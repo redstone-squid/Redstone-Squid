@@ -11,9 +11,9 @@ from Discord.commands import COMMANDS
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
 if not TOKEN:
-    if os.path.isfile('auth.ini'):
+    if os.path.isfile('Discord/auth.ini'):
         config = configparser.ConfigParser()
-        config.read('auth.ini')
+        config.read('Discord/auth.ini')
         TOKEN = config.get('discord', 'token')
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
@@ -35,6 +35,7 @@ async def on_ready():
     for member in CLIENT.get_all_members():
         if str(member) == LOG_USER['name']:
             LOG_USER['member'] = member
+
     await log('Bot logged in with name: {} and id: {}.'.format(CLIENT.user.name, CLIENT.user.id), first_log = True)
 
 # Message event
