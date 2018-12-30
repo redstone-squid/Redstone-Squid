@@ -15,10 +15,8 @@ if not TOKEN:
         config = configparser.ConfigParser()
         config.read('auth.ini')
         TOKEN = config.get('discord', 'token')
-    elif len(sys.argv) > 1:
-        TOKEN = sys.argv[1]
     else:
-        raise Exception('Specify discord token either with a auth.ini file or as an argument.')
+        raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
 
 CLIENT = discord.Client()
 LOG_USER = {'name': OWNER}
