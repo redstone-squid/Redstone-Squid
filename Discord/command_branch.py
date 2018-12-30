@@ -1,8 +1,8 @@
 from inspect import iscoroutinefunction
-from src.command import Command
-from src.command_leaf import Command_Leaf
-import src.utils as utils
-import src.permissions as perms
+from Discord.command import Command
+from Discord.command_leaf import Command_Leaf
+import Discord.utils as utils
+import Discord.permissions as perms
 
 class Command_Branch(Command):
 

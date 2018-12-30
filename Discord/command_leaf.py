@@ -1,6 +1,6 @@
 from inspect import iscoroutinefunction
-from src.command import Command
-import src.utils as utils
+from Discord.command import Command
+import Discord.utils as utils
 
 class Command_Leaf(Command):
 
