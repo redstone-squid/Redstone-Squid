@@ -84,4 +84,21 @@ def validate_permissions(user_perms, cmd_perms):
                 return False
     return True
 
-        
+def validate_roles(user_roles, cmd_role_names):
+    if cmd_role_names == None:
+        return True
+
+    if isinstance(cmd_role_names, str):
+        for user_role in user_roles:
+            if user_role.name == cmd_role_names:
+                return True
+        return False
+     
+    if len(cmd_role_names) == 0:
+        return True
+
+    for cmd_role_name in cmd_role_names:
+        for user_role in user_roles:
+            if user_role.name == cmd_role_name:
+                return True
+    return False
