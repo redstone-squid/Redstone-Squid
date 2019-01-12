@@ -62,7 +62,7 @@ async def unset_confirm_channel(client, user_command, message):
     sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
 
     server_id = message.server.id
-    server_settings.update_server_setting(server_id, 'Confirm Channel ID', '')
+    server_settings.update_server_setting(server_id, 'Confirm Channel ID', -1)
 
     await client.delete_message(sent_message)
     await client.send_message(message.channel, embed = utils.info_embed('Settings updated', 'Confirm channel has successfully been unset.'))
