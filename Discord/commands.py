@@ -7,6 +7,10 @@ from Discord.command_leaf import Command_Leaf
 from Discord.command_branch import Command_Branch
 from Discord.permissions import *
 
+import Discord.config as config
+
+import Discord.option.option as option
+
 # Main Command Branch --------------------------------------------------------------------------------------------
 BOT_NAME = 'RecordBot'
 BOT_VERSION = '1.0'
@@ -26,13 +30,16 @@ async def source_code(client, user_command, message):
 
 COMMANDS.add_command('source_code', Command_Leaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
 
+# Option ---------------------------------------------------------------------------------------------------------
+COMMANDS.add_command('option', option.OPTION_COMMANDS)
+
 # Help -----------------------------------------------------------------------------------------------------------
 async def help_func(client, user_command, message):
     argv = user_command.split(' ')[1:]
     help_message = COMMANDS.get_help_message(*argv)
     if isinstance(help_message, discord.Embed):
         return help_message
-    help_message += '\nUse `@{} help <command>` to get more information.\n'.format(client.user.name)
+    help_message += '\nUse `{}help <command>` to get more information.\n'.format(config.PREFIX)
     em = discord.Embed(title = 'Help', description = help_message, colour = 0x43B581)
     await client.send_message(message.channel, embed = em)
 
