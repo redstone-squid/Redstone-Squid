@@ -4,11 +4,12 @@ import Discord.utils as utils
 
 class Command_Leaf(Command):
 
-    def __init__(self, function, brief, params = None, perms = None, **kwargs):
+    def __init__(self, function, brief, params = None, perms = None, roles = None, **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
         self._perms = perms
+        self._roles = roles
 
         self._function = function
 
