@@ -5,7 +5,7 @@ import discord
 import configparser
 
 import Discord.utils as utils
-from Discord.config import OWNER
+from Discord.config import *
 from Discord.commands import COMMANDS
 
 # Establishing connection with discord
@@ -42,11 +42,9 @@ async def on_ready():
 @CLIENT.event
 async def on_message(message):
     user_command = ''
-    
-    matches = re.findall(r'<@!?' + str(CLIENT.user.id) + '>\s', message.content)
 
-    if len(matches) > 0 and message.content.startswith(matches[0]):
-        user_command = message.content.replace(matches[0], '', 1)
+    if message.content.startswith(PREFIX):
+        user_command = message.content.replace(PREFIX, '', 1)
     elif not message.server:
         user_command = message.content
 
