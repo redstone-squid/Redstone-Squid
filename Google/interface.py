@@ -29,5 +29,3 @@ def connect():
         credentials = ServiceAccountCredentials.from_json_keyfile_name('Google/client_secret.json', scopes)
 
     return gspread.authorize(credentials)
-
-gc = connect()
