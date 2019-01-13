@@ -9,8 +9,8 @@ from Discord.permissions import *
 
 import Database.server_settings as server_settings
 
-# Option Command Branch ------------------------------------------------------------------------------------------
-OPTION_COMMANDS = Command_Branch('Allows you to configure the bot for your server.')
+# Settings Command Branch ------------------------------------------------------------------------------------------
+SETTINGS_COMMANDS = Command_Branch('Allows you to configure the bot for your server.')
 
 # Confirm Channel --------------------------------------------------------------------------------------------
 channel_settings_roles = ['Admin', 'Moderator']
@@ -67,8 +67,8 @@ async def unset_smallest_channel(client, user_command, message):
 SMALLEST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_smallest_channel, 'Querys which channel is set to post smallest records to.', roles = channel_settings_roles))
 SMALLEST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_smallest_channel, 'Sets current channel as the channel to post smallest records to.', roles = channel_settings_roles))
 SMALLEST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_smallest_channel, 'Unsets the channel to post smallest records to.', roles = channel_settings_roles))
-# Adding command branch to the options command branch
-OPTION_COMMANDS.add_command('smallest_channel', SMALLEST_CHANNEL_COMMANDS)
+# Adding command branch to the settings command branch
+SETTINGS_COMMANDS.add_command('smallest_channel', SMALLEST_CHANNEL_COMMANDS)
 
 # Fastest ----------------------------------------------------------------------------------------------------
 # Creating command branch
@@ -84,8 +84,8 @@ async def unset_fastest_channel(client, user_command, message):
 FASTEST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_fastest_channel, 'Querys which channel is set to post fastest records to.', roles = channel_settings_roles))
 FASTEST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_channel, 'Sets current channel as the channel to post fastest records to.', roles = channel_settings_roles))
 FASTEST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_fastest_channel, 'Unsets the channel to post fastest records to.', roles = channel_settings_roles))
-# Adding command branch to the options command branch
-OPTION_COMMANDS.add_command('fastest_channel', FASTEST_CHANNEL_COMMANDS)
+# Adding command branch to the settings command branch
+SETTINGS_COMMANDS.add_command('fastest_channel', FASTEST_CHANNEL_COMMANDS)
 
 # Smallest Observerless --------------------------------------------------------------------------------------
 # Creating command branch
@@ -101,8 +101,8 @@ async def unset_smallest_observerless_channel(client, user_command, message):
 SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_smallest_observerless_channel, 'Querys which channel is set to post smallest observerless records to.', roles = channel_settings_roles))
 SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_smallest_observerless_channel, 'Sets current channel as the channel to post smallest observerless records to.', roles = channel_settings_roles))
 SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_smallest_observerless_channel, 'Unsets the channel to post smallest observerless records to.', roles = channel_settings_roles))
-# Adding command branch to the options command branch
-OPTION_COMMANDS.add_command('smallest_observerless_channel', SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS)
+# Adding command branch to the settings command branch
+SETTINGS_COMMANDS.add_command('smallest_observerless_channel', SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS)
 
 # Fastest Observerless ---------------------------------------------------------------------------------------
 # Creating command branch
@@ -118,6 +118,6 @@ async def unset_fastest_observerless_channel(client, user_command, message):
 FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_fastest_observerless_channel, 'Querys which channel is set to post fastest observerless records to.', roles = channel_settings_roles))
 FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_observerless_channel, 'Sets current channel as the channel to post fastest observerless records to.', roles = channel_settings_roles))
 FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_fastest_observerless_channel, 'Unsets the channel to post fastest observerless records to.', roles = channel_settings_roles))
-# Adding command branch to the options command branch
-OPTION_COMMANDS.add_command('fastest_observerless_channel', FASTEST_OBSERVERLESS_CHANNEL_COMMANDS)
+# Adding command branch to the settings command branch
+SETTINGS_COMMANDS.add_command('fastest_observerless_channel', FASTEST_OBSERVERLESS_CHANNEL_COMMANDS)
 

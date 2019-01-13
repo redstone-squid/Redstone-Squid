@@ -9,7 +9,7 @@ from Discord.permissions import *
 
 import Discord.config as config
 
-import Discord.option.option as option
+import Discord.settings.settings as settings
 
 # Main Command Branch --------------------------------------------------------------------------------------------
 BOT_NAME = 'RecordBot'
@@ -31,7 +31,7 @@ async def source_code(client, user_command, message):
 COMMANDS.add_command('source_code', Command_Leaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
 
 # Option ---------------------------------------------------------------------------------------------------------
-COMMANDS.add_command('option', option.OPTION_COMMANDS)
+COMMANDS.add_command('settings', settings.SETTINGS_COMMANDS)
 
 # Help -----------------------------------------------------------------------------------------------------------
 async def help_func(client, user_command, message):
