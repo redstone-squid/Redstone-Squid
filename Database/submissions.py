@@ -1,4 +1,5 @@
 import Database.main as DB
+from Database.submission import Submission as Submission_Class
 import Database.global_vars as global_vars
 import Database.config as config
 import Google.interface as Google
@@ -50,3 +51,16 @@ def open_form_submissions():
     # Removing Submissions from form worksheet
     for _ in range(submission_count):
         form_wks.delete_row(2)
+
+# Returns all submissions that are in the open submissions worksheet.
+def get_open_submissions_raw():
+    wks = DB.get_open_submissions_worksheet()
+    return wks.get_all_records()
+
+def get_open_submissions():
+    submissions = get_open_submissions_raw()
+    
+    for index, submission in enumerate(submissions):
+        submissions[index] = Submission_Class.from_dict(submission)
+
+    return submissions
