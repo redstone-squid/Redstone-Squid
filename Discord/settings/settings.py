@@ -1,4 +1,3 @@
-import os
 import discord
 
 import Discord.utils as utils
@@ -17,15 +16,24 @@ channel_settings_roles = ['Admin', 'Moderator']
 
 # Returns the channel which has been set to deal with the channel perpose.
 def get_channel_for(server, channel_perpose):
+    # Getting channel if from database
     channel_id = server_settings.get_server_setting(server.id, channel_perpose)
+
+    # If channel is none or cannot be converted to int, return None.
     if channel_id == None:
         return None
-    result = None
+    try:
+        channel_id = int(channel_id)
+    except ValueError:
+        return None
+    
+    # Go through each channel in a server to find channel with matching id.
     for channel in server.channels:
-        if int(channel.id) == int(channel_id):
-            result = channel
-            break
-    return result
+        if int(channel.id) == channel_id:
+            return channel
+
+    # If no channel is found, return None.
+    return None
 
 # Finds which channel is set for a perpose and sends the results to the user.
 async def query_channel(client, user_command, message, channel_perpose):
@@ -49,7 +57,7 @@ async def set_channel(client, user_command, message, channel_perpose):
 async def unset_channel(client, user_command, message, channel_perpose):
     sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
     server_id = message.server.id
-    server_settings.update_server_setting(server_id, channel_perpose, -1)
+    server_settings.update_server_setting(server_id, channel_perpose, '')
     await client.delete_message(sent_message)
     await client.send_message(message.channel, embed = utils.info_embed('Settings updated', '{} channel has successfully been unset.'.format(channel_perpose)))
 
