@@ -12,9 +12,9 @@ import Discord.config as config
 import Discord.settings.settings as settings
 
 # Main Command Branch --------------------------------------------------------------------------------------------
-BOT_NAME = 'RecordBot'
+BOT_NAME = 'Redstone Squid'
 BOT_VERSION = '1.0'
-SOURCE_CODE_URL = 'https://github.com/Kappeh/RecordBot'
+SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'
 
 COMMANDS = Command_Branch(BOT_NAME + ' v' + BOT_VERSION)
 
