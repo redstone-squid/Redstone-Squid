@@ -1,5 +1,14 @@
 # Workbook name for database
 WORKBOOK_NAME = 'RecordBotDB'
 
-# Server settings sheet name
-SERVER_SETTINGS_SHEET_INDEX = 0
+# Globals sheet
+GLOBALS_SHEET_INDEX = 0
+
+# Server settings sheet
+SERVER_SETTINGS_SHEET_INDEX = 1
+
+# Submission database sheets
+FORM_SUBMISSIONS_SHEET_INDEX = 2
+OPEN_SUBMISSIONS_SHEET_INDEX = 3
+CONFIRMED_SUBMISSIONS_SHEET_INDEX = 4
+DENIED_SUBMISSIONS_SHEET_INDEX = 5
