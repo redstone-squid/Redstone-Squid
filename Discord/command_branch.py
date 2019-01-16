@@ -6,12 +6,13 @@ import Discord.permissions as perms
 
 class Command_Branch(Command):
 
-    def __init__(self, brief, function = None, params = None, perms = None, roles = None, **kwargs):
+    def __init__(self, brief, function = None, params = None, perms = None, roles = None, servers = None, **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
         self._perms = perms
         self._roles = roles
+        self._servers = servers
 
         self._function = function
         self._commands = {}
@@ -52,12 +53,15 @@ class Command_Branch(Command):
 
         if cmd == None:
             return utils.error_embed('Error.', 'Unable to find command.')
-            
-        if not perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms):
-            return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')
+
+        if cmd._servers and not int(argv[2].server.id) in cmd._servers:
+            return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
         if not perms.validate_roles(argv[2].author.roles, cmd._roles):
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed by certain roles.')
+
+        if not perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms):
+            return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')
 
         error = cmd.validate_execute_command(argv_return)
         if error:
