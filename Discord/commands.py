@@ -10,6 +10,7 @@ from Discord.permissions import *
 import Discord.config as config
 
 import Discord.settings.settings as settings
+import Discord.submission.submissions as submissions
 
 # Main Command Branch --------------------------------------------------------------------------------------------
 BOT_NAME = 'Redstone Squid'
@@ -32,6 +33,9 @@ COMMANDS.add_command('source_code', Command_Leaf(source_code, 'Link to {}\'s sou
 
 # Option ---------------------------------------------------------------------------------------------------------
 COMMANDS.add_command('settings', settings.SETTINGS_COMMANDS)
+
+# Submissions ----------------------------------------------------------------------------------------------------
+COMMANDS.add_command('submissions', submissions.SUBMISSIONS_COMMANDS)
 
 # Help -----------------------------------------------------------------------------------------------------------
 async def help_func(client, user_command, message):
