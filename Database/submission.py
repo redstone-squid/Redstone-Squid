@@ -63,17 +63,32 @@ class Submission:
         return title
 
     def get_description(self):
-        description = ''
+        description = []
 
         # Second order restrictions
         if self.so_restrictions[0] != 'None':
-            description += ', '.join(self.so_restrictions)
-            if self.information:
-                description += '\n\n'
-        if self.information:
-            description += self.information
+            description.append(', '.join(self.so_restrictions))
+            
+        if not config.VERSIONS_LIST[-1] in self.versions:
+            description.append('**Broken** in current version.')
         
-        return description
+        if self.locational == 'LOCATIONAL':
+            description.append('**Locational**.')
+        elif self.locational == 'LOCATIONAL_FIX':
+            description.append('**Locational** with known fixes for each location.')
+        
+        if self.directional == 'DIRECTIONAL':
+            description.append('**Directional**.')
+        elif self.directional == 'DIRECTIONAL_FIX':
+            description.append('**Directional** with known fixes for each direction.')
+
+        if self.information:
+            description.append('\n' + str(self.information))
+        
+        if len(description) > 0:
+            return '\n'.join(description)
+        else:
+            return None
 
     def get_versions_string(self):
 
@@ -116,19 +131,28 @@ class Submission:
     def get_meta_fields(self):
         fields = {}
 
-        fields['Volume'] = str(self.build_width * self.build_height * self.build_depth)
         fields['Dimensions'] = '{}x{}x{}'.format(self.build_width, self.build_height, self.build_depth)
+        fields['Volume'] = str(self.build_width * self.build_height * self.build_depth)
         fields['Opening Time'] = str(self.relative_open_time)
         fields['Closing Time'] = str(self.relative_close_time)
+
+        if self.absolute_open_time and self.absolute_close_time:
+            fields['Absolute Opening Time'] = self.absolute_open_time
+            fields['Absolute Closing Time'] = self.absolute_close_time
+
         fields['Creators'] = ', '.join(sorted(self.creators))
         fields['Date Of Completion'] = str(self.build_date)
         fields['Versions'] = self.get_versions_string()
         
         if self.server_ip:
-            value = self.server_ip if not self.coordinates else '{} - {}'.format(self.server_ip, self.coordinates)
-            fields['Server'] = value
-        if self.command:
-            fields['Command'] = self.command
+            fields['Server'] = self.server_ip
+            
+            if self.coordinates:
+                fields['Coordinates'] = self.coordinates
+
+            if self.command:
+                fields['Command'] = self.command
+
         if self.world_download_link:
             fields['World Download'] = self.world_download_link
         if self.youtube_link:
@@ -179,7 +203,7 @@ class Submission:
             result.directional = 'DIRECTIONAL_FIX'
         elif dict['Directionality'] == 'Directional without known fixes for each direction':
             result.directional = 'DIRECTIONAL'
-        result.versions = dict['Versions Which Submission Works In'].split(', ')
+        result.versions = str(dict['Versions Which Submission Works In']).split(', ')
         if dict['Link To Image']:
             result.image_url = dict['Link To Image']
         if dict['Link To YouTube Video']:
