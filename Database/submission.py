@@ -1,3 +1,5 @@
+import Database.config as config
+
 class Submission:
     def __init__(self):
         self.id = None
@@ -28,6 +30,112 @@ class Submission:
         self.coordinates = None
         self.command = None
     
+    def get_title(self):
+        # Catagory
+        title = self.base_category + ' '
+        
+        # Door dimensions
+        if self.door_width and self.door_height:
+            title += '{}x{} '.format(self.door_width, self.door_height)
+        elif self.door_width:
+            title += '{} Wide '.format(self.door_width)
+        elif self.door_height:
+            title += '{} High '.format(self.door_height)
+        
+        # First order restrictions
+        for restriction in self.fo_restrictions:
+            if restriction != 'None':
+                title += '{} '.format(restriction)
+        
+        # Pattern
+        if self.door_pattern[0] != 'Regular':
+            for pattern in self.door_pattern:
+                title += '{} '.format(pattern)
+
+        # Door type
+        if self.door_type == None:
+            title += 'Door.'
+        elif self.door_type == 'SKY':
+            title += 'Skydoor.'
+        elif self.door_type == 'TRAP':
+            title += 'Trapdoor.'
+        
+        return title
+
+    def get_description(self):
+        description = ''
+
+        # Second order restrictions
+        if self.so_restrictions[0] != 'None':
+            description += ', '.join(self.so_restrictions)
+            if self.information:
+                description += '\n\n'
+        if self.information:
+            description += self.information
+        
+        return description
+
+    def get_versions_string(self):
+
+        versions = []
+
+        linking = False
+        first_version = None
+        last_version = None
+
+        for index, version in enumerate(config.VERSIONS_LIST):
+            if version in self.versions:
+                
+                if linking == False:
+                    linking = True
+                    first_version = version
+                    last_version = version
+                else:
+                    last_version = version
+
+            elif linking == True:
+                linking = False
+
+                if first_version == last_version:
+                    versions.append(first_version)
+                else:
+                    versions.append('{} - {}'.format(first_version, last_version))
+
+                first_version = None
+                last_version = None
+
+            if index == len(config.VERSIONS_LIST) - 1 and linking == True:
+                if first_version == last_version:
+                    versions.append(first_version)
+                else:
+                    versions.append('{} - {}'.format(first_version, last_version))
+        
+        return ', '.join(versions)
+
+
+    def get_meta_fields(self):
+        fields = {}
+
+        fields['Volume'] = str(self.build_width * self.build_height * self.build_depth)
+        fields['Dimensions'] = '{}x{}x{}'.format(self.build_width, self.build_height, self.build_depth)
+        fields['Opening Time'] = str(self.relative_open_time)
+        fields['Closing Time'] = str(self.relative_close_time)
+        fields['Creators'] = ', '.join(sorted(self.creators))
+        fields['Date Of Completion'] = str(self.build_date)
+        fields['Versions'] = self.get_versions_string()
+        
+        if self.server_ip:
+            value = self.server_ip if not self.coordinates else '{} - {}'.format(self.server_ip, self.coordinates)
+            fields['Server'] = value
+        if self.command:
+            fields['Command'] = self.command
+        if self.world_download_link:
+            fields['World Download'] = self.world_download_link
+        if self.youtube_link:
+            fields['Video'] = self.youtube_link
+        
+        return fields
+        
     @staticmethod
     def from_dict(dict):
         result = Submission()
