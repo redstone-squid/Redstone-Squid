@@ -84,8 +84,12 @@ def validate_permissions(user_perms, cmd_perms):
                 return False
     return True
 
-def validate_roles(user_roles, cmd_role_names):
+def validate_roles(user_roles, cmd_role_names, user_perms):
     if cmd_role_names == None:
+        return True
+
+    # Administrator permission override
+    if user_perms.administrator:
         return True
 
     if isinstance(cmd_role_names, str):

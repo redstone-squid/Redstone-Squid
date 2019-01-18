@@ -57,7 +57,7 @@ class Command_Branch(Command):
         if cmd._servers and not int(argv[2].server.id) in cmd._servers:
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
-        if not perms.validate_roles(argv[2].author.roles, cmd._roles):
+        if not perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author)):
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed by certain roles.')
 
         if not perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms):
