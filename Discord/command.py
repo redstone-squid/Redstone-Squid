@@ -17,7 +17,7 @@ class Param():
     def validate_param(self):
         if (self.min_val or self.min_val) and self.dtype not in ['int', 'num']:
             raise Exception('Min and max values can only be specified for int and num params.')
-        if self.dtype and self.dtype not in ['int', 'num', 'mention', 'str', 'text']:
+        if self.dtype and self.dtype not in ['int', 'num', 'mention', 'channel_mention', 'str', 'text']:
             raise Exception('Invalid Param.dtype.')
         if self.min_val and not isinstance(self.min_val, (float, int)):
             raise Exception('Param.min_val must be a number.')
@@ -113,6 +113,8 @@ class Command():
                 return utils.warning_embed('Incorrect parameter type.', '`{}` must be a number.'.format(self._params[i].name))
             if self._params[i].dtype == 'mention' and not utils.represents_user(argv[i]):
                 return utils.warning_embed('Incorrect parameter type.', '`{}` must be a mention.'.format(self._params[i].name))
+            if self._params[i].dtype == 'channel_mention' and not utils.represents_channel(argv[i]):
+                return utils.warning_embed('Incorrect parameter type.', '`{}` must be a channel mention.'.format(self._params[i].name))
 
         return None
 

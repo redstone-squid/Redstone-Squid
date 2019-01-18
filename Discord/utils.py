@@ -1,5 +1,6 @@
-from time import gmtime, strftime
+import re
 import discord
+from time import gmtime, strftime
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -20,12 +21,12 @@ def represents_float(s):
         return False
 
 def represents_user(s):
-    if (s[:2] != '<@' and s[:3] != '<@!') or s[-1] != '>':
+    if re.match('<@!?\d{17,18}>', s) == None:
         return False
-    chars = '!<@>'
-    for c in chars:
-        s = s.replace(c, '')
-    if not represents_int(s):
+    return True
+
+def represents_channel(s):
+    if re.match('<#\d{18}>', s) == None:
         return False
     return True
 
