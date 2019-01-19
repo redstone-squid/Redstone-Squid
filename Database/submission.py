@@ -43,9 +43,10 @@ class Submission:
             title += '{} High '.format(self.door_height)
         
         # First order restrictions
-        for restriction in self.fo_restrictions:
-            if restriction != 'None':
-                title += '{} '.format(restriction)
+        if self.fo_restrictions != None:
+            for restriction in self.fo_restrictions:
+                if restriction != 'None':
+                    title += '{} '.format(restriction)
         
         # Pattern
         if self.door_pattern[0] != 'Regular':
@@ -66,7 +67,7 @@ class Submission:
         description = []
 
         # Second order restrictions
-        if self.so_restrictions[0] != 'None':
+        if self.so_restrictions != None and self.so_restrictions[0] != 'None':
             description.append(', '.join(self.so_restrictions))
             
         if not config.VERSIONS_LIST[-1] in self.versions:
