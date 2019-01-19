@@ -35,6 +35,9 @@ def generate_embed(submission_obj):
 
 # Get the channels ['smallest', 'fastest', 'smallest_observerless', 'fastest_observerless'] to post record to
 def get_channel_type_to_post_to(submission_obj):
+    if submission_obj.base_category == 'First':
+        return 'First'
+
     if submission_obj.base_category == 'Fastest' or submission_obj.base_category == 'Fastest Smallest':
         if 'Observerless' in submission_obj.so_restrictions:
             return 'Fastest Observerless'

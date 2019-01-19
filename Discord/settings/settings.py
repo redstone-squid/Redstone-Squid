@@ -25,11 +25,8 @@ def get_channel_for(server, channel_perpose):
     # If channel is none or cannot be converted to int, return None.
     if channel_id == None:
         return None
-    try:
-        channel_id = int(channel_id)
-    except ValueError:
-        return None
-    
+    channel_id = str(channel_id)
+
     return server.get_channel(channel_id)
 
 # Gets all channels
@@ -44,6 +41,7 @@ def get_all_channels(server):
     result['Fastest'] = server.get_channel(settings['Fastest'])
     result['Smallest Observerless'] = server.get_channel(settings['Smallest Observerless'])
     result['Fastest Observerless'] = server.get_channel(settings['Fastest Observerless'])
+    result['First'] = server.get_channel(settings['First'])
 
     return result
 
@@ -58,6 +56,7 @@ async def query_all(client, user_command, message):
     desc += '`fastest channel`: {}\n'.format('_Not set_' if channels['Fastest'] == None else '#' + channels['Fastest'].name)
     desc += '`smallest observerless channel`: {}\n'.format('_Not set_' if channels['Smallest Observerless'] == None else '#' + channels['Smallest Observerless'].name)
     desc += '`fastest observerless channel`: {}\n'.format('_Not set_' if channels['Fastest Observerless'] == None else '#' + channels['Fastest Observerless'].name)
+    desc += '`first channel`: {}\n'.format('_Not set_' if channels['First'] == None else '#' + channels['First'].name)
 
     em = discord.Embed(title = 'Current Settings', description = desc, colour = utils.discord_green)
 
@@ -166,8 +165,24 @@ async def unset_fastest_observerless_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'Fastest Observerless')
 # Adding functions to the command branch
 FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_fastest_observerless_channel, 'Querys which channel is set to post fastest observerless records to.', roles = channel_settings_roles))
-FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_observerless_channel, 'Sets current channel as the channel to post fastest observerless records to.', roles = channel_settings_roles))
+FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_observerless_channel, 'Sets current channel as the channel to post fastest observerless records to.', roles = channel_settings_roles, params = channel_set_params))
 FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_fastest_observerless_channel, 'Unsets the channel to post fastest observerless records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('fastest_observerless_channel', FASTEST_OBSERVERLESS_CHANNEL_COMMANDS)
 
+# First ------------------------------------------------------------------------------------------------------
+# Creating command branch
+FIRST_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post first records to.')
+# Defining the query, set and unset functions
+async def query_first_channel(client, user_command, message):
+    return await query_channel(client, user_command, message, 'First')
+async def set_first_channel(client, user_command, message):
+    return await set_channel(client, user_command, message, 'First')
+async def unset_first_channel(client, user_command, message):
+    return await unset_channel(client, user_command, message, 'First')
+# Adding functions to the command branch
+FIRST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_first_channel, 'Querys which channel is set to post first records to.', roles = channel_settings_roles))
+FIRST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_first_channel, 'Sets current channel as the channel to post first records to.', roles = channel_settings_roles, params = channel_set_params))
+FIRST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_first_channel, 'Unsets the channel to post first records to.', roles = channel_settings_roles))
+# Adding command branch to the settings command branch
+SETTINGS_COMMANDS.add_command('first_channel', FIRST_CHANNEL_COMMANDS)
