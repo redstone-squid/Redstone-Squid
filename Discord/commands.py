@@ -17,6 +17,8 @@ BOT_NAME = 'Redstone Squid'
 BOT_VERSION = '1.0'
 SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'
 
+FORM_LINK = 'https://goo.gl/forms/35mjuQHId4sgCnZ82'
+
 COMMANDS = Command_Branch(BOT_NAME + ' v' + BOT_VERSION)
 
 # Invite Link ----------------------------------------------------------------------------------------------------
@@ -30,6 +32,14 @@ async def source_code(client, user_command, message):
     await client.send_message(message.channel, 'Source code can be found at: {}.'.format(SOURCE_CODE_URL))
 
 COMMANDS.add_command('source_code', Command_Leaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
+
+# Submit record --------------------------------------------------------------------------------------------------
+async def submit_record(client, user_command, message):
+    em = discord.Embed(title = 'Submission form.', description = 'You can submit new records with ease via our google form: {}'.format(FORM_LINK), colour = utils.discord_green)
+    em.set_image(url = 'https://i.imgur.com/AqYEd1o.png')
+    await client.send_message(message.channel, embed = em)
+
+COMMANDS.add_command('submit_record', Command_Leaf(submit_record, 'Links you to our record submission form.'))
 
 # Option ---------------------------------------------------------------------------------------------------------
 COMMANDS.add_command('settings', settings.SETTINGS_COMMANDS)
