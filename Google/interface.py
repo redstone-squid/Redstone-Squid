@@ -28,13 +28,16 @@ def connect():
         # Getting service account credentials from json file
         credentials = ServiceAccountCredentials.from_json_keyfile_name('Google/client_secret.json', scopes)
 
-    return gspread.authorize(credentials)
+    return credentials, gspread.authorize(credentials)
+
+import Discord.utils as utils
 
 class Connection:
-    GC = None
+    _GC = None
+    _CREDS = None
 
     @staticmethod
     def get():
-        if not Connection.GC:
-            Connection.GC = connect()
-        return Connection.GC
+        if not Connection._GC or Connection._CREDS.access_token_expired:
+            Connection._CREDS, Connection._GC = connect()
+        return Connection._GC
