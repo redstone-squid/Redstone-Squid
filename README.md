@@ -7,8 +7,6 @@ This is a discord bot designed to make the process of submitting, confirming and
 
 Setting up your own version of this bot is **NOT RECOMMENDED** as their is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
-
 To get this bot up and running on your machine, you will need a copy of this repository. To clone the repository, use:
 ```
 git clone https://github.com/Kappeh/Redstone-Squid.git
@@ -43,6 +41,13 @@ Discord requires a discord bot account. You can learn how to make bot accounts a
 ```
 [discord]
 token=<Replace this with your discord access token>
+```
+
+### Running The Application
+
+The application can now be ran simply with:
+```
+python app.py
 ```
 
 ## Discord Set Up
