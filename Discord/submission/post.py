@@ -29,7 +29,7 @@ def generate_embed(submission_obj):
     if submission_obj.image_url:
         em.set_image(url = submission_obj.image_url)
 
-    em.set_footer(text = 'Record ID: {}.'.format(submission_obj.id))
+    em.set_footer(text = 'Submission ID: {}.'.format(submission_obj.id))
 
     return em
 
