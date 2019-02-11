@@ -29,6 +29,10 @@ def get_confirmed_submissions_worksheet():
 def get_denied_submissions_worksheet():
     return get_workbook().get_worksheet(config.DENIED_SUBMISSIONS_SHEET_INDEX)
 
+# Gets the worksheet which contains the message ids of posted submissions
+def get_message_worksheet():
+    return get_workbook().get_worksheet(config.MESSAGE_SHEET_INDEX)
+
 # Returns a list of possible settings.
 def header_list(wks):
     return wks.row_values(1)

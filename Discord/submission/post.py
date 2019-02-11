@@ -10,6 +10,7 @@ from Discord.permissions import *
 import Discord.settings.settings as settings
 import Database.submission as submission
 import Database.server_settings as server_settings
+import Database.message as msg
 
 def generate_embed(submission_obj):
     # Title -------------------------------------------------------------------------------
@@ -75,4 +76,5 @@ async def post_submission(client, submission_obj):
     em = generate_embed(submission_obj)
 
     for channel in channels:
-        await client.send_message(channel, embed = em)
+        message = await client.send_message(channel, embed = em)
+        msg.update_message(channel.server.id, submission_obj.id, message.id)
