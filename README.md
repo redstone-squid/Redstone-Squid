@@ -3,59 +3,11 @@
 
 This is a discord bot designed to make the process of submitting, confirming and denying submissions easier. In addition to this, it manages a database of records automatically.
 
-## Getting Started
-
-Setting up your own version of this bot is **NOT RECOMMENDED** as their is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
-
-To get this bot up and running on your machine, you will need a copy of this repository. To clone the repository, use:
-```
-git clone https://github.com/Kappeh/Redstone-Squid.git
-```
-Then you can move to the repository's root directory with
-```
-cd Redstone-Squid
-```
-
-### Virtual Environment
-
-There are a list of required python packages in requirements.txt. You can install them onto your machine directly or into a virtual environment (recommended)
-
-If you want to use a virtual environment, first create the environment in the root directory and activate it.
-```
-python -m venv venv
-source venv/bin/activate
-```
-
-### Installing Packages
-
-In the root directory of the repository you can use the following command to install all of the required packages.
-```
-pip install -r requirements.txt
-```
-
-### Credential Files
-
-Google services requires a google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
-
-Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `auth.ini` in the `Discord` directory with the following contents:
-```
-[discord]
-token=<Replace this with your discord access token>
-```
-
-### Running The Application
-
-The application can now be ran simply with:
-```
-python app.py
-```
-
 ## Discord Set Up
 
 ###  Adding Bot To Servers
-You can add your bot to your server by going to `https://discordapp.com/oauth2/authorize?client_id=<REPLACE WITH YOUR BOT'S ID>&scope=bot`. It is recommended to give the bot administrator permissions but is not required for it's functionality.
 
-If you wish to invite the main instance to your server, click [here](https://discordapp.com/oauth2/authorize?client_id=528946065668308992&scope=bot&permissions=8).
+If you wish to invite the bot to your Discord server, click [here](https://discordapp.com/oauth2/authorize?client_id=528946065668308992&scope=bot&permissions=8). It is recommended to give the bot administrator permissions but is not required for it's functionality.
 
 ### Setting Up Channels
 
