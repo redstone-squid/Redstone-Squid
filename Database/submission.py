@@ -29,6 +29,7 @@ class Submission:
         self.server_ip = None
         self.coordinates = None
         self.command = None
+        self.submitted_by = None
     
     def get_title(self):
         # Catagory
@@ -217,6 +218,7 @@ class Submission:
             result.coordinates = dict['Coordinates']
         if dict['Command To Get To Build/Plot']:
             result.command = dict['Command To Get To Build/Plot']
+        result.submitted_by = dict['Your IGN / Discord Handle']
 
         return result
 
@@ -265,5 +267,6 @@ class Submission:
             string += 'Coordinates: {}\n'.format(self.coordinates)
         if self.command:
             string += 'Command: {}\n'.format(self.command)
+        string += 'Submitted By: {}\n'.format(self.submitted_by)
         
         return string

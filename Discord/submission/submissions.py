@@ -33,7 +33,7 @@ async def open_function(client, user_command, message):
     else:
         desc = []
         for sub in open_submissions:
-            desc.append('**{}** - {}\n_by {}_'.format(sub.id, sub.get_title(), ', '.join(sorted(sub.creators))))
+            desc.append('**{}** - {}\n_by {}_ - _submitted by {}_'.format(sub.id, sub.get_title(), ', '.join(sorted(sub.creators)), sub.submitted_by))
         desc = '\n\n'.join(desc)
     
     # Creating embed
