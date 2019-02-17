@@ -40,6 +40,7 @@ class Command():
     _perms = None
     _roles = None
     _servers = None
+    _perm_role_operator = None
 
     def __getitem__(self, i):
         if i in self._meta:

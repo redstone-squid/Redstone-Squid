@@ -4,13 +4,17 @@ import Discord.utils as utils
 
 class Command_Leaf(Command):
 
-    def __init__(self, function, brief, params = None, perms = None, roles = None, servers = None, **kwargs):
+    def __init__(self, function, brief, params = None, perms = None, roles = None, servers = None, perm_role_operator = 'And', **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
         self._perms = perms
         self._roles = roles
         self._servers = servers
+        self._perm_role_operator = perm_role_operator
+
+        if perm_role_operator != 'And' and perm_role_operator != 'Or':
+            raise Exception('perm_role_operator must be \'And\' or \'Or\'')
 
         self._function = function
 

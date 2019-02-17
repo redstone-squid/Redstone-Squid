@@ -6,13 +6,17 @@ import Discord.permissions as perms
 
 class Command_Branch(Command):
 
-    def __init__(self, brief, function = None, params = None, perms = None, roles = None, servers = None, **kwargs):
+    def __init__(self, brief, function = None, params = None, perms = None, roles = None, servers = None, perm_role_operator = 'And', **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
         self._perms = perms
         self._roles = roles
         self._servers = servers
+        self._perm_role_operator = perm_role_operator
+
+        if perm_role_operator != 'And' and perm_role_operator != 'Or':
+            raise Exception('perm_role_operator must be \'And\' or \'Or\'')
 
         self._function = function
         self._commands = {}
@@ -57,11 +61,17 @@ class Command_Branch(Command):
         if cmd._servers and not int(argv[2].server.id) in cmd._servers:
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
-        if not perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author)):
-            return utils.error_embed('Insufficient Permissions.', 'This command can only be executed by certain roles.')
+        roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author))
+        permissions_validated = perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms)
 
-        if not perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms):
-            return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')
+        if cmd._perm_role_operator == 'And':
+            if not roles_validated:
+                return utils.error_embed('Insufficient Permissions.', 'This command can only be executed by certain roles.')
+            if not permissions_validated:
+                return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')    
+        else:
+            if not roles_validated and not permissions_validated:
+                return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')
 
         error = cmd.validate_execute_command(argv_return)
         if error:

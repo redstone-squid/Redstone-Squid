@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import Database.main as DB
 from Database.submission import Submission as Submission_Class
 import Database.global_vars as global_vars
@@ -23,7 +25,7 @@ def open_form_submissions():
     
     first_row = open_wks.row_count + 1
     last_row = open_wks.row_count + submission_count
-    first_col = 2
+    first_col = 3
     last_col = open_wks.col_count
 
     # Adding Rows
@@ -39,16 +41,17 @@ def open_form_submissions():
 
     open_wks.update_cells(cells_to_update)
 
-    # Adding IDs to submissions
+    # Adding IDs and Last update times to submissions
     next_id = global_vars.get_next_id()
 
-    cells_to_update = open_wks.range(first_row, 1, last_row, 1)
-    for i, cell in enumerate(cells_to_update):
-        cell.value = i + next_id
-    
-    open_wks.update_cells(cells_to_update)
+    cells_to_update = open_wks.range(first_row, 1, last_row, 2)
+
+    for i in range(len(cells_to_update) // 2):
+        cells_to_update[i * 2].value = i + next_id
+        cells_to_update[i * 2 + 1].value = datetime.now().strftime('%d-%m-%Y %H:%M:%S')
 
     global_vars.add_to_next_id(submission_count)
+    open_wks.update_cells(cells_to_update)
 
     # Removing Submissions from form worksheet
     for _ in range(submission_count):
@@ -69,6 +72,38 @@ def get_open_submissions():
 
 def get_open_submission(submission_id):
     return get_submission(submission_id, DB.get_open_submissions_worksheet())
+
+# Returns all submissions that are in the confirmed submissions worksheet.
+def get_confirmed_submissions_raw():
+    wks = DB.get_confirmed_submissions_worksheet()
+    return wks.get_all_records()
+
+def get_confirmed_submissions():
+    submissions = get_confirmed_submissions_raw()
+
+    for index, submission in enumerate(submissions):
+        submissions[index] = Submission_Class.from_dict(submission)
+    
+    return submissions
+
+def get_confirmed_submission(submissions_id):
+    return get_submission(submission_id, DB.get_confirmed_submissions_worksheet())
+
+# Returns all submissions that are in the denied submissions worksheet.
+def get_denied_submissions_raw():
+    wks = DB.get_denied_submissions_worksheet()
+    return wks.get_all_records()
+
+def get_denied_submissions():
+    submissions = get_denied_submissions_raw()
+
+    for index, submission in enumerate(submissions):
+        submissions[index] = Submission_Class.from_dict(submission)
+    
+    return submissions
+
+def get_denied_submission(submissions_id):
+    return get_submission(submission_id, DB.get_denied_submissions_worksheet())
 
 # Returns a Submission object parsed from wks with the submission_id
 def get_submission(submission_id, wks):

@@ -10,11 +10,13 @@ from Discord.permissions import *
 import Discord.config as config
 import Discord.submission.post as post
 import Database.submissions as submissions
+import Database.message as msg
 
 # Submissions Command Branch -----------------------------------------------------------------------------
 SUBMISSIONS_COMMANDS = Command_Branch('View, confirm and deny submissions.')
 
 submission_roles = ['Admin', 'Moderator']
+submission_perms = [ADMINISTRATOR]
 
 # Open ---------------------------------------------------------------------------------------------------
 async def open_function(client, user_command, message):
@@ -95,7 +97,7 @@ confirm_params = [
 
 SUBMISSIONS_COMMANDS.add_command('confirm', Command_Leaf(confirm_submission, 'Marks a submission as confirmed.', roles = submission_roles, servers = [config.OWNER_SERVER_ID], params = confirm_params))
 
-# Confirm ------------------------------------------------------------------------------------------------
+# Deny ---------------------------------------------------------------------------------------------------
 async def deny_submission(client, user_command, message):
     # Sending working message.
     sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Please wait...'))
@@ -118,3 +120,81 @@ deny_params = [
 ]
 
 SUBMISSIONS_COMMANDS.add_command('deny', Command_Leaf(deny_submission, 'Marks a submission as denied.', roles = submission_roles, servers = [config.OWNER_SERVER_ID], params = deny_params))
+
+# Outdated -----------------------------------------------------------------------------------------------
+async def outdated_function(client, user_command, message):
+    # Sending working message.
+    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
+
+    # Creating list of submissions
+    outdated_submissions = msg.get_outdated_messages(message.server.id)
+    
+    desc = None
+    if len(outdated_submissions) == 0:
+        desc = 'No outdated submissions.'
+    else:
+        desc = []
+        for sub in outdated_submissions:
+            sub_obj = sub[1]
+            desc.append('**{}** - {}\n_by {}_ - _submitted by {}_'.format(sub_obj.id, sub_obj.get_title(), ', '.join(sorted(sub_obj.creators)), sub_obj.submitted_by))
+        desc = '\n\n'.join(desc)
+    
+    # Creating embed
+    em = discord.Embed(title = 'Outdated Records', description = desc, colour = utils.discord_green)
+
+    # Sending embed
+    await client.delete_message(sent_message)
+    return em
+
+SUBMISSIONS_COMMANDS.add_command('outdated', Command_Leaf(outdated_function, 'Shows an overview of all discord posts that are require updating.', perms = submission_perms, roles = submission_roles, perm_role_operator = 'Or'))
+
+# Update -------------------------------------------------------------------------------------------------
+async def update_function(client, user_command, message):
+    # Sending working message.
+    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
+
+    submission_id = int(user_command.split(' ')[2])
+    outdated_submissions = msg.get_outdated_messages(message.server.id)
+
+    sub = None
+    for outdated_sub in outdated_submissions:
+        if outdated_sub[1].id == submission_id:
+            sub = outdated_sub
+            break
+
+    if sub == None:
+        await client.delete_message(sent_message)
+        await client.send_message(message.channel, embed = utils.error_embed('Error', 'No outdated submissions with that ID.'))
+        return
+
+    if sub[0] == None:
+        await post.post_submission_to_server(client, sub[1], message.server.id)
+    else:
+        await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
+
+    await client.delete_message(sent_message)
+    await client.send_message(message.channel, embed = utils.info_embed('Success', 'Post has successfully been updated.'))
+
+update_params = [
+    Param('index', 'The id of the submission you wish to deny.', dtype = 'int')
+]
+
+SUBMISSIONS_COMMANDS.add_command('update', Command_Leaf(update_function, 'Updated an outdate discord post.', perms = submission_perms, params = update_params, roles = submission_roles, perm_role_operator = 'Or'))
+
+# Update All ---------------------------------------------------------------------------------------------
+async def update_all_function(client, user_command, message):
+    # Sending working message.
+    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
+
+    outdated_submissions = msg.get_outdated_messages(message.server.id)
+
+    for sub in outdated_submissions:
+        if sub[0] == None:
+            await post.post_submission_to_server(client, sub[1], message.server.id)
+        else:
+            await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
+    
+    await client.delete_message(sent_message)
+    await client.send_message(message.channel, embed = utils.info_embed('Success', 'All posts have been successfully updated.'))
+
+SUBMISSIONS_COMMANDS.add_command('update_all', Command_Leaf(update_all_function, 'Updates all outdated discord posts.', perms = submission_perms, roles = submission_roles, perm_role_operator = 'Or'))

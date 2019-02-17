@@ -1,8 +1,10 @@
+from datetime import datetime
 import Database.config as config
 
 class Submission:
     def __init__(self):
         self.id = None
+        self.last_updated = None
         self.base_category = None
         self.door_width = None
         self.door_height = None
@@ -167,6 +169,7 @@ class Submission:
         result = Submission()
 
         result.id = int(dict['Submission ID'])
+        result.last_updated = datetime.strptime(dict['Last Update'], r'%d-%m-%Y %H:%M:%S')
         result.base_category = dict['Record Category']
         if dict['Door Width']:
             result.door_width = int(dict['Door Width'])
