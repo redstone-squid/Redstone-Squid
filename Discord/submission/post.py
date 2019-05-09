@@ -21,7 +21,11 @@ def generate_embed(submission_obj):
     description = submission_obj.get_description()
     
     # Embed -------------------------------------------------------------------------------
-    em = discord.Embed(title = title, description = description, colour = utils.discord_green)
+    em = None
+    if description is None:
+        em = discord.Embed(title = title,  colour = utils.discord_green)
+    else:
+        em = discord.Embed(title = title, description = description, colour = utils.discord_green)
 
     fields = submission_obj.get_meta_fields()
     for key, val in fields.items():
@@ -40,12 +44,16 @@ def get_channel_type_to_post_to(submission_obj):
         return 'First'
 
     if submission_obj.base_category == 'Fastest' or submission_obj.base_category == 'Fastest Smallest':
-        if 'Observerless' in submission_obj.so_restrictions:
+        if submission_obj.so_restrictions is None:
+            return 'Fastest'
+        elif 'Observerless' in submission_obj.so_restrictions:
             return 'Fastest Observerless'
         else:
             return 'Fastest'
     elif submission_obj.base_category == 'Smallest' or submission_obj.base_category == 'Smallest Fastest':
-        if 'Observerless' in submission_obj.so_restrictions:
+        if submission_obj.so_restrictions is None:
+            return 'Smallest'
+        elif 'Observerless' in submission_obj.so_restrictions:
             return 'Smallest Observerless'
         else:
             return 'Smallest'
