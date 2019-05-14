@@ -17,4 +17,4 @@ DENIED_SUBMISSIONS_SHEET_INDEX = 5
 MESSAGE_SHEET_INDEX = 6
 
 # List of versions for version string parser
-VERSIONS_LIST = ['Pre 1.5', '1.5', '1.6', '1.7', '1.8', '1.9', '1.10', '1.11', '1.12', '1.13', '1.13.1 / 1.13.2', '1.14']
+VERSIONS_LIST = ['Pre 1.5', '1.5', '1.6', '1.7', '1.8', '1.9', '1.10', '1.11', '1.12', '1.13', '1.13.1 / 1.13.2', '1.14', '1.14.1']
