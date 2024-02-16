@@ -52,7 +52,17 @@ async def on_ready():
     await log(f'Bot logged in with name: {bot.user.name} and id: {bot.user.id}.', first_log=True)
 
 
-# Message event
+# Temporary fix
+# TODO: Remove this event after the bot doesn't break when it is in more than one server
+@bot.event
+async def on_guild_join(guild: discord.Guild):
+    if guild != OWNER_SERVER_ID:
+        # Send a warning message in the server, and then leave
+        await log(f'Bot joined server: {guild.name} with id: {guild.id}.')
+        await guild.system_channel.send('I am not supposed to be in this server. Leaving now.')
+        await guild.leave()
+
+
 @bot.event
 async def on_message(message: discord.Message):
     user_command = ''
