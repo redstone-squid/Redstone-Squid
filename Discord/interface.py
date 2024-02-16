@@ -18,11 +18,11 @@ if not TOKEN:
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
 
-CLIENT = discord.Client()
+CLIENT = discord.Client(intents=discord.Intents.all())
 LOG_USER = {'name': OWNER}
 
 # Log function
-def log(msg, first_log = False):
+async def log(msg, first_log=False):
     timestamp_msg = utils.get_time() + msg
     print(timestamp_msg)
     if first_log:
@@ -45,17 +45,17 @@ async def on_message(message):
 
     if message.content.startswith(PREFIX):
         user_command = message.content.replace(PREFIX, '', 1)
-    elif not message.server:
+    elif not message.guild:
         user_command = message.content
 
     if CLIENT.user.id != message.author.id and user_command:
         log_message = str(message.author) + ' ran: "' + user_command + '"'
-        if message.server:
-            log_message += ' in server: {}.'.format(message.server.name)
+        if message.guild:
+            log_message += ' in server: {}.'.format(message.guild.name)
         else:
             log_message += ' in a private message.'
         log_routine = log(log_message)
-        if LOG_USER['name'] != str(message.author) or message.server:
+        if LOG_USER['name'] != str(message.author) or message.guild:
             await log_routine
 
         output = await COMMANDS.execute(user_command, CLIENT, user_command, message)
