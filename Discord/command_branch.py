@@ -4,9 +4,11 @@ from Discord.command_leaf import Command_Leaf
 import Discord.utils as utils
 import Discord.permissions as perms
 
+
 class Command_Branch(Command):
 
-    def __init__(self, brief, function = None, params = None, perms = None, roles = None, servers = None, perm_role_operator = 'And', **kwargs):
+    def __init__(self, brief, function=None, params=None, perms=None, roles=None, servers=None,
+                 perm_role_operator='And', **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
@@ -22,7 +24,7 @@ class Command_Branch(Command):
         self._commands = {}
 
         self.validate_params()
-    
+
     def get_command(self, cmd, *argv):
         if not isinstance(cmd, str):
             return None, None
@@ -32,7 +34,7 @@ class Command_Branch(Command):
             if len(argv) == 0 or isinstance(self._commands[cmd], Command_Leaf):
                 return self._commands[cmd], argv
             return self._commands[cmd].get_command(*argv)
-        
+
         return None, None
 
     def validate_add_command(self, cmd_string, cmd):
@@ -59,20 +61,25 @@ class Command_Branch(Command):
             return utils.error_embed('Error.', 'Unable to find command.')
 
         if cmd._servers and not int(argv[2].guild.id) in cmd._servers:
-            return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
+            return utils.error_embed('Insufficient Permissions.',
+                                     'This command can only be executed on certain servers.')
 
         # TODO: this fails if user DMs the bot, as 'User' object has no attribute 'roles'.
-        roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author))
+        roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles,
+                                               argv[2].channel.permissions_for(argv[2].author))
         permissions_validated = perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms)
 
         if cmd._perm_role_operator == 'And':
             if not roles_validated:
-                return utils.error_embed('Insufficient Permissions.', 'This command can only be executed by certain roles.')
+                return utils.error_embed('Insufficient Permissions.',
+                                         'This command can only be executed by certain roles.')
             if not permissions_validated:
-                return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')    
+                return utils.error_embed('Insufficient Permissions.',
+                                         'You do not have the permissions required to execute that command.')
         else:
             if not roles_validated and not permissions_validated:
-                return utils.error_embed('Insufficient Permissions.', 'You do not have the permissions required to execute that command.')
+                return utils.error_embed('Insufficient Permissions.',
+                                         'You do not have the permissions required to execute that command.')
 
         error = cmd.validate_execute_command(argv_return)
         if error:
@@ -84,9 +91,9 @@ class Command_Branch(Command):
                 return await cmd._function(*argv, **kwargs)
             else:
                 return cmd._function(*argv, **kwargs)
-        
+
         return utils.error_embed('Error.', 'could not find a callable in the command object.')
-        
+
     def get_help_message(self, *argv):
         cmd = self
         if len(argv) != 0:
