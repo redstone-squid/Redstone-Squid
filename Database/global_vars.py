@@ -2,6 +2,8 @@ import Database.main as DB
 import Database.config as config
 import Google.interface as Google
 
+# Submission ID is the primary key for the submissions in the whole database.
+# Next ID is the next available submission ID.
 def get_next_id():
     wks = DB.get_globals_worksheet()
     return int(wks.get_all_records()[0]['Next ID'])
