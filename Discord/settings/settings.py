@@ -17,10 +17,10 @@ channel_set_params = [
     Param('channel', 'The channel that you want to update this setting to.', dtype = 'channel_mention', optional = False)
 ]
 
-# Returns the channel which has been set to deal with the channel perpose.
-def get_channel_for(server, channel_perpose):
+# Returns the channel which has been set to deal with the channel purpose.
+def get_channel_for(server, channel_purpose):
     # Getting channel if from database
-    channel_id = server_settings.get_server_setting(server.id, channel_perpose)
+    channel_id = server_settings.get_server_setting(server.id, channel_purpose)
 
     # If channel is none or cannot be converted to int, return None.
     if channel_id is None:
@@ -72,17 +72,17 @@ async def query_all(client, user_command, message):
 
 SETTINGS_COMMANDS.add_command('query_all', Command_Leaf(query_all, 'Queries all settings.', roles = channel_settings_roles))
 
-# Finds which channel is set for a perpose and sends the results to the user.
-async def query_channel(client, user_command, message, channel_perpose):
+# Finds which channel is set for a purpose and sends the results to the user.
+async def query_channel(client, user_command, message, channel_purpose):
     sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
-    result_channel = get_channel_for(message.guild, channel_perpose)
+    result_channel = get_channel_for(message.guild, channel_purpose)
     await message.channel.delete(sent_message)
     if result_channel is None:
-        return utils.info_embed('{} Channel Info'.format(channel_perpose), 'Unset - Use the set command to set a channel.')
-    return utils.info_embed('{} Channel Info'.format(channel_perpose), 'ID: {} \n Name: {}'.format(result_channel.id, result_channel.name))
+        return utils.info_embed('{} Channel Info'.format(channel_purpose), 'Unset - Use the set command to set a channel.')
+    return utils.info_embed('{} Channel Info'.format(channel_purpose), 'ID: {} \n Name: {}'.format(result_channel.id, result_channel.name))
 
-# Sets the current channel for a perpose.
-async def set_channel(client, user_command, message, channel_perpose):
+# Sets the current channel for a purpose.
+async def set_channel(client, user_command, message, channel_purpose):
     sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
 
     # channel_id looks like <#599268156258648073>
@@ -98,19 +98,19 @@ async def set_channel(client, user_command, message, channel_perpose):
         return utils.error_embed('Error', 'Could not find that channel.')
 
     # Updating database
-    server_settings.update_server_setting(message.guild.id, channel_perpose, channel_id)
+    server_settings.update_server_setting(message.guild.id, channel_purpose, channel_id)
 
     # Sending success message
     await sent_message.delete()
-    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been set.'.format(channel_perpose)))
+    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been set.'.format(channel_purpose)))
 
-# Unsets all channels from having a perpose.
-async def unset_channel(client, user_command, message, channel_perpose):
+# Unsets all channels from having a purpose.
+async def unset_channel(client, user_command, message, channel_purpose):
     sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
     server_id = message.guild.id
-    server_settings.update_server_setting(server_id, channel_perpose, '')
+    server_settings.update_server_setting(server_id, channel_purpose, '')
     await sent_message.delete()
-    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been unset.'.format(channel_perpose)))
+    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been unset.'.format(channel_purpose)))
 
 # Smallest ---------------------------------------------------------------------------------------------------
 # Creating command branch
