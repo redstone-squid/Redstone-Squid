@@ -42,7 +42,7 @@ async def open_function(client, user_command, message):
     em = discord.Embed(title = 'Open Records', description = desc, colour = utils.discord_green)
 
     # Sending embed
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     return em
 
 SUBMISSIONS_COMMANDS.add_command('open', Command_Leaf(open_function, 'Shows an overview of all submissions open for review.', roles = submission_roles))
@@ -61,7 +61,7 @@ async def view_function(client, user_command, message):
             result = sub
             break
         
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     if result == None:
         return utils.error_embed('Error', 'No open submission with that ID.')
     return post.generate_embed(result)
@@ -81,14 +81,14 @@ async def confirm_submission(client, user_command, message):
     sub = submissions.get_open_submission(submission_id)
 
     if sub == None:
-        await client.delete_message(sent_message)
+        await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
 
     await post.post_submission(client, sub)
     submissions.confirm_submission(sub.id)
 
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     await message.channel.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
 confirm_params = [
@@ -106,13 +106,13 @@ async def deny_submission(client, user_command, message):
     sub = submissions.get_open_submission(submission_id)
 
     if sub == None:
-        await client.delete_message(sent_message)
+        await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
 
     submissions.deny_submission(sub.id)
 
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     await message.channel.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
 deny_params = [
@@ -143,7 +143,7 @@ async def outdated_function(client, user_command, message):
     em = discord.Embed(title = 'Outdated Records', description = desc, colour = utils.discord_green)
 
     # Sending embed
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     return em
 
 SUBMISSIONS_COMMANDS.add_command('outdated', Command_Leaf(outdated_function, 'Shows an overview of all discord posts that are require updating.', perms = submission_perms, roles = submission_roles, perm_role_operator = 'Or'))
@@ -163,7 +163,7 @@ async def update_function(client, user_command, message):
             break
 
     if sub == None:
-        await client.delete_message(sent_message)
+        await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
         return
 
@@ -172,7 +172,7 @@ async def update_function(client, user_command, message):
     else:
         await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
 
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     await message.channel.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
 update_params = [
@@ -194,7 +194,7 @@ async def update_all_function(client, user_command, message):
         else:
             await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
     
-    await client.delete_message(sent_message)
+    await sent_message.delete()
     await message.channel.send(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
 SUBMISSIONS_COMMANDS.add_command('update_all', Command_Leaf(update_all_function, 'Updates all outdated discord posts.', perms = submission_perms, roles = submission_roles, perm_role_operator = 'Or'))
