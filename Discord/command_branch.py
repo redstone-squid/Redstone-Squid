@@ -58,7 +58,7 @@ class Command_Branch(Command):
         if cmd is None:
             return utils.error_embed('Error.', 'Unable to find command.')
 
-        if cmd._servers and not int(argv[2].server.id) in cmd._servers:
+        if cmd._servers and not int(argv[2].guild.id) in cmd._servers:
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
         roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author))
