@@ -64,7 +64,7 @@ def get_open_submissions_raw():
 
 def get_open_submissions():
     submissions = get_open_submissions_raw()
-    
+
     for index, submission in enumerate(submissions):
         submissions[index] = Submission_Class.from_dict(submission)
 
@@ -144,4 +144,3 @@ def confirm_submission(submission_id):
 # Deny submission
 def deny_submission(submission_id):
     return move_submission(submission_id, DB.get_open_submissions_worksheet(), DB.get_denied_submissions_worksheet())
-    
