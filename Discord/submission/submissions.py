@@ -21,7 +21,7 @@ submission_perms = [ADMINISTRATOR]
 # Open ---------------------------------------------------------------------------------------------------
 async def open_function(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
 
     # Updating open worksheet to contain all submitted from google form.
     submissions.open_form_submissions()
@@ -50,7 +50,7 @@ SUBMISSIONS_COMMANDS.add_command('open', Command_Leaf(open_function, 'Shows an o
 # View ---------------------------------------------------------------------------------------------------
 async def view_function(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
 
     index = int(user_command.split(' ')[2])
     open_submissions = submissions.get_open_submissions()
@@ -75,21 +75,21 @@ SUBMISSIONS_COMMANDS.add_command('view', Command_Leaf(view_function, 'Displays a
 # Confirm ------------------------------------------------------------------------------------------------
 async def confirm_submission(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Please wait...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Please wait...'))
 
     submission_id = int(user_command.split(' ')[2])
     sub = submissions.get_open_submission(submission_id)
 
     if sub == None:
         await client.delete_message(sent_message)
-        await client.send_message(message.channel, embed = utils.error_embed('Error', 'No open submission with that ID.'))
+        await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
 
     await post.post_submission(client, sub)
     submissions.confirm_submission(sub.id)
 
     await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Success', 'Submission has successfully been confirmed.'))
+    await message.channel.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
 confirm_params = [
     Param('index', 'The id of the submission you wish to confirm.', dtype = 'int')
@@ -100,20 +100,20 @@ SUBMISSIONS_COMMANDS.add_command('confirm', Command_Leaf(confirm_submission, 'Ma
 # Deny ---------------------------------------------------------------------------------------------------
 async def deny_submission(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Please wait...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Please wait...'))
 
     submission_id = int(user_command.split(' ')[2])
     sub = submissions.get_open_submission(submission_id)
 
     if sub == None:
         await client.delete_message(sent_message)
-        await client.send_message(message.channel, embed = utils.error_embed('Error', 'No open submission with that ID.'))
+        await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
 
     submissions.deny_submission(sub.id)
 
     await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Success', 'Submission has successfully been denied.'))
+    await message.channel.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
 deny_params = [
     Param('index', 'The id of the submission you wish to deny.', dtype = 'int')
@@ -124,7 +124,7 @@ SUBMISSIONS_COMMANDS.add_command('deny', Command_Leaf(deny_submission, 'Marks a 
 # Outdated -----------------------------------------------------------------------------------------------
 async def outdated_function(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
 
     # Creating list of submissions
     outdated_submissions = msg.get_outdated_messages(message.server.id)
@@ -151,7 +151,7 @@ SUBMISSIONS_COMMANDS.add_command('outdated', Command_Leaf(outdated_function, 'Sh
 # Update -------------------------------------------------------------------------------------------------
 async def update_function(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
 
     submission_id = int(user_command.split(' ')[2])
     outdated_submissions = msg.get_outdated_messages(message.server.id)
@@ -164,7 +164,7 @@ async def update_function(client, user_command, message):
 
     if sub == None:
         await client.delete_message(sent_message)
-        await client.send_message(message.channel, embed = utils.error_embed('Error', 'No outdated submissions with that ID.'))
+        await message.channel.send(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
         return
 
     if sub[0] == None:
@@ -173,7 +173,7 @@ async def update_function(client, user_command, message):
         await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
 
     await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Success', 'Post has successfully been updated.'))
+    await message.channel.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
 update_params = [
     Param('index', 'The id of the submission you wish to deny.', dtype = 'int')
@@ -184,7 +184,7 @@ SUBMISSIONS_COMMANDS.add_command('update', Command_Leaf(update_function, 'Update
 # Update All ---------------------------------------------------------------------------------------------
 async def update_all_function(client, user_command, message):
     # Sending working message.
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
 
     outdated_submissions = msg.get_outdated_messages(message.server.id)
 
@@ -195,6 +195,6 @@ async def update_all_function(client, user_command, message):
             await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
     
     await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Success', 'All posts have been successfully updated.'))
+    await message.channel.send(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
 SUBMISSIONS_COMMANDS.add_command('update_all', Command_Leaf(update_all_function, 'Updates all outdated discord posts.', perms = submission_perms, roles = submission_roles, perm_role_operator = 'Or'))
