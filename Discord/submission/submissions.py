@@ -62,7 +62,7 @@ async def view_function(client, user_command, message):
             break
         
     await sent_message.delete()
-    if result == None:
+    if result is None:
         return utils.error_embed('Error', 'No open submission with that ID.')
     return post.generate_embed(result)
 
@@ -80,7 +80,7 @@ async def confirm_submission(client, user_command, message):
     submission_id = int(user_command.split(' ')[2])
     sub = submissions.get_open_submission(submission_id)
 
-    if sub == None:
+    if sub is None:
         await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
@@ -105,7 +105,7 @@ async def deny_submission(client, user_command, message):
     submission_id = int(user_command.split(' ')[2])
     sub = submissions.get_open_submission(submission_id)
 
-    if sub == None:
+    if sub is None:
         await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         return
@@ -162,12 +162,12 @@ async def update_function(client, user_command, message):
             sub = outdated_sub
             break
 
-    if sub == None:
+    if sub is None:
         await sent_message.delete()
         await message.channel.send(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
         return
 
-    if sub[0] == None:
+    if sub[0] is None:
         await post.post_submission_to_server(client, sub[1], message.server.id)
     else:
         await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
@@ -189,7 +189,7 @@ async def update_all_function(client, user_command, message):
     outdated_submissions = msg.get_outdated_messages(message.server.id)
 
     for sub in outdated_submissions:
-        if sub[0] == None:
+        if sub[0] is None:
             await post.post_submission_to_server(client, sub[1], message.server.id)
         else:
             await post.edit_post(client, message.server, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
