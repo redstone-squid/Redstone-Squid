@@ -61,6 +61,7 @@ class Command_Branch(Command):
         if cmd._servers and not int(argv[2].guild.id) in cmd._servers:
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
+        # TODO: this fails if user DMs the bot, as 'User' object has no attribute 'roles'.
         roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author))
         permissions_validated = perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms)
 
