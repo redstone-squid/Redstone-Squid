@@ -55,12 +55,13 @@ class Command_Branch(Command):
         cmd_argv = cmd_to_execute.split(' ')
         cmd, argv_return = self.get_command(*cmd_argv)
 
-        if cmd == None:
+        if cmd is None:
             return utils.error_embed('Error.', 'Unable to find command.')
 
-        if cmd._servers and not int(argv[2].server.id) in cmd._servers:
+        if cmd._servers and not int(argv[2].guild.id) in cmd._servers:
             return utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
 
+        # TODO: this fails if user DMs the bot, as 'User' object has no attribute 'roles'.
         roles_validated = perms.validate_roles(argv[2].author.roles, cmd._roles, argv[2].channel.permissions_for(argv[2].author))
         permissions_validated = perms.validate_permissions(argv[2].channel.permissions_for(argv[2].author), cmd._perms)
 
@@ -79,6 +80,7 @@ class Command_Branch(Command):
 
         if cmd._function and callable(cmd._function):
             if iscoroutinefunction(cmd._function):
+                # TODO: Add error handling for failing here.
                 return await cmd._function(*argv, **kwargs)
             else:
                 return cmd._function(*argv, **kwargs)
@@ -89,7 +91,7 @@ class Command_Branch(Command):
         cmd = self
         if len(argv) != 0:
             cmd, _ = self.get_command(*argv)
-        if cmd == None:
+        if cmd is None:
             return utils.error_embed('Error.', 'Unable to find command. Use help to get a list of avaliable commands.')
 
         if isinstance(cmd, Command_Leaf):

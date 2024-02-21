@@ -17,90 +17,100 @@ channel_set_params = [
     Param('channel', 'The channel that you want to update this setting to.', dtype = 'channel_mention', optional = False)
 ]
 
-# Returns the channel which has been set to deal with the channel perpose.
-def get_channel_for(server, channel_perpose):
+# Returns the channel which has been set to deal with the channel purpose.
+def get_channel_for(server, channel_purpose):
     # Getting channel if from database
-    channel_id = server_settings.get_server_setting(server.id, channel_perpose)
+    channel_id = server_settings.get_server_setting(server.id, channel_purpose)
 
     # If channel is none or cannot be converted to int, return None.
-    if channel_id == None:
+    if channel_id is None:
         return None
     channel_id = str(channel_id)
 
     return server.get_channel(channel_id)
 
 # Gets all channels
-def get_all_channels(server):
+def get_all_channels(server: discord.Guild):
+    """
+    Gets all record channels of a server from the server settings table.
+
+    This includes the following:
+    - Smallest
+    - Fastest
+    - Smallest Observerless
+    - Fastest Observerless
+    - First
+    :param server: The server to get the channels from.
+    :return: A dictionary with the channel names as keys and the channel objects as values.
+    """
     settings = server_settings.get_server_settings(server.id)
-    result = {}
-
-    for key, val in settings.items():
-        settings[key] = str(val)
-
-    result['Smallest'] = server.get_channel(settings['Smallest'])
-    result['Fastest'] = server.get_channel(settings['Fastest'])
-    result['Smallest Observerless'] = server.get_channel(settings['Smallest Observerless'])
-    result['Fastest Observerless'] = server.get_channel(settings['Fastest Observerless'])
-    result['First'] = server.get_channel(settings['First'])
+    result = {'Smallest': server.get_channel(settings['Smallest']),
+              'Fastest': server.get_channel(settings['Fastest']),
+              'Smallest Observerless': server.get_channel(settings['Smallest Observerless']),
+              'Fastest Observerless': server.get_channel(settings['Fastest Observerless']),
+              'First': server.get_channel(settings['First'])}
 
     return result
 
 # Query all settings.
 async def query_all(client, user_command, message):
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
     
-    channels = get_all_channels(message.server)
+    channels = get_all_channels(message.guild)
 
     desc = ''
-    desc += '`smallest channel`: {}\n'.format('_Not set_' if channels['Smallest'] == None else '#' + channels['Smallest'].name)
-    desc += '`fastest channel`: {}\n'.format('_Not set_' if channels['Fastest'] == None else '#' + channels['Fastest'].name)
-    desc += '`smallest observerless channel`: {}\n'.format('_Not set_' if channels['Smallest Observerless'] == None else '#' + channels['Smallest Observerless'].name)
-    desc += '`fastest observerless channel`: {}\n'.format('_Not set_' if channels['Fastest Observerless'] == None else '#' + channels['Fastest Observerless'].name)
-    desc += '`first channel`: {}\n'.format('_Not set_' if channels['First'] == None else '#' + channels['First'].name)
+    desc += '`smallest channel`: {}\n'.format('_Not set_' if channels['Smallest'] is None else '#' + channels['Smallest'].name)
+    desc += '`fastest channel`: {}\n'.format('_Not set_' if channels['Fastest'] is None else '#' + channels['Fastest'].name)
+    desc += '`smallest observerless channel`: {}\n'.format('_Not set_' if channels['Smallest Observerless'] is None else '#' + channels['Smallest Observerless'].name)
+    desc += '`fastest observerless channel`: {}\n'.format('_Not set_' if channels['Fastest Observerless'] is None else '#' + channels['Fastest Observerless'].name)
+    desc += '`first channel`: {}\n'.format('_Not set_' if channels['First'] is None else '#' + channels['First'].name)
 
-    em = discord.Embed(title = 'Current Settings', description = desc, colour = utils.discord_green)
+    em = discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green)
 
-    await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = em)
+    await sent_message.delete()
+    await message.channel.send(embed=em)
 
 SETTINGS_COMMANDS.add_command('query_all', Command_Leaf(query_all, 'Queries all settings.', roles = channel_settings_roles))
 
-# Finds which channel is set for a perpose and sends the results to the user.
-async def query_channel(client, user_command, message, channel_perpose):
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Getting information...'))
-    result_channel = get_channel_for(message.server, channel_perpose)
-    await client.delete_message(sent_message)
-    if result_channel == None:
-        return utils.info_embed('{} Channel Info'.format(channel_perpose), 'Unset - Use the set command to set a channel.')
-    return utils.info_embed('{} Channel Info'.format(channel_perpose), 'ID: {} \n Name: {}'.format(result_channel.id, result_channel.name))
+# Finds which channel is set for a purpose and sends the results to the user.
+async def query_channel(client, user_command, message, channel_purpose):
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
+    result_channel = get_channel_for(message.guild, channel_purpose)
+    await message.channel.delete(sent_message)
+    if result_channel is None:
+        return utils.info_embed('{} Channel Info'.format(channel_purpose), 'Unset - Use the set command to set a channel.')
+    return utils.info_embed('{} Channel Info'.format(channel_purpose), 'ID: {} \n Name: {}'.format(result_channel.id, result_channel.name))
 
-# Sets the current channel for a perpose.
-async def set_channel(client, user_command, message, channel_perpose):
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
+# Sets the current channel for a purpose.
+async def set_channel(client, user_command, message, channel_purpose):
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
 
+    # channel_id looks like <#599268156258648073>
+    # This line removes the <#> from the string.
+    # TODO: ugly code
     channel_id = user_command.split(' ')[3]
     for c in '<#>':
         channel_id = str.replace(channel_id, c, '')
 
     # Verifying channel exists on server
-    if message.server.get_channel(channel_id) == None:
-        await client.delete_message(sent_message)
+    if message.guild.get_channel(int(channel_id)) is None:
+        await sent_message.delete()
         return utils.error_embed('Error', 'Could not find that channel.')
 
     # Updating database
-    server_settings.update_server_setting(message.server.id, channel_perpose, channel_id)
+    server_settings.update_server_setting(message.guild.id, channel_purpose, channel_id)
 
     # Sending success message
-    await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Settings updated', '{} channel has successfully been set.'.format(channel_perpose)))
+    await sent_message.delete()
+    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been set.'.format(channel_purpose)))
 
-# Unsets all channels from having a perpose.
-async def unset_channel(client, user_command, message, channel_perpose):
-    sent_message = await client.send_message(message.channel, embed = utils.info_embed('Working', 'Updating information...'))
-    server_id = message.server.id
-    server_settings.update_server_setting(server_id, channel_perpose, '')
-    await client.delete_message(sent_message)
-    await client.send_message(message.channel, embed = utils.info_embed('Settings updated', '{} channel has successfully been unset.'.format(channel_perpose)))
+# Unsets all channels from having a purpose.
+async def unset_channel(client, user_command, message, channel_purpose):
+    sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Updating information...'))
+    server_id = message.guild.id
+    server_settings.update_server_setting(server_id, channel_purpose, '')
+    await sent_message.delete()
+    await message.channel.send(embed=utils.info_embed('Settings updated', '{} channel has successfully been unset.'.format(channel_purpose)))
 
 # Smallest ---------------------------------------------------------------------------------------------------
 # Creating command branch

@@ -165,63 +165,63 @@ class Submission:
         return fields
         
     @staticmethod
-    def from_dict(dict):
+    def from_dict(submission: dict):
         result = Submission()
 
-        result.id = int(dict['Submission ID'])
-        result.last_updated = datetime.strptime(dict['Last Update'], r'%d-%m-%Y %H:%M:%S')
-        result.base_category = dict['Record Category']
-        if dict['Door Width']:
-            result.door_width = int(dict['Door Width'])
-        if dict['Door Height']:
-            result.door_height = int(dict['Door Height'])
-        result.door_pattern = dict['Pattern'].split(', ')
-        if dict['Door Type'] == 'Trapdoor':
+        result.id = int(submission['Submission ID'])
+        result.last_updated = datetime.strptime(submission['Last Update'], r'%d-%m-%Y %H:%M:%S')  # TODO: make this stop relying on a specific format
+        result.base_category = submission['Record Category']
+        if submission['Door Width']:
+            result.door_width = int(submission['Door Width'])
+        if submission['Door Height']:
+            result.door_height = int(submission['Door Height'])
+        result.door_pattern = submission['Pattern'].split(', ')
+        if submission['Door Type'] == 'Trapdoor':
             result.door_type = 'TRAP'
-        if dict['Door Type'] == 'Skydoor':
+        if submission['Door Type'] == 'Skydoor':
             result.door_type = 'SKY'
-        if dict['First Order Restrictions']:
-            result.fo_restrictions = dict['First Order Restrictions'].split(', ')
-        if dict['Second Order Restrictions']:
-            result.so_restrictions = dict['Second Order Restrictions'].split(', ')
-        if dict['Information About Build']:
-            result.information = dict['Information About Build']
-        result.build_width = int(dict['Width Of Build'])
-        result.build_height = int(dict['Height Of Build'])
-        result.build_depth = int(dict['Depth Of Build'])
-        result.relative_close_time = float(dict['Relative Closing Time'])
-        result.relative_open_time = float(dict['Relative Opening Time'])
-        if dict['Absolute Closing Time']:
-            result.absolute_close_time = float(dict['Absolute Closing Time'])
-        if dict['Absolute Opening Time']:
-            result.absolute_open_time = float(dict['Absolute Opening Time'])
-        if dict['Date Of Creation']:
-            result.build_date = dict['Date Of Creation']
+        if submission['First Order Restrictions']:
+            result.fo_restrictions = submission['First Order Restrictions'].split(', ')
+        if submission['Second Order Restrictions']:
+            result.so_restrictions = submission['Second Order Restrictions'].split(', ')
+        if submission['Information About Build']:
+            result.information = submission['Information About Build']
+        result.build_width = int(submission['Width Of Build'])
+        result.build_height = int(submission['Height Of Build'])
+        result.build_depth = int(submission['Depth Of Build'])
+        result.relative_close_time = float(submission['Relative Closing Time'])
+        result.relative_open_time = float(submission['Relative Opening Time'])
+        if submission['Absolute Closing Time']:
+            result.absolute_close_time = float(submission['Absolute Closing Time'])
+        if submission['Absolute Opening Time']:
+            result.absolute_open_time = float(submission['Absolute Opening Time'])
+        if submission['Date Of Creation']:
+            result.build_date = submission['Date Of Creation']
         else:
-            result.build_date = dict['Timestamp']
-        result.creators = dict['In Game Name(s) Of Creator(s)'].split(',')
-        if dict['Locationality'] == 'Locational with known fixes for each location':
+            result.build_date = submission['Timestamp']
+        result.creators = submission['In Game Name(s) Of Creator(s)'].split(',')
+        if submission['Locationality'] == 'Locational with known fixes for each location':
             result.locational = 'LOCATIONAL_FIX'
-        elif dict['Locationality'] == 'Locational without known fixes for each location':
+        elif submission['Locationality'] == 'Locational without known fixes for each location':
             result.locational = 'LOCATIONAL'
-        if dict['Directionality'] == 'Directional with known fixes for each direction':
+        if submission['Directionality'] == 'Directional with known fixes for each direction':
             result.directional = 'DIRECTIONAL_FIX'
-        elif dict['Directionality'] == 'Directional without known fixes for each direction':
+        elif submission['Directionality'] == 'Directional without known fixes for each direction':
             result.directional = 'DIRECTIONAL'
-        result.versions = str(dict['Versions Which Submission Works In']).split(', ')
-        if dict['Link To Image']:
-            result.image_url = dict['Link To Image']
-        if dict['Link To YouTube Video']:
-            result.youtube_link = dict['Link To YouTube Video']
-        if dict['Link To World Download']:
-            result.world_download_link = dict['Link To World Download']
-        if dict['Server IP']:
-            result.server_ip = dict['Server IP']
-        if dict['Coordinates']:
-            result.coordinates = dict['Coordinates']
-        if dict['Command To Get To Build/Plot']:
-            result.command = dict['Command To Get To Build/Plot']
-        result.submitted_by = dict['Your IGN / Discord Handle']
+        result.versions = str(submission['Versions Which Submission Works In']).split(', ')
+        if submission['Link To Image']:
+            result.image_url = submission['Link To Image']
+        if submission['Link To YouTube Video']:
+            result.youtube_link = submission['Link To YouTube Video']
+        if submission['Link To World Download']:
+            result.world_download_link = submission['Link To World Download']
+        if submission['Server IP']:
+            result.server_ip = submission['Server IP']
+        if submission['Coordinates']:
+            result.coordinates = submission['Coordinates']
+        if submission['Command To Get To Build/Plot']:
+            result.command = submission['Command To Get To Build/Plot']
+        result.submitted_by = submission['Your IGN / Discord Handle']
 
         return result
 

@@ -64,7 +64,7 @@ def get_open_submissions_raw():
 
 def get_open_submissions():
     submissions = get_open_submissions_raw()
-    
+
     for index, submission in enumerate(submissions):
         submissions[index] = Submission_Class.from_dict(submission)
 
@@ -86,6 +86,7 @@ def get_confirmed_submissions():
     
     return submissions
 
+# TODO: fix this
 def get_confirmed_submission(submissions_id):
     return get_submission(submission_id, DB.get_confirmed_submissions_worksheet())
 
@@ -102,6 +103,7 @@ def get_denied_submissions():
     
     return submissions
 
+# TODO: fix this
 def get_denied_submission(submissions_id):
     return get_submission(submission_id, DB.get_denied_submissions_worksheet())
 
@@ -127,7 +129,7 @@ def move_submission(submission_id, source_wks, destination_wks):
             break
 
     # Returns False if no such submission exist
-    if row_number == None:
+    if row_number is None:
         return False
 
     # Appends the submission to the destination worksheet
@@ -144,4 +146,3 @@ def confirm_submission(submission_id):
 # Deny submission
 def deny_submission(submission_id):
     return move_submission(submission_id, DB.get_open_submissions_worksheet(), DB.get_denied_submissions_worksheet())
-    
