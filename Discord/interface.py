@@ -2,13 +2,13 @@ import os
 import re
 import sys
 import discord
-import discord.ext.commands as commands
+from discord.ext import commands
 import configparser
 import asyncio
 
 import Discord.utils as utils
 from Discord.config import *
-from Discord.commands import COMMANDS, help_func
+from Discord.commands import COMMANDS
 
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -20,7 +20,7 @@ if not TOKEN:
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
 
-bot = commands.Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all())
+bot = commands.Bot('!', help_command=None, owner_id=OWNER_ID, intents=discord.Intents.all())
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
 log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
@@ -74,5 +74,6 @@ async def on_message(message: discord.Message):
             await message.channel.send(embed=output)
 
 
-# Running the application
-bot.run(TOKEN)
+if __name__ == '__main__':
+    # Running the application
+    bot.run(TOKEN)
