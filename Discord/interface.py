@@ -3,6 +3,7 @@ import re
 import sys
 import discord
 import configparser
+import asyncio
 
 import Discord.utils as utils
 from Discord.config import *
@@ -21,8 +22,9 @@ if not TOKEN:
 CLIENT = discord.Client(intents=discord.Intents.all())
 LOG_USER = {'name': OWNER}
 
+
 # Log function
-async def log(msg, first_log=False):
+async def log(msg: str, first_log=False):
     timestamp_msg = utils.get_time() + msg
     print(timestamp_msg)
     if first_log:
@@ -30,17 +32,19 @@ async def log(msg, first_log=False):
     if 'member' in LOG_USER:
         return CLIENT.send_message(LOG_USER['member'], timestamp_msg)
 
+
 @CLIENT.event
 async def on_ready():
     for member in CLIENT.get_all_members():
         if str(member) == LOG_USER['name']:
             LOG_USER['member'] = member
 
-    await log('Bot logged in with name: {} and id: {}.'.format(CLIENT.user.name, CLIENT.user.id), first_log = True)
+    await log('Bot logged in with name: {} and id: {}.'.format(CLIENT.user.name, CLIENT.user.id), first_log=True)
+
 
 # Message event
 @CLIENT.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     user_command = ''
 
     if message.content.startswith(PREFIX):
@@ -63,6 +67,7 @@ async def on_message(message):
             await message.channel.send(output)
         if isinstance(output, discord.Embed):
             await message.channel.send(embed=output)
+
 
 # Running the application
 CLIENT.run(TOKEN)
