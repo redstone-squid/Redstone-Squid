@@ -53,11 +53,10 @@ async def on_message(message: discord.Message):
         user_command = message.content
 
     if CLIENT.user.id != message.author.id and user_command:
-        log_message = str(message.author) + ' ran: "' + user_command + '"'
         if message.guild:
-            log_message += ' in server: {}.'.format(message.guild.name)
+            log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
         else:
-            log_message += ' in a private message.'
+            log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
         log_routine = log(log_message)
         if LOG_USER['name'] != str(message.author) or message.guild:
             await log_routine
