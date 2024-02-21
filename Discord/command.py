@@ -1,8 +1,8 @@
 import Discord.utils as utils
 
-class Param():
 
-    def __init__(self, name, description, dtype = None, min_val = None, max_val = None, min_len = None, max_len = None, optional = False):
+class Param:
+    def __init__(self, name, description, dtype=None, min_val=None, max_val=None, min_len=None, max_len=None, optional=False):
         self.name = name
         self.description = description
         self.dtype = dtype
@@ -32,8 +32,8 @@ class Param():
         if not isinstance(self.description, str):
             raise Exception('Param.description must be a string.')
 
-class Command():
 
+class Command():
     _brief = None
     _params = None
     _meta = {}
@@ -46,7 +46,7 @@ class Command():
         if i in self._meta:
             return self._meta[i]
         return None
-    
+
     def get_usage_message(self):
         if not self._params:
             return 'No parameters required.'
@@ -58,7 +58,7 @@ class Command():
             usage_message += self._params[i].description
             if i < len(self._params) - 1:
                 usage_message += '\n'
-        
+
         return usage_message
 
     def validate_params(self):
@@ -119,7 +119,7 @@ class Command():
 
         return None
 
-    def get_help(self, description = False):
+    def get_help(self, description=False):
         if description and self._params:
             return self._brief + '\n\n' + self.get_usage_message()
         elif self._brief:
