@@ -2,12 +2,13 @@ import os
 import re
 import sys
 import discord
+import discord.ext.commands as commands
 import configparser
 import asyncio
 
 import Discord.utils as utils
 from Discord.config import *
-from Discord.commands import COMMANDS
+from Discord.commands import COMMANDS, help_func
 
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -19,7 +20,7 @@ if not TOKEN:
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
 
-client = discord.Client(intents=discord.Intents.all())
+bot = commands.Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all())
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
 log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
@@ -35,18 +36,18 @@ async def log(msg: str, first_log=False, dm=True):
         return await log_user['owner_user_object'].send(timestamp_msg)
 
 
-@client.event
+@bot.event
 async def on_ready():
     # Cryptic code that seems to be trying to get the user object of the owner of the bot,
     # and then sending a message to that user only if the bot can see the owner's user object.
-    for member in client.get_all_members():
+    for member in bot.get_all_members():
         if str(member) == log_user['owner_name']:
             log_user['owner_user_object'] = member
-    await log(f'Bot logged in with name: {client.user.name} and id: {client.user.id}.', first_log=True)
+    await log(f'Bot logged in with name: {bot.user.name} and id: {bot.user.id}.', first_log=True)
 
 
 # Message event
-@client.event
+@bot.event
 async def on_message(message: discord.Message):
     user_command = ''
 
@@ -55,7 +56,7 @@ async def on_message(message: discord.Message):
     elif not message.guild:
         user_command = message.content
 
-    if client.user.id != message.author.id and user_command:
+    if bot.user.id != message.author.id and user_command:
         if message.guild:
             log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
         else:
@@ -66,7 +67,7 @@ async def on_message(message: discord.Message):
         else:
             await log(log_message)
 
-        output = await COMMANDS.execute(user_command, client, user_command, message)
+        output = await COMMANDS.execute(user_command, bot, user_command, message)
         if isinstance(output, str):
             await message.channel.send(output)
         if isinstance(output, discord.Embed):
@@ -74,4 +75,4 @@ async def on_message(message: discord.Message):
 
 
 # Running the application
-client.run(TOKEN)
+bot.run(TOKEN)
