@@ -26,13 +26,13 @@ log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
 
 
 # Log function
-async def log(msg: str, first_log=False):
+async def log(msg: str, first_log=False, dm=True):
     timestamp_msg = utils.get_time() + msg
     print(timestamp_msg)
-    if first_log:
-        timestamp_msg = '-' * 90 + '\n' + timestamp_msg
-    if log_user['owner_user_object'] is not None:
-        return log_user['owner_user_object'].send(timestamp_msg)
+    if log_user['owner_user_object'] and dm:
+        if first_log:
+            timestamp_msg = '-' * 90 + '\n' + timestamp_msg
+        return await log_user['owner_user_object'].send(timestamp_msg)
 
 
 @client.event
@@ -60,9 +60,11 @@ async def on_message(message: discord.Message):
             log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
         else:
             log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
-        log_routine = log(log_message)
-        if log_user['owner_name'] != str(message.author) or message.guild:
-            await log_routine
+        owner_dmed_bot = not message.guild and log_user['owner_name'] == str(message.author)
+        if owner_dmed_bot:
+            await log(log_message, dm=False)
+        else:
+            await log(log_message)
 
         output = await COMMANDS.execute(user_command, client, user_command, message)
         if isinstance(output, str):
