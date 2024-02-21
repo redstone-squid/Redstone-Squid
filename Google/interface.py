@@ -30,8 +30,6 @@ def connect():
 
     return credentials, gspread.authorize(credentials)
 
-import Discord.utils as utils
-
 class Connection:
     _GC = None
     _CREDS = None
