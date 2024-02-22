@@ -17,7 +17,7 @@ BOT_NAME = 'Redstone Squid'
 BOT_VERSION = '1.0'
 SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'
 
-FORM_LINK = 'https://goo.gl/forms/35mjuQHId4sgCnZ82'
+FORM_LINK = 'https://forms.gle/i9Nf6apGgPGTUohr9'
 
 COMMANDS = CommandBranch(f"{BOT_NAME} v{BOT_VERSION}")
 
