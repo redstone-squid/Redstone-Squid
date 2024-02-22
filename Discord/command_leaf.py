@@ -5,7 +5,7 @@ from Discord.command import Command, Param
 import Discord.utils as utils
 
 
-class Command_Leaf(Command):
+class CommandLeaf(Command):
     def __init__(self, function, brief, params=None, perms=None, roles=None, servers=None,
                  perm_role_operator: Literal['And', 'Or'] = 'And', **kwargs):
         self._brief: str = brief

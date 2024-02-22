@@ -3,7 +3,7 @@ from inspect import iscoroutinefunction
 from typing import Callable, Literal
 
 from Discord.command import Command, Param
-from Discord.command_leaf import Command_Leaf
+from Discord.command_leaf import CommandLeaf
 import Discord.utils as utils
 import Discord.permissions as perms
 
@@ -23,7 +23,7 @@ class CommandBranch(Command):
             raise Exception('perm_role_operator must be \'And\' or \'Or\'')
 
         self._function: Callable = function
-        self._commands: dict[str, CommandBranch | Command_Leaf] = {}
+        self._commands: dict[str, CommandBranch | CommandLeaf] = {}
 
         self.validate_params()
 
@@ -33,23 +33,23 @@ class CommandBranch(Command):
         cmd = cmd.lower()
 
         if cmd in self._commands:
-            if len(argv) == 0 or isinstance(self._commands[cmd], Command_Leaf):
+            if len(argv) == 0 or isinstance(self._commands[cmd], CommandLeaf):
                 return self._commands[cmd], argv
             return self._commands[cmd].get_command(*argv)
 
         return None, None
 
-    def validate_add_command(self, cmd_string: str, cmd: CommandBranch | Command_Leaf):
+    def validate_add_command(self, cmd_string: str, cmd: CommandBranch | CommandLeaf):
         if not isinstance(cmd_string, str):
             raise ValueError('Command name must be a string.')
         if len(cmd_string) == 0:
             raise ValueError('Command name must have at least length 1.')
         if self.get_command(cmd_string)[0] is not None:
             raise ValueError('Command already exists.')
-        if not (isinstance(cmd, Command_Leaf) or isinstance(cmd, CommandBranch)):
+        if not (isinstance(cmd, CommandLeaf) or isinstance(cmd, CommandBranch)):
             raise ValueError('Command must be a Command Node or Command Branch.')
 
-    def add_command(self, cmd_string: str, cmd: CommandBranch | Command_Leaf):
+    def add_command(self, cmd_string: str, cmd: CommandBranch | CommandLeaf):
         self.validate_add_command(cmd_string, cmd)
         cmd_string = cmd_string.lower()
 
@@ -103,7 +103,7 @@ class CommandBranch(Command):
         if cmd is None:
             return utils.error_embed('Error.', 'Unable to find command. Use help to get a list of avaliable commands.')
 
-        if isinstance(cmd, Command_Leaf):
+        if isinstance(cmd, CommandLeaf):
             return f'`{' '.join(argv)}` - {cmd.get_help(True)}\n'
         else:
             result = f'{cmd.get_help()}\n\nCommands:\n'

@@ -3,7 +3,7 @@ import discord
 
 import Discord.utils as utils
 from Discord.command import Param
-from Discord.command_leaf import Command_Leaf
+from Discord.command_leaf import CommandLeaf
 from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
@@ -28,7 +28,7 @@ async def invite_link(client, user_command, message):
         'https://discordapp.com/oauth2/authorize?client_id=' + str(client.user.id) + '&scope=bot&permissions=8')
 
 
-COMMANDS.add_command('invite_link', Command_Leaf(invite_link, 'Invite me to your other servers!'))
+COMMANDS.add_command('invite_link', CommandLeaf(invite_link, 'Invite me to your other servers!'))
 
 
 # Source code ----------------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ async def source_code(client, user_command, message):
     await message.channel.send('Source code can be found at: {}.'.format(SOURCE_CODE_URL))
 
 
-COMMANDS.add_command('source_code', Command_Leaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
+COMMANDS.add_command('source_code', CommandLeaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
 
 
 # Submit record --------------------------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ async def submit_record(client, user_command, message):
     await message.channel.send(embed=em)
 
 
-COMMANDS.add_command('submit_record', Command_Leaf(submit_record, 'Links you to our record submission form.'))
+COMMANDS.add_command('submit_record', CommandLeaf(submit_record, 'Links you to our record submission form.'))
 
 # Option ---------------------------------------------------------------------------------------------------------
 COMMANDS.add_command('settings', settings.SETTINGS_COMMANDS)
@@ -72,4 +72,4 @@ help_func_params = [
     Param('cmd', 'The command which you need help with.', dtype='text', optional=True)
 ]
 
-COMMANDS.add_command('help', Command_Leaf(help_func, 'Shows help messages.', params=help_func_params))
+COMMANDS.add_command('help', CommandLeaf(help_func, 'Shows help messages.', params=help_func_params))

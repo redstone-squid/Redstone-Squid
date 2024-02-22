@@ -2,7 +2,7 @@ import discord
 
 import Discord.utils as utils
 from Discord.command import Param
-from Discord.command_leaf import Command_Leaf
+from Discord.command_leaf import CommandLeaf
 from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
@@ -70,7 +70,7 @@ async def query_all(client, user_command, message):
     await sent_message.delete()
     await message.channel.send(embed=em)
 
-SETTINGS_COMMANDS.add_command('query_all', Command_Leaf(query_all, 'Queries all settings.', roles = channel_settings_roles))
+SETTINGS_COMMANDS.add_command('query_all', CommandLeaf(query_all, 'Queries all settings.', roles = channel_settings_roles))
 
 # Finds which channel is set for a purpose and sends the results to the user.
 async def query_channel(client, user_command, message, channel_purpose):
@@ -123,9 +123,9 @@ async def set_smallest_channel(client, user_command, message):
 async def unset_smallest_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'Smallest')
 # Adding functions to the command branch
-SMALLEST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_smallest_channel, 'Querys which channel is set to post smallest records to.', roles = channel_settings_roles))
-SMALLEST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_smallest_channel, 'Sets current channel as the channel to post smallest records to.', roles = channel_settings_roles, params = channel_set_params))
-SMALLEST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_smallest_channel, 'Unsets the channel to post smallest records to.', roles = channel_settings_roles))
+SMALLEST_CHANNEL_COMMANDS.add_command('query', CommandLeaf(query_smallest_channel, 'Querys which channel is set to post smallest records to.', roles = channel_settings_roles))
+SMALLEST_CHANNEL_COMMANDS.add_command('set', CommandLeaf(set_smallest_channel, 'Sets current channel as the channel to post smallest records to.', roles = channel_settings_roles, params = channel_set_params))
+SMALLEST_CHANNEL_COMMANDS.add_command('unset', CommandLeaf(unset_smallest_channel, 'Unsets the channel to post smallest records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('smallest_channel', SMALLEST_CHANNEL_COMMANDS)
 
@@ -140,9 +140,9 @@ async def set_fastest_channel(client, user_command, message):
 async def unset_fastest_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'Fastest')
 # Adding functions to the command branch
-FASTEST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_fastest_channel, 'Querys which channel is set to post fastest records to.', roles = channel_settings_roles))
-FASTEST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_channel, 'Sets current channel as the channel to post fastest records to.', roles = channel_settings_roles, params = channel_set_params))
-FASTEST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_fastest_channel, 'Unsets the channel to post fastest records to.', roles = channel_settings_roles))
+FASTEST_CHANNEL_COMMANDS.add_command('query', CommandLeaf(query_fastest_channel, 'Querys which channel is set to post fastest records to.', roles = channel_settings_roles))
+FASTEST_CHANNEL_COMMANDS.add_command('set', CommandLeaf(set_fastest_channel, 'Sets current channel as the channel to post fastest records to.', roles = channel_settings_roles, params = channel_set_params))
+FASTEST_CHANNEL_COMMANDS.add_command('unset', CommandLeaf(unset_fastest_channel, 'Unsets the channel to post fastest records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('fastest_channel', FASTEST_CHANNEL_COMMANDS)
 
@@ -157,9 +157,9 @@ async def set_smallest_observerless_channel(client, user_command, message):
 async def unset_smallest_observerless_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'Smallest Observerless')
 # Adding functions to the command branch
-SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_smallest_observerless_channel, 'Querys which channel is set to post smallest observerless records to.', roles = channel_settings_roles))
-SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_smallest_observerless_channel, 'Sets current channel as the channel to post smallest observerless records to.', roles = channel_settings_roles, params = channel_set_params))
-SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_smallest_observerless_channel, 'Unsets the channel to post smallest observerless records to.', roles = channel_settings_roles))
+SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', CommandLeaf(query_smallest_observerless_channel, 'Querys which channel is set to post smallest observerless records to.', roles = channel_settings_roles))
+SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', CommandLeaf(set_smallest_observerless_channel, 'Sets current channel as the channel to post smallest observerless records to.', roles = channel_settings_roles, params = channel_set_params))
+SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', CommandLeaf(unset_smallest_observerless_channel, 'Unsets the channel to post smallest observerless records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('smallest_observerless_channel', SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS)
 
@@ -174,9 +174,9 @@ async def set_fastest_observerless_channel(client, user_command, message):
 async def unset_fastest_observerless_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'Fastest Observerless')
 # Adding functions to the command branch
-FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_fastest_observerless_channel, 'Querys which channel is set to post fastest observerless records to.', roles = channel_settings_roles))
-FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_fastest_observerless_channel, 'Sets current channel as the channel to post fastest observerless records to.', roles = channel_settings_roles, params = channel_set_params))
-FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_fastest_observerless_channel, 'Unsets the channel to post fastest observerless records to.', roles = channel_settings_roles))
+FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('query', CommandLeaf(query_fastest_observerless_channel, 'Querys which channel is set to post fastest observerless records to.', roles = channel_settings_roles))
+FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('set', CommandLeaf(set_fastest_observerless_channel, 'Sets current channel as the channel to post fastest observerless records to.', roles = channel_settings_roles, params = channel_set_params))
+FASTEST_OBSERVERLESS_CHANNEL_COMMANDS.add_command('unset', CommandLeaf(unset_fastest_observerless_channel, 'Unsets the channel to post fastest observerless records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('fastest_observerless_channel', FASTEST_OBSERVERLESS_CHANNEL_COMMANDS)
 
@@ -191,8 +191,8 @@ async def set_first_channel(client, user_command, message):
 async def unset_first_channel(client, user_command, message):
     return await unset_channel(client, user_command, message, 'First')
 # Adding functions to the command branch
-FIRST_CHANNEL_COMMANDS.add_command('query', Command_Leaf(query_first_channel, 'Querys which channel is set to post first records to.', roles = channel_settings_roles))
-FIRST_CHANNEL_COMMANDS.add_command('set', Command_Leaf(set_first_channel, 'Sets current channel as the channel to post first records to.', roles = channel_settings_roles, params = channel_set_params))
-FIRST_CHANNEL_COMMANDS.add_command('unset', Command_Leaf(unset_first_channel, 'Unsets the channel to post first records to.', roles = channel_settings_roles))
+FIRST_CHANNEL_COMMANDS.add_command('query', CommandLeaf(query_first_channel, 'Querys which channel is set to post first records to.', roles = channel_settings_roles))
+FIRST_CHANNEL_COMMANDS.add_command('set', CommandLeaf(set_first_channel, 'Sets current channel as the channel to post first records to.', roles = channel_settings_roles, params = channel_set_params))
+FIRST_CHANNEL_COMMANDS.add_command('unset', CommandLeaf(unset_first_channel, 'Unsets the channel to post first records to.', roles = channel_settings_roles))
 # Adding command branch to the settings command branch
 SETTINGS_COMMANDS.add_command('first_channel', FIRST_CHANNEL_COMMANDS)

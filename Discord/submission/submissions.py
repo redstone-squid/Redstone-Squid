@@ -3,7 +3,7 @@ import discord
 
 import Discord.utils as utils
 from Discord.command import Param
-from Discord.command_leaf import Command_Leaf
+from Discord.command_leaf import CommandLeaf
 from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
@@ -50,8 +50,8 @@ async def open_function(client, user_command, message):
 
 
 SUBMISSIONS_COMMANDS.add_command('open',
-                                 Command_Leaf(open_function, 'Shows an overview of all submissions open for review.',
-                                              roles=submission_roles))
+                                 CommandLeaf(open_function, 'Shows an overview of all submissions open for review.',
+                                             roles=submission_roles))
 
 
 # View ---------------------------------------------------------------------------------------------------
@@ -79,8 +79,8 @@ view_params = [
 ]
 
 SUBMISSIONS_COMMANDS.add_command('view',
-                                 Command_Leaf(view_function, 'Displays an open submission.', roles=submission_roles,
-                                              params=view_params))
+                                 CommandLeaf(view_function, 'Displays an open submission.', roles=submission_roles,
+                                             params=view_params))
 
 
 # Confirm ------------------------------------------------------------------------------------------------
@@ -107,9 +107,9 @@ confirm_params = [
     Param('index', 'The id of the submission you wish to confirm.', dtype='int')
 ]
 
-SUBMISSIONS_COMMANDS.add_command('confirm', Command_Leaf(confirm_submission, 'Marks a submission as confirmed.',
-                                                         roles=submission_roles, servers=[config.OWNER_SERVER_ID],
-                                                         params=confirm_params))
+SUBMISSIONS_COMMANDS.add_command('confirm', CommandLeaf(confirm_submission, 'Marks a submission as confirmed.',
+                                                        roles=submission_roles, servers=[config.OWNER_SERVER_ID],
+                                                        params=confirm_params))
 
 
 # Deny ---------------------------------------------------------------------------------------------------
@@ -136,8 +136,8 @@ deny_params = [
 ]
 
 SUBMISSIONS_COMMANDS.add_command('deny',
-                                 Command_Leaf(deny_submission, 'Marks a submission as denied.', roles=submission_roles,
-                                              servers=[config.OWNER_SERVER_ID], params=deny_params))
+                                 CommandLeaf(deny_submission, 'Marks a submission as denied.', roles=submission_roles,
+                                             servers=[config.OWNER_SERVER_ID], params=deny_params))
 
 
 # Outdated -----------------------------------------------------------------------------------------------
@@ -168,10 +168,10 @@ async def outdated_function(client, user_command, message):
     return em
 
 
-SUBMISSIONS_COMMANDS.add_command('outdated', Command_Leaf(outdated_function,
+SUBMISSIONS_COMMANDS.add_command('outdated', CommandLeaf(outdated_function,
                                                           'Shows an overview of all discord posts that are require updating.',
-                                                          perms=submission_perms, roles=submission_roles,
-                                                          perm_role_operator='Or'))
+                                                         perms=submission_perms, roles=submission_roles,
+                                                         perm_role_operator='Or'))
 
 
 # Update -------------------------------------------------------------------------------------------------
@@ -206,9 +206,9 @@ update_params = [
     Param('index', 'The id of the submission you wish to deny.', dtype='int')
 ]
 
-SUBMISSIONS_COMMANDS.add_command('update', Command_Leaf(update_function, 'Updated an outdated discord post.',
-                                                        perms=submission_perms, params=update_params,
-                                                        roles=submission_roles, perm_role_operator='Or'))
+SUBMISSIONS_COMMANDS.add_command('update', CommandLeaf(update_function, 'Updated an outdated discord post.',
+                                                       perms=submission_perms, params=update_params,
+                                                       roles=submission_roles, perm_role_operator='Or'))
 
 
 # Update All ---------------------------------------------------------------------------------------------
@@ -228,6 +228,6 @@ async def update_all_function(client, user_command, message):
     await message.channel.send(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
 
-SUBMISSIONS_COMMANDS.add_command('update_all', Command_Leaf(update_all_function, 'Updates all outdated discord posts.',
-                                                            perms=submission_perms, roles=submission_roles,
-                                                            perm_role_operator='Or'))
+SUBMISSIONS_COMMANDS.add_command('update_all', CommandLeaf(update_all_function, 'Updates all outdated discord posts.',
+                                                           perms=submission_perms, roles=submission_roles,
+                                                           perm_role_operator='Or'))
