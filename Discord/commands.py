@@ -25,7 +25,7 @@ COMMANDS = CommandBranch(f"{BOT_NAME} v{BOT_VERSION}")
 # Invite Link ----------------------------------------------------------------------------------------------------
 async def invite_link(client, user_command, message):
     await message.channel.send(
-        'https://discordapp.com/oauth2/authorize?client_id=' + str(client.user.id) + '&scope=bot&permissions=8')
+        f'https://discordapp.com/oauth2/authorize?client_id={str(client.user.id)}&scope=bot&permissions=8')
 
 
 COMMANDS.add_command('invite_link', CommandLeaf(invite_link, 'Invite me to your other servers!'))
@@ -33,17 +33,18 @@ COMMANDS.add_command('invite_link', CommandLeaf(invite_link, 'Invite me to your 
 
 # Source code ----------------------------------------------------------------------------------------------------
 async def source_code(client, user_command, message):
-    await message.channel.send('Source code can be found at: {}.'.format(SOURCE_CODE_URL))
+    await message.channel.send(f'Source code can be found at: {SOURCE_CODE_URL}.')
 
 
-COMMANDS.add_command('source_code', CommandLeaf(source_code, 'Link to {}\'s source code.'.format(BOT_NAME)))
+COMMANDS.add_command('source_code', CommandLeaf(source_code, f'Link to {BOT_NAME}\'s source code.'))
 
 
 # Submit record --------------------------------------------------------------------------------------------------
 async def submit_record(client, user_command, message):
     em = discord.Embed(title='Submission form.',
-                       description='You can submit new records with ease via our google form: {}'.format(FORM_LINK),
+                       description=f'You can submit new records with ease via our google form: {FORM_LINK}',
                        colour=utils.discord_green)
+    # TODO: image is not showing up.
     em.set_image(url='https://i.imgur.com/AqYEd1o.png')
     await message.channel.send(embed=em)
 
@@ -63,7 +64,7 @@ async def help_func(client, user_command, message):
     help_message = COMMANDS.get_help_message(*argv)
     if isinstance(help_message, discord.Embed):
         return help_message
-    help_message += '\nUse `{}help <command>` to get more information.\n'.format(config.PREFIX)
+    help_message += f'\nUse `{config.PREFIX}help <command>` to get more information.\n'
     em = discord.Embed(title='Help', description=help_message, colour=0x43B581)
     await message.channel.send(embeds=[em])
 
