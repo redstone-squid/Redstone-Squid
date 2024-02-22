@@ -1,10 +1,7 @@
 import os
-import re
-import sys
 import discord
 from discord.ext import commands
 import configparser
-import asyncio
 
 import Discord.utils as utils
 from Discord.config import *
@@ -26,7 +23,6 @@ bot = commands.Bot('!', help_command=None, owner_id=OWNER_ID, intents=discord.In
 log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
 
 
-# Log function
 async def log(msg: str, first_log=False, dm=True) -> None:
     """
     Logs a timestamped message to stdout and to the owner of the bot via DM.
