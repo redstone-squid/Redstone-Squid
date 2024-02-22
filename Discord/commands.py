@@ -19,7 +19,7 @@ SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'
 
 FORM_LINK = 'https://goo.gl/forms/35mjuQHId4sgCnZ82'
 
-COMMANDS = Command_Branch(BOT_NAME + ' v' + BOT_VERSION)
+COMMANDS = Command_Branch(f"{BOT_NAME} v{BOT_VERSION}")
 
 
 # Invite Link ----------------------------------------------------------------------------------------------------
