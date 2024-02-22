@@ -1,24 +1,30 @@
+from typing import Literal
+
 import Discord.utils as utils
 
 
 class Param:
     def __init__(self, name, description, dtype=None, min_val=None, max_val=None, min_len=None, max_len=None, optional=False):
-        self.name = name
-        self.description = description
-        self.dtype = dtype
-        self.min_val = min_val
-        self.max_val = max_val
-        self.min_len = min_len
-        self.max_len = max_len
-        self.optional = optional
+        self.name: str = name
+        self.description: str = description
+        self.dtype: Literal['int', 'num', 'mention', 'channel_mention', 'str', 'text'] = dtype
+        self.min_val: float | int = min_val
+        self.max_val: float | int = max_val
+        self.min_len: float | int = min_len
+        self.max_len: float | int = max_len
+        self.optional: bool = optional
 
         self.validate_param()
 
     def validate_param(self):
-        if (self.min_val or self.min_val) and self.dtype not in ['int', 'num']:
-            raise Exception('Min and max values can only be specified for int and num params.')
+        if not isinstance(self.name, str):
+            raise Exception('Param.name must be a string.')
+        if not isinstance(self.description, str):
+            raise Exception('Param.description must be a string.')
         if self.dtype and self.dtype not in ['int', 'num', 'mention', 'channel_mention', 'str', 'text']:
             raise Exception('Invalid Param.dtype.')
+        if (self.min_val or self.min_val) and self.dtype not in ['int', 'num']:
+            raise Exception('Min and max values can only be specified for int and num params.')
         if self.min_val and not isinstance(self.min_val, (float, int)):
             raise Exception('Param.min_val must be a number.')
         if self.max_val and not isinstance(self.max_val, (float, int)):
@@ -27,20 +33,16 @@ class Param:
             raise Exception('Param.min_len must be a number.')
         if self.max_len and not isinstance(self.max_len, (float, int)):
             raise Exception('Param.max_len must be a number.')
-        if not isinstance(self.name, str):
-            raise Exception('Param.name must be a string.')
-        if not isinstance(self.description, str):
-            raise Exception('Param.description must be a string.')
 
 
-class Command():
-    _brief = None
-    _params = None
+class Command:
+    _brief: str = None
+    _params: list[Param] = None
     _meta = {}
-    _perms = None
-    _roles = None
-    _servers = None
-    _perm_role_operator = None
+    _perms: list[int] = None
+    _roles: list[str] = None
+    _servers: list[int] = None
+    _perm_role_operator: Literal['And', 'Or'] = None
 
     def __getitem__(self, i):
         if i in self._meta:
@@ -99,23 +101,23 @@ class Command():
                 break
 
             if self._params[i].min_val and float(argv[i]) < self._params[i].min_val:
-                return utils.warning_embed('Parameter out of bounds.', '`{}` must be at least {}.'.format(self._params[i].name, self._params[i].min_val))
+                return utils.warning_embed('Parameter out of bounds.', f'`{self._params[i].name}` must be at least {self._params[i].min_val}.')
             if self._params[i].max_val and float(argv[i]) > self._params[i].max_val:
-                return utils.warning_embed('Parameter out of bounds.', '`{}` must be at most {}.'.format(self._params[i].name, self._params[i].max_val))
+                return utils.warning_embed('Parameter out of bounds.', f'`{self._params[i].name}` must be at most {self._params[i].max_val}.')
             if self._params[i].min_len and len(argv[i]) < self._params[i].min_len:
-                return utils.warning_embed('Incorrect parameter length.', '`{}` must have length of at least {}.'.format(self._params[i].name, self._params[i].min_len))
+                return utils.warning_embed('Incorrect parameter length.', f'`{self._params[i].name}` must have length of at least {self._params[i].min_len}.')
             if self._params[i].max_len and len(argv[i]) > self._params[i].max_len:
-                return utils.warning_embed('Incorrect parameter length.', '`{}` must have length of at most {}.'.format(self._params[i].name, self._params[i].max_len))
+                return utils.warning_embed('Incorrect parameter length.', f'`{self._params[i].name}` must have length of at most {self._params[i].max_len}.')
             if not self._params[i].dtype:
                 continue
             if self._params[i].dtype == 'int' and not utils.represents_int(argv[i]):
-                return utils.warning_embed('Incorrect parameter type.', '`{}` must be an integer.'.format(self._params[i].name))
+                return utils.warning_embed('Incorrect parameter type.', f'`{self._params[i].name}` must be an integer.')
             if self._params[i].dtype == 'num' and not utils.represents_float(argv[i]):
-                return utils.warning_embed('Incorrect parameter type.', '`{}` must be a number.'.format(self._params[i].name))
+                return utils.warning_embed('Incorrect parameter type.', f'`{self._params[i].name}` must be a number.')
             if self._params[i].dtype == 'mention' and not utils.represents_user(argv[i]):
-                return utils.warning_embed('Incorrect parameter type.', '`{}` must be a mention.'.format(self._params[i].name))
+                return utils.warning_embed('Incorrect parameter type.', f'`{self._params[i].name}` must be a mention.')
             if self._params[i].dtype == 'channel_mention' and not utils.represents_channel(argv[i]):
-                return utils.warning_embed('Incorrect parameter type.', '`{}` must be a channel mention.'.format(self._params[i].name))
+                return utils.warning_embed('Incorrect parameter type.', f'`{self._params[i].name}` must be a channel mention.')
 
         return None
 

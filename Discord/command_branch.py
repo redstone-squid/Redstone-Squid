@@ -1,31 +1,33 @@
+from __future__ import annotations
 from inspect import iscoroutinefunction
-from Discord.command import Command
+from typing import Callable, Literal
+
+from Discord.command import Command, Param
 from Discord.command_leaf import Command_Leaf
 import Discord.utils as utils
 import Discord.permissions as perms
 
 
 class Command_Branch(Command):
-
     def __init__(self, brief, function=None, params=None, perms=None, roles=None, servers=None,
-                 perm_role_operator='And', **kwargs):
-        self._brief = brief
-        self._meta = kwargs
-        self._params = params
-        self._perms = perms
-        self._roles = roles
-        self._servers = servers
-        self._perm_role_operator = perm_role_operator
+                 perm_role_operator: Literal['And', 'Or'] = 'And', **kwargs):
+        self._brief: str = brief
+        self._meta: dict[str, ...] = kwargs
+        self._params: list[Param] = params
+        self._perms: list[int] = perms
+        self._roles: list[str] = roles
+        self._servers: list[int] = servers
+        self._perm_role_operator: Literal['And', 'Or'] = perm_role_operator
 
         if perm_role_operator != 'And' and perm_role_operator != 'Or':
             raise Exception('perm_role_operator must be \'And\' or \'Or\'')
 
-        self._function = function
-        self._commands = {}
+        self._function: Callable = function
+        self._commands: dict[str, Command_Branch | Command_Leaf] = {}
 
         self.validate_params()
 
-    def get_command(self, cmd, *argv):
+    def get_command(self, cmd: str, *argv):
         if not isinstance(cmd, str):
             return None, None
         cmd = cmd.lower()
@@ -37,17 +39,17 @@ class Command_Branch(Command):
 
         return None, None
 
-    def validate_add_command(self, cmd_string, cmd):
+    def validate_add_command(self, cmd_string: str, cmd: Command_Branch | Command_Leaf):
         if not isinstance(cmd_string, str):
             raise ValueError('Command name must be a string.')
         if len(cmd_string) == 0:
             raise ValueError('Command name must have at least length 1.')
-        if self.get_command(cmd_string)[0] != None:
+        if self.get_command(cmd_string)[0] is not None:
             raise ValueError('Command already exists.')
         if not (isinstance(cmd, Command_Leaf) or isinstance(cmd, Command_Branch)):
             raise ValueError('Command must be a Command Node or Command Branch.')
 
-    def add_command(self, cmd_string, cmd):
+    def add_command(self, cmd_string: str, cmd: Command_Branch | Command_Leaf):
         self.validate_add_command(cmd_string, cmd)
         cmd_string = cmd_string.lower()
 
@@ -102,9 +104,9 @@ class Command_Branch(Command):
             return utils.error_embed('Error.', 'Unable to find command. Use help to get a list of avaliable commands.')
 
         if isinstance(cmd, Command_Leaf):
-            return '`{}` - {}\n'.format(' '.join(argv), cmd.get_help(True))
+            return f'`{' '.join(argv)}` - {cmd.get_help(True)}\n'
         else:
-            result = '{}\n\nCommands:\n'.format(cmd.get_help())
+            result = f'{cmd.get_help()}\n\nCommands:\n'
             for scmd in cmd._commands.keys():
-                result += '`{}` - {}\n'.format(scmd, cmd._commands[scmd].get_help())
+                result += f'`{scmd}` - {cmd._commands[scmd].get_help()}\n'
             return result
