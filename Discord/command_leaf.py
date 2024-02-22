@@ -2,9 +2,10 @@ from inspect import iscoroutinefunction
 from Discord.command import Command
 import Discord.utils as utils
 
-class Command_Leaf(Command):
 
-    def __init__(self, function, brief, params = None, perms = None, roles = None, servers = None, perm_role_operator = 'And', **kwargs):
+class Command_Leaf(Command):
+    def __init__(self, function, brief, params=None, perms=None, roles=None, servers=None, perm_role_operator='And',
+                 **kwargs):
         self._brief = brief
         self._meta = kwargs
         self._params = params
@@ -19,7 +20,7 @@ class Command_Leaf(Command):
         self._function = function
 
         self.validate_params()
-    
+
     async def execute(self, argv, kwargs):
         if callable(self._function):
             if iscoroutinefunction(self._function):
