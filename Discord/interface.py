@@ -27,7 +27,18 @@ log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
 
 
 # Log function
-async def log(msg: str, first_log=False, dm=True):
+async def log(msg: str, first_log=False, dm=True) -> None:
+    """
+    Logs a timestamped message to stdout and to the owner of the bot via DM.
+
+    Args:
+        msg: the message to log
+        first_log: if True, adds a line of dashes before the message
+        dm: whether to send the message to the owner of the bot via DM
+
+    Returns:
+        None
+    """
     timestamp_msg = utils.get_time() + msg
     print(timestamp_msg)
     if log_user['owner_user_object'] and dm:
@@ -38,8 +49,7 @@ async def log(msg: str, first_log=False, dm=True):
 
 @bot.event
 async def on_ready():
-    # Cryptic code that seems to be trying to get the user object of the owner of the bot,
-    # and then sending a message to that user only if the bot can see the owner's user object.
+    # Try to get the user object of the owner of the bot, which is used for logging.
     for member in bot.get_all_members():
         if str(member) == log_user['owner_name']:
             log_user['owner_user_object'] = member
