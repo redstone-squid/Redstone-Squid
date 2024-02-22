@@ -4,7 +4,7 @@ import discord
 import Discord.utils as utils
 from Discord.command import Param
 from Discord.command_leaf import Command_Leaf
-from Discord.command_branch import Command_Branch
+from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
 import Discord.config as config
@@ -13,7 +13,7 @@ import Database.submissions as submissions
 import Database.message as msg
 
 # Submissions Command Branch -----------------------------------------------------------------------------
-SUBMISSIONS_COMMANDS = Command_Branch('View, confirm and deny submissions.')
+SUBMISSIONS_COMMANDS = CommandBranch('View, confirm and deny submissions.')
 
 submission_roles = ['Admin', 'Moderator']
 submission_perms = [ADMINISTRATOR]

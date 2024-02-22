@@ -8,7 +8,7 @@ import Discord.utils as utils
 import Discord.permissions as perms
 
 
-class Command_Branch(Command):
+class CommandBranch(Command):
     def __init__(self, brief, function=None, params=None, perms=None, roles=None, servers=None,
                  perm_role_operator: Literal['And', 'Or'] = 'And', **kwargs):
         self._brief: str = brief
@@ -23,7 +23,7 @@ class Command_Branch(Command):
             raise Exception('perm_role_operator must be \'And\' or \'Or\'')
 
         self._function: Callable = function
-        self._commands: dict[str, Command_Branch | Command_Leaf] = {}
+        self._commands: dict[str, CommandBranch | Command_Leaf] = {}
 
         self.validate_params()
 
@@ -39,17 +39,17 @@ class Command_Branch(Command):
 
         return None, None
 
-    def validate_add_command(self, cmd_string: str, cmd: Command_Branch | Command_Leaf):
+    def validate_add_command(self, cmd_string: str, cmd: CommandBranch | Command_Leaf):
         if not isinstance(cmd_string, str):
             raise ValueError('Command name must be a string.')
         if len(cmd_string) == 0:
             raise ValueError('Command name must have at least length 1.')
         if self.get_command(cmd_string)[0] is not None:
             raise ValueError('Command already exists.')
-        if not (isinstance(cmd, Command_Leaf) or isinstance(cmd, Command_Branch)):
+        if not (isinstance(cmd, Command_Leaf) or isinstance(cmd, CommandBranch)):
             raise ValueError('Command must be a Command Node or Command Branch.')
 
-    def add_command(self, cmd_string: str, cmd: Command_Branch | Command_Leaf):
+    def add_command(self, cmd_string: str, cmd: CommandBranch | Command_Leaf):
         self.validate_add_command(cmd_string, cmd)
         cmd_string = cmd_string.lower()
 

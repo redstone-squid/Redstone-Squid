@@ -3,13 +3,13 @@ import discord
 import Discord.utils as utils
 from Discord.command import Param
 from Discord.command_leaf import Command_Leaf
-from Discord.command_branch import Command_Branch
+from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
 import Database.server_settings as server_settings
 
 # Settings Command Branch ------------------------------------------------------------------------------------------
-SETTINGS_COMMANDS = Command_Branch('Allows you to configure the bot for your server.')
+SETTINGS_COMMANDS = CommandBranch('Allows you to configure the bot for your server.')
 
 # Confirm Channel --------------------------------------------------------------------------------------------
 channel_settings_roles = ['Admin', 'Moderator']
@@ -55,7 +55,7 @@ def get_all_channels(server: discord.Guild):
 # Query all settings.
 async def query_all(client, user_command, message):
     sent_message = await message.channel.send(embed=utils.info_embed('Working', 'Getting information...'))
-    
+
     channels = get_all_channels(message.guild)
 
     desc = ''
@@ -114,7 +114,7 @@ async def unset_channel(client, user_command, message, channel_purpose):
 
 # Smallest ---------------------------------------------------------------------------------------------------
 # Creating command branch
-SMALLEST_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post smallest records to.')
+SMALLEST_CHANNEL_COMMANDS = CommandBranch('Settings for channel to post smallest records to.')
 # Defining the query, set and unset functions
 async def query_smallest_channel(client, user_command, message):
     return await query_channel(client, user_command, message, 'Smallest')
@@ -131,7 +131,7 @@ SETTINGS_COMMANDS.add_command('smallest_channel', SMALLEST_CHANNEL_COMMANDS)
 
 # Fastest ----------------------------------------------------------------------------------------------------
 # Creating command branch
-FASTEST_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post fastest records to.')
+FASTEST_CHANNEL_COMMANDS = CommandBranch('Settings for channel to post fastest records to.')
 # Defining the query, set and unset functions
 async def query_fastest_channel(client, user_command, message):
     return await query_channel(client, user_command, message, 'Fastest')
@@ -148,7 +148,7 @@ SETTINGS_COMMANDS.add_command('fastest_channel', FASTEST_CHANNEL_COMMANDS)
 
 # Smallest Observerless --------------------------------------------------------------------------------------
 # Creating command branch
-SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post smallest observerless records to.')
+SMALLEST_OBSERVERLESS_CHANNEL_COMMANDS = CommandBranch('Settings for channel to post smallest observerless records to.')
 # Defining the query, set and unset functions
 async def query_smallest_observerless_channel(client, user_command, message):
     return await query_channel(client, user_command, message, 'Smallest Observerless')
@@ -165,7 +165,7 @@ SETTINGS_COMMANDS.add_command('smallest_observerless_channel', SMALLEST_OBSERVER
 
 # Fastest Observerless ---------------------------------------------------------------------------------------
 # Creating command branch
-FASTEST_OBSERVERLESS_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post fastest records to.')
+FASTEST_OBSERVERLESS_CHANNEL_COMMANDS = CommandBranch('Settings for channel to post fastest records to.')
 # Defining the query, set and unset functions
 async def query_fastest_observerless_channel(client, user_command, message):
     return await query_channel(client, user_command, message, 'Fastest Observerless')
@@ -182,7 +182,7 @@ SETTINGS_COMMANDS.add_command('fastest_observerless_channel', FASTEST_OBSERVERLE
 
 # First ------------------------------------------------------------------------------------------------------
 # Creating command branch
-FIRST_CHANNEL_COMMANDS = Command_Branch('Settings for channel to post first records to.')
+FIRST_CHANNEL_COMMANDS = CommandBranch('Settings for channel to post first records to.')
 # Defining the query, set and unset functions
 async def query_first_channel(client, user_command, message):
     return await query_channel(client, user_command, message, 'First')

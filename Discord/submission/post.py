@@ -4,7 +4,7 @@ import discord
 import Discord.utils as utils
 from Discord.command import Param
 from Discord.command_leaf import Command_Leaf
-from Discord.command_branch import Command_Branch
+from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
 import Discord.settings.settings as settings
