@@ -206,7 +206,7 @@ update_params = [
     Param('index', 'The id of the submission you wish to deny.', dtype='int')
 ]
 
-SUBMISSIONS_COMMANDS.add_command('update', Command_Leaf(update_function, 'Updated an outdate discord post.',
+SUBMISSIONS_COMMANDS.add_command('update', Command_Leaf(update_function, 'Updated an outdated discord post.',
                                                         perms=submission_perms, params=update_params,
                                                         roles=submission_roles, perm_role_operator='Or'))
 
