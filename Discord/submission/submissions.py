@@ -24,8 +24,17 @@ class Submissions(commands.GroupCog, name='Submissions'):
         """This is a check that will be called before any command in this cog is executed."""
         return commands.has_any_role(*submission_roles)
 
-    @commands.command(name='open', aliases=['o'], brief='Shows an overview of all submissions open for review.')
+    @commands.command(name='open', aliases=['o'])
     async def open_function(self, ctx):
+        """
+        Shows an overview of all submissions open for review.
+
+        Args:
+            ctx: The context of the command.
+
+        Returns:
+            None
+        """
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -41,9 +50,9 @@ class Submissions(commands.GroupCog, name='Submissions'):
         else:
             desc = []
             for sub in open_submissions:
-                desc.append('**{}** - {}\n_by {}_ - _submitted by {}_'.format(sub.id, sub.get_title(),
-                                                                              ', '.join(sorted(sub.creators)),
-                                                                              sub.submitted_by))
+                # ID - Title
+                # by Creators - submitted by Submitter
+                desc.append(f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
             desc = '\n\n'.join(desc)
 
         # Creating embed
@@ -53,7 +62,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await sent_message.delete()
         await ctx.send(embed=em)
 
-    @commands.command(name='view', brief='Displays an open submission.')
+    @commands.command(name='view')
     async def view_function(self, ctx, index: int):
         """
         Displays an open submission.
@@ -82,7 +91,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         return await ctx.send(embed=post.generate_embed(result))
 
     # confirm_function
-    @commands.command(name='confirm', brief='Marks a submission as confirmed.')
+    @commands.command(name='confirm')
     async def confirm_function(self, ctx, index: int):
         """
         Marks a submission as confirmed.
@@ -112,7 +121,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
-    @commands.command(name='deny', brief='Marks a submission as denied.')
+    @commands.command(name='deny')
     async def deny_function(self, ctx, index: int):
         """
         Marks a submission as denied.
@@ -141,7 +150,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
-    @commands.command(name='outdated', brief='Shows an overview of all discord posts that are require updating.')
+    @commands.command(name='outdated')
     async def outdated_function(self, ctx):
         """
         Shows an overview of all discord posts that are require updating.
@@ -165,9 +174,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
             desc = []
             for sub in outdated_submissions:
                 sub_obj = sub[1]
-                desc.append('**{}** - {}\n_by {}_ - _submitted by {}_'.format(sub_obj.id, sub_obj.get_title(),
-                                                                              ', '.join(sorted(sub_obj.creators)),
-                                                                              sub_obj.submitted_by))
+                desc.append(f"**{sub_obj.id}** - {sub_obj.get_title()}\n_by {', '.join(sorted(sub_obj.creators))}_ - _submitted by {sub_obj.submitted_by}_")
             desc = '\n\n'.join(desc)
 
         # Creating embed
@@ -177,7 +184,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await sent_message.delete()
         return await ctx.send(embed=em)
 
-    @commands.command(name='update', brief='Updated an outdated discord post.')
+    @commands.command(name='update')
     async def update_function(self, ctx, index: int):
         """
         Updated an outdated discord post.
@@ -213,7 +220,7 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
-    @commands.command(name='update_all', brief='Updates all outdated discord posts.')
+    @commands.command(name='update_all')
     async def update_all_function(self, ctx):
         """
         Updates all outdated discord posts.
