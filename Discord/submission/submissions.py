@@ -1,9 +1,7 @@
-import os
 import discord
 from discord.ext import commands
 
 import Discord.utils as utils
-from Discord.command_branch import CommandBranch
 from Discord.permissions import *
 
 import Discord.config as config
