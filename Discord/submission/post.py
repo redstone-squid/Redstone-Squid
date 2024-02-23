@@ -72,7 +72,7 @@ def get_channels_to_post_to(client, submission_obj):
     # TODO: bug here, bot may not be configured in a server, and then it fails
     for guild in client.guilds:
         # Find the channel (if set) that is set for this post to go to
-        channel = settings.get_channel_for(guild, channel_type)
+        channel = settings.get_record_channel_for(guild, channel_type)
 
         if not channel:
             continue
