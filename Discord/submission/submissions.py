@@ -23,7 +23,20 @@ class Submissions(commands.GroupCog, name='submissions'):
     #     """This is a check that will be called before any command in this cog is executed."""
     #     return commands.has_any_role(*submission_roles)(lambda x: True)(ctx)
 
-    @commands.command(name='open', aliases=['o'])
+    @commands.group(invoke_without_command=True)
+    async def submissions(self, ctx: commands.Context):
+        """
+        Shows help messages for the submissions commands.
+
+        Args:
+            ctx: The context of the command.
+
+        Returns:
+            None
+        """
+        await ctx.send("hi")
+
+    @submissions.command(name='open', aliases=['o'])
     @commands.has_any_role(*submission_roles)
     async def open_function(self, ctx):
         """
@@ -62,7 +75,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         await sent_message.delete()
         await ctx.send(embed=em)
 
-    @commands.command(name='view')
+    @submissions.command(name='view')
     @commands.has_any_role(*submission_roles)
     async def view_function(self, ctx, index: int):
         """
@@ -92,7 +105,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         return await ctx.send(embed=post.generate_embed(result))
 
     # confirm_function
-    @commands.command(name='confirm')
+    @submissions.command(name='confirm')
     @commands.has_any_role(*submission_roles)
     async def confirm_function(self, ctx, index: int):
         """
@@ -123,7 +136,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
-    @commands.command(name='deny')
+    @submissions.command(name='deny')
     @commands.has_any_role(*submission_roles)
     async def deny_function(self, ctx, index: int):
         """
@@ -153,7 +166,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
-    @commands.command(name='outdated')
+    @submissions.command(name='outdated')
     @commands.has_any_role(*submission_roles)
     async def outdated_function(self, ctx):
         """
@@ -188,7 +201,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=em)
 
-    @commands.command(name='update')
+    @submissions.command(name='update')
     @commands.has_any_role(*submission_roles)
     async def update_function(self, ctx, index: int):
         """
@@ -225,7 +238,7 @@ class Submissions(commands.GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
-    @commands.command(name='update_all')
+    @submissions.command(name='update_all')
     @commands.has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
         """

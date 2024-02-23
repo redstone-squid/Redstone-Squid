@@ -22,4 +22,4 @@ import asyncio
 import Google.interface as google
 import Discord.interface as discord
 
-discord.bot.run(discord.TOKEN)
+asyncio.run(discord.main())

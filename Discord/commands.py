@@ -40,14 +40,6 @@ async def submit_record(ctx):
     em.set_image(url='https://i.imgur.com/AqYEd1o.png')
     await ctx.send(embed=em)
 
-
-# Option ---------------------------------------------------------------------------------------------------------
-# COMMANDS.add_command('settings', settings.SETTINGS_COMMANDS)
-
-# Submissions ----------------------------------------------------------------------------------------------------
-# COMMANDS.add_command('submissions', submissions.SUBMISSIONS_COMMANDS)
-
-
 # @commands.command(name='help', description='Shows help messages.')
 # async def help_func(ctx: commands.Context, *, cmd: str = None):
 #     help_message = COMMANDS.get_help_message(cmd.split(' ') if cmd else None)
