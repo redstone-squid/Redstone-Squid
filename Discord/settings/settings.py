@@ -5,14 +5,8 @@ from discord.ext import commands
 
 import Discord.utils as utils
 from Discord.command import Param
-from Discord.command_leaf import CommandLeaf
-from Discord.command_branch import CommandBranch
-from Discord.permissions import *
 
 import Database.server_settings as server_settings
-
-# Settings Command Branch ------------------------------------------------------------------------------------------
-SETTINGS_COMMANDS = CommandBranch('Allows you to configure the bot for your server.')
 
 # Confirm Channel --------------------------------------------------------------------------------------------
 channel_settings_roles = ['Admin', 'Moderator']
