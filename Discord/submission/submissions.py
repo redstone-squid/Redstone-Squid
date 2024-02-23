@@ -11,8 +11,6 @@ import Discord.submission.post as post
 import Database.submissions as submissions
 import Database.message as msg
 
-# Submissions Command Branch -----------------------------------------------------------------------------
-SUBMISSIONS_COMMANDS = CommandBranch('View, confirm and deny submissions.')
 
 submission_roles = ['Admin', 'Moderator']
 submission_perms = [ADMINISTRATOR]
@@ -22,8 +20,11 @@ class Submissions(commands.GroupCog, name='Submissions'):
     def __init__(self, bot):
         self.bot = bot
 
+    def cog_check(self, ctx):
+        """This is a check that will be called before any command in this cog is executed."""
+        return commands.has_any_role(*submission_roles)
+
     @commands.command(name='open', aliases=['o'], brief='Shows an overview of all submissions open for review.')
-    @commands.has_any_role(*submission_roles)
     async def open_function(self, ctx):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
@@ -53,7 +54,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
         await ctx.send(embed=em)
 
     @commands.command(name='view', brief='Displays an open submission.')
-    @commands.has_any_role(*submission_roles)
     async def view_function(self, ctx, index: int):
         """
         Displays an open submission.
@@ -83,7 +83,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
 
     # confirm_function
     @commands.command(name='confirm', brief='Marks a submission as confirmed.')
-    @commands.has_any_role(*submission_roles)
     async def confirm_function(self, ctx, index: int):
         """
         Marks a submission as confirmed.
@@ -114,7 +113,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
     @commands.command(name='deny', brief='Marks a submission as denied.')
-    @commands.has_any_role(*submission_roles)
     async def deny_function(self, ctx, index: int):
         """
         Marks a submission as denied.
@@ -144,7 +142,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @commands.command(name='outdated', brief='Shows an overview of all discord posts that are require updating.')
-    @commands.has_any_role(*submission_roles)
     async def outdated_function(self, ctx):
         """
         Shows an overview of all discord posts that are require updating.
@@ -181,7 +178,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
         return await ctx.send(embed=em)
 
     @commands.command(name='update', brief='Updated an outdated discord post.')
-    @commands.has_any_role(*submission_roles)
     async def update_function(self, ctx, index: int):
         """
         Updated an outdated discord post.
@@ -218,7 +214,6 @@ class Submissions(commands.GroupCog, name='Submissions'):
         return await ctx.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
     @commands.command(name='update_all', brief='Updates all outdated discord posts.')
-    @commands.has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
         """
         Updates all outdated discord posts.
@@ -242,4 +237,3 @@ class Submissions(commands.GroupCog, name='Submissions'):
 
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
-
