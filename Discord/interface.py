@@ -1,8 +1,8 @@
 import asyncio
 import os
 import discord
-from discord.ext import commands
 import configparser
+from discord.ext.commands import Cog, Bot
 
 import Discord.utils as utils
 from Discord.config import *
@@ -46,11 +46,11 @@ async def log(msg: str, first_log=False, dm=True) -> None:
             timestamp_msg = '-' * 90 + '\n' + timestamp_msg
         return await log_user['owner_user_object'].send(timestamp_msg)
 
-class Listeners(commands.Cog):
+class Listeners(Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_ready(self):
         # Try to get the user object of the owner of the bot, which is used for logging.
         for member in self.bot.get_all_members():
@@ -61,7 +61,7 @@ class Listeners(commands.Cog):
 
     # Temporary fix
     # TODO: Remove this event after the bot doesn't break when it is in more than one server
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         if guild.id != OWNER_SERVER_ID:
             # Send a warning message in the server, and then leave
@@ -69,7 +69,7 @@ class Listeners(commands.Cog):
             await guild.system_channel.send('I am not supposed to be in this server. Leaving now.')
             await guild.leave()
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_message(self, message: discord.Message):
         user_command = ''
 
@@ -89,7 +89,7 @@ class Listeners(commands.Cog):
             else:
                 await log(log_message)
 
-        # output = await COMMANDS.execute(user_command, bot, user_command, message)
+        # output = await execute(user_command, bot, user_command, message)
         # if isinstance(output, str):
         #     await message.channel.send(output)
         # if isinstance(output, discord.Embed):
@@ -97,7 +97,7 @@ class Listeners(commands.Cog):
 
 async def main():
     # Running the application
-    async with commands.Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all()) as bot:
+    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all()) as bot:
         bot.add_command(invite_link)
         bot.add_command(source_code)
         bot.add_command(submit_record)

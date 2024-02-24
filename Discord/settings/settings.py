@@ -1,7 +1,7 @@
 from typing import Optional
 
 import discord
-from discord.ext import commands
+from discord.ext.commands import GroupCog, Context, Bot, has_any_role
 
 import Discord.utils as utils
 from Discord.command import Param
@@ -14,12 +14,12 @@ channel_set_params = [
     Param('channel', 'The channel that you want to update this setting to.', dtype = 'channel_mention', optional = False)
 ]
 
-class Settings(commands.GroupCog, name='settings'):
-    def __init__(self, bot: commands.Bot):
+class Settings(GroupCog, name='settings'):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
-    @commands.group(invoke_without_command=True)
-    async def settings(self, ctx: commands.Context):
+    @group(invoke_without_command=True)
+    async def settings(self, ctx: Context):
         """
         Shows help messages for the settings commands.
 
@@ -32,7 +32,7 @@ class Settings(commands.GroupCog, name='settings'):
         await ctx.send("hi")
 
     @settings.command(description='Queries all settings.')
-    @commands.has_any_role(*channel_settings_roles)
+    @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx):
         """
         Query all settings.
@@ -67,8 +67,8 @@ class Settings(commands.GroupCog, name='settings'):
         await ctx.send(embed=em)
 
     @settings.command(name='query', description='Queries which channel is set to post this record type to.')
-    @commands.has_any_role(*channel_settings_roles)
-    async def query_channel(self, ctx: commands.Context, channel_purpose: str):
+    @has_any_role(*channel_settings_roles)
+    async def query_channel(self, ctx: Context, channel_purpose: str):
         """
         Finds which channel is set for a purpose and sends the results to the user.
 
@@ -89,8 +89,8 @@ class Settings(commands.GroupCog, name='settings'):
         await ctx.send(embed=em)
 
     @settings.command(name='set', description='Sets the current channel as the channel to post this record type to.')
-    @commands.has_any_role(*channel_settings_roles)
-    async def set_channel(self, ctx: commands.Context, channel_purpose: str, channel: discord.TextChannel):
+    @has_any_role(*channel_settings_roles)
+    async def set_channel(self, ctx: Context, channel_purpose: str, channel: discord.TextChannel):
         """
         Sets the channel for a specific purpose.
 
@@ -118,8 +118,8 @@ class Settings(commands.GroupCog, name='settings'):
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
     @settings.command(name='unset', description='Unsets the channel to post this record type to.')
-    @commands.has_any_role(*channel_settings_roles)
-    async def unset_channel(self, ctx: commands.Context, channel_purpose: str):
+    @has_any_role(*channel_settings_roles)
+    async def unset_channel(self, ctx: Context, channel_purpose: str):
         """
         Unsets the channel for a specific purpose.
 
