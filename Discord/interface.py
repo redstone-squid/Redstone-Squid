@@ -7,6 +7,7 @@ from discord.ext.commands import Cog, Bot
 import Discord.utils as utils
 from Discord.config import *
 from Discord.commands import invite_link, source_code, submit_record
+from Discord.help import Help
 from Discord.settings.settings import Settings
 from Discord.submission.submissions import Submissions
 
@@ -58,7 +59,6 @@ class Listeners(Cog):
                 log_user['owner_user_object'] = member
         await log(f'Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.', first_log=True)
 
-
     # Temporary fix
     # TODO: Remove this event after the bot doesn't break when it is in more than one server
     @Cog.listener()
@@ -89,21 +89,17 @@ class Listeners(Cog):
             else:
                 await log(log_message)
 
-        # output = await execute(user_command, bot, user_command, message)
-        # if isinstance(output, str):
-        #     await message.channel.send(output)
-        # if isinstance(output, discord.Embed):
-        #     await message.channel.send(embed=output)
 
 async def main():
     # Running the application
-    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all()) as bot:
+    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         bot.add_command(invite_link)
         bot.add_command(source_code)
         bot.add_command(submit_record)
         await bot.add_cog(Settings(bot))
         await bot.add_cog(Submissions(bot))
         await bot.add_cog(Listeners(bot))
+        bot.help_command = Help()
         await bot.start(TOKEN)
 
 if __name__ == '__main__':

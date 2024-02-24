@@ -50,3 +50,7 @@ def warning_embed(title, description):
 
 def info_embed(title, description):
     return discord.Embed(title=title, colour=discord_green, description=description)
+
+
+def help_embed(title, description):
+    return discord.Embed(title=title, colour=discord_green, description=description)
