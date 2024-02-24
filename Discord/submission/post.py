@@ -1,14 +1,7 @@
 import discord
 
 import Discord.utils as utils
-from Discord.command import Param
-from Discord.command_leaf import CommandLeaf
-from Discord.command_branch import CommandBranch
-from Discord.permissions import *
-
 import Discord.settings.settings as settings
-import Database.submission as submission
-import Database.server_settings as server_settings
 import Database.message as msg
 
 
