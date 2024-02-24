@@ -18,8 +18,6 @@
 # https://console.cloud.google.com/apis/library/sheets.googleapis.com
 # 7. Create a spreadsheet in Google Sheets and share it with the email in the json file, the name of the file is the `WORKBOOK_NAME` in `config.py`.
 import asyncio
-
-import Google.interface as google
 import Discord.interface as discord
 
 asyncio.run(discord.main())
