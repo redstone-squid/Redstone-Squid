@@ -1,11 +1,16 @@
+import asyncio
 import os
 import discord
-from discord.ext import commands
 import configparser
+from discord.ext.commands import Cog, Bot
 
 import Discord.utils as utils
 from Discord.config import *
-from Discord.commands import COMMANDS
+from Discord.commands import invite_link, source_code, submit_record
+from Discord.help import Help
+from Discord.settings import Settings
+from Discord.submission.submissions import Submissions
+
 
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -17,7 +22,7 @@ if not TOKEN:
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
 
-bot = commands.Bot('!', help_command=None, owner_id=OWNER_ID, intents=discord.Intents.all())
+
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
 log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
@@ -42,54 +47,60 @@ async def log(msg: str, first_log=False, dm=True) -> None:
             timestamp_msg = '-' * 90 + '\n' + timestamp_msg
         return await log_user['owner_user_object'].send(timestamp_msg)
 
+class Listeners(Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
-@bot.event
-async def on_ready():
-    # Try to get the user object of the owner of the bot, which is used for logging.
-    for member in bot.get_all_members():
-        if str(member) == log_user['owner_name']:
-            log_user['owner_user_object'] = member
-    await log(f'Bot logged in with name: {bot.user.name} and id: {bot.user.id}.', first_log=True)
+    @Cog.listener()
+    async def on_ready(self):
+        # Try to get the user object of the owner of the bot, which is used for logging.
+        for member in self.bot.get_all_members():
+            if str(member) == log_user['owner_name']:
+                log_user['owner_user_object'] = member
+        await log(f'Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.', first_log=True)
+
+    # Temporary fix
+    # TODO: Remove this event after the bot doesn't break when it is in more than one server
+    @Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        if guild.id != OWNER_SERVER_ID:
+            # Send a warning message in the server, and then leave
+            await log(f'Bot joined server: {guild.name} with id: {guild.id}.')
+            await guild.system_channel.send('I am not supposed to be in this server. Leaving now.')
+            await guild.leave()
+
+    @Cog.listener()
+    async def on_message(self, message: discord.Message):
+        user_command = ''
+
+        if message.content.startswith(PREFIX):
+            user_command = message.content.replace(PREFIX, '', 1)
+        elif not message.guild:
+            user_command = message.content
+
+        if self.bot.user.id != message.author.id and user_command:
+            if message.guild:
+                log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
+            else:
+                log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
+            owner_dmed_bot = not message.guild and log_user['owner_name'] == str(message.author)
+            if owner_dmed_bot:
+                await log(log_message, dm=False)
+            else:
+                await log(log_message)
 
 
-# Temporary fix
-# TODO: Remove this event after the bot doesn't break when it is in more than one server
-@bot.event
-async def on_guild_join(guild: discord.Guild):
-    if guild.id != OWNER_SERVER_ID:
-        # Send a warning message in the server, and then leave
-        await log(f'Bot joined server: {guild.name} with id: {guild.id}.')
-        await guild.system_channel.send('I am not supposed to be in this server. Leaving now.')
-        await guild.leave()
-
-
-@bot.event
-async def on_message(message: discord.Message):
-    user_command = ''
-
-    if message.content.startswith(PREFIX):
-        user_command = message.content.replace(PREFIX, '', 1)
-    elif not message.guild:
-        user_command = message.content
-
-    if bot.user.id != message.author.id and user_command:
-        if message.guild:
-            log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
-        else:
-            log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
-        owner_dmed_bot = not message.guild and log_user['owner_name'] == str(message.author)
-        if owner_dmed_bot:
-            await log(log_message, dm=False)
-        else:
-            await log(log_message)
-
-        output = await COMMANDS.execute(user_command, bot, user_command, message)
-        if isinstance(output, str):
-            await message.channel.send(output)
-        if isinstance(output, discord.Embed):
-            await message.channel.send(embed=output)
-
+async def main():
+    # Running the application
+    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
+        bot.add_command(invite_link)
+        bot.add_command(source_code)
+        bot.add_command(submit_record)
+        await bot.add_cog(Settings(bot))
+        await bot.add_cog(Submissions(bot))
+        await bot.add_cog(Listeners(bot))
+        bot.help_command = Help()
+        await bot.start(TOKEN)
 
 if __name__ == '__main__':
-    # Running the application
-    bot.run(TOKEN)
+    asyncio.run(main())
