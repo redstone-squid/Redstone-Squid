@@ -94,7 +94,7 @@ class Listeners(Cog):
 async def main():
     # Running the application
     async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
-        handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
+        handler = logging.FileHandler(filename='discord.log', encoding='utf-8')
         bot.add_command(invite_link)
         bot.add_command(source_code)
         bot.add_command(submit_record)
