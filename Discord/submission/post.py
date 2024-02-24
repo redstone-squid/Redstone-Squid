@@ -3,6 +3,7 @@ import discord
 import Discord.utils as utils
 import Discord.settings as settings
 import Database.message as msg
+from Database.submission import Submission
 
 
 def generate_embed(submission_obj):
@@ -33,7 +34,7 @@ def generate_embed(submission_obj):
 
 
 # Get the channels ['smallest', 'fastest', 'smallest_observerless', 'fastest_observerless'] to post record to
-def get_channel_type_to_post_to(submission_obj):
+def get_channel_type_to_post_to(submission_obj: Submission) -> str:
     if submission_obj.base_category == 'First':
         return 'First'
 
@@ -56,7 +57,7 @@ def get_channel_type_to_post_to(submission_obj):
 
 
 # Gets all channels which a submission should be posted to
-def get_channels_to_post_to(client, submission_obj):
+def get_channels_to_post_to(client: discord.Client, submission_obj: Submission) -> list[discord.TextChannel]:
     # Get channel type to post submission to
     channel_type = get_channel_type_to_post_to(submission_obj)
     channels = []
@@ -76,30 +77,30 @@ def get_channels_to_post_to(client, submission_obj):
 
 
 # Posts submission to each server in the channel the server settings worksheet
-async def post_submission(client, submission_obj):
+async def post_submission(client: discord.Client, submission_obj: Submission):
     channels = get_channels_to_post_to(client, submission_obj)
     em = generate_embed(submission_obj)
 
     for channel in channels:
-        message = await client.send_message(channel, embed=em)
-        msg.update_message(channel.server.id, submission_obj.id, message.channel.id, message.id)
+        message = await channel.send(embed=em)
+        msg.update_message(channel.guild.id, submission_obj.id, message.channel.id, message.id)
 
 
-async def post_submission_to_server(client, submission_obj, server_id):
+async def post_submission_to_server(client: discord.Client, submission_obj: Submission, server_id: int):
     channels = get_channels_to_post_to(client, submission_obj)
     em = generate_embed(submission_obj)
 
     for channel in channels:
-        if channel.server.id == server_id:
-            message = await client.send_message(channel, embed=em)
-            msg.update_message(channel.server.id, submission_obj.id, message.channel.id, message.id)
+        if channel.guild.id == server_id:
+            message = await channel.send(embed=em)
+            msg.update_message(channel.guild.id, submission_obj.id, message.channel.id, message.id)
 
 
 # Updates post to conform to the submission obj
-async def edit_post(client, server, channel_id, message_id, submission_obj):
+async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: str, submission_obj: Submission):
     em = generate_embed(submission_obj)
-    channel = client.get_channel(str(channel_id))
-    message = await client.get_message(channel, int(message_id))
+    channel = client.get_channel(channel_id)
+    message = await channel.fetch_message(int(message_id))
 
-    updated_message = await client.edit_message(message, embed=em)
-    msg.update_message(server.id, submission_obj.id, str(channel_id), updated_message.id)
+    updated_message = await message.edit(embed=em)
+    msg.update_message(server.id, submission_obj.id, channel_id, updated_message.id)

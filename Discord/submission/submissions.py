@@ -11,9 +11,7 @@ import Database.message as msg
 
 
 submission_roles = ['Admin', 'Moderator']
-# submission_perms = [ADMINISTRATOR]
-# submission_roles = []
-submission_perms = []
+# submission_roles = ["Everyone"]
 
 class Submissions(GroupCog, name='submissions'):
     """View, confirm and deny submissions."""
