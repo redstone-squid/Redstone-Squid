@@ -112,7 +112,7 @@ def get_outdated_messages(server_id):
                 break
 
         # If message doesn't exist
-        if message == None:
+        if message is None:
             outdated.append((message, sub))
             continue
 
