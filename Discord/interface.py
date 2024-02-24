@@ -8,7 +8,7 @@ import Discord.utils as utils
 from Discord.config import *
 from Discord.commands import invite_link, source_code, submit_record
 from Discord.help import Help
-from Discord.settings.settings import Settings
+from Discord.settings import Settings
 from Discord.submission.submissions import Submissions
 
 

@@ -1,7 +1,7 @@
 import discord
 
 import Discord.utils as utils
-import Discord.settings.settings as settings
+import Discord.settings as settings
 import Database.message as msg
 
 
