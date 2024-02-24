@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from gspread import Worksheet
+
 import Database.main as DB
 from Database.submission import Submission as Submission_Class
 import Database.global_vars as global_vars
@@ -58,11 +60,11 @@ def open_form_submissions():
         form_wks.delete_row(2)
 
 # Returns all submissions that are in the open submissions worksheet.
-def get_open_submissions_raw():
+def get_open_submissions_raw() -> list[dict]:
     wks = DB.get_open_submissions_worksheet()
     return wks.get_all_records()
 
-def get_open_submissions():
+def get_open_submissions() -> list[dict]:
     submissions = get_open_submissions_raw()
 
     for index, submission in enumerate(submissions):
@@ -70,15 +72,15 @@ def get_open_submissions():
 
     return submissions
 
-def get_open_submission(submission_id):
+def get_open_submission(submission_id: int) -> Submission_Class | None:
     return get_submission(submission_id, DB.get_open_submissions_worksheet())
 
 # Returns all submissions that are in the confirmed submissions worksheet.
-def get_confirmed_submissions_raw():
+def get_confirmed_submissions_raw() -> list[dict]:
     wks = DB.get_confirmed_submissions_worksheet()
     return wks.get_all_records()
 
-def get_confirmed_submissions():
+def get_confirmed_submissions() -> list[dict]:
     submissions = get_confirmed_submissions_raw()
 
     for index, submission in enumerate(submissions):
@@ -86,16 +88,15 @@ def get_confirmed_submissions():
     
     return submissions
 
-# TODO: fix this
-def get_confirmed_submission(submissions_id):
+def get_confirmed_submission(submission_id) -> Submission_Class | None:
     return get_submission(submission_id, DB.get_confirmed_submissions_worksheet())
 
 # Returns all submissions that are in the denied submissions worksheet.
-def get_denied_submissions_raw():
+def get_denied_submissions_raw() -> list[dict]:
     wks = DB.get_denied_submissions_worksheet()
     return wks.get_all_records()
 
-def get_denied_submissions():
+def get_denied_submissions() -> list[dict]:
     submissions = get_denied_submissions_raw()
 
     for index, submission in enumerate(submissions):
@@ -103,12 +104,11 @@ def get_denied_submissions():
     
     return submissions
 
-# TODO: fix this
-def get_denied_submission(submissions_id):
+def get_denied_submission(submission_id: int) -> Submission_Class | None:
     return get_submission(submission_id, DB.get_denied_submissions_worksheet())
 
 # Returns a Submission object parsed from wks with the submission_id
-def get_submission(submission_id, wks):
+def get_submission(submission_id: int, wks: Worksheet) -> Submission_Class | None:
     submissions = wks.get_all_records()
     for sub in submissions:
         if int(sub['Submission ID']) == submission_id:
@@ -117,7 +117,7 @@ def get_submission(submission_id, wks):
 
 # Moves submission with submission_id from source_wks to destination_wks
 # Returns if the submission exists in source_wks
-def move_submission(submission_id, source_wks, destination_wks):
+def move_submission(submission_id: int, source_wks: Worksheet, destination_wks: Worksheet) -> bool:
     # Gets all submission from source
     submissions = source_wks.get_all_records()
 
@@ -135,14 +135,14 @@ def move_submission(submission_id, source_wks, destination_wks):
     # Appends the submission to the destination worksheet
     destination_wks.append_row(source_wks.row_values(row_number))
     # Removes the submission from the source worksheet
-    source_wks.delete_row(row_number)
+    source_wks.delete_rows(row_number)
 
     return True
 
 # Confirm submission
-def confirm_submission(submission_id):
+def confirm_submission(submission_id: int) -> bool:
     return move_submission(submission_id, DB.get_open_submissions_worksheet(), DB.get_confirmed_submissions_worksheet())
 
 # Deny submission
-def deny_submission(submission_id):
+def deny_submission(submission_id: int) -> bool:
     return move_submission(submission_id, DB.get_open_submissions_worksheet(), DB.get_denied_submissions_worksheet())

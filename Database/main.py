@@ -1,3 +1,5 @@
+from gspread import Worksheet
+
 import Database.config as config
 import Google.interface as Google
 
@@ -30,7 +32,7 @@ def get_denied_submissions_worksheet():
     return get_workbook().get_worksheet(config.DENIED_SUBMISSIONS_SHEET_INDEX)
 
 # Gets the worksheet which contains the message ids of posted submissions
-def get_message_worksheet():
+def get_message_worksheet() -> Worksheet:
     return get_workbook().get_worksheet(config.MESSAGE_SHEET_INDEX)
 
 # Returns a list of possible settings.
@@ -42,15 +44,12 @@ def header_count(wks):
     return len(header_list(wks))
 
 # Gets the column in the database which contains the setting.
-def get_col_index(wks, header_name):
+def get_col_index(wks: Worksheet, header_name: str) -> int:
     # Makes a list of headers.
-    headers = wks.row_values(1)
+    headers: list = wks.row_values(1)
 
     # Finding the column which contains the correct setting name.
-    try:
-        return headers.index(header_name)
-    except ValueError:
-        return None
+    return headers.index(header_name)
     
 def get_col_number(wks, header_name):
     index = get_col_index(wks, header_name)

@@ -11,9 +11,7 @@ import Database.message as msg
 
 
 submission_roles = ['Admin', 'Moderator']
-# submission_perms = [ADMINISTRATOR]
-# submission_roles = []
-submission_perms = []
+# submission_roles = ["Everyone"]
 
 class Submissions(GroupCog, name='submissions'):
     """View, confirm and deny submissions."""
@@ -128,7 +126,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='outdated')
     @has_any_role(*submission_roles)
     async def outdated_function(self, ctx: Context):
-        """Shows an overview of all discord posts that are require updating."""
+        """Shows an overview of all discord posts that require updating."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
