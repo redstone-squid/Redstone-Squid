@@ -1,18 +1,14 @@
 from typing import Optional
-
 import discord
-from discord.ext.commands import GroupCog, Context, Bot, has_any_role
+from discord.ext.commands import GroupCog, Context, Bot, has_any_role, group
 
 import Discord.utils as utils
-from Discord.command import Param
-
 import Database.server_settings as server_settings
 
-# Confirm Channel --------------------------------------------------------------------------------------------
 channel_settings_roles = ['Admin', 'Moderator']
-channel_set_params = [
-    Param('channel', 'The channel that you want to update this setting to.', dtype = 'channel_mention', optional = False)
-]
+# channel_set_params = [
+#     Param('channel', 'The channel that you want to update this setting to.', dtype='channel_mention', optional=False)
+# ]
 
 class Settings(GroupCog, name='settings'):
     def __init__(self, bot: Bot):
@@ -20,29 +16,13 @@ class Settings(GroupCog, name='settings'):
 
     @group(invoke_without_command=True)
     async def settings(self, ctx: Context):
-        """
-        Shows help messages for the settings commands.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Shows help messages for the settings commands."""
         await ctx.send("hi")
 
     @settings.command(description='Queries all settings.')
     @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx):
-        """
-        Query all settings.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Query all settings."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
         channels = get_all_record_channels(ctx.guild)
@@ -69,16 +49,7 @@ class Settings(GroupCog, name='settings'):
     @settings.command(name='query', description='Queries which channel is set to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: str):
-        """
-        Finds which channel is set for a purpose and sends the results to the user.
-
-        Args:
-            ctx: The context of the command.
-            channel_purpose: "Smallest", "Fastest", "Smallest Observerless", "Fastest Observerless", "First"
-
-        Returns:
-
-        """
+        """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
         result_channel = get_record_channel_for(ctx.guild, channel_purpose)
         await sent_message.delete()
@@ -91,17 +62,7 @@ class Settings(GroupCog, name='settings'):
     @settings.command(name='set', description='Sets the current channel as the channel to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def set_channel(self, ctx: Context, channel_purpose: str, channel: discord.TextChannel):
-        """
-        Sets the channel for a specific purpose.
-
-        Args:
-            ctx: The context of the command.
-            channel_purpose: "Smallest", "Fastest", "Smallest Observerless", "Fastest Observerless", "First"
-            channel: The channel to set.
-
-        Returns:
-            None
-        """
+        """Sets the channel for a specific purpose."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
 
         # Verifying channel exists on server
@@ -120,16 +81,7 @@ class Settings(GroupCog, name='settings'):
     @settings.command(name='unset', description='Unsets the channel to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: str):
-        """
-        Unsets the channel for a specific purpose.
-
-        Args:
-            ctx: The context of the command.
-            channel_purpose: "Smallest", "Fastest", "Smallest Observerless", "Fastest Observerless", "First"
-
-        Returns:
-            None
-        """
+        """Unsets the channel for a specific purpose."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
         server_id = ctx.guild.id
         server_settings.update_server_setting(server_id, channel_purpose, '')
@@ -138,16 +90,7 @@ class Settings(GroupCog, name='settings'):
 
 
 def get_record_channel_for(server: discord.Guild, channel_purpose: str) -> discord.TextChannel | None:
-    """
-    Gets the channel for a specific purpose from the server settings table.
-
-    Args:
-        server: The server to get the channel from.
-        channel_purpose: "Smallest", "Fastest", "Smallest Observerless", "Fastest Observerless", "First"
-
-    Returns:
-        The channel object if it exists, otherwise None.
-    """
+    """Gets the channel for a specific purpose from the server settings table."""
     # Getting channel if from database
     channel_id = server_settings.get_server_setting(server.id, channel_purpose)
 
@@ -168,12 +111,6 @@ def get_all_record_channels(server: discord.Guild) -> dict[str, Optional[discord
     - Smallest Observerless
     - Fastest Observerless
     - First
-
-    Args:
-        server: The server to get the channels from.
-
-    Returns:
-        A dictionary with the channel names as keys and the channel objects as values.
     """
     settings = server_settings.get_server_settings(server.id)
     result = {'Smallest': server.get_channel(settings['Smallest']),

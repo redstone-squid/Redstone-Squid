@@ -25,29 +25,13 @@ class Submissions(GroupCog, name='submissions'):
 
     @group(invoke_without_command=True)
     async def submissions(self, ctx: Context):
-        """
-        Shows help messages for the submissions commands.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Shows help messages for the submissions commands."""
         await ctx.send("hi")
 
     @submissions.command(name='open', aliases=['o'])
     @has_any_role(*submission_roles)
     async def open_function(self, ctx):
-        """
-        Shows an overview of all submissions open for review.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Shows an overview of all submissions open for review."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -78,16 +62,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='view')
     @has_any_role(*submission_roles)
     async def view_function(self, ctx, index: int):
-        """
-        Displays an open submission.
-
-        Args:
-            ctx: The context of the command.
-            index: The id of the submission you wish to view.
-
-        Returns:
-            None
-        """
+        """Displays an open submission."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -108,16 +83,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='confirm')
     @has_any_role(*submission_roles)
     async def confirm_function(self, ctx, index: int):
-        """
-        Marks a submission as confirmed.
-
-        Args:
-            ctx: The context of the command.
-            index: The id of the submission you wish to confirm.
-
-        Returns:
-            None
-        """
+        """Marks a submission as confirmed."""
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
             return await ctx.send(embed=em)
@@ -139,16 +105,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='deny')
     @has_any_role(*submission_roles)
     async def deny_function(self, ctx, index: int):
-        """
-        Marks a submission as denied.
-
-        Args:
-            ctx: The context of the command.
-            index: The id of the submission you wish to deny.
-
-        Returns:
-            None
-        """
+        """Marks a submission as denied."""
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
             return await ctx.send(embed=em)
@@ -169,15 +126,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='outdated')
     @has_any_role(*submission_roles)
     async def outdated_function(self, ctx):
-        """
-        Shows an overview of all discord posts that are require updating.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Shows an overview of all discord posts that are require updating."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -204,16 +153,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='update')
     @has_any_role(*submission_roles)
     async def update_function(self, ctx, index: int):
-        """
-        Updated an outdated discord post.
-
-        Args:
-            ctx: The context of the command.
-            index: The id of the submission you wish to deny.
-
-        Returns:
-            None
-        """
+        """Updated an outdated discord post."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
 
@@ -241,15 +181,7 @@ class Submissions(GroupCog, name='submissions'):
     @submissions.command(name='update_all')
     @has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
-        """
-        Updates all outdated discord posts.
-
-        Args:
-            ctx: The context of the command.
-
-        Returns:
-            None
-        """
+        """Updates all outdated discord posts."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
 
