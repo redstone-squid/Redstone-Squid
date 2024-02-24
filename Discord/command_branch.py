@@ -104,7 +104,7 @@ class CommandBranch(Command):
             return utils.error_embed('Error.', 'Unable to find command. Use help to get a list of avaliable commands.')
 
         if isinstance(cmd, CommandLeaf):
-            return f'`{' '.join(argv)}` - {cmd.get_help(True)}\n'
+            return f'`{" ".join(argv)}` - {cmd.get_help(True)}\n'
         else:
             result = f'{cmd.get_help()}\n\nCommands:\n'
             for scmd in cmd._commands.keys():
