@@ -10,9 +10,10 @@ import Database.submissions as submissions
 import Database.message as msg
 
 
-submission_roles = ['Admin', 'Moderator']
-submission_perms = [ADMINISTRATOR]
-
+# submission_roles = ['Admin', 'Moderator']
+# submission_perms = [ADMINISTRATOR]
+submission_roles = []
+submission_perms = []
 
 class Submissions(GroupCog, name='submissions'):
     def __init__(self, bot):
@@ -23,14 +24,14 @@ class Submissions(GroupCog, name='submissions'):
     #     """This is a check that will be called before any command in this cog is executed."""
     #     return has_any_role(*submission_roles)(lambda x: True)(ctx)
 
-    @group(invoke_without_command=True)
+    @group(invoke_without_command=True, brief="Shows brief messages for the submissions ")
     async def submissions(self, ctx: Context):
-        """Shows help messages for the submissions commands."""
+        """Shows help messages for the submissions"""
         await ctx.send("hi")
 
-    @submissions.command(name='open', aliases=['o'])
+    @submissions.command(name='open', brief="Shows an overview of all submissions open for review.")
     @has_any_role(*submission_roles)
-    async def open_function(self, ctx):
+    async def open_function(self, ctx: Context):
         """Shows an overview of all submissions open for review."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
@@ -59,9 +60,9 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         await ctx.send(embed=em)
 
-    @submissions.command(name='view')
+    @submissions.command(name='view', brief="Displays an open submission.")
     @has_any_role(*submission_roles)
-    async def view_function(self, ctx, index: int):
+    async def view_function(self, ctx: Context, index: int):
         """Displays an open submission."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
@@ -80,9 +81,9 @@ class Submissions(GroupCog, name='submissions'):
         return await ctx.send(embed=post.generate_embed(result))
 
     # confirm_function
-    @submissions.command(name='confirm')
+    @submissions.command(name='confirm', brief="Marks a submission as confirmed.")
     @has_any_role(*submission_roles)
-    async def confirm_function(self, ctx, index: int):
+    async def confirm_function(self, ctx: Context, index: int):
         """Marks a submission as confirmed."""
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
@@ -102,9 +103,9 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
-    @submissions.command(name='deny')
+    @submissions.command(name='deny', brief="Marks a submission as denied.")
     @has_any_role(*submission_roles)
-    async def deny_function(self, ctx, index: int):
+    async def deny_function(self, ctx: Context, index: int):
         """Marks a submission as denied."""
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
@@ -123,9 +124,9 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
-    @submissions.command(name='outdated')
+    @submissions.command(name='outdated', brief="Shows an overview of all discord posts that are require updating.")
     @has_any_role(*submission_roles)
-    async def outdated_function(self, ctx):
+    async def outdated_function(self, ctx: Context):
         """Shows an overview of all discord posts that are require updating."""
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
@@ -150,7 +151,7 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=em)
 
-    @submissions.command(name='update')
+    @submissions.command(name='update', brief="Updated an outdated discord post.")
     @has_any_role(*submission_roles)
     async def update_function(self, ctx, index: int):
         """Updated an outdated discord post."""
@@ -178,7 +179,7 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         return await ctx.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
-    @submissions.command(name='update_all')
+    @submissions.command(name='update_all', brief="Updates all outdated discord posts.")
     @has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
         """Updates all outdated discord posts."""

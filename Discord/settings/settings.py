@@ -19,7 +19,7 @@ class Settings(GroupCog, name='settings'):
         """Shows help messages for the settings commands."""
         await ctx.send("hi")
 
-    @settings.command(description='Queries all settings.')
+    @settings.command(brief='Queries all settings.')
     @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx):
         """Query all settings."""
@@ -46,7 +46,7 @@ class Settings(GroupCog, name='settings'):
         await sent_message.delete()
         await ctx.send(embed=em)
 
-    @settings.command(name='query', description='Queries which channel is set to post this record type to.')
+    @settings.command(name='query', brief='Queries which channel is set to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: str):
         """Finds which channel is set for a purpose and sends the results to the user."""
@@ -59,7 +59,7 @@ class Settings(GroupCog, name='settings'):
             em = utils.info_embed(f'{channel_purpose} Channel Info', f'ID: {result_channel.id} \n Name: {result_channel.name}')
         await ctx.send(embed=em)
 
-    @settings.command(name='set', description='Sets the current channel as the channel to post this record type to.')
+    @settings.command(name='set', brief='Sets the current channel as the channel to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def set_channel(self, ctx: Context, channel_purpose: str, channel: discord.TextChannel):
         """Sets the channel for a specific purpose."""
@@ -78,7 +78,7 @@ class Settings(GroupCog, name='settings'):
         await ctx.send(
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
-    @settings.command(name='unset', description='Unsets the channel to post this record type to.')
+    @settings.command(name='unset', brief='Unsets the channel to post this record type to.')
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: str):
         """Unsets the channel for a specific purpose."""
