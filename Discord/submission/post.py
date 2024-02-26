@@ -1,3 +1,4 @@
+"""Helper functions for posting submissions to discord channels."""
 import discord
 
 import Discord.utils as utils
@@ -15,7 +16,6 @@ def generate_embed(submission_obj):
     description = submission_obj.get_description()
 
     # Embed -------------------------------------------------------------------------------
-    em = None
     if description is None:
         em = discord.Embed(title=title, colour=utils.discord_green)
     else:
@@ -28,13 +28,13 @@ def generate_embed(submission_obj):
     if submission_obj.image_url:
         em.set_image(url=submission_obj.image_url)
 
-    em.set_footer(text='Submission ID: {}.'.format(submission_obj.id))
+    em.set_footer(text=f'Submission ID: {submission_obj.id}.')
 
     return em
 
 
 # Get the channels ['smallest', 'fastest', 'smallest_observerless', 'fastest_observerless'] to post record to
-def get_channel_type_to_post_to(submission_obj: Submission) -> str:
+def get_channel_type_to_post_to(submission_obj: Submission) -> str | None:
     if submission_obj.base_category == 'First':
         return 'First'
 
@@ -63,7 +63,7 @@ def get_channels_to_post_to(client: discord.Client, submission_obj: Submission) 
     channels = []
 
     # For each server the bot can see
-    # TODO: bug here, bot may not be configured in a server, and then it fails
+    # FIXME: bug here, bot may not be configured in a server, and then it fails
     for guild in client.guilds:
         # Find the channel (if set) that is set for this post to go to
         channel = settings.get_record_channel_for(guild, channel_type)
