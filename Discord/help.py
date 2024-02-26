@@ -12,6 +12,10 @@ MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information."
 
 class Help(commands.MinimalHelpCommand):
     """Show help for a command or a group of commands."""
+    def __init__(self):
+        super().__init__(command_attrs={'help': 'Show help for a command or a group of commands.'})
+        self.verify_checks = False
+
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Optional[Cog], List[Command[Any, ..., Any]]], /) -> None:
@@ -62,7 +66,7 @@ class Help(commands.MinimalHelpCommand):
         desc = \
             f"""{group.cog.description}
             
-            Usable Subcommands:{command_details}
+            Usable Subcommands: {command_details or "None"}
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
