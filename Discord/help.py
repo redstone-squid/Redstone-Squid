@@ -19,6 +19,7 @@ class Help(commands.MinimalHelpCommand):
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Optional[Cog], List[Command[Any, ..., Any]]], /) -> None:
+        # TODO: hide hidden commands
         desc = f"""{self.context.bot.description}
         
         Commands:{self.get_commands_brief_details(list(self.context.bot.commands))}
