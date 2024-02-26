@@ -10,7 +10,7 @@ import Database.submissions as submissions
 import Database.message as msg
 
 
-submission_roles = ['Admin', 'Moderator']
+submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # submission_roles = ["Everyone"]
 
 class Submissions(GroupCog, name='submissions'):
