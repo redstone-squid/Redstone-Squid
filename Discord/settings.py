@@ -17,7 +17,7 @@ class Settings(GroupCog, name='settings'):
 
     @group(invoke_without_command=True, hidden=True)
     async def settings(self, ctx: Context):
-        """Shows help messages for the settings commands."""
+        """Allows you to configure the bot for your server."""
         await ctx.send_help(ctx.command)
 
     @settings.command()
