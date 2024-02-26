@@ -14,7 +14,7 @@ class Help(commands.MinimalHelpCommand):
     """Show help for a command or a group of commands."""
     def __init__(self):
         super().__init__(command_attrs={'help': 'Show help for a command or a group of commands.'})
-        self.verify_checks = False
+        # self.verify_checks = False
 
     # !help
     @override
@@ -59,7 +59,9 @@ class Help(commands.MinimalHelpCommand):
         subcommands = group.commands
 
         if len(subcommands) == 0:
-            return await self.send_command_help(group.self)
+            # Group is a subclass of Command
+            # noinspection PyTypeChecker
+            return await self.send_command_help(group)
 
         commands_ = await self.filter_commands(subcommands, sort=True)
         command_details = self.get_commands_brief_details(commands_)
@@ -70,7 +72,7 @@ class Help(commands.MinimalHelpCommand):
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
-        await self.context.send(embed=em)
+        await self.get_destination().send(embed=em)
 
     # !help <cog>
     @override
