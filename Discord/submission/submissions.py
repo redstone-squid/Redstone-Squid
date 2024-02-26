@@ -25,7 +25,7 @@ class Submissions(GroupCog, name='submissions'):
 
     @group(invoke_without_command=True, hidden=True)
     async def submissions(self, ctx: Context):
-        """Shows help messages for the submissions"""
+        """View, confirm and deny submissions."""
         await ctx.send_help(ctx.command)
 
     @submissions.command(name='open')

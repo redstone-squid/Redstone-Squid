@@ -1,13 +1,9 @@
 from datetime import datetime
-
 from gspread import Worksheet
 
 import Database.main as DB
-from Database.submission import Submission as Submission_Class
+from Database.submission import Submission
 import Database.global_vars as global_vars
-import Database.config as config
-import Google.interface as Google
-
 import Database.submission as submission
 
 # Moves all records from the form_submissions worksheet to the open submissions worksheet.
@@ -64,15 +60,16 @@ def get_open_submissions_raw() -> list[dict]:
     wks = DB.get_open_submissions_worksheet()
     return wks.get_all_records()
 
-def get_open_submissions() -> list[dict]:
-    submissions = get_open_submissions_raw()
+def get_open_submissions() -> list[Submission]:
+    submissions_dict = get_open_submissions_raw()
+    submissions = []
 
-    for index, submission in enumerate(submissions):
-        submissions[index] = Submission_Class.from_dict(submission)
+    for index, submission in enumerate(submissions_dict):
+        submissions[index] = Submission.from_dict(submission)
 
     return submissions
 
-def get_open_submission(submission_id: int) -> Submission_Class | None:
+def get_open_submission(submission_id: int) -> Submission | None:
     return get_submission(submission_id, DB.get_open_submissions_worksheet())
 
 # Returns all submissions that are in the confirmed submissions worksheet.
@@ -80,15 +77,16 @@ def get_confirmed_submissions_raw() -> list[dict]:
     wks = DB.get_confirmed_submissions_worksheet()
     return wks.get_all_records()
 
-def get_confirmed_submissions() -> list[dict]:
-    submissions = get_confirmed_submissions_raw()
+def get_confirmed_submissions() -> list[Submission]:
+    submissions_dict = get_confirmed_submissions_raw()
+    submissions = []
 
-    for index, submission in enumerate(submissions):
-        submissions[index] = Submission_Class.from_dict(submission)
+    for index, submission in enumerate(submissions_dict):
+        submissions[index] = Submission.from_dict(submission)
     
     return submissions
 
-def get_confirmed_submission(submission_id) -> Submission_Class | None:
+def get_confirmed_submission(submission_id) -> Submission | None:
     return get_submission(submission_id, DB.get_confirmed_submissions_worksheet())
 
 # Returns all submissions that are in the denied submissions worksheet.
@@ -96,19 +94,20 @@ def get_denied_submissions_raw() -> list[dict]:
     wks = DB.get_denied_submissions_worksheet()
     return wks.get_all_records()
 
-def get_denied_submissions() -> list[dict]:
-    submissions = get_denied_submissions_raw()
+def get_denied_submissions() -> list[Submission]:
+    submissions_dict = get_denied_submissions_raw()
+    submissions = []
 
-    for index, submission in enumerate(submissions):
-        submissions[index] = Submission_Class.from_dict(submission)
+    for index, submission in enumerate(submissions_dict):
+        submissions[index] = Submission.from_dict(submission)
     
     return submissions
 
-def get_denied_submission(submission_id: int) -> Submission_Class | None:
+def get_denied_submission(submission_id: int) -> Submission | None:
     return get_submission(submission_id, DB.get_denied_submissions_worksheet())
 
 # Returns a Submission object parsed from wks with the submission_id
-def get_submission(submission_id: int, wks: Worksheet) -> Submission_Class | None:
+def get_submission(submission_id: int, wks: Worksheet) -> Submission | None:
     submissions = wks.get_all_records()
     for sub in submissions:
         if int(sub['Submission ID']) == submission_id:
