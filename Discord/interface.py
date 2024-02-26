@@ -7,7 +7,7 @@ import logging
 
 import Discord.utils as utils
 from Discord.config import *
-from Discord.commands import invite_link, source_code, submit_record
+from Discord.commands import invite_link, source_code, submit_record, give_redstoner
 from Discord.help import Help
 from Discord.settings import Settings
 from Discord.submission.submissions import Submissions
@@ -98,6 +98,7 @@ async def main():
         bot.add_command(invite_link)
         bot.add_command(source_code)
         bot.add_command(submit_record)
+        bot.add_command(give_redstoner)
         await bot.add_cog(Settings(bot))
         await bot.add_cog(Submissions(bot))
         await bot.add_cog(Listeners(bot))
