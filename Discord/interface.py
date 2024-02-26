@@ -1,3 +1,4 @@
+"""Main file for the discord bot, includes logging and the main event loop."""
 import asyncio
 import os
 import discord
@@ -91,9 +92,13 @@ class Listeners(Cog):
                 await log(log_message)
 
 
-async def main():
+async def main(*, debug=False):
+    if debug:
+        prefix = '.'
+    else:
+        prefix = PREFIX
     # Running the application
-    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
+    async with Bot(prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         handler = logging.FileHandler(filename='discord.log', encoding='utf-8')
         bot.add_command(invite_link)
         bot.add_command(source_code)

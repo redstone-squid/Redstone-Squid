@@ -22,4 +22,4 @@ import asyncio
 import Google.interface as google
 import Discord.interface as discord
 
-asyncio.run(discord.main())
+asyncio.run(discord.main(debug=True))
