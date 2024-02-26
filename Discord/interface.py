@@ -29,21 +29,21 @@ if not TOKEN:
 log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
 
 
-async def log(msg: str, first_log=False, dm=True) -> None:
+async def log(msg: str, first_log=False, dm_owner=True) -> None:
     """
     Logs a timestamped message to stdout and to the owner of the bot via DM.
 
     Args:
         msg: the message to log
         first_log: if True, adds a line of dashes before the message
-        dm: whether to send the message to the owner of the bot via DM
+        dm_owner: whether to send the message to the owner of the bot via DM
 
     Returns:
         None
     """
     timestamp_msg = utils.get_time() + msg
     print(timestamp_msg)
-    if log_user['owner_user_object'] and dm:
+    if dm_owner and log_user['owner_user_object']:
         if first_log:
             timestamp_msg = '-' * 90 + '\n' + timestamp_msg
         return await log_user['owner_user_object'].send(timestamp_msg)
@@ -86,7 +86,7 @@ class Listeners(Cog):
                 log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
             owner_dmed_bot = not message.guild and log_user['owner_name'] == str(message.author)
             if owner_dmed_bot:
-                await log(log_message, dm=False)
+                await log(log_message, dm_owner=False)
             else:
                 await log(log_message)
 
