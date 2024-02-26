@@ -81,7 +81,7 @@ class Help(commands.MinimalHelpCommand):
         desc = \
             f"""{cog.description}
             
-            Usable Subcommands:{command_details}
+            Usable Subcommands:{command_details or "None"}
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
