@@ -62,10 +62,7 @@ def get_open_submissions_raw() -> list[dict]:
 
 def get_open_submissions() -> list[Submission]:
     submissions_dict = get_open_submissions_raw()
-    submissions = []
-
-    for index, submission in enumerate(submissions_dict):
-        submissions[index] = Submission.from_dict(submission)
+    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
 
     return submissions
 
@@ -79,11 +76,7 @@ def get_confirmed_submissions_raw() -> list[dict]:
 
 def get_confirmed_submissions() -> list[Submission]:
     submissions_dict = get_confirmed_submissions_raw()
-    submissions = []
-
-    for index, submission in enumerate(submissions_dict):
-        submissions[index] = Submission.from_dict(submission)
-    
+    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
     return submissions
 
 def get_confirmed_submission(submission_id) -> Submission | None:
@@ -96,11 +89,7 @@ def get_denied_submissions_raw() -> list[dict]:
 
 def get_denied_submissions() -> list[Submission]:
     submissions_dict = get_denied_submissions_raw()
-    submissions = []
-
-    for index, submission in enumerate(submissions_dict):
-        submissions[index] = Submission.from_dict(submission)
-    
+    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
     return submissions
 
 def get_denied_submission(submission_id: int) -> Submission | None:
