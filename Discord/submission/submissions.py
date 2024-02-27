@@ -1,5 +1,5 @@
 import discord
-from discord.ext.commands import group, GroupCog, Context, has_any_role
+from discord.ext.commands import group, GroupCog, Context, has_any_role, hybrid_group
 
 import Discord.utils as utils
 from Discord.permissions import *
@@ -23,7 +23,7 @@ class Submissions(GroupCog, name='submissions'):
     #     """This is a check that will be called before any command in this cog is executed."""
     #     return has_any_role(*submission_roles)(lambda x: True)(ctx)
 
-    @group(invoke_without_command=True, hidden=True)
+    @hybrid_group(invoke_without_command=True)
     async def submissions(self, ctx: Context):
         """View, confirm and deny submissions."""
         await ctx.send_help(ctx.command)

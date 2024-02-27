@@ -1,11 +1,12 @@
 from typing import Optional
 import discord
-from discord.ext.commands import GroupCog, Context, Bot, has_any_role, group
+from discord.ext.commands import GroupCog, Context, Bot, has_any_role, group, hybrid_group
 
 import Discord.utils as utils
 import Database.server_settings as server_settings
 
 channel_settings_roles = ['Admin', 'Moderator']
+# TODO: Add this description to the help command
 # channel_set_params = [
 #     Param('channel', 'The channel that you want to update this setting to.', dtype='channel_mention', optional=False)
 # ]
@@ -15,7 +16,8 @@ class Settings(GroupCog, name='settings'):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @group(invoke_without_command=True, hidden=True)
+    @hybrid_group(invoke_without_command=True)
+    @has_any_role(*channel_settings_roles)
     async def settings(self, ctx: Context):
         """Allows you to configure the bot for your server."""
         await ctx.send_help(ctx.command)
