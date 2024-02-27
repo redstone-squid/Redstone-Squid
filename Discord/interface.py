@@ -7,6 +7,7 @@ from discord.ext.commands import Cog, Bot
 import logging
 
 import Discord.utils as utils
+from Discord import slash_commands
 from Discord.config import *
 from Discord.misc_commands import Miscellaneous
 from Discord.help import Help
@@ -99,6 +100,7 @@ async def main(prefix=PREFIX):
         await bot.add_cog(Settings(bot))
         await bot.add_cog(Submissions(bot))
         await bot.add_cog(Listeners(bot))
+        await bot.add_cog(slash_commands.MyGroup(bot))
         bot.help_command = Help()
         discord.utils.setup_logging()
         await bot.start(TOKEN)
