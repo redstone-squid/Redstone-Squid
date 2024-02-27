@@ -94,13 +94,12 @@ class Listeners(Cog):
 async def main(prefix=PREFIX):
     # Running the application
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
-        handler = logging.FileHandler(filename='discord.log', encoding='utf-8')
         await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(Settings(bot))
         await bot.add_cog(Submissions(bot))
         await bot.add_cog(Listeners(bot))
         bot.help_command = Help()
-        discord.utils.setup_logging(handler=handler)
+        discord.utils.setup_logging()
         await bot.start(TOKEN)
 
 if __name__ == '__main__':
