@@ -1,6 +1,6 @@
 from typing import Optional
 import discord
-from discord.ext.commands import GroupCog, Context, Bot, has_any_role, group, hybrid_group
+from discord.ext.commands import GroupCog, Context, Bot, has_any_role, group, hybrid_group, hybrid_command
 
 import Discord.utils as utils
 import Database.server_settings as server_settings
@@ -16,13 +16,7 @@ class Settings(GroupCog, name='settings'):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @hybrid_group(invoke_without_command=True)
-    @has_any_role(*channel_settings_roles)
-    async def settings(self, ctx: Context):
-        """Allows you to configure the bot for your server."""
-        await ctx.send_help(ctx.command)
-
-    @settings.command()
+    @hybrid_command()
     @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx):
         """Query all settings."""
@@ -49,7 +43,7 @@ class Settings(GroupCog, name='settings'):
         await sent_message.delete()
         await ctx.send(embed=em)
 
-    @settings.command(name='query')
+    @hybrid_command(name='query')
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: str):
         """Finds which channel is set for a purpose and sends the results to the user."""
@@ -62,7 +56,7 @@ class Settings(GroupCog, name='settings'):
             em = utils.info_embed(f'{channel_purpose} Channel Info', f'ID: {result_channel.id} \n Name: {result_channel.name}')
         await ctx.send(embed=em)
 
-    @settings.command(name='set')
+    @hybrid_command(name='set')
     @has_any_role(*channel_settings_roles)
     async def set_channel(self, ctx: Context, channel_purpose: str, channel: discord.TextChannel):
         """Sets the current channel as the channel to post this record type to."""
@@ -81,7 +75,7 @@ class Settings(GroupCog, name='settings'):
         await ctx.send(
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
-    @settings.command(name='unset')
+    @hybrid_command(name='unset')
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: str):
         """Unsets the channel to post this record type to."""
