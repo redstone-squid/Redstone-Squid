@@ -50,7 +50,7 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
             timestamp_msg = '-' * 90 + '\n' + timestamp_msg
         return await log_user['owner_user_object'].send(timestamp_msg)
 
-class Listeners(Cog):
+class Listeners(Cog, command_attrs=dict(hidden=True)):
     def __init__(self, bot):
         self.bot = bot
 
