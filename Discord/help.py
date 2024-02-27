@@ -12,9 +12,14 @@ MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information."
 
 class Help(commands.MinimalHelpCommand):
     """Show help for a command or a group of commands."""
+    def __init__(self):
+        super().__init__(command_attrs={'help': 'Show help for a command or a group of commands.'})
+        # self.verify_checks = False
+
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Optional[Cog], List[Command[Any, ..., Any]]], /) -> None:
+        # TODO: hide hidden commands
         desc = f"""{self.context.bot.description}
         
         Commands:{self.get_commands_brief_details(list(self.context.bot.commands))}
@@ -55,18 +60,20 @@ class Help(commands.MinimalHelpCommand):
         subcommands = group.commands
 
         if len(subcommands) == 0:
-            return await self.send_command_help(group.self)
+            # Group is a subclass of Command
+            # noinspection PyTypeChecker
+            return await self.send_command_help(group)
 
         commands_ = await self.filter_commands(subcommands, sort=True)
         command_details = self.get_commands_brief_details(commands_)
         desc = \
             f"""{group.cog.description}
             
-            Usable Subcommands:{command_details}
+            Usable Subcommands: {command_details or "None"}
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
-        await self.context.send(embed=em)
+        await self.get_destination().send(embed=em)
 
     # !help <cog>
     @override
@@ -77,7 +84,7 @@ class Help(commands.MinimalHelpCommand):
         desc = \
             f"""{cog.description}
             
-            Usable Subcommands:{command_details}
+            Usable Subcommands:{command_details or "None"}
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)

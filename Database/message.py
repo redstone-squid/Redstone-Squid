@@ -1,18 +1,10 @@
 from datetime import datetime
-from typing import Any
-
-from gspread import Worksheet
 
 import Database.main as DB
-from Database.submission import Submission as Submission_Class
-import Database.global_vars as global_vars
-import Database.config as config
-import Google.interface as Google
-
+from Database.submission import Submission
 import Database.submissions as submissions
-import Database.submission as submission
 
-def get_messages(server_id):
+def get_messages(server_id: int) -> list[dict[str, str | int]]:
     # Getting worksheet
     wks = DB.get_message_worksheet()
 
@@ -20,7 +12,7 @@ def get_messages(server_id):
     all_records = wks.get_all_records()
     server_records = []
     for index, record in enumerate(all_records):
-        if int(record['Server ID']) == int(server_id):
+        if int(record['Server ID']) == server_id:
             record['Row Number'] = index + 2
             server_records.append(record)
     
@@ -36,15 +28,17 @@ def get_message(server_id: int, submission_id: int) -> dict[str, str | int] | No
 
     for index, record in enumerate(all_records):
         try:
-            if int(record['Server ID']) == int(server_id) and int(record['Submission ID']) == int(submission_id):
+            if int(record['Server ID']) == server_id and int(record['Submission ID']) == submission_id:
                 record['Row Number'] = index + 2
                 return record
-        except:
-            print(f'Error: {record}')
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"Record: {record}")
+            raise e
     
     return None
 
-def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int):
+def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
     # Getting worksheet
     wks = DB.get_message_worksheet()
 
@@ -88,12 +82,12 @@ def update_message(server_id: int, submission_id: int, channel_id: int, message_
     # Writing to cells
     cells_to_update = wks.range(row_number, 1, row_number, length)
     for i, val in enumerate(row_values):
-        cells_to_update[i].value = val
+        cells_to_update[i].value = str(val)
     
     # Updating cells
     wks.update_cells(cells_to_update)
 
-def get_outdated_messages(server_id):
+def get_outdated_messages(server_id: int) -> list[tuple[dict[str, str | int] | None, Submission]]:
     # Getting messages from database
     messages = get_messages(server_id)
 
