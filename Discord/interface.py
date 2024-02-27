@@ -7,7 +7,7 @@ import logging
 
 import Discord.utils as utils
 from Discord.config import *
-from Discord.commands import invite_link, source_code, submit_record, give_redstoner
+from Discord.misc_commands import Miscellaneous
 from Discord.help import Help
 from Discord.settings import Settings
 from Discord.submission.submissions import Submissions
@@ -91,14 +91,11 @@ class Listeners(Cog):
                 await log(log_message)
 
 
-async def main():
+async def main(prefix=PREFIX):
     # Running the application
-    async with Bot('!', owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
+    async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         handler = logging.FileHandler(filename='discord.log', encoding='utf-8')
-        bot.add_command(invite_link)
-        bot.add_command(source_code)
-        bot.add_command(submit_record)
-        bot.add_command(give_redstoner)
+        await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(Settings(bot))
         await bot.add_cog(Submissions(bot))
         await bot.add_cog(Listeners(bot))
