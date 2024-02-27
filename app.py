@@ -20,4 +20,8 @@
 import asyncio
 import Discord.interface as discord
 
-asyncio.run(discord.main())
+DEV_BOT = False
+if DEV_BOT:
+    asyncio.run(discord.main(prefix='.'))
+else:
+    asyncio.run(discord.main())
