@@ -20,9 +20,11 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_bot_help(self, mapping: Mapping[Optional[Cog], List[Command[Any, ..., Any]]], /) -> None:
         # TODO: hide hidden commands
+        commands_ = list(self.context.bot.commands)
+        filtered_commands = await self.filter_commands(commands_, sort=True)
         desc = f"""{self.context.bot.description}
         
-        Commands:{self.get_commands_brief_details(list(self.context.bot.commands))}
+        Commands:{self.get_commands_brief_details(filtered_commands)}
         
         {MORE_INFORMATION}"""
         em = utils.help_embed("Help", desc)
@@ -32,7 +34,7 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
         em = utils.help_embed(f"Command Help - `{command.qualified_name}`", f"{command.help or 'No details provided'}")
-        await self.context.send(embed=em)
+        await self.get_destination().send(embed=em)
 
     @staticmethod
     def get_commands_brief_details(commands_: Sequence[Command], return_as_list: bool = False) -> list[str] | str:
@@ -47,6 +49,15 @@ class Help(commands.MinimalHelpCommand):
             details.append(
                 f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}"
             )
+        if return_as_list:
+            return details
+        return "".join(details)
+
+    @staticmethod
+    def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
+        details = []
+        for cog in cogs:
+            details.append(f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}")
         if return_as_list:
             return details
         return "".join(details)
@@ -88,7 +99,7 @@ class Help(commands.MinimalHelpCommand):
             
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
-        await self.context.send(embed=em)
+        await self.get_destination().send(embed=em)
 
     @override
     async def command_not_found(self, string: str, /) -> str:
@@ -98,5 +109,4 @@ class Help(commands.MinimalHelpCommand):
     async def send_error_message(self, error: str, /) -> None:
         # TODO: error can be a custom Error too
         embed = utils.error_embed('Error.', error)
-        channel = self.get_destination()
-        await channel.send(embed=embed)
+        await self.get_destination().send(embed=embed)
