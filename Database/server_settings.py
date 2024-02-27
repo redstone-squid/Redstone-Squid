@@ -40,7 +40,7 @@ def get_server_settings(server_id: int) -> dict[str, int] | None:
 
     for record in records:
         if int(record['Server ID']) == server_id:
-            return {key: int(value) for key, value in record.items() if key != 'Server ID'}
+            return {key: int(value) for key, value in record.items() if key != 'Server ID' and value}
 
     return None
 
