@@ -86,3 +86,9 @@ class Miscellaneous(Cog):
                 ret += 1
 
         await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
+
+    @command(name="db", hidden=True)
+    @commands.is_owner()
+    async def get_database_link(self, ctx: Context):
+        """Sends the database link"""
+        await ctx.send("https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221")
