@@ -111,7 +111,7 @@ def get_outdated_messages(server_id: int) -> list[tuple[dict[str, str | int] | N
             continue
 
         # If the message was last edited before the submission's last update
-        if datetime.strptime(message['Last Updated'], r'%d-%m-%Y %H:%M:%S') < datetime.strptime(sub.last_updated, r'%d-%m-%Y %H:%M:%S'):
+        if datetime.strptime(message['Last Updated'], r'%d-%m-%Y %H:%M:%S') < sub.last_updated:
             outdated.append((message, sub))
             continue
     
