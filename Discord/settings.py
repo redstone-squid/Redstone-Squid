@@ -6,6 +6,8 @@ import Discord.utils as utils
 import Database.server_settings as server_settings
 
 channel_settings_roles = ['Admin', 'Moderator']
+
+
 # TODO: Add this description to the help command
 # channel_set_params = [
 #     Param('channel', 'The channel that you want to update this setting to.', dtype='channel_mention', optional=False)
@@ -13,6 +15,7 @@ channel_settings_roles = ['Admin', 'Moderator']
 
 class Settings(GroupCog, name='settings'):
     """Allows you to configure the bot for your server."""
+
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -31,17 +34,16 @@ class Settings(GroupCog, name='settings'):
         `fastest observerless channel`: {}\n
         `first channel`: {}\n
         """.format(
-            '_Not set_' if channels['Smallest'] is None else '#' + channels['Smallest'].name,
-            '_Not set_' if channels['Fastest'] is None else '#' + channels['Fastest'].name,
-            '_Not set_' if channels['Smallest Observerless'] is None else '#' + channels['Smallest Observerless'].name,
-            '_Not set_' if channels['Fastest Observerless'] is None else '#' + channels['Fastest Observerless'].name,
-            '_Not set_' if channels['First'] is None else '#' + channels['First'].name
+            channels.get('Smallest', '_Not set_'),
+            channels.get('Fastest', '_Not set_'),
+            channels.get('Smallest Observerless', '_Not set_'),
+            channels.get('Fastest Observerless', '_Not set_'),
+            channels.get('First', '_Not set_')
         )
 
         em = discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green)
 
-        await sent_message.delete()
-        await ctx.send(embed=em)
+        await sent_message.edit(embed=em)
 
     @hybrid_command(name='query')
     @has_any_role(*channel_settings_roles)
@@ -49,12 +51,12 @@ class Settings(GroupCog, name='settings'):
         """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
         result_channel = get_record_channel_for(ctx.guild, channel_purpose)
-        await sent_message.delete()
         if result_channel is None:
             em = utils.info_embed(f'{channel_purpose} Channel Info', 'Unset - Use the set command to set a channel.')
         else:
-            em = utils.info_embed(f'{channel_purpose} Channel Info', f'ID: {result_channel.id} \n Name: {result_channel.name}')
-        await ctx.send(embed=em)
+            em = utils.info_embed(f'{channel_purpose} Channel Info',
+                                  f'ID: {result_channel.id} \n Name: {result_channel.name}')
+        await sent_message.edit(embed=em)
 
     @hybrid_command(name='set')
     @has_any_role(*channel_settings_roles)
@@ -71,8 +73,7 @@ class Settings(GroupCog, name='settings'):
         server_settings.update_server_setting(ctx.guild.id, channel_purpose, channel.id)
 
         # Sending success message
-        await sent_message.delete()
-        await ctx.send(
+        await sent_message.edit(
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
     @hybrid_command(name='unset')
@@ -82,8 +83,8 @@ class Settings(GroupCog, name='settings'):
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
         server_id = ctx.guild.id
         server_settings.update_server_setting(server_id, channel_purpose, '')
-        await sent_message.delete()
-        await ctx.send(embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
+        await sent_message.edit(
+            embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
 def get_record_channel_for(server: discord.Guild, channel_purpose: str) -> discord.TextChannel | None:
@@ -96,6 +97,7 @@ def get_record_channel_for(server: discord.Guild, channel_purpose: str) -> disco
         return None
 
     return server.get_channel(channel_id)
+
 
 # Gets all channels
 def get_all_record_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
@@ -110,11 +112,10 @@ def get_all_record_channels(server: discord.Guild) -> dict[str, Optional[discord
     - First
     """
     settings = server_settings.get_server_settings(server.id)
-    result = {'Smallest': server.get_channel(settings['Smallest']),
-              'Fastest': server.get_channel(settings['Fastest']),
-              'Smallest Observerless': server.get_channel(settings['Smallest Observerless']),
-              'Fastest Observerless': server.get_channel(settings['Fastest Observerless']),
-              'First': server.get_channel(settings['First'])}
+    result = {'Smallest': server.get_channel(settings.get('Smallest')),
+              'Fastest': server.get_channel(settings.get('Fastest')),
+              'Smallest Observerless': server.get_channel(settings.get('Smallest Observerless')),
+              'Fastest Observerless': server.get_channel(settings.get('Fastest Observerless')),
+              'First': server.get_channel(settings.get('First'))}
 
     return result
-

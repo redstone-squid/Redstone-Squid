@@ -51,8 +51,7 @@ class Submissions(GroupCog, name='submissions'):
         em = discord.Embed(title='Open Records', description=desc, colour=utils.discord_green)
 
         # Sending embed
-        await sent_message.delete()
-        await ctx.send(embed=em)
+        await sent_message.edit(embed=em)
 
     @hybrid_command(name='view')
     @has_any_role(*submission_roles)
@@ -89,13 +88,11 @@ class Submissions(GroupCog, name='submissions'):
         sub = submissions.get_open_submission(index)
 
         if sub is None:
-            await sent_message.delete()
-            return await ctx.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
+            return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         await post.post_submission(self.bot, sub)
         submissions.confirm_submission(sub.id)
 
-        await sent_message.delete()
-        return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
+        return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
     @hybrid_command(name='deny')
     @has_any_role(*submission_roles)
@@ -111,12 +108,10 @@ class Submissions(GroupCog, name='submissions'):
         sub = submissions.get_open_submission(index)
 
         if sub is None:
-            await sent_message.delete()
-            return await ctx.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
+            return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         submissions.deny_submission(sub.id)
 
-        await sent_message.delete()
-        return await ctx.send(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
+        return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @hybrid_command(name='outdated')
     @has_any_role(*submission_roles)
@@ -142,8 +137,7 @@ class Submissions(GroupCog, name='submissions'):
         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
 
         # Sending embed
-        await sent_message.delete()
-        return await ctx.send(embed=em)
+        return await sent_message.edit(embed=em)
 
     @hybrid_command(name='update')
     @has_any_role(*submission_roles)
@@ -162,16 +156,14 @@ class Submissions(GroupCog, name='submissions'):
                 break
 
         if sub is None:
-            await sent_message.delete()
-            return await ctx.send(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
+            return await sent_message.edit(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
 
         if sub[0] is None:
             await post.post_submission_to_server(self.bot, sub[1], ctx.guild.id)
         else:
             await post.edit_post(self.bot, ctx.guild, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
 
-        await sent_message.delete()
-        return await ctx.send(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
+        return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
     @hybrid_command(name='update_all')
     @has_any_role(*submission_roles)
@@ -188,5 +180,4 @@ class Submissions(GroupCog, name='submissions'):
             else:
                 await post.edit_post(self.bot, ctx.guild, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
 
-        await sent_message.delete()
-        return await ctx.send(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
+        return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
