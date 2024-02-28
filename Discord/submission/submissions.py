@@ -2,7 +2,6 @@ import discord
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, GroupCog, hybrid_command
 
 import Discord.utils as utils
-from Discord.permissions import *
 
 import Discord.config as config
 import Discord.submission.post as post

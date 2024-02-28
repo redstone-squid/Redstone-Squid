@@ -7,6 +7,7 @@ from discord.ext import commands
 
 import Database.main as DB
 
+# TODO: refactor this and give a better name
 class MyGroup(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -24,6 +25,7 @@ class MyGroup(commands.Cog):
                      link_to_world_download: str = '', server_ip: str = '', coordinates: str = '',
                      command_to_get_to_build: str = '', your_ign_or_discord: str = ''):
         """Submits a record to the database directly."""
+        # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
         # TODO: Discord only allows 25 options, so we have to split the options into two commands.
         # For now, ignore the absolute times.
         absolute_closing_time = ''

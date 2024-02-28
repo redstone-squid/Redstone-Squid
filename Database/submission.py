@@ -175,7 +175,7 @@ class Submission:
             result.door_width = int(submission['Door Width'])
         if submission['Door Height']:
             result.door_height = int(submission['Door Height'])
-        result.door_pattern = submission['Pattern'].split(', ')
+        result.door_pattern = submission['Pattern'].split(', ')  # TODO: wtf is this assuming
         if submission['Door Type'] == 'Trapdoor':
             result.door_type = 'TRAP'
         if submission['Door Type'] == 'Skydoor':
