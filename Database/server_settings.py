@@ -60,7 +60,7 @@ def update_server_setting(server_id: int, setting_name: str, value: int) -> None
     if col is None:
         raise Exception(f'No settings called {setting_name}.')
 
-    wks.update_cell(row, col, value)
+    wks.update_cell(row, col, str(value))
 
 # Updates multiple settings for a server.
 def update_server_settings(server_id: int, settings_dict: dict[str, int]) -> None:
