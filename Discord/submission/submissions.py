@@ -1,28 +1,31 @@
+import time
+from typing import Literal
+
 import discord
-from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, GroupCog, hybrid_command
+from discord import InteractionResponse
+from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, GroupCog, command, HybridGroup, \
+    hybrid_command
 
 import Discord.utils as utils
-
 import Discord.config as config
 import Discord.submission.post as post
 import Database.submissions as submissions
 import Database.message as msg
-
+import Database.main as DB
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # submission_roles = ["Everyone"]
 
-class Submissions(GroupCog, name='submissions'):
-    """View, confirm and deny submissions."""
+class Submissions(Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # Not sure if this works
-    # def cog_check(self, ctx):
-    #     """This is a check that will be called before any command in this cog is executed."""
-    #     return has_any_role(*submission_roles)(lambda x: True)(ctx)
+    @hybrid_group(name='submissions', invoke_without_command=True)
+    async def submission_hybrid_group(self, ctx: Context):
+        """View, confirm and deny submissions."""
+        await ctx.send_help('submissions')
 
-    @hybrid_command(name='open')
+    @submission_hybrid_group.command(name='open')
     @has_any_role(*submission_roles)
     async def open_function(self, ctx: Context):
         """Shows an overview of all submissions open for review."""
@@ -52,7 +55,7 @@ class Submissions(GroupCog, name='submissions'):
         # Sending embed
         await sent_message.edit(embed=em)
 
-    @hybrid_command(name='view')
+    @submission_hybrid_group.command(name='view')
     @has_any_role(*submission_roles)
     async def view_function(self, ctx: Context, index: int):
         """Displays an open submission."""
@@ -70,10 +73,10 @@ class Submissions(GroupCog, name='submissions'):
         await sent_message.delete()
         if result is None:
             return await ctx.send(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        return await ctx.send(embed=post.generate_embed(result))
+        return await ctx.send(embed=post.generate_submission_embed(result))
 
     # confirm_function
-    @hybrid_command(name='confirm')
+    @submission_hybrid_group.command(name='confirm')
     @has_any_role(*submission_roles)
     async def confirm_function(self, ctx: Context, index: int):
         """Marks a submission as confirmed."""
@@ -93,7 +96,7 @@ class Submissions(GroupCog, name='submissions'):
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
-    @hybrid_command(name='deny')
+    @submission_hybrid_group.command(name='deny')
     @has_any_role(*submission_roles)
     async def deny_function(self, ctx: Context, index: int):
         """Marks a submission as denied."""
@@ -112,7 +115,7 @@ class Submissions(GroupCog, name='submissions'):
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
-    @hybrid_command(name='outdated')
+    @submission_hybrid_group.command(name='outdated')
     @has_any_role(*submission_roles)
     async def outdated_function(self, ctx: Context):
         """Shows an overview of all discord posts that require updating."""
@@ -138,7 +141,7 @@ class Submissions(GroupCog, name='submissions'):
         # Sending embed
         return await sent_message.edit(embed=em)
 
-    @hybrid_command(name='update')
+    @submission_hybrid_group.command(name='update')
     @has_any_role(*submission_roles)
     async def update_function(self, ctx, index: int):
         """Updated an outdated discord post."""
@@ -164,7 +167,7 @@ class Submissions(GroupCog, name='submissions'):
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
-    @hybrid_command(name='update_all')
+    @submission_hybrid_group.command(name='update_all')
     @has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
         """Updates all outdated discord posts."""
@@ -180,3 +183,69 @@ class Submissions(GroupCog, name='submissions'):
                 await post.edit_post(self.bot, ctx.guild, sub[0]['Channel ID'], sub[0]['Message ID'], sub[1])
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
+
+    @hybrid_command(name='submit')
+    async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First'],
+                     door_width: int, door_height: int, pattern: str, door_type: str, width_of_build: int,
+                     height_of_build: int, depth_of_build: int,
+                     works_in: str,
+                     first_order_restrictions: str = '',
+                     second_order_restrictions: str = '', information_about_build: str = '',
+                     relative_closing_time: int = -1,
+                     relative_opening_time: int = -1, date_of_creation: str = '', in_game_name_of_creator: str = '',
+                     locationality: str = '', directionality: str = '',
+                     link_to_image: str = '', link_to_youtube_video: str = '',
+                     link_to_world_download: str = '', server_ip: str = '', coordinates: str = '',
+                     command_to_get_to_build: str = '', your_ign_or_discord: str = ''):
+        """Submits a record to the database directly."""
+        # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
+
+        # noinspection PyTypeChecker
+        response: InteractionResponse = interaction.response
+        await response.defer()
+
+        # TODO: Discord only allows 25 options. For now, ignore the absolute times.
+        absolute_closing_time = ''
+        absolute_opening_time = ''
+
+        if relative_closing_time == -1:
+            relative_closing_time = ''
+        if relative_opening_time == -1:
+            relative_opening_time = ''
+
+        # noinspection PyTypeChecker
+        followup: discord.Webhook = interaction.followup
+        message: discord.WebhookMessage | None = await followup.send('Received')
+        timestamp = time.strftime('%d/%m/%Y %H:%M:%S')
+        form_wks = DB.get_form_submissions_worksheet()
+        submissions.add_submission_raw({
+            'Record Category': record_category,
+            'Door Width': door_width,
+            'Door Height': door_height,
+            'Pattern': pattern,
+            'Door Type': door_type,
+            'First Order Restrictions': first_order_restrictions,
+            'Second Order Restrictions': second_order_restrictions,
+            'Information About Build': information_about_build,
+            'Width of Build': width_of_build,
+            'Height of Build': height_of_build,
+            'Depth of Build': depth_of_build,
+            'Relative Closing Time': relative_closing_time,
+            'Relative Opening Time': relative_opening_time,
+            'Absolute Closing Time': absolute_closing_time,
+            'Absolute Opening Time': absolute_opening_time,
+            'Date of Creation': date_of_creation,
+            'Timestamp': timestamp,
+            'In-Game Name of Creator': in_game_name_of_creator,
+            'Locationality': locationality,
+            'Directionality': directionality,
+            'Works In': works_in,
+            'Link to Image': link_to_image,
+            'Link to YouTube Video': link_to_youtube_video,
+            'Link to World Download': link_to_world_download,
+            'Server IP': server_ip,
+            'Coordinates': coordinates,
+            'Command to Get to Build': command_to_get_to_build,
+            'Your IGN or Discord': your_ign_or_discord
+        })
+        await message.edit(content='Record submitted successfully!')

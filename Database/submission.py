@@ -232,6 +232,39 @@ class Submission:
 
         return result
 
+    def to_dict(self):
+        return {
+            "Submission ID": self.id,
+            "Last Update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
+            "Record Category": self.base_category,
+            "Door Width": self.door_width,
+            "Door Height": self.door_height,
+            "Pattern": ", ".join(self.door_pattern),
+            "Door Type": self.door_type,
+            "First Order Restrictions": ", ".join(self.fo_restrictions),
+            "Second Order Restrictions": ", ".join(self.so_restrictions),
+            "Information About Build": self.information,
+            "Width Of Build": self.build_width,
+            "Height Of Build": self.build_height,
+            "Depth Of Build": self.build_depth,
+            "Relative Closing Time": self.relative_close_time,
+            "Relative Opening Time": self.relative_open_time,
+            "Absolute Closing Time": self.absolute_close_time,
+            "Absolute Opening Time": self.absolute_open_time,
+            "Date Of Creation": self.build_date,
+            "In Game Name(s) Of Creator(s)": ", ".join(self.creators),
+            "Locationality": self.locational,
+            "Directionality": self.directional,
+            "Versions Which Submission Works In": ", ".join(self.versions),
+            "Link To Image": self.image_url,
+            "Link To YouTube Video": self.youtube_link,
+            "Link To World Download": self.world_download_link,
+            "Server IP": self.server_ip,
+            "Coordinates": self.coordinates,
+            "Command To Get To Build/Plot": self.command,
+            "Your IGN / Discord Handle": self.submitted_by
+        }
+
     def to_string(self) -> str:
         string = ""
 

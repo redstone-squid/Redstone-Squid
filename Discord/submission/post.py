@@ -7,9 +7,9 @@ import Database.message as msg
 from Database.submission import Submission
 
 
-def generate_embed(submission_obj):
+def generate_submission_embed(submission_obj):
     # Title -------------------------------------------------------------------------------
-    # Catagory
+    # Category
     title = submission_obj.get_title()
 
     # Description -------------------------------------------------------------------------
@@ -33,7 +33,7 @@ def generate_embed(submission_obj):
     return em
 
 
-# Get the channels ['smallest', 'fastest', 'smallest_observerless', 'fastest_observerless'] to post record to
+# Get the channels ['Smallest', 'Fastest', 'Smallest Observerless', 'fFastest Observerless', 'First'] to post record to
 def get_channel_type_to_post_to(submission_obj: Submission) -> str | None:
     if submission_obj.base_category == 'First':
         return 'First'
@@ -79,7 +79,7 @@ def get_channels_to_post_to(client: discord.Client, submission_obj: Submission) 
 # Posts submission to each server in the channel the server settings worksheet
 async def post_submission(client: discord.Client, submission_obj: Submission):
     channels = get_channels_to_post_to(client, submission_obj)
-    em = generate_embed(submission_obj)
+    em = generate_submission_embed(submission_obj)
 
     for channel in channels:
         message = await channel.send(embed=em)
@@ -88,7 +88,7 @@ async def post_submission(client: discord.Client, submission_obj: Submission):
 
 async def post_submission_to_server(client: discord.Client, submission_obj: Submission, server_id: int):
     channels = get_channels_to_post_to(client, submission_obj)
-    em = generate_embed(submission_obj)
+    em = generate_submission_embed(submission_obj)
 
     for channel in channels:
         if channel.guild.id == server_id:
@@ -98,7 +98,7 @@ async def post_submission_to_server(client: discord.Client, submission_obj: Subm
 
 # Updates post to conform to the submission obj
 async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: str, submission_obj: Submission):
-    em = generate_embed(submission_obj)
+    em = generate_submission_embed(submission_obj)
     channel = client.get_channel(channel_id)
     message = await channel.fetch_message(int(message_id))
 

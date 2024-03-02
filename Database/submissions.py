@@ -55,6 +55,20 @@ def open_form_submissions():
     for _ in range(submission_count):
         form_wks.delete_row(2)
 
+def add_submission(submission: Submission) -> None:
+    """Adds a submission to the form submissions worksheet."""
+    add_submission_raw(submission.to_dict())
+
+def add_submission_raw(submission: dict) -> None:
+    """Adds a submission to the form submissions worksheet."""
+    wks = DB.get_open_submissions_worksheet()
+    headers = wks.row_values(1)
+    put_values = [None] * len(headers)
+    for key, value in submission.items():
+        put_values[headers.index(key)] = value
+    wks.append_row(put_values)
+
+
 # Returns all submissions that are in the open submissions worksheet.
 def get_open_submissions_raw() -> list[dict]:
     wks = DB.get_open_submissions_worksheet()
