@@ -1,118 +1,83 @@
 from datetime import datetime
 
-import Database.main as DB
+from Database.database import DatabaseManager
 from Database.submission import Submission
-import Database.submissions as submissions
 
-def get_messages(server_id: int) -> list[dict[str, str | int]]:
-    # Getting worksheet
-    wks = DB.get_message_worksheet()
 
-    # Getting all records for server
-    all_records = wks.get_all_records()
-    server_records = []
-    for index, record in enumerate(all_records):
-        if int(record['Server ID']) == server_id:
-            record['Row Number'] = index + 2
-            server_records.append(record)
-    
+def get_messages(server_id: int) -> list[dict[str, int]]:
+    db = DatabaseManager()
+    server_records = db.table('messages').select('*').eq('server_id', server_id).execute().data
     return server_records
 
-def get_message(server_id: int, submission_id: int) -> dict[str, str | int] | None:
-    # Getting worksheet
-    wks = DB.get_message_worksheet()
-
-    # TODO: get_all_records() returns a list of [{'col1_name': 'col1_name'}, ...] if the sheet only has one row. This is a bug.
-    # Getting the record with requested server and submission id
-    all_records = wks.get_all_records()
-
-    for index, record in enumerate(all_records):
-        try:
-            if int(record['Server ID']) == server_id and int(record['Submission ID']) == submission_id:
-                record['Row Number'] = index + 2
-                return record
-        except Exception as e:
-            print(f"Error: {e}")
-            print(f"Record: {record}")
-            raise e
-    
-    return None
+def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
+    db = DatabaseManager()
+    server_record = db.table('messages').select('*').eq('server_id', server_id).eq('submission_id', submission_id).maybe_single().execute().data
+    if len(server_record) == 0:
+        return None
+    return server_record
 
 def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
-    # Getting worksheet
-    wks = DB.get_message_worksheet()
-
-    # Generating row
-    # The ids are converted to strings to avoid gspread rounding off large numbers
-    row_values = [None] * wks.col_count
-    row_values[DB.get_col_index(wks, 'Server ID')] = str(server_id)
-    row_values[DB.get_col_index(wks, 'Submission ID')] = str(submission_id)
-    row_values[DB.get_col_index(wks, 'Channel ID')] = str(channel_id)
-    row_values[DB.get_col_index(wks, 'Message ID')] = str(message_id)
-    row_values[DB.get_col_index(wks, 'Last Updated')] = datetime.now().strftime(r'%d-%m-%Y %H:%M:%S')
-
-    # Appending row to wks
-    wks.append_row(row_values)
+    db = DatabaseManager()
+    db.table('messages').insert({
+        'server_id': server_id,
+        'submission_id': submission_id,
+        'channel_id': channel_id,
+        'message_id': message_id,
+        'last_updated': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+    }).execute()
 
 def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
-    # Getting worksheet
-    wks = DB.get_message_worksheet()
-
-    # Getting message
+    # Try getting the message
     message = get_message(server_id, submission_id)
-    
+
     # If message isn't yet tracked, add it.
     if message is None:
         add_message(server_id, submission_id, channel_id, message_id)
         return
     
-    # Generating new row information
-    row_number = message['Row Number']
-    length = wks.col_count
+    # Update the message
+    db = DatabaseManager()
+    db.table('messages').update({
+        'channel_id': channel_id,
+        'message_id': message_id,
+        'last_updated': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+    }).eq('server_id', server_id).eq('submission_id', submission_id).execute()
 
-    row_values = wks.row_values(row_number)
-    cha_col = DB.get_col_index(wks, 'Channel ID')
-    msg_col = DB.get_col_index(wks, 'Message ID')
-    time_col = DB.get_col_index(wks, 'Last Updated')
+def get_outdated_messages(server_id: int) -> list[dict[str, int]] | None:
+    """Returns a list of messages that are outdated. Usually `get_submissions` is called in combination with this function.
 
-    row_values[msg_col] = message_id
-    row_values[cha_col] = channel_id
-    row_values[time_col] = datetime.now().strftime(r'%d-%m-%Y %H:%M:%S')
+    Args:
+        server_id: The server id to check for outdated messages.
 
-    # Writing to cells
-    cells_to_update = wks.range(row_number, 1, row_number, length)
-    for i, val in enumerate(row_values):
-        cells_to_update[i].value = str(val)
-    
-    # Updating cells
-    wks.update_cells(cells_to_update)
+    Returns:
+        A list of messages.
+    """
+    db = DatabaseManager()
+    # Messages that have been updated since the last submission message update.
+    server_outdated_messages = db.rpc('get_outdated_messages', {'server_id_input': server_id}).execute().data
+    if len(server_outdated_messages) == 0:
+        return None
+    return server_outdated_messages
 
-def get_outdated_messages(server_id: int) -> list[tuple[dict[str, str | int] | None, Submission]]:
-    # Getting messages from database
-    messages = get_messages(server_id)
 
-    # Getting all submissions
-    confirmed_submissions = submissions.get_confirmed_submissions()
+def get_outdated_message(server_id: int, submission_id: int) -> dict[str, int] | None:
+    """Returns a message that is outdated. Usually `get_submission` is called in combination with this function.
 
-    # Get list of which ones are out of data
-    outdated = []
-    for sub in confirmed_submissions:
-        message = None
+    Args:
+        server_id: The server id to check for outdated messages.
+        submission_id: The submission id to check for outdated message.
 
-        # Getting message if it exists
-        for mes in messages:
-            if int(mes['Submission ID']) == sub.id:
-                message = mes
-                break
+    Returns:
+        A dictionary containing all the information about the outdated message.
+    """
+    db = DatabaseManager()
+    # Messages that have been updated since the last submission message update.
+    server_outdated_messages = db.rpc('get_outdated_messages', {'server_id_input': server_id}).eq('submission_id', submission_id).execute().data
+    if len(server_outdated_messages) == 0:
+        return None
+    return server_outdated_messages
 
-        # If message doesn't exist
-        if message is None:
-            outdated.append((message, sub))
-            continue
 
-        # If the message was last edited before the submission's last update
-        if datetime.strptime(message['Last Updated'], r'%d-%m-%Y %H:%M:%S') < sub.last_updated:
-            outdated.append((message, sub))
-            continue
-    
-    return outdated
+if __name__ == '__main__':
+    print(get_outdated_message(433618741528625152, 30))
+    # print(get_outdated_messages(433618741528625152))
