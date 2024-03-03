@@ -1,7 +1,7 @@
 OWNER = 'papetoast'
 OWNER_ID = 353089661175988224
 OWNER_SERVER_ID = 433618741528625152
-PREFIX = '!'
+PREFIX = '.'
 BOT_NAME = 'Redstone Squid'
 BOT_VERSION = '1.2.3'
 SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'

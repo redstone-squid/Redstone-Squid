@@ -4,22 +4,21 @@ import os
 import discord
 import configparser
 from discord.ext.commands import Cog, Bot
-import logging
 
 import Discord.utils as utils
 from Discord.config import *
 from Discord.misc_commands import Miscellaneous
 from Discord.help import Help
 from Discord.settings import Settings
-from Discord.submission.submissions import Submissions
+from Discord.submission.submissions import SubmissionsCog
 
 
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
 if not TOKEN:
-    if os.path.isfile('Discord/auth.ini'):
+    if os.path.isfile('auth.ini'):
         config = configparser.ConfigParser()
-        config.read('Discord/auth.ini')
+        config.read('auth.ini')
         TOKEN = config.get('discord', 'token')
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
@@ -97,7 +96,7 @@ async def main(prefix=PREFIX):
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(Settings(bot))
-        await bot.add_cog(Submissions(bot))
+        await bot.add_cog(SubmissionsCog(bot))
         await bot.add_cog(Listeners(bot))
         bot.help_command = Help()
         discord.utils.setup_logging()
