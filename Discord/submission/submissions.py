@@ -217,7 +217,7 @@ class SubmissionsCog(Cog):
             'absolute_closing_time': absolute_closing_time,
             'absolute_opening_time': absolute_opening_time,
             'date_of_creation': date_of_creation,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'submission_time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'creators_ign': in_game_name_of_creator,
             'locationality': locationality,
             'directionality': directionality,
@@ -227,7 +227,7 @@ class SubmissionsCog(Cog):
             'world_download_link': link_to_world_download,
             'server_ip': server_ip,
             'coordinates': coordinates,
-            'command_to_get_to_build': command_to_get_to_build,
+            'command_to_build': command_to_get_to_build,
             'submitter_name': your_ign_or_discord
         })
         await message.edit(embed=utils.info_embed('Success', 'Record submitted successfully!'))
