@@ -107,7 +107,7 @@ class Submission:
         description = []
 
         # Component Restrictions
-        if self.so_restrictions is not None and self.so_restrictions[0] != "None":
+        if self.so_restrictions and self.so_restrictions[0] != "None":
             description.append(", ".join(self.so_restrictions))
 
         if not config.VERSIONS_LIST[-1] in self.versions:

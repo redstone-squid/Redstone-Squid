@@ -61,12 +61,11 @@ class SubmissionsCog(Cog):
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
         db = DatabaseManager()
-        submission, count = db.table('submissions').select('*').eq('submission_id', submission_id).execute()
-        assert count <= 1
+        submission = db.table('submissions').select('*').eq('submission_id', submission_id).maybe_single().execute().data
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        return await sent_message.edit(embed=Submission.from_dict(submission[0]).generate_embed())
+        return await sent_message.edit(embed=Submission.from_dict(submission).generate_embed())
 
     @staticmethod
     def is_owner_server(ctx: Context):
