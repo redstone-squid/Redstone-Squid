@@ -202,6 +202,7 @@ class SubmissionsCog(Cog):
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
         submissions.add_submission_raw({
             'record_category': record_category,
+            'submission_status': Submission.PENDING,  # 'pending', 'confirmed', 'denied', 'outdated
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,
