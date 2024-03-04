@@ -9,14 +9,14 @@ if not url:
     if os.path.isfile('auth.ini'):
         config = configparser.ConfigParser()
         config.read('auth.ini')
-        TOKEN = config.get('supabase', 'SUPABASE_URL')
+        url = config.get('supabase', 'SUPABASE_URL')
     else:
         raise Exception('Specify supabase url either with an auth.ini or a SUPABASE_URL environment variable.')
 if not key:
     if os.path.isfile('auth.ini'):
         config = configparser.ConfigParser()
         config.read('auth.ini')
-        TOKEN = config.get('supabase', 'SUPABASE_KEY')
+        key = config.get('supabase', 'SUPABASE_KEY')
     else:
         raise Exception('Specify supabase key either with an auth.ini or a SUPABASE_KEY environment variable.')
 
