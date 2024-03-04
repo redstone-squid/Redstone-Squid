@@ -50,7 +50,7 @@ class Submission:
         self.command: Optional[str] = None
         self.submitted_by: str | None = None
 
-    def generate_submission_embed(self: "Submission"):
+    def generate_embed(self: "Submission"):
         title = self.get_title()
         description = self.get_description()
 
@@ -203,14 +203,14 @@ class Submission:
 
         result.id = submission["submission_id"]
         result.last_updated = datetime.strptime(submission["last_update"],
-                                                r"%Y-%m-%d %H:%M:%S")  # TODO: make this stop relying on a specific format
+                                                r"%Y-%m-%dT%H:%M:%S")  # TODO: make this stop relying on a specific format
         result.base_category = submission["record_category"]
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
-        result.door_pattern = submission["pattern"].split(", ")  # TODO: wtf is this assuming
+        result.door_pattern = submission["pattern"]  # TODO: removed .split(", ") from here so need to fix the database
         result.door_type = submission["door_type"]
-        result.fo_restrictions = submission.get("wiring_placement_restrictions", "").split(", ")
-        result.so_restrictions = submission.get("component_restrictions", "").split(", ")
+        result.fo_restrictions = submission.get("wiring_placement_restrictions")  # TODO: removed .split(", ")
+        result.so_restrictions = submission.get("component_restrictions")  # TODO: removed .split(", ")
         result.information = submission.get("information")
         result.build_width = int(submission["build_width"])
         result.build_height = int(submission["build_height"])
@@ -225,12 +225,12 @@ class Submission:
         result.build_date = submission.get("date_of_creation")
         if not result.build_date:
             result.build_date = submission["submission_time"]
-        result.creators = submission.get("creators_ign", "").split(",")
+        result.creators = submission.get("creators_ign")  # TODO: removed .split(", ")
         # Locational with known fixes for each location
         # Locational without known fixes for each location
         result.locational = submission["locationality"]
         result.directional = submission["directionality"]
-        result.versions = submission.get("functional_versions", "").split(", ")
+        result.versions = submission.get("functional_versions")  # TODO: removed .split(", ")
         if submission["image_link"]:  # TODO: maybe better as image_url
             result.image_url = submission["image_link"]
         if submission["video_link"]:

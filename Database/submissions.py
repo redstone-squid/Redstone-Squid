@@ -48,6 +48,19 @@ def get_submission(submission_id: int) -> Submission | None:
     response = db.table('submissions').select('*').eq('submission_id', submission_id).execute()
     return Submission.from_dict(response.data[0]) if response.data else None
 
+def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
+    if len(submission_ids) == 0:
+        return []
+
+    db = DatabaseManager()
+    response = db.table('submissions').select('*').in_('submission_id', submission_ids).execute()
+
+    # Insert None for missing submissions
+    submissions = [None] * len(submission_ids)
+    for submission in response.data:
+        submissions[submission_ids.index(submission['submission_id'])] = Submission.from_dict(submission)
+    return submissions
+
 def confirm_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').update({'submission_status': Submission.CONFIRMED}, count='exact').eq('submission_id', submission_id).execute()
@@ -61,3 +74,15 @@ def deny_submission(submission_id: int) -> Submission | None:
     if response.count == 1:
         return Submission.from_dict(response.data[0])
     return None
+
+def get_unsent_submissions(server_id: int) -> list[Submission] | None:
+    """Get all the submissions that have not been posted on the server"""
+    db = DatabaseManager()
+
+    # Submissions that have not been posted on the server
+    server_unsent_submissions = db.rpc('get_unsent_submissions', {'server_id_input': server_id}).execute().data
+    return [Submission.from_dict(unsent_sub) for unsent_sub in server_unsent_submissions]
+
+
+if __name__ == '__main__':
+    print(get_submissions([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))

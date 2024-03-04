@@ -5,6 +5,7 @@ import discord
 
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
+from Database import submissions
 from Database.submission import Submission
 
 
@@ -54,7 +55,7 @@ def get_channels_to_post_to(client: discord.Client, submission: Submission) -> l
 async def send_submission(client: discord.Client, submission: Submission):
     """Posts a submission to the appropriate channels in every server the bot is in."""
     channels = get_channels_to_post_to(client, submission)
-    em = submission.generate_submission_embed()
+    em = submission.generate_embed()
 
     for channel in channels:
         message = await channel.send(embed=em)
@@ -64,7 +65,7 @@ async def send_submission(client: discord.Client, submission: Submission):
 async def send_submission_to_server(client: discord.Client, submission: Submission, server_id: int):
     """Posts a submission to the appropriate channel in a specific server."""
     channels = get_channels_to_post_to(client, submission)
-    em = submission.generate_submission_embed()
+    em = submission.generate_embed()
 
     for channel in channels:
         if channel.guild.id == server_id:
@@ -72,11 +73,11 @@ async def send_submission_to_server(client: discord.Client, submission: Submissi
             msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
 
 
-async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: str, submission: Submission):
+async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: int, submission_id: int):
     """Edits a post to conform to the submission object."""
-    em = submission.generate_submission_embed()
+    em = submissions.get_submission(submission_id).generate_embed()
     channel = client.get_channel(channel_id)
-    message = await channel.fetch_message(int(message_id))
+    message = await channel.fetch_message(message_id)
 
     updated_message = await message.edit(embed=em)
-    msg.update_message(server.id, submission.id, channel_id, updated_message.id)
+    msg.update_message(server.id, submission_id, channel_id, updated_message.id)

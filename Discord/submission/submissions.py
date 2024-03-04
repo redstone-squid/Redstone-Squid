@@ -4,8 +4,7 @@ from typing import Literal
 import discord
 from discord import InteractionResponse
 from discord.ext import commands
-from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, GroupCog, command, HybridGroup, \
-    hybrid_command, guild_only
+from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
 
 import Discord.utils as utils
 import Discord.config as config
@@ -16,7 +15,7 @@ from Database.database import DatabaseManager
 from Database.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
-# submission_roles = ["Everyone"]
+# TODO: Set up a webhook for the bot to handle google form submissions.
 
 class SubmissionsCog(Cog):
     def __init__(self, bot):
@@ -38,7 +37,6 @@ class SubmissionsCog(Cog):
         pending_submissions_raw = db.table('submissions').select('*').eq('submission_status', Submission.PENDING).execute().data
         pending_submissions = [submissions.Submission.from_dict(sub) for sub in pending_submissions_raw]
 
-        desc = None
         if len(pending_submissions) == 0:
             desc = 'No open submissions.'
         else:
@@ -57,17 +55,17 @@ class SubmissionsCog(Cog):
 
     @submission_hybrid_group.command(name='view')
     @has_any_role(*submission_roles)
-    async def view_function(self, ctx: Context, index: int):
+    async def view_function(self, ctx: Context, submission_id: int):
         """Displays a submission."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
         db = DatabaseManager()
-        submission, count = db.table('submissions').select('*').eq('submission_id', index).execute()
+        submission, count = db.table('submissions').select('*').eq('submission_id', submission_id).execute()
         assert count <= 1
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        return await sent_message.edit(embed=Submission.from_dict(submission[0]).generate_submission_embed())
+        return await sent_message.edit(embed=Submission.from_dict(submission[0]).generate_embed())
 
     @staticmethod
     def is_owner_server(ctx: Context):
@@ -79,7 +77,7 @@ class SubmissionsCog(Cog):
 
     @submission_hybrid_group.command(name='confirm')
     @has_any_role(*submission_roles)
-    async def confirm_function(self, ctx: Context, index: int):
+    async def confirm_function(self, ctx: Context, submission_id: int):
         """Marks a submission as confirmed.
 
         This posts the submission to all the servers which configured the bot."""
@@ -89,7 +87,7 @@ class SubmissionsCog(Cog):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        submission = submissions.confirm_submission(index)
+        submission = submissions.confirm_submission(submission_id)
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
         await post.send_submission(self.bot, submission)
@@ -98,7 +96,7 @@ class SubmissionsCog(Cog):
 
     @submission_hybrid_group.command(name='deny')
     @has_any_role(*submission_roles)
-    async def deny_function(self, ctx: Context, index: int):
+    async def deny_function(self, ctx: Context, submission_id: int):
         """Marks a submission as denied."""
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
@@ -107,72 +105,71 @@ class SubmissionsCog(Cog):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        sub = submissions.deny_submission(index)
+        sub = submissions.deny_submission(submission_id)
 
         if sub is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
-    # @submission_hybrid_group.command(name='outdated')
-    # @has_any_role(*submission_roles)
-    # async def outdated_function(self, ctx: Context):
-    #     """Shows an overview of all discord posts that require updating."""
-    #     # Sending working message.
-    #     sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
-    #
-    #     # Creating list of submissions
-    #     outdated_submissions = msg.get_outdated_messages(ctx.guild.id)
-    #
-    #     if len(outdated_submissions) == 0:
-    #         desc = 'No outdated submissions.'
-    #         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
-    #         return await sent_message.edit(embed=em)
-    #
-    #     desc = []
-    #     for message, sub in outdated_submissions:
-    #         desc.append(f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
-    #     desc = '\n\n'.join(desc)
-    #
-    #     em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
-    #     return await sent_message.edit(embed=em)
-    #
-    # @submission_hybrid_group.command(name='update')
-    # @has_any_role(*submission_roles)
-    # async def update_function(self, ctx, index: int):
-    #     """Update or post an outdated discord post to this server."""
-    #     # Sending working message.
-    #     sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
-    #
-    #     submission_id = index
-    #
-    #     sub = msg.get_outdated_message(ctx.guild.id, submission_id)
-    #
-    #     if sub is None:
-    #         return await sent_message.edit(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
-    #
-    #     if sub[0] is None:
-    #         # If message isn't yet tracked, add it.
-    #         await post.send_submission_to_server(self.bot, sub[1], ctx.guild.id)
-    #     else:
-    #         await post.edit_post(self.bot, ctx.guild, sub[0]['channel_id'], sub[0]['message_id'], sub[1])
-    #
-    #     return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
-    #
-    # @submission_hybrid_group.command(name='update_all')
-    # @has_any_role(*submission_roles)
-    # async def update_all_function(self, ctx):
-    #     """Updates all outdated discord posts in this server."""
-    #     sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
-    #
-    #     outdated_submissions = msg.get_outdated_messages(ctx.guild.id)
-    #     for message, sub in outdated_submissions:
-    #         if message is None:
-    #             await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
-    #         else:
-    #             await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], sub)
-    #
-    #     return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
+    @submission_hybrid_group.command(name='outdated')
+    @has_any_role(*submission_roles)
+    async def outdated_function(self, ctx: Context):
+        """Shows an overview of all discord posts that require updating."""
+        # Sending working message.
+        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
+
+        # Creating list of submissions
+        outdated_messages = msg.get_outdated_messages(ctx.guild.id)
+
+        if len(outdated_messages) == 0:
+            desc = 'No outdated submissions.'
+            em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
+            return await sent_message.edit(embed=em)
+
+        subs = submissions.get_submissions([message['submission_id'] for message in outdated_messages])
+
+        # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
+        # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
+
+        desc = []
+        for sub in subs:
+            desc.append(f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+        desc = '\n\n'.join(desc)
+
+        em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
+        return await sent_message.edit(embed=em)
+
+    @submission_hybrid_group.command(name='update')
+    @has_any_role(*submission_roles)
+    async def update_function(self, ctx, submission_id: int):
+        """Update or post an outdated discord post to this server."""
+        # Sending working message.
+        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
+
+        message = msg.get_outdated_message(ctx.guild.id, submission_id)
+        if message is None:
+            return await sent_message.edit(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
+
+        # If message isn't yet tracked, add it.
+        # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
+
+        await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['submission_id'])
+        return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
+
+    @submission_hybrid_group.command(name='update_all')
+    @has_any_role(*submission_roles)
+    async def update_all_function(self, ctx):
+        """Updates all outdated discord posts in this server."""
+        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
+
+        outdated_messages = msg.get_outdated_messages(ctx.guild.id)
+        for message in outdated_messages:
+            # If message isn't yet tracked, add it.
+            # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
+            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['submission_id'])
+
+        return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
     @hybrid_command(name='submit')
     async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First'],
