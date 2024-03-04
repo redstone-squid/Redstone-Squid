@@ -3,8 +3,9 @@ from typing import Literal
 
 import discord
 from discord import InteractionResponse
+from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
+from discord.ext.commands import Context, has_any_role, hybrid_group, Cog
 
 import Discord.utils as utils
 import Discord.config as config
@@ -171,7 +172,7 @@ class SubmissionsCog(Cog):
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
-    @hybrid_command(name='submit')
+    @app_commands.command(name='submit')
     async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First'],
                      door_width: int, door_height: int, pattern: str, door_type: str, width_of_build: int,
                      height_of_build: int, depth_of_build: int,
