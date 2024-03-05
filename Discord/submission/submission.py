@@ -33,10 +33,10 @@ class Submission:
         self.build_width: int | None = None
         self.build_height: int | None = None
         self.build_depth: int | None = None
-        self.relative_close_time: float | None = None
-        self.relative_open_time: float | None = None
-        self.absolute_close_time: Optional[float] = None
-        self.absolute_open_time: Optional[float] = None
+        self.normal_closing_time: float | None = None
+        self.normal_opening_time: float | None = None
+        self.visible_closing_time: Optional[float] = None
+        self.visible_opening_time: Optional[float] = None
         self.build_date: Optional[str] = None
         self.creators: Optional[str] = None
         self.locational: Optional[Literal["LOCATIONAL", "LOCATIONAL_FIX"]] = None
@@ -170,12 +170,12 @@ class Submission:
     def get_meta_fields(self) -> dict[str, str]:
         fields = {"Dimensions": f"{self.build_width}x{self.build_height}x{self.build_depth}",
                   "Volume": str(self.build_width * self.build_height * self.build_depth),
-                  "Opening Time": str(self.relative_open_time),
-                  "Closing Time": str(self.relative_close_time)}
+                  "Opening Time": str(self.normal_opening_time),
+                  "Closing Time": str(self.normal_closing_time)}
 
-        if self.absolute_open_time and self.absolute_close_time:
-            fields["Absolute Opening Time"] = self.absolute_open_time
-            fields["Absolute Closing Time"] = self.absolute_close_time
+        if self.visible_opening_time and self.visible_closing_time:
+            fields["Absolute Opening Time"] = self.visible_opening_time
+            fields["Absolute Closing Time"] = self.visible_closing_time
 
         fields["Creators"] = ', '.join(sorted(self.creators))
         fields["Date Of Completion"] = str(self.build_date)
@@ -199,6 +199,7 @@ class Submission:
 
     @staticmethod
     def from_dict(submission: dict) -> "Submission":
+        """Creates a new Submission object from a dictionary."""
         result = Submission()
 
         result.id = submission["submission_id"]
@@ -221,12 +222,12 @@ class Submission:
         result.build_height = int(submission["build_height"])
         result.build_depth = int(submission["build_depth"])
         # The times are stored as game ticks, so they need to be divided by 20 to get seconds
-        result.relative_close_time = submission["relative_closing_time"] / 20
-        result.relative_open_time = submission["relative_opening_time"] / 20
-        if submission["absolute_closing_time"]:
-            result.absolute_close_time = submission["absolute_closing_time"] / 20
-        if submission["absolute_opening_time"]:
-            result.absolute_open_time = submission["absolute_opening_time"] / 20
+        result.normal_closing_time = submission["normal_closing_time"] / 20
+        result.normal_opening_time = submission["normal_opening_time"] / 20
+        if submission["visible_closing_time"]:
+            result.visible_close_time = submission["visible_closing_time"] / 20
+        if submission["visible_opening_time"]:
+            result.visible_open_time = submission["visible_opening_time"] / 20
         result.build_date = submission.get("date_of_creation")
         if not result.build_date:
             result.build_date = submission["submission_time"]
@@ -268,10 +269,10 @@ class Submission:
             "build_width": self.build_width,
             "build_height": self.build_height,
             "build_depth": self.build_depth,
-            "normal_closing_time": self.relative_close_time,
-            "normal_opening_time": self.relative_open_time,
-            "absolute_closing_time": self.absolute_close_time,
-            "absolute_opening_time": self.absolute_open_time,
+            "normal_closing_time": self.normal_closing_time,
+            "normal_opening_time": self.normal_opening_time,
+            "visible_closing_time": self.visible_close_time,
+            "visible_opening_time": self.visible_open_time,
             "date_of_creation": self.build_date,
             "creators_ign": ", ".join(self.creators),
             "locationality": self.locational,
@@ -306,12 +307,12 @@ class Submission:
         string += f"Build Width: {self.build_width}\n"
         string += f"Build Height: {self.build_height}\n"
         string += f"Build Depth: {self.build_depth}\n"
-        string += f"Relative Closing Time: {self.relative_close_time}\n"
-        string += f"Relative Opening Time: {self.relative_open_time}\n"
-        if self.absolute_close_time:
-            string += f"Absolute Closing Time: {self.absolute_close_time}\n"
-        if self.absolute_open_time:
-            string += f"Absolute Opening Time: {self.absolute_open_time}\n"
+        string += f"Relative Closing Time: {self.normal_closing_time}\n"
+        string += f"Relative Opening Time: {self.normal_opening_time}\n"
+        if self.visible_closing_time:
+            string += f"Absolute Closing Time: {self.visible_closing_time}\n"
+        if self.visible_opening_time:
+            string += f"Absolute Opening Time: {self.visible_opening_time}\n"
         string += f"Date Of Creation: {self.build_date}\n"
         string += f"Creators: {', '.join(self.creators)}\n"
         if self.locational:
