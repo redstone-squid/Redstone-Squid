@@ -208,7 +208,7 @@ class SubmissionsCog(Cog):
         followup: discord.Webhook = interaction.followup
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
-        submissions.add_submission_raw({
+        submission_id = submissions.add_submission_raw({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Submission.PENDING,
             'door_width': door_width,
@@ -240,7 +240,7 @@ class SubmissionsCog(Cog):
             'submitted_by': your_ign_or_discord
         })
         # TODO: preview the submission
-        await message.edit(embed=utils.info_embed('Success', f'Record submitted successfully!'))
+        await message.edit(embed=utils.info_embed('Success', f'Record submitted successfully!\nThe submission ID is: {submission_id}'))
 
     @app_commands.command(name='edit')
     async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,

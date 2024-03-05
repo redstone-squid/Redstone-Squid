@@ -5,10 +5,15 @@ def add_submission(submission: Submission) -> None:
     """Adds a submission to the form submissions worksheet."""
     add_submission_raw(submission.to_dict())
 
-def add_submission_raw(submission: dict) -> None:
-    """Adds a submission to the form submissions worksheet."""
+def add_submission_raw(submission: dict) -> int:
+    """Adds a submission to the form submissions worksheet.
+
+    Returns:
+        The submission ID of the added submission.
+    """
     db = DatabaseManager()
-    db.table('submissions').insert(submission).execute()
+    response = db.table('submissions').insert(submission).execute()
+    return response.data[0]['submission_id']
 
 def get_open_submissions_raw() -> list[dict]:
     db = DatabaseManager()
