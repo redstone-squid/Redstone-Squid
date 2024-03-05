@@ -9,6 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog
 
+import Database.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
@@ -178,18 +179,31 @@ class SubmissionsCog(Cog):
         return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
     @app_commands.command(name='submit')
+    @app_commands.describe(
+        record_category='The category of the record. If none, use "None".',
+        door_width='The width of the door.',
+        door_height='The height of the door.',
+        pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
+        door_type='"Door", "Skydoor", or "Trapdoor".',
+        width_of_build='The width of the build.',
+        height_of_build='The height of the build.',
+        depth_of_build='The depth of the build.',
+        works_in='The versions the build works in. Use /versions for a list of versions. Default to the current version',  # TODO
+        wiring_placement_restrictions='For example, "Seamless, Full Flush", see the regulations for the complete list.',
+    )
     async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First', 'None'],
-                     door_width: int, door_height: int, pattern: str, door_type: str, width_of_build: int,
-                     height_of_build: int, depth_of_build: int,
-                     works_in: str,
-                     first_order_restrictions: str = '',
-                     second_order_restrictions: str = '', information_about_build: str = '',
-                     relative_closing_time: int = 0,
-                     relative_opening_time: int = 0, date_of_creation: str = '', in_game_name_of_creator: str = '',
-                     locationality: str = '', directionality: str = '',
-                     link_to_image: str = '', link_to_youtube_video: str = '',
-                     link_to_world_download: str = '', server_ip: str = '', coordinates: str = '',
-                     command_to_get_to_build: str = '', your_ign_or_discord: str = ''):
+                     door_width: int, door_height: int, pattern: str, door_type: Literal['Door', 'Skydoor', 'Trapdoor'],
+                     build_width: int, build_height: int, build_depth: int,
+                     # Optional parameters
+                     works_in: str = Database.config.VERSIONS_LIST[-1],
+                     wiring_placement_restrictions: str = None,
+                     component_restrictions: str = None, information_about_build: str = None,
+                     relative_closing_time: int = None,
+                     relative_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
+                     locationality: str = None, directionality: str = None,
+                     link_to_image: str = None, link_to_youtube_video: str = None,
+                     link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
+                     command_to_get_to_build: str = None, your_ign_or_discord: str = None):
         """Submits a record to the database directly."""
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
 
@@ -197,17 +211,11 @@ class SubmissionsCog(Cog):
         response: InteractionResponse = interaction.response
         await response.defer()
 
-        # TODO: Discord only allows 25 options. For now, ignore the absolute times.
-        absolute_closing_time = None
-        absolute_opening_time = None
-
-        if your_ign_or_discord == '':
-            your_ign_or_discord = str(interaction.user)
-
         # noinspection PyTypeChecker
         followup: discord.Webhook = interaction.followup
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
+
         submission_id = submissions.add_submission_raw({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Submission.PENDING,
@@ -215,16 +223,16 @@ class SubmissionsCog(Cog):
             'door_height': door_height,
             'pattern': pattern,
             'door_type': door_type,
-            'wiring_placement_restrictions': first_order_restrictions,
-            'component_restrictions': second_order_restrictions,
+            'wiring_placement_restrictions': wiring_placement_restrictions,
+            'component_restrictions': component_restrictions,
             'information': information_about_build,
-            'build_width': width_of_build,
-            'build_height': height_of_build,
-            'build_depth': depth_of_build,
+            'build_width': build_width,
+            'build_height': build_height,
+            'build_depth': build_depth,
             'relative_closing_time': relative_closing_time,
             'relative_opening_time': relative_opening_time,
-            'absolute_closing_time': absolute_closing_time,
-            'absolute_opening_time': absolute_opening_time,
+            'absolute_closing_time': None,  # TODO: Discord only allows 25 options. For now, ignore the absolute times.
+            'absolute_opening_time': None,
             'date_of_creation': date_of_creation,
             'submission_time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'creators_ign': in_game_name_of_creator,
@@ -237,7 +245,7 @@ class SubmissionsCog(Cog):
             'server_ip': server_ip,
             'coordinates': coordinates,
             'command_to_build': command_to_get_to_build,
-            'submitted_by': your_ign_or_discord
+            'submitted_by': your_ign_or_discord or str(interaction.user)  # Use the discord username if no IGN is provided.
         })
         # TODO: preview the submission
         await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission_id}'))
