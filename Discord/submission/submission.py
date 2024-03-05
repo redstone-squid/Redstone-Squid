@@ -3,7 +3,6 @@ from typing import Literal, Optional
 
 import discord
 
-import Database.config as config
 import Discord.config
 from Discord import utils
 
