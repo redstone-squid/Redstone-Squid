@@ -1,3 +1,4 @@
+"""A """
 from datetime import datetime
 from typing import Literal, Optional
 
@@ -94,12 +95,7 @@ class Submission:
                 title += f"{pattern} "
 
         # Door type
-        if self.door_type is None:
-            title += "Door."
-        elif self.door_type == "SKY":
-            title += "Skydoor."
-        elif self.door_type == "TRAP":
-            title += "Trapdoor."
+        title += self.door_type
 
         return title
 
@@ -113,14 +109,14 @@ class Submission:
         if not Discord.config.VERSIONS_LIST[-1] in self.versions:
             description.append("**Broken** in current version.")
 
-        if self.locational == "LOCATIONAL":
+        if self.locational == "Locational":
             description.append("**Locational**.")
-        elif self.locational == "LOCATIONAL_FIX":
+        elif self.locational == "Locational with fixes":
             description.append("**Locational** with known fixes for each location.")
 
-        if self.directional == "DIRECTIONAL":
+        if self.directional == "Directional":
             description.append("**Directional**.")
-        elif self.directional == "DIRECTIONAL_FIX":
+        elif self.directional == "Directional with fixes":
             description.append("**Directional** with known fixes for each direction.")
 
         if self.information:
@@ -174,8 +170,8 @@ class Submission:
                   "Closing Time": str(self.normal_closing_time)}
 
         if self.visible_opening_time and self.visible_closing_time:
-            fields["Absolute Opening Time"] = self.visible_opening_time
-            fields["Absolute Closing Time"] = self.visible_closing_time
+            fields["Visible Opening Time"] = self.visible_opening_time
+            fields["Visible Closing Time"] = self.visible_closing_time
 
         fields["Creators"] = ', '.join(sorted(self.creators))
         fields["Date Of Completion"] = str(self.build_date)
@@ -271,8 +267,8 @@ class Submission:
             "build_depth": self.build_depth,
             "normal_closing_time": self.normal_closing_time,
             "normal_opening_time": self.normal_opening_time,
-            "visible_closing_time": self.visible_close_time,
-            "visible_opening_time": self.visible_open_time,
+            "visible_closing_time": self.visible_closing_time,
+            "visible_opening_time": self.visible_opening_time,
             "date_of_creation": self.build_date,
             "creators_ign": ", ".join(self.creators),
             "locationality": self.locational,
