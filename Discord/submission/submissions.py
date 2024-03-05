@@ -10,6 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog
 
 import Database.config
+import Discord.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
@@ -195,7 +196,7 @@ class SubmissionsCog(Cog):
                      door_width: int, door_height: int, pattern: str, door_type: Literal['Door', 'Skydoor', 'Trapdoor'],
                      build_width: int, build_height: int, build_depth: int,
                      # Optional parameters
-                     works_in: str = Database.config.VERSIONS_LIST[-1],
+                     works_in: str = Discord.config.VERSIONS_LIST[-1],
                      wiring_placement_restrictions: str = None,
                      component_restrictions: str = None, information_about_build: str = None,
                      relative_closing_time: int = None,

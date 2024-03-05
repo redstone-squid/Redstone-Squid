@@ -4,6 +4,7 @@ from typing import Literal, Optional
 import discord
 
 import Database.config as config
+import Discord.config
 from Discord import utils
 
 
@@ -110,7 +111,7 @@ class Submission:
         if self.so_restrictions and self.so_restrictions[0] != "None":
             description.append(", ".join(self.so_restrictions))
 
-        if not config.VERSIONS_LIST[-1] in self.versions:
+        if not Discord.config.VERSIONS_LIST[-1] in self.versions:
             description.append("**Broken** in current version.")
 
         if self.locational == "LOCATIONAL":
@@ -138,7 +139,7 @@ class Submission:
         first_version = None
         last_version = None
 
-        for index, version in enumerate(config.VERSIONS_LIST):
+        for index, version in enumerate(Discord.config.VERSIONS_LIST):
             if version in self.versions:
 
                 if not linking:
@@ -159,7 +160,7 @@ class Submission:
                 first_version = None
                 last_version = None
 
-            if index == len(config.VERSIONS_LIST) - 1 and linking:
+            if index == len(Discord.config.VERSIONS_LIST) - 1 and linking:
                 if first_version == last_version:
                     versions.append(first_version)
                 else:
@@ -268,8 +269,8 @@ class Submission:
             "build_width": self.build_width,
             "build_height": self.build_height,
             "build_depth": self.build_depth,
-            "relative_closing_time": self.relative_close_time,
-            "relative_opening_time": self.relative_open_time,
+            "normal_closing_time": self.relative_close_time,
+            "normal_opening_time": self.relative_open_time,
             "absolute_closing_time": self.absolute_close_time,
             "absolute_opening_time": self.absolute_open_time,
             "date_of_creation": self.build_date,
