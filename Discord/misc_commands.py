@@ -39,6 +39,8 @@ class Miscellaneous(Cog):
         await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
 
     # ----------------- Owner only commands -----------------
+    # These commands are only available to the bot owner.
+    # I use them for debugging and testing purposes.
     @command()
     @commands.is_owner()
     async def logs(self, ctx: Context):
