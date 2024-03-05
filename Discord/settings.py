@@ -9,7 +9,7 @@ import Discord.utils as utils
 
 channel_settings_roles = ['Admin', 'Moderator']
 
-class Settings(Cog):
+class SettingsCog(Cog, name="Settings"):
     def __init__(self, bot: Bot):
         self.bot = bot
     
@@ -41,7 +41,7 @@ class Settings(Cog):
             channels.get('First', '_Not set_')
         )
 
-        em = discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green)
+        em = discord.Embed(title='Current SettingsCog', description=desc, colour=utils.discord_green)
         await sent_message.edit(embed=em)
 
     @settings_hybrid_group.command(name='query')
@@ -81,7 +81,7 @@ class Settings(Cog):
 
         # Sending success message
         await sent_message.edit(
-            embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
+            embed=utils.info_embed('SettingsCog updated', f'{channel_purpose} channel has successfully been set.'))
 
     @settings_hybrid_group.command(name='unset')
     @app_commands.describe(channel_purpose="Smallest, Fastest, First, Builds")
@@ -92,7 +92,7 @@ class Settings(Cog):
         setting_name = f'{channel_purpose.lower().replace(" ", "_")}_channel_id'
         update_server_setting(ctx.guild.id, setting_name, None)
         await sent_message.edit(
-            embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
+            embed=utils.info_embed('SettingsCog updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
 def get_record_channel_for(server: discord.Guild, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"]) -> discord.TextChannel | None:

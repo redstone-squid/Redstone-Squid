@@ -8,8 +8,8 @@ from discord.ext.commands import Cog, Bot
 import Discord.utils as utils
 from Discord.config import *
 from Discord.misc_commands import Miscellaneous
-from Discord.help import Help
-from Discord.settings import Settings
+from Discord.help import HelpCog
+from Discord.settings import SettingsCog
 from Discord.submission.submissions import SubmissionsCog
 
 
@@ -95,10 +95,10 @@ async def main(prefix=PREFIX):
     # Running the application
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         await bot.add_cog(Miscellaneous(bot))
-        await bot.add_cog(Settings(bot))
+        await bot.add_cog(SettingsCog(bot))
         await bot.add_cog(SubmissionsCog(bot))
         await bot.add_cog(Listeners(bot))
-        bot.help_command = Help()
+        await bot.add_cog(HelpCog(bot))
         discord.utils.setup_logging()
         await bot.start(TOKEN)
 

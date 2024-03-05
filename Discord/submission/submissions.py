@@ -20,7 +20,7 @@ from Discord.submission.submission import Submission
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
-class SubmissionsCog(Cog):
+class SubmissionsCog(Cog, name='Submissions'):
     def __init__(self, bot):
         self.bot = bot
 

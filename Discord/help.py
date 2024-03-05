@@ -2,16 +2,58 @@ from collections.abc import Mapping, Sequence
 from typing import Optional, List, Any, override
 
 import discord
+from discord import app_commands, InteractionResponse
 from discord.ext import commands
-from discord.ext.commands import Cog, Command, Group
+from discord.ext.commands import Cog, Command, Group, Context
 
 from Discord import utils
 from Discord.config import PREFIX
 
-MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information."
+MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information.\nNote that this command does not certain commands that are only usable as slash commands, like /submit"
+
+
+class HelpCog(Cog):
+    """Show help for a command or a group of commands."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.bot.help_command = Help()
+
+    # /help [command]
+    @app_commands.command()
+    async def help(self, interaction: discord.Interaction, command: Optional[str]):
+        """Show help for a command or a group of commands."""
+        response: InteractionResponse = interaction.response
+        await response.defer()
+        ctx = await self.bot.get_context(interaction, cls=Context)
+        if command is not None:
+            await ctx.send_help(command)
+        else:
+            await ctx.send_help()
+
+    @help.autocomplete("command")
+    async def command_autocomplete(self, interaction: discord.Interaction, needle: str) -> List[app_commands.Choice[str]]:
+        assert self.bot.help_command
+        ctx = await self.bot.get_context(interaction, cls=Context)
+        help_command = self.bot.help_command.copy()
+        help_command.context = ctx
+        if not needle:
+            return [
+               app_commands.Choice(name=cog_name, value=cog_name)
+               for cog_name, cog in self.bot.cogs.items()
+               if await help_command.filter_commands(cog.get_commands())
+            ][:25]
+        needle = needle.lower()
+        return [
+           app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
+           for command in await help_command.filter_commands(self.bot.walk_commands(), sort=True)
+           if needle in command.qualified_name
+        ][:25]
+
 
 class Help(commands.MinimalHelpCommand):
     """Show help for a command or a group of commands."""
+
     def __init__(self):
         super().__init__(command_attrs={'help': 'Show help for a command or a group of commands.'})
         # self.verify_checks = False
