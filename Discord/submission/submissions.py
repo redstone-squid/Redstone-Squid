@@ -19,8 +19,6 @@ from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
-
-
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 class SubmissionsCog(Cog):
@@ -75,7 +73,7 @@ class SubmissionsCog(Cog):
     @staticmethod
     def is_owner_server(ctx: Context):
         if not ctx.guild.id == config.OWNER_SERVER_ID:
-            # TODO: Make a custom error for this. Then implement
+            # TODO: Make a custom error for this.
             # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
             raise commands.CommandError('This command can only be executed on certain servers.')
         return True
@@ -193,7 +191,7 @@ class SubmissionsCog(Cog):
         build_width='The width of the build.',
         build_height='The height of the build.',
         build_depth='The depth of the build.',
-        works_in='The versions the build works in. Default to newest version. /versions for full list.',  # TODO
+        works_in='The versions the build works in. Default to newest version. /versions for full list.',
         wiring_placement_restrictions='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.',
         component_restrictions='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.',
         information_about_build='Any additional information about the build.',
@@ -279,7 +277,7 @@ class SubmissionsCog(Cog):
         build_width='The width of the build.',
         build_height='The height of the build.',
         build_depth='The depth of the build.',
-        works_in='The versions the build works in. Default to newest version. /versions for full list.',  # TODO
+        works_in='The versions the build works in. Default to newest version. /versions for full list.',
         wiring_placement_restrictions='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.',
         component_restrictions='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.',
         information_about_build='Any additional information about the build.',
