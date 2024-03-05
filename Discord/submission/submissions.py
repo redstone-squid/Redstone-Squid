@@ -240,7 +240,7 @@ class SubmissionsCog(Cog):
             'submitted_by': your_ign_or_discord
         })
         # TODO: preview the submission
-        await message.edit(embed=utils.info_embed('Success', f'Record submitted successfully!\nThe submission ID is: {submission_id}'))
+        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission_id}'))
 
     @app_commands.command(name='edit')
     async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,
@@ -302,4 +302,4 @@ class SubmissionsCog(Cog):
         # TODO: Implement a way to confirm the changes. Right now, it updates the record immediately.
 
         submissions.update_submission(submission_id, update_values)
-        await message.edit(embed=utils.info_embed('Success', 'Record edited successfully!'))
+        await message.edit(embed=utils.info_embed('Success', 'Build edited successfully!'))
