@@ -1,18 +1,13 @@
 from typing import Optional, Literal
 
 import discord
+from discord import app_commands
 from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
 
 from Database.server_settings import update_server_setting, get_server_setting, get_server_settings
 import Discord.utils as utils
 
 channel_settings_roles = ['Admin', 'Moderator']
-
-
-# TODO: Add this description to the help command
-# channel_set_params = [
-#     Param('channel', 'The channel that you want to update this setting to.', dtype='channel_mention', optional=False)
-# ]
 
 class Settings(Cog):
     def __init__(self, bot: Bot):
@@ -50,6 +45,7 @@ class Settings(Cog):
         await sent_message.edit(embed=em)
 
     @settings_hybrid_group.command(name='query')
+    @app_commands.describe(channel_purpose="Smallest, Fastest, First, Builds")
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"]):
         """Finds which channel is set for a purpose and sends the results to the user."""
@@ -63,6 +59,10 @@ class Settings(Cog):
         await sent_message.edit(embed=em)
 
     @settings_hybrid_group.command(name='set')
+    @app_commands.describe(
+        channel_purpose="Smallest, Fastest, First, Builds",
+        channel="The channel that you want to set to send this record type to."
+    )
     @has_any_role(*channel_settings_roles)
     async def set_channel(self, ctx: Context, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"],
                           channel: discord.TextChannel):
@@ -84,6 +84,7 @@ class Settings(Cog):
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
     @settings_hybrid_group.command(name='unset')
+    @app_commands.describe(channel_purpose="Smallest, Fastest, First, Builds")
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"]):
         """Unsets the channel to post this record type to."""
