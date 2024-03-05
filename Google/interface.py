@@ -31,6 +31,7 @@ def connect():
     return credentials, gspread.authorize(credentials)
 
 class Connection:
+    """Singleton class to manage the connection to Google Sheets."""
     _GC = None
     _CREDS = None
 
