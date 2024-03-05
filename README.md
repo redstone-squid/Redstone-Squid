@@ -8,11 +8,11 @@ This is a discord bot designed to make the process of submitting, confirming and
 Setting up your own version of this bot is **NOT RECOMMENDED** as their is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
 
 To get this bot up and running on your machine, you will need a copy of this repository. To clone the repository, use:
-```
+```bash
 git clone https://github.com/Kappeh/Redstone-Squid.git
 ```
 Then you can move to the repository's root directory with
-```
+```bash
 cd Redstone-Squid
 ```
 
@@ -21,15 +21,20 @@ cd Redstone-Squid
 There are a list of required python packages in requirements.txt. You can install them onto your machine directly or into a virtual environment (recommended)
 
 If you want to use a virtual environment, first create the environment in the root directory and activate it.
-```
+```bash
 python -m venv venv
 source venv/bin/activate
+```
+Alternatively, you can set up a conda environment with:
+```bash
+conda create -f environment.yml
+conda activate redstone-squid
 ```
 
 ### Installing Packages
 
 In the root directory of the repository you can use the following command to install all of the required packages.
-```
+```bash
 pip install -r requirements.txt
 ```
 
@@ -37,11 +42,19 @@ pip install -r requirements.txt
 
 Google services requires a google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
 
-Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `auth.ini` in the `Discord` directory with the following contents:
+Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `auth.ini` in the root directory with the following contents:
 ```
 [discord]
-token=<Replace this with your discord access token>
+token = <Replace this with your discord access token>
 ```
+
+Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project and navigate to **Project Settings | API** and copy the URL and API key (secret, not public) to the same `auth.ini` with the following contents:
+```
+[supabase]
+SUPABASE_URL = <Replace this with your supabase url>
+SUPABASE_KEY = <Replace this with your supabase api key>
+```
+The schema for the database has not been provided because I haven't organised it yet. If you want to run this bot, please contact me (@papetoast on discord) and I will provide you with the schema.
 
 ### Running The Application
 
@@ -65,19 +78,17 @@ As an example, let's pretend you want to set all categories to post to a channel
 ```
 !settings smallest_channel set #records
 !settings fastest_channel set #records
-!settings smallest_observerless_channel set #records
-!settings fastest_observerless_channel set #records
 !settings first_channel set #records
 ```
 Whenever a submission is confirmed by the bot's admins, it will be posted in the respective channel.
 
 You can unset a channel by either setting it to another channel or running the unset command e.g.
 ```
-!settings smallest_channel unset
+!settings unset smallest_channel
 ```
 In addition to this, you can check which channel a setting is currently set to via the query command e.g.
 ```
-!settings fastest_channel query
+!settings query fastest_channel
 ```
 If you want to query all settings at once, you can run:
 ```
@@ -86,14 +97,14 @@ If you want to query all settings at once, you can run:
 
 ## Other Commands
 
-This list of commands is subject to change due to improvements and new features.
+This list of commands is subject to change due to improvements and new features. In fact, `discord.py` provides self-documenting help messages for each command, so you can always run `!help` to see the most up-to-date list of commands.
 
-`!invite_link` gives the user a link which they can use to add the bot to their servers.
-`!source_code` links a user to this GitHub repository.
-`!submit_record` provides a user to the Google Form which is used for collecting record submissions.
-`!settings` has been discussed above.
-`!submissions` is a server specific, role specific set of commands used to view, confirm and deny submissions. _This will be discussed below._
-`!help <command>` provides a user with a help message. If a command is provided, a help message for that command will be provided.
+* `!invite_link` gives the user a link which they can use to add the bot to their servers.
+* `!source_code` links a user to this GitHub repository.
+* `!submit_record` provides a user to the Google Form which is used for collecting record submissions.
+* `!settings` has been discussed above.
+* `!submissions` is a server specific, role specific set of commands used to view, confirm and deny submissions. _This will be discussed below._
+* `!help <command>` provides a user with a help message. If a command is provided, a help message for that command will be provided.
 
 ### Submissions Commands
 
@@ -109,6 +120,7 @@ Please read [CODE_OF_CONDUCT.md](https://github.com/Kappeh/Redstone-Squid/blob/m
 ## Authors
 
 * **Kieran Powell** - *Initial work* - [Kappeh](https://github.com/Kappeh)
+* **Savio Mak** - *Contributor* - [Glinte](https://github.com/Glinte)
 
 ## License
 
