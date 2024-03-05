@@ -183,8 +183,8 @@ class SubmissionsCog(Cog, name='Submissions'):
     @app_commands.command(name='submit')
     @app_commands.describe(
         record_category='The category of the record. If none, use "None".',
-        door_width='The width of the door.',
-        door_height='The height of the door.',
+        door_width='The width of the door itself. Like 2x2 piston door.',
+        door_height='The height of the door itself. Like 2x2 piston door.',
         pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
         door_type='Door, Skydoor, or Trapdoor.',
         build_width='The width of the build.',
@@ -269,8 +269,8 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     @app_commands.command(name='edit')
     @app_commands.describe(
-        door_width='The width of the door.',
-        door_height='The height of the door.',
+        door_width='The width of the door itself. Like 2x2 piston door.',
+        door_height='The height of the door itself. Like 2x2 piston door.',
         pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
         door_type='Door, Skydoor, or Trapdoor.',
         build_width='The width of the build.',
