@@ -1,4 +1,6 @@
+import inspect
 import time
+from datetime import datetime
 from typing import Literal
 
 import discord
@@ -16,6 +18,8 @@ from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
+
+
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 class SubmissionsCog(Cog):
@@ -28,7 +32,6 @@ class SubmissionsCog(Cog):
         await ctx.send_help('submissions')
 
     @submission_hybrid_group.command(name='pending')
-    @has_any_role(*submission_roles)
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         # Sending working message.
@@ -45,7 +48,8 @@ class SubmissionsCog(Cog):
             for sub in pending_submissions:
                 # ID - Title
                 # by Creators - submitted by Submitter
-                desc.append(f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                desc.append(
+                    f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
             desc = '\n\n'.join(desc)
 
         # Creating embed
@@ -55,13 +59,13 @@ class SubmissionsCog(Cog):
         await sent_message.edit(embed=em)
 
     @submission_hybrid_group.command(name='view')
-    @has_any_role(*submission_roles)
     async def view_function(self, ctx: Context, submission_id: int):
         """Displays a submission."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
         db = DatabaseManager()
-        submission = db.table('submissions').select('*').eq('submission_id', submission_id).maybe_single().execute().data
+        submission = db.table('submissions').select('*').eq('submission_id',
+                                                            submission_id).maybe_single().execute().data
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
@@ -113,7 +117,6 @@ class SubmissionsCog(Cog):
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
-    @has_any_role(*submission_roles)
     async def outdated_function(self, ctx: Context):
         """Shows an overview of all discord posts that require updating."""
         # Sending working message.
@@ -134,7 +137,8 @@ class SubmissionsCog(Cog):
 
         desc = []
         for sub in subs:
-            desc.append(f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+            desc.append(
+                f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
         desc = '\n\n'.join(desc)
 
         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -154,7 +158,8 @@ class SubmissionsCog(Cog):
         # If message isn't yet tracked, add it.
         # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
 
-        await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['submission_id'])
+        await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
+                             message['submission_id'])
         return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
     @submission_hybrid_group.command(name='update_all')
@@ -167,12 +172,13 @@ class SubmissionsCog(Cog):
         for message in outdated_messages:
             # If message isn't yet tracked, add it.
             # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
-            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['submission_id'])
+            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
+                                 message['submission_id'])
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
     @app_commands.command(name='submit')
-    async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First'],
+    async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First', 'None'],
                      door_width: int, door_height: int, pattern: str, door_type: str, width_of_build: int,
                      height_of_build: int, depth_of_build: int,
                      works_in: str,
@@ -195,12 +201,15 @@ class SubmissionsCog(Cog):
         absolute_closing_time = None
         absolute_opening_time = None
 
+        if your_ign_or_discord == '':
+            your_ign_or_discord = str(interaction.user)
+
         # noinspection PyTypeChecker
         followup: discord.Webhook = interaction.followup
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
         submissions.add_submission_raw({
-            'record_category': record_category,
+            'record_category': record_category if record_category != 'None' else None,
             'submission_status': Submission.PENDING,
             'door_width': door_width,
             'door_height': door_height,
@@ -228,6 +237,69 @@ class SubmissionsCog(Cog):
             'server_ip': server_ip,
             'coordinates': coordinates,
             'command_to_build': command_to_get_to_build,
-            'submitter_name': your_ign_or_discord
+            'submitted_by': your_ign_or_discord
         })
-        await message.edit(embed=utils.info_embed('Success', 'Record submitted successfully!'))
+        # TODO: preview the submission
+        await message.edit(embed=utils.info_embed('Success', f'Record submitted successfully!'))
+
+    @app_commands.command(name='edit')
+    async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,
+                   pattern: str = None, door_type: str = None, width_of_build: int = None,
+                   height_of_build: int = None, depth_of_build: int = None, works_in: str = None, first_order_restrictions: str = None,
+                   second_order_restrictions: str = None, information_about_build: str = None,
+                   relative_closing_time: int = None,
+                   relative_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
+                   locationality: str = None, directionality: str = None,
+                   link_to_image: str = None, link_to_youtube_video: str = None,
+                   link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
+                   command_to_get_to_build: str = None, your_ign_or_discord: str = None):
+        """Edits a record in the database directly."""
+        # noinspection PyTypeChecker
+        response: InteractionResponse = interaction.response
+        await response.defer()
+
+        # noinspection PyTypeChecker
+        followup: discord.Webhook = interaction.followup
+        message: discord.WebhookMessage | None = \
+            await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
+
+        update_values = {
+            'last_update': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S.%f'),
+            'door_width': door_width,
+            'door_height': door_height,
+            'pattern': pattern,
+            'door_type': door_type,
+            'wiring_placement_restrictions': first_order_restrictions,
+            'component_restrictions': second_order_restrictions,
+            'information': information_about_build,
+            'build_width': width_of_build,
+            'build_height': height_of_build,
+            'build_depth': depth_of_build,
+            'relative_closing_time': relative_closing_time,
+            'relative_opening_time': relative_opening_time,
+            'date_of_creation': date_of_creation,
+            'creators_ign': in_game_name_of_creator,
+            'locationality': locationality,
+            'directionality': directionality,
+            'functional_versions': works_in,
+            'image_link': link_to_image,
+            'video_link': link_to_youtube_video,
+            'world_download_link': link_to_world_download,
+            'server_ip': server_ip,
+            'coordinates': coordinates,
+            'command_to_build': command_to_get_to_build,
+            'submitted_by': your_ign_or_discord
+        }
+        update_values = {k: v for k, v in update_values.items() if v is not None}
+
+        # Show a preview of the changes
+        old_submission = submissions.get_submission(submission_id)
+        new_submission = Submission.from_dict({**old_submission.to_dict(), **update_values})
+        preview_embed = new_submission.generate_embed()
+        # await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+        await followup.send(embed=preview_embed, ephemeral=True)
+
+        # TODO: Implement a way to confirm the changes. Right now, it updates the record immediately.
+
+        submissions.update_submission(submission_id, update_values)
+        await message.edit(embed=utils.info_embed('Success', 'Record edited successfully!'))

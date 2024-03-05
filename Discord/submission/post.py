@@ -9,27 +9,12 @@ from Database import submissions
 from Discord.submission.submission import Submission
 
 
-def get_channel_type_to_post_to(submission: Submission) -> Literal['Smallest', 'Fastest', 'Smallest Observerless', 'Fastest Observerless', 'First'] | None:
+def get_channel_type_to_post_to(submission: Submission) -> Literal['Smallest', 'Fastest', 'First', 'Builds']:
     """Gets the type of channel to post a submission to."""
-    if submission.base_category == 'First':
-        return 'First'
-
-    if submission.base_category == 'Fastest' or submission.base_category == 'Fastest Smallest':
-        if submission.so_restrictions is None:
-            return 'Fastest'
-        elif 'Observerless' in submission.so_restrictions:
-            return 'Fastest Observerless'
-        else:
-            return 'Fastest'
-    elif submission.base_category == 'Smallest' or submission.base_category == 'Smallest Fastest':
-        if submission.so_restrictions is None:
-            return 'Smallest'
-        elif 'Observerless' in submission.so_restrictions:
-            return 'Smallest Observerless'
-        else:
-            return 'Smallest'
-
-    return None
+    if submission.base_category is None:
+        return "Builds"
+    else:
+        return submission.base_category
 
 
 def get_channels_to_post_to(client: discord.Client, submission: Submission) -> list[discord.TextChannel]:

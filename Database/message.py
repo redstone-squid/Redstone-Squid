@@ -10,7 +10,8 @@ def get_messages(server_id: int) -> list[dict[str, int]]:
 
 def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
     db = DatabaseManager()
-    server_record = db.table('messages').select('*').eq('server_id', server_id).eq('submission_id', submission_id).maybe_single().execute().data
+    # supabase hate .maybe_single() and throws a 406 error if no records are found
+    server_record = db.table('messages').select('*').eq('server_id', server_id).eq('submission_id', submission_id).execute().data
     if len(server_record) == 0:
         return None
     return server_record
@@ -74,7 +75,7 @@ def get_outdated_message(server_id: int, submission_id: int) -> dict[str, int] |
     server_outdated_messages = db.rpc('get_outdated_messages', {'server_id_input': server_id}).eq('submission_id', submission_id).execute().data
     if len(server_outdated_messages) == 0:
         return None
-    return server_outdated_messages
+    return server_outdated_messages[0]
 
 
 if __name__ == '__main__':

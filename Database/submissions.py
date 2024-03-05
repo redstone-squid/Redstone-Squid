@@ -58,6 +58,14 @@ def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
         submissions[submission_ids.index(submission['submission_id'])] = Submission.from_dict(submission)
     return submissions
 
+def update_submission(submission_id: int, submission: dict) -> Submission | None:
+    db = DatabaseManager()
+    update_values = {key: value for key, value in submission.items() if key != 'submission_id' and value is not None}
+    response = db.table('submissions').update(update_values, count='exact').eq('submission_id', submission_id).execute()
+    if response.count == 1:
+        return Submission.from_dict(response.data[0])
+    return None
+
 def confirm_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').update({'submission_status': Submission.CONFIRMED}, count='exact').eq('submission_id', submission_id).execute()

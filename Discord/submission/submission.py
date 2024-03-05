@@ -22,7 +22,7 @@ class Submission:
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
         self.id: int | None = None
         self.last_updated: datetime | None = None
-        self.base_category: Literal["Smallest", "Fastest", "Smallest Observerless", "Fastest Observerless", "First"] | None = None
+        self.base_category: Literal["Smallest", "Fastest", "First"] | None = None
         self.door_width: int | None = None
         self.door_height: int | None = None
         self.door_pattern: Optional[list[str]] = None
@@ -72,7 +72,7 @@ class Submission:
 
     def get_title(self):
         # Category
-        title = self.base_category + " "
+        title = f"{self.base_category or ''} "
 
         # Door dimensions
         if self.door_width and self.door_height:
@@ -202,12 +202,12 @@ class Submission:
         result = Submission()
 
         result.id = submission["submission_id"]
-        try:
-            result.last_updated = datetime.strptime(submission["last_update"],r"%Y-%m-%dT%H:%M:%S")
-            # TODO: make this stop relying on a specific format
-        except ValueError:
-            result.last_updated = datetime.strptime(submission["last_update"],r"%Y-%m-%dT%H:%M:%S.%f")
-        result.base_category = submission["record_category"]
+        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
+            try:
+                result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
+            except ValueError:
+                pass
+        result.base_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
         result.door_pattern = submission["pattern"].split(", ") if submission["pattern"] else ["Regular"]
@@ -248,41 +248,42 @@ class Submission:
             result.coordinates = submission["coordinates"]
         if submission["command_to_build"]:
             result.command = submission["command_to_build"]
-        result.submitted_by = submission["submitter_name"]  # TODO
+        result.submitted_by = submission["submitted_by"]
 
         return result
 
     def to_dict(self):
+        """Converts the submission to a dictionary with keys conforming to the database column names."""
         return {
-            "Submission ID": self.id,
-            "Last Update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
-            "Record Category": self.base_category,
-            "Door Width": self.door_width,
-            "Door Height": self.door_height,
-            "Pattern": ", ".join(self.door_pattern),
-            "Door Type": self.door_type,
+            "submission_id": self.id,
+            "last_update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
+            "record_category": self.base_category,
+            "door_width": self.door_width,
+            "door_height": self.door_height,
+            "pattern": ", ".join(self.door_pattern),
+            "door_type": self.door_type,
             "wiring_placement_restrictions": ", ".join(self.fo_restrictions),
             "component_restrictions": ", ".join(self.so_restrictions),
-            "Information About Build": self.information,
-            "Width Of Build": self.build_width,
-            "Height Of Build": self.build_height,
-            "Depth Of Build": self.build_depth,
-            "Relative Closing Time": self.relative_close_time,
-            "Relative Opening Time": self.relative_open_time,
-            "Absolute Closing Time": self.absolute_close_time,
-            "Absolute Opening Time": self.absolute_open_time,
-            "Date Of Creation": self.build_date,
-            "In Game Name(s) Of Creator(s)": ", ".join(self.creators),
-            "Locationality": self.locational,
-            "Directionality": self.directional,
-            "Versions Which Submission Works In": ", ".join(self.versions),
-            "Link To Image": self.image_url,
-            "Link To YouTube Video": self.video_link,
-            "Link To World Download": self.world_download_link,
-            "Server IP": self.server_ip,
-            "Coordinates": self.coordinates,
-            "Command To Get To Build/Plot": self.command,
-            "Your IGN / Discord Handle": self.submitted_by
+            "information": self.information,
+            "build_width": self.build_width,
+            "build_height": self.build_height,
+            "build_depth": self.build_depth,
+            "relative_closing_time": self.relative_close_time,
+            "relative_opening_time": self.relative_open_time,
+            "absolute_closing_time": self.absolute_close_time,
+            "absolute_opening_time": self.absolute_open_time,
+            "date_of_creation": self.build_date,
+            "creators_ign": ", ".join(self.creators),
+            "locationality": self.locational,
+            "directionality": self.directional,
+            "functional_versions": ", ".join(self.versions),
+            "image_link": self.image_url,
+            "video_link": self.video_link,
+            "world_download_link": self.world_download_link,
+            "server_ip": self.server_ip,
+            "coordinates": self.coordinates,
+            "command_to_build": self.command,
+            "submitted_by": self.submitted_by
         }
 
     def to_string(self) -> str:
