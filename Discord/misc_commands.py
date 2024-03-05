@@ -33,20 +33,12 @@ class Miscellaneous(Cog):
         # em.set_image(url='https://i.imgur.com/AqYEd1o.png')
         await ctx.send(embed=em)
 
-    @staticmethod
-    async def is_my_alt(ctx: Context):
-        return ctx.author.id == 1146802450100138004
+    @hybrid_command()
+    async def docs(self, ctx: Context):
+        """Links you to our regulations."""
+        await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
 
-    @command(name="r", hidden=True)
-    @commands.check(is_my_alt)
-    async def give_redstoner(self, ctx: Context):
-        """Give redstoner role to my alt for testing. Does nothing for others."""
-        moderator: discord.Role = ctx.guild.get_role(433670432420397060)
-        if moderator in ctx.author.roles:
-            await ctx.author.remove_roles(moderator)
-        else:
-            await ctx.author.add_roles(moderator)
-
+    # ----------------- Owner only commands -----------------
     @command()
     @commands.is_owner()
     async def logs(self, ctx: Context):
@@ -87,8 +79,28 @@ class Miscellaneous(Cog):
 
         await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
 
+    @staticmethod
+    async def is_my_alt(ctx: Context):
+        return ctx.author.id == 1146802450100138004
+
+    @command(name="r", hidden=True)
+    @commands.check(is_my_alt)
+    async def give_redstoner(self, ctx: Context):
+        """Give redstoner role to my alt for testing. Does nothing for others."""
+        moderator: discord.Role = ctx.guild.get_role(433670432420397060)
+        if moderator in ctx.author.roles:
+            await ctx.author.remove_roles(moderator)
+        else:
+            await ctx.author.add_roles(moderator)
+
+    @command(name="gdb", hidden=True)
+    @commands.is_owner()
+    async def get_sheets_link(self, ctx: Context):
+        """Sends the google sheets link"""
+        await ctx.send("https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221")
+
     @command(name="db", hidden=True)
     @commands.is_owner()
     async def get_database_link(self, ctx: Context):
         """Sends the database link"""
-        await ctx.send("https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221")
+        await ctx.send("https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc")
