@@ -1,3 +1,4 @@
+"""Some functions related to the message table, which stores message ids."""
 from datetime import datetime
 
 from Database.database import DatabaseManager

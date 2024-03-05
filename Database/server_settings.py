@@ -1,3 +1,4 @@
+"""Some functions related to storing and changing server ids for sending records."""
 from Database.database import DatabaseManager
 
 def get_server_setting(server_id: int, setting_name: str) -> int | None:

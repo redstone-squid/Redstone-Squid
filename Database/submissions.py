@@ -1,3 +1,4 @@
+"""Submitting and retrieving submissions to/from the database"""
 from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
