@@ -1,8 +1,5 @@
-from datetime import datetime
-from gspread import Worksheet
-
 from Database.database import DatabaseManager
-from Database.submission import Submission
+from Discord.submission.submission import Submission
 
 def add_submission(submission: Submission) -> None:
     """Adds a submission to the form submissions worksheet."""

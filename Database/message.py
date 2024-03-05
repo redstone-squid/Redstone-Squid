@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from Database.database import DatabaseManager
-from Database.submission import Submission
 
 
 def get_messages(server_id: int) -> list[dict[str, int]]:

@@ -13,7 +13,7 @@ import Discord.submission.post as post
 import Database.submissions as submissions
 import Database.message as msg
 from Database.database import DatabaseManager
-from Database.submission import Submission
+from Discord.submission.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.

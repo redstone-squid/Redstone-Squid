@@ -6,7 +6,7 @@ import discord
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database import submissions
-from Database.submission import Submission
+from Discord.submission.submission import Submission
 
 
 def get_channel_type_to_post_to(submission: Submission) -> Literal['Smallest', 'Fastest', 'Smallest Observerless', 'Fastest Observerless', 'First'] | None:
