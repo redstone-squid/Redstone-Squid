@@ -45,8 +45,8 @@ def get_denied_submissions() -> list[Submission]:
 
 def get_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
-    response = db.table('submissions').select('*').eq('submission_id', submission_id).execute()
-    return Submission.from_dict(response.data[0]) if response.data else None
+    response = db.table('submissions').select('*').eq('submission_id', submission_id).maybe_single().execute()
+    return Submission.from_dict(response.data) if response.data else None
 
 def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
     if len(submission_ids) == 0:
@@ -56,7 +56,7 @@ def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
     response = db.table('submissions').select('*').in_('submission_id', submission_ids).execute()
 
     # Insert None for missing submissions
-    submissions = [None] * len(submission_ids)
+    submissions: list[Submission | None] = [None] * len(submission_ids)
     for submission in response.data:
         submissions[submission_ids.index(submission['submission_id'])] = Submission.from_dict(submission)
     return submissions
