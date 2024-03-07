@@ -7,34 +7,6 @@ discord_yellow = 0xFAA61A
 discord_green = 0x43B581
 
 
-def represents_int(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
-
-
-def represents_float(s):
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
-
-
-def represents_user(s):
-    if re.match(r'<@!?\d{17,18}>', s) is None:
-        return False
-    return True
-
-
-def represents_channel(s):
-    if re.match(r'<#\d{18}>', s) is None:
-        return False
-    return True
-
-
 def get_time():
     raw_time = strftime("%Y/%m/%d %H:%M:%S", gmtime())
     return '[' + raw_time + '] '
