@@ -1,11 +1,11 @@
 
-# Rauðsteinskubbssmokkfiskur
+# Rauðsteinssmokkfiskur
 
 Þetta er discord vélmenni sem er hannað til að gera ferlið við að senda inn, staðfesta og hafna innsendingum auðveldara. Að auki stjórnar það gagnagrunninum yfir mets sjálfkrafa.
 
 ## Er að fá Hafist handa
 
-Að setja upp þína eigin útgáfu af þessum vélmenni er **EKKI Mælt með** þar sem það er nú þegar tilvik í gangi sem þú getur boðið á discord þjóninn þinn. Ef þú býrð til þitt eigið tilvik mun það hafa sérstakan gagnagrunn við það sem þegar er í gangi. Ef þú vilt nota þennan vélmenni, slepptu því í `Discord uppsetning`.
+Að setja upp þína eigin útgáfu af þessum vélmenni er **EKKI Mælt með** þar sem það er nú þegar tilvik í gangi sem þú getur boðið á discord þjóninn þinn. Ef þú býrð til þitt eigið tilvik mun það hafa sérstakan gagnagrunn við það sem þegar er í gangi. Ef þú vilt nota þennan vélmenni, slepptu því í `Discord Uppsetning`.
 
 Til að koma þessu botni í gang á vélinni þinni þarftu afrit af þessari geymslu. Til að klóna geymsluna skaltu nota:
 ```bash
