@@ -20,13 +20,13 @@ def add_submission_raw(submission: dict) -> int:
     response = db.table('submissions').insert(submission).execute()
     return response.data[0]['submission_id']
 
-def get_open_submissions_raw() -> list[dict]:
+def get_pending_submissions_raw() -> list[dict]:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_status', Submission.PENDING).execute()
     return response.data
 
-def get_open_submissions() -> list[Submission]:
-    submissions_dict = get_open_submissions_raw()
+def get_pending_submissions() -> list[Submission]:
+    submissions_dict = get_pending_submissions_raw()
     submissions = [Submission.from_dict(submission) for submission in submissions_dict]
     return submissions
 
