@@ -14,7 +14,6 @@ import Discord.config as config
 import Discord.submission.post as post
 import Database.submissions as submissions
 import Database.message as msg
-from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
@@ -35,9 +34,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        db = DatabaseManager()
-        pending_submissions_raw = db.table('submissions').select('*').eq('submission_status', Submission.PENDING).execute().data
-        pending_submissions = [submissions.Submission.from_dict(sub) for sub in pending_submissions_raw]
+        pending_submissions = submissions.get_pending_submissions()
 
         if len(pending_submissions) == 0:
             desc = 'No open submissions.'
