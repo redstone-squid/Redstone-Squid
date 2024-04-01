@@ -23,7 +23,7 @@ def add_submission_raw(submission: dict) -> int:
 def get_pending_submissions_raw() -> list[dict]:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_status', Submission.PENDING).execute()
-    return response.data
+    return response.data if response else []
 
 def get_pending_submissions() -> list[Submission]:
     submissions_dict = get_pending_submissions_raw()
@@ -33,7 +33,7 @@ def get_pending_submissions() -> list[Submission]:
 def get_confirmed_submissions_raw() -> list[dict]:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_status', Submission.CONFIRMED).execute()
-    return response.data
+    return response.data if response else []
 
 def get_confirmed_submissions() -> list[Submission]:
     submissions_dict = get_confirmed_submissions_raw()
@@ -43,7 +43,7 @@ def get_confirmed_submissions() -> list[Submission]:
 def get_denied_submissions_raw() -> list[dict]:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_status', Submission.DENIED).execute()
-    return response.data
+    return response.data if response else []
 
 def get_denied_submissions() -> list[Submission]:
     submissions_dict = get_denied_submissions_raw()
@@ -53,7 +53,7 @@ def get_denied_submissions() -> list[Submission]:
 def get_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_id', submission_id).maybe_single().execute()
-    return Submission.from_dict(response.data) if response.data else None
+    return Submission.from_dict(response.data) if response else None
 
 def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
     if len(submission_ids) == 0:
