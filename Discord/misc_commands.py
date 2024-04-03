@@ -89,11 +89,11 @@ class Miscellaneous(Cog):
     @commands.check(is_my_alt)
     async def give_redstoner(self, ctx: Context):
         """Give redstoner role to my alt for testing. Does nothing for others."""
-        moderator: discord.Role = ctx.guild.get_role(433670432420397060)
-        if moderator in ctx.author.roles:
-            await ctx.author.remove_roles(moderator)
+        redstoner_role: discord.Role = ctx.guild.get_role(433670432420397060)
+        if redstoner_role in ctx.author.roles:
+            await ctx.author.remove_roles(redstoner_role)
         else:
-            await ctx.author.add_roles(moderator)
+            await ctx.author.add_roles(redstoner_role)
 
     @command(name="gdb", hidden=True)
     @commands.is_owner()
