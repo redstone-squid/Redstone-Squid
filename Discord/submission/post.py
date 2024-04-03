@@ -1,15 +1,14 @@
 """Helper functions for posting submissions to discord channels."""
-from typing import Literal
-
 import discord
 
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database import submissions
+from Discord.config import RECORD_CHANNEL_TYPES
 from Discord.submission.submission import Submission
 
 
-def get_channel_type_to_post_to(submission: Submission) -> Literal['Smallest', 'Fastest', 'First', 'Builds']:
+def get_channel_type_to_post_to(submission: Submission) -> RECORD_CHANNEL_TYPES:
     """Gets the type of channel to post a submission to."""
     if submission.base_category is None:
         return "Builds"
