@@ -1,6 +1,6 @@
 """Some functions related to storing and changing server ids for sending records."""
 from Database.database import DatabaseManager
-from Discord.config import RECORD_CHANNEL_TYPES
+from Discord.config import RECORD_CHANNEL_TYPES, RECORD_CHANNELS
 
 # The names of the settings in the database, mapped from the channel purpose,
 # which is the name of the setting in the UI.
@@ -10,7 +10,7 @@ PURPOSE_TO_SETTING = {'Smallest': 'smallest_channel_id',
                       'Builds': 'builds_channel_id'}
 SETTING_TO_PURPOSE = {value: key for key, value in PURPOSE_TO_SETTING.items()}
 assert len(PURPOSE_TO_SETTING) == len(SETTING_TO_PURPOSE), 'The mapping is not bijective!'
-assert set(PURPOSE_TO_SETTING.keys()) == set(RECORD_CHANNEL_TYPES), 'The mapping is not exhaustive!'
+assert set(PURPOSE_TO_SETTING.keys()) == set(RECORD_CHANNELS), 'The mapping is not exhaustive!'
 
 def get_setting_name(channel_purpose: str) -> str:
     """Maps a channel purpose to the column name in the database."""

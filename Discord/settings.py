@@ -6,7 +6,7 @@ from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
 
 from Database.server_settings import update_server_setting, get_server_setting, get_server_settings
 import Discord.utils as utils
-from config import RECORD_CHANNEL_TYPES, RECORD_CHANNELS
+from Discord.config import RECORD_CHANNEL_TYPES, RECORD_CHANNELS
 
 channel_settings_roles = ['Admin', 'Moderator']
 
@@ -49,7 +49,7 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name='query')
     @app_commands.describe(channel_purpose=', '.join(RECORD_CHANNELS))
     @has_any_role(*channel_settings_roles)
-    async def query_channel(self, ctx: Context, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"]):
+    async def query_channel(self, ctx: Context, channel_purpose: RECORD_CHANNEL_TYPES):
         """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -88,7 +88,7 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name='unset')
     @app_commands.describe(channel_purpose=', '.join(RECORD_CHANNELS))
     @has_any_role(*channel_settings_roles)
-    async def unset_channel(self, ctx: Context, channel_purpose: Literal["Smallest", "Fastest", "First", "Builds"]):
+    async def unset_channel(self, ctx: Context, channel_purpose: RECORD_CHANNEL_TYPES):
         """Unsets the channel to post this record type to."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
         update_server_setting(ctx.guild.id, channel_purpose, None)
