@@ -32,7 +32,7 @@ create table if not exists
     visible_opening_time bigint check (visible_opening_time >= 0 or visible_opening_time is null),
     date_of_creation text,
     submission_time timestamp default current_timestamp,
-    creators_ign
+    creators_ign,
     locationality text,
     directionality text,
     functional_versions text,
