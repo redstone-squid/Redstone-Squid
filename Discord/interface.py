@@ -1,6 +1,8 @@
 """Main file for the discord bot, includes logging and the main event loop."""
 import asyncio
 import os
+from pathlib import Path
+
 import discord
 import configparser
 from discord.ext.commands import Cog, Bot
@@ -18,7 +20,8 @@ TOKEN = os.environ.get('DISCORD_TOKEN')
 if not TOKEN:
     if os.path.isfile('auth.ini'):
         config = configparser.ConfigParser()
-        config.read('auth.ini')
+        config_file = Path(__file__).parent.parent / 'auth.ini'
+        config.read(config_file)
         TOKEN = config.get('discord', 'token')
     else:
         raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
