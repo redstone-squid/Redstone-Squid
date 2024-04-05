@@ -87,7 +87,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         submission = submissions.confirm_submission(submission_id)
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        await post.send_record(self.bot, submission)
+        await post.send_submission(self.bot, submission)
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 

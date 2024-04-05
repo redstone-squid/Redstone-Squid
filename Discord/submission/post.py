@@ -36,8 +36,8 @@ def get_channels_to_post_to(client: discord.Client, submission: Submission) -> l
     return channels
 
 
-async def send_record(client: discord.Client, submission: Submission):
-    """Posts a record submission to the appropriate channels in every server the bot is in."""
+async def send_submission(client: discord.Client, submission: Submission):
+    """Posts a submission to the appropriate channels in every server the bot is in."""
     channels = get_channels_to_post_to(client, submission)
     em = submission.generate_embed()
 
@@ -46,8 +46,8 @@ async def send_record(client: discord.Client, submission: Submission):
         msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
 
 
-async def send_record_to_server(client: discord.Client, submission: Submission, server_id: int):
-    """Posts a record submission to the appropriate channel in a specific server."""
+async def send_submission_to_server(client: discord.Client, submission: Submission, server_id: int):
+    """Posts a submission to the appropriate channel in a specific server."""
     channels = get_channels_to_post_to(client, submission)
     em = submission.generate_embed()
 
