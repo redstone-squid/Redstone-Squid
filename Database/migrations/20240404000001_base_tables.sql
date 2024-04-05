@@ -5,8 +5,6 @@ create table if not exists
     server_id bigint primary key not null,
     smallest_channel_id bigint unique,
     fastest_channel_id bigint unique,
-    smallest_observerless_channel_id bigint unique,
-    fastest_observerless_channel_id bigint unique,
     first_channel_id bigint unique
   );
 
@@ -53,7 +51,7 @@ create table if not exists
 create table if not exists
   messages (
     server_id bigint not null,
-    submission_id int,
+    submission_id bigint,
     channel_id text,
     message_id text,
     last_updated timestamp default current_timestamp,
