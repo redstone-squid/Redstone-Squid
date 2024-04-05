@@ -1,4 +1,6 @@
 """Submitting and retrieving submissions to/from the database"""
+from typing import Optional, Literal
+
 from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
@@ -12,40 +14,21 @@ def add_submission_raw(submission: dict) -> int:
     response = db.table('submissions').insert(submission).execute()
     return response.data[0]['submission_id']
 
-def get_pending_submissions_raw() -> list[dict]:
+
+def get_all_submissions_raw(status: Optional[int] = None) -> list[dict]:
     db = DatabaseManager()
-    response = db.table('submissions').select('*').eq('submission_status', Submission.PENDING).execute()
+    if status:
+        response = db.table('submissions').select('*').eq('submission_status', status).execute()
+    else:
+        response = db.table('submissions').select('*').execute()
     return response.data if response else []
 
-def get_pending_submissions() -> list[Submission]:
-    submissions_dict = get_pending_submissions_raw()
-    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
-    return submissions
-
-def get_confirmed_submissions_raw() -> list[dict]:
-    db = DatabaseManager()
-    response = db.table('submissions').select('*').eq('submission_status', Submission.CONFIRMED).execute()
-    return response.data if response else []
-
-def get_confirmed_submissions() -> list[Submission]:
-    submissions_dict = get_confirmed_submissions_raw()
-    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
-    return submissions
-
-def get_denied_submissions_raw() -> list[dict]:
-    db = DatabaseManager()
-    response = db.table('submissions').select('*').eq('submission_status', Submission.DENIED).execute()
-    return response.data if response else []
-
-def get_denied_submissions() -> list[Submission]:
-    submissions_dict = get_denied_submissions_raw()
-    submissions = [Submission.from_dict(submission) for submission in submissions_dict]
-    return submissions
 
 def get_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').select('*').eq('submission_id', submission_id).maybe_single().execute()
     return Submission.from_dict(response.data) if response else None
+
 
 def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
     if len(submission_ids) == 0:
@@ -60,6 +43,7 @@ def get_submissions(submission_ids: list[int]) -> list[Submission | None]:
         submissions[submission_ids.index(submission['submission_id'])] = Submission.from_dict(submission)
     return submissions
 
+
 def update_submission(submission_id: int, submission: dict) -> Submission | None:
     db = DatabaseManager()
     update_values = {key: value for key, value in submission.items() if key != 'submission_id' and value is not None}
@@ -68,6 +52,7 @@ def update_submission(submission_id: int, submission: dict) -> Submission | None
         return Submission.from_dict(response.data[0])
     return None
 
+
 def confirm_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').update({'submission_status': Submission.CONFIRMED}, count='exact').eq('submission_id', submission_id).execute()
@@ -75,12 +60,14 @@ def confirm_submission(submission_id: int) -> Submission | None:
         return Submission.from_dict(response.data[0])
     return None
 
+
 def deny_submission(submission_id: int) -> Submission | None:
     db = DatabaseManager()
     response = db.table('submissions').update({'submission_status': Submission.DENIED}, count='exact').eq('submission_id', submission_id).execute()
     if response.count == 1:
         return Submission.from_dict(response.data[0])
     return None
+
 
 def get_unsent_submissions(server_id: int) -> list[Submission] | None:
     """Get all the submissions that have not been posted on the server"""
