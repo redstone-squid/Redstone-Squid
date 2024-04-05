@@ -53,6 +53,8 @@ class Submission:
 
     def generate_embed(self: "Submission"):
         title = self.get_title()
+        if self.submission_status == Submission.PENDING:
+            title = f"Pending: {title}"
         description = self.get_description()
 
         if description is None:
