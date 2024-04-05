@@ -21,6 +21,7 @@ class Submission:
         # Optional[type] is used to indicate that the value is actually optional.
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
         self.id: int | None = None
+        self.submission_status: int | None = None
         self.last_updated: datetime | None = None
         self.base_category: Literal["Smallest", "Fastest", "First"] | None = None
         self.door_width: int | None = None
@@ -198,6 +199,7 @@ class Submission:
         result = Submission()
 
         result.id = submission["submission_id"]
+        result.submission_status = submission.get("submission_status", Submission.PENDING)
         for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
             try:
                 result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
@@ -252,6 +254,7 @@ class Submission:
         """Converts the submission to a dictionary with keys conforming to the database column names."""
         return {
             "submission_id": self.id,
+            "submission_status": self.submission_status,
             "last_update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
             "record_category": self.base_category,
             "door_width": self.door_width,
@@ -286,6 +289,7 @@ class Submission:
         string = ""
 
         string += f"ID: {self.id}\n"
+        string += f"Submission status: {self.submission_status}"
         string += f"Base Catagory: {self.base_category}\n"
         if self.door_width:
             string += f"Door Width: {self.door_width}\n"
