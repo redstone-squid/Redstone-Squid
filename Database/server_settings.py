@@ -37,7 +37,7 @@ def get_server_settings(server_id: int) -> dict[str, int]:
         return {}
 
     settings = response.data
-    return {get_purpose_name(setting_name): value for setting_name, value in settings.items()}
+    return {get_purpose_name(setting_name): value for setting_name, value in settings.items() if setting_name != 'server_id'}
 
 
 def update_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_TYPE, value: int | None) -> None:
