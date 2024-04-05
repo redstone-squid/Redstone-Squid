@@ -25,7 +25,7 @@ class Miscellaneous(Cog):
 
     @hybrid_command()
     async def google_forms(self, ctx: Context):
-        """Links you to our record submission form."""
+        """Links you to our record submission form. You want to use /submit instead."""
         em = discord.Embed(title='Submission form.',
                            description=f'You can submit new records with ease via our google form: {FORM_LINK}',
                            colour=utils.discord_green)
