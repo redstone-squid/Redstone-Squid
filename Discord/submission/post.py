@@ -7,8 +7,8 @@ from Database import submissions
 from Discord.config import RECORD_CHANNEL_TYPES
 from Discord.submission.submission import Submission
 
-
-def get_channel_type_to_post_to(submission: Submission) -> RECORD_CHANNEL_TYPES:
+# TODO: make this inside a cog and remove the client parameter?
+def get_channel_type_to_post_to(submission: Submission) -> SETTABLE_CHANNELS_TYPE:
     """Gets the type of channel to post a submission to."""
     if submission.base_category is None:
         return "Builds"
