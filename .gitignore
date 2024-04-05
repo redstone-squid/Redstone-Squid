@@ -107,3 +107,4 @@ venv.bak/
 *.ini
 *.json
 .idea/
+supabase/
