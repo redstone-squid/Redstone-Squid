@@ -24,7 +24,7 @@ class Miscellaneous(Cog):
         await ctx.send(f'Source code can be found at: {SOURCE_CODE_URL}.')
 
     @hybrid_command()
-    async def submit_record(self, ctx: Context):
+    async def google_forms(self, ctx: Context):
         """Links you to our record submission form."""
         em = discord.Embed(title='Submission form.',
                            description=f'You can submit new records with ease via our google form: {FORM_LINK}',
