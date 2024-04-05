@@ -34,10 +34,10 @@ class Submission:
         self.build_width: int | None = None
         self.build_height: int | None = None
         self.build_depth: int | None = None
-        self.normal_closing_time: float | None = None
-        self.normal_opening_time: float | None = None
-        self.visible_closing_time: Optional[float] = None
-        self.visible_opening_time: Optional[float] = None
+        self.normal_closing_time: int | None = None
+        self.normal_opening_time: int | None = None
+        self.visible_closing_time: Optional[int] = None
+        self.visible_opening_time: Optional[int] = None
         self.build_date: Optional[str] = None
         self.creators: Optional[str] = None
         self.locational: Optional[Literal["LOCATIONAL", "LOCATIONAL_FIX"]] = None
@@ -172,8 +172,9 @@ class Submission:
                   "Closing Time": str(self.normal_closing_time)}
 
         if self.visible_opening_time and self.visible_closing_time:
-            fields["Visible Opening Time"] = self.visible_opening_time
-            fields["Visible Closing Time"] = self.visible_closing_time
+            # The times are stored as game ticks, so they need to be divided by 20 to get seconds
+            fields["Visible Opening Time"] = self.visible_opening_time / 20
+            fields["Visible Closing Time"] = self.visible_closing_time / 20
 
         fields["Creators"] = ', '.join(sorted(self.creators))
         fields["Date Of Completion"] = str(self.build_date)
@@ -205,8 +206,10 @@ class Submission:
         for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
             try:
                 result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
+        else:
+            result.last_updated = datetime.now()
         result.base_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
@@ -220,13 +223,12 @@ class Submission:
         result.build_width = int(submission["build_width"])
         result.build_height = int(submission["build_height"])
         result.build_depth = int(submission["build_depth"])
-        # The times are stored as game ticks, so they need to be divided by 20 to get seconds
-        result.normal_closing_time = submission["normal_closing_time"] / 20
-        result.normal_opening_time = submission["normal_opening_time"] / 20
+        result.normal_closing_time = submission["normal_closing_time"]
+        result.normal_opening_time = submission["normal_opening_time"]
         if submission["visible_closing_time"]:
-            result.visible_close_time = submission["visible_closing_time"] / 20
+            result.visible_close_time = submission["visible_closing_time"]
         if submission["visible_opening_time"]:
-            result.visible_open_time = submission["visible_opening_time"] / 20
+            result.visible_open_time = submission["visible_opening_time"]
         result.build_date = submission.get("date_of_creation")
         if not result.build_date:
             result.build_date = submission["submission_time"]
