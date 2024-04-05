@@ -9,7 +9,7 @@ from discord.ext.commands import Cog, Command, Group, Context
 from Discord import utils
 from Discord.config import PREFIX
 
-MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information.\nNote that this command does not certain commands that are only usable as slash commands, like /submit"
+MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
 
 
 class HelpCog(Cog):
