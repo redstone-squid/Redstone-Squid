@@ -4,12 +4,18 @@ import discord
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database import submissions
-from Discord.config import RECORD_CHANNEL_TYPES
+from Discord.config import SETTABLE_CHANNELS_TYPE
 from Discord.submission.submission import Submission
 
-
-def get_channel_type_to_post_to(submission: Submission) -> RECORD_CHANNEL_TYPES:
+# TODO: make this inside a cog and remove the client parameter?
+def get_channel_type_to_post_to(submission: Submission) -> SETTABLE_CHANNELS_TYPE:
     """Gets the type of channel to post a submission to."""
+    status = submission.submission_status
+    if status == Submission.PENDING:
+        return "Vote"
+    elif status == Submission.DENIED:
+        raise ValueError("Denied submissions should not be posted.")
+
     if submission.base_category is None:
         return "Builds"
     else:
@@ -20,6 +26,7 @@ def get_channels_to_post_to(client: discord.Client, submission: Submission) -> l
     """Gets all channels which a submission should be posted to."""
     # Get channel type to post submission to
     channel_type = get_channel_type_to_post_to(submission)
+    # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
     if channel_type is None:
         return []
 
@@ -38,6 +45,7 @@ def get_channels_to_post_to(client: discord.Client, submission: Submission) -> l
 
 async def send_submission(client: discord.Client, submission: Submission):
     """Posts a submission to the appropriate channels in every server the bot is in."""
+    # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
     channels = get_channels_to_post_to(client, submission)
     em = submission.generate_embed()
 

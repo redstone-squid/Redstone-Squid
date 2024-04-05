@@ -261,6 +261,8 @@ class SubmissionsCog(Cog, name='Submissions'):
         })
         # TODO: preview the submission
         await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission_id}'))
+        submission = submissions.get_submission(submission_id)
+        await post.send_submission(self.bot, submission)
 
     @app_commands.command(name='edit')
     @app_commands.describe(

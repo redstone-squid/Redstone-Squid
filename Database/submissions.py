@@ -2,14 +2,6 @@
 from Database.database import DatabaseManager
 from Discord.submission.submission import Submission
 
-def add_submission(submission: Submission) -> int:
-    """Adds a submission to the form submissions worksheet.
-
-    Returns:
-        The submission ID of the added submission.
-    """
-    return add_submission_raw(submission.to_dict())
-
 def add_submission_raw(submission: dict) -> int:
     """Adds a submission to the form submissions worksheet.
 

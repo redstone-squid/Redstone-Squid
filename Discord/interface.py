@@ -13,7 +13,7 @@ from Discord.misc_commands import Miscellaneous
 from Discord.help import HelpCog
 from Discord.settings import SettingsCog
 from Discord.submission.submissions import SubmissionsCog
-
+from Discord.submission.voting import VotingCog
 
 # Establishing connection with discord
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -102,6 +102,7 @@ async def main(prefix=PREFIX):
         await bot.add_cog(SubmissionsCog(bot))
         await bot.add_cog(Listeners(bot))
         await bot.add_cog(HelpCog(bot))
+        await bot.add_cog(VotingCog(bot))
         discord.utils.setup_logging()
         await bot.start(TOKEN)
 
