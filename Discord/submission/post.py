@@ -38,6 +38,7 @@ def get_channels_to_post_to(client: discord.Client, submission: Submission) -> l
 
 async def send_submission(client: discord.Client, submission: Submission):
     """Posts a submission to the appropriate channels in every server the bot is in."""
+    # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
     channels = get_channels_to_post_to(client, submission)
     em = submission.generate_embed()
 
