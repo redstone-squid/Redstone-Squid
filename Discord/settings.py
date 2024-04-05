@@ -96,6 +96,7 @@ class SettingsCog(Cog, name="Settings"):
             embed=utils.info_embed('SettingsCog updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
+# TODO: Move this to a different file, probably under Database/server_settings.py
 def get_record_channel_for(server: discord.Guild, channel_purpose: RECORD_CHANNEL_TYPES) -> discord.TextChannel | None:
     """Gets the channel for a specific purpose from the server settings table."""
     channel_id = get_server_setting(server.id, channel_purpose)
