@@ -6,7 +6,7 @@ from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
 
 from Database.server_settings import update_server_setting, get_server_setting, get_server_settings
 import Discord.utils as utils
-from Discord.config import RECORD_CHANNEL_TYPES, RECORD_CHANNELS
+from Discord.config import SETTABLE_CHANNELS, SETTABLE_CHANNELS_TYPE
 
 channel_settings_roles = ['Admin', 'Moderator']
 
@@ -26,30 +26,19 @@ class SettingsCog(Cog, name="Settings"):
         """Query all settings."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        channels = get_all_record_channels(ctx.guild)
+        channels = get_all_settable_channels(ctx.guild)
 
-        # TODO: stop hardcoding this
-        desc = """
-        `smallest channel`: #{}\n
-        `fastest channel`: #{}\n
-        `smallest observerless channel`: #{}\n
-        `fastest observerless channel`: #{}\n
-        `first channel`: #{}\n
-        """.format(
-            channels.get('Smallest', '_Not set_'),
-            channels.get('Fastest', '_Not set_'),
-            channels.get('Smallest Observerless', '_Not set_'),
-            channels.get('Fastest Observerless', '_Not set_'),
-            channels.get('First', '_Not set_')
-        )
+        desc = ""
+        for channel_type in SETTABLE_CHANNELS:
+            desc += f"`{channel_type.lower()} channel`: {channels.get(channel_type, '_Not set_')}\n"
 
         em = discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green)
         await sent_message.edit(embed=em)
 
     @settings_hybrid_group.command(name='query')
-    @app_commands.describe(channel_purpose=', '.join(RECORD_CHANNELS))
+    @app_commands.describe(channel_purpose=', '.join(SETTABLE_CHANNELS))
     @has_any_role(*channel_settings_roles)
-    async def query_channel(self, ctx: Context, channel_purpose: RECORD_CHANNEL_TYPES):
+    async def query_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
@@ -64,11 +53,11 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name='set')
     @app_commands.describe(
-        channel_purpose=', '.join(RECORD_CHANNELS),
+        channel_purpose=', '.join(SETTABLE_CHANNELS),
         channel="The channel that you want to set to send this record type to."
     )
     @has_any_role(*channel_settings_roles)
-    async def set_channel(self, ctx: Context, channel_purpose: RECORD_CHANNEL_TYPES,
+    async def set_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE,
                           channel: discord.TextChannel):
         """Sets the current channel as the channel to post this record type to."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
@@ -83,21 +72,21 @@ class SettingsCog(Cog, name="Settings"):
 
         # Sending success message
         await sent_message.edit(
-            embed=utils.info_embed('SettingsCog updated', f'{channel_purpose} channel has successfully been set.'))
+            embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.'))
 
     @settings_hybrid_group.command(name='unset')
-    @app_commands.describe(channel_purpose=', '.join(RECORD_CHANNELS))
+    @app_commands.describe(channel_purpose=', '.join(SETTABLE_CHANNELS))
     @has_any_role(*channel_settings_roles)
-    async def unset_channel(self, ctx: Context, channel_purpose: RECORD_CHANNEL_TYPES):
+    async def unset_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Unsets the channel to post this record type to."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
         update_server_setting(ctx.guild.id, channel_purpose, None)
         await sent_message.edit(
-            embed=utils.info_embed('SettingsCog updated', f'{channel_purpose} channel has successfully been unset.'))
+            embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
 # TODO: Move this to a different file, probably under Database/server_settings.py
-def get_record_channel_for(server: discord.Guild, channel_purpose: RECORD_CHANNEL_TYPES) -> discord.TextChannel | None:
+def get_record_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
     """Gets the channel for a specific purpose from the server settings table."""
     channel_id = get_server_setting(server.id, channel_purpose)
 
@@ -108,19 +97,12 @@ def get_record_channel_for(server: discord.Guild, channel_purpose: RECORD_CHANNE
 
 
 # Gets all channels
-def get_all_record_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
-    """
-    Gets all record channels of a server from the server settings table.
-
-    This includes the following:
-    - Smallest
-    - Fastest
-    - First
-    """
+def get_all_settable_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
+    """Gets all record channels of a server from the server settings table."""
     settings = get_server_settings(server.id)
 
     channels = {}
-    for record_type in RECORD_CHANNELS:
+    for record_type in SETTABLE_CHANNELS:
         channel_id = settings.get(record_type)
         channels[record_type] = server.get_channel(channel_id)
 
