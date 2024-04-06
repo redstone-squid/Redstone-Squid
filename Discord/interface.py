@@ -1,5 +1,6 @@
 """Main file for the discord bot, includes logging and the main event loop."""
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from Discord.config import *
 from Discord.misc_commands import Miscellaneous
 from Discord.help import HelpCog
 from Discord.settings import SettingsCog
-from Discord.submission.submissions import SubmissionsCog
+from Discord.submission.submit import SubmissionsCog
 from Discord.submission.voting import VotingCog
 
 # Establishing connection with discord

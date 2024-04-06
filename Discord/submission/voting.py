@@ -3,12 +3,11 @@ import discord
 from discord.ext.commands import Bot, Cog
 
 import Database.message as msg
-from Database.message import get_submission_id_by_message
+from Database.message import get_build_id_by_message
 from Database.server_settings import get_server_setting
-from Database.submissions import get_submission, confirm_submission
+from Database.builds import Build
 from Discord.config import OWNER_ID
 from Discord.submission import post
-from Discord.submission.submission import Submission
 
 
 class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
@@ -32,23 +31,24 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         if message.author.id != self.bot.user.id:
             return
 
-        # The submission status must be pending
-        submission_id = get_submission_id_by_message(payload.message_id)
+        build_id = get_build_id_by_message(payload.message_id)
+
         # No submission found (message is not a submission)
-        if submission_id is None:
+        if build_id is None:
             return
-        submission = get_submission(submission_id)
-        if submission.submission_status != Submission.PENDING:
+
+        submission = Build.from_id(build_id)
+
+        # The submission status must be pending
+        if submission.submission_status != Build.PENDING:
             return
 
         # If the reaction is a thumbs up, confirm the submission
         if payload.emoji.name == '👍':
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
-            confirm_submission(submission_id)
-            message_ids = msg.delete_message(payload.guild_id, submission_id)
+            submission.confirm()
+            message_ids = msg.delete_message(payload.guild_id, build_id)
+            await post.send_submission(self.bot, submission)
             for message_id in message_ids:
                 message = await self.bot.get_channel(vote_channel_id).fetch_message(message_id)
                 await message.delete()
-            # Refreshes the submission from the database
-            submission = get_submission(submission_id)
-            await post.send_submission(self.bot, submission)

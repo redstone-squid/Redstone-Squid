@@ -12,10 +12,8 @@ import Discord.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
-from Database.submissions import get_all_submissions_raw, get_submission, confirm_submission, deny_submission, \
-    get_submissions, add_submission_raw, update_submission
+from Database.builds import get_all_builds_raw, get_builds, update_build, Build
 import Database.message as msg
-from Discord.submission.submission import Submission
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -35,7 +33,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        pending_submissions = [Submission.from_dict(submission) for submission in get_all_submissions_raw(Submission.PENDING)]
+        pending_submissions = [Build.from_dict(submission) for submission in get_all_builds_raw(Build.PENDING)]
 
         if len(pending_submissions) == 0:
             desc = 'No open submissions.'
@@ -59,7 +57,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Displays a submission."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        submission = get_submission(submission_id)
+        submission = Build.from_id(submission_id)
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
@@ -85,11 +83,12 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        submission = confirm_submission(submission_id)
+        submission = Build.from_id(submission_id)
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        await post.send_submission(self.bot, submission)
 
+        submission.confirm()
+        await post.send_submission(self.bot, submission)
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
     @submission_hybrid_group.command(name='deny')
@@ -103,11 +102,12 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        sub = deny_submission(submission_id)
+        sub = Build.from_id(submission_id)
 
         if sub is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
+        sub.deny()
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
@@ -124,7 +124,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
 
-        subs = get_submissions([message['submission_id'] for message in outdated_messages])
+        subs = get_builds([message['build_id'] for message in outdated_messages])
 
         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
@@ -153,7 +153,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
 
         await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
-                             message['submission_id'])
+                             message['build_id'])
         return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
 
     @submission_hybrid_group.command(name='update_all')
@@ -167,7 +167,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             # If message isn't yet tracked, add it.
             # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
             await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
-                                 message['submission_id'])
+                                 message['build_id'])
 
         return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
 
@@ -229,9 +229,9 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        submission_id = add_submission_raw({
+        submission = Build.add({
             'record_category': record_category if record_category != 'None' else None,
-            'submission_status': Submission.PENDING,
+            'submission_status': Build.PENDING,
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,
@@ -261,8 +261,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'submitted_by': str(interaction.user)
         })
         # TODO: preview the submission
-        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission_id}'))
-        submission = get_submission(submission_id)
+        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission.id}'))
         await post.send_submission(self.bot, submission)
 
     @app_commands.command(name='edit')
@@ -342,13 +341,13 @@ class SubmissionsCog(Cog, name='Submissions'):
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
         # Show a preview of the changes
-        old_submission = get_submission(submission_id)
-        new_submission = Submission.from_dict({**old_submission.to_dict(), **update_values})
+        old_submission = Build.from_id(submission_id)
+        new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
         preview_embed = new_submission.generate_embed()
         # await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
         await followup.send(embed=preview_embed, ephemeral=True)
 
         # TODO: Implement a way to confirm the changes. Right now, it updates the record immediately.
 
-        update_submission(submission_id, update_values)
+        update_build(submission_id, update_values)
         await message.edit(embed=utils.info_embed('Success', 'Build edited successfully!'))

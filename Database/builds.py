@@ -1,13 +1,16 @@
+"""Submitting and retrieving submissions to/from the database"""
+from __future__ import annotations
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Optional, Literal
 
 import discord
 
 import Discord.config
+from Database.database import DatabaseManager
 from Discord import utils
 
 
-class Submission:
+class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
     PENDING = 0
     CONFIRMED = 1
@@ -51,9 +54,33 @@ class Submission:
         self.command: Optional[str] = None
         self.submitted_by: str | None = None
 
-    def generate_embed(self: "Submission"):
+    def confirm(self) -> None:
+        """Confirms the submission.
+
+        Raises:
+            ValueError: If the submission could not be confirmed.
+        """
+        self.submission_status = Build.CONFIRMED
+        db = DatabaseManager()
+        response = db.table('builds').update({'submission_status': Build.CONFIRMED}, count='exact').eq('id', self.id).execute()
+        if response.count != 1:
+            raise ValueError("Failed to confirm submission in the database.")
+
+    def deny(self) -> None:
+        """Denies the submission.
+
+        Raises:
+            ValueError: If the submission could not be denied.
+        """
+        self.submission_status = Build.DENIED
+        db = DatabaseManager()
+        response = db.table('builds').update({'submission_status': Build.DENIED}, count='exact').eq('id', self.id).execute()
+        if response.count != 1:
+            raise ValueError("Failed to deny submission in the database.")
+
+    def generate_embed(self) -> discord.Embed:
         title = self.get_title()
-        if self.submission_status == Submission.PENDING:
+        if self.submission_status == Build.PENDING:
             title = f"Pending: {title}"
         description = self.get_description()
 
@@ -73,7 +100,7 @@ class Submission:
 
         return em
 
-    def get_title(self):
+    def get_title(self) -> str:
         # Category
         title = f"{self.base_category or ''} "
 
@@ -197,12 +224,41 @@ class Submission:
         return fields
 
     @staticmethod
-    def from_dict(submission: dict) -> "Submission":
-        """Creates a new Submission object from a dictionary."""
-        result = Submission()
+    def add(data: dict) -> Build:
+        """Adds a build to the database.
 
-        result.id = submission["submission_id"]
-        result.submission_status = submission.get("submission_status", Submission.PENDING)
+        Returns:
+            The Build object that was added.
+        """
+        db = DatabaseManager()
+        response = db.table('builds').insert(data, count='exact').execute()
+        assert response.count == 1
+        return Build.from_dict(response.data[0])
+
+    @staticmethod
+    def from_id(build_id: int) -> Build | None:
+        """Creates a new Build object from a database ID.
+
+        Args:
+            build_id: The ID of the build to retrieve.
+
+        Returns:
+            The Build object with the specified ID, or None if the build was not found.
+        """
+        db = DatabaseManager()
+        response = db.table('builds').select('*').eq('id', build_id).maybe_single().execute()
+        if response:
+            return Build.from_dict(response.data)
+        else:
+            return None
+
+    @staticmethod
+    def from_dict(submission: dict) -> Build:
+        """Creates a new Build object from a dictionary."""
+        result = Build()
+
+        result.id = submission["id"]
+        result.submission_status = submission.get("submission_status", Build.PENDING)
         for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
             try:
                 result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
@@ -257,7 +313,7 @@ class Submission:
     def to_dict(self):
         """Converts the submission to a dictionary with keys conforming to the database column names."""
         return {
-            "submission_id": self.id,
+            "id": self.id,
             "submission_status": self.submission_status,
             "last_update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
             "record_category": self.base_category,
@@ -338,3 +394,56 @@ class Submission:
         string += f"Submitted By: {self.submitted_by}\n"
 
         return string
+
+
+def get_all_builds_raw(submission_status: Optional[int] = None) -> list[dict]:
+    """Fetches all builds from the database, optionally filtered by submission status.
+
+    Args:
+        submission_status: The status of the submissions to filter by. If None, all submissions are returned. See Build class for possible values.
+
+    Returns:
+        A list of dictionaries, each representing a build.
+    """
+    db = DatabaseManager()
+    if submission_status:
+        response = db.table('builds').select('*').eq('submission_status', submission_status).execute()
+    else:
+        response = db.table('builds').select('*').execute()
+    return response.data if response else []
+
+
+def get_builds(build_ids: list[int]) -> list[Build | None]:
+    if len(build_ids) == 0:
+        return []
+
+    db = DatabaseManager()
+    response = db.table('builds').select('*').in_('id', build_ids).execute()
+
+    # Insert None for missing submissions
+    submissions: list[Build | None] = [None] * len(build_ids)
+    for submission in response.data:
+        submissions[build_ids.index(submission['id'])] = Build.from_dict(submission)
+    return submissions
+
+
+def update_build(build_id: int, submission: dict) -> Build | None:
+    db = DatabaseManager()
+    update_values = {key: value for key, value in submission.items() if key != 'id' and value is not None}
+    response = db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
+    if response.count == 1:
+        return Build.from_dict(response.data[0])
+    return None
+
+
+def get_unsent_builds(server_id: int) -> list[Build] | None:
+    """Get all the builds that have not been posted on the server"""
+    db = DatabaseManager()
+
+    # Builds that have not been posted on the server
+    server_unsent_builds = db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute().data
+    return [Build.from_dict(unsent_sub) for unsent_sub in server_unsent_builds]
+
+
+if __name__ == '__main__':
+    print(get_builds([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))

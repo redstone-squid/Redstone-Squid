@@ -37,3 +37,8 @@ class DatabaseManager:
 
         return url, key
 
+
+if __name__ == '__main__':
+    db = DatabaseManager()
+    response = db.table('submissions').select('*').eq('submission_id', 1).maybe_single().execute()
+    print(response)
