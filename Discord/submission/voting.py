@@ -34,7 +34,9 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
 
         # The submission status must be pending
         submission_id = get_submission_id_by_message(payload.message_id)
-        assert submission_id is not None, "Submission ID not found in database given message ID."
+        # No submission found (message is not a submission)
+        if submission_id is None:
+            return
         submission = get_submission(submission_id)
         if submission.submission_status != Submission.PENDING:
             return
