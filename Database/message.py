@@ -47,7 +47,7 @@ def update_message(server_id: int, submission_id: int, channel_id: int, message_
 
 
 def delete_message(server_id: int, submission_id: int) -> list[int]:
-    """Remove a message from the database and delete the message from discord.
+    """Remove a message from the database.
 
     Args:
         server_id: The server id of the message to delete.
