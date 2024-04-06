@@ -23,6 +23,7 @@ class HelpCog(Cog):
     @app_commands.command()
     async def help(self, interaction: discord.Interaction, command: Optional[str]):
         """Show help for a command or a group of commands."""
+        # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
         await response.defer()
         ctx = await self.bot.get_context(interaction, cls=Context)
