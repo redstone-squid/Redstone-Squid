@@ -29,8 +29,6 @@ class Miscellaneous(Cog):
         em = discord.Embed(title='Submission form.',
                            description=f'You can submit new records with ease via our google form: {FORM_LINK}',
                            colour=utils.discord_green)
-        # TODO: image is not showing up.
-        # em.set_image(url='https://i.imgur.com/AqYEd1o.png')
         await ctx.send(embed=em)
 
     @hybrid_command()
