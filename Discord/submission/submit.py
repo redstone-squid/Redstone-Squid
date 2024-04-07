@@ -4,6 +4,7 @@ from typing import Literal
 
 import discord
 from discord import InteractionResponse
+from discord.ui import View, Button
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
@@ -291,16 +292,16 @@ class SubmissionsCog(Cog, name='Submissions'):
         command_to_get_to_build='The command to get to the build in the server.'
     )
     async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,
-                   pattern: str = None, door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = None, build_width: int = None,
-                   build_height: int = None, build_depth: int = None, works_in: str = None, wiring_placement_restrictions: str = None,
-                   component_restrictions: str = None, information_about_build: str = None,
-                   normal_closing_time: int = None,
-                   normal_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
-                   locationality: Literal["Locational", "Locational with fixes"] = None,
-                   directionality: Literal["Directional", "Directional with fixes"] = None,
-                   link_to_image: str = None, link_to_youtube_video: str = None,
-                   link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
-                   command_to_get_to_build: str = None):
+                    pattern: str = None, door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = None, build_width: int = None,
+                    build_height: int = None, build_depth: int = None, works_in: str = None, wiring_placement_restrictions: str = None,
+                    component_restrictions: str = None, information_about_build: str = None,
+                    normal_closing_time: int = None,
+                    normal_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
+                    locationality: Literal["Locational", "Locational with fixes"] = None,
+                    directionality: Literal["Directional", "Directional with fixes"] = None,
+                    link_to_image: str = None, link_to_youtube_video: str = None,
+                    link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
+                    command_to_get_to_build: str = None):
         """Edits a record in the database directly."""
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
@@ -344,10 +345,26 @@ class SubmissionsCog(Cog, name='Submissions'):
         old_submission = Build.from_id(submission_id)
         new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
         preview_embed = new_submission.generate_embed()
-        # await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
-        await followup.send(embed=preview_embed, ephemeral=True)
+        await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
 
-        # TODO: Implement a way to confirm the changes. Right now, it updates the record immediately.
+        class ConfirmationView(View):
+            def __init__(self):
+                super().__init__()
+                self.interaction = interaction
 
-        update_build(submission_id, update_values)
-        await message.edit(embed=utils.info_embed('Success', 'Build edited successfully!'))
+            #TODO: disable buttons after one of them is pressed
+            #TODO: timeout the original message if neither of the buttons is pressed after a certian amount of time
+            @discord.ui.button(label="Confirm", style = discord.ButtonStyle.success)
+            async def confirm(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                update_build(submission_id, update_values)
+                await message.edit(embed=utils.info_embed('Success', 'Record edited successfully'))
+             
+                self.stop()
+
+            @discord.ui.button(label="Cancel", style = discord.ButtonStyle.danger)
+            async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                await message.edit(embed=utils.info_embed('Cancel', 'Record edit canceled'))
+                self.stop()
+
+        
+        await followup.send(embed=preview_embed, view=ConfirmationView(), ephemeral=True)
