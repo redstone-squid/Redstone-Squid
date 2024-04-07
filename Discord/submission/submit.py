@@ -341,30 +341,36 @@ class SubmissionsCog(Cog, name='Submissions'):
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
-        # Show a preview of the changes
         old_submission = Build.from_id(submission_id)
         new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
         preview_embed = new_submission.generate_embed()
+
+        # Show a preview of the changes and ask for confirmation
         await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+        view = ConfirmationView()
+        preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
+        await view.wait()
 
-        class ConfirmationView(View):
-            def __init__(self):
-                super().__init__()
-                self.interaction = interaction
+        await preview.delete()
+        if view.value is None:
+            await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
+        elif view.value:
+            update_build(submission_id, update_values)
+            await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
+        else:
+            await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
 
-            #TODO: disable buttons after one of them is pressed
-            #TODO: timeout the original message if neither of the buttons is pressed after a certian amount of time
-            @discord.ui.button(label="Confirm", style = discord.ButtonStyle.success)
-            async def confirm(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-                update_build(submission_id, update_values)
-                await message.edit(embed=utils.info_embed('Success', 'Record edited successfully'))
-             
-                self.stop()
+class ConfirmationView(View):
+    def __init__(self, timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.value = None
 
-            @discord.ui.button(label="Cancel", style = discord.ButtonStyle.danger)
-            async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-                await message.edit(embed=utils.info_embed('Cancel', 'Record edit canceled'))
-                self.stop()
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
 
-        
-        await followup.send(embed=preview_embed, view=ConfirmationView(), ephemeral=True)
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
