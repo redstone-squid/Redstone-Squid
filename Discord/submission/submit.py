@@ -83,12 +83,12 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        submission = Build.from_id(submission_id)
-        if submission is None:
+        build = Build.from_id(submission_id)
+        if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        submission.confirm()
-        await post.send_submission(self.bot, submission)
+        build.confirm()
+        await post.send_submission(self.bot, build)
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
     @submission_hybrid_group.command(name='deny')
@@ -102,12 +102,12 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        sub = Build.from_id(submission_id)
+        build = Build.from_id(submission_id)
 
-        if sub is None:
+        if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        sub.deny()
+        build.deny()
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
@@ -124,15 +124,15 @@ class SubmissionsCog(Cog, name='Submissions'):
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
 
-        subs = get_builds([message['build_id'] for message in outdated_messages])
+        builds = get_builds([message['build_id'] for message in outdated_messages])
 
         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
 
         desc = []
-        for sub in subs:
+        for build in builds:
             desc.append(
-                f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
         desc = '\n\n'.join(desc)
 
         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -178,7 +178,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     @app_commands.command(name='submit')
     @app_commands.describe(
-        record_category='The category of the record. If none, use "None".',
+        record_category='The category of the build. If none, use "None".',
         door_width='The width of the door itself. Like 2x2 piston door.',
         door_height='The height of the door itself. Like 2x2 piston door.',
         pattern='The pattern type of the door. For example, "full lamp" or "funnel".',

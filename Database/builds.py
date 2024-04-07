@@ -17,9 +17,9 @@ class Build:
     DENIED = 2
 
     def __init__(self):
-        """Initializes an empty submission.
+        """Initializes an empty build.
 
-         This should not be used externally. Use `from_dict()` instead."""
+         This should not be used externally. Use `from_dict()` or `from_id()` instead."""
         # type | None indicates that the value is expected to be filled in.
         # Optional[type] is used to indicate that the value is actually optional.
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
@@ -55,10 +55,10 @@ class Build:
         self.submitted_by: str | None = None
 
     def confirm(self) -> None:
-        """Confirms the submission.
+        """Marks the build as confirmed.
 
         Raises:
-            ValueError: If the submission could not be confirmed.
+            ValueError: If the build could not be confirmed.
         """
         self.submission_status = Build.CONFIRMED
         db = DatabaseManager()
@@ -67,10 +67,10 @@ class Build:
             raise ValueError("Failed to confirm submission in the database.")
 
     def deny(self) -> None:
-        """Denies the submission.
+        """Marks the build as denied.
 
         Raises:
-            ValueError: If the submission could not be denied.
+            ValueError: If the build could not be denied.
         """
         self.submission_status = Build.DENIED
         db = DatabaseManager()

@@ -8,24 +8,24 @@ from Database.builds import Build
 
 
 # TODO: make this inside a cog and remove the client parameter?
-def get_channel_type_to_post_to(submission: Build) -> SETTABLE_CHANNELS_TYPE:
+def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
     """Gets the type of channel to post a submission to."""
-    status = submission.submission_status
+    status = build.submission_status
     if status == Build.PENDING:
         return "Vote"
     elif status == Build.DENIED:
         raise ValueError("Denied submissions should not be posted.")
 
-    if submission.base_category is None:
+    if build.base_category is None:
         return "Builds"
     else:
-        return submission.base_category
+        return build.base_category
 
 
-def get_channels_to_post_to(client: discord.Client, submission: Build) -> list[discord.TextChannel]:
+def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:
     """Gets all channels which a submission should be posted to."""
     # Get channel type to post submission to
-    channel_type = get_channel_type_to_post_to(submission)
+    channel_type = get_channel_type_to_post_to(build)
     # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
     if channel_type is None:
         return []
@@ -43,33 +43,34 @@ def get_channels_to_post_to(client: discord.Client, submission: Build) -> list[d
     return channels
 
 
-async def send_submission(client: discord.Client, submission: Build):
+async def send_submission(client: discord.Client, build: Build):
     """Posts a submission to the appropriate channels in every server the bot is in."""
     # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
-    channels = get_channels_to_post_to(client, submission)
-    em = submission.generate_embed()
+    channels = get_channels_to_post_to(client, build)
+    em = build.generate_embed()
 
     for channel in channels:
         message = await channel.send(embed=em)
-        msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
+        msg.update_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
-async def send_submission_to_server(client: discord.Client, submission: Build, server_id: int):
+async def send_submission_to_server(client: discord.Client, build: Build, server_id: int) -> None:
     """Posts a submission to the appropriate channel in a specific server."""
-    channels = get_channels_to_post_to(client, submission)
-    em = submission.generate_embed()
+    channels = get_channels_to_post_to(client, build)
+    em = build.generate_embed()
 
     for channel in channels:
         if channel.guild.id == server_id:
             message = await channel.send(embed=em)
-            msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
+            msg.update_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
-async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: int, submission_id: int):
-    """Edits a post to conform to the submission object."""
-    em = Build.from_id(submission_id).generate_embed()
+async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: int, build_id: int) -> None:
+    """Updates a post according to the information given by the build_id."""
+    # TODO: Check whether the message_id corresponds to the build_id
+    em = Build.from_id(build_id).generate_embed()
     channel = client.get_channel(channel_id)
     message = await channel.fetch_message(message_id)
 
     updated_message = await message.edit(embed=em)
-    msg.update_message(server.id, submission_id, channel_id, updated_message.id)
+    msg.update_message(server.id, build_id, channel_id, updated_message.id)
