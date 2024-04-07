@@ -230,7 +230,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        submission = Build.add({
+        build = Build.add({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Build.PENDING,
             'door_width': door_width,
@@ -261,9 +261,12 @@ class SubmissionsCog(Cog, name='Submissions'):
             'command_to_build': command_to_get_to_build,
             'submitted_by': str(interaction.user)
         })
-        # TODO: preview the submission
-        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission.id}'))
-        await post.send_submission(self.bot, submission)
+        # Shows the submission to the user
+        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                            embed=build.generate_embed(), ephemeral=True)
+
+        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}'))
+        await post.send_submission(self.bot, build)
 
     @app_commands.command(name='edit')
     @app_commands.describe(
