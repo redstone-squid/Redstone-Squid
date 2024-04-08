@@ -23,7 +23,7 @@ cd Redstone-Squid
 Ef þú vilt nota sýndarumhverfi skaltu fyrst búa til umhverfið í rótarskránni og virkja það.
 ```bash
 python -m venv venv
-source venv/bin/activate
+source venv/Lib/activate
 ```
 Að öðrum kosti geturðu sett upp conda umhverfi með:
 ```bash
