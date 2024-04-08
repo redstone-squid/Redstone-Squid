@@ -1,16 +1,21 @@
 import configparser
 import os
+import asyncio
 from pathlib import Path
-from supabase import create_client, Client
+from supabase_py_async import create_client, AsyncClient
+from supabase_py_async.lib.client_options import ClientOptions
+
 
 class DatabaseManager:
     """Singleton class for the supabase client."""
-    _client: Client = None
+    _client: AsyncClient = None
 
-    def __new__(cls):
+
+    # This actually works, but some IDE might show a warning
+    async def __new__(cls):
         if not cls._client:
             url, key = cls.get_credentials()
-            cls._client = create_client(url, key)
+            cls._client = await create_client(url, key)
         return cls._client
 
     @staticmethod
@@ -38,7 +43,10 @@ class DatabaseManager:
         return url, key
 
 
-if __name__ == '__main__':
-    db = DatabaseManager()
-    response = db.table('submissions').select('*').eq('submission_id', 1).maybe_single().execute()
+async def main():
+    db = await DatabaseManager()
+    response = await db.table('builds').select('*').eq('id', 10).maybe_single().execute()
     print(response)
+
+if __name__ == '__main__':
+    asyncio.run(main())

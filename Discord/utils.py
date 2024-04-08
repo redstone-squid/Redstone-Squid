@@ -1,4 +1,3 @@
-import re
 import discord
 from time import gmtime, strftime
 

@@ -17,7 +17,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
     @Cog.listener(name='on_raw_reaction_add')
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        vote_channel_id = get_server_setting(payload.guild_id, 'Vote')
+        vote_channel_id = await get_server_setting(payload.guild_id, 'Vote')
         # Must be in the vote channel
         if vote_channel_id is None or payload.channel_id != vote_channel_id:
             return
@@ -31,13 +31,13 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         if message.author.id != self.bot.user.id:
             return
 
-        build_id = get_build_id_by_message(payload.message_id)
+        build_id = await get_build_id_by_message(payload.message_id)
 
         # No submission found (message is not a submission)
         if build_id is None:
             return
 
-        submission = Build.from_id(build_id)
+        submission = await Build.from_id(build_id)
 
         # The submission status must be pending
         if submission.submission_status != Build.PENDING:
@@ -46,8 +46,8 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         # If the reaction is a thumbs up, confirm the submission
         if payload.emoji.name == '👍':
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
-            submission.confirm()
-            message_ids = msg.delete_message(payload.guild_id, build_id)
+            await submission.confirm()
+            message_ids = await msg.delete_message(payload.guild_id, build_id)
             await post.send_submission(self.bot, submission)
             for message_id in message_ids:
                 message = await self.bot.get_channel(vote_channel_id).fetch_message(message_id)

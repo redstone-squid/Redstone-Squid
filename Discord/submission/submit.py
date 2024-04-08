@@ -58,7 +58,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Displays a submission."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        submission = Build.from_id(submission_id)
+        submission = await Build.from_id(submission_id)
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
@@ -84,11 +84,11 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        submission = Build.from_id(submission_id)
+        submission = await Build.from_id(submission_id)
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        submission.confirm()
+        await submission.confirm()
         await post.send_submission(self.bot, submission)
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
@@ -103,12 +103,12 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        sub = Build.from_id(submission_id)
+        sub = await Build.from_id(submission_id)
 
         if sub is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        sub.deny()
+        await sub.deny()
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
@@ -125,7 +125,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
 
-        subs = get_builds([message['build_id'] for message in outdated_messages])
+        subs = await get_builds([message['build_id'] for message in outdated_messages])
 
         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
@@ -230,7 +230,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        build = Build.add({
+        build = await Build.add({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Build.PENDING,
             'door_width': door_width,
@@ -344,7 +344,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
-        old_submission = Build.from_id(submission_id)
+        old_submission = await Build.from_id(submission_id)
         new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
         preview_embed = new_submission.generate_embed()
 
