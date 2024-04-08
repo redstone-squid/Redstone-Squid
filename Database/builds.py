@@ -17,9 +17,9 @@ class Build:
     DENIED = 2
 
     def __init__(self):
-        """Initializes an empty submission.
+        """Initializes an empty build.
 
-         This should not be used externally. Use `from_dict()` instead."""
+         This should not be used externally. Use `from_dict()` or `from_id()` instead."""
         # type | None indicates that the value is expected to be filled in.
         # Optional[type] is used to indicate that the value is actually optional.
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
@@ -55,10 +55,10 @@ class Build:
         self.submitted_by: str | None = None
 
     async def confirm(self) -> None:
-        """Confirms the submission.
+        """Marks the build as confirmed.
 
         Raises:
-            ValueError: If the submission could not be confirmed.
+            ValueError: If the build could not be confirmed.
         """
         self.submission_status = Build.CONFIRMED
         db = await DatabaseManager()
@@ -67,10 +67,10 @@ class Build:
             raise ValueError("Failed to confirm submission in the database.")
 
     async def deny(self) -> None:
-        """Denies the submission.
+        """Marks the build as denied.
 
         Raises:
-            ValueError: If the submission could not be denied.
+            ValueError: If the build could not be denied.
         """
         self.submission_status = Build.DENIED
         db = await DatabaseManager()
@@ -281,31 +281,24 @@ class Build:
         result.build_depth = int(submission["build_depth"])
         result.normal_closing_time = submission["normal_closing_time"]
         result.normal_opening_time = submission["normal_opening_time"]
-        if submission["visible_closing_time"]:
-            result.visible_close_time = submission["visible_closing_time"]
-        if submission["visible_opening_time"]:
-            result.visible_open_time = submission["visible_opening_time"]
-        result.build_date = submission.get("date_of_creation")
-        if not result.build_date:
-            result.build_date = submission["submission_time"]
+        result.visible_close_time = submission.get("visible_closing_time")
+        result.visible_open_time = submission.get("visible_opening_time")
+        # Date of creation is the user provided time, defaulting to the submission time if not provided
+        result.build_date = submission.get("date_of_creation", submission["submission_time"])
         result.creators = submission.get("creators_ign").split(", ") if submission.get("creators_ign") else []
-        # Locational with known fixes for each location
-        # Locational without known fixes for each location
         result.locational = submission["locationality"]
         result.directional = submission["directionality"]
-        result.versions = submission.get("functional_versions").split(", ") if submission.get("functional_versions") else []
-        if submission["image_link"]:  # TODO: maybe better as image_url
-            result.image_url = submission["image_link"]
-        if submission["video_link"]:
-            result.video_link = submission["video_link"]
-        if submission["world_download_link"]:
-            result.world_download_link = submission["world_download_link"]
-        if submission["server_ip"]:
-            result.server_ip = submission["server_ip"]
-        if submission["coordinates"]:
-            result.coordinates = submission["coordinates"]
-        if submission["command_to_build"]:
-            result.command = submission["command_to_build"]
+        if submission.get("functional_versions"):
+            result.versions = submission.get("functional_versions").split(", ")
+        else:
+            result.versions = []
+        # TODO: maybe better as image_url
+        result.image_url = submission.get("image_link")
+        result.video_link = submission.get("video_link")
+        result.world_download_link = submission.get("world_download_link")
+        result.server_ip = submission.get("server_ip")
+        result.coordinates = submission.get("coordinates")
+        result.command = submission.get("command_to_build")
         result.submitted_by = submission["submitted_by"]
 
         return result
@@ -350,7 +343,7 @@ class Build:
 
         string += f"ID: {self.id}\n"
         string += f"Submission status: {self.submission_status}"
-        string += f"Base Catagory: {self.base_category}\n"
+        string += f"Base Category: {self.base_category}\n"
         if self.door_width:
             string += f"Door Width: {self.door_width}\n"
         if self.door_height:
@@ -414,6 +407,7 @@ async def get_all_builds_raw(submission_status: Optional[int] = None) -> list[di
 
 
 async def get_builds(build_ids: list[int]) -> list[Build | None]:
+    """Fetches builds from the database with the given IDs."""
     if len(build_ids) == 0:
         return []
 
@@ -427,9 +421,19 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
     return submissions
 
 
-async def update_build(build_id: int, submission: dict) -> Build | None:
+async def update_build(build_id: int, data: dict) -> Build | None:
+    """ Update a build in the database using the given data. No validation is done on the data.
+
+    Args:
+        build_id: The ID of the build to update.
+        data: A dictionary containing the data to update. The keys should match the column names in the database.
+            See `Build.to_dict()` for an example.
+
+    Returns:
+        The updated build, or None if the build was not found.
+    """
     db = await DatabaseManager()
-    update_values = {key: value for key, value in submission.items() if key != 'id' and value is not None}
+    update_values = {key: value for key, value in data.items() if key != 'id' and value is not None}
     response = await db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
     if response.count == 1:
         return Build.from_dict(response.data[0])

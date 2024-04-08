@@ -84,12 +84,12 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        submission = await Build.from_id(submission_id)
-        if submission is None:
+        build = await Build.from_id(submission_id)
+        if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        await submission.confirm()
-        await post.send_submission(self.bot, submission)
+        await build.confirm()
+        await post.send_submission(self.bot, build)
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
     @submission_hybrid_group.command(name='deny')
@@ -103,12 +103,12 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        sub = await Build.from_id(submission_id)
+        build = await Build.from_id(submission_id)
 
-        if sub is None:
+        if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        await sub.deny()
+        await build.deny()
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
@@ -125,15 +125,15 @@ class SubmissionsCog(Cog, name='Submissions'):
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
 
-        subs = await get_builds([message['build_id'] for message in outdated_messages])
+        builds = await get_builds([message['build_id'] for message in outdated_messages])
 
         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
 
         desc = []
-        for sub in subs:
+        for build in builds:
             desc.append(
-                f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
         desc = '\n\n'.join(desc)
 
         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -179,7 +179,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     @app_commands.command(name='submit')
     @app_commands.describe(
-        record_category='The category of the record. If none, use "None".',
+        record_category='The category of the build. If none, use "None".',
         door_width='The width of the door itself. Like 2x2 piston door.',
         door_height='The height of the door itself. Like 2x2 piston door.',
         pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
@@ -295,16 +295,16 @@ class SubmissionsCog(Cog, name='Submissions'):
         command_to_get_to_build='The command to get to the build in the server.'
     )
     async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,
-                    pattern: str = None, door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = None, build_width: int = None,
-                    build_height: int = None, build_depth: int = None, works_in: str = None, wiring_placement_restrictions: str = None,
-                    component_restrictions: str = None, information_about_build: str = None,
-                    normal_closing_time: int = None,
-                    normal_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
-                    locationality: Literal["Locational", "Locational with fixes"] = None,
-                    directionality: Literal["Directional", "Directional with fixes"] = None,
-                    link_to_image: str = None, link_to_youtube_video: str = None,
-                    link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
-                    command_to_get_to_build: str = None):
+                   pattern: str = None, door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = None, build_width: int = None,
+                   build_height: int = None, build_depth: int = None, works_in: str = None, wiring_placement_restrictions: str = None,
+                   component_restrictions: str = None, information_about_build: str = None,
+                   normal_closing_time: int = None,
+                   normal_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
+                   locationality: Literal["Locational", "Locational with fixes"] = None,
+                   directionality: Literal["Directional", "Directional with fixes"] = None,
+                   link_to_image: str = None, link_to_youtube_video: str = None,
+                   link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
+                   command_to_get_to_build: str = None):
         """Edits a record in the database directly."""
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
@@ -358,7 +358,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         if view.value is None:
             await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
         elif view.value:
-            update_build(submission_id, update_values)
+            await update_build(submission_id, update_values)
             await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
         else:
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
