@@ -4,6 +4,6 @@ channels:
 dependencies:
   - gspread=5.12.4=pyh1a96a4e_0
   - oauthlib=3.2.2=pyhd8ed1ab_0
-  - supabase=2.3.6=pyhd8ed1ab_0
   - pip:
       - discord==2.3.2
+      - supabase-py-async==2.5.6

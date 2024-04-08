@@ -51,7 +51,7 @@ async def send_submission(client: discord.Client, submission: Build):
 
     for channel in channels:
         message = await channel.send(embed=em)
-        msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
+        await msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
 
 
 async def send_submission_to_server(client: discord.Client, submission: Build, server_id: int):
@@ -62,14 +62,15 @@ async def send_submission_to_server(client: discord.Client, submission: Build, s
     for channel in channels:
         if channel.guild.id == server_id:
             message = await channel.send(embed=em)
-            msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
+            await msg.update_message(channel.guild.id, submission.id, message.channel.id, message.id)
 
 
 async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: int, submission_id: int):
     """Edits a post to conform to the submission object."""
-    em = Build.from_id(submission_id).generate_embed()
+    build = await Build.from_id(submission_id)
+    em = build.generate_embed()
     channel = client.get_channel(channel_id)
     message = await channel.fetch_message(message_id)
 
     updated_message = await message.edit(embed=em)
-    msg.update_message(server.id, submission_id, channel_id, updated_message.id)
+    await msg.update_message(server.id, submission_id, channel_id, updated_message.id)

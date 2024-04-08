@@ -54,27 +54,27 @@ class Build:
         self.command: Optional[str] = None
         self.submitted_by: str | None = None
 
-    def confirm(self) -> None:
+    async def confirm(self) -> None:
         """Confirms the submission.
 
         Raises:
             ValueError: If the submission could not be confirmed.
         """
         self.submission_status = Build.CONFIRMED
-        db = DatabaseManager()
-        response = db.table('builds').update({'submission_status': Build.CONFIRMED}, count='exact').eq('id', self.id).execute()
+        db = await DatabaseManager()
+        response = await db.table('builds').update({'submission_status': Build.CONFIRMED}, count='exact').eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
 
-    def deny(self) -> None:
+    async def deny(self) -> None:
         """Denies the submission.
 
         Raises:
             ValueError: If the submission could not be denied.
         """
         self.submission_status = Build.DENIED
-        db = DatabaseManager()
-        response = db.table('builds').update({'submission_status': Build.DENIED}, count='exact').eq('id', self.id).execute()
+        db = await DatabaseManager()
+        response = await db.table('builds').update({'submission_status': Build.DENIED}, count='exact').eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
@@ -224,19 +224,19 @@ class Build:
         return fields
 
     @staticmethod
-    def add(data: dict) -> Build:
+    async def add(data: dict) -> Build:
         """Adds a build to the database.
 
         Returns:
             The Build object that was added.
         """
-        db = DatabaseManager()
-        response = db.table('builds').insert(data, count='exact').execute()
+        db = await DatabaseManager()
+        response = await db.table('builds').insert(data, count='exact').execute()
         assert response.count == 1
         return Build.from_dict(response.data[0])
 
     @staticmethod
-    def from_id(build_id: int) -> Build | None:
+    async def from_id(build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
 
         Args:
@@ -245,8 +245,8 @@ class Build:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
-        db = DatabaseManager()
-        response = db.table('builds').select('*').eq('id', build_id).maybe_single().execute()
+        db = await DatabaseManager()
+        response = await db.table('builds').select('*').eq('id', build_id).maybe_single().execute()
         if response:
             return Build.from_dict(response.data)
         else:
@@ -396,7 +396,7 @@ class Build:
         return string
 
 
-def get_all_builds_raw(submission_status: Optional[int] = None) -> list[dict]:
+async def get_all_builds_raw(submission_status: Optional[int] = None) -> list[dict]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:
@@ -405,20 +405,20 @@ def get_all_builds_raw(submission_status: Optional[int] = None) -> list[dict]:
     Returns:
         A list of dictionaries, each representing a build.
     """
-    db = DatabaseManager()
+    db = await DatabaseManager()
     if submission_status:
-        response = db.table('builds').select('*').eq('submission_status', submission_status).execute()
+        response = await db.table('builds').select('*').eq('submission_status', submission_status).execute()
     else:
-        response = db.table('builds').select('*').execute()
+        response = await db.table('builds').select('*').execute()
     return response.data if response else []
 
 
-def get_builds(build_ids: list[int]) -> list[Build | None]:
+async def get_builds(build_ids: list[int]) -> list[Build | None]:
     if len(build_ids) == 0:
         return []
 
-    db = DatabaseManager()
-    response = db.table('builds').select('*').in_('id', build_ids).execute()
+    db = await DatabaseManager()
+    response = await db.table('builds').select('*').in_('id', build_ids).execute()
 
     # Insert None for missing submissions
     submissions: list[Build | None] = [None] * len(build_ids)
@@ -427,21 +427,21 @@ def get_builds(build_ids: list[int]) -> list[Build | None]:
     return submissions
 
 
-def update_build(build_id: int, submission: dict) -> Build | None:
-    db = DatabaseManager()
+async def update_build(build_id: int, submission: dict) -> Build | None:
+    db = await DatabaseManager()
     update_values = {key: value for key, value in submission.items() if key != 'id' and value is not None}
-    response = db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
+    response = await db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
     if response.count == 1:
         return Build.from_dict(response.data[0])
     return None
 
 
-def get_unsent_builds(server_id: int) -> list[Build] | None:
+async def get_unsent_builds(server_id: int) -> list[Build] | None:
     """Get all the builds that have not been posted on the server"""
-    db = DatabaseManager()
+    db = await DatabaseManager()
 
     # Builds that have not been posted on the server
-    server_unsent_builds = db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute().data
+    server_unsent_builds = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute().data
     return [Build.from_dict(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
