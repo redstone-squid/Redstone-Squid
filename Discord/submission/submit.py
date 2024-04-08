@@ -4,6 +4,7 @@ from typing import Literal
 
 import discord
 from discord import InteractionResponse
+from discord.ui import View, Button
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
@@ -57,7 +58,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Displays a submission."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        submission = Build.from_id(submission_id)
+        submission = await Build.from_id(submission_id)
 
         if submission is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
@@ -83,11 +84,11 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        build = Build.from_id(submission_id)
+        build = await Build.from_id(submission_id)
         if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        build.confirm()
+        await build.confirm()
         await post.send_submission(self.bot, build)
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
 
@@ -102,12 +103,12 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
 
-        build = Build.from_id(submission_id)
+        build = await Build.from_id(submission_id)
 
         if build is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
 
-        build.deny()
+        await build.deny()
         return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
 
     @submission_hybrid_group.command(name='outdated')
@@ -124,7 +125,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
 
-        builds = get_builds([message['build_id'] for message in outdated_messages])
+        builds = await get_builds([message['build_id'] for message in outdated_messages])
 
         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
@@ -229,7 +230,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = \
             await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        submission = Build.add({
+        build = await Build.add({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Build.PENDING,
             'door_width': door_width,
@@ -260,9 +261,12 @@ class SubmissionsCog(Cog, name='Submissions'):
             'command_to_build': command_to_get_to_build,
             'submitted_by': str(interaction.user)
         })
-        # TODO: preview the submission
-        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {submission.id}'))
-        await post.send_submission(self.bot, submission)
+        # Shows the submission to the user
+        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                            embed=build.generate_embed(), ephemeral=True)
+
+        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}'))
+        await post.send_submission(self.bot, build)
 
     @app_commands.command(name='edit')
     @app_commands.describe(
@@ -340,14 +344,36 @@ class SubmissionsCog(Cog, name='Submissions'):
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
-        # Show a preview of the changes
-        old_submission = Build.from_id(submission_id)
+        old_submission = await Build.from_id(submission_id)
         new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
         preview_embed = new_submission.generate_embed()
-        # await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
-        await followup.send(embed=preview_embed, ephemeral=True)
 
-        # TODO: Implement a way to confirm the changes. Right now, it updates the record immediately.
+        # Show a preview of the changes and ask for confirmation
+        await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+        view = ConfirmationView()
+        preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
+        await view.wait()
 
-        update_build(submission_id, update_values)
-        await message.edit(embed=utils.info_embed('Success', 'Build edited successfully!'))
+        await preview.delete()
+        if view.value is None:
+            await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
+        elif view.value:
+            await update_build(submission_id, update_values)
+            await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
+        else:
+            await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
+
+class ConfirmationView(View):
+    def __init__(self, timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.value = None
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()

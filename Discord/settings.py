@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional
 
 import discord
 from discord import app_commands
@@ -26,7 +26,7 @@ class SettingsCog(Cog, name="Settings"):
         """Query all settings."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        channels = get_all_settable_channels(ctx.guild)
+        channels = await get_all_settable_channels(ctx.guild)
 
         desc = ""
         for channel_type in SETTABLE_CHANNELS:
@@ -42,7 +42,7 @@ class SettingsCog(Cog, name="Settings"):
         """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        result_channel = get_record_channel_for(ctx.guild, channel_purpose)
+        result_channel = await get_record_channel_for(ctx.guild, channel_purpose)
 
         if result_channel is None:
             em = utils.info_embed(f'{channel_purpose} Channel Info', 'Unset - Use the set command to set a channel.')
@@ -68,7 +68,7 @@ class SettingsCog(Cog, name="Settings"):
             return utils.error_embed('Error', 'Could not find that channel.')
 
         # Updating database
-        update_server_setting(ctx.guild.id, channel_purpose, channel.id)
+        await update_server_setting(ctx.guild.id, channel_purpose, channel.id)
 
         # Sending success message
         await sent_message.edit(
@@ -80,15 +80,15 @@ class SettingsCog(Cog, name="Settings"):
     async def unset_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Unsets the channel to post this record type to."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
-        update_server_setting(ctx.guild.id, channel_purpose, None)
+        await update_server_setting(ctx.guild.id, channel_purpose, None)
         await sent_message.edit(
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
 # TODO: Move this to a different file, probably under Database/server_settings.py
-def get_record_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
+async def get_record_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
     """Gets the channel for a specific purpose from the server settings table."""
-    channel_id = get_server_setting(server.id, channel_purpose)
+    channel_id = await get_server_setting(server.id, channel_purpose)
 
     if channel_id is None:
         return None
@@ -96,10 +96,9 @@ def get_record_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHAN
     return server.get_channel(channel_id)
 
 
-# Gets all channels
-def get_all_settable_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
+async def get_all_settable_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
     """Gets all record channels of a server from the server settings table."""
-    settings = get_server_settings(server.id)
+    settings = await get_server_settings(server.id)
 
     channels = {}
     for record_type in SETTABLE_CHANNELS:
