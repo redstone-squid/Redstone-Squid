@@ -6,7 +6,7 @@ from pathlib import Path
 
 import discord
 import configparser
-from discord.ext.commands import Cog, Bot
+from discord.ext.commands import Cog, Bot, Context, CommandError
 
 import Discord.utils as utils
 from Discord.config import *
@@ -53,6 +53,7 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
         return await log_user['owner_user_object'].send(timestamp_msg)
 
 class Listeners(Cog, command_attrs=dict(hidden=True)):
+    """Global listeners for the bot."""
     def __init__(self, bot):
         self.bot = bot
 
@@ -93,6 +94,19 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
                 await log(log_message, dm_owner=False)
             else:
                 await log(log_message)
+
+    @Cog.listener()
+    async def on_command_error(self, ctx: Context, exception: CommandError):
+        """Global error handler for the bot."""
+        command = ctx.command
+        if command and command.has_error_handler():
+            return
+
+        cog = ctx.cog
+        if cog and cog.has_error_handler():
+            return
+
+        logging.getLogger(__name__).error('Ignoring exception in command %s', command, exc_info=exception)
 
 
 async def main(prefix=PREFIX):
