@@ -4,6 +4,7 @@ from traceback import format_tb
 from types import TracebackType
 
 import discord
+from discord import Embed
 from discord.ext.commands import Context
 
 from Discord.config import OWNER_ID, PRINT_TRACEBACKS
@@ -36,7 +37,10 @@ def help_embed(title, description):
 
 class RunningMessage:
     """Context manager to show a working message while the bot is working."""
-    def __init__(self, ctx: Context, *, title="Working", description="Getting information...", delete_on_exit=False):
+    def __init__(self, ctx: Context, *,
+                 title: str = "Working",
+                 description: str = "Getting information...",
+                 delete_on_exit: bool = False):
         self.ctx = ctx
         self.title = title
         self.description = description
