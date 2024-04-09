@@ -31,38 +31,34 @@ class SubmissionsCog(Cog, name='Submissions'):
     @submission_hybrid_group.command(name='pending')
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
-        # Sending working message.
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Build.PENDING)]
 
-        pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Build.PENDING)]
+            if len(pending_submissions) == 0:
+                desc = 'No open submissions.'
+            else:
+                desc = []
+                for sub in pending_submissions:
+                    # ID - Title
+                    # by Creators - submitted by Submitter
+                    desc.append(
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                desc = '\n\n'.join(desc)
 
-        if len(pending_submissions) == 0:
-            desc = 'No open submissions.'
-        else:
-            desc = []
-            for sub in pending_submissions:
-                # ID - Title
-                # by Creators - submitted by Submitter
-                desc.append(
-                    f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
-            desc = '\n\n'.join(desc)
-
-        # Creating embed
-        em = discord.Embed(title='Open Records', description=desc, colour=utils.discord_green)
-
-        # Sending embed
-        await sent_message.edit(embed=em)
+            em = utils.info_embed(title='Open Records', description=desc)
+            await sent_message.edit(embed=em)
 
     @submission_hybrid_group.command(name='view')
     async def view_function(self, ctx: Context, submission_id: int):
         """Displays a submission."""
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            submission = await Build.from_id(submission_id)
 
-        submission = await Build.from_id(submission_id)
+            if submission is None:
+                error_embed = utils.error_embed('Error', 'No open submission with that ID.')
+                return await sent_message.edit(embed=error_embed)
 
-        if submission is None:
-            return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-        return await sent_message.edit(embed=submission.generate_embed())
+            return await sent_message.edit(embed=submission.generate_embed())
 
     @staticmethod
     def is_owner_server(ctx: Context):
@@ -73,104 +69,100 @@ class SubmissionsCog(Cog, name='Submissions'):
         return True
 
     @submission_hybrid_group.command(name='confirm')
+    @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def confirm_function(self, ctx: Context, submission_id: int):
         """Marks a submission as confirmed.
 
         This posts the submission to all the servers which configured the bot."""
-        if not ctx.guild.id == config.OWNER_SERVER_ID:
-            em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
-            return await ctx.send(embed=em)
+        async with utils.RunningMessage(ctx) as sent_message:
+            build = await Build.from_id(submission_id)
 
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
+            if build is None:
+                error_embed = utils.error_embed('Error', 'No pending submission with that ID.')
+                return await sent_message.edit(embed=error_embed)
 
-        build = await Build.from_id(submission_id)
-        if build is None:
-            return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
+            await build.confirm()
+            await post.send_submission(self.bot, build)
 
-        await build.confirm()
-        await post.send_submission(self.bot, build)
-        return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been confirmed.'))
+            success_embed = utils.info_embed('Success', 'Submission has successfully been confirmed.')
+            return await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name='deny')
+    @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def deny_function(self, ctx: Context, submission_id: int):
         """Marks a submission as denied."""
-        if not ctx.guild.id == config.OWNER_SERVER_ID:
-            em = utils.error_embed('Insufficient Permissions.', 'This command can only be executed on certain servers.')
-            return await ctx.send(embed=em)
+        async with utils.RunningMessage(ctx) as sent_message:
+            build = await Build.from_id(submission_id)
 
-        # Sending working message.
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Please wait...'))
+            if build is None:
+                error_embed = utils.error_embed('Error', 'No pending submission with that ID.')
+                return await sent_message.edit(embed=error_embed)
 
-        build = await Build.from_id(submission_id)
+            await build.deny()
 
-        if build is None:
-            return await sent_message.edit(embed=utils.error_embed('Error', 'No open submission with that ID.'))
-
-        await build.deny()
-        return await sent_message.edit(embed=utils.info_embed('Success', 'Submission has successfully been denied.'))
+            success_embed = utils.info_embed('Success', 'Submission has successfully been denied.')
+            return await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name='outdated')
     async def outdated_function(self, ctx: Context):
         """Shows an overview of all discord posts that require updating."""
-        # Sending working message.
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
 
-        # Creating list of submissions
-        outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
+            if len(outdated_messages) == 0:
+                desc = 'No outdated submissions.'
+                em = utils.info_embed(title='Outdated Records', description=desc)
+                return await sent_message.edit(embed=em)
 
-        if len(outdated_messages) == 0:
-            desc = 'No outdated submissions.'
+            builds = await get_builds([message['build_id'] for message in outdated_messages])
+
+            # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
+            # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
+
+            desc = []
+            for build in builds:
+                desc.append(
+                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
+            desc = '\n\n'.join(desc)
+
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
             return await sent_message.edit(embed=em)
-
-        builds = await get_builds([message['build_id'] for message in outdated_messages])
-
-        # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
-        # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
-
-        desc = []
-        for build in builds:
-            desc.append(
-                f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
-        desc = '\n\n'.join(desc)
-
-        em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
-        return await sent_message.edit(embed=em)
 
     @submission_hybrid_group.command(name='update')
     @has_any_role(*submission_roles)
     async def update_function(self, ctx, submission_id: int):
         """Update or post an outdated discord post to this server."""
-        # Sending working message.
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            message = await msg.get_outdated_message(ctx.guild.id, submission_id)
 
-        message = await msg.get_outdated_message(ctx.guild.id, submission_id)
-        if message is None:
-            return await sent_message.edit(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
+            if message is None:
+                error_embed = utils.error_embed('Error', 'No outdated submissions with that ID.')
+                return await sent_message.edit(embed=error_embed)
 
-        # If message isn't yet tracked, add it.
-        # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
+            # If message isn't yet tracked, add it.
+            # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
 
-        await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
-                             message['build_id'])
-        return await sent_message.edit(embed=utils.info_embed('Success', 'Post has successfully been updated.'))
+            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['build_id'])
+
+            success_embed = utils.info_embed('Success', 'Post has successfully been updated.')
+            return await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name='update_all')
     @has_any_role(*submission_roles)
     async def update_all_function(self, ctx):
         """Updates all outdated discord posts in this server."""
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
 
-        outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
-        for message in outdated_messages:
-            # If message isn't yet tracked, add it.
-            # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
-            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'],
-                                 message['build_id'])
+            for message in outdated_messages:
+                # If message isn't yet tracked, add it.
+                # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
+                await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['build_id'])
 
-        return await sent_message.edit(embed=utils.info_embed('Success', 'All posts have been successfully updated.'))
+            success_embed = utils.info_embed('Success', 'All posts have been successfully updated.')
+            return await sent_message.edit(embed=success_embed)
 
     @hybrid_command(name='versions')
     async def versions(self, ctx: Context):
@@ -221,14 +213,11 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Submits a record to the database directly."""
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
 
-        # noinspection PyTypeChecker
-        response: InteractionResponse = interaction.response
+        response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
-        # noinspection PyTypeChecker
-        followup: discord.Webhook = interaction.followup
-        message: discord.WebhookMessage | None = \
-            await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
+        followup: discord.Webhook = interaction.followup  # type: ignore
+        message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
         build = await Build.add({
             'record_category': record_category if record_category != 'None' else None,
@@ -265,7 +254,8 @@ class SubmissionsCog(Cog, name='Submissions'):
         await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
                             embed=build.generate_embed(), ephemeral=True)
 
-        await message.edit(embed=utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}'))
+        success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
+        await message.edit(embed=success_embed)
         await post.send_submission(self.bot, build)
 
     @app_commands.command(name='edit')
@@ -306,14 +296,11 @@ class SubmissionsCog(Cog, name='Submissions'):
                    link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
                    command_to_get_to_build: str = None):
         """Edits a record in the database directly."""
-        # noinspection PyTypeChecker
-        response: InteractionResponse = interaction.response
+        response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
-        # noinspection PyTypeChecker
-        followup: discord.Webhook = interaction.followup
-        message: discord.WebhookMessage | None = \
-            await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
+        followup: discord.Webhook = interaction.followup  # type: ignore
+        message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
         update_values = {
             'last_update': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S.%f'),
