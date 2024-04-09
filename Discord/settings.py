@@ -62,8 +62,8 @@ class SettingsCog(Cog, name="Settings"):
 
         # Verifying channel exists on server
         if ctx.guild.get_channel(channel.id) is None:
-            await sent_message.delete()
-            return utils.error_embed('Error', 'Could not find that channel.')
+            await sent_message.edit(embed=utils.error_embed('Error', 'Could not find that channel.'))
+            return
 
         # Updating database
         await update_server_setting(ctx.guild.id, channel_purpose, channel.id)
