@@ -1,5 +1,10 @@
-import discord
+from contextlib import asynccontextmanager
 from time import gmtime, strftime
+
+import discord
+from discord.ext.commands import Context
+
+from Discord.config import OWNER_ID
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -25,3 +30,16 @@ def info_embed(title, description):
 
 def help_embed(title, description):
     return discord.Embed(title=title, colour=discord_green, description=description)
+
+
+@asynccontextmanager
+async def work_in_progress(ctx: Context):
+    sent_message = await ctx.send(embed=info_embed('Working', 'Getting information...'))
+    try:
+        yield sent_message
+    except Exception as e:
+        # TODO: This may leak a lot of information, but is fine for now.
+        await sent_message.edit(content=f"{ctx.bot.get_user(OWNER_ID).mention}", embed=error_embed('An error has occurred', str(e)))
+        raise e
+    finally:
+        pass
