@@ -61,7 +61,7 @@ class SettingsCog(Cog, name="Settings"):
         success_embed = utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been set.')
         failure_embed = utils.error_embed('Error', 'Could not find that channel.')
 
-        with utils.RunningMessage(ctx) as sent_message:
+        async with utils.RunningMessage(ctx) as sent_message:
             # Verifying channel exists on server
             if ctx.guild.get_channel(channel.id) is None:
                 await sent_message.edit(embed=failure_embed)
@@ -78,7 +78,7 @@ class SettingsCog(Cog, name="Settings"):
         """Unsets the channel to post this record type to."""
         success_embed = utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.')
 
-        with utils.RunningMessage(ctx) as sent_message:
+        async with utils.RunningMessage(ctx) as sent_message:
             await update_server_setting(ctx.guild.id, channel_purpose, None)
             await sent_message.edit(embed=success_embed)
 
