@@ -36,8 +36,8 @@ async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_
 async def get_server_settings(server_id: int) -> dict[str, int]:
     """Gets a list of settings for a server."""
     db = await DatabaseManager()
-    response = await db.table('server_settings').select('*', count='exact').eq('server_id', server_id).maybe_single().execute()
-    if response.count == 0:
+    response = await db.table('server_settings').select('*').eq('server_id', server_id).maybe_single().execute()
+    if response is None:
         return {}
 
     settings = response.data
