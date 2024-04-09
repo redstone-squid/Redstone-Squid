@@ -4,7 +4,7 @@ from typing import Literal
 
 import discord
 from discord import InteractionResponse
-from discord.ui import View, Button
+from discord.ui import View
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
