@@ -34,6 +34,7 @@ def help_embed(title, description):
 
 @asynccontextmanager
 async def work_in_progress(ctx: Context):
+    """Context manager to show a working message while the bot is working."""
     sent_message = await ctx.send(embed=info_embed('Working', 'Getting information...'))
     try:
         yield sent_message
