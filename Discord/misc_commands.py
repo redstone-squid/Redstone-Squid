@@ -105,9 +105,9 @@ class Miscellaneous(Cog):
         """Sends the database link"""
         await ctx.send("https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc")
 
-    @command(name="error", hidden=True)
+    @command(name="error", aliases=["e"], hidden=True)
     @commands.is_owner()
     async def error(self, ctx: Context):
         """Raises an error for testing purposes."""
-        async with utils.work_in_progress(ctx) as sent_message:
+        async with utils.RunningMessage(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")

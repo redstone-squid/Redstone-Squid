@@ -34,7 +34,7 @@ async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[
     # For each server the bot can see
     for guild in client.guilds:
         # Find the channel (if set) that is set for this post to go to
-        channel = await settings.get_record_channel_for(guild, channel_type)
+        channel = await settings.get_channel_for(guild, channel_type)
         if channel is None:
             continue
         else:

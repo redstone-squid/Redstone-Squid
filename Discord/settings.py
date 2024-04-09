@@ -24,16 +24,14 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx):
         """Query all settings."""
-        sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
+        async with utils.RunningMessage(ctx) as sent_message:
+            channels = await get_settable_channels(ctx.guild)
 
-        channels = await get_all_settable_channels(ctx.guild)
+            desc = ""
+            for channel_type in SETTABLE_CHANNELS:
+                desc += f"`{channel_type.lower()} channel`: {channels.get(channel_type, '_Not set_')}\n"
 
-        desc = ""
-        for channel_type in SETTABLE_CHANNELS:
-            desc += f"`{channel_type.lower()} channel`: {channels.get(channel_type, '_Not set_')}\n"
-
-        em = discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green)
-        await sent_message.edit(embed=em)
+            await sent_message.edit(embed=discord.Embed(title='Current Settings', description=desc, colour=utils.discord_green))
 
     @settings_hybrid_group.command(name='query')
     @app_commands.describe(channel_purpose=', '.join(SETTABLE_CHANNELS))
@@ -42,7 +40,7 @@ class SettingsCog(Cog, name="Settings"):
         """Finds which channel is set for a purpose and sends the results to the user."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        result_channel = await get_record_channel_for(ctx.guild, channel_purpose)
+        result_channel = await get_channel_for(ctx.guild, channel_purpose)
 
         if result_channel is None:
             em = utils.info_embed(f'{channel_purpose} Channel Info', 'Unset - Use the set command to set a channel.')
@@ -85,18 +83,13 @@ class SettingsCog(Cog, name="Settings"):
             embed=utils.info_embed('Settings updated', f'{channel_purpose} channel has successfully been unset.'))
 
 
-# TODO: Move this to a different file, probably under Database/server_settings.py
-async def get_record_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
+async def get_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
     """Gets the channel for a specific purpose from the server settings table."""
     channel_id = await get_server_setting(server.id, channel_purpose)
-
-    if channel_id is None:
-        return None
-
     return server.get_channel(channel_id)
 
 
-async def get_all_settable_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
+async def get_settable_channels(server: discord.Guild) -> dict[str, Optional[discord.TextChannel]]:
     """Gets all record channels of a server from the server settings table."""
     settings = await get_server_settings(server.id)
 

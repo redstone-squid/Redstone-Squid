@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 from time import gmtime, strftime
+from traceback import format_tb
+from types import TracebackType
 
 import discord
 from discord.ext.commands import Context
 
-from Discord.config import OWNER_ID
+from Discord.config import OWNER_ID, PRINT_TRACEBACKS
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -32,15 +34,31 @@ def help_embed(title, description):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-@asynccontextmanager
-async def work_in_progress(ctx: Context):
+class RunningMessage:
     """Context manager to show a working message while the bot is working."""
-    sent_message = await ctx.send(embed=info_embed('Working', 'Getting information...'))
-    try:
-        yield sent_message
-    except Exception as e:
-        # TODO: This may leak a lot of information, but is fine for now.
-        await sent_message.edit(content=f"{ctx.bot.get_user(OWNER_ID).mention}", embed=error_embed('An error has occurred', str(e)))
-        raise e
-    finally:
-        pass
+    def __init__(self, ctx: Context, *, title="Working", description="Getting information...", delete_on_exit=False):
+        self.ctx = ctx
+        self.title = title
+        self.description = description
+        self.sent_message = None
+        self.delete_on_exit = delete_on_exit
+
+    async def __aenter__(self):
+        self.sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
+        return self.sent_message
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb: TracebackType):
+        # Handle exceptions
+        if exc_type is not None:
+            description = f'{str(exc_val)}'
+            if PRINT_TRACEBACKS:
+                description += f'\n\n```{"".join(format_tb(exc_tb))}```'
+            await self.sent_message.edit(content=f"{self.ctx.bot.get_user(OWNER_ID).mention}",
+                                         embed=error_embed(f'An error has occurred: {exc_type.__name__}',
+                                                           description))
+            return False
+
+        # Handle normal exit
+        if self.delete_on_exit:
+            await self.sent_message.delete()
+        return False
