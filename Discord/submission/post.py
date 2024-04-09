@@ -65,6 +65,7 @@ async def send_submission_to_server(client: discord.Client, build: Build, server
             await msg.update_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
+# TODO: merge server, channel_id, message_id, build_id into a single object
 async def edit_post(client: discord.Client, server: discord.Guild, channel_id: int, message_id: int, build_id: int) -> None:
     """Updates a post according to the information given by the build_id."""
     # TODO: Check whether the message_id corresponds to the build_id
