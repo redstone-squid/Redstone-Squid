@@ -22,7 +22,7 @@ def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
         return build.base_category
 
 
-def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:
+async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:
     """Gets all channels which a submission should be posted to."""
     # Get channel type to post submission to
     channel_type = get_channel_type_to_post_to(build)
@@ -34,7 +34,7 @@ def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discor
     # For each server the bot can see
     for guild in client.guilds:
         # Find the channel (if set) that is set for this post to go to
-        channel = settings.get_record_channel_for(guild, channel_type)
+        channel = await settings.get_record_channel_for(guild, channel_type)
         if channel is None:
             continue
         else:
@@ -46,7 +46,7 @@ def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discor
 async def send_submission(client: discord.Client, build: Build):
     """Posts a submission to the appropriate channels in every server the bot is in."""
     # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
-    channels = get_channels_to_post_to(client, build)
+    channels = await get_channels_to_post_to(client, build)
     em = build.generate_embed()
 
     for channel in channels:
@@ -56,7 +56,7 @@ async def send_submission(client: discord.Client, build: Build):
 
 async def send_submission_to_server(client: discord.Client, build: Build, server_id: int) -> None:
     """Posts a submission to the appropriate channel in a specific server."""
-    channels = get_channels_to_post_to(client, build)
+    channels = await get_channels_to_post_to(client, build)
     em = build.generate_embed()
 
     for channel in channels:

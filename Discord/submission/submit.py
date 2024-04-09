@@ -34,7 +34,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
-        pending_submissions = [Build.from_dict(submission) for submission in get_all_builds_raw(Build.PENDING)]
+        pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Build.PENDING)]
 
         if len(pending_submissions) == 0:
             desc = 'No open submissions.'
@@ -118,7 +118,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Getting information...'))
 
         # Creating list of submissions
-        outdated_messages = msg.get_outdated_messages(ctx.guild.id)
+        outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
 
         if len(outdated_messages) == 0:
             desc = 'No outdated submissions.'
@@ -146,7 +146,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         # Sending working message.
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        message = msg.get_outdated_message(ctx.guild.id, submission_id)
+        message = await msg.get_outdated_message(ctx.guild.id, submission_id)
         if message is None:
             return await sent_message.edit(embed=utils.error_embed('Error', 'No outdated submissions with that ID.'))
 
@@ -163,7 +163,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Updates all outdated discord posts in this server."""
         sent_message = await ctx.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        outdated_messages = msg.get_outdated_messages(ctx.guild.id)
+        outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
         for message in outdated_messages:
             # If message isn't yet tracked, add it.
             # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
