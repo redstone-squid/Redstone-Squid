@@ -35,8 +35,8 @@ class Build:
         self.door_width: int | None = None
         self.door_height: int | None = None
 
-        self.door_pattern: Optional[list[str]] = None
-        self.door_type: Optional[Literal["Door", "Trapdoor", "Skydoor"]] = None
+        self.door_type: Optional[list[str]] = None
+        self.door_orientation_type: Optional[Literal["Door", "Trapdoor", "Skydoor"]] = None
 
         self.wp_restrictions: Optional[list[str]] = None
         self.comp_restrictions: Optional[list[str]] = None
@@ -58,7 +58,7 @@ class Build:
         self.coordinates: Optional[str] = None
         self.command: Optional[str] = None
 
-        self.submitted_by: str | None = None
+        self.submitter_id: int | None = None
         self.completion_time: Optional[str] = None
         self.edited_time: datetime | None = None
 
@@ -127,12 +127,12 @@ class Build:
                     title += f"{restriction} "
 
         # Pattern
-        if self.door_pattern[0] != "Regular":
-            for pattern in self.door_pattern:
+        if self.door_type[0] != "Regular":
+            for pattern in self.door_type:
                 title += f"{pattern} "
 
         # Door type
-        title += self.door_type
+        title += self.door_orientation_type
 
         return title
 
@@ -277,8 +277,8 @@ class Build:
         result.record_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
-        result.door_pattern = submission["pattern"].split(", ") if submission["pattern"] else ["Regular"]
-        result.door_type = submission["door_type"]
+        result.door_type = submission["pattern"].split(", ") if submission["pattern"] else ["Regular"]
+        result.door_orientation_type = submission["door_orientation_type"]
         result.wp_restrictions = submission.get("wiring_placement_restrictions").split(", ") if submission.get(
             "wiring_placement_restrictions") else []
         result.comp_restrictions = submission.get("component_restrictions").split(", ") if submission.get(
@@ -306,7 +306,7 @@ class Build:
         result.server_ip = submission.get("server_ip")
         result.coordinates = submission.get("coordinates")
         result.command = submission.get("command_to_build")
-        result.submitted_by = submission["submitted_by"]
+        result.submitter_id = submission["submitter_id"]
 
         return result
 
@@ -319,8 +319,8 @@ class Build:
             "record_category": self.record_category,
             "door_width": self.door_width,
             "door_height": self.door_height,
-            "pattern": ", ".join(self.door_pattern),
-            "door_type": self.door_type,
+            "pattern": ", ".join(self.door_type),
+            "door_orientation_type": self.door_orientation_type,
             "wiring_placement_restrictions": ", ".join(self.wp_restrictions),
             "component_restrictions": ", ".join(self.comp_restrictions),
             "information": self.information,
@@ -340,7 +340,7 @@ class Build:
             "server_ip": self.server_ip,
             "coordinates": self.coordinates,
             "command_to_build": self.command,
-            "submitted_by": self.submitted_by
+            "submitter_id": self.submitter_id
         }
 
     def to_string(self) -> str:
@@ -353,8 +353,8 @@ class Build:
             string += f"Door Width: {self.door_width}\n"
         if self.door_height:
             string += f"Door Height: {self.door_height}\n"
-        string += f"Pattern: {' '.join(self.door_pattern)}\n"
-        string += f"Door Type: {self.door_type}\n"
+        string += f"Pattern: {' '.join(self.door_type)}\n"
+        string += f"Door Type: {self.door_orientation_type}\n"
         if self.wp_restrictions:
             string += f"Wiring Placement Restrictions: {', '.join(self.wp_restrictions)}\n"
         if self.comp_restrictions:
@@ -387,7 +387,7 @@ class Build:
             string += f"Coordinates: {self.coordinates}\n"
         if self.command:
             string += f"Command: {self.command}\n"
-        string += f"Submitted By: {self.submitted_by}\n"
+        string += f"Submitted By: {self.submitter_id}\n"
 
         return string
 

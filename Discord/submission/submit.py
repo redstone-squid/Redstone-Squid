@@ -42,7 +42,7 @@ class SubmissionsCog(Cog, name='Submissions'):
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitter_id}_")
                 desc = '\n\n'.join(desc)
 
             em = utils.info_embed(title='Open Records', description=desc)
@@ -124,7 +124,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             desc = []
             for build in builds:
                 desc.append(
-                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
+                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitter_id}_")
             desc = '\n\n'.join(desc)
 
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -225,7 +225,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,
-            'door_type': door_type,
+            'door_orientation_type': door_type,
             'wiring_placement_restrictions': wiring_placement_restrictions,
             'component_restrictions': component_restrictions,
             'information': information_about_build,
@@ -248,7 +248,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'server_ip': server_ip,
             'coordinates': coordinates,
             'command_to_build': command_to_get_to_build,
-            'submitted_by': str(interaction.user)
+            'submitter_id': str(interaction.user)
         })
         # Shows the submission to the user
         await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
@@ -307,7 +307,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,
-            'door_type': door_type,
+            'door_orientation_type': door_type,
             'wiring_placement_restrictions': wiring_placement_restrictions,
             'component_restrictions': component_restrictions,
             'information': information_about_build,
@@ -327,7 +327,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'server_ip': server_ip,
             'coordinates': coordinates,
             'command_to_build': command_to_get_to_build,
-            'submitted_by': None
+            'submitter_id': None
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
