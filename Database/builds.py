@@ -429,13 +429,13 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
         return []
 
     db = await DatabaseManager()
-    response = await db.table('builds').select('*').in_('id', build_ids).execute()
+    response = await db.table('builds').select(all_build_columns).in_('id', build_ids).execute()
 
-    # Insert None for missing submissions
-    submissions: list[Build | None] = [None] * len(build_ids)
-    for submission in response.data:
-        submissions[build_ids.index(submission['id'])] = Build.from_dict(submission)
-    return submissions
+    builds: list[Build | None] = [None] * len(build_ids)
+    for build_json in response.data:
+        idx = build_ids.index(build_json['id'])
+        builds[idx] = Build.from_json(build_json)
+    return builds
 
 
 async def update_build(build_id: int, data: dict) -> Build | None:
