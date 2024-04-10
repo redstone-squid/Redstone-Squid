@@ -4,7 +4,8 @@ import asyncio
 from pathlib import Path
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
-from Database.builds import all_build_columns
+
+all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 
 class DatabaseManager:
     """Singleton class for the supabase client."""

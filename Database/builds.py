@@ -8,10 +8,9 @@ from typing import Optional, Literal
 import discord
 
 import Discord.config
-from Database.database import DatabaseManager
+from Database.database import DatabaseManager, all_build_columns
 from Discord import utils
 
-all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
     PENDING = 0
@@ -321,6 +320,7 @@ class Build:
         Returns:
             A Build object.
         """
+
 
     def to_dict(self):
         """Converts the submission to a dictionary with keys conforming to the database column names."""
