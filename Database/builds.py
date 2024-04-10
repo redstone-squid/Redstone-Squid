@@ -84,10 +84,7 @@ class Build:
             title = f"Pending: {title}"
         description = self.get_description()
 
-        if description is None:
-            em = discord.Embed(title=title, colour=utils.discord_green)
-        else:
-            em = discord.Embed(title=title, description=description, colour=utils.discord_green)
+        em = utils.info_embed(title=title, description=description)
 
         fields = self.get_meta_fields()
         for key, val in fields.items():
