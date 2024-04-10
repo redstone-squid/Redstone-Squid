@@ -80,8 +80,6 @@ class Build:
 
     def generate_embed(self) -> discord.Embed:
         title = self.get_title()
-        if self.submission_status == Build.PENDING:
-            title = f"Pending: {title}"
         description = self.get_description()
 
         em = utils.info_embed(title=title, description=description)
@@ -98,8 +96,10 @@ class Build:
         return em
 
     def get_title(self) -> str:
+        title = "Pending: " if self.submission_status == Build.PENDING else ""
+
         # Category
-        title = f"{self.base_category or ''} "
+        title += f"{self.base_category or ''} "
 
         # Door dimensions
         if self.door_width and self.door_height:
