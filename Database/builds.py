@@ -25,33 +25,42 @@ class Build:
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
         self.id: int | None = None
         self.submission_status: int | None = None
-        self.edited_time: datetime | None = None
-        self.record_category: Literal["Smallest", "Fastest", "First"] | None = None
-        self.door_width: int | None = None
-        self.door_height: int | None = None
-        self.door_pattern: Optional[list[str]] = None
-        self.door_type: Optional[Literal["TRAP", "SKY"]] = None
-        self.wp_restrictions: Optional[list[str]] = None
-        self.comp_restrictions: Optional[list[str]] = None
-        self.misc_restrictions: Optional[list[str]] = None
-        self.information: Optional[str] = None
+        self.record_category: Optional[Literal["Smallest", "Fastest", "First"]]= None
+        self.versions: Optional[list[str]] = None
+
         self.width: int | None = None
         self.height: int | None = None
         self.depth: int | None = None
+
+        self.door_width: int | None = None
+        self.door_height: int | None = None
+
+        self.door_pattern: Optional[list[str]] = None
+        self.door_type: Optional[Literal["Door", "Trapdoor", "Skydoor"]] = None
+
+        self.wp_restrictions: Optional[list[str]] = None
+        self.comp_restrictions: Optional[list[str]] = None
+        self.misc_restrictions: Optional[list[str]] = None
+
         self.normal_closing_time: int | None = None
         self.normal_opening_time: int | None = None
         self.visible_closing_time: Optional[int] = None
         self.visible_opening_time: Optional[int] = None
-        self.completion_time: Optional[str] = None
+
+        self.information: Optional[dict] = None
         self.creators: Optional[str] = None
-        self.versions: list[str] | None = None
+
         self.image_url: Optional[str] = None
         self.video_url: Optional[str] = None
         self.world_download_url: Optional[str] = None
+
         self.server_ip: Optional[str] = None
         self.coordinates: Optional[str] = None
         self.command: Optional[str] = None
+
         self.submitted_by: str | None = None
+        self.completion_time: Optional[str] = None
+        self.edited_time: datetime | None = None
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
