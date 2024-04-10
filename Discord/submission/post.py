@@ -16,10 +16,10 @@ def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
     elif status == Build.DENIED:
         raise ValueError("Denied submissions should not be posted.")
 
-    if build.base_category is None:
+    if build.record_category is None:
         return "Builds"
     else:
-        return build.base_category
+        return build.record_category
 
 
 async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:

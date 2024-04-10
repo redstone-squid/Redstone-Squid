@@ -25,30 +25,29 @@ class Build:
         # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
         self.id: int | None = None
         self.submission_status: int | None = None
-        self.last_updated: datetime | None = None
-        self.base_category: Literal["Smallest", "Fastest", "First"] | None = None
+        self.edited_time: datetime | None = None
+        self.record_category: Literal["Smallest", "Fastest", "First"] | None = None
         self.door_width: int | None = None
         self.door_height: int | None = None
         self.door_pattern: Optional[list[str]] = None
         self.door_type: Optional[Literal["TRAP", "SKY"]] = None
-        self.fo_restrictions: Optional[list[str]] = None
-        self.so_restrictions: Optional[list[str]] = None
+        self.wp_restrictions: Optional[list[str]] = None
+        self.comp_restrictions: Optional[list[str]] = None
+        self.misc_restrictions: Optional[list[str]] = None
         self.information: Optional[str] = None
-        self.build_width: int | None = None
-        self.build_height: int | None = None
-        self.build_depth: int | None = None
+        self.width: int | None = None
+        self.height: int | None = None
+        self.depth: int | None = None
         self.normal_closing_time: int | None = None
         self.normal_opening_time: int | None = None
         self.visible_closing_time: Optional[int] = None
         self.visible_opening_time: Optional[int] = None
-        self.build_date: Optional[str] = None
+        self.completion_time: Optional[str] = None
         self.creators: Optional[str] = None
-        self.locational: Optional[Literal["LOCATIONAL", "LOCATIONAL_FIX"]] = None
-        self.directional: Optional[Literal["DIRECTIONAL", "DIRECTIONAL_FIX"]] = None
         self.versions: list[str] | None = None
         self.image_url: Optional[str] = None
-        self.video_link: Optional[str] = None
-        self.world_download_link: Optional[str] = None
+        self.video_url: Optional[str] = None
+        self.world_download_url: Optional[str] = None
         self.server_ip: Optional[str] = None
         self.coordinates: Optional[str] = None
         self.command: Optional[str] = None
@@ -102,7 +101,7 @@ class Build:
 
     def get_title(self) -> str:
         # Category
-        title = f"{self.base_category or ''} "
+        title = f"{self.record_category or ''} "
 
         # Door dimensions
         if self.door_width and self.door_height:
@@ -113,8 +112,8 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
-        if self.fo_restrictions is not None:
-            for restriction in self.fo_restrictions:
+        if self.wp_restrictions is not None:
+            for restriction in self.wp_restrictions:
                 if restriction != "None":
                     title += f"{restriction} "
 
@@ -132,20 +131,20 @@ class Build:
         description = []
 
         # Component Restrictions
-        if self.so_restrictions and self.so_restrictions[0] != "None":
-            description.append(", ".join(self.so_restrictions))
+        if self.comp_restrictions and self.comp_restrictions[0] != "None":
+            description.append(", ".join(self.comp_restrictions))
 
         if not Discord.config.VERSIONS_LIST[-1] in self.versions:
             description.append("**Broken** in current version.")
 
-        if self.locational == "Locational":
+        if "Locational" in self.misc_restrictions:
             description.append("**Locational**.")
-        elif self.locational == "Locational with fixes":
+        elif "Locational with fixes" in self.misc_restrictions:
             description.append("**Locational** with known fixes for each location.")
 
-        if self.directional == "Directional":
+        if "Directional" in self.misc_restrictions:
             description.append("**Directional**.")
-        elif self.directional == "Directional with fixes":
+        elif "Directional with fixes" in self.misc_restrictions:
             description.append("**Directional** with known fixes for each direction.")
 
         if self.information:
@@ -193,8 +192,8 @@ class Build:
         return ', '.join(versions)
 
     def get_meta_fields(self) -> dict[str, str]:
-        fields = {"Dimensions": f"{self.build_width}x{self.build_height}x{self.build_depth}",
-                  "Volume": str(self.build_width * self.build_height * self.build_depth),
+        fields = {"Dimensions": f"{self.width}x{self.height}x{self.depth}",
+                  "Volume": str(self.width * self.height * self.depth),
                   "Opening Time": str(self.normal_opening_time),
                   "Closing Time": str(self.normal_closing_time)}
 
@@ -204,7 +203,7 @@ class Build:
             fields["Visible Closing Time"] = self.visible_closing_time / 20
 
         fields["Creators"] = ', '.join(sorted(self.creators))
-        fields["Date Of Completion"] = str(self.build_date)
+        fields["Date Of Completion"] = str(self.completion_time)
         fields["Versions"] = self.get_versions_string()
 
         if self.server_ip:
@@ -216,10 +215,10 @@ class Build:
             if self.command:
                 fields["Command"] = self.command
 
-        if self.world_download_link:
-            fields["World Download"] = self.world_download_link
-        if self.video_link:
-            fields["Video"] = self.video_link
+        if self.world_download_url:
+            fields["World Download"] = self.world_download_url
+        if self.video_url:
+            fields["Video"] = self.video_url
 
         return fields
 
@@ -261,30 +260,30 @@ class Build:
         result.submission_status = submission.get("submission_status", Build.PENDING)
         for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
             try:
-                result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
+                result.edited_time = datetime.strptime(submission.get("last_update"), fmt)
             except (ValueError, TypeError):
                 pass
         else:
-            result.last_updated = datetime.now()
-        result.base_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
+            result.edited_time = datetime.now()
+        result.record_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
         result.door_pattern = submission["pattern"].split(", ") if submission["pattern"] else ["Regular"]
         result.door_type = submission["door_type"]
-        result.fo_restrictions = submission.get("wiring_placement_restrictions").split(", ") if submission.get(
+        result.wp_restrictions = submission.get("wiring_placement_restrictions").split(", ") if submission.get(
             "wiring_placement_restrictions") else []
-        result.so_restrictions = submission.get("component_restrictions").split(", ") if submission.get(
+        result.comp_restrictions = submission.get("component_restrictions").split(", ") if submission.get(
             "component_restrictions") else []
         result.information = submission.get("information")
-        result.build_width = int(submission["build_width"])
-        result.build_height = int(submission["build_height"])
-        result.build_depth = int(submission["build_depth"])
+        result.width = int(submission["width"])
+        result.height = int(submission["height"])
+        result.depth = int(submission["depth"])
         result.normal_closing_time = submission["normal_closing_time"]
         result.normal_opening_time = submission["normal_opening_time"]
         result.visible_close_time = submission.get("visible_closing_time")
         result.visible_open_time = submission.get("visible_opening_time")
         # Date of creation is the user provided time, defaulting to the submission time if not provided
-        result.build_date = submission.get("date_of_creation", submission["submission_time"])
+        result.completion_time = submission.get("date_of_creation", submission["submission_time"])
         result.creators = submission.get("creators_ign").split(", ") if submission.get("creators_ign") else []
         result.locational = submission["locationality"]
         result.directional = submission["directionality"]
@@ -292,10 +291,9 @@ class Build:
             result.versions = submission.get("functional_versions").split(", ")
         else:
             result.versions = []
-        # TODO: maybe better as image_url
-        result.image_url = submission.get("image_link")
-        result.video_link = submission.get("video_link")
-        result.world_download_link = submission.get("world_download_link")
+        result.image_url = submission.get("image_url")
+        result.video_url = submission.get("video_url")
+        result.world_download_url = submission.get("world_download_url")
         result.server_ip = submission.get("server_ip")
         result.coordinates = submission.get("coordinates")
         result.command = submission.get("command_to_build")
@@ -308,30 +306,28 @@ class Build:
         return {
             "id": self.id,
             "submission_status": self.submission_status,
-            "last_update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
-            "record_category": self.base_category,
+            "last_update": self.edited_time.strftime(r'%d-%m-%Y %H:%M:%S'),
+            "record_category": self.record_category,
             "door_width": self.door_width,
             "door_height": self.door_height,
             "pattern": ", ".join(self.door_pattern),
             "door_type": self.door_type,
-            "wiring_placement_restrictions": ", ".join(self.fo_restrictions),
-            "component_restrictions": ", ".join(self.so_restrictions),
+            "wiring_placement_restrictions": ", ".join(self.wp_restrictions),
+            "component_restrictions": ", ".join(self.comp_restrictions),
             "information": self.information,
-            "build_width": self.build_width,
-            "build_height": self.build_height,
-            "build_depth": self.build_depth,
+            "width": self.width,
+            "height": self.height,
+            "depth": self.depth,
             "normal_closing_time": self.normal_closing_time,
             "normal_opening_time": self.normal_opening_time,
             "visible_closing_time": self.visible_closing_time,
             "visible_opening_time": self.visible_opening_time,
-            "date_of_creation": self.build_date,
+            "date_of_creation": self.completion_time,
             "creators_ign": ", ".join(self.creators),
-            "locationality": self.locational,
-            "directionality": self.directional,
             "functional_versions": ", ".join(self.versions),
             "image_link": self.image_url,
-            "video_link": self.video_link,
-            "world_download_link": self.world_download_link,
+            "video_url": self.video_url,
+            "world_download_url": self.world_download_url,
             "server_ip": self.server_ip,
             "coordinates": self.coordinates,
             "command_to_build": self.command,
@@ -343,41 +339,39 @@ class Build:
 
         string += f"ID: {self.id}\n"
         string += f"Submission status: {self.submission_status}"
-        string += f"Base Category: {self.base_category}\n"
+        string += f"Base Category: {self.record_category}\n"
         if self.door_width:
             string += f"Door Width: {self.door_width}\n"
         if self.door_height:
             string += f"Door Height: {self.door_height}\n"
         string += f"Pattern: {' '.join(self.door_pattern)}\n"
         string += f"Door Type: {self.door_type}\n"
-        if self.fo_restrictions:
-            string += f"Wiring Placement Restrictions: {', '.join(self.fo_restrictions)}\n"
-        if self.so_restrictions:
-            string += f"Component Restrictions: {', '.join(self.so_restrictions)}\n"
+        if self.wp_restrictions:
+            string += f"Wiring Placement Restrictions: {', '.join(self.wp_restrictions)}\n"
+        if self.comp_restrictions:
+            string += f"Component Restrictions: {', '.join(self.comp_restrictions)}\n"
+        if self.misc_restrictions:
+            string += f"Miscellaneous Restrictions: {', '.join(self.misc_restrictions)}\n"
         if self.information:
             string += f"Information: {self.information}\n"
-        string += f"Build Width: {self.build_width}\n"
-        string += f"Build Height: {self.build_height}\n"
-        string += f"Build Depth: {self.build_depth}\n"
+        string += f"Build Width: {self.width}\n"
+        string += f"Build Height: {self.height}\n"
+        string += f"Build Depth: {self.depth}\n"
         string += f"Relative Closing Time: {self.normal_closing_time}\n"
         string += f"Relative Opening Time: {self.normal_opening_time}\n"
         if self.visible_closing_time:
             string += f"Absolute Closing Time: {self.visible_closing_time}\n"
         if self.visible_opening_time:
             string += f"Absolute Opening Time: {self.visible_opening_time}\n"
-        string += f"Date Of Creation: {self.build_date}\n"
+        string += f"Date Of Creation: {self.completion_time}\n"
         string += f"Creators: {', '.join(self.creators)}\n"
-        if self.locational:
-            string += f"Locationality Tag: {self.locational}\n"
-        if self.directional:
-            string += f"Directionality Tag: {self.directional}\n"
         string += f"Versions: {', '.join(self.versions)}\n"
         if self.image_url:
             string += f"Image URL: {self.image_url}\n"
-        if self.video_link:
-            string += f"YouTube Link: {self.video_link}\n"
-        if self.world_download_link:
-            string += f"World Download: {self.world_download_link}\n"
+        if self.video_url:
+            string += f"YouTube Link: {self.video_url}\n"
+        if self.world_download_url:
+            string += f"World Download: {self.world_download_url}\n"
         if self.server_ip:
             string += f"Server IP: {self.server_ip}\n"
         if self.coordinates:

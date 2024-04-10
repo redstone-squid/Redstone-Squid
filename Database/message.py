@@ -25,7 +25,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
         'build_id': submission_id,
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+        'edited_time': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
     }).execute()
 
 async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
@@ -42,7 +42,7 @@ async def update_message(server_id: int, submission_id: int, channel_id: int, me
     await db.table('messages').update({
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+        'edited_time': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
     }).eq('server_id', server_id).eq('build_id', submission_id).execute()
 
 
