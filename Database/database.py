@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
-
+from Database.builds import all_build_columns
 
 class DatabaseManager:
     """Singleton class for the supabase client."""
@@ -44,9 +44,10 @@ class DatabaseManager:
 
 
 async def main():
+    from pprint import pprint
     db = await DatabaseManager()
-    response = await db.table('builds').select('*').eq('id', 10).maybe_single().execute()
-    print(response)
+    response = await db.table('builds').select(all_build_columns).eq('id', 30).maybe_single().execute()
+    pprint(response.data, sort_dicts=False)
 
 if __name__ == '__main__':
     asyncio.run(main())

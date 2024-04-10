@@ -1,5 +1,7 @@
 """Submitting and retrieving submissions to/from the database"""
 from __future__ import annotations
+
+import asyncio
 from datetime import datetime
 from typing import Optional, Literal
 
@@ -9,7 +11,7 @@ import Discord.config
 from Database.database import DatabaseManager
 from Discord import utils
 
-
+all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
     PENDING = 0
@@ -307,6 +309,19 @@ class Build:
 
         return result
 
+    @staticmethod
+    def from_json(data: dict) -> Build:
+        """
+        Converts a JSON object to a Build object.
+
+        Args:
+            data: the exact JSON object returned by
+                `DatabaseManager().table('builds').select(all_build_columns).eq('id', build_id).execute().data[0]`
+
+        Returns:
+            A Build object.
+        """
+
     def to_dict(self):
         """Converts the submission to a dictionary with keys conforming to the database column names."""
         return {
@@ -399,10 +414,12 @@ async def get_all_builds_raw(submission_status: Optional[int] = None) -> list[di
         A list of dictionaries, each representing a build.
     """
     db = await DatabaseManager()
+    query = db.table('builds').select(all_build_columns)
+
     if submission_status:
-        response = await db.table('builds').select('*').eq('submission_status', submission_status).execute()
-    else:
-        response = await db.table('builds').select('*').execute()
+        query = query.eq('submission_status', submission_status)
+
+    response = await query.execute()
     return response.data if response else []
 
 
@@ -449,5 +466,9 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     return [Build.from_dict(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
+async def main():
+    from pprint import pprint
+    pprint(await get_all_builds_raw())
+
 if __name__ == '__main__':
-    print(get_builds([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+    asyncio.run(main())
