@@ -88,14 +88,9 @@ class Build:
 
     def generate_embed(self) -> discord.Embed:
         title = self.get_title()
-        if self.submission_status == Build.PENDING:
-            title = f"Pending: {title}"
         description = self.get_description()
 
-        if description is None:
-            em = discord.Embed(title=title, colour=utils.discord_green)
-        else:
-            em = discord.Embed(title=title, description=description, colour=utils.discord_green)
+        em = utils.info_embed(title=title, description=description)
 
         fields = self.get_meta_fields()
         for key, val in fields.items():
@@ -109,8 +104,10 @@ class Build:
         return em
 
     def get_title(self) -> str:
+        title = "Pending: " if self.submission_status == Build.PENDING else ""
+
         # Category
-        title = f"{self.record_category or ''} "
+        title += f"{self.record_category or ''} "
 
         # Door dimensions
         if self.door_width and self.door_height:
