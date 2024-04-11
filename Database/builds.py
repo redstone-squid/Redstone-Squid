@@ -9,60 +9,203 @@ import discord
 
 import Discord.config
 from Database.database import DatabaseManager, all_build_columns
+from Database.utils import MISSING, Missing
 from Database.enums import Status
 from Discord import utils
 
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
-    PENDING = 0
-    CONFIRMED = 1
-    DENIED = 2
-
     def __init__(self):
         """Initializes an empty build.
 
          This should not be used externally. Use `from_dict()` or `from_id()` instead."""
-        # type | None indicates that the value is expected to be filled in.
-        # Optional[type] is used to indicate that the value is actually optional.
-        # If you do not fill in parameters that are typed "type | None", errors will occur from all parts of the code.
-        self.id: int | None = None
-        self.submission_status: int | None = None
-        self.record_category: Optional[Literal["Smallest", "Fastest", "First"]]= None
-        self.versions: Optional[list[str]] = None
+        self.id: int | MISSING = Missing
+        self.submission_status: int | MISSING = Missing
+        self.record_category: Optional[Literal["Smallest", "Fastest", "First"]] | MISSING = Missing
+        self.functional_versions: Optional[list[str]] | MISSING = Missing
 
-        self.width: int | None = None
-        self.height: int | None = None
-        self.depth: int | None = None
+        self.width: Optional[int] | MISSING = Missing
+        self.height: Optional[int] | MISSING = Missing
+        self.depth: Optional[int] | MISSING = Missing
 
-        self.door_width: int | None = None
-        self.door_height: int | None = None
+        self.door_width: int | MISSING = Missing
+        self.door_height: int | MISSING = Missing
 
-        self.door_type: Optional[list[str]] = None
-        self.door_orientation_type: Optional[Literal["Door", "Trapdoor", "Skydoor"]] = None
+        self.door_type: Optional[list[str]] | MISSING = Missing
+        self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | MISSING = Missing
 
-        self.wp_restrictions: Optional[list[str]] = None
-        self.comp_restrictions: Optional[list[str]] = None
-        self.misc_restrictions: Optional[list[str]] = None
+        self.wiring_placement_restrictions: Optional[list[str]] | MISSING = Missing
+        self.component_restrictions: Optional[list[str]] | MISSING = Missing
+        self.miscellaneous_restrictions: Optional[list[str]] | MISSING = Missing
 
-        self.normal_closing_time: int | None = None
-        self.normal_opening_time: int | None = None
-        self.visible_closing_time: Optional[int] = None
-        self.visible_opening_time: Optional[int] = None
+        self.normal_closing_time: Optional[int] | MISSING = Missing
+        self.normal_opening_time: Optional[int] | MISSING = Missing
+        self.visible_closing_time: Optional[int] | MISSING = Missing
+        self.visible_opening_time: Optional[int] | MISSING = Missing
 
-        self.information: Optional[dict] = None
-        self.creators: Optional[str] = None
+        self.information: Optional[dict] | MISSING = Missing
+        self.creators_ign: Optional[str] | MISSING = Missing
 
-        self.image_url: Optional[list[str]] = None
-        self.video_url: Optional[list[str]] = None
-        self.world_download_url: Optional[list[str]] = None
+        self.image_url: Optional[list[str]] | MISSING = Missing
+        self.video_url: Optional[list[str]] | MISSING = Missing
+        self.world_download_url: Optional[list[str]] | MISSING = Missing
 
-        self.server_ip: Optional[str] = None
-        self.coordinates: Optional[str] = None
-        self.command: Optional[str] = None
+        self.server_ip: Optional[str] | MISSING = Missing
+        self.coordinates: Optional[str] | MISSING = Missing
+        self.command: Optional[str] | MISSING = Missing
 
-        self.submitter_id: int | None = None
-        self.completion_time: Optional[str] = None
-        self.edited_time: datetime | None = None
+        self.submitter_id: int | MISSING = Missing
+        self.completion_time: Optional[str] | MISSING = Missing
+        self.edited_time: datetime | MISSING = Missing
+
+    def __iter__(self):
+        """Iterates over the attributes of the Build object."""
+        for attr in [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self, a))]:
+            yield attr
+
+    @staticmethod
+    async def from_id(build_id: int) -> Build | None:
+        """Creates a new Build object from a database ID.
+
+        Args:
+            build_id: The ID of the build to retrieve.
+
+        Returns:
+            The Build object with the specified ID, or None if the build was not found.
+        """
+        build = Build()
+        build.id = build_id
+        return await build.load()
+
+    @staticmethod
+    def from_json(data: dict) -> Build:
+        """
+        Converts a JSON object to a Build object.
+
+        Args:
+            data: the exact JSON object returned by
+                `DatabaseManager().table('builds').select(all_build_columns).eq('id', build_id).execute().data[0]`
+
+        Returns:
+            A Build object.
+        """
+        build = Build()
+        build.id = data['id']
+        build.submission_status = data['submission_status']
+        build.record_category = data['record_category']
+        build.category = data['category']
+
+        build.width = data['width']
+        build.height = data['height']
+        build.depth = data['depth']
+
+        match data['category']:
+            case 'Door': category_data = data['doors']
+            case 'Extender': category_data = data['extenders']
+            case 'Utility': category_data = data['utilities']
+            case 'Entrance': category_data = data['entrances']
+
+        # FIXME: This is hardcoded for now
+        types = data.get('types', [])
+        build.door_type = [type_['name'] for type_ in types]
+
+        build.door_orientation_type = data['doors']['orientation']
+        build.door_width = data['doors']['door_width']
+        build.door_height = data['doors']['door_height']
+        build.normal_closing_time = data['doors']['normal_closing_time']
+        build.normal_opening_time = data['doors']['normal_opening_time']
+        build.visible_closing_time = data['doors']['visible_closing_time']
+        build.visible_opening_time = data['doors']['visible_opening_time']
+
+        restrictions = data.get('restrictions', [])
+        build.wiring_placement_restrictions = [r['name'] for r in restrictions if r['type'] == 'wiring-placement']
+        build.component_restrictions = [r['name'] for r in restrictions if r['type'] == 'component']
+        build.miscellaneous_restrictions = [r['name'] for r in restrictions if r['type'] == 'miscellaneous']
+
+        build.information = data['information']
+
+        creators: list[dict] = data.get('build_creators', [])
+        build.creators_ign = [creator['creator_ign'] for creator in creators]
+
+        versions: list[dict] = data.get('functional_versions', [])
+        build.functional_versions = [version['full_name_temp'] for version in versions]
+
+        links: list[dict] = data.get('build_links', [])
+        build.image_url = [link['url'] for link in links if link['media_type'] == 'image']
+        build.video_url = [link['url'] for link in links if link['media_type'] == 'video']
+        build.world_download_url = [link['url'] for link in links if link['media_type'] == 'world-download']
+
+        server_info: dict = data['server_info']
+        if server_info:
+            build.server_ip = server_info.get('server_ip')
+            build.coordinates = server_info.get('coordinates')
+            build.command = server_info.get('command_to_build')
+
+        build.submitter_id = data['submitter_id']
+        build.completion_time = data['completion_time']
+        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
+            try:
+                build.edited_time = datetime.strptime(data.get("edited_time"), fmt)
+            except (ValueError, TypeError):
+                pass
+        else:
+            build.edited_time = datetime.now()
+        return build
+
+
+    @staticmethod
+    def from_dict(submission: dict) -> Build:
+        """Creates a new Build object from a dictionary. No validation is done on the data."""
+        build = Build()
+        for attr in build:
+            if attr in submission:
+                setattr(build, attr, submission[attr])
+
+        # for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
+        #     try:
+        #         build.edited_time = datetime.strptime(submission.get("last_update"), fmt)
+        #     except (ValueError, TypeError):
+        #         pass
+        # else:
+        #     build.edited_time = datetime.now()
+
+        # build.wiring_placement_restrictions = submission.get("wiring_placement_restrictions", Missing).split(", ") if submission.get(
+        #     "wiring_placement_restrictions") else []
+        # build.component_restrictions = submission.get("component_restrictions", Missing).split(", ") if submission.get(
+        #     "component_restrictions") else []
+
+        # build.width = int(submission["width"])
+        # build.height = int(submission["height"])
+        # build.depth = int(submission["depth"])
+
+        # Date of creation is the user provided time, defaulting to the submission time if not provided
+        # build.completion_time = submission.get("date_of_creation", submission["submission_time"])
+
+        # build.creators_ign = submission.get("creators_ign", Missing).split(", ") if submission.get("creators_ign", Missing) else []
+
+        # if submission.get("functional_versions", Missing):
+        #     build.functional_versions = submission.get("functional_versions", Missing).split(", ")
+        # else:
+        #     build.functional_versions = []
+
+        return build
+
+    async def load(self) -> Build:
+        """
+        Loads the build from the database.
+
+        Returns:
+            The Build object.
+
+        Raises:
+            ValueError: If the build was not found.
+        """
+        if self.id is Missing:
+            raise ValueError("Build ID is missing.")
+
+        db = await DatabaseManager()
+        response = await db.table('builds').select(all_build_columns).eq('id', self.id).execute()
+        raise NotImplementedError("This method is not implemented yet.")
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
@@ -120,8 +263,8 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
-        if self.wp_restrictions is not None:
-            for restriction in self.wp_restrictions:
+        if self.wiring_placement_restrictions is not None:
+            for restriction in self.wiring_placement_restrictions:
                 if restriction != "None":
                     title += f"{restriction} "
 
@@ -139,20 +282,20 @@ class Build:
         description = []
 
         # Component Restrictions
-        if self.comp_restrictions and self.comp_restrictions[0] != "None":
-            description.append(", ".join(self.comp_restrictions))
+        if self.component_restrictions and self.component_restrictions[0] != "None":
+            description.append(", ".join(self.component_restrictions))
 
-        if not Discord.config.VERSIONS_LIST[-1] in self.versions:
+        if not Discord.config.VERSIONS_LIST[-1] in self.functional_versions:
             description.append("**Broken** in current version.")
 
-        if "Locational" in self.misc_restrictions:
+        if "Locational" in self.miscellaneous_restrictions:
             description.append("**Locational**.")
-        elif "Locational with fixes" in self.misc_restrictions:
+        elif "Locational with fixes" in self.miscellaneous_restrictions:
             description.append("**Locational** with known fixes for each location.")
 
-        if "Directional" in self.misc_restrictions:
+        if "Directional" in self.miscellaneous_restrictions:
             description.append("**Directional**.")
-        elif "Directional with fixes" in self.misc_restrictions:
+        elif "Directional with fixes" in self.miscellaneous_restrictions:
             description.append("**Directional** with known fixes for each direction.")
 
         if self.information:
@@ -171,7 +314,7 @@ class Build:
         last_version = None
 
         for index, version in enumerate(Discord.config.VERSIONS_LIST):
-            if version in self.versions:
+            if version in self.functional_versions:
 
                 if not linking:
                     linking = True
@@ -210,7 +353,7 @@ class Build:
             fields["Visible Opening Time"] = self.visible_opening_time / 20
             fields["Visible Closing Time"] = self.visible_closing_time / 20
 
-        fields["Creators"] = ', '.join(sorted(self.creators))
+        fields["Creators"] = ', '.join(sorted(self.creators_ign))
         fields["Date Of Completion"] = str(self.completion_time)
         fields["Versions"] = self.get_versions_string()
 
@@ -240,183 +383,16 @@ class Build:
         db = await DatabaseManager()
         response = await db.table('builds').insert(data, count='exact').execute()
         assert response.count == 1
-        return Build.from_dict(response.data[0])
-
-    @staticmethod
-    async def from_id(build_id: int) -> Build | None:
-        """Creates a new Build object from a database ID.
-
-        Args:
-            build_id: The ID of the build to retrieve.
-
-        Returns:
-            The Build object with the specified ID, or None if the build was not found.
-        """
-        db = await DatabaseManager()
-        response = await db.table('builds').select(all_build_columns).eq('id', build_id).maybe_single().execute()
-        if response:
-            return Build.from_json(response.data)
-        else:
-            return None
-
-    @staticmethod
-    def from_dict(submission: dict) -> Build:
-        """Creates a new Build object from a dictionary."""
-        result = Build()
-
-        result.id = submission["id"]
-        result.submission_status = submission.get("submission_status", Status.PENDING)
-        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
-            try:
-                result.edited_time = datetime.strptime(submission.get("last_update"), fmt)
-            except (ValueError, TypeError):
-                pass
-        else:
-            result.edited_time = datetime.now()
-        result.record_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
-        result.door_width = submission.get("door_width")
-        result.door_height = submission.get("door_height")
-        result.door_type = submission["pattern"].split(", ") if submission["pattern"] else ["Regular"]
-        result.door_orientation_type = submission["door_orientation_type"]
-        result.wp_restrictions = submission.get("wiring_placement_restrictions").split(", ") if submission.get(
-            "wiring_placement_restrictions") else []
-        result.comp_restrictions = submission.get("component_restrictions").split(", ") if submission.get(
-            "component_restrictions") else []
-        result.information = submission.get("information")
-        result.width = int(submission["width"])
-        result.height = int(submission["height"])
-        result.depth = int(submission["depth"])
-        result.normal_closing_time = submission["normal_closing_time"]
-        result.normal_opening_time = submission["normal_opening_time"]
-        result.visible_close_time = submission.get("visible_closing_time")
-        result.visible_open_time = submission.get("visible_opening_time")
-        # Date of creation is the user provided time, defaulting to the submission time if not provided
-        result.completion_time = submission.get("date_of_creation", submission["submission_time"])
-        result.creators = submission.get("creators_ign").split(", ") if submission.get("creators_ign") else []
-        result.locational = submission["locationality"]
-        result.directional = submission["directionality"]
-        if submission.get("functional_versions"):
-            result.versions = submission.get("functional_versions").split(", ")
-        else:
-            result.versions = []
-        result.image_url = submission.get("image_url")
-        result.video_url = submission.get("video_url")
-        result.world_download_url = submission.get("world_download_url")
-        result.server_ip = submission.get("server_ip")
-        result.coordinates = submission.get("coordinates")
-        result.command = submission.get("command_to_build")
-        result.submitter_id = submission["submitter_id"]
-
-        return result
-
-    @staticmethod
-    def from_json(data: dict) -> Build:
-        """
-        Converts a JSON object to a Build object.
-
-        Args:
-            data: the exact JSON object returned by
-                `DatabaseManager().table('builds').select(all_build_columns).eq('id', build_id).execute().data[0]`
-
-        Returns:
-            A Build object.
-        """
-        build = Build()
-        build.id = data['id']
-        build.submission_status = data['submission_status']
-        build.record_category = data['record_category']
-        build.category = data['category']
-
-        build.width = data['width']
-        build.height = data['height']
-        build.depth = data['depth']
-
-        match data['category']:
-            case 'Door': category_data = data['doors']
-            case 'Extender': category_data = data['extenders']
-            case 'Utility': category_data = data['utilities']
-            case 'Entrance': category_data = data['entrances']
-
-        # FIXME: This is hardcoded for now
-        types = data.get('types', [])
-        build.door_type = [type_['name'] for type_ in types]
-
-        build.door_orientation_type = data['doors']['orientation']
-        build.door_width = data['doors']['door_width']
-        build.door_height = data['doors']['door_height']
-        build.normal_closing_time = data['doors']['normal_closing_time']
-        build.normal_opening_time = data['doors']['normal_opening_time']
-        build.visible_closing_time = data['doors']['visible_closing_time']
-        build.visible_opening_time = data['doors']['visible_opening_time']
-
-        build.restrictions = data.get('restrictions', [])
-        build.wp_restrictions = [restriction['name'] for restriction in build.restrictions if restriction['type'] == 'wiring-placement']
-        build.comp_restrictions = [restriction['name'] for restriction in build.restrictions if restriction['type'] == 'component']
-        build.misc_restrictions = [restriction['name'] for restriction in build.restrictions if restriction['type'] == 'miscellaneous']
-
-        build.information = data['information']
-
-        creators: list[dict] = data.get('build_creators', [])
-        build.creators = [creator['creator_ign'] for creator in creators]
-
-        versions: list[dict] = data.get('versions', [])
-        build.versions = [version['full_name_temp'] for version in versions]
-
-        links: list[dict] = data.get('build_links', [])
-        build.image_url = [link['url'] for link in links if link['media_type'] == 'image']
-        build.video_url = [link['url'] for link in links if link['media_type'] == 'video']
-        build.world_download_url = [link['url'] for link in links if link['media_type'] == 'world-download']
-
-        server_info: dict = data['server_info']
-        if server_info:
-            build.server_ip = server_info.get('server_ip')
-            build.coordinates = server_info.get('coordinates')
-            build.command = server_info.get('command_to_build')
-
-        build.submitter_id = data['submitter_id']
-        build.completion_time = data['completion_time']
-        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
-            try:
-                build.edited_time = datetime.strptime(data.get("edited_time"), fmt)
-            except (ValueError, TypeError):
-                pass
-        else:
-            build.edited_time = datetime.now()
-        return build
+        return Build.from_json(response.data[0])
 
     def to_dict(self):
-        """Converts the submission to a dictionary with keys conforming to the database column names."""
-        return {
-            "id": self.id,
-            "submission_status": self.submission_status,
-            "last_update": self.edited_time.strftime(r'%d-%m-%Y %H:%M:%S'),
-            "record_category": self.record_category,
-            "door_width": self.door_width,
-            "door_height": self.door_height,
-            "pattern": ", ".join(self.door_type),
-            "door_orientation_type": self.door_orientation_type,
-            "wiring_placement_restrictions": ", ".join(self.wp_restrictions),
-            "component_restrictions": ", ".join(self.comp_restrictions),
-            "information": self.information,
-            "width": self.width,
-            "height": self.height,
-            "depth": self.depth,
-            "normal_closing_time": self.normal_closing_time,
-            "normal_opening_time": self.normal_opening_time,
-            "visible_closing_time": self.visible_closing_time,
-            "visible_opening_time": self.visible_opening_time,
-            "date_of_creation": self.completion_time,
-            "creators_ign": ", ".join(self.creators),
-            "functional_versions": ", ".join(self.versions),
-            "image_link": self.image_url,
-            "video_url": self.video_url,
-            "world_download_url": self.world_download_url,
-            "server_ip": self.server_ip,
-            "coordinates": self.coordinates,
-            "command_to_build": self.command,
-            "submitter_id": self.submitter_id
-        }
+        """Converts the submission to a dictionary representation."""
+        data = {}
+        for attr in self:
+            data[attr] = getattr(self, attr)
+        return data
 
+    # TODO: Find a use or remove this method
     def to_string(self) -> str:
         string = ""
 
@@ -429,12 +405,12 @@ class Build:
             string += f"Door Height: {self.door_height}\n"
         string += f"Pattern: {' '.join(self.door_type)}\n"
         string += f"Door Type: {self.door_orientation_type}\n"
-        if self.wp_restrictions:
-            string += f"Wiring Placement Restrictions: {', '.join(self.wp_restrictions)}\n"
-        if self.comp_restrictions:
-            string += f"Component Restrictions: {', '.join(self.comp_restrictions)}\n"
-        if self.misc_restrictions:
-            string += f"Miscellaneous Restrictions: {', '.join(self.misc_restrictions)}\n"
+        if self.wiring_placement_restrictions:
+            string += f"Wiring Placement Restrictions: {', '.join(self.wiring_placement_restrictions)}\n"
+        if self.component_restrictions:
+            string += f"Component Restrictions: {', '.join(self.component_restrictions)}\n"
+        if self.miscellaneous_restrictions:
+            string += f"Miscellaneous Restrictions: {', '.join(self.miscellaneous_restrictions)}\n"
         if self.information:
             string += f"Information: {self.information}\n"
         string += f"Build Width: {self.width}\n"
@@ -447,8 +423,8 @@ class Build:
         if self.visible_opening_time:
             string += f"Absolute Opening Time: {self.visible_opening_time}\n"
         string += f"Date Of Creation: {self.completion_time}\n"
-        string += f"Creators: {', '.join(self.creators)}\n"
-        string += f"Versions: {', '.join(self.versions)}\n"
+        string += f"Creators: {', '.join(self.creators_ign)}\n"
+        string += f"Versions: {', '.join(self.functional_versions)}\n"
         if self.image_url:
             string += f"Image URL: {self.image_url}\n"
         if self.video_url:
@@ -515,7 +491,7 @@ async def update_build(build_id: int, data: dict) -> Build | None:
     update_values = {key: value for key, value in data.items() if key != 'id' and value is not None}
     response = await db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
     if response.count == 1:
-        return Build.from_dict(response.data[0])
+        return Build.from_json(response.data[0])
     return None
 
 
@@ -525,13 +501,14 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
     # Builds that have not been posted on the server
     server_unsent_builds = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute().data
-    return [Build.from_dict(unsent_sub) for unsent_sub in server_unsent_builds]
+    return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
 async def main():
     from pprint import pprint
-    build = await Build.from_id(30)
-    pprint(build.to_dict())
+    build = Build()
+    for attr in build:
+        print(attr)
 
 if __name__ == '__main__':
     asyncio.run(main())

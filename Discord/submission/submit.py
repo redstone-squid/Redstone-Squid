@@ -43,7 +43,7 @@ class SubmissionsCog(Cog, name='Submissions'):
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitter_id}_")
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_")
                 desc = '\n\n'.join(desc)
 
             em = utils.info_embed(title='Open Records', description=desc)
@@ -125,7 +125,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             desc = []
             for build in builds:
                 desc.append(
-                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitter_id}_")
+                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators_ign))}_ - _submitted by {build.submitter_id}_")
             desc = '\n\n'.join(desc)
 
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -220,12 +220,13 @@ class SubmissionsCog(Cog, name='Submissions'):
         followup: discord.Webhook = interaction.followup  # type: ignore
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
+        # FIXME: data is not consistent with Build
         build = await Build.add({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Status.PENDING,
             'door_width': door_width,
             'door_height': door_height,
-            'pattern': pattern,
+            'door_type': pattern,
             'door_orientation_type': door_type,
             'wiring_placement_restrictions': wiring_placement_restrictions,
             'component_restrictions': component_restrictions,
@@ -237,7 +238,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'normal_opening_time': normal_opening_time,
             'visible_closing_time': None,  # TODO: Discord only allows 25 options. For now, ignore the absolute times.
             'visible_opening_time': None,
-            'date_of_creation': date_of_creation,
+            'completion_time': date_of_creation,
             'submission_time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'creators_ign': in_game_name_of_creator,
             'locationality': locationality,
@@ -248,7 +249,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'world_download_url': link_to_world_download,
             'server_ip': server_ip,
             'coordinates': coordinates,
-            'command_to_build': command_to_get_to_build,
+            'command': command_to_get_to_build,
             'submitter_id': str(interaction.user)
         })
         # Shows the submission to the user
@@ -307,7 +308,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'last_update': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S.%f'),
             'door_width': door_width,
             'door_height': door_height,
-            'pattern': pattern,
+            'door_type': pattern,
             'door_orientation_type': door_type,
             'wiring_placement_restrictions': wiring_placement_restrictions,
             'component_restrictions': component_restrictions,
@@ -327,7 +328,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'world_download_url': link_to_world_download,
             'server_ip': server_ip,
             'coordinates': coordinates,
-            'command_to_build': command_to_get_to_build,
+            'command': command_to_get_to_build,
             'submitter_id': None
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
