@@ -98,7 +98,7 @@ class Build:
             em.add_field(name=key, value=val, inline=True)
 
         if self.image_url:
-            em.set_image(url=self.image_url)
+            em.set_image(url=self.image_url[0])
 
         em.set_footer(text=f'Submission ID: {self.id}.')
 
