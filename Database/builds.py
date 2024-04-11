@@ -12,7 +12,7 @@ from Database.database import DatabaseManager, all_build_columns
 from Database.utils import MISSING, Missing, drop_missing
 from Database.enums import Status
 from Discord import utils
-from common import get_current_utc
+from common import utcnow
 
 
 class Build:
@@ -156,7 +156,7 @@ class Build:
         try:
             build.last_updated = datetime.strptime(data.get("last_update"), '%Y-%m-%d %H:%M:%S')
         except (ValueError, TypeError):
-            build.last_updated = get_current_utc()
+            build.last_updated = utcnow()
 
         return build
 
@@ -195,7 +195,7 @@ class Build:
             raise ValueError(
                 "Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
 
-        self.edited_time = get_current_utc()
+        self.edited_time = utcnow()
         data = {key: drop_missing(value) for key, value in self.as_dict().items()}
         raise NotImplementedError
 
@@ -205,7 +205,7 @@ class Build:
         if self.id is Missing:
             raise ValueError("Build ID is missing.")
 
-        self.edited_time = get_current_utc()
+        self.edited_time = utcnow()
         data = {key: drop_missing(value) for key, value in self.as_dict().items()}
 
         raise NotImplementedError

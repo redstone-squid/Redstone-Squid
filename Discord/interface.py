@@ -3,12 +3,13 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+import configparser
+from time import strftime
 
 import discord
-import configparser
 from discord.ext.commands import Cog, Bot, Context, CommandError
 
-from common import get_current_utc
+from common import utcnow
 from Discord.config import *
 from Discord.misc_commands import Miscellaneous
 from Discord.help import HelpCog
@@ -45,7 +46,7 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
     Returns:
         None
     """
-    timestamp_msg = get_current_utc() + msg
+    timestamp_msg = strftime("%Y-%m-%d %H:%M:%S", utcnow()) + msg
     print(timestamp_msg)
     if dm_owner and log_user['owner_user_object']:
         if first_log:
