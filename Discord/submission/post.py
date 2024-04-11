@@ -3,6 +3,7 @@ import discord
 
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
+from Database.enums import Status
 from Discord.config import SETTABLE_CHANNELS_TYPE
 from Database.builds import Build
 
@@ -11,9 +12,9 @@ from Database.builds import Build
 def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
     """Gets the type of channel to post a submission to."""
     status = build.submission_status
-    if status == Build.PENDING:
+    if status == Status.PENDING:
         return "Vote"
-    elif status == Build.DENIED:
+    elif status == Status.DENIED:
         raise ValueError("Denied submissions should not be posted.")
 
     if build.record_category is None:

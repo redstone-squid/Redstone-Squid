@@ -15,6 +15,7 @@ import Discord.config as config
 import Discord.submission.post as post
 from Database.builds import get_all_builds_raw, get_builds, update_build, Build
 import Database.message as msg
+from Database.enums import Status
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -32,7 +33,7 @@ class SubmissionsCog(Cog, name='Submissions'):
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
-            pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Build.PENDING)]
+            pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Status.PENDING)]
 
             if len(pending_submissions) == 0:
                 desc = 'No open submissions.'
@@ -221,7 +222,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         build = await Build.add({
             'record_category': record_category if record_category != 'None' else None,
-            'submission_status': Build.PENDING,
+            'submission_status': Status.PENDING,
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,

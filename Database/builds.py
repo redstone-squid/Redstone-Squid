@@ -9,6 +9,7 @@ import discord
 
 import Discord.config
 from Database.database import DatabaseManager, all_build_columns
+from Database.enums import Status
 from Discord import utils
 
 class Build:
@@ -69,9 +70,9 @@ class Build:
         Raises:
             ValueError: If the build could not be confirmed.
         """
-        self.submission_status = Build.CONFIRMED
+        self.submission_status = Status.CONFIRMED
         db = await DatabaseManager()
-        response = await db.table('builds').update({'submission_status': Build.CONFIRMED}, count='exact').eq('id', self.id).execute()
+        response = await db.table('builds').update({'submission_status': Status.CONFIRMED}, count='exact').eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
 
@@ -81,9 +82,9 @@ class Build:
         Raises:
             ValueError: If the build could not be denied.
         """
-        self.submission_status = Build.DENIED
+        self.submission_status = Status.DENIED
         db = await DatabaseManager()
-        response = await db.table('builds').update({'submission_status': Build.DENIED}, count='exact').eq('id', self.id).execute()
+        response = await db.table('builds').update({'submission_status': Status.DENIED}, count='exact').eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
@@ -105,7 +106,7 @@ class Build:
         return em
 
     def get_title(self) -> str:
-        title = "Pending: " if self.submission_status == Build.PENDING else ""
+        title = "Pending: " if self.submission_status == Status.PENDING else ""
 
         # Category
         title += f"{self.record_category or ''} "
@@ -264,7 +265,7 @@ class Build:
         result = Build()
 
         result.id = submission["id"]
-        result.submission_status = submission.get("submission_status", Build.PENDING)
+        result.submission_status = submission.get("submission_status", Status.PENDING)
         for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
             try:
                 result.edited_time = datetime.strptime(submission.get("last_update"), fmt)
