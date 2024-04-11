@@ -156,12 +156,7 @@ class Build:
 
         build.submitter_id = data['submitter_id']
         build.completion_time = data['completion_time']
-
-        # TODO: nuke stuff in the database to make this unnecessary
-        try:
-            build.last_updated = datetime.strptime(data.get("last_update"), '%Y-%m-%d %H:%M:%S')
-        except (ValueError, TypeError):
-            build.last_updated = utcnow()
+        build.last_updated = datetime.strptime(data.get("last_update"), '%Y-%m-%d %H:%M:%S')
 
         return build
 
