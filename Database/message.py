@@ -24,7 +24,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
         'build_id': submission_id,
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': get_current_utc
+        'last_updated': get_current_utc()
     }).execute()
 
 async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
@@ -41,7 +41,7 @@ async def update_message(server_id: int, submission_id: int, channel_id: int, me
     await db.table('messages').update({
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': get_current_utc
+        'last_updated': get_current_utc()
     }).eq('server_id', server_id).eq('build_id', submission_id).execute()
 
 
