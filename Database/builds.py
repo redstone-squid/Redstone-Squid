@@ -5,6 +5,7 @@ from typing import Optional, Literal
 
 import discord
 
+from common import get_current_utc
 import Discord.config
 from Database.database import DatabaseManager
 from Discord import utils
@@ -256,13 +257,13 @@ class Build:
 
         result.id = submission["id"]
         result.submission_status = submission.get("submission_status", Build.PENDING)
-        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
-            try:
-                result.last_updated = datetime.strptime(submission.get("last_update"), fmt)
-            except (ValueError, TypeError):
-                pass
+        
+        try:
+            result.last_updated = datetime.strptime(submission.get("last_update"), '%Y-%m-%d %H:%M:%S')
+        except (ValueError, TypeError):
+            pass
         else:
-            result.last_updated = datetime.now()
+            result.last_updated = get_current_utc()
         result.base_category = submission["record_category"] if submission.get("record_category") and submission.get("record_category") != "None" else None
         result.door_width = submission.get("door_width")
         result.door_height = submission.get("door_height")
@@ -305,7 +306,7 @@ class Build:
         return {
             "id": self.id,
             "submission_status": self.submission_status,
-            "last_update": self.last_updated.strftime(r'%d-%m-%Y %H:%M:%S'),
+            "last_update": get_current_utc(),
             "record_category": self.base_category,
             "door_width": self.door_width,
             "door_height": self.door_height,

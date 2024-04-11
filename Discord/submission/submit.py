@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from common import get_current_utc
 from typing import Literal
 
 import discord
@@ -303,7 +303,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
         update_values = {
-            'last_update': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S.%f'),
+            'last_update': get_current_utc(),
             'door_width': door_width,
             'door_height': door_height,
             'pattern': pattern,
