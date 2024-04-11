@@ -12,10 +12,11 @@ async def get_messages(server_id: int) -> list[dict[str, int]]:
 async def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
     db = await DatabaseManager()
     # supabase hate .maybe_single() and throws a 406 error if no records are found
-    server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute().data
-    if len(server_record) == 0:
+    server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute()
+    if len(server_record.data) == 0:
         return None
-    return server_record
+    # FIXME: this assumes that the server_id, build_id pair is unique
+    return server_record.data[0]
 
 async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
     db = await DatabaseManager()

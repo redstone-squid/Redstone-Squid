@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 from typing import Optional, Literal
 
 import discord
+from postgrest.types import CountMethod
 
 import Discord.config
+from Database._types import BuildRecord, DoorRecord
 from Database.database import DatabaseManager, all_build_columns
 from Database.utils import MISSING, Missing, drop_missing
 from Database.enums import Status
@@ -24,6 +27,7 @@ class Build:
          This should not be used externally. Use `from_dict()` or `from_id()` instead."""
         self.id: int | MISSING = Missing
         self.submission_status: int | MISSING = Missing
+        self.category: Optional[Literal["Door", "Extender", "Utility", "Entrance"]] | MISSING = Missing
         self.record_category: Optional[Literal["Smallest", "Fastest", "First"]] | MISSING = Missing
         self.functional_versions: Optional[list[str]] | MISSING = Missing
 
@@ -47,7 +51,8 @@ class Build:
         self.visible_closing_time: Optional[int] | MISSING = Missing
         self.visible_opening_time: Optional[int] | MISSING = Missing
 
-        self.information: Optional[dict] | MISSING = Missing
+        # In the database, we force empty information to be {}
+        self.information: dict | MISSING = Missing
         self.creators_ign: Optional[str] | MISSING = Missing
 
         self.image_url: Optional[list[str]] | MISSING = Missing
@@ -197,7 +202,94 @@ class Build:
 
         self.edited_time = utcnow()
         data = {key: drop_missing(value) for key, value in self.as_dict().items()}
-        raise NotImplementedError
+        db = await DatabaseManager()
+
+        build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
+        # information is a special JSON field in the database that stores various information about the build
+        # this needs to be kept because it will be updated later
+        information = {}
+        if build_data.get("information"):
+            information = {"user": build_data['information']}
+            build_data['information'] = json.dumps(information)
+
+        response = await db.table('builds').insert(build_data, count=CountMethod.exact).execute()
+        if response.count != 1:
+            raise ValueError("Failed to insert submission in the database.")
+
+        build_id = response.data[0]['id']
+        self.id = build_id
+
+        # doors table
+        if data.get("category") == "Door":
+            doors_data = {key: data[key] for key in DoorRecord.__annotations__.keys() if key in data}
+            doors_data['build_id'] = build_id
+            await db.table('doors').insert(doors_data).execute()
+
+        if data.get("category") == "Extender":
+            raise NotImplementedError
+        if data.get("category") == "Utility":
+            raise NotImplementedError
+        if data.get("category") == "Entrance":
+            raise NotImplementedError
+
+        # build_restrictions table
+        build_restrictions = data.get("wiring_placement_restrictions", []) + data.get("component_restrictions", []) + data.get("miscellaneous_restrictions", [])
+        response = await db.table('restrictions').select('*').in_('name', build_restrictions).execute()
+        restriction_ids = [restriction['id'] for restriction in response.data]
+        build_restrictions_data = list({'build_id': build_id, 'restriction_id': restriction_id} for restriction_id in restriction_ids)
+        await db.table('build_restrictions').upsert(build_restrictions_data).execute()
+
+        unknown_restrictions = {}
+        unknown_wiring_restrictions = []
+        unknown_component_restrictions = []
+        for wiring_restriction in data.get("wiring_placement_restrictions", []):
+            if wiring_restriction not in [restriction['name'] for restriction in response.data if restriction['type'] == 'wiring-placement']:
+                unknown_wiring_restrictions.append(wiring_restriction)
+        for component_restriction in data.get("component_restrictions", []):
+            if component_restriction not in [restriction['name'] for restriction in response.data if restriction['type'] == 'component']:
+                unknown_component_restrictions.append(component_restriction)
+        if unknown_wiring_restrictions:
+            unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring_restrictions
+        if unknown_component_restrictions:
+            unknown_restrictions["component_restrictions"] = unknown_component_restrictions
+        if unknown_restrictions:
+            information["unknown_restrictions"] = unknown_restrictions
+            await db.table('builds').update({'information': json.dumps(information)}).eq('id', build_id).execute()
+
+        # build_types table
+        response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', data.get("door_type", [])).execute()
+        type_ids = [type_['id'] for type_ in response.data]
+        build_types_data = list({'build_id': build_id, 'type_id': type_id} for type_id in type_ids)
+        await db.table('build_types').upsert(build_types_data).execute()
+
+        unknown_types = []
+        for door_type in data.get("door_type", []):
+            if door_type not in [type_['name'] for type_ in response.data]:
+                unknown_types.append(door_type)
+        if unknown_types:
+            information["unknown_types"] = unknown_types
+            await db.table('builds').update({'information': json.dumps(information)}).eq('id', build_id).execute()
+
+        # build_links table
+        build_links_data = []
+        if data.get('image_url'):
+            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'image'} for link in data.get("image_url", []))
+        if data.get('video_url'):
+            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'video'} for link in data.get("video_url", []))
+        if data.get('world_download_url'):
+            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'world_download'} for link in data.get("world_download_url", []))
+        if build_links_data:
+            await db.table('build_links').upsert(build_links_data).execute()
+
+        # build_creators table
+        build_creators_data = list({'build_id': build_id, 'creator_ign': creator} for creator in data.get("creators_ign", []))
+        await db.table('build_creators').upsert(build_creators_data).execute()
+
+        # build_versions table
+        response = await db.table('versions').select('*').in_('full_name_temp', data.get("functional_versions", [])).execute()
+        version_ids = [version['id'] for version in response.data]
+        build_versions_data = list({'build_id': build_id, 'version_id': version_id} for version_id in version_ids)
+        await db.table('build_versions').upsert(build_versions_data).execute()
 
     async def save(self) -> None:
         """Updates the build in the database with the given data. No validation is done on the data."""
@@ -302,7 +394,9 @@ class Build:
         if self.component_restrictions and self.component_restrictions[0] != "None":
             description.append(", ".join(self.component_restrictions))
 
-        if not Discord.config.VERSIONS_LIST[-1] in self.functional_versions:
+        if self.functional_versions is Missing:
+            description.append("Unknown version compatibility.")
+        elif not Discord.config.VERSIONS_LIST[-1] in self.functional_versions:
             description.append("**Broken** in current version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -489,7 +583,9 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 async def main():
     from pprint import pprint
     build = await Build.from_id(30)
-
+    build.id = Missing
+    d = await build.insert()
+    pprint(d)
 
 if __name__ == '__main__':
     asyncio.run(main())

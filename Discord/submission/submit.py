@@ -14,7 +14,7 @@ from Discord._types import SubmissionCommandResponseT
 from Database.builds import get_all_builds, get_builds, Build
 import Database.message as msg
 from Database.enums import Status
-from Discord.utils import ConfirmationView
+from Discord.utils import ConfirmationView, RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -213,24 +213,25 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
-        data = format_submission_input(locals())
+        data = locals().copy()
 
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
-        message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        fmt_data = format_submission_input(data)
-        build = Build.from_dict(fmt_data)
-        await build.insert()
-        # Shows the submission to the user
-        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
-                            embed=build.generate_embed(), ephemeral=True)
+        async with RunningMessage(followup) as message:
+            fmt_data = format_submission_input(data)
+            build = Build.from_dict(fmt_data)
+            build.submission_status = Status.PENDING
+            await build.insert()
+            # Shows the submission to the user
+            await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                                embed=build.generate_embed(), ephemeral=True)
 
-        success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
-        await message.edit(embed=success_embed)
-        await post.send_submission(self.bot, build)
+            success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
+            await message.edit(embed=success_embed)
+            await post.send_submission(self.bot, build)
 
     @app_commands.command(name='edit')
     @app_commands.describe(
@@ -312,61 +313,62 @@ def format_submission_input(data: SubmissionCommandResponseT) -> dict:
                            'normal_closing_time', 'date_of_creation', 'in_game_name_of_creator', 'locationality',
                            'directionality', 'link_to_image', 'link_to_youtube_video', 'link_to_world_download',
                            'server_ip', 'coordinates', 'command_to_get_to_build']
-    if not all(key in data for key in parsable_signatures):
+    if not all(key in parsable_signatures for key in data):
         raise ValueError("found unknown keys in data, did the command signature of /submit or /edit change?")
 
     fmt_data = dict()
-    fmt_data['id'] = data['submission_id']
+    fmt_data['id'] = data.get('submission_id')
     # fmt_data['submission_status']
-    fmt_data['record_category'] = data['record_category'] if data['record_category'] != 'None' else None
-    if data['works_in'] is not None:
+    fmt_data['record_category'] = data['record_category'] if data.get('record_category') != 'None' else None
+    if data.get('works_in') is not None:
         fmt_data['functions_versions'] = data['works_in'].split(", ")
     else:
         fmt_data['functions_versions'] = []
 
-    fmt_data['width'] = data['build_width']
-    fmt_data['height'] = data['build_height']
-    fmt_data['depth'] = data['build_depth']
+    fmt_data['width'] = data.get('build_width')
+    fmt_data['height'] = data.get('build_height')
+    fmt_data['depth'] = data.get('build_depth')
 
-    fmt_data['door_width'] = data['door_width']
-    fmt_data['door_height'] = data['door_height']
+    fmt_data['door_width'] = data.get('door_width')
+    fmt_data['door_height'] = data.get('door_height')
     # fmt_data['door_depth']
 
-    fmt_data['door_type'] = data['pattern']
-    fmt_data['door_orientation_type'] = data['door_type']
+    fmt_data['door_type'] = data.get('pattern')
+    fmt_data['door_orientation_type'] = data.get('door_type')
 
-    if data['wiring_placement_restrictions'] is not None:
+    if data.get('wiring_placement_restrictions') is not None:
         fmt_data['wiring_placement_restrictions'] = data['wiring_placement_restrictions'].split(", ")
     else:
         fmt_data['wiring_placement_restrictions'] = []
-    if data['component_restrictions'] is not None:
+    if data.get('component_restrictions') is not None:
         fmt_data['component_restrictions'] = data['component_restrictions'].split(", ")
     else:
         fmt_data['component_restrictions'] = []
-    misc_restrictions = [data['locationality'], data['directionality']]
+    misc_restrictions = [data.get('locationality'), data.get('directionality')]
     fmt_data['miscellaneous_restrictions'] = [x for x in misc_restrictions if x is not None]
 
-    fmt_data['normal_closing_time'] = data['normal_closing_time']
-    fmt_data['normal_opening_time'] = data['normal_opening_time']
+    fmt_data['normal_closing_time'] = data.get('normal_closing_time')
+    fmt_data['normal_opening_time'] = data.get('normal_opening_time')
     # fmt_data['visible_closing_time']
     # fmt_data['visible_opening_time']
 
-    fmt_data['information'] = data['information_about_build']
-    if data['in_game_name_of_creator'] is not None:
+    fmt_data['information'] = data.get('information_about_build')
+    if data.get('in_game_name_of_creator') is not None:
         fmt_data['creators_ign'] = data['in_game_name_of_creator'].split(", ")
     else:
         fmt_data['creators_ign'] = []
 
-    fmt_data['image_url'] = data['link_to_image']
-    fmt_data['video_url'] = data['link_to_youtube_video']
-    fmt_data['world_download_url'] = data['link_to_world_download']
+    fmt_data['image_url'] = data.get('link_to_image')
+    fmt_data['video_url'] = data.get('link_to_youtube_video')
+    fmt_data['world_download_url'] = data.get('link_to_world_download')
 
-    fmt_data['server_ip'] = data['server_ip']
-    fmt_data['coordinates'] = data['coordinates']
-    fmt_data['command'] = data['command_to_get_to_build']
+    fmt_data['server_ip'] = data.get('server_ip')
+    fmt_data['coordinates'] = data.get('coordinates')
+    fmt_data['command'] = data.get('command_to_get_to_build')
 
-    fmt_data['submitter_id'] = data['interaction'].user.id
-    fmt_data['completion_time'] = data['date_of_creation']
+    fmt_data['submitter_id'] = data.get('interaction').user.id
+    fmt_data['completion_time'] = data.get('date_of_creation')
     # fmt_data['edited_time'] = get_current_utc()
 
+    fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
     return fmt_data

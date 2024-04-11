@@ -30,7 +30,7 @@ def help_embed(title, description):
 
 class RunningMessage:
     """Context manager to show a working message while the bot is working."""
-    def __init__(self, ctx: Context, *,
+    def __init__(self, ctx, *,
                  title: str = "Working",
                  description: str = "Getting information...",
                  delete_on_exit: bool = False):
@@ -50,7 +50,7 @@ class RunningMessage:
             description = f'{str(exc_val)}'
             if PRINT_TRACEBACKS:
                 description += f'\n\n```{"".join(format_tb(exc_tb))}```'
-            await self.sent_message.edit(content=f"{self.ctx.bot.get_user(OWNER_ID).mention}",
+            await self.sent_message.edit(content=f"<@{OWNER_ID}>",
                                          embed=error_embed(f'An error has occurred: {exc_type.__name__}',
                                                            description))
             return False
