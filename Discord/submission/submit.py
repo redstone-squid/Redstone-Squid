@@ -13,7 +13,7 @@ import Discord.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
-from Database.builds import get_all_builds_raw, get_builds, update_build, Build
+from Database.builds import get_all_builds, get_builds, Build
 import Database.message as msg
 from Database.enums import Status
 
@@ -33,7 +33,7 @@ class SubmissionsCog(Cog, name='Submissions'):
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
-            pending_submissions = [Build.from_json(builds) for builds in await get_all_builds_raw(Status.PENDING)]
+            pending_submissions = await get_all_builds(Status.PENDING)
 
             if len(pending_submissions) == 0:
                 desc = 'No open submissions.'

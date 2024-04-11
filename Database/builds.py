@@ -452,14 +452,14 @@ class Build:
         return string
 
 
-async def get_all_builds_raw(submission_status: Optional[int] = None) -> list[dict]:
+async def get_all_builds(submission_status: Optional[int] = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:
         submission_status: The status of the submissions to filter by. If None, all submissions are returned. See Build class for possible values.
 
     Returns:
-        A list of dictionaries, each representing a build.
+        A list of Build objects.
     """
     db = await DatabaseManager()
     query = db.table('builds').select(all_build_columns)
@@ -468,7 +468,10 @@ async def get_all_builds_raw(submission_status: Optional[int] = None) -> list[di
         query = query.eq('submission_status', submission_status)
 
     response = await query.execute()
-    return response.data if response else []
+    if not response:
+        return []
+    else:
+        return [Build.from_json(build_json) for build_json in response.data]
 
 
 async def get_builds(build_ids: list[int]) -> list[Build | None]:
@@ -484,26 +487,6 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
         idx = build_ids.index(build_json['id'])
         builds[idx] = Build.from_json(build_json)
     return builds
-
-
-async def update_build(build_id: int, data: dict) -> Build | None:
-    """ Update a build in the database using the given data. No validation is done on the data.
-
-    Args:
-        build_id: The ID of the build to update.
-        data: A dictionary containing the data to update. The keys should match the column names in the database.
-            See `Build.to_dict()` for an example.
-
-    Returns:
-        The updated build, or None if the build was not found.
-    """
-    db = await DatabaseManager()
-    update_values = {key: value for key, value in data.items() if key != 'id' and value is not None}
-    response = await db.table('builds').update(update_values, count='exact').eq('id', build_id).execute()
-    if response.count == 1:
-        return Build.from_json(response.data[0])
-    return None
-
 
 async def get_unsent_builds(server_id: int) -> list[Build] | None:
     """Get all the builds that have not been posted on the server"""
