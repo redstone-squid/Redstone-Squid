@@ -12,6 +12,7 @@ import Discord.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
+from Discord._types import SubmissionCommandResponseT
 from Database.builds import get_all_builds, get_builds, Build
 import Database.message as msg
 from Database.enums import Status
@@ -212,7 +213,9 @@ class SubmissionsCog(Cog, name='Submissions'):
                      link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
                      command_to_get_to_build: str = None):
         """Submits a record to the database directly."""
+        # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
+        data = format_submission_input(locals())
 
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
@@ -220,38 +223,8 @@ class SubmissionsCog(Cog, name='Submissions'):
         followup: discord.Webhook = interaction.followup  # type: ignore
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        # FIXME: data is not consistent with Build
-        build = Build.from_dict({
-            'record_category': record_category if record_category != 'None' else None,
-            'submission_status': Status.PENDING,
-            'door_width': door_width,
-            'door_height': door_height,
-            'door_type': pattern,
-            'door_orientation_type': door_type,
-            'wiring_placement_restrictions': wiring_placement_restrictions,
-            'component_restrictions': component_restrictions,
-            'information': information_about_build,
-            'width': build_width,
-            'height': build_height,
-            'depth': build_depth,
-            'normal_closing_time': normal_closing_time,
-            'normal_opening_time': normal_opening_time,
-            'visible_closing_time': None,  # TODO: Discord only allows 25 options. For now, ignore the absolute times.
-            'visible_opening_time': None,
-            'completion_time': date_of_creation,
-            'submission_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'creators_ign': in_game_name_of_creator,
-            'locationality': locationality,
-            'directionality': directionality,
-            'functional_versions': works_in,
-            'image_url': link_to_image,
-            'video_url': link_to_youtube_video,
-            'world_download_url': link_to_world_download,
-            'server_ip': server_ip,
-            'coordinates': coordinates,
-            'command': command_to_get_to_build,
-            'submitter_id': str(interaction.user)
-        })
+        fmt_data = format_submission_input(data)
+        build = Build.from_dict(fmt_data)
         await build.insert()
         # Shows the submission to the user
         await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
@@ -299,42 +272,20 @@ class SubmissionsCog(Cog, name='Submissions'):
                    link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
                    command_to_get_to_build: str = None):
         """Edits a record in the database directly."""
+        data = locals().copy()
+
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        update_values = {
-            'last_update': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S.%f'),
-            'door_width': door_width,
-            'door_height': door_height,
-            'door_type': pattern,
-            'door_orientation_type': door_type,
-            'wiring_placement_restrictions': wiring_placement_restrictions,
-            'component_restrictions': component_restrictions,
-            'information': information_about_build,
-            'width': build_width,
-            'height': build_height,
-            'depth': build_depth,
-            'normal_closing_time': normal_closing_time,
-            'normal_opening_time': normal_opening_time,
-            'date_of_creation': date_of_creation,
-            'creators_ign': in_game_name_of_creator,
-            'locationality': locationality,
-            'directionality': directionality,
-            'functional_versions': works_in,
-            'image_url': link_to_image,
-            'video_url': link_to_youtube_video,
-            'world_download_url': link_to_world_download,
-            'server_ip': server_ip,
-            'coordinates': coordinates,
-            'command': command_to_get_to_build,
-            'submitter_id': None
-        }
-        update_values = {k: v for k, v in update_values.items() if v is not None}
-
         submission = await Build.from_id(submission_id)
+        if submission is None:
+            error_embed = utils.error_embed('Error', 'No submission with that ID.')
+            return await message.edit(embed=error_embed)
+
+        update_values = format_submission_input(data)
         submission.update_local(update_values)
         preview_embed = submission.generate_embed()
 
@@ -352,3 +303,72 @@ class SubmissionsCog(Cog, name='Submissions'):
             await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
         else:
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
+
+
+def format_submission_input(data: SubmissionCommandResponseT) -> dict:
+    """Formats the submission data from what is passed in commands to something recognizable by Build."""
+    # Union of all the /submit and /edit command options
+    parsable_signatures = ['self', 'interaction', 'submission_id', 'record_category', 'door_width', 'door_height', 'pattern',
+                           'door_type', 'build_width', 'build_height', 'build_depth', 'works_in', 'wiring_placement_restrictions',
+                           'component_restrictions', 'information_about_build', 'normal_opening_time',
+                           'normal_closing_time', 'date_of_creation', 'in_game_name_of_creator', 'locationality',
+                           'directionality', 'link_to_image', 'link_to_youtube_video', 'link_to_world_download',
+                           'server_ip', 'coordinates', 'command_to_get_to_build']
+    if not all(key in data for key in parsable_signatures):
+        raise ValueError("found unknown keys in data, did the command signature of /submit or /edit change?")
+
+    fmt_data = dict()
+    fmt_data['id'] = data['submission_id']
+    # fmt_data['submission_status']
+    fmt_data['record_category'] = data['record_category'] if data['record_category'] != 'None' else None
+    if data['works_in'] is not None:
+        fmt_data['functions_versions'] = data['works_in'].split(", ")
+    else:
+        fmt_data['functions_versions'] = []
+
+    fmt_data['width'] = data['build_width']
+    fmt_data['height'] = data['build_height']
+    fmt_data['depth'] = data['build_depth']
+
+    fmt_data['door_width'] = data['door_width']
+    fmt_data['door_height'] = data['door_height']
+    # fmt_data['door_depth']
+
+    fmt_data['door_type'] = data['pattern']
+    fmt_data['door_orientation_type'] = data['door_type']
+
+    if data['wiring_placement_restrictions'] is not None:
+        fmt_data['wiring_placement_restrictions'] = data['wiring_placement_restrictions'].split(", ")
+    else:
+        fmt_data['wiring_placement_restrictions'] = []
+    if data['component_restrictions'] is not None:
+        fmt_data['component_restrictions'] = data['component_restrictions'].split(", ")
+    else:
+        fmt_data['component_restrictions'] = []
+    misc_restrictions = [data['locationality'], data['directionality']]
+    fmt_data['miscellaneous_restrictions'] = [x for x in misc_restrictions if x is not None]
+
+    fmt_data['normal_closing_time'] = data['normal_closing_time']
+    fmt_data['normal_opening_time'] = data['normal_opening_time']
+    # fmt_data['visible_closing_time']
+    # fmt_data['visible_opening_time']
+
+    fmt_data['information'] = data['information_about_build']
+    if data['in_game_name_of_creator'] is not None:
+        fmt_data['creators_ign'] = data['in_game_name_of_creator'].split(", ")
+    else:
+        fmt_data['creators_ign'] = []
+
+    fmt_data['image_url'] = data['link_to_image']
+    fmt_data['video_url'] = data['link_to_youtube_video']
+    fmt_data['world_download_url'] = data['link_to_world_download']
+
+    fmt_data['server_ip'] = data['server_ip']
+    fmt_data['coordinates'] = data['coordinates']
+    fmt_data['command'] = data['command_to_get_to_build']
+
+    fmt_data['submitter_id'] = data['interaction'].user.id
+    fmt_data['completion_time'] = data['date_of_creation']
+    # fmt_data['edited_time'] = datetime.now()
+
+    return fmt_data

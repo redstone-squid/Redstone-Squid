@@ -9,12 +9,14 @@ import discord
 
 import Discord.config
 from Database.database import DatabaseManager, all_build_columns
-from Database.utils import MISSING, Missing
+from Database.utils import MISSING, Missing, drop_missing
 from Database.enums import Status
 from Discord import utils
 
+
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
+
     def __init__(self):
         """Initializes an empty build.
 
@@ -30,6 +32,7 @@ class Build:
 
         self.door_width: int | MISSING = Missing
         self.door_height: int | MISSING = Missing
+        self.door_depth: int | MISSING = Missing
 
         self.door_type: Optional[list[str]] | MISSING = Missing
         self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | MISSING = Missing
@@ -59,7 +62,7 @@ class Build:
         self.edited_time: datetime | MISSING = Missing
 
     def __iter__(self):
-        """Iterates over the attributes of the Build object."""
+        """Iterates over the *attributes* of the Build object."""
         for attr in [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self, a))]:
             yield attr
 
@@ -100,10 +103,14 @@ class Build:
         build.depth = data['depth']
 
         match data['category']:
-            case 'Door': category_data = data['doors']
-            case 'Extender': category_data = data['extenders']
-            case 'Utility': category_data = data['utilities']
-            case 'Entrance': category_data = data['entrances']
+            case 'Door':
+                category_data = data['doors']
+            case 'Extender':
+                category_data = data['extenders']
+            case 'Utility':
+                category_data = data['utilities']
+            case 'Entrance':
+                category_data = data['entrances']
 
         # FIXME: This is hardcoded for now
         types = data.get('types', [])
@@ -152,7 +159,6 @@ class Build:
             build.edited_time = datetime.now()
         return build
 
-
     @staticmethod
     def from_dict(submission: dict) -> Build:
         """Creates a new Build object from a dictionary. No validation is done on the data."""
@@ -161,38 +167,11 @@ class Build:
             if attr in submission:
                 setattr(build, attr, submission[attr])
 
-        # for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
-        #     try:
-        #         build.edited_time = datetime.strptime(submission.get("last_update"), fmt)
-        #     except (ValueError, TypeError):
-        #         pass
-        # else:
-        #     build.edited_time = datetime.now()
-
-        # build.wiring_placement_restrictions = submission.get("wiring_placement_restrictions", Missing).split(", ") if submission.get(
-        #     "wiring_placement_restrictions") else []
-        # build.component_restrictions = submission.get("component_restrictions", Missing).split(", ") if submission.get(
-        #     "component_restrictions") else []
-
-        # build.width = int(submission["width"])
-        # build.height = int(submission["height"])
-        # build.depth = int(submission["depth"])
-
-        # Date of creation is the user provided time, defaulting to the submission time if not provided
-        # build.completion_time = submission.get("date_of_creation", submission["submission_time"])
-
-        # build.creators_ign = submission.get("creators_ign", Missing).split(", ") if submission.get("creators_ign", Missing) else []
-
-        # if submission.get("functional_versions", Missing):
-        #     build.functional_versions = submission.get("functional_versions", Missing).split(", ")
-        # else:
-        #     build.functional_versions = []
-
         return build
 
     async def load(self) -> Build:
         """
-        Loads the build from the database.
+        Loads the build from the database. All previous data is overwritten.
 
         Returns:
             The Build object.
@@ -212,22 +191,33 @@ class Build:
     async def insert(self) -> None:
         """Inserts the build into the database."""
         if self.id is not Missing:
-            raise ValueError("Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
+            raise ValueError(
+                "Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
+
         raise NotImplementedError
 
-    async def save(self) -> Build:
+    async def save(self) -> None:
         """Updates the build in the database with the given data. No validation is done on the data."""
         # TODO: update the edited time
         if self.id is Missing:
             raise ValueError("Build ID is missing.")
+        data = {key: drop_missing(value) for key, value in self.as_dict().items()}
+
         raise NotImplementedError
-        return self
 
     def update_local(self, data: dict) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def as_dict(self) -> dict:
+        """Converts the build to a dictionary."""
+        build = {}
+        for attr in self:
+            if getattr(self, attr) is not Missing:
+                build[attr] = getattr(self, attr)
+        return build
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
@@ -480,6 +470,7 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
         idx = build_ids.index(build_json['id'])
         builds[idx] = Build.from_json(build_json)
     return builds
+
 
 async def get_unsent_builds(server_id: int) -> list[Build] | None:
     """Get all the builds that have not been posted on the server"""
