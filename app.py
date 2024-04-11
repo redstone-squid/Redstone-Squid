@@ -5,7 +5,7 @@
 import asyncio
 import Discord.interface as discord
 
-DEV_BOT = True
+DEV_BOT = False
 if DEV_BOT:
     asyncio.run(discord.main(prefix='.'))
 else:
