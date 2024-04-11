@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from common import get_current_utc
 from typing import Literal
 
 import discord
@@ -369,6 +369,6 @@ def format_submission_input(data: SubmissionCommandResponseT) -> dict:
 
     fmt_data['submitter_id'] = data['interaction'].user.id
     fmt_data['completion_time'] = data['date_of_creation']
-    # fmt_data['edited_time'] = datetime.now()
+    # fmt_data['edited_time'] = get_current_utc()
 
     return fmt_data

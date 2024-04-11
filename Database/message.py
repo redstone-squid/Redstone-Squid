@@ -1,6 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
-from datetime import datetime
-
+from common import get_current_utc
 from Database.database import DatabaseManager
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
@@ -25,7 +24,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
         'build_id': submission_id,
         'channel_id': channel_id,
         'message_id': message_id,
-        'edited_time': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+        'edited_time': get_current_utc()
     }).execute()
 
 async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
@@ -42,7 +41,7 @@ async def update_message(server_id: int, submission_id: int, channel_id: int, me
     await db.table('messages').update({
         'channel_id': channel_id,
         'message_id': message_id,
-        'edited_time': datetime.now().strftime(r'%Y-%m-%d %H:%M:%S')
+        'edited_time': get_current_utc()
     }).eq('server_id', server_id).eq('build_id', submission_id).execute()
 
 
