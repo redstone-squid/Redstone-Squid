@@ -4,7 +4,6 @@ from typing import Literal
 
 import discord
 from discord import InteractionResponse
-from discord.ui import View
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
@@ -16,6 +15,7 @@ import Discord.submission.post as post
 from Database.builds import get_all_builds, get_builds, Build
 import Database.message as msg
 from Database.enums import Status
+from Discord.utils import ConfirmationView
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -352,18 +352,3 @@ class SubmissionsCog(Cog, name='Submissions'):
             await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
         else:
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
-
-class ConfirmationView(View):
-    def __init__(self, timeout: int = 60):
-        super().__init__(timeout=timeout)
-        self.value = None
-
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = False
-        self.stop()

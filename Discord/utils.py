@@ -4,8 +4,8 @@ from traceback import format_tb
 from types import TracebackType
 
 import discord
-from discord import Embed
 from discord.ext.commands import Context
+from discord.ui import View
 
 from Discord.config import OWNER_ID, PRINT_TRACEBACKS
 
@@ -66,3 +66,19 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
+
+
+class ConfirmationView(View):
+    def __init__(self, timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.value = None
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
