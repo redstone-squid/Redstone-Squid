@@ -224,7 +224,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             fmt_data = format_submission_input(data)
             build = Build.from_dict(fmt_data)
             build.submission_status = Status.PENDING
-            await build.insert()
+            await build.save()
             # Shows the submission to the user
             await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
                                 embed=build.generate_embed(), ephemeral=True)

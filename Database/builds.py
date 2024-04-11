@@ -194,12 +194,12 @@ class Build:
             raise ValueError("Build not found in the database.")
         return Build.from_json(response.data)
 
-    async def insert(self) -> None:
-        """Inserts the build into the database."""
-        if self.id is not Missing:
-            raise ValueError(
-                "Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
+    async def save(self) -> None:
+        """
+        Updates the build in the database with the given data.
 
+        If the build does not exist in the database, it will be inserted instead.
+        """
         self.edited_time = utcnow()
         data = {key: drop_missing(value) for key, value in self.as_dict().items()}
         db = await DatabaseManager()
@@ -212,18 +212,22 @@ class Build:
             information = {"user": build_data['information']}
             build_data['information'] = json.dumps(information)
 
-        response = await db.table('builds').insert(build_data, count=CountMethod.exact).execute()
-        if response.count != 1:
-            raise ValueError("Failed to insert submission in the database.")
-
-        build_id = response.data[0]['id']
-        self.id = build_id
+        if self.id:
+            response = await db.table('builds').update(build_data, count=CountMethod.exact).eq('id', self.id).execute()
+            if response.count != 1:
+                raise ValueError("Failed to update submission in the database.")
+        else:
+            response = await db.table('builds').insert(build_data, count=CountMethod.exact).execute()
+            if response.count != 1:
+                raise ValueError("Failed to insert submission in the database.")
+            build_id = response.data[0]['id']
+            self.id = build_id
 
         # doors table
         if data.get("category") == "Door":
             doors_data = {key: data[key] for key in DoorRecord.__annotations__.keys() if key in data}
-            doors_data['build_id'] = build_id
-            await db.table('doors').insert(doors_data).execute()
+            doors_data['build_id'] = self.id
+            await db.table('doors').upsert(doors_data).execute()
 
         if data.get("category") == "Extender":
             raise NotImplementedError
@@ -236,7 +240,7 @@ class Build:
         build_restrictions = data.get("wiring_placement_restrictions", []) + data.get("component_restrictions", []) + data.get("miscellaneous_restrictions", [])
         response = await db.table('restrictions').select('*').in_('name', build_restrictions).execute()
         restriction_ids = [restriction['id'] for restriction in response.data]
-        build_restrictions_data = list({'build_id': build_id, 'restriction_id': restriction_id} for restriction_id in restriction_ids)
+        build_restrictions_data = list({'build_id': self.id, 'restriction_id': restriction_id} for restriction_id in restriction_ids)
         await db.table('build_restrictions').upsert(build_restrictions_data).execute()
 
         unknown_restrictions = {}
@@ -254,12 +258,12 @@ class Build:
             unknown_restrictions["component_restrictions"] = unknown_component_restrictions
         if unknown_restrictions:
             information["unknown_restrictions"] = unknown_restrictions
-            await db.table('builds').update({'information': json.dumps(information)}).eq('id', build_id).execute()
+            await db.table('builds').update({'information': json.dumps(information)}).eq('id', self.id).execute()
 
         # build_types table
         response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', data.get("door_type", [])).execute()
         type_ids = [type_['id'] for type_ in response.data]
-        build_types_data = list({'build_id': build_id, 'type_id': type_id} for type_id in type_ids)
+        build_types_data = list({'build_id': self.id, 'type_id': type_id} for type_id in type_ids)
         await db.table('build_types').upsert(build_types_data).execute()
 
         unknown_types = []
@@ -268,39 +272,30 @@ class Build:
                 unknown_types.append(door_type)
         if unknown_types:
             information["unknown_types"] = unknown_types
-            await db.table('builds').update({'information': json.dumps(information)}).eq('id', build_id).execute()
+            await db.table('builds').update({'information': json.dumps(information)}).eq('id', self.id).execute()
 
         # build_links table
         build_links_data = []
         if data.get('image_url'):
-            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'image'} for link in data.get("image_url", []))
+            build_links_data.extend(
+                {'build_id': self.id, 'url': link, 'media_type': 'image'} for link in data.get("image_url", []))
         if data.get('video_url'):
-            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'video'} for link in data.get("video_url", []))
+            build_links_data.extend(
+                {'build_id': self.id, 'url': link, 'media_type': 'video'} for link in data.get("video_url", []))
         if data.get('world_download_url'):
-            build_links_data.extend({'build_id': build_id, 'url': link, 'media_type': 'world_download'} for link in data.get("world_download_url", []))
+            build_links_data.extend({'build_id': self.id, 'url': link, 'media_type': 'world_download'} for link in data.get("world_download_url", []))
         if build_links_data:
             await db.table('build_links').upsert(build_links_data).execute()
 
         # build_creators table
-        build_creators_data = list({'build_id': build_id, 'creator_ign': creator} for creator in data.get("creators_ign", []))
+        build_creators_data = list({'build_id': self.id, 'creator_ign': creator} for creator in data.get("creators_ign", []))
         await db.table('build_creators').upsert(build_creators_data).execute()
 
         # build_versions table
         response = await db.table('versions').select('*').in_('full_name_temp', data.get("functional_versions", [])).execute()
         version_ids = [version['id'] for version in response.data]
-        build_versions_data = list({'build_id': build_id, 'version_id': version_id} for version_id in version_ids)
+        build_versions_data = list({'build_id': self.id, 'version_id': version_id} for version_id in version_ids)
         await db.table('build_versions').upsert(build_versions_data).execute()
-
-    async def save(self) -> None:
-        """Updates the build in the database with the given data. No validation is done on the data."""
-        # TODO: update the edited time
-        if self.id is Missing:
-            raise ValueError("Build ID is missing.")
-
-        self.edited_time = utcnow()
-        data = {key: drop_missing(value) for key, value in self.as_dict().items()}
-
-        raise NotImplementedError
 
     def update_local(self, data: dict) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
@@ -584,7 +579,6 @@ async def main():
     from pprint import pprint
     build = await Build.from_id(30)
     build.id = Missing
-    d = await build.insert()
     pprint(d)
 
 if __name__ == '__main__':
