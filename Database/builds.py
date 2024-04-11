@@ -576,10 +576,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    from pprint import pprint
-    build = await Build.from_id(30)
-    build.id = Missing
-    pprint(d)
+    pass
 
 if __name__ == '__main__':
     asyncio.run(main())
