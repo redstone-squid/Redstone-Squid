@@ -33,7 +33,7 @@ class SubmissionsCog(Cog, name='Submissions'):
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
-            pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Status.PENDING)]
+            pending_submissions = [Build.from_json(builds) for builds in await get_all_builds_raw(Status.PENDING)]
 
             if len(pending_submissions) == 0:
                 desc = 'No open submissions.'
