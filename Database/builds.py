@@ -395,13 +395,6 @@ class Build:
 
         return fields
 
-    def to_dict(self):
-        """Converts the submission to a dictionary representation."""
-        data = {}
-        for attr in self:
-            data[attr] = getattr(self, attr)
-        return data
-
     # TODO: Find a use or remove this method
     def to_string(self) -> str:
         string = ""
@@ -500,7 +493,6 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 async def main():
     from pprint import pprint
     build = await Build.from_id(30)
-    pprint(build.to_dict())
 
 
 if __name__ == '__main__':
