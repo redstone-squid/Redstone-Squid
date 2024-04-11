@@ -85,7 +85,7 @@ ALTER TABLE builds DROP COLUMN creators_ign;
 CREATE TABLE restrictions (
   id SMALLSERIAL PRIMARY KEY,
   build_category TEXT,
-  name TEXT,
+  name TEXT UNIQUE,
   type TEXT
 );
 insert into restrictions(build_category, name, type)
@@ -178,7 +178,7 @@ alter table builds drop column component_restrictions;
 CREATE TABLE types (
   id SMALLSERIAL PRIMARY KEY,
   build_category TEXT,
-  name TEXT
+  name TEXT UNIQUE
 );
 
 insert into types(build_category, name)
