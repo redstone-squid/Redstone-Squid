@@ -1,6 +1,7 @@
 import configparser
 import os
 import asyncio
+from typing import Coroutine, Any
 from pathlib import Path
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
@@ -13,7 +14,7 @@ class DatabaseManager:
 
 
     # This actually works, but some IDE might show a warning
-    async def __new__(cls):
+    async def __new__(cls) -> Coroutine[Any, Any, AsyncClient]:
         if not cls._client:
             url, key = cls.get_credentials()
             cls._client = await create_client(url, key)
