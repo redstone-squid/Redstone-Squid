@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
 
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def utcnow() -> str:
+    current_utc = datetime.now(tz=timezone.utc)
+    formatted_time = current_utc.strftime('%Y-%m-%d %H:%M:%S')
+    return formatted_time

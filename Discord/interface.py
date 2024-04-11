@@ -46,7 +46,7 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
     Returns:
         None
     """
-    timestamp_msg = strftime("%Y-%m-%d %H:%M:%S", utcnow()) + msg
+    timestamp_msg = utcnow() + msg
     print(timestamp_msg)
     if dm_owner and log_user['owner_user_object']:
         if first_log:
