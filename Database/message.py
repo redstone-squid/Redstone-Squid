@@ -1,5 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
-from common import get_current_utc
+from common import utcnow
 from Database.database import DatabaseManager
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
@@ -12,10 +12,11 @@ async def get_messages(server_id: int) -> list[dict[str, int]]:
 async def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
     db = await DatabaseManager()
     # supabase hate .maybe_single() and throws a 406 error if no records are found
-    server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute().data
-    if len(server_record) == 0:
+    server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute()
+    if len(server_record.data) == 0:
         return None
-    return server_record
+    # FIXME: this assumes that the server_id, build_id pair is unique
+    return server_record.data[0]
 
 async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
     db = await DatabaseManager()
@@ -24,7 +25,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
         'build_id': submission_id,
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': get_current_utc()
+        'edited_time': utcnow()
     }).execute()
 
 async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
@@ -41,7 +42,7 @@ async def update_message(server_id: int, submission_id: int, channel_id: int, me
     await db.table('messages').update({
         'channel_id': channel_id,
         'message_id': message_id,
-        'last_updated': get_current_utc()
+        'edited_time': utcnow()
     }).eq('server_id', server_id).eq('build_id', submission_id).execute()
 
 

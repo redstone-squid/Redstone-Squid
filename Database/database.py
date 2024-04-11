@@ -1,10 +1,12 @@
 import configparser
 import os
 import asyncio
+from typing import Coroutine, Any
 from pathlib import Path
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
 
+all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 
 class DatabaseManager:
     """Singleton class for the supabase client."""
@@ -12,7 +14,7 @@ class DatabaseManager:
 
 
     # This actually works, but some IDE might show a warning
-    async def __new__(cls):
+    async def __new__(cls) -> Coroutine[Any, Any, AsyncClient]:
         if not cls._client:
             url, key = cls.get_credentials()
             cls._client = await create_client(url, key)
@@ -44,9 +46,10 @@ class DatabaseManager:
 
 
 async def main():
+    from pprint import pprint
     db = await DatabaseManager()
-    response = await db.table('builds').select('*').eq('id', 10).maybe_single().execute()
-    print(response)
+    response = await db.table('builds').select(all_build_columns).eq('id', 30).maybe_single().execute()
+    pprint(response.data, sort_dicts=False)
 
 if __name__ == '__main__':
     asyncio.run(main())

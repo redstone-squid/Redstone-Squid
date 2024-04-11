@@ -3,6 +3,7 @@ import discord
 from discord.ext.commands import Bot, Cog
 
 import Database.message as msg
+from Database.enums import Status
 from Database.message import get_build_id_by_message
 from Database.server_settings import get_server_setting
 from Database.builds import Build
@@ -40,7 +41,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         submission = await Build.from_id(build_id)
 
         # The submission status must be pending
-        if submission.submission_status != Build.PENDING:
+        if submission.submission_status != Status.PENDING:
             return
 
         # If the reaction is a thumbs up, confirm the submission

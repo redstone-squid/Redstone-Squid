@@ -1,10 +1,7 @@
-import time
-from common import get_current_utc
 from typing import Literal
 
 import discord
 from discord import InteractionResponse
-from discord.ui import View
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
@@ -13,8 +10,11 @@ import Discord.config
 import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
-from Database.builds import get_all_builds_raw, get_builds, update_build, Build
+from Discord._types import SubmissionCommandResponseT
+from Database.builds import get_all_builds, get_builds, Build
 import Database.message as msg
+from Database.enums import Status
+from Discord.utils import ConfirmationView, RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -32,7 +32,7 @@ class SubmissionsCog(Cog, name='Submissions'):
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
-            pending_submissions = [Build.from_dict(submission) for submission in await get_all_builds_raw(Build.PENDING)]
+            pending_submissions = await get_all_builds(Status.PENDING)
 
             if len(pending_submissions) == 0:
                 desc = 'No open submissions.'
@@ -42,7 +42,7 @@ class SubmissionsCog(Cog, name='Submissions'):
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators))}_ - _submitted by {sub.submitted_by}_")
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_")
                 desc = '\n\n'.join(desc)
 
             em = utils.info_embed(title='Open Records', description=desc)
@@ -124,7 +124,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             desc = []
             for build in builds:
                 desc.append(
-                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators))}_ - _submitted by {build.submitted_by}_")
+                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators_ign))}_ - _submitted by {build.submitter_id}_")
             desc = '\n\n'.join(desc)
 
             em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
@@ -211,52 +211,27 @@ class SubmissionsCog(Cog, name='Submissions'):
                      link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
                      command_to_get_to_build: str = None):
         """Submits a record to the database directly."""
+        # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
+        data = locals().copy()
 
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
-        message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        build = await Build.add({
-            'record_category': record_category if record_category != 'None' else None,
-            'submission_status': Build.PENDING,
-            'door_width': door_width,
-            'door_height': door_height,
-            'pattern': pattern,
-            'door_type': door_type,
-            'wiring_placement_restrictions': wiring_placement_restrictions,
-            'component_restrictions': component_restrictions,
-            'information': information_about_build,
-            'build_width': build_width,
-            'build_height': build_height,
-            'build_depth': build_depth,
-            'normal_closing_time': normal_closing_time,
-            'normal_opening_time': normal_opening_time,
-            'visible_closing_time': None,  # TODO: Discord only allows 25 options. For now, ignore the absolute times.
-            'visible_opening_time': None,
-            'date_of_creation': date_of_creation,
-            'submission_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'creators_ign': in_game_name_of_creator,
-            'locationality': locationality,
-            'directionality': directionality,
-            'functional_versions': works_in,
-            'image_link': link_to_image,
-            'video_link': link_to_youtube_video,
-            'world_download_link': link_to_world_download,
-            'server_ip': server_ip,
-            'coordinates': coordinates,
-            'command_to_build': command_to_get_to_build,
-            'submitted_by': str(interaction.user)
-        })
-        # Shows the submission to the user
-        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
-                            embed=build.generate_embed(), ephemeral=True)
+        async with RunningMessage(followup) as message:
+            fmt_data = format_submission_input(data)
+            build = Build.from_dict(fmt_data)
+            build.submission_status = Status.PENDING
+            await build.save()
+            # Shows the submission to the user
+            await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                                embed=build.generate_embed(), ephemeral=True)
 
-        success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
-        await message.edit(embed=success_embed)
-        await post.send_submission(self.bot, build)
+            success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
+            await message.edit(embed=success_embed)
+            await post.send_submission(self.bot, build)
 
     @app_commands.command(name='edit')
     @app_commands.describe(
@@ -296,44 +271,22 @@ class SubmissionsCog(Cog, name='Submissions'):
                    link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
                    command_to_get_to_build: str = None):
         """Edits a record in the database directly."""
+        data = locals().copy()
+
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        update_values = {
-            'last_update': get_current_utc(),
-            'door_width': door_width,
-            'door_height': door_height,
-            'pattern': pattern,
-            'door_type': door_type,
-            'wiring_placement_restrictions': wiring_placement_restrictions,
-            'component_restrictions': component_restrictions,
-            'information': information_about_build,
-            'build_width': build_width,
-            'build_height': build_height,
-            'build_depth': build_depth,
-            'normal_closing_time': normal_closing_time,
-            'normal_opening_time': normal_opening_time,
-            'date_of_creation': date_of_creation,
-            'creators_ign': in_game_name_of_creator,
-            'locationality': locationality,
-            'directionality': directionality,
-            'functional_versions': works_in,
-            'image_link': link_to_image,
-            'video_link': link_to_youtube_video,
-            'world_download_link': link_to_world_download,
-            'server_ip': server_ip,
-            'coordinates': coordinates,
-            'command_to_build': command_to_get_to_build,
-            'submitted_by': None
-        }
-        update_values = {k: v for k, v in update_values.items() if v is not None}
+        submission = await Build.from_id(submission_id)
+        if submission is None:
+            error_embed = utils.error_embed('Error', 'No submission with that ID.')
+            return await message.edit(embed=error_embed)
 
-        old_submission = await Build.from_id(submission_id)
-        new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
-        preview_embed = new_submission.generate_embed()
+        update_values = format_submission_input(data)
+        submission.update_local(update_values)
+        preview_embed = submission.generate_embed()
 
         # Show a preview of the changes and ask for confirmation
         await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
@@ -345,22 +298,77 @@ class SubmissionsCog(Cog, name='Submissions'):
         if view.value is None:
             await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
         elif view.value:
-            await update_build(submission_id, update_values)
+            await submission.save()
             await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
         else:
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
 
-class ConfirmationView(View):
-    def __init__(self, timeout: int = 60):
-        super().__init__(timeout=timeout)
-        self.value = None
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
+def format_submission_input(data: SubmissionCommandResponseT) -> dict:
+    """Formats the submission data from what is passed in commands to something recognizable by Build."""
+    # Union of all the /submit and /edit command options
+    parsable_signatures = ['self', 'interaction', 'submission_id', 'record_category', 'door_width', 'door_height', 'pattern',
+                           'door_type', 'build_width', 'build_height', 'build_depth', 'works_in', 'wiring_placement_restrictions',
+                           'component_restrictions', 'information_about_build', 'normal_opening_time',
+                           'normal_closing_time', 'date_of_creation', 'in_game_name_of_creator', 'locationality',
+                           'directionality', 'link_to_image', 'link_to_youtube_video', 'link_to_world_download',
+                           'server_ip', 'coordinates', 'command_to_get_to_build']
+    if not all(key in parsable_signatures for key in data):
+        raise ValueError("found unknown keys in data, did the command signature of /submit or /edit change?")
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = False
-        self.stop()
+    fmt_data = dict()
+    fmt_data['id'] = data.get('submission_id')
+    # fmt_data['submission_status']
+    fmt_data['record_category'] = data['record_category'] if data.get('record_category') != 'None' else None
+    if data.get('works_in') is not None:
+        fmt_data['functions_versions'] = data['works_in'].split(", ")
+    else:
+        fmt_data['functions_versions'] = []
+
+    fmt_data['width'] = data.get('build_width')
+    fmt_data['height'] = data.get('build_height')
+    fmt_data['depth'] = data.get('build_depth')
+
+    fmt_data['door_width'] = data.get('door_width')
+    fmt_data['door_height'] = data.get('door_height')
+    # fmt_data['door_depth']
+
+    fmt_data['door_type'] = data.get('pattern')
+    fmt_data['door_orientation_type'] = data.get('door_type')
+
+    if data.get('wiring_placement_restrictions') is not None:
+        fmt_data['wiring_placement_restrictions'] = data['wiring_placement_restrictions'].split(", ")
+    else:
+        fmt_data['wiring_placement_restrictions'] = []
+    if data.get('component_restrictions') is not None:
+        fmt_data['component_restrictions'] = data['component_restrictions'].split(", ")
+    else:
+        fmt_data['component_restrictions'] = []
+    misc_restrictions = [data.get('locationality'), data.get('directionality')]
+    fmt_data['miscellaneous_restrictions'] = [x for x in misc_restrictions if x is not None]
+
+    fmt_data['normal_closing_time'] = data.get('normal_closing_time')
+    fmt_data['normal_opening_time'] = data.get('normal_opening_time')
+    # fmt_data['visible_closing_time']
+    # fmt_data['visible_opening_time']
+
+    fmt_data['information'] = data.get('information_about_build')
+    if data.get('in_game_name_of_creator') is not None:
+        fmt_data['creators_ign'] = data['in_game_name_of_creator'].split(", ")
+    else:
+        fmt_data['creators_ign'] = []
+
+    fmt_data['image_url'] = data.get('link_to_image')
+    fmt_data['video_url'] = data.get('link_to_youtube_video')
+    fmt_data['world_download_url'] = data.get('link_to_world_download')
+
+    fmt_data['server_ip'] = data.get('server_ip')
+    fmt_data['coordinates'] = data.get('coordinates')
+    fmt_data['command'] = data.get('command_to_get_to_build')
+
+    fmt_data['submitter_id'] = data.get('interaction').user.id
+    fmt_data['completion_time'] = data.get('date_of_creation')
+    # fmt_data['edited_time'] = get_current_utc()
+
+    fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
+    return fmt_data

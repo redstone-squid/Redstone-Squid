@@ -3,8 +3,8 @@ from traceback import format_tb
 from types import TracebackType
 
 import discord
-from discord import Embed
 from discord.ext.commands import Context
+from discord.ui import View
 
 from Discord.config import OWNER_ID, PRINT_TRACEBACKS
 
@@ -30,7 +30,7 @@ def help_embed(title, description):
 
 class RunningMessage:
     """Context manager to show a working message while the bot is working."""
-    def __init__(self, ctx: Context, *,
+    def __init__(self, ctx, *,
                  title: str = "Working",
                  description: str = "Getting information...",
                  delete_on_exit: bool = False):
@@ -50,7 +50,7 @@ class RunningMessage:
             description = f'{str(exc_val)}'
             if PRINT_TRACEBACKS:
                 description += f'\n\n```{"".join(format_tb(exc_tb))}```'
-            await self.sent_message.edit(content=f"{self.ctx.bot.get_user(OWNER_ID).mention}",
+            await self.sent_message.edit(content=f"<@{OWNER_ID}>",
                                          embed=error_embed(f'An error has occurred: {exc_type.__name__}',
                                                            description))
             return False
@@ -59,3 +59,19 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
+
+
+class ConfirmationView(View):
+    def __init__(self, timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.value = None
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()

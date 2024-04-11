@@ -3,6 +3,8 @@ import discord
 
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
+from Database.enums import Status
+from Database.utils import Missing
 from Discord.config import SETTABLE_CHANNELS_TYPE
 from Database.builds import Build
 
@@ -11,15 +13,17 @@ from Database.builds import Build
 def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
     """Gets the type of channel to post a submission to."""
     status = build.submission_status
-    if status == Build.PENDING:
+    if status == Status.PENDING:
         return "Vote"
-    elif status == Build.DENIED:
+    elif status == Status.DENIED:
         raise ValueError("Denied submissions should not be posted.")
 
-    if build.base_category is None:
+    if build.record_category is None:
         return "Builds"
+    elif build.record_category is Missing:
+        raise ValueError("Submission status is missing.")
     else:
-        return build.base_category
+        return build.record_category  # type: ignore
 
 
 async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:
