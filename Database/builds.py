@@ -156,7 +156,7 @@ class Build:
 
         build.submitter_id = data['submitter_id']
         build.completion_time = data['completion_time']
-        build.last_updated = datetime.strptime(data.get("edited_time"), '%Y-%m-%d %H:%M:%S')
+        build.last_updated = datetime.strptime(data.get("edited_time"), '%Y-%m-%dT%H:%M:%S')
 
         return build
 
@@ -221,6 +221,8 @@ class Build:
         # doors table
         if data.get("category") == "Door":
             doors_data = {key: data[key] for key in DoorRecord.__annotations__.keys() if key in data}
+            # FIXME
+            doors_data['orientation'] = data['door_orientation_type']
             doors_data['build_id'] = self.id
             await db.table('doors').upsert(doors_data).execute()
 
