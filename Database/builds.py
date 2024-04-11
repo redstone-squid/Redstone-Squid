@@ -135,7 +135,7 @@ class Build:
         build.component_restrictions = [r['name'] for r in restrictions if r['type'] == 'component']
         build.miscellaneous_restrictions = [r['name'] for r in restrictions if r['type'] == 'miscellaneous']
 
-        build.information = data['information']
+        build.information = json.loads(data['information'])
 
         creators: list[dict] = data.get('build_creators', [])
         build.creators_ign = [creator['creator_ign'] for creator in creators]
@@ -370,9 +370,10 @@ class Build:
                     title += f"{restriction} "
 
         # Pattern
-        if self.door_type[0] != "Regular":
-            for pattern in self.door_type:
-                title += f"{pattern} "
+        # FIXME: list index out of range due to not adding Regular to the list when Build.save()
+        # if self.door_type[0] != "Regular":
+        for pattern in self.door_type:
+            title += f"{pattern} "
 
         # Door type
         title += self.door_orientation_type
@@ -401,8 +402,8 @@ class Build:
         elif "Directional with fixes" in self.miscellaneous_restrictions:
             description.append("**Directional** with known fixes for each direction.")
 
-        if self.information:
-            description.append("\n" + str(self.information))
+        if self.information and self.information.get("user"):
+            description.append("\n" + self.information.get("user"))
 
         if len(description) > 0:
             return "\n".join(description)
