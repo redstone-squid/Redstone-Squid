@@ -204,8 +204,10 @@ class Build:
             raise ValueError("Build ID is missing.")
 
         db = await DatabaseManager()
-        response = await db.table('builds').select(all_build_columns).eq('id', self.id).execute()
-        raise NotImplementedError("This method is not implemented yet.")
+        response = await db.table('builds').select(all_build_columns).eq('id', self.id).maybe_single().execute()
+        if not response:
+            raise ValueError("Build not found in the database.")
+        return Build.from_json(response.data)
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
