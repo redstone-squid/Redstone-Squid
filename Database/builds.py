@@ -209,6 +209,18 @@ class Build:
             raise ValueError("Build not found in the database.")
         return Build.from_json(response.data)
 
+    async def insert(self) -> None:
+        """Inserts the build into the database."""
+        if self.id is not Missing:
+            raise ValueError("Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
+        raise NotImplementedError
+
+    async def update(self, data: dict) -> None:
+        """Updates the build in the database with the given data. No validation is done on the data."""
+        if self.id is Missing:
+            raise ValueError("Build ID is missing.")
+        raise NotImplementedError
+
     async def confirm(self) -> None:
         """Marks the build as confirmed.
 
@@ -375,18 +387,6 @@ class Build:
 
         return fields
 
-    @staticmethod
-    async def add(data: dict) -> Build:
-        """Adds a build to the database.
-
-        Returns:
-            The Build object that was added.
-        """
-        db = await DatabaseManager()
-        response = await db.table('builds').insert(data, count='exact').execute()
-        assert response.count == 1
-        return Build.from_json(response.data[0])
-
     def to_dict(self):
         """Converts the submission to a dictionary representation."""
         data = {}
@@ -508,9 +508,9 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 async def main():
     from pprint import pprint
-    build = Build()
-    for attr in build:
-        print(attr)
+    build = await Build.from_id(30)
+    pprint(build.to_dict())
+
 
 if __name__ == '__main__':
     asyncio.run(main())

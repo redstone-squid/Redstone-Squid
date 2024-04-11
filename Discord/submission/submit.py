@@ -221,7 +221,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
         # FIXME: data is not consistent with Build
-        build = await Build.add({
+        build = Build.from_dict({
             'record_category': record_category if record_category != 'None' else None,
             'submission_status': Status.PENDING,
             'door_width': door_width,
@@ -252,6 +252,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             'command': command_to_get_to_build,
             'submitter_id': str(interaction.user)
         })
+        await build.insert()
         # Shows the submission to the user
         await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
                             embed=build.generate_embed(), ephemeral=True)
