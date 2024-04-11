@@ -12,6 +12,7 @@ from Database.database import DatabaseManager, all_build_columns
 from Database.utils import MISSING, Missing, drop_missing
 from Database.enums import Status
 from Discord import utils
+from common import get_current_utc
 
 
 class Build:
@@ -150,13 +151,13 @@ class Build:
 
         build.submitter_id = data['submitter_id']
         build.completion_time = data['completion_time']
-        for fmt in (r"%Y-%m-%dT%H:%M:%S", r"%Y-%m-%dT%H:%M:%S.%f", r"%d-%m-%Y %H:%M:%S"):
-            try:
-                build.edited_time = datetime.strptime(data.get("edited_time"), fmt)
-            except (ValueError, TypeError):
-                pass
-        else:
-            build.edited_time = datetime.now()
+
+        # TODO: nuke stuff in the database to make this unnecessary
+        try:
+            build.last_updated = datetime.strptime(data.get("last_update"), '%Y-%m-%d %H:%M:%S')
+        except (ValueError, TypeError):
+            build.last_updated = get_current_utc()
+
         return build
 
     @staticmethod
@@ -194,6 +195,8 @@ class Build:
             raise ValueError(
                 "Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
 
+        self.edited_time = get_current_utc()
+        data = {key: drop_missing(value) for key, value in self.as_dict().items()}
         raise NotImplementedError
 
     async def save(self) -> None:
@@ -201,6 +204,8 @@ class Build:
         # TODO: update the edited time
         if self.id is Missing:
             raise ValueError("Build ID is missing.")
+
+        self.edited_time = get_current_utc()
         data = {key: drop_missing(value) for key, value in self.as_dict().items()}
 
         raise NotImplementedError
