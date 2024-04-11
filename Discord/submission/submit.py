@@ -224,6 +224,8 @@ class SubmissionsCog(Cog, name='Submissions'):
             fmt_data = format_submission_input(data)
             build = Build.from_dict(fmt_data)
             build.submission_status = Status.PENDING
+            # TODO: unhardcode this
+            build.category = "Door"
             await build.save()
             # Shows the submission to the user
             await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
@@ -321,9 +323,9 @@ def format_submission_input(data: SubmissionCommandResponseT) -> dict:
     # fmt_data['submission_status']
     fmt_data['record_category'] = data['record_category'] if data.get('record_category') != 'None' else None
     if data.get('works_in') is not None:
-        fmt_data['functions_versions'] = data['works_in'].split(", ")
+        fmt_data['functional_versions'] = data['works_in'].split(", ")
     else:
-        fmt_data['functions_versions'] = []
+        fmt_data['functional_versions'] = []
 
     fmt_data['width'] = data.get('build_width')
     fmt_data['height'] = data.get('build_height')
