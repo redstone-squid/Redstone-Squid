@@ -334,9 +334,9 @@ class SubmissionsCog(Cog, name='Submissions'):
         }
         update_values = {k: v for k, v in update_values.items() if v is not None}
 
-        old_submission = await Build.from_id(submission_id)
-        new_submission = Build.from_dict({**old_submission.to_dict(), **update_values})
-        preview_embed = new_submission.generate_embed()
+        submission = await Build.from_id(submission_id)
+        submission.update_local(update_values)
+        preview_embed = submission.generate_embed()
 
         # Show a preview of the changes and ask for confirmation
         await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
@@ -348,7 +348,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         if view.value is None:
             await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
         elif view.value:
-            await update_build(submission_id, update_values)
+            await submission.save()
             await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
         else:
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))

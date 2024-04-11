@@ -215,11 +215,19 @@ class Build:
             raise ValueError("Build ID cannot be set when inserting a build. Use update() instead to update an existing build.")
         raise NotImplementedError
 
-    async def update(self, data: dict) -> None:
+    async def save(self) -> Build:
         """Updates the build in the database with the given data. No validation is done on the data."""
+        # TODO: update the edited time
         if self.id is Missing:
             raise ValueError("Build ID is missing.")
         raise NotImplementedError
+        return self
+
+    def update_local(self, data: dict) -> None:
+        """Updates the build locally with the given data. No validation is done on the data."""
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
