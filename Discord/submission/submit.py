@@ -1,5 +1,3 @@
-import time
-from common import get_current_utc
 from typing import Literal
 
 import discord
