@@ -319,7 +319,7 @@ class Build:
         """
         self.submission_status = Status.CONFIRMED
         db = await DatabaseManager()
-        response = await db.table('builds').update({'submission_status': Status.CONFIRMED}, count='exact').eq('id', self.id).execute()
+        response = await db.table('builds').update({'submission_status': Status.CONFIRMED}, count=CountMethod.exact).eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
 
@@ -331,7 +331,7 @@ class Build:
         """
         self.submission_status = Status.DENIED
         db = await DatabaseManager()
-        response = await db.table('builds').update({'submission_status': Status.DENIED}, count='exact').eq('id', self.id).execute()
+        response = await db.table('builds').update({'submission_status': Status.DENIED}, count=CountMethod.exact).eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
@@ -571,7 +571,8 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     db = await DatabaseManager()
 
     # Builds that have not been posted on the server
-    server_unsent_builds = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute().data
+    respons = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
+    server_unsent_builds = respons.data
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
