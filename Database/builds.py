@@ -10,7 +10,7 @@ import discord
 from postgrest.types import CountMethod
 
 import Discord.config
-from Database._types import BuildRecord, DoorRecord
+from Database.types import BuildRecord, DoorRecord
 from Database.database import DatabaseManager, all_build_columns
 from Database.utils import utcnow
 from Database.enums import Status
