@@ -1,13 +1,6 @@
-from enum import StrEnum
 from typing import TypedDict
-from Database.enums import Status
+from Database.enums import Status, Category
 
-class Category(StrEnum):
-    """The categories of the builds."""
-    DOOR = 'Door'
-    EXTENDER = 'Extender'
-    UTILITY = 'Utility'
-    ENTRANCE = 'Entrance'
 
 class BuildRecord(TypedDict, total=False):
     """A record of a build in the database."""

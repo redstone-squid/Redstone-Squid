@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 
 class Status(IntEnum):
@@ -6,3 +6,11 @@ class Status(IntEnum):
     PENDING = 0
     CONFIRMED = 1
     DENIED = 2
+
+
+class Category(StrEnum):
+    """The categories of the builds."""
+    DOOR = 'Door'
+    EXTENDER = 'Extender'
+    UTILITY = 'Utility'
+    ENTRANCE = 'Entrance'
