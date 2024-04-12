@@ -1,20 +1,18 @@
-import json
 from typing import Literal
 
 import discord
 from discord import InteractionResponse
-from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command, flag
 
+import Database.message as msg
 import Discord.config
-import Discord.utils as utils
 import Discord.config as config
 import Discord.submission.post as post
-from Discord._types import SubmissionCommandResponseT
+import Discord.utils as utils
 from Database.builds import get_all_builds, get_builds, Build
-import Database.message as msg
 from Database.enums import Status
+from Discord._types import SubmissionCommandResponseT
 from Discord.utils import ConfirmationView, RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
