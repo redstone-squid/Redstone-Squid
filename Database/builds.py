@@ -177,7 +177,7 @@ class Build:
             The Build object.
 
         Raises:
-            ValueError: If the build was not found.
+            ValueError: If the build was not found or build.id is not set.
         """
         if self.id is None:
             raise ValueError("Build ID is missing.")
