@@ -52,7 +52,7 @@ async def send_submission(client: discord.Client, build: Build):
 
     for channel in channels:
         message = await channel.send(embed=em)
-        await msg.update_message(channel.guild.id, build.id, message.channel.id, message.id)
+        await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
 async def send_submission_to_server(client: discord.Client, build: Build, server_id: int) -> None:
@@ -63,7 +63,7 @@ async def send_submission_to_server(client: discord.Client, build: Build, server
     for channel in channels:
         if channel.guild.id == server_id:
             message = await channel.send(embed=em)
-            await msg.update_message(channel.guild.id, build.id, message.channel.id, message.id)
+            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
 # TODO: merge server, channel_id, message_id, build_id into a single object
@@ -76,7 +76,7 @@ async def edit_post(client: discord.Client, server: discord.Guild, channel_id: i
     message = await channel.fetch_message(message_id)
 
     updated_message = await message.edit(embed=em)
-    await msg.update_message(server.id, build_id, channel_id, updated_message.id)
+    await msg.update_message(updated_message.id)
 
 
 async def update_build_posts(client: discord.Client, build: Build) -> None:
@@ -89,4 +89,4 @@ async def update_build_posts(client: discord.Client, build: Build) -> None:
         channel = client.get_channel(message['channel_id'])
         message = await channel.fetch_message(message['message_id'])
         await message.edit(embed=em)
-        await msg.update_message(message.guild.id, build.id, channel.id, message.id)
+        await msg.update_message(message.id)

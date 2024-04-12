@@ -40,22 +40,10 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
     }).execute()
 
 
-async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
-    # Try getting the message
-    message = await get_message(server_id, submission_id)
-
-    # If message isn't yet tracked, add it.
-    if message is None:
-        await add_message(server_id, submission_id, channel_id, message_id)
-        return
-    
-    # Update the message
+async def update_message(message_id: int) -> None:
+    """Update the edited time of a message."""
     db = await DatabaseManager()
-    await db.table('messages').update({
-        'channel_id': channel_id,
-        'message_id': message_id,
-        'edited_time': utcnow()
-    }).eq('server_id', server_id).eq('build_id', submission_id).execute()
+    await db.table('messages').update({'edited_time': utcnow()}).eq('message_id', message_id).execute()
 
 
 async def delete_message(server_id: int, build_id: int) -> list[int]:
