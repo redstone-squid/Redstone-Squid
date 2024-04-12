@@ -81,7 +81,8 @@ async def get_outdated_messages(server_id: int) -> list[dict[str, int]] | None:
     """
     db = await DatabaseManager()
     # Messages that have been updated since the last submission message update.
-    server_outdated_messages = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).execute().data
+    response = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).execute()
+    server_outdated_messages = response.data
     if len(server_outdated_messages) == 0:
         return None
     return server_outdated_messages
@@ -99,7 +100,8 @@ async def get_outdated_message(server_id: int, build_id: int) -> dict[str, int] 
     """
     db = await DatabaseManager()
     # Messages that have been updated since the last submission message update.
-    server_outdated_messages = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).eq('build_id', build_id).execute().data
+    response = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).eq('build_id', build_id).execute()
+    server_outdated_messages = response.data
     if len(server_outdated_messages) == 0:
         return None
     return server_outdated_messages[0]
