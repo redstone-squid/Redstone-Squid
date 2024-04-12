@@ -201,10 +201,8 @@ class Build:
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
         # information is a special JSON field in the database that stores various information about the build
         # this needs to be kept because it will be updated later
-        information = {}
-        if build_data.get("information"):
-            information = {"user": build_data['information']}
-            build_data['information'] = json.dumps(information)
+        information = build_data.pop('information', {})
+        build_data['information'] = information
 
         if self.id:
             response = await db.table('builds').update(build_data, count=CountMethod.exact).eq('id', self.id).execute()
@@ -254,7 +252,7 @@ class Build:
             unknown_restrictions["component_restrictions"] = unknown_component_restrictions
         if unknown_restrictions:
             information["unknown_restrictions"] = unknown_restrictions
-            await db.table('builds').update({'information': json.dumps(information)}).eq('id', self.id).execute()
+            await db.table('builds').update({'information': information}).eq('id', self.id).execute()
 
         # build_types table
         response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', data.get("door_type", [])).execute()
@@ -268,7 +266,7 @@ class Build:
                 unknown_types.append(door_type)
         if unknown_types:
             information["unknown_types"] = unknown_types
-            await db.table('builds').update({'information': json.dumps(information)}).eq('id', self.id).execute()
+            await db.table('builds').update({'information': information}).eq('id', self.id).execute()
 
         # build_links table
         build_links_data = []
