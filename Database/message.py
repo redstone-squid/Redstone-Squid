@@ -5,9 +5,10 @@ from Database.database import DatabaseManager
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
 async def get_messages(server_id: int) -> list[dict[str, int]]:
+    """Get all tracked bot messages in a server."""
     db = await DatabaseManager()
-    server_records = await db.table('messages').select('*').eq('server_id', server_id).execute().data
-    return server_records
+    response = await db.table('messages').select('*').eq('server_id', server_id).execute()
+    return response.data
 
 async def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
     db = await DatabaseManager()
