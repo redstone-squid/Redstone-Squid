@@ -49,7 +49,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
             await submission.confirm()
             message_ids = await msg.delete_message(payload.guild_id, build_id)
-            await post.send_submission(self.bot, submission)
+            await post.post_build(self.bot, submission)
             for message_id in message_ids:
                 message = await self.bot.get_channel(vote_channel_id).fetch_message(message_id)
                 await message.delete()

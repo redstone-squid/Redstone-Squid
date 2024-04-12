@@ -82,7 +82,7 @@ class SubmissionsCog(Cog, name='Submissions'):
                 return await sent_message.edit(embed=error_embed)
 
             await build.confirm()
-            await post.send_submission(self.bot, build)
+            await post.post_build(self.bot, build)
 
             success_embed = utils.info_embed('Success', 'Submission has successfully been confirmed.')
             return await sent_message.edit(embed=success_embed)
@@ -219,7 +219,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
             success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
             await message.edit(embed=success_embed)
-            await post.send_submission(self.bot, build)
+            await post.post_build(self.bot, build)
 
     class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""

@@ -20,7 +20,7 @@ def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
     if build.record_category is None:
         return "Builds"
     else:
-        return build.record_category  # type: ignore
+        return build.record_category
 
 
 async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[discord.TextChannel]:
@@ -44,7 +44,7 @@ async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[
     return channels
 
 
-async def send_submission(client: discord.Client, build: Build):
+async def post_build(client: discord.Client, build: Build) -> None:
     """Posts a submission to the appropriate channels in every server the bot is in."""
     # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
     channels = await get_channels_to_post_to(client, build)
