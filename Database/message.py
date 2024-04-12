@@ -15,7 +15,6 @@ async def get_messages(server_id: int) -> list[MessageRecord]:
 
 async def get_message(server_id: int, submission_id: int) -> MessageRecord | None:
     db = await DatabaseManager()
-    # supabase hate .maybe_single() and throws a 406 error if no records are found
     server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute()
     if len(server_record.data) == 0:
         return None
