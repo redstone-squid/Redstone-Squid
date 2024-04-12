@@ -12,7 +12,7 @@ from postgrest.types import CountMethod
 import Discord.config
 from Database._types import BuildRecord, DoorRecord
 from Database.database import DatabaseManager, all_build_columns
-from Database.utils import MISSING, Missing, drop_missing, utcnow
+from Database.utils import utcnow
 from Database.enums import Status
 from Discord import utils
 
@@ -24,47 +24,47 @@ class Build:
         """Initializes an empty build.
 
          This should not be used externally. Use `from_dict()` or `from_id()` instead."""
-        self.id: int | MISSING = Missing
-        self.submission_status: int | MISSING = Missing
-        self.category: Optional[Literal["Door", "Extender", "Utility", "Entrance"]] | MISSING = Missing
-        self.record_category: Optional[Literal["Smallest", "Fastest", "First"]] | MISSING = Missing
-        self.functional_versions: Optional[list[str]] | MISSING = Missing
+        self.id: int | None = None
+        self.submission_status: int | None = None
+        self.category: Literal["Door", "Extender", "Utility", "Entrance"] | None = None
+        self.record_category: Literal["Smallest", "Fastest", "First"] | None = None
+        self.functional_versions: list[str] | None = None
 
-        self.width: Optional[int] | MISSING = Missing
-        self.height: Optional[int] | MISSING = Missing
-        self.depth: Optional[int] | MISSING = Missing
+        self.width: int | None = None
+        self.height: Optional[int] | None = None
+        self.depth: Optional[int] | None = None
 
-        self.door_width: int | MISSING = Missing
-        self.door_height: int | MISSING = Missing
-        self.door_depth: int | MISSING = Missing
+        self.door_width: int | None = None
+        self.door_height: int | None = None
+        self.door_depth: int | None = None
 
-        self.door_type: Optional[list[str]] | MISSING = Missing
-        self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | MISSING = Missing
+        self.door_type: Optional[list[str]] | None = None
+        self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | None = None
 
-        self.wiring_placement_restrictions: Optional[list[str]] | MISSING = Missing
-        self.component_restrictions: Optional[list[str]] | MISSING = Missing
-        self.miscellaneous_restrictions: Optional[list[str]] | MISSING = Missing
+        self.wiring_placement_restrictions: Optional[list[str]] | None = None
+        self.component_restrictions: Optional[list[str]] | None = None
+        self.miscellaneous_restrictions: Optional[list[str]] | None = None
 
-        self.normal_closing_time: Optional[int] | MISSING = Missing
-        self.normal_opening_time: Optional[int] | MISSING = Missing
-        self.visible_closing_time: Optional[int] | MISSING = Missing
-        self.visible_opening_time: Optional[int] | MISSING = Missing
+        self.normal_closing_time: Optional[int] | None = None
+        self.normal_opening_time: Optional[int] | None = None
+        self.visible_closing_time: Optional[int] | None = None
+        self.visible_opening_time: Optional[int] | None = None
 
         # In the database, we force empty information to be {}
-        self.information: dict | MISSING = Missing
-        self.creators_ign: Optional[str] | MISSING = Missing
+        self.information: dict | None = None
+        self.creators_ign: Optional[str] | None = None
 
-        self.image_url: Optional[list[str]] | MISSING = Missing
-        self.video_url: Optional[list[str]] | MISSING = Missing
-        self.world_download_url: Optional[list[str]] | MISSING = Missing
+        self.image_url: Optional[list[str]] | None = None
+        self.video_url: Optional[list[str]] | None = None
+        self.world_download_url: Optional[list[str]] | None = None
 
-        self.server_ip: Optional[str] | MISSING = Missing
-        self.coordinates: Optional[str] | MISSING = Missing
-        self.command: Optional[str] | MISSING = Missing
+        self.server_ip: Optional[str] | None = None
+        self.coordinates: Optional[str] | None = None
+        self.command: Optional[str] | None = None
 
-        self.submitter_id: int | MISSING = Missing
-        self.completion_time: Optional[str] | MISSING = Missing
-        self.edited_time: datetime | MISSING = Missing
+        self.submitter_id: int | None = None
+        self.completion_time: Optional[str] | None = None
+        self.edited_time: datetime | None = None
 
     def __iter__(self):
         """Iterates over the *attributes* of the Build object."""
@@ -179,7 +179,7 @@ class Build:
         Raises:
             ValueError: If the build was not found.
         """
-        if self.id is Missing:
+        if self.id is None:
             raise ValueError("Build ID is missing.")
 
         db = await DatabaseManager()
@@ -195,7 +195,7 @@ class Build:
         If the build does not exist in the database, it will be inserted instead.
         """
         self.edited_time = utcnow()
-        data = {key: drop_missing(value) for key, value in self.as_dict().items()}
+        data = {key: value for key, value in self.as_dict().items() if value is not None}
         db = await DatabaseManager()
 
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
@@ -302,8 +302,7 @@ class Build:
         """Converts the build to a dictionary."""
         build = {}
         for attr in self:
-            if getattr(self, attr) is not Missing:
-                build[attr] = getattr(self, attr)
+            build[attr] = getattr(self, attr)
         return build
 
     async def confirm(self) -> None:
@@ -385,7 +384,7 @@ class Build:
         if self.component_restrictions and self.component_restrictions[0] != "None":
             description.append(", ".join(self.component_restrictions))
 
-        if self.functional_versions is Missing:
+        if self.functional_versions is None:
             description.append("Unknown version compatibility.")
         elif not Discord.config.VERSIONS_LIST[-1] in self.functional_versions:
             description.append("**Broken** in current version.")

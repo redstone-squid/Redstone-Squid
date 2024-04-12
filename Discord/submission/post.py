@@ -4,7 +4,6 @@ import discord
 import Discord.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database.enums import Status
-from Database.utils import Missing
 from Discord.config import SETTABLE_CHANNELS_TYPE
 from Database.builds import Build
 
@@ -20,8 +19,6 @@ def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
 
     if build.record_category is None:
         return "Builds"
-    elif build.record_category is Missing:
-        raise ValueError("Submission status is missing.")
     else:
         return build.record_category  # type: ignore
 
