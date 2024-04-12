@@ -258,31 +258,31 @@ class SubmissionsCog(Cog, name='Submissions'):
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
-        message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
+        async with RunningMessage(followup) as message:
+            submission = await Build.from_id(flags.submission_id)
+            if submission is None:
+                error_embed = utils.error_embed('Error', 'No submission with that ID.')
+                return await message.edit(embed=error_embed)
 
-        submission = await Build.from_id(flags.submission_id)
-        if submission is None:
-            error_embed = utils.error_embed('Error', 'No submission with that ID.')
-            return await message.edit(embed=error_embed)
+            update_values = format_submission_input(ctx, dict(flags))
+            submission.update_local(update_values)
+            preview_embed = submission.generate_embed()
 
-        update_values = format_submission_input(ctx, dict(flags))
-        submission.update_local(update_values)
-        preview_embed = submission.generate_embed()
+            # Show a preview of the changes and ask for confirmation
+            await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+            view = ConfirmationView()
+            preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
+            await view.wait()
 
-        # Show a preview of the changes and ask for confirmation
-        await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
-        view = ConfirmationView()
-        preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
-        await view.wait()
-
-        await preview.delete()
-        if view.value is None:
-            await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
-        elif view.value:
-            await submission.save()
-            await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
-        else:
-            await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
+            await preview.delete()
+            if view.value is None:
+                await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
+            elif view.value:
+                await message.edit(embed=utils.info_embed('Editing', 'Editing build...'))
+                await submission.save()
+                await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
+            else:
+                await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:
