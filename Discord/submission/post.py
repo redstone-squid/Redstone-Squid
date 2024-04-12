@@ -55,7 +55,7 @@ async def post_build(client: discord.Client, build: Build) -> None:
         await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id)
 
 
-async def send_submission_to_server(client: discord.Client, build: Build, server_id: int) -> None:
+async def post_build_to_server(client: discord.Client, build: Build, server_id: int) -> None:
     """Posts a submission to the appropriate channel in a specific server."""
     channels = await get_channels_to_post_to(client, build)
     em = build.generate_embed()
