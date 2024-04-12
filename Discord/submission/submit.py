@@ -103,31 +103,31 @@ class SubmissionsCog(Cog, name='Submissions'):
 
             success_embed = utils.info_embed('Success', 'Submission has successfully been denied.')
             return await sent_message.edit(embed=success_embed)
-
-    @submission_hybrid_group.command(name='outdated')
-    async def outdated_function(self, ctx: Context):
-        """Shows an overview of all discord posts that require updating."""
-        async with utils.RunningMessage(ctx) as sent_message:
-            outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
-
-            if len(outdated_messages) == 0:
-                desc = 'No outdated submissions.'
-                em = utils.info_embed(title='Outdated Records', description=desc)
-                return await sent_message.edit(embed=em)
-
-            builds = await get_builds([message['build_id'] for message in outdated_messages])
-
-            # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
-            # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
-
-            desc = []
-            for build in builds:
-                desc.append(
-                    f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators_ign))}_ - _submitted by {build.submitter_id}_")
-            desc = '\n\n'.join(desc)
-
-            em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
-            return await sent_message.edit(embed=em)
+    #
+    # @submission_hybrid_group.command(name='outdated')
+    # async def outdated_function(self, ctx: Context):
+    #     """Shows an overview of all discord posts that require updating."""
+    #     async with utils.RunningMessage(ctx) as sent_message:
+    #         outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
+    #
+    #         if len(outdated_messages) == 0:
+    #             desc = 'No outdated submissions.'
+    #             em = utils.info_embed(title='Outdated Records', description=desc)
+    #             return await sent_message.edit(embed=em)
+    #
+    #         builds = await get_builds([message['build_id'] for message in outdated_messages])
+    #
+    #         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
+    #         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
+    #
+    #         desc = []
+    #         for build in builds:
+    #             desc.append(
+    #                 f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators_ign))}_ - _submitted by {build.submitter_id}_")
+    #         desc = '\n\n'.join(desc)
+    #
+    #         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
+    #         return await sent_message.edit(embed=em)
 
     @submission_hybrid_group.command(name='update')
     @has_any_role(*submission_roles)
@@ -256,31 +256,32 @@ class SubmissionsCog(Cog, name='Submissions'):
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
-        async with RunningMessage(followup) as message:
+        async with RunningMessage(followup) as sent_message:
             submission = await Build.from_id(flags.submission_id)
             if submission is None:
                 error_embed = utils.error_embed('Error', 'No submission with that ID.')
-                return await message.edit(embed=error_embed)
+                return await sent_message.edit(embed=error_embed)
 
             update_values = format_submission_input(ctx, dict(flags))
             submission.update_local(update_values)
             preview_embed = submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
-            await message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+            await sent_message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
             view = ConfirmationView()
             preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
             await view.wait()
 
             await preview.delete()
             if view.value is None:
-                await message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
+                await sent_message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
             elif view.value:
-                await message.edit(embed=utils.info_embed('Editing', 'Editing build...'))
+                await sent_message.edit(embed=utils.info_embed('Editing', 'Editing build...'))
                 await submission.save()
-                await message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
+                await post.update_build_posts(self.bot, submission)
+                await sent_message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
             else:
-                await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
+                await sent_message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:

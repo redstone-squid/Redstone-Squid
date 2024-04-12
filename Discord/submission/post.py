@@ -77,3 +77,16 @@ async def edit_post(client: discord.Client, server: discord.Guild, channel_id: i
 
     updated_message = await message.edit(embed=em)
     await msg.update_message(server.id, build_id, channel_id, updated_message.id)
+
+
+async def update_build_posts(client: discord.Client, build: Build) -> None:
+    """Updates all posts for a build."""
+    # Get all messages for a build
+    messages = await msg.get_build_messages(build.id)
+    em = build.generate_embed()
+
+    for message in messages:
+        channel = client.get_channel(message['channel_id'])
+        message = await channel.fetch_message(message['message_id'])
+        await message.edit(embed=em)
+        await msg.update_message(message.guild.id, build.id, channel.id, message.id)

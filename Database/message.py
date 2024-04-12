@@ -7,10 +7,16 @@ from Database.database import DatabaseManager
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
-async def get_messages(server_id: int) -> list[MessageRecord]:
+async def get_server_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
     db = await DatabaseManager()
     response = await db.table('messages').select('*').eq('server_id', server_id).execute()
+    return response.data
+
+async def get_build_messages(build_id: int) -> list[MessageRecord]:
+    """Get all messages for a build."""
+    db = await DatabaseManager()
+    response = await db.table('messages').select('*').eq('build_id', build_id).execute()
     return response.data
 
 async def get_message(server_id: int, submission_id: int) -> MessageRecord | None:
@@ -21,7 +27,9 @@ async def get_message(server_id: int, submission_id: int) -> MessageRecord | Non
     # FIXME: this assumes that the server_id, build_id pair is unique
     return server_record.data[0]
 
-async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
+
+async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str = None) -> None:
+    """Add a message to the database."""
     db = await DatabaseManager()
     await db.table('messages').insert({
         'server_id': server_id,
@@ -30,6 +38,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
         'message_id': message_id,
         'edited_time': utcnow()
     }).execute()
+
 
 async def update_message(server_id: int, submission_id: int, channel_id: int, message_id: int) -> None:
     # Try getting the message
@@ -69,6 +78,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
     message_ids = [response.data[i]['message_id'] for i in range(response.count)]
     await db.table('messages').delete().in_('message_id', message_ids).execute()
     return message_ids
+
 
 async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     """Returns a list of messages that are outdated. Usually `get_submissions` is called in combination with this function.
