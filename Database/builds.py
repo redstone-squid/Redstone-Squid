@@ -134,7 +134,7 @@ class Build:
         build.component_restrictions = [r['name'] for r in restrictions if r['type'] == 'component']
         build.miscellaneous_restrictions = [r['name'] for r in restrictions if r['type'] == 'miscellaneous']
 
-        build.information = data['information']
+        build.information = json.loads(data['information'])
 
         creators: list[dict] = data.get('build_creators', [])
         build.creators_ign = [creator['creator_ign'] for creator in creators]
@@ -295,6 +295,7 @@ class Build:
 
     def update_local(self, data: dict) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
+        # FIXME: this does not work with nested data like self.information
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)

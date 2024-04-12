@@ -1,10 +1,11 @@
+import json
 from typing import Literal
 
 import discord
 from discord import InteractionResponse
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command
+from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command, flag
 
 import Discord.config
 import Discord.utils as utils
@@ -169,59 +170,46 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Shows a list of versions the bot recognizes."""
         await ctx.send(config.VERSIONS_LIST)
 
-    @app_commands.command(name='submit')
-    @app_commands.describe(
-        record_category='The category of the build. If none, use "None".',
-        door_width='The width of the door itself. Like 2x2 piston door.',
-        door_height='The height of the door itself. Like 2x2 piston door.',
-        pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
-        door_type='Door, Skydoor, or Trapdoor.',
-        build_width='The width of the build.',
-        build_height='The height of the build.',
-        build_depth='The depth of the build.',
-        works_in='The versions the build works in. Default to newest version. /versions for full list.',
-        wiring_placement_restrictions='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.',
-        component_restrictions='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.',
-        information_about_build='Any additional information about the build.',
-        normal_closing_time='The time it takes to close the door, in gameticks. (1s = 20gt)',
-        normal_opening_time='The time it takes to open the door, in gameticks. (1s = 20gt)',
-        date_of_creation='The date the build was created.',
-        in_game_name_of_creator='The in-game name of the creator(s).',
-        locationality='Whether the build works everywhere, or only in certain locations.',
-        directionality='Whether the build works in all directions, or only in certain directions.',
-        link_to_image='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"',
-        link_to_youtube_video='A link to a video of the build.',
-        link_to_world_download='A link to download the world.',
-        server_ip='The IP of the server where the build is located.',
-        coordinates='The coordinates of the build in the server.',
-        command_to_get_to_build='The command to get to the build in the server.'
-    )
-    async def submit(self, interaction: discord.Interaction, record_category: Literal['Smallest', 'Fastest', 'First', 'None'],
-                     door_width: int, door_height: int, pattern: str, door_type: Literal['Door', 'Skydoor', 'Trapdoor'],
-                     build_width: int, build_height: int, build_depth: int,
-                     # Optional parameters
-                     works_in: str = Discord.config.VERSIONS_LIST[-1],
-                     wiring_placement_restrictions: str = None,
-                     component_restrictions: str = None, information_about_build: str = None,
-                     normal_opening_time: int = None, normal_closing_time: int = None,
-                     date_of_creation: str = None, in_game_name_of_creator: str = None,
-                     locationality: Literal["Locational", "Locational with fixes"] = None,
-                     directionality: Literal["Directional", "Directional with fixes"] = None,
-                     link_to_image: str = None, link_to_youtube_video: str = None,
-                     link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
-                     command_to_get_to_build: str = None):
+    class SubmitFlags(commands.FlagConverter):
+        """Parameters information for the /submit command."""
+        record_category: Literal['Smallest', 'Fastest', 'First', 'None'] = flag(description='Is this build a record?')
+        door_width: int = flag(description='The width of the door itself. Like 2x2 piston door.')
+        door_height: int = flag(description='The height of the door itself. Like 2x2 piston door.')
+        pattern: str = flag(description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(description='Door, Skydoor, or Trapdoor.')
+        build_width: int = flag(description='The width of the build.')
+        build_height: int = flag(description='The height of the build.')
+        build_depth: int = flag(description='The depth of the build.')
+        works_in: str = flag(default=Discord.config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')
+        wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        information_about_build: str = flag(default=None, description='Any additional information about the build.')
+        normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        date_of_creation: str = flag(default=None, description='The date the build was created.')
+        in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes"] = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
+        link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
+        link_to_world_download: str = flag(default=None, description='A link to download the world.')
+        server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
+        coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
+
+    @commands.hybrid_command(name='submit')
+    async def submit(self, ctx: Context, flags: SubmitFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
-        data = locals().copy()
-
+        interaction: discord.Interaction = ctx.interaction
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            fmt_data = format_submission_input(data)
+            fmt_data = format_submission_input(ctx, dict(flags))
             build = Build.from_dict(fmt_data)
             build.submission_status = Status.PENDING
             # TODO: unhardcode this
@@ -235,58 +223,49 @@ class SubmissionsCog(Cog, name='Submissions'):
             await message.edit(embed=success_embed)
             await post.send_submission(self.bot, build)
 
-    @app_commands.command(name='edit')
-    @app_commands.describe(
-        door_width='The width of the door itself. Like 2x2 piston door.',
-        door_height='The height of the door itself. Like 2x2 piston door.',
-        pattern='The pattern type of the door. For example, "full lamp" or "funnel".',
-        door_type='Door, Skydoor, or Trapdoor.',
-        build_width='The width of the build.',
-        build_height='The height of the build.',
-        build_depth='The depth of the build.',
-        works_in='The versions the build works in. Default to newest version. /versions for full list.',
-        wiring_placement_restrictions='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.',
-        component_restrictions='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.',
-        information_about_build='Any additional information about the build.',
-        normal_closing_time='The time it takes to close the door, in gameticks. (1s = 20gt)',
-        normal_opening_time='The time it takes to open the door, in gameticks. (1s = 20gt)',
-        date_of_creation='The date the build was created.',
-        in_game_name_of_creator='The in-game name of the creator(s).',
-        locationality='Whether the build works everywhere, or only in certain locations.',
-        directionality='Whether the build works in all directions, or only in certain directions.',
-        link_to_image='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"',
-        link_to_youtube_video='A link to a video of the build.',
-        link_to_world_download='A link to download the world.',
-        server_ip='The IP of the server where the build is located.',
-        coordinates='The coordinates of the build in the server.',
-        command_to_get_to_build='The command to get to the build in the server.'
-    )
-    async def edit(self, interaction: discord.Interaction, submission_id: int, door_width: int = None, door_height: int = None,
-                   pattern: str = None, door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = None, build_width: int = None,
-                   build_height: int = None, build_depth: int = None, works_in: str = None, wiring_placement_restrictions: str = None,
-                   component_restrictions: str = None, information_about_build: str = None,
-                   normal_closing_time: int = None,
-                   normal_opening_time: int = None, date_of_creation: str = None, in_game_name_of_creator: str = None,
-                   locationality: Literal["Locational", "Locational with fixes"] = None,
-                   directionality: Literal["Directional", "Directional with fixes"] = None,
-                   link_to_image: str = None, link_to_youtube_video: str = None,
-                   link_to_world_download: str = None, server_ip: str = None, coordinates: str = None,
-                   command_to_get_to_build: str = None):
-        """Edits a record in the database directly."""
-        data = locals().copy()
+    class EditFlags(commands.FlagConverter):
+        """Parameters information for the /edit command."""
+        submission_id: int = flag(description='The ID of the submission to edit.')
+        door_width: int = flag(default=None, description='The width of the door itself. Like 2x2 piston door.')
+        door_height: int = flag(default=None, description='The height of the door itself. Like 2x2 piston door.')
+        pattern: str = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default=None, description='Door, Skydoor, or Trapdoor.')
+        build_width: int = flag(default=None, description='The width of the build.')
+        build_height: int = flag(default=None, description='The height of the build.')
+        build_depth: int = flag(default=None, description='The depth of the build.')
+        works_in: str = flag(default=None, description='The versions the build works in. Default to newest version. /versions for full list.')
+        wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        information_about_build: str = flag(default=None, description='Any additional information about the build.')
+        normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        date_of_creation: str = flag(default=None, description='The date the build was created.')
+        in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes"] = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
+        link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
+        link_to_world_download: str = flag(default=None, description='A link to download the world.')
+        server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
+        coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
 
+    @commands.hybrid_command(name='edit')
+    async def edit(self, ctx: Context, flags: EditFlags):
+        """Edits a record in the database directly."""
+        interaction: discord.Interaction = ctx.interaction
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         message: discord.WebhookMessage | None = await followup.send(embed=utils.info_embed('Working', 'Updating information...'))
 
-        submission = await Build.from_id(submission_id)
+        submission = await Build.from_id(flags.submission_id)
         if submission is None:
             error_embed = utils.error_embed('Error', 'No submission with that ID.')
             return await message.edit(embed=error_embed)
 
-        update_values = format_submission_input(data)
+        update_values = format_submission_input(ctx, dict(flags))
         submission.update_local(update_values)
         preview_embed = submission.generate_embed()
 
@@ -306,22 +285,26 @@ class SubmissionsCog(Cog, name='Submissions'):
             await message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
 
 
-def format_submission_input(data: SubmissionCommandResponseT) -> dict:
+def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:
     """Formats the submission data from what is passed in commands to something recognizable by Build."""
     # Union of all the /submit and /edit command options
-    parsable_signatures = ['self', 'interaction', 'submission_id', 'record_category', 'door_width', 'door_height', 'pattern',
+    parsable_signatures = ['submission_id', 'record_category', 'door_width', 'door_height', 'pattern',
                            'door_type', 'build_width', 'build_height', 'build_depth', 'works_in', 'wiring_placement_restrictions',
                            'component_restrictions', 'information_about_build', 'normal_opening_time',
                            'normal_closing_time', 'date_of_creation', 'in_game_name_of_creator', 'locationality',
                            'directionality', 'link_to_image', 'link_to_youtube_video', 'link_to_world_download',
                            'server_ip', 'coordinates', 'command_to_get_to_build']
     if not all(key in parsable_signatures for key in data):
-        raise ValueError("found unknown keys in data, did the command signature of /submit or /edit change?")
+        unknown_keys = [key for key in data if key not in parsable_signatures]
+        raise ValueError(f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?")
 
     fmt_data = dict()
     fmt_data['id'] = data.get('submission_id')
     # fmt_data['submission_status']
-    fmt_data['record_category'] = data['record_category'] if data.get('record_category') != 'None' else None
+    if data.get('record_category') is not None and data['record_category'] != 'None':
+        fmt_data['record_category'] = data['record_category']
+    else:
+        fmt_data['record_category'] = None
     if data.get('works_in') is not None:
         fmt_data['functional_versions'] = data['works_in'].split(", ")
     else:
@@ -354,7 +337,8 @@ def format_submission_input(data: SubmissionCommandResponseT) -> dict:
     # fmt_data['visible_closing_time']
     # fmt_data['visible_opening_time']
 
-    fmt_data['information'] = data.get('information_about_build')
+    information_dict = {"user": data.get('information_about_build')} if data.get('information_about_build') is not None else None
+    fmt_data['information'] = information_dict
     if data.get('in_game_name_of_creator') is not None:
         fmt_data['creators_ign'] = data['in_game_name_of_creator'].split(", ")
     else:
@@ -368,7 +352,7 @@ def format_submission_input(data: SubmissionCommandResponseT) -> dict:
     fmt_data['coordinates'] = data.get('coordinates')
     fmt_data['command'] = data.get('command_to_get_to_build')
 
-    fmt_data['submitter_id'] = data.get('interaction').user.id
+    fmt_data['submitter_id'] = ctx.author.id
     fmt_data['completion_time'] = data.get('date_of_creation')
     # fmt_data['edited_time'] = get_current_utc()
 
