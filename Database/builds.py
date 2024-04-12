@@ -474,55 +474,6 @@ class Build:
 
         return fields
 
-    # TODO: Find a use or remove this method
-    def to_string(self) -> str:
-        string = ""
-
-        string += f"ID: {self.id}\n"
-        string += f"Submission status: {self.submission_status}"
-        string += f"Base Category: {self.record_category}\n"
-        if self.door_width:
-            string += f"Door Width: {self.door_width}\n"
-        if self.door_height:
-            string += f"Door Height: {self.door_height}\n"
-        string += f"Pattern: {' '.join(self.door_type)}\n"
-        string += f"Door Type: {self.door_orientation_type}\n"
-        if self.wiring_placement_restrictions:
-            string += f"Wiring Placement Restrictions: {', '.join(self.wiring_placement_restrictions)}\n"
-        if self.component_restrictions:
-            string += f"Component Restrictions: {', '.join(self.component_restrictions)}\n"
-        if self.miscellaneous_restrictions:
-            string += f"Miscellaneous Restrictions: {', '.join(self.miscellaneous_restrictions)}\n"
-        if self.information:
-            string += f"Information: {self.information}\n"
-        string += f"Build Width: {self.width}\n"
-        string += f"Build Height: {self.height}\n"
-        string += f"Build Depth: {self.depth}\n"
-        string += f"Relative Closing Time: {self.normal_closing_time}\n"
-        string += f"Relative Opening Time: {self.normal_opening_time}\n"
-        if self.visible_closing_time:
-            string += f"Absolute Closing Time: {self.visible_closing_time}\n"
-        if self.visible_opening_time:
-            string += f"Absolute Opening Time: {self.visible_opening_time}\n"
-        string += f"Date Of Creation: {self.completion_time}\n"
-        string += f"Creators: {', '.join(self.creators_ign)}\n"
-        string += f"Versions: {', '.join(self.functional_versions)}\n"
-        if self.image_url:
-            string += f"Image URL: {self.image_url}\n"
-        if self.video_url:
-            string += f"YouTube Link: {self.video_url}\n"
-        if self.world_download_url:
-            string += f"World Download: {self.world_download_url}\n"
-        if self.server_ip:
-            string += f"Server IP: {self.server_ip}\n"
-        if self.coordinates:
-            string += f"Coordinates: {self.coordinates}\n"
-        if self.command:
-            string += f"Command: {self.command}\n"
-        string += f"Submitted By: {self.submitter_id}\n"
-
-        return string
-
 
 async def get_all_builds(submission_status: Optional[int] = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
@@ -572,8 +523,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    build = await Build.from_id(30)
-    print(build.to_string())
+    pass
 
 if __name__ == '__main__':
     asyncio.run(main())
