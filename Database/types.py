@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Required
 from Database.enums import Status, Category
 
 
@@ -18,6 +18,13 @@ class BuildRecord(TypedDict, total=False):
     server_info: dict  # JSON
     submitter_id: int
 
+class MessageRecord(TypedDict, total=False):
+    """A record of a message in the database."""
+    message_id: Required[int]
+    server_id: int
+    build_id: int
+    channel_id: int
+    edited_time: str
 
 class DoorRecord(TypedDict, total=False):
     """A record of a door in the database."""

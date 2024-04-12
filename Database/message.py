@@ -1,18 +1,19 @@
 """Some functions related to the message table, which stores message ids."""
 from postgrest.types import CountMethod
 
+from Database.types import MessageRecord
 from Database.utils import utcnow
 from Database.database import DatabaseManager
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
-async def get_messages(server_id: int) -> list[dict[str, int]]:
+async def get_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
     db = await DatabaseManager()
     response = await db.table('messages').select('*').eq('server_id', server_id).execute()
     return response.data
 
-async def get_message(server_id: int, submission_id: int) -> dict[str, int] | None:
+async def get_message(server_id: int, submission_id: int) -> MessageRecord | None:
     db = await DatabaseManager()
     # supabase hate .maybe_single() and throws a 406 error if no records are found
     server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute()
@@ -70,7 +71,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
     await db.table('messages').delete().in_('message_id', message_ids).execute()
     return message_ids
 
-async def get_outdated_messages(server_id: int) -> list[dict[str, int]] | None:
+async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     """Returns a list of messages that are outdated. Usually `get_submissions` is called in combination with this function.
 
     Args:
@@ -88,7 +89,7 @@ async def get_outdated_messages(server_id: int) -> list[dict[str, int]] | None:
     return server_outdated_messages
 
 
-async def get_outdated_message(server_id: int, build_id: int) -> dict[str, int] | None:
+async def get_outdated_message(server_id: int, build_id: int) -> MessageRecord | None:
     """Returns a message that is outdated. Usually `get_submission` is called in combination with this function.
 
     Args:
