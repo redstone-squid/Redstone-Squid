@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import final, Any
 
 
@@ -15,3 +16,9 @@ class MISSING:
 Missing = MISSING()
 def drop_missing(x: Any):
     return None if x is Missing else x
+
+
+def utcnow() -> str:
+    current_utc = datetime.now(tz=timezone.utc)
+    formatted_time = current_utc.strftime('%Y-%m-%dT%H:%M:%S')
+    return formatted_time

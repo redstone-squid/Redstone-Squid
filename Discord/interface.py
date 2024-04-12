@@ -9,7 +9,7 @@ from time import strftime
 import discord
 from discord.ext.commands import Cog, Bot, Context, CommandError
 
-from common import utcnow
+from Database.utils import utcnow
 from Discord.config import *
 from Discord.misc_commands import Miscellaneous
 from Discord.help import HelpCog

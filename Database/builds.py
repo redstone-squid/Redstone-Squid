@@ -12,10 +12,9 @@ from postgrest.types import CountMethod
 import Discord.config
 from Database._types import BuildRecord, DoorRecord
 from Database.database import DatabaseManager, all_build_columns
-from Database.utils import MISSING, Missing, drop_missing
+from Database.utils import MISSING, Missing, drop_missing, utcnow
 from Database.enums import Status
 from Discord import utils
-from common import utcnow
 
 
 class Build:

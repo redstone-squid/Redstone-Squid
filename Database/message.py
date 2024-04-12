@@ -1,5 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
-from common import utcnow
+from Database.utils import utcnow
 from Database.database import DatabaseManager
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
