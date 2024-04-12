@@ -1,4 +1,6 @@
 """Some functions related to the message table, which stores message ids."""
+from postgrest.types import CountMethod
+
 from Database.utils import utcnow
 from Database.database import DatabaseManager
 
@@ -61,7 +63,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
         A list of message ids that were deleted.
     """
     db = await DatabaseManager()
-    response = await db.table('messages').select('message_id', count='exact').eq('server_id', server_id).eq('build_id', build_id).execute()
+    response = await db.table('messages').select('message_id', count=CountMethod.exact).eq('server_id', server_id).eq('build_id', build_id).execute()
     if response.count == 0:
         raise ValueError("No messages found in this server with the given submission id.")
     message_ids = [response.data[i]['message_id'] for i in range(response.count)]
@@ -114,7 +116,7 @@ async def get_build_id_by_message(message_id: int) -> int | None:
         The build id of the message.
     """
     db = await DatabaseManager()
-    response = await db.table('messages').select('build_id', count='exact').eq('message_id', message_id).maybe_single().execute()
+    response = await db.table('messages').select('build_id', count=CountMethod.exact).eq('message_id', message_id).maybe_single().execute()
     if response.count == 0:
         return None
     return response.data['build_id']

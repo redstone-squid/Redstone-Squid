@@ -1,4 +1,6 @@
 """Some functions related to storing and changing server ids for sending records."""
+from postgrest.types import CountMethod
+
 from Database.database import DatabaseManager
 from Discord.config import SETTABLE_CHANNELS_TYPE, SETTABLE_CHANNELS
 
@@ -29,7 +31,7 @@ async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_
     """Gets the channel id of the specified purpose for a server."""
     setting_name = get_setting_name(channel_purpose)
     db = await DatabaseManager()
-    response = await db.table('server_settings').select(setting_name, count='exact').eq('server_id', server_id).maybe_single().execute()
+    response = await db.table('server_settings').select(setting_name, count=CountMethod.exact).eq('server_id', server_id).maybe_single().execute()
     return response.data[setting_name] if response.count > 0 else None
 
 
