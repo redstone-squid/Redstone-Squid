@@ -143,7 +143,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             # If message isn't yet tracked, add it.
             # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
 
-            await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['build_id'])
+            await post.edit_post(self.bot, message['channel_id'], message['message_id'], message['build_id'])
 
             success_embed = utils.info_embed('Success', 'Post has successfully been updated.')
             return await sent_message.edit(embed=success_embed)
@@ -158,7 +158,7 @@ class SubmissionsCog(Cog, name='Submissions'):
             for message in outdated_messages:
                 # If message isn't yet tracked, add it.
                 # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
-                await post.edit_post(self.bot, ctx.guild, message['channel_id'], message['message_id'], message['build_id'])
+                await post.edit_post(self.bot, message['channel_id'], message['message_id'], message['build_id'])
 
             success_embed = utils.info_embed('Success', 'All posts have been successfully updated.')
             return await sent_message.edit(embed=success_embed)
