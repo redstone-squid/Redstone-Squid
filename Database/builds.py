@@ -134,7 +134,7 @@ class Build:
         build.component_restrictions = [r['name'] for r in restrictions if r['type'] == 'component']
         build.miscellaneous_restrictions = [r['name'] for r in restrictions if r['type'] == 'miscellaneous']
 
-        build.information = json.loads(data['information'])
+        build.information = data['information']
 
         creators: list[dict] = data.get('build_creators', [])
         build.creators_ign = [creator['creator_ign'] for creator in creators]
