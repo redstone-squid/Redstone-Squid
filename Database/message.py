@@ -1,6 +1,7 @@
 """Some functions related to the message table, which stores message ids."""
 from postgrest.types import CountMethod
 
+from Database.builds import Build, get_builds
 from Database.types import MessageRecord
 from Database.utils import utcnow
 from Database.database import DatabaseManager
@@ -69,7 +70,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
 
 
 async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
-    """Returns a list of messages that are outdated. Usually `get_submissions` is called in combination with this function.
+    """Returns a list of messages that are outdated.
 
     Args:
         server_id: The server id to check for outdated messages.
@@ -81,28 +82,24 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     # Messages that have been updated since the last submission message update.
     response = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).execute()
     server_outdated_messages = response.data
-    if len(server_outdated_messages) == 0:
-        return None
     return server_outdated_messages
 
 
-async def get_outdated_message(server_id: int, build_id: int) -> MessageRecord | None:
-    """Returns a message that is outdated. Usually `get_submission` is called in combination with this function.
+async def get_unsent_builds(server_id: int) -> list[Build]:
+    """
+    Gets all the builds without messages in this server.
 
     Args:
-        server_id: The server id to check for outdated messages.
-        build_id: The build id to check for outdated message.
+        server_id: The server id to check for.
 
     Returns:
-        A dictionary containing all the information about the outdated message.
+        A list of messages
     """
     db = await DatabaseManager()
-    # Messages that have been updated since the last submission message update.
-    response = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).eq('build_id', build_id).execute()
-    server_outdated_messages = response.data
-    if len(server_outdated_messages) == 0:
-        return None
-    return server_outdated_messages[0]
+    response = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
+    build_ids = [row['id'] for row in response.data]
+    builds = await get_builds(build_ids)
+    return builds
 
 
 async def get_build_id_by_message(message_id: int) -> int | None:

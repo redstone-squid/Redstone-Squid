@@ -103,64 +103,19 @@ class SubmissionsCog(Cog, name='Submissions'):
 
             success_embed = utils.info_embed('Success', 'Submission has successfully been denied.')
             return await sent_message.edit(embed=success_embed)
-    #
-    # @submission_hybrid_group.command(name='outdated')
-    # async def outdated_function(self, ctx: Context):
-    #     """Shows an overview of all discord posts that require updating."""
-    #     async with utils.RunningMessage(ctx) as sent_message:
-    #         outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
-    #
-    #         if len(outdated_messages) == 0:
-    #             desc = 'No outdated submissions.'
-    #             em = utils.info_embed(title='Outdated Records', description=desc)
-    #             return await sent_message.edit(embed=em)
-    #
-    #         builds = await get_builds([message['build_id'] for message in outdated_messages])
-    #
-    #         # TODO: Consider using get_unsent_messages too, and then merge the two lists, with different headers.
-    #         # unsent_submissions = submissions.get_unsent_submissions(ctx.guild.id)
-    #
-    #         desc = []
-    #         for build in builds:
-    #             desc.append(
-    #                 f"**{build.id}** - {build.get_title()}\n_by {', '.join(sorted(build.creators_ign))}_ - _submitted by {build.submitter_id}_")
-    #         desc = '\n\n'.join(desc)
-    #
-    #         em = discord.Embed(title='Outdated Records', description=desc, colour=utils.discord_green)
-    #         return await sent_message.edit(embed=em)
 
-    @submission_hybrid_group.command(name='update')
-    @has_any_role(*submission_roles)
-    async def update_function(self, ctx, submission_id: int):
-        """Update or post an outdated discord post to this server."""
+    # @submission_hybrid_group.command("send_all")
+    # @has_any_role(*submission_roles)
+    async def send_all(self, ctx):
+        """Sends all records and builds to this server, in the channels set."""
+        # NOT in use right now
         async with utils.RunningMessage(ctx) as sent_message:
-            message = await msg.get_outdated_message(ctx.guild.id, submission_id)
+            unsent_builds = await msg.get_unsent_builds(ctx.guild.id)
 
-            if message is None:
-                error_embed = utils.error_embed('Error', 'No outdated submissions with that ID.')
-                return await sent_message.edit(embed=error_embed)
+            for build in unsent_builds:
+                await post.post_build_to_server(self.bot, build, ctx.guild.id)
 
-            # If message isn't yet tracked, add it.
-            # await post.send_submission_to_server(self.bot, message[1], ctx.guild.id)
-
-            await post.edit_post(self.bot, message['channel_id'], message['message_id'], message['build_id'])
-
-            success_embed = utils.info_embed('Success', 'Post has successfully been updated.')
-            return await sent_message.edit(embed=success_embed)
-
-    @submission_hybrid_group.command(name='update_all')
-    @has_any_role(*submission_roles)
-    async def update_all_function(self, ctx):
-        """Updates all outdated discord posts in this server."""
-        async with utils.RunningMessage(ctx) as sent_message:
-            outdated_messages = await msg.get_outdated_messages(ctx.guild.id)
-
-            for message in outdated_messages:
-                # If message isn't yet tracked, add it.
-                # await post.send_submission_to_server(self.bot, sub, ctx.guild.id)
-                await post.edit_post(self.bot, message['channel_id'], message['message_id'], message['build_id'])
-
-            success_embed = utils.info_embed('Success', 'All posts have been successfully updated.')
+            success_embed = utils.info_embed('Success', 'All posts have been successfully sent.')
             return await sent_message.edit(embed=success_embed)
 
     @hybrid_command(name='versions')
