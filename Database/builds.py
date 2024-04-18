@@ -349,8 +349,8 @@ class Build:
     def get_title(self) -> str:
         title = "Pending: " if self.submission_status == Status.PENDING else ""
 
-        # Category
-        title += f"{self.record_category or ''} "
+        if self.record_category:
+            title += f"{self.record_category} "
 
         # Door dimensions
         if self.door_width and self.door_height:
@@ -367,10 +367,9 @@ class Build:
                     title += f"{restriction} "
 
         # Pattern
-        # FIXME: list index out of range due to not adding Regular to the list when Build.save()
-        # if self.door_type[0] != "Regular":
         for pattern in self.door_type:
-            title += f"{pattern} "
+            if pattern != "Regular":
+                title += f"{pattern} "
 
         # Door type
         title += self.door_orientation_type
@@ -445,9 +444,11 @@ class Build:
 
     def get_meta_fields(self) -> dict[str, str]:
         fields = {"Dimensions": f"{self.width}x{self.height}x{self.depth}",
-                  "Volume": str(self.width * self.height * self.depth),
                   "Opening Time": str(self.normal_opening_time),
                   "Closing Time": str(self.normal_closing_time)}
+
+        if self.width and self.height and self.depth:
+            fields["Volume"] = str(self.width * self.height * self.depth)
 
         if self.visible_opening_time and self.visible_closing_time:
             # The times are stored as game ticks, so they need to be divided by 20 to get seconds

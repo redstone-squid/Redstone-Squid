@@ -170,14 +170,14 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
-        record_category: Literal['Smallest', 'Fastest', 'First', 'None'] = flag(description='Is this build a record?')
         door_width: int = flag(description='The width of the door itself. Like 2x2 piston door.')
         door_height: int = flag(description='The height of the door itself. Like 2x2 piston door.')
-        pattern: str = flag(description='The pattern type of the door. For example, "full lamp" or "funnel".')
-        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(description='Door, Skydoor, or Trapdoor.')
-        build_width: int = flag(description='The width of the build.')
-        build_height: int = flag(description='The height of the build.')
-        build_depth: int = flag(description='The depth of the build.')
+        record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
+        pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
+        build_width: int = flag(default=None, description='The width of the build.')
+        build_height: int = flag(default=None, description='The height of the build.')
+        build_depth: int = flag(default=None, description='The depth of the build.')
         works_in: str = flag(default=Discord.config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
@@ -207,11 +207,15 @@ class SubmissionsCog(Cog, name='Submissions'):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
+            # fix discord.py stupid type conversion
+            if flags.record_category == 'None':
+                flags.record_category = None
+
             fmt_data = format_submission_input(ctx, dict(flags))
             build = Build.from_dict(fmt_data)
+
             build.submission_status = Status.PENDING
-            # TODO: unhardcode this
-            build.category = "Door"
+
             await build.save()
             # Shows the submission to the user
             await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
@@ -300,10 +304,8 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data = dict()
     fmt_data['id'] = data.get('submission_id')
     # fmt_data['submission_status']
-    if data.get('record_category') is not None and data['record_category'] != 'None':
-        fmt_data['record_category'] = data['record_category']
-    else:
-        fmt_data['record_category'] = None
+
+    fmt_data['record_category'] = data['record_category']
     if data.get('works_in') is not None:
         fmt_data['functional_versions'] = data['works_in'].split(", ")
     else:
@@ -317,7 +319,8 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data['door_height'] = data.get('door_height')
     # fmt_data['door_depth']
 
-    fmt_data['door_type'] = data.get('pattern')
+    if data.get('pattern'):
+        fmt_data['door_type'] = data.get('pattern').split(', ')
     fmt_data['door_orientation_type'] = data.get('door_type')
 
     if data.get('wiring_placement_restrictions') is not None:
