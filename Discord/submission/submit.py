@@ -207,10 +207,6 @@ class SubmissionsCog(Cog, name='Submissions'):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            # fix discord.py stupid type conversion
-            if flags.record_category == 'None':
-                flags.record_category = None
-
             fmt_data = format_submission_input(ctx, dict(flags))
             build = Build.from_dict(fmt_data)
 
