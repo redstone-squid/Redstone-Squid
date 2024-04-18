@@ -12,8 +12,6 @@ class DatabaseManager:
     """Singleton class for the supabase client."""
     _client: AsyncClient = None
 
-
-    # This actually works, but some IDE might show a warning
     async def __new__(cls) -> Coroutine[Any, Any, AsyncClient]:
         if not cls._client:
             url, key = cls.get_credentials()
