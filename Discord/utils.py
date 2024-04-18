@@ -1,5 +1,7 @@
 # FIXME: this file name can't be worse bcs dpy has a utils file
 from traceback import format_tb
+from typing import Tuple
+
 from types import TracebackType
 
 import discord
@@ -26,6 +28,22 @@ def info_embed(title, description):
 
 def help_embed(title, description):
     return discord.Embed(title=title, colour=discord_green, description=description)
+
+
+def parse_door_size(size_str: str) -> Tuple[int, int, int | None]:
+    inputs = size_str.split('x')
+    if not 2 <= len(inputs) <= 3:
+        raise ValueError("Invalid door size. Must be in the format 'width x height' or 'width x height x depth'")
+
+    try:
+        dimensions = list(map(int, inputs))
+    except ValueError:
+        raise ValueError(f"Invalid door size. Each dimension must be parsable an integer, found {inputs}")
+
+    if len(dimensions) == 2:
+        return dimensions[0], dimensions[1], None
+    elif len(dimensions) == 3:
+        return dimensions[0], dimensions[1], dimensions[2]
 
 
 class RunningMessage:

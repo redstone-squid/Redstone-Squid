@@ -6,10 +6,9 @@ from discord.ext.commands import Bot
 
 class SubmissionCommandResponseT(TypedDict, total=False):
     """Response from the submit or edit command."""
-    self: Bot
-    interaction: discord.Interaction
     submission_id: Optional[int]
     record_category: Optional[str]
+    door_size: Optional[str]
     door_width: Optional[int]
     door_height: Optional[int]
     pattern: Optional[str]

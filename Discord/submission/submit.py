@@ -170,8 +170,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
-        door_width: int = flag(description='The width of the door itself. Like 2x2 piston door.')
-        door_height: int = flag(description='The height of the door itself. Like 2x2 piston door.')
+        door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
@@ -210,6 +209,8 @@ class SubmissionsCog(Cog, name='Submissions'):
             fmt_data = format_submission_input(ctx, dict(flags))
             build = Build.from_dict(fmt_data)
 
+            # TODO: Stop hardcoding this
+            build.category = 'Door'
             build.submission_status = Status.PENDING
 
             await build.save()
@@ -287,12 +288,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:
     """Formats the submission data from what is passed in commands to something recognizable by Build."""
     # Union of all the /submit and /edit command options
-    parsable_signatures = ['submission_id', 'record_category', 'door_width', 'door_height', 'pattern',
-                           'door_type', 'build_width', 'build_height', 'build_depth', 'works_in', 'wiring_placement_restrictions',
-                           'component_restrictions', 'information_about_build', 'normal_opening_time',
-                           'normal_closing_time', 'date_of_creation', 'in_game_name_of_creator', 'locationality',
-                           'directionality', 'link_to_image', 'link_to_youtube_video', 'link_to_world_download',
-                           'server_ip', 'coordinates', 'command_to_get_to_build']
+    parsable_signatures = SubmissionCommandResponseT.__annotations__.keys()
     if not all(key in parsable_signatures for key in data):
         unknown_keys = [key for key in data if key not in parsable_signatures]
         raise ValueError(f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?")
@@ -311,8 +307,14 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data['height'] = data.get('build_height')
     fmt_data['depth'] = data.get('build_depth')
 
-    fmt_data['door_width'] = data.get('door_width')
-    fmt_data['door_height'] = data.get('door_height')
+    if data.get('door_size'):
+        width, height, depth = utils.parse_door_size(data['door_size'])
+        fmt_data['door_width'] = width
+        fmt_data['door_height'] = height
+        fmt_data['door_depth'] = depth
+    else:
+        fmt_data['door_width'] = data.get('door_width')
+        fmt_data['door_height'] = data.get('door_height')
     # fmt_data['door_depth']
 
     if data.get('pattern'):
