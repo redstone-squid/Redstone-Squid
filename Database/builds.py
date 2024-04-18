@@ -139,7 +139,7 @@ class Build:
         creators: list[dict] = data.get('build_creators', [])
         build.creators_ign = [creator['creator_ign'] for creator in creators]
 
-        versions: list[dict] = data.get('functional_versions', [])
+        versions: list[dict] = data.get('versions', [])
         build.functional_versions = [version['full_name_temp'] for version in versions]
 
         links: list[dict] = data.get('build_links', [])
@@ -451,9 +451,13 @@ class Build:
         return ', '.join(versions)
 
     def get_meta_fields(self) -> dict[str, str]:
-        fields = {"Dimensions": f"{self.width}x{self.height}x{self.depth}",
-                  "Opening Time": str(self.normal_opening_time),
-                  "Closing Time": str(self.normal_closing_time)}
+        fields = {"Dimensions": f"{self.width or '?'} x {self.height or '?'} x {self.depth or '?'}"}
+
+        if self.normal_opening_time:
+            fields["Opening Time"] = str(self.normal_opening_time)
+
+        if self.normal_closing_time:
+            fields["Opening Time"] = str(self.normal_closing_time)
 
         if self.width and self.height and self.depth:
             fields["Volume"] = str(self.width * self.height * self.depth)
@@ -463,8 +467,12 @@ class Build:
             fields["Visible Opening Time"] = self.visible_opening_time / 20
             fields["Visible Closing Time"] = self.visible_closing_time / 20
 
-        fields["Creators"] = ', '.join(sorted(self.creators_ign))
-        fields["Date Of Completion"] = str(self.completion_time)
+        if self.creators_ign:
+            fields["Creators"] = ', '.join(sorted(self.creators_ign))
+
+        if self.completion_time:
+            fields["Date Of Completion"] = str(self.completion_time)
+
         fields["Versions"] = self.get_versions_string()
 
         if self.server_ip:
