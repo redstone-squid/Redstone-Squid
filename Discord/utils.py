@@ -1,12 +1,13 @@
 # FIXME: this file name can't be worse bcs dpy has a utils file
 from traceback import format_tb
-from typing import Tuple
+from typing import List, Tuple
 
 from types import TracebackType
 
 import discord
 from discord.ext.commands import Context
-from discord.ui import View
+from discord.ui import View, Select, Button
+from discord.utils import MISSING
 
 from Discord.config import OWNER_ID, PRINT_TRACEBACKS
 
@@ -93,3 +94,120 @@ class ConfirmationView(View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
         self.stop()
+
+
+class RecordCategory(discord.ui.Select):
+    def __init__(self):
+
+        # Set the options that will be presented inside the dropdown
+        options = [
+            discord.SelectOption(label="Smallest"),
+            discord.SelectOption(label="Fastest"),
+            discord.SelectOption(label="First")
+        ]
+
+        super().__init__(placeholder="Choose the record category", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'user choosed {self.values[0]}')
+
+
+class DoorType(discord.ui.Select):
+    def __init__(self):
+
+        # Set the options that will be presented inside the dropdown
+        options = [
+            discord.SelectOption(label="Door"),
+            discord.SelectOption(label="Skydoor"),
+            discord.SelectOption(label="Trapdoor")
+        ]
+
+        super().__init__(placeholder="Choose the door type", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'user choosed {self.values[0]}')
+
+class VersionsSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Pre 1.5"),
+            discord.SelectOption(label="1.5"),
+            discord.SelectOption(label="1.6"),
+            discord.SelectOption(label="1.7"),
+            discord.SelectOption(label="1.8"),
+            discord.SelectOption(label="1.9"),
+            discord.SelectOption(label="1.10"),
+            discord.SelectOption(label="1.11"),
+            discord.SelectOption(label="1.12"),
+            discord.SelectOption(label="1.13"),
+            discord.SelectOption(label="1.13.1 / 1.13.2"),
+            discord.SelectOption(label="1.14"),
+            discord.SelectOption(label="1.14.1"),
+            discord.SelectOption(label="1.15"),
+            discord.SelectOption(label="1.16"),
+            discord.SelectOption(label="1.17"),
+            discord.SelectOption(label="1.18"),
+            discord.SelectOption(label="1.19"),
+            discord.SelectOption(label="1.20"),
+            discord.SelectOption(label="1.20.4")
+        ]
+
+        super().__init__(placeholder="Choose the versions the door works in", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'user choosed {self.values[0]}')
+
+class SubmissionModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Submit Your Build")
+
+        # Door size
+        self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g., 2x2 piston door")
+
+
+        # Pattern
+        self.pattern = discord.ui.TextInput(label="Pattern Type", placeholder="e.g., full lamp, funnel", required=False)
+        
+
+        # Dimensions
+        self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=False)        
+
+
+        # Restrictions
+        self.restrictions = discord.ui.TextInput(label="Restrictions", placeholder="e.g., Seamless, Full Flush", required=False)
+        
+
+        # Additional Information
+        self.additional_info = discord.ui.TextInput(label="Additional Information", style=discord.TextStyle.paragraph, required=False)
+        
+        
+        self.add_item(self.door_size)
+        self.add_item(self.pattern)
+        self.add_item(self.dimensions)
+        self.add_item(self.restrictions)
+        self.add_item(self.additional_info)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        parsed_children={
+        "parse_door_size": self.door_size.value,
+        "parse_pattern": self.pattern.value,
+        "parse_dimensions": self.dimensions.value,
+        "parse_restrictions": self.restrictions.value,
+        "parse_additional_info": self.additional_info.value
+        }
+        
+    
+class OpenModalButton(Button):
+    def __init__(self):
+        super().__init__(label="Open Modal", style=discord.ButtonStyle.primary, custom_id="open_modal")
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SubmissionModal())
+
+class SelectAndButtonView(View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(RecordCategory())
+        self.add_item(DoorType())
+        self.add_item(VersionsSelect())
+        self.add_item(OpenModalButton())
