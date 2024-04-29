@@ -109,7 +109,7 @@ async def main():
 
         token = os.environ.get('BOT_TOKEN')
         if not token:
-            raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
+            raise Exception('Specify discord token either with .env file or a BOT_TOKEN environment variable.')
         await bot.start(token)
 
 if __name__ == '__main__':

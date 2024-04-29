@@ -25,9 +25,9 @@ class DatabaseManager:
             url = os.environ.get('SUPABASE_URL')
             key = os.environ.get('SUPABASE_KEY')
             if not url:
-                raise Exception(f'Specify SUPABASE_URL either with an auth.ini or an environment variable.')
+                raise Exception(f'Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.')
             if not key:
-                raise Exception(f'Specify SUPABASE_KEY either with an auth.ini or an environment variable.')
+                raise Exception(f'Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.')
             cls._client = await create_client(url, key)
 
         return cls._client
