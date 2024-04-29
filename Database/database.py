@@ -8,6 +8,7 @@ import git
 
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
+from Discord.config import DEV_MODE
 
 all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 
@@ -19,8 +20,9 @@ class DatabaseManager:
         if not cls._client:
             # Load the environment variables from the .env file, which is located in the root of the git repository.
             # This is necessary only if you are not running from app.py.
-            git_repo = git.Repo(Path(__file__), search_parent_directories=True)
-            load_dotenv(git_repo.working_dir + '/squid.env')
+            if DEV_MODE:
+                git_repo = git.Repo(Path(__file__), search_parent_directories=True)
+                load_dotenv(git_repo.working_dir + '/squid.env')
 
             url = os.environ.get('SUPABASE_URL')
             key = os.environ.get('SUPABASE_KEY')
