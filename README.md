@@ -44,19 +44,17 @@ pip install -r requirements.txt
 
 Google services requires a google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
 
-Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `auth.ini` in the root directory with the following contents:
+Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `.env` in the root directory with the following contents:
 ```
-[discord]
-token = <Replace this with your discord access token>
+BOT_TOKEN = <Replace this with your discord access token>
 ```
 
-Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project and navigate to **Project Settings | API** and copy the URL and API key (secret, not public) to the same `auth.ini` with the following contents:
+Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project and navigate to **Project Settings | API** and copy the URL and API key (secret, not public) to the same `.env` with the following contents:
 ```
-[supabase]
 SUPABASE_URL = <Replace this with your supabase url>
 SUPABASE_KEY = <Replace this with your supabase api key>
 ```
-The schema for the database has not been provided because I haven't organised it yet. If you want to run this bot, please contact me (@papetoast on discord) and I will provide you with the schema.
+The schema for the database can be obtained by applying the SQL files in Database/migrations in order.
 
 ### Running The Application
 
