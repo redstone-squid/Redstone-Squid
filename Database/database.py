@@ -3,6 +3,9 @@ import os
 import asyncio
 from typing import Coroutine, Any
 from pathlib import Path
+from dotenv import load_dotenv
+import git
+
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
 
@@ -14,33 +17,20 @@ class DatabaseManager:
 
     async def __new__(cls) -> Coroutine[Any, Any, AsyncClient]:
         if not cls._client:
-            url, key = cls.get_credentials()
+            # Load the environment variables from the .env file, which is located in the root of the git repository.
+            # This is necessary only if you are not running from app.py.
+            git_repo = git.Repo(Path(__file__), search_parent_directories=True)
+            load_dotenv(git_repo.working_dir + '/squid.env')
+
+            url = os.environ.get('SUPABASE_URL')
+            key = os.environ.get('SUPABASE_KEY')
+            if not url:
+                raise Exception(f'Specify SUPABASE_URL either with an auth.ini or an environment variable.')
+            if not key:
+                raise Exception(f'Specify SUPABASE_KEY either with an auth.ini or an environment variable.')
             cls._client = await create_client(url, key)
+
         return cls._client
-
-    @staticmethod
-    def get_credentials() -> tuple[str, str]:
-        """Get the Supabase credentials from the environment variables or the auth.ini file."""
-        # Try to get the credentials from the environment variables
-        url = os.environ.get('SUPABASE_URL')
-        key = os.environ.get('SUPABASE_KEY')
-
-        config_file = Path(__file__).parent.parent / 'auth.ini'
-        if not url or not key:
-            # Try to get the credentials from the auth.ini file
-            config = configparser.ConfigParser()
-
-            if os.path.isfile(config_file):
-                config.read(config_file)
-                url = url or config.get('supabase', 'SUPABASE_URL')
-                key = key or config.get('supabase', 'SUPABASE_KEY')
-
-        if not url:
-            raise Exception(f'Specify SUPABASE_URL either with an auth.ini or an environment variable.')
-        if not key:
-            raise Exception(f'Specify SUPABASE_KEY either with an auth.ini or an environment variable.')
-
-        return url, key
 
 
 async def main():

@@ -1,10 +1,13 @@
 import typing
 from typing import Literal, Tuple
 
+DEV_MODE = False
+
 OWNER = 'papetoast'
 OWNER_ID = 353089661175988224
 OWNER_SERVER_ID = 433618741528625152
 PREFIX = '!'
+DEV_PREFIX = '.'
 BOT_NAME = 'Redstone Squid'
 BOT_VERSION = '1.5.1'
 SOURCE_CODE_URL = 'https://github.com/Kappeh/Redstone-Squid'
