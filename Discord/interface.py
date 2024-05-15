@@ -2,9 +2,6 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
-import configparser
-from time import strftime
 
 import discord
 from discord.ext.commands import Cog, Bot, Context, CommandError
@@ -16,18 +13,6 @@ from Discord.help import HelpCog
 from Discord.settings import SettingsCog
 from Discord.submission.submit import SubmissionsCog
 from Discord.submission.voting import VotingCog
-
-# Establishing connection with discord
-TOKEN = os.environ.get('DISCORD_TOKEN')
-if not TOKEN:
-    if os.path.isfile('auth.ini'):
-        config = configparser.ConfigParser()
-        config_file = Path(__file__).parent.parent / 'auth.ini'
-        config.read(config_file)
-        TOKEN = config.get('discord', 'token')
-    else:
-        raise Exception('Specify discord token either with an auth.ini or a DISCORD_TOKEN environment variable.')
-
 
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
@@ -110,7 +95,8 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         logging.getLogger(__name__).error('Ignoring exception in command %s', command, exc_info=exception)
 
 
-async def main(prefix=PREFIX):
+async def main():
+    prefix = PREFIX if not DEV_MODE else DEV_PREFIX
     # Running the application
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         await bot.add_cog(Miscellaneous(bot))
@@ -120,7 +106,11 @@ async def main(prefix=PREFIX):
         await bot.add_cog(HelpCog(bot))
         await bot.add_cog(VotingCog(bot))
         discord.utils.setup_logging()
-        await bot.start(TOKEN)
+
+        token = os.environ.get('BOT_TOKEN')
+        if not token:
+            raise Exception('Specify discord token either with .env file or a BOT_TOKEN environment variable.')
+        await bot.start(token)
 
 if __name__ == '__main__':
     asyncio.run(main())
