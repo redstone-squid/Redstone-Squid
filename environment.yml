@@ -1,3 +1,4 @@
+# This file is manually created and maintained, please refer to requirements.txt as source of truth
 name: redstone-squid
 channels:
   - conda-forge
