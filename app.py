@@ -8,5 +8,5 @@ from dotenv import load_dotenv
 import Discord.interface as discord
 
 
-load_dotenv('squid.env')
+load_dotenv()
 asyncio.run(discord.main())
