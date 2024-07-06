@@ -126,7 +126,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
-        first_image: discord.Attachment = flag()
+        first_image: discord.Attachment = flag(default=None)
         second_image: discord.Attachment = flag(default=None)
         third_image: discord.Attachment = flag(default=None)
         fourth_image: discord.Attachment = flag(default=None)
