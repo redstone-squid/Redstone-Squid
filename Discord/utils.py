@@ -33,8 +33,9 @@ def help_embed(title: str, description: str):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-def parse_door_size(size_str: str) -> Tuple[int, int, int | None]:
-    inputs = size_str.split("x")
+def parse_dimensions(dim_str: str) -> Tuple[int, int, int | None]:
+    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'."""
+    inputs = dim_str.split("x")
     if not 2 <= len(inputs) <= 3:
         raise ValueError(
             "Invalid door size. Must be in the format 'width x height' or 'width x height x depth'"

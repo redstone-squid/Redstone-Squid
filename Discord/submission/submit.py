@@ -14,7 +14,7 @@ import Discord.utils as utils
 from Database.builds import get_all_builds, Build
 from Database.enums import Status
 from Discord.types_ import SubmissionCommandResponseT
-from Discord.utils import RunningMessage, parse_door_size, ConfirmationView
+from Discord.utils import RunningMessage, ConfirmationView, parse_dimensions
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -227,7 +227,7 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data['depth'] = data.get('build_depth')
 
     if data.get('door_size'):
-        width, height, depth = utils.parse_door_size(data['door_size'])
+        width, height, depth = utils.parse_dimensions(data['door_size'])
         fmt_data['door_width'] = width
         fmt_data['door_height'] = height
         fmt_data['door_depth'] = depth
@@ -319,7 +319,7 @@ class SubmissionModal(discord.ui.Modal):
         self.add_item(self.additional_info)
 
     async def on_submit(self, interaction: discord.Interaction):
-        dimensions = parse_door_size(self.dimensions.value)
+        dimensions = parse_dimensions(self.dimensions.value)
         width = dimensions[0]
         height = dimensions[1]
         depth = dimensions[2]
