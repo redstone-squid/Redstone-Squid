@@ -133,6 +133,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     @commands.hybrid_command(name='submit')
     async def submit(self, ctx: Context, flags: SubmitFlags):
+        """Submits a build to the database."""
         await ctx.defer()
 
         view = BuildSubmissionForm()
