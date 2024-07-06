@@ -12,7 +12,7 @@ import Discord.submission.post as post
 import Discord.utils as utils
 from Database.builds import get_all_builds, get_builds, Build
 from Database.enums import Status
-from Discord.types import SubmissionCommandResponseT
+from Discord.types_ import SubmissionCommandResponseT
 from Discord.utils import ConfirmationView, RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
