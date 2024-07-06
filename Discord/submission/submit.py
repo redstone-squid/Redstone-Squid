@@ -372,7 +372,7 @@ class OpenModalButton(Button):
         await interaction_response.send_modal(SubmissionModal())
 
 
-class RecordCategory(discord.ui.Select):
+class RecordCategorySelect(discord.ui.Select):
     def __init__(self):
 
         # Set the options that will be presented inside the dropdown
@@ -393,7 +393,7 @@ class RecordCategory(discord.ui.Select):
         await interaction.response.defer()  # type: ignore
 
 
-class DoorType(discord.ui.Select):
+class DoorTypeSelect(discord.ui.Select):
     def __init__(self):
 
         # Set the options that will be presented inside the dropdown
@@ -472,8 +472,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
 class BuildSubmissionForm(View):
     def __init__(self, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
-        self.add_item(RecordCategory())
-        self.add_item(DoorType())
+        self.add_item(RecordCategorySelect())
+        self.add_item(DoorTypeSelect())
         self.add_item(VersionsSelect())
         self.add_item(DirectonalityLocationalitySelect())
         self.add_item(OpenModalButton())
