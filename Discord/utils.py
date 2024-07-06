@@ -18,23 +18,23 @@ discord_yellow = 0xFAA61A
 discord_green = 0x43B581
 
 
-def error_embed(title, description):
+def error_embed(title: str, description: str):
     return discord.Embed(
         title=title, colour=discord_red, description=":x: " + description
     )
 
 
-def warning_embed(title, description):
+def warning_embed(title: str, description: str):
     return discord.Embed(
         title=":warning: " + title, colour=discord_yellow, description=description
     )
 
 
-def info_embed(title, description):
+def info_embed(title: str, description: str):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-def help_embed(title, description):
+def help_embed(title: str, description: str):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
