@@ -186,7 +186,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         fourth_image: discord.Attachment = flag(default=None)
 
     @commands.hybrid_command(name='submit_form')
-    async def submit(self, ctx: Context, flags: SubmitFormFlags):
+    async def submit_form(self, ctx: Context, flags: SubmitFormFlags):
         """Submits a build to the database."""
         await ctx.defer()
 
