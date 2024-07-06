@@ -1,19 +1,20 @@
+import re
 from typing import Literal
 
 import discord
 from discord import InteractionResponse
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command, flag
+from discord.ui import Button, View
 
 import Database.message as msg
-import Discord.config
 import Discord.config as config
 import Discord.submission.post as post
 import Discord.utils as utils
-from Database.builds import get_all_builds, get_builds, Build
+from Database.builds import get_all_builds, Build
 from Database.enums import Status
 from Discord.types_ import SubmissionCommandResponseT
-from Discord.utils import ConfirmationView, RunningMessage
+from Discord.utils import RunningMessage, parse_door_size, ConfirmationView
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -130,12 +131,11 @@ class SubmissionsCog(Cog, name='Submissions'):
         third_image: discord.Attachment = flag(default=None)
         fourth_image: discord.Attachment = flag(default=None)
 
-
     @commands.hybrid_command(name='submit')
     async def submit(self, ctx: Context, flags: SubmitFlags):
         await ctx.defer()
 
-        view = utils.BuildSubmissionForm()
+        view = BuildSubmissionForm()
         followup: discord.Webhook = ctx.interaction.followup  # type: ignore
 
         await followup.send("Use the select menus then click the button", view=view)
@@ -276,3 +276,203 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
 
     fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
     return fmt_data
+
+
+class SubmissionModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Submit Your Build")
+
+        # Door size
+        self.door_size = discord.ui.TextInput(
+            label="Door Size", placeholder="e.g., 2x2 piston door"
+        )
+
+        # Pattern
+        self.pattern = discord.ui.TextInput(
+            label="Pattern Type", placeholder="e.g., full lamp, funnel", required=False
+        )
+
+        # Dimensions
+        self.dimensions = discord.ui.TextInput(
+            label="Dimensions", placeholder="Width x Height x Depth", required=False
+        )
+
+        # Restrictions
+        self.restrictions = discord.ui.TextInput(
+            label="Restrictions",
+            placeholder="e.g., Seamless, Full Flush",
+            required=False,
+        )
+
+        # Additional Information
+        self.additional_info = discord.ui.TextInput(
+            label="Additional Information",
+            style=discord.TextStyle.paragraph,
+            required=False,
+        )
+
+        self.add_item(self.door_size)
+        self.add_item(self.pattern)
+        self.add_item(self.dimensions)
+        self.add_item(self.restrictions)
+        self.add_item(self.additional_info)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        dimensions = parse_door_size(self.dimensions.value)
+        width = dimensions[0]
+        height = dimensions[1]
+        depth = dimensions[2]
+
+        pattern_match = re.search(
+            r"\bpattern:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE
+        )
+        pattern = pattern_match.group(1).strip() if pattern_match else None
+
+        # Extract IGN
+        ign_match = re.search(
+            r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE
+        )
+        ign = ign_match.group(1).strip() if ign_match else None
+
+        # Extract video link
+        video_match = re.search(
+            r"\bvideo:\s*(https?://[^\s,]+)(?:,|$)",
+            self.additional_info.value,
+            re.IGNORECASE,
+        )
+        video_link = video_match.group(1).strip() if video_match else None
+
+        # Extract download link
+        download_match = re.search(
+            r"\bdownload:\s*(https?://[^\s,]+)(?:,|$)",
+            self.additional_info.value,
+            re.IGNORECASE,
+        )
+        download_link = download_match.group(1).strip() if download_match else None
+        parsed_children = {
+            "parse_door_size": self.door_size.value,
+            "parse_pattern": self.pattern.value,
+            "parse_dimensions": self.dimensions.value,
+            "parse_restrictions": self.restrictions.value,
+            "parse_additional_info": self.additional_info.value,
+        }
+
+
+class OpenModalButton(Button):
+    def __init__(self):
+        super().__init__(
+            label="Open Modal",
+            style=discord.ButtonStyle.primary,
+            custom_id="open_modal",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        interaction_response: InteractionResponse = interaction.response  # type: ignore
+        await interaction_response.send_modal(SubmissionModal())
+
+
+class RecordCategory(discord.ui.Select):
+    def __init__(self):
+
+        # Set the options that will be presented inside the dropdown
+        options = [
+            discord.SelectOption(label="Smallest"),
+            discord.SelectOption(label="Fastest"),
+            discord.SelectOption(label="First"),
+        ]
+
+        super().__init__(
+            placeholder="Choose the record category",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
+
+
+class DoorType(discord.ui.Select):
+    def __init__(self):
+
+        # Set the options that will be presented inside the dropdown
+        options = [
+            discord.SelectOption(label="Door"),
+            discord.SelectOption(label="Skydoor"),
+            discord.SelectOption(label="Trapdoor"),
+        ]
+
+        super().__init__(
+            placeholder="Choose the door type",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
+
+
+class VersionsSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Pre 1.5"),
+            discord.SelectOption(label="1.5"),
+            discord.SelectOption(label="1.6"),
+            discord.SelectOption(label="1.7"),
+            discord.SelectOption(label="1.8"),
+            discord.SelectOption(label="1.9"),
+            discord.SelectOption(label="1.10"),
+            discord.SelectOption(label="1.11"),
+            discord.SelectOption(label="1.12"),
+            discord.SelectOption(label="1.13"),
+            discord.SelectOption(label="1.13.1 / 1.13.2"),
+            discord.SelectOption(label="1.14"),
+            discord.SelectOption(label="1.14.1"),
+            discord.SelectOption(label="1.15"),
+            discord.SelectOption(label="1.16"),
+            discord.SelectOption(label="1.17"),
+            discord.SelectOption(label="1.18"),
+            discord.SelectOption(label="1.19"),
+            discord.SelectOption(label="1.20"),
+            discord.SelectOption(label="1.20.4"),
+        ]
+
+        super().__init__(
+            placeholder="Choose the versions the door works in",
+            min_values=1,
+            max_values=19,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
+
+
+class DirectonalityLocationalitySelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Directional"),
+            discord.SelectOption(label="Locational"),
+            discord.SelectOption(label="Fully reliable"),
+        ]
+
+        super().__init__(
+            placeholder="Choose how reliable the the door is",
+            min_values=1,
+            max_values=2,
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
+
+
+class BuildSubmissionForm(View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(RecordCategory())
+        self.add_item(DoorType())
+        self.add_item(VersionsSelect())
+        self.add_item(DirectonalityLocationalitySelect())
+        self.add_item(OpenModalButton())
