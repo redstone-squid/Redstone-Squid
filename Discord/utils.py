@@ -1,8 +1,10 @@
 # FIXME: this file name can't be worse bcs dpy has a utils file
 from traceback import format_tb
+from types import TracebackType
 from typing import List, Tuple
 import re
-from types import TracebackType
+
+from discord.interactions import InteractionResponse
 
 import discord
 from discord.ext.commands import Context
@@ -206,7 +208,8 @@ class OpenModalButton(Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(SubmissionModal())
+        interaction_response: InteractionResponse = interaction.response  # type: ignore
+        await interaction_response.send_modal(SubmissionModal())
 
 
 class RecordCategory(discord.ui.Select):
@@ -226,9 +229,8 @@ class RecordCategory(discord.ui.Select):
             options=options,
         )
 
-    async def callback(self):
-        selected_category = self.values[0]
-        await selected_category
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
 
 
 class DoorType(discord.ui.Select):
@@ -248,9 +250,8 @@ class DoorType(discord.ui.Select):
             options=options,
         )
 
-    async def callback(self):
-        selected_doortype = self.values[0]
-        await selected_doortype
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
 
 
 class VersionsSelect(discord.ui.Select):
@@ -285,9 +286,8 @@ class VersionsSelect(discord.ui.Select):
             options=options,
         )
 
-    async def callback(self):
-        selected_version = self.values
-        await selected_version
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
 
 
 class DirectonalityLocationalitySelect(discord.ui.Select):
@@ -305,10 +305,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
             options=options,
         )
 
-    async def callback(self):
-        selected_reliablity_options = self.values
-        print(selected_reliablity_options)
-        await selected_reliablity_options
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
 
 
 class SelectAndButtonView(View):
