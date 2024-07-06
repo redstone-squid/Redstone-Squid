@@ -126,13 +126,67 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
+        door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
+        record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
+        pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
+        build_width: int = flag(default=None, description='The width of the build.')
+        build_height: int = flag(default=None, description='The height of the build.')
+        build_depth: int = flag(default=None, description='The depth of the build.')
+        works_in: str = flag(default=config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')
+        wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        information_about_build: str = flag(default=None, description='Any additional information about the build.')
+        normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        date_of_creation: str = flag(default=None, description='The date the build was created.')
+        in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes"] = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
+        link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
+        link_to_world_download: str = flag(default=None, description='A link to download the world.')
+        server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
+        coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
+
+    @commands.hybrid_command(name='submit')
+    async def submit(self, ctx: Context, flags: SubmitFlags):
+        """Submits a record to the database directly."""
+        # TODO: Discord only allows 25 options. Split this into multiple commands.
+        # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
+        interaction: discord.Interaction = ctx.interaction
+        response: InteractionResponse = interaction.response  # type: ignore
+        await response.defer()
+
+        followup: discord.Webhook = interaction.followup  # type: ignore
+
+        async with RunningMessage(followup) as message:
+            fmt_data = format_submission_input(ctx, dict(flags))
+            build = Build.from_dict(fmt_data)
+
+            # TODO: Stop hardcoding this
+            build.category = 'Door'
+            build.submission_status = Status.PENDING
+
+            await build.save()
+            # Shows the submission to the user
+            await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                                embed=build.generate_embed(), ephemeral=True)
+
+            success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
+            await message.edit(embed=success_embed)
+            await post.post_build(self.bot, build)
+
+    class SubmitFormFlags(commands.FlagConverter):
+        """Parameters information for the /submit command."""
         first_image: discord.Attachment = flag(default=None)
         second_image: discord.Attachment = flag(default=None)
         third_image: discord.Attachment = flag(default=None)
         fourth_image: discord.Attachment = flag(default=None)
 
-    @commands.hybrid_command(name='submit')
-    async def submit(self, ctx: Context, flags: SubmitFlags):
+    @commands.hybrid_command(name='submit_form')
+    async def submit(self, ctx: Context, flags: SubmitFormFlags):
         """Submits a build to the database."""
         await ctx.defer()
 
