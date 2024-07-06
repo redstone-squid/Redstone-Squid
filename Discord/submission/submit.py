@@ -123,7 +123,6 @@ class SubmissionsCog(Cog, name='Submissions'):
         """Shows a list of versions the bot recognizes."""
         await ctx.send(config.VERSIONS_LIST)
 
-
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
         first_image: discord.Attachment = flag(default=None)
@@ -134,13 +133,12 @@ class SubmissionsCog(Cog, name='Submissions'):
 
     @commands.hybrid_command(name='submit')
     async def submit(self, ctx: Context, flags: SubmitFlags):
-        interaction = ctx.interaction
-        view = utils.SelectAndButtonView()
-        followup: discord.Webhook = interaction.followup
-        
-        await ctx.send("Use the select menus then click the button", view=view)
-        
+        await ctx.defer()
 
+        view = utils.BuildSubmissionForm()
+        followup: discord.Webhook = ctx.interaction.followup  # type: ignore
+
+        await followup.send("Use the select menus then click the button", view=view)
 
     class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""
