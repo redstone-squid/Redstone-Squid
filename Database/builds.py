@@ -71,6 +71,14 @@ class Build:
         for attr in [a for a in dir(self) if not a.startswith('__') and not callable(getattr(self, a))]:
             yield attr
 
+    @property
+    def dimensions(self) -> tuple[int, int, int]:
+        return self.width, self.height, self.depth
+
+    @dimensions.setter
+    def dimensions(self, dimensions: tuple[int, int, int]) -> None:
+        self.width, self.height, self.depth = dimensions
+
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
