@@ -285,12 +285,12 @@ class SubmissionModal(discord.ui.Modal):
 
         # Door size
         self.door_size = discord.ui.TextInput(
-            label="Door Size", placeholder="e.g., 2x2 piston door"
+            label="Door Size", placeholder="e.g. 2x2 piston door"
         )
 
         # Pattern
         self.pattern = discord.ui.TextInput(
-            label="Pattern Type", placeholder="e.g., full lamp, funnel", required=False
+            label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False
         )
 
         # Dimensions
