@@ -2,7 +2,7 @@ import re
 from typing import Literal
 
 import discord
-from discord import InteractionResponse
+from discord import InteractionResponse, Webhook
 from discord.ext import commands
 from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command, flag
 from discord.ui import Button, View
@@ -11,10 +11,10 @@ import Database.message as msg
 import Discord.config as config
 import Discord.submission.post as post
 import Discord.utils as utils
-from Database.builds import get_all_builds, Build
+from Database.builds import get_all_builds, Build, get_all_restrictions
 from Database.enums import Status
-from Discord.types_ import SubmissionCommandResponseT
-from Discord.utils import RunningMessage, ConfirmationView, parse_dimensions
+from Discord.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
+from Discord.utils import RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -188,7 +188,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
-            view = ConfirmationView()
+            view = utils.ConfirmationView()
             preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
             await view.wait()
 
@@ -280,12 +280,13 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
 
 
 class SubmissionModal(discord.ui.Modal):
-    def __init__(self):
+    def __init__(self, build: Build):
         super().__init__(title="Submit Your Build")
+        self.build = build
 
         # Door size
         self.door_size = discord.ui.TextInput(
-            label="Door Size", placeholder="e.g. 2x2 piston door"
+            label="Door Size", placeholder="e.g. 2x2 (piston door)"
         )
 
         # Pattern
@@ -295,7 +296,7 @@ class SubmissionModal(discord.ui.Modal):
 
         # Dimensions
         self.dimensions = discord.ui.TextInput(
-            label="Dimensions", placeholder="Width x Height x Depth", required=False
+            label="Dimensions", placeholder="Width x Height x Depth", required=True
         )
 
         # Restrictions
@@ -319,21 +320,19 @@ class SubmissionModal(discord.ui.Modal):
         self.add_item(self.additional_info)
 
     async def on_submit(self, interaction: discord.Interaction):
-        dimensions = parse_dimensions(self.dimensions.value)
-        width = dimensions[0]
-        height = dimensions[1]
-        depth = dimensions[2]
+        await interaction.response.defer()  # type: ignore
 
-        pattern_match = re.search(
-            r"\bpattern:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE
-        )
-        pattern = pattern_match.group(1).strip() if pattern_match else None
+        self.build.door_dimensions = utils.parse_hallway_dimensions(self.door_size.value)
+        self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
+        self.build.dimensions = utils.parse_dimensions(self.dimensions.value)
+        self.build.restrictions = self.restrictions.value.split(", ")
 
         # Extract IGN
         ign_match = re.search(
             r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE
         )
         ign = ign_match.group(1).strip() if ign_match else None
+        self.build.creators_ign = ign
 
         # Extract video link
         video_match = re.search(
@@ -342,6 +341,7 @@ class SubmissionModal(discord.ui.Modal):
             re.IGNORECASE,
         )
         video_link = video_match.group(1).strip() if video_match else None
+        self.build.video_url = video_link
 
         # Extract download link
         download_match = re.search(
@@ -350,38 +350,28 @@ class SubmissionModal(discord.ui.Modal):
             re.IGNORECASE,
         )
         download_link = download_match.group(1).strip() if download_match else None
-        parsed_children = {
-            "parse_door_size": self.door_size.value,
-            "parse_pattern": self.pattern.value,
-            "parse_dimensions": self.dimensions.value,
-            "parse_restrictions": self.restrictions.value,
-            "parse_additional_info": self.additional_info.value,
-        }
+        self.build.world_download_url = download_link
 
 
-class OpenModalButton(Button):
-    def __init__(self):
+class AdditionalSubmissionInfoButton(Button):
+    def __init__(self, build: Build):
+        self.build = build
         super().__init__(
-            label="Open Modal",
+            label="Add more Information",
             style=discord.ButtonStyle.primary,
             custom_id="open_modal",
         )
 
     async def callback(self, interaction: discord.Interaction):
         interaction_response: InteractionResponse = interaction.response  # type: ignore
-        await interaction_response.send_modal(SubmissionModal())
+        await interaction_response.send_modal(SubmissionModal(self.build))
 
 
 class RecordCategorySelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, build: Build):
+        self.build = build
 
-        # Set the options that will be presented inside the dropdown
-        options = [
-            discord.SelectOption(label="Smallest"),
-            discord.SelectOption(label="Fastest"),
-            discord.SelectOption(label="First"),
-        ]
-
+        options = [discord.SelectOption(label=category) for category in RECORD_CATEGORIES]
         super().__init__(
             placeholder="Choose the record category",
             min_values=1,
@@ -390,19 +380,15 @@ class RecordCategorySelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        self.build.record_category = interaction.data["values"][0]
         await interaction.response.defer()  # type: ignore
 
 
 class DoorTypeSelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, build: Build):
+        self.build = build
 
-        # Set the options that will be presented inside the dropdown
-        options = [
-            discord.SelectOption(label="Door"),
-            discord.SelectOption(label="Skydoor"),
-            discord.SelectOption(label="Trapdoor"),
-        ]
-
+        options = [discord.SelectOption(label=door_type) for door_type in DOOR_TYPES]
         super().__init__(
             placeholder="Choose the door type",
             min_values=1,
@@ -411,34 +397,15 @@ class DoorTypeSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        self.build.door_orientation_type = interaction.data["values"][0]
         await interaction.response.defer()  # type: ignore
 
 
 class VersionsSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Pre 1.5"),
-            discord.SelectOption(label="1.5"),
-            discord.SelectOption(label="1.6"),
-            discord.SelectOption(label="1.7"),
-            discord.SelectOption(label="1.8"),
-            discord.SelectOption(label="1.9"),
-            discord.SelectOption(label="1.10"),
-            discord.SelectOption(label="1.11"),
-            discord.SelectOption(label="1.12"),
-            discord.SelectOption(label="1.13"),
-            discord.SelectOption(label="1.13.1 / 1.13.2"),
-            discord.SelectOption(label="1.14"),
-            discord.SelectOption(label="1.14.1"),
-            discord.SelectOption(label="1.15"),
-            discord.SelectOption(label="1.16"),
-            discord.SelectOption(label="1.17"),
-            discord.SelectOption(label="1.18"),
-            discord.SelectOption(label="1.19"),
-            discord.SelectOption(label="1.20"),
-            discord.SelectOption(label="1.20.4"),
-        ]
+    def __init__(self, build: Build):
+        self.build = build
 
+        options = [discord.SelectOption(label=version) for version in config.VERSIONS_LIST]
         super().__init__(
             placeholder="Choose the versions the door works in",
             min_values=1,
@@ -447,33 +414,64 @@ class VersionsSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        self.build.functional_versions = interaction.data["values"]
         await interaction.response.defer()  # type: ignore
 
 
 class DirectonalityLocationalitySelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, build: Build):
+        self.build = build
+
         options = [
             discord.SelectOption(label="Directional"),
             discord.SelectOption(label="Locational"),
-            discord.SelectOption(label="Fully reliable"),
         ]
 
         super().__init__(
             placeholder="Choose how reliable the the door is",
-            min_values=1,
+            min_values=0,
             max_values=2,
             options=options,
         )
 
     async def callback(self, interaction: discord.Interaction):
+        self.build.miscellaneous_restrictions = interaction.data["values"]
         await interaction.response.defer()  # type: ignore
 
 
 class BuildSubmissionForm(View):
     def __init__(self, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
-        self.add_item(RecordCategorySelect())
-        self.add_item(DoorTypeSelect())
-        self.add_item(VersionsSelect())
-        self.add_item(DirectonalityLocationalitySelect())
-        self.add_item(OpenModalButton())
+        build = Build()
+
+        # Assumptions
+        build.submission_status = Status.PENDING
+        build.category = "Door"
+
+        self.build = build
+        self.add_item(RecordCategorySelect(self.build))
+        self.add_item(DoorTypeSelect(self.build))
+        self.add_item(VersionsSelect(self.build))
+        self.add_item(DirectonalityLocationalitySelect(self.build))
+        self.add_item(AdditionalSubmissionInfoButton(self.build))
+
+    @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
+    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()  # type: ignore
+
+        self.build.submitter_id = interaction.user.id
+
+        await self.build.save()
+
+        followup: Webhook = interaction.followup  # type: ignore
+        # Shows the submission to the user
+        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
+                            embed=self.build.generate_embed(), ephemeral=True)
+
+        await post.post_build(interaction.client, self.build)
+
+
+async def setup(bot):
+    # Cache the restrictions
+    Build.all_restrictions = await get_all_restrictions()
+    await bot.add_cog(SubmissionsCog(bot))

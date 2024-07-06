@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from functools import cache
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional, Literal, Sequence, Mapping
 
 import discord
 from postgrest.types import CountMethod
@@ -15,10 +15,14 @@ from Database.database import DatabaseManager, all_build_columns
 from Database.utils import utcnow
 from Database.enums import Status
 from Discord import utils
+from Discord.types_ import Restriction
+from Discord.config import VERSIONS_LIST
 
 
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
+    all_restrictions: list[Restriction]
+    """A list of all restrictions in the database. This is set by the DatabaseManager when the class is first initialized."""
 
     def __init__(self):
         """Initializes an empty build.
@@ -73,11 +77,55 @@ class Build:
 
     @property
     def dimensions(self) -> tuple[int, int, int]:
+        """The dimensions of the build."""
         return self.width, self.height, self.depth
 
     @dimensions.setter
     def dimensions(self, dimensions: tuple[int, int, int]) -> None:
         self.width, self.height, self.depth = dimensions
+
+    @property
+    def door_dimensions(self) -> tuple[int, int, int]:
+        """The dimensions of the door (hallway)."""
+        return self.door_width, self.door_height, self.door_depth
+
+    @door_dimensions.setter
+    def door_dimensions(self, dimensions: tuple[int, int, int]) -> None:
+        self.door_width, self.door_height, self.door_depth = dimensions
+
+    @property
+    def restrictions(self) -> dict[Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"], list[str]]:
+        """The restrictions of the build."""
+        return {
+            "wiring_placement_restrictions": self.wiring_placement_restrictions,
+            "component_restrictions": self.component_restrictions,
+            "miscellaneous_restrictions": self.miscellaneous_restrictions
+        }
+
+    @restrictions.setter
+    def restrictions(self, restrictions: Sequence[str] | Mapping[str, Sequence[str]]) -> None:
+        """Sets the restrictions of the build.
+
+        This is relatively cheap if a dictionary is passed, as it will only set the restrictions that are present.
+        However, if a list is passed. We find the type of restriction from the database and set it accordingly."""
+        if isinstance(restrictions, Mapping):
+            self.wiring_placement_restrictions = restrictions.get("wiring_placement_restrictions")
+            self.component_restrictions = restrictions.get("component_restrictions")
+            self.miscellaneous_restrictions = restrictions.get("miscellaneous_restrictions")
+        else:
+            self.wiring_placement_restrictions = []
+            self.component_restrictions = []
+            self.miscellaneous_restrictions = []
+
+            for restriction in self.all_restrictions:
+                for door_restriction in restrictions:
+                    if door_restriction.lower() == restriction['name'].lower():
+                        if restriction['type'] == 'wiring-placement':
+                            self.wiring_placement_restrictions.append(restriction['name'])
+                        elif restriction['type'] == 'component':
+                            self.component_restrictions.append(restriction['name'])
+                        elif restriction['type'] == 'miscellaneous':
+                            self.miscellaneous_restrictions.append(restriction['name'])
 
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
@@ -126,8 +174,11 @@ class Build:
                 category_data = data['entrances']
 
         # FIXME: This is hardcoded for now
-        types = data.get('types', [])
-        build.door_type = [type_['name'] for type_ in types]
+        if data.get('types'):
+            types = data['types']
+            build.door_type = [type_['name'] for type_ in types]
+        else:
+            build.door_type = ["Regular"]
 
         build.door_orientation_type = data['doors']['orientation']
         build.door_width = data['doors']['door_width']
@@ -240,14 +291,15 @@ class Build:
             elif data["category"] == "Entrance":
                 raise NotImplementedError
             else:
-                raise ValueError("category must be set")
+                raise ValueError("Build category must be set")
 
             # build_restrictions table
             build_restrictions = data.get("wiring_placement_restrictions", []) + data.get("component_restrictions", []) + data.get("miscellaneous_restrictions", [])
             response = await db.table('restrictions').select('*').in_('name', build_restrictions).execute()
             restriction_ids = [restriction['id'] for restriction in response.data]
             build_restrictions_data = list({'build_id': self.id, 'restriction_id': restriction_id} for restriction_id in restriction_ids)
-            await db.table('build_restrictions').upsert(build_restrictions_data).execute()
+            if build_restrictions_data:
+                await db.table('build_restrictions').upsert(build_restrictions_data).execute()
 
             unknown_restrictions = {}
             unknown_wiring_restrictions = []
@@ -267,7 +319,11 @@ class Build:
                 await db.table('builds').update({'information': information}).eq('id', self.id).execute()
 
             # build_types table
-            response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', data.get("door_type", [])).execute()
+            if data.get("door_type"):
+                door_type = data.get("door_type")
+            else:
+                door_type = ["Regular"]
+            response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', door_type).execute()  # Door type defaults to Regular if none
             type_ids = [type_['id'] for type_ in response.data]
             build_types_data = list({'build_id': self.id, 'type_id': type_id} for type_id in type_ids)
             await db.table('build_types').upsert(build_types_data).execute()
@@ -295,10 +351,11 @@ class Build:
 
             # build_creators table
             build_creators_data = list({'build_id': self.id, 'creator_ign': creator} for creator in data.get("creators_ign", []))
-            await db.table('build_creators').upsert(build_creators_data).execute()
+            if build_creators_data:
+                await db.table('build_creators').upsert(build_creators_data).execute()
 
             # build_versions table
-            response = await db.table('versions').select('*').in_('full_name_temp', data.get("functional_versions", [])).execute()
+            response = await db.table('versions').select('*').in_('full_name_temp', data.get("functional_versions", [VERSIONS_LIST[-1]])).execute()
             version_ids = [version['id'] for version in response.data]
             build_versions_data = list({'build_id': self.id, 'version_id': version_id} for version_id in version_ids)
             await db.table('build_versions').upsert(build_versions_data).execute()
@@ -545,6 +602,15 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     response = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
     server_unsent_builds = response.data
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
+
+
+# TODO: Invalidate cache every, say, 1 day
+@cache
+async def get_all_restrictions() -> list[Restriction]:
+    """Fetches all restrictions from the database."""
+    db = await DatabaseManager()
+    response = await db.table('restrictions').select('*').execute()
+    return response.data
 
 
 async def main():

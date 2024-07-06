@@ -101,7 +101,7 @@ async def main():
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(SettingsCog(bot))
-        await bot.add_cog(SubmissionsCog(bot))
+        await bot.load_extension('Discord.submission.submit')
         await bot.add_cog(Listeners(bot))
         await bot.add_cog(HelpCog(bot))
         await bot.add_cog(VotingCog(bot))

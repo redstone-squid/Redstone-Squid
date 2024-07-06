@@ -1,4 +1,5 @@
 # FIXME: this file name can't be worse bcs dpy has a utils file
+import re
 from traceback import format_tb
 from types import TracebackType
 from typing import Tuple
@@ -33,26 +34,60 @@ def help_embed(title: str, description: str):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-def parse_dimensions(dim_str: str) -> Tuple[int, int, int | None]:
-    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'."""
+def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> list[int | None]:
+    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'.
+
+    Args:
+        dim_str: The string to parse
+        min_dim: The minimum number of dimensions
+        max_dim: The maximum number of dimensions
+
+    Returns:
+        A list of the dimensions, the length of the list will be padded with None to match `max_dim`.
+    """
     inputs = dim_str.split("x")
-    if not 2 <= len(inputs) <= 3:
+    if not min_dim <= len(inputs) <= max_dim:
         raise ValueError(
-            "Invalid door size. Must be in the format 'width x height' or 'width x height x depth'"
+            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs)} in {dim_str}."
         )
 
     try:
         dimensions = list(map(int, inputs))
     except ValueError:
         raise ValueError(
-            f"Invalid door size. Each dimension must be parsable as an integer, found {inputs}"
+            f"Invalid input. Each dimension must be parsable as an integer, found {inputs}"
         )
 
-    if len(dimensions) == 2:
-        return dimensions[0], dimensions[1], None
-    elif len(dimensions) == 3:
-        return dimensions[0], dimensions[1], dimensions[2]
+    # Pad with None
+    return dimensions + [None] * (max_dim - len(dimensions))
 
+
+def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]:
+    """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
+
+    Examples:
+        "5x5x5" -> (5, 5, 5)
+        "5x5" -> (5, 5, None)
+        "5 wide" -> (5, None, None)
+        "5 high" -> (None, 5, None)
+    
+    References:
+        https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit
+
+    Returns:
+        A tuple of the dimensions (width, height)
+    """
+    try:
+        return parse_dimensions(dim_str)  # type: ignore
+    except ValueError:
+        if match := re.match(r"^(\d+) (wide|high)$", dim_str):
+            size, direction = match.groups()
+            if direction == "wide":
+                return int(size), None, None
+            elif direction == "high":
+                return None, int(size), None
+        else:
+            raise ValueError("Invalid hallway size. Must be in the format 'width x height' or '<width> wide' or '<height> high'")
 
 class RunningMessage:
     """Context manager to show a working message while the bot is working."""

@@ -4,3 +4,4 @@ gspread
 supabase-py-async
 python-dotenv
 pip-tools
+GitPython
