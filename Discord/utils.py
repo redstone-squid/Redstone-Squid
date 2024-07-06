@@ -44,7 +44,7 @@ def parse_door_size(size_str: str) -> Tuple[int, int, int | None]:
         dimensions = list(map(int, inputs))
     except ValueError:
         raise ValueError(
-            f"Invalid door size. Each dimension must be parsable an integer, found {inputs}"
+            f"Invalid door size. Each dimension must be parsable as an integer, found {inputs}"
         )
 
     if len(dimensions) == 2:
