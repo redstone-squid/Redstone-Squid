@@ -470,8 +470,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
 
 
 class BuildSubmissionForm(View):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *, timeout: float | None = 180.0):
+        super().__init__(timeout=timeout)
         self.add_item(RecordCategory())
         self.add_item(DoorType())
         self.add_item(VersionsSelect())
