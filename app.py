@@ -5,7 +5,7 @@ config.DEV_MODE = False
 
 import asyncio
 from dotenv import load_dotenv
-import Discord.interface as discord
+import Discord.main as discord
 
 
 load_dotenv()
