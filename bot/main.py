@@ -1,4 +1,5 @@
 """Main file for the discord bot, includes logging and the main event loop."""
+
 import asyncio
 import logging
 import os
@@ -17,7 +18,7 @@ from bot.submission.voting import VotingCog
 
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
-log_user: dict = {'owner_name': OWNER, 'owner_user_object': None}
+log_user: dict = {"owner_name": OWNER, "owner_user_object": None}
 
 
 async def log(msg: str, first_log=False, dm_owner=True) -> None:
@@ -34,13 +35,15 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
     """
     timestamp_msg = utcnow() + msg
     print(timestamp_msg)
-    if dm_owner and log_user['owner_user_object']:
+    if dm_owner and log_user["owner_user_object"]:
         if first_log:
-            timestamp_msg = '-' * 90 + '\n' + timestamp_msg
-        return await log_user['owner_user_object'].send(timestamp_msg)
+            timestamp_msg = "-" * 90 + "\n" + timestamp_msg
+        return await log_user["owner_user_object"].send(timestamp_msg)
+
 
 class Listeners(Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -48,9 +51,12 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
     async def on_ready(self):
         # Try to get the user object of the owner of the bot, which is used for logging.
         for member in self.bot.get_all_members():
-            if str(member) == log_user['owner_name']:
-                log_user['owner_user_object'] = member
-        await log(f'Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.', first_log=True)
+            if str(member) == log_user["owner_name"]:
+                log_user["owner_user_object"] = member
+        await log(
+            f"Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.",
+            first_log=True,
+        )
 
     # Temporary fix
     # TODO: Remove this event after the bot doesn't break when it is in more than one server
@@ -58,16 +64,16 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
     async def on_guild_join(self, guild: discord.Guild):
         if guild.id != OWNER_SERVER_ID:
             # Send a warning message in the server, and then leave
-            await log(f'Bot joined server: {guild.name} with id: {guild.id}.')
-            await guild.system_channel.send('I am not supposed to be in this server. Leaving now.')
+            await log(f"Bot joined server: {guild.name} with id: {guild.id}.")
+            await guild.system_channel.send("I am not supposed to be in this server. Leaving now.")
             await guild.leave()
 
     @Cog.listener()
     async def on_message(self, message: discord.Message):
-        user_command = ''
+        user_command = ""
 
         if message.content.startswith(PREFIX):
-            user_command = message.content.replace(PREFIX, '', 1)
+            user_command = message.content.replace(PREFIX, "", 1)
         elif not message.guild:
             user_command = message.content
 
@@ -76,7 +82,7 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
                 log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
             else:
                 log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
-            owner_dmed_bot = not message.guild and log_user['owner_name'] == str(message.author)
+            owner_dmed_bot = not message.guild and log_user["owner_name"] == str(message.author)
             if owner_dmed_bot:
                 await log(log_message, dm_owner=False)
             else:
@@ -93,26 +99,27 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         if cog and cog.has_error_handler():
             return
 
-        logging.getLogger(__name__).error('Ignoring exception in command %s', command, exc_info=exception)
+        logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
 
 
 async def main():
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
     # Running the application
-    async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
+    async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:  # noqa: E501
         await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(SettingsCog(bot))
-        await bot.load_extension('bot.submission.submit')
+        await bot.load_extension("bot.submission.submit")
         await bot.add_cog(Listeners(bot))
         await bot.add_cog(HelpCog(bot))
         await bot.add_cog(VotingCog(bot))
         discord.utils.setup_logging()
 
         load_dotenv()
-        token = os.environ.get('BOT_TOKEN')
+        token = os.environ.get("BOT_TOKEN")
         if not token:
-            raise Exception('Specify discord token either with .env file or a BOT_TOKEN environment variable.')
+            raise Exception("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
         await bot.start(token)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(main())

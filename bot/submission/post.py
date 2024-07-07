@@ -1,4 +1,5 @@
 """Helper functions for posting submissions to discord channels."""
+
 import discord
 
 import bot.settings as settings
@@ -85,7 +86,7 @@ async def update_build_posts(client: discord.Client, build: Build) -> None:
     em = build.generate_embed()
 
     for message in messages:
-        channel = client.get_channel(message['channel_id'])
-        message = await channel.fetch_message(message['message_id'])
+        channel = client.get_channel(message["channel_id"])
+        message = await channel.fetch_message(message["message_id"])
         await message.edit(embed=em)
         await msg.update_message(message.id)

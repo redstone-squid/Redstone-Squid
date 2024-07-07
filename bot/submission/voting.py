@@ -1,4 +1,5 @@
 """Handles the reaction-based voting system for submissions."""
+
 import discord
 from discord.ext.commands import Bot, Cog
 
@@ -15,10 +16,10 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @Cog.listener(name='on_raw_reaction_add')
+    @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        vote_channel_id = await get_server_setting(payload.guild_id, 'Vote')
+        vote_channel_id = await get_server_setting(payload.guild_id, "Vote")
         # Must be in the vote channel
         if vote_channel_id is None or payload.channel_id != vote_channel_id:
             return
@@ -45,7 +46,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             return
 
         # If the reaction is a thumbs up, confirm the submission
-        if payload.emoji.name == '👍':
+        if payload.emoji.name == "👍":
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
             await submission.confirm()
             message_ids = await msg.delete_message(payload.guild_id, build_id)

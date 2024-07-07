@@ -14,15 +14,11 @@ discord_green = 0x43B581
 
 
 def error_embed(title: str, description: str):
-    return discord.Embed(
-        title=title, colour=discord_red, description=":x: " + description
-    )
+    return discord.Embed(title=title, colour=discord_red, description=":x: " + description)
 
 
 def warning_embed(title: str, description: str):
-    return discord.Embed(
-        title=":warning: " + title, colour=discord_yellow, description=description
-    )
+    return discord.Embed(title=":warning: " + title, colour=discord_yellow, description=description)
 
 
 def info_embed(title: str, description: str):
@@ -53,9 +49,7 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> lis
     try:
         dimensions = list(map(int, inputs))
     except ValueError:
-        raise ValueError(
-            f"Invalid input. Each dimension must be parsable as an integer, found {inputs}"
-        )
+        raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}")
 
     # Pad with None
     return dimensions + [None] * (max_dim - len(dimensions))
@@ -69,7 +63,7 @@ def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int 
         "5x5" -> (5, 5, None)
         "5 wide" -> (5, None, None)
         "5 high" -> (None, 5, None)
-    
+
     References:
         https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit
 
@@ -86,7 +80,10 @@ def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int 
             elif direction == "high":
                 return None, int(size), None
         else:
-            raise ValueError("Invalid hallway size. Must be in the format 'width x height' or '<width> wide' or '<height> high'")
+            raise ValueError(
+                "Invalid hallway size. Must be in the format 'width x height' or '<width> wide' or '<height> high'"
+            )
+
 
 class RunningMessage:
     """Context manager to show a working message while the bot is working."""
@@ -106,9 +103,7 @@ class RunningMessage:
         self.delete_on_exit = delete_on_exit
 
     async def __aenter__(self):
-        self.sent_message = await self.ctx.send(
-            embed=info_embed(self.title, self.description)
-        )
+        self.sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
         return self.sent_message
 
     async def __aexit__(self, exc_type, exc_val, exc_tb: TracebackType):
@@ -119,9 +114,7 @@ class RunningMessage:
                 description += f'\n\n```{"".join(format_tb(exc_tb))}```'
             await self.sent_message.edit(
                 content=f"<@{OWNER_ID}>",
-                embed=error_embed(
-                    f"An error has occurred: {exc_type.__name__}", description
-                ),
+                embed=error_embed(f"An error has occurred: {exc_type.__name__}", description),
             )
             return False
 
@@ -137,9 +130,7 @@ class ConfirmationView(View):
         self.value = None
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
-    async def confirm(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         self.stop()
 

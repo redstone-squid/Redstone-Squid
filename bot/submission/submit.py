@@ -4,7 +4,14 @@ from typing import Literal
 import discord
 from discord import InteractionResponse, Webhook
 from discord.ext import commands
-from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybrid_command, flag
+from discord.ext.commands import (
+    Context,
+    has_any_role,
+    hybrid_group,
+    Cog,
+    hybrid_command,
+    flag,
+)
 from discord.ui import Button, View
 
 import Database.message as msg
@@ -16,46 +23,48 @@ from Database.enums import Status
 from bot.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
 from bot.utils import RunningMessage
 
-submission_roles = ['Admin', 'Moderator', 'Redstoner']
+submission_roles = ["Admin", "Moderator", "Redstoner"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
-class SubmissionsCog(Cog, name='Submissions'):
+
+class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot):
         self.bot = bot
 
-    @hybrid_group(name='submissions', invoke_without_command=True)
+    @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
         """View, confirm and deny submissions."""
-        await ctx.send_help('submissions')
+        await ctx.send_help("submissions")
 
-    @submission_hybrid_group.command(name='pending')
+    @submission_hybrid_group.command(name="pending")
     async def get_pending_submissions(self, ctx: Context):
         """Shows an overview of all submissions pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
             pending_submissions = await get_all_builds(Status.PENDING)
 
             if len(pending_submissions) == 0:
-                desc = 'No open submissions.'
+                desc = "No open submissions."
             else:
                 desc = []
                 for sub in pending_submissions:
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_")
-                desc = '\n\n'.join(desc)
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"
+                    )
+                desc = "\n\n".join(desc)
 
-            em = utils.info_embed(title='Open Records', description=desc)
+            em = utils.info_embed(title="Open Records", description=desc)
             await sent_message.edit(embed=em)
 
-    @submission_hybrid_group.command(name='view')
+    @submission_hybrid_group.command(name="view")
     async def view_function(self, ctx: Context, submission_id: int):
         """Displays a submission."""
         async with utils.RunningMessage(ctx) as sent_message:
             submission = await Build.from_id(submission_id)
 
             if submission is None:
-                error_embed = utils.error_embed('Error', 'No open submission with that ID.')
+                error_embed = utils.error_embed("Error", "No open submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             return await sent_message.edit(embed=submission.generate_embed())
@@ -65,10 +74,10 @@ class SubmissionsCog(Cog, name='Submissions'):
         if not ctx.guild.id == config.OWNER_SERVER_ID:
             # TODO: Make a custom error for this.
             # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
-            raise commands.CommandError('This command can only be executed on certain servers.')
+            raise commands.CommandError("This command can only be executed on certain servers.")
         return True
 
-    @submission_hybrid_group.command(name='confirm')
+    @submission_hybrid_group.command(name="confirm")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def confirm_function(self, ctx: Context, submission_id: int):
@@ -79,16 +88,16 @@ class SubmissionsCog(Cog, name='Submissions'):
             build = await Build.from_id(submission_id)
 
             if build is None:
-                error_embed = utils.error_embed('Error', 'No pending submission with that ID.')
+                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             await build.confirm()
             await post.post_build(self.bot, build)
 
-            success_embed = utils.info_embed('Success', 'Submission has successfully been confirmed.')
+            success_embed = utils.info_embed("Success", "Submission has successfully been confirmed.")
             return await sent_message.edit(embed=success_embed)
 
-    @submission_hybrid_group.command(name='deny')
+    @submission_hybrid_group.command(name="deny")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def deny_function(self, ctx: Context, submission_id: int):
@@ -97,12 +106,12 @@ class SubmissionsCog(Cog, name='Submissions'):
             build = await Build.from_id(submission_id)
 
             if build is None:
-                error_embed = utils.error_embed('Error', 'No pending submission with that ID.')
+                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             await build.deny()
 
-            success_embed = utils.info_embed('Success', 'Submission has successfully been denied.')
+            success_embed = utils.info_embed("Success", "Submission has successfully been denied.")
             return await sent_message.edit(embed=success_embed)
 
     # @submission_hybrid_group.command("send_all")
@@ -116,15 +125,15 @@ class SubmissionsCog(Cog, name='Submissions'):
             for build in unsent_builds:
                 await post.post_build_to_server(self.bot, build, ctx.guild.id)
 
-            success_embed = utils.info_embed('Success', 'All posts have been successfully sent.')
+            success_embed = utils.info_embed("Success", "All posts have been successfully sent.")
             return await sent_message.edit(embed=success_embed)
 
-    @hybrid_command(name='versions')
+    @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
         await ctx.send(config.VERSIONS_LIST)
 
-    class SubmitFlags(commands.FlagConverter):
+    class SubmitFlags(commands.FlagConverter):  # noqa: E501
         """Parameters information for the /submit command."""
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
@@ -166,26 +175,33 @@ class SubmissionsCog(Cog, name='Submissions'):
             build = Build.from_dict(fmt_data)
 
             # TODO: Stop hardcoding this
-            build.category = 'Door'
+            build.category = "Door"
             build.submission_status = Status.PENDING
 
             await build.save()
             # Shows the submission to the user
-            await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
-                                embed=build.generate_embed(), ephemeral=True)
+            await followup.send(
+                "Here is a preview of the submission. Use /edit if you have made a mistake",
+                embed=build.generate_embed(),
+                ephemeral=True,
+            )
 
-            success_embed = utils.info_embed('Success', f'Build submitted successfully!\nThe submission ID is: {build.id}')
+            success_embed = utils.info_embed(
+                "Success",
+                f"Build submitted successfully!\nThe submission ID is: {build.id}",
+            )
             await message.edit(embed=success_embed)
             await post.post_build(self.bot, build)
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
+
         first_image: discord.Attachment = flag(default=None)
         second_image: discord.Attachment = flag(default=None)
         third_image: discord.Attachment = flag(default=None)
         fourth_image: discord.Attachment = flag(default=None)
 
-    @commands.hybrid_command(name='submit_form')
+    @commands.hybrid_command(name="submit_form")
     async def submit_form(self, ctx: Context, flags: SubmitFormFlags):
         """Submits a build to the database."""
         await ctx.defer()
@@ -195,7 +211,7 @@ class SubmissionsCog(Cog, name='Submissions'):
 
         await followup.send("Use the select menus then click the button", view=view)
 
-    class EditFlags(commands.FlagConverter):
+    class EditFlags(commands.FlagConverter):  # noqa: E501
         """Parameters information for the /edit command."""
         submission_id: int = flag(description='The ID of the submission to edit.')
         door_width: int = flag(default=None, description='The width of the door itself. Like 2x2 piston door.')
@@ -233,7 +249,7 @@ class SubmissionsCog(Cog, name='Submissions'):
         async with RunningMessage(followup) as sent_message:
             submission = await Build.from_id(flags.submission_id)
             if submission is None:
-                error_embed = utils.error_embed('Error', 'No submission with that ID.')
+                error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             update_values = format_submission_input(ctx, dict(flags))
@@ -241,21 +257,21 @@ class SubmissionsCog(Cog, name='Submissions'):
             preview_embed = submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
-            await sent_message.edit(embed=utils.info_embed('Waiting', 'User confirming changes...'))
+            await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
             view = utils.ConfirmationView()
             preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
             await view.wait()
 
             await preview.delete()
             if view.value is None:
-                await sent_message.edit(embed=utils.info_embed('Timed out', 'Build edit canceled due to inactivity.'))
+                await sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity."))
             elif view.value:
-                await sent_message.edit(embed=utils.info_embed('Editing', 'Editing build...'))
+                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await submission.save()
                 await post.update_build_posts(self.bot, submission)
-                await sent_message.edit(embed=utils.info_embed('Success', 'Build edited successfully'))
+                await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
             else:
-                await sent_message.edit(embed=utils.info_embed('Cancelled', 'Build edit canceled by user'))
+                await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:
@@ -264,69 +280,73 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     parsable_signatures = SubmissionCommandResponseT.__annotations__.keys()
     if not all(key in parsable_signatures for key in data):
         unknown_keys = [key for key in data if key not in parsable_signatures]
-        raise ValueError(f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?")
+        raise ValueError(
+            f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?"
+        )
 
     fmt_data = dict()
-    fmt_data['id'] = data.get('submission_id')
+    fmt_data["id"] = data.get("submission_id")
     # fmt_data['submission_status']
 
-    fmt_data['record_category'] = data['record_category']
-    if data.get('works_in') is not None:
-        fmt_data['functional_versions'] = data['works_in'].split(", ")
+    fmt_data["record_category"] = data["record_category"]
+    if data.get("works_in") is not None:
+        fmt_data["functional_versions"] = data["works_in"].split(", ")
     else:
-        fmt_data['functional_versions'] = []
+        fmt_data["functional_versions"] = []
 
-    fmt_data['width'] = data.get('build_width')
-    fmt_data['height'] = data.get('build_height')
-    fmt_data['depth'] = data.get('build_depth')
+    fmt_data["width"] = data.get("build_width")
+    fmt_data["height"] = data.get("build_height")
+    fmt_data["depth"] = data.get("build_depth")
 
-    if data.get('door_size'):
-        width, height, depth = utils.parse_dimensions(data['door_size'])
-        fmt_data['door_width'] = width
-        fmt_data['door_height'] = height
-        fmt_data['door_depth'] = depth
+    if data.get("door_size"):
+        width, height, depth = utils.parse_dimensions(data["door_size"])
+        fmt_data["door_width"] = width
+        fmt_data["door_height"] = height
+        fmt_data["door_depth"] = depth
     else:
-        fmt_data['door_width'] = data.get('door_width')
-        fmt_data['door_height'] = data.get('door_height')
+        fmt_data["door_width"] = data.get("door_width")
+        fmt_data["door_height"] = data.get("door_height")
     # fmt_data['door_depth']
 
-    if data.get('pattern'):
-        fmt_data['door_type'] = data.get('pattern').split(', ')
-    fmt_data['door_orientation_type'] = data.get('door_type')
+    if data.get("pattern"):
+        fmt_data["door_type"] = data.get("pattern").split(", ")
+    fmt_data["door_orientation_type"] = data.get("door_type")
 
-    if data.get('wiring_placement_restrictions') is not None:
-        fmt_data['wiring_placement_restrictions'] = data['wiring_placement_restrictions'].split(", ")
+    if data.get("wiring_placement_restrictions") is not None:
+        fmt_data["wiring_placement_restrictions"] = data["wiring_placement_restrictions"].split(", ")
     else:
-        fmt_data['wiring_placement_restrictions'] = []
-    if data.get('component_restrictions') is not None:
-        fmt_data['component_restrictions'] = data['component_restrictions'].split(", ")
+        fmt_data["wiring_placement_restrictions"] = []
+    if data.get("component_restrictions") is not None:
+        fmt_data["component_restrictions"] = data["component_restrictions"].split(", ")
     else:
-        fmt_data['component_restrictions'] = []
-    misc_restrictions = [data.get('locationality'), data.get('directionality')]
-    fmt_data['miscellaneous_restrictions'] = [x for x in misc_restrictions if x is not None]
+        fmt_data["component_restrictions"] = []
+    misc_restrictions = [data.get("locationality"), data.get("directionality")]
+    fmt_data["miscellaneous_restrictions"] = [x for x in misc_restrictions if x is not None]
 
-    fmt_data['normal_closing_time'] = data.get('normal_closing_time')
-    fmt_data['normal_opening_time'] = data.get('normal_opening_time')
+    fmt_data["normal_closing_time"] = data.get("normal_closing_time")
+    fmt_data["normal_opening_time"] = data.get("normal_opening_time")
     # fmt_data['visible_closing_time']
     # fmt_data['visible_opening_time']
 
-    information_dict = {"user": data.get('information_about_build')} if data.get('information_about_build') is not None else None
-    fmt_data['information'] = information_dict
-    if data.get('in_game_name_of_creator') is not None:
-        fmt_data['creators_ign'] = data['in_game_name_of_creator'].split(", ")
+    information_dict = (
+        {"user": data.get("information_about_build")} if data.get("information_about_build") is not None else None
+    )
+    fmt_data["information"] = information_dict
+    if data.get("in_game_name_of_creator") is not None:
+        fmt_data["creators_ign"] = data["in_game_name_of_creator"].split(", ")
     else:
-        fmt_data['creators_ign'] = []
+        fmt_data["creators_ign"] = []
 
-    fmt_data['image_url'] = data.get('link_to_image')
-    fmt_data['video_url'] = data.get('link_to_youtube_video')
-    fmt_data['world_download_url'] = data.get('link_to_world_download')
+    fmt_data["image_url"] = data.get("link_to_image")
+    fmt_data["video_url"] = data.get("link_to_youtube_video")
+    fmt_data["world_download_url"] = data.get("link_to_world_download")
 
-    fmt_data['server_ip'] = data.get('server_ip')
-    fmt_data['coordinates'] = data.get('coordinates')
-    fmt_data['command'] = data.get('command_to_get_to_build')
+    fmt_data["server_ip"] = data.get("server_ip")
+    fmt_data["coordinates"] = data.get("coordinates")
+    fmt_data["command"] = data.get("command_to_get_to_build")
 
-    fmt_data['submitter_id'] = ctx.author.id
-    fmt_data['completion_time'] = data.get('date_of_creation')
+    fmt_data["submitter_id"] = ctx.author.id
+    fmt_data["completion_time"] = data.get("date_of_creation")
     # fmt_data['edited_time'] = get_current_utc()
 
     fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
@@ -339,19 +359,13 @@ class SubmissionModal(discord.ui.Modal):
         self.build = build
 
         # Door size
-        self.door_size = discord.ui.TextInput(
-            label="Door Size", placeholder="e.g. 2x2 (piston door)"
-        )
+        self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g. 2x2 (piston door)")
 
         # Pattern
-        self.pattern = discord.ui.TextInput(
-            label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False
-        )
+        self.pattern = discord.ui.TextInput(label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False)
 
         # Dimensions
-        self.dimensions = discord.ui.TextInput(
-            label="Dimensions", placeholder="Width x Height x Depth", required=True
-        )
+        self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=True)
 
         # Restrictions
         self.restrictions = discord.ui.TextInput(
@@ -382,9 +396,7 @@ class SubmissionModal(discord.ui.Modal):
         self.build.restrictions = self.restrictions.value.split(", ")
 
         # Extract IGN
-        ign_match = re.search(
-            r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE
-        )
+        ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
         ign = ign_match.group(1).strip() if ign_match else None
         self.build.creators_ign = ign
 
@@ -519,8 +531,11 @@ class BuildSubmissionForm(View):
 
         followup: Webhook = interaction.followup  # type: ignore
         # Shows the submission to the user
-        await followup.send("Here is a preview of the submission. Use /edit if you have made a mistake",
-                            embed=self.build.generate_embed(), ephemeral=True)
+        await followup.send(
+            "Here is a preview of the submission. Use /edit if you have made a mistake",
+            embed=self.build.generate_embed(),
+            ephemeral=True,
+        )
 
         await post.post_build(interaction.client, self.build)
 

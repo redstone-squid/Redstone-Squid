@@ -16,19 +16,22 @@ class Miscellaneous(Cog):
     async def invite_link(self, ctx: Context):
         """Invite me to your other servers!"""
         await ctx.send(
-            f'https://discordapp.com/oauth2/authorize?client_id={str(ctx.bot.user.id)}&scope=bot&permissions=8')
+            f"https://discordapp.com/oauth2/authorize?client_id={str(ctx.bot.user.id)}&scope=bot&permissions=8"
+        )
 
     # Docstring can't be an f-string, so we use the help parameter instead.
     @hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
     async def source_code(self, ctx: Context):
-        await ctx.send(f'Source code can be found at: {SOURCE_CODE_URL}.')
+        await ctx.send(f"Source code can be found at: {SOURCE_CODE_URL}.")
 
     @hybrid_command()
     async def google_forms(self, ctx: Context):
         """Links you to our record submission form. You want to use /submit instead."""
-        em = discord.Embed(title='Submission form.',
-                           description=f'You can submit new records with ease via our google form: {FORM_LINK}',
-                           colour=utils.discord_green)
+        em = discord.Embed(
+            title="Submission form.",
+            description=f"You can submit new records with ease via our google form: {FORM_LINK}",
+            colour=utils.discord_green,
+        )
         await ctx.send(embed=em)
 
     @hybrid_command()
@@ -48,7 +51,7 @@ class Miscellaneous(Cog):
     @command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:  # noqa: E501
         """Syncs the slash commands with the discord API."""
         if not guilds:
             if spec == "~":
@@ -63,9 +66,7 @@ class Miscellaneous(Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
-            await ctx.send(
-                f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
-            )
+            await ctx.send(f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}")
             return
 
         ret = 0
@@ -97,13 +98,17 @@ class Miscellaneous(Cog):
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context):
         """Sends the google sheets link"""
-        await ctx.send("https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221")
+        await ctx.send(
+            "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221"
+        )
 
     @command(name="db", hidden=True)
     @commands.is_owner()
     async def get_database_link(self, ctx: Context):
         """Sends the database link"""
-        await ctx.send("https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc")
+        await ctx.send(
+            "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc"
+        )
 
     @command(name="error", aliases=["e"], hidden=True)
     @commands.is_owner()

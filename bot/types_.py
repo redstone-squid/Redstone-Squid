@@ -8,6 +8,7 @@ from discord.ext.commands import Bot
 
 class SubmissionCommandResponseT(TypedDict, total=False):
     """Response from the submit or edit command."""
+
     submission_id: Optional[int]
     record_category: Optional[RecordCategory]
     door_size: Optional[str]
@@ -35,6 +36,7 @@ class SubmissionCommandResponseT(TypedDict, total=False):
     coordinates: Optional[str]
     command_to_get_to_build: Optional[str]
 
+
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Tuple[RecordCategory, ...] = get_args(RecordCategory)
 
@@ -44,8 +46,10 @@ BUILD_TYPES: Tuple[BuildType, ...] = get_args(BuildType)
 DoorType: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_TYPES: Tuple[DoorType, ...] = get_args(DoorType)
 
+
 class Restriction(TypedDict, total=False):
     """A restriction on a build."""
+
     id: int
     build_category: BuildType
     name: str

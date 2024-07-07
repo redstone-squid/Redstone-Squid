@@ -33,22 +33,24 @@ class HelpCog(Cog):
             await ctx.send_help()
 
     @help.autocomplete("command")
-    async def command_autocomplete(self, interaction: discord.Interaction, needle: str) -> List[app_commands.Choice[str]]:
+    async def command_autocomplete(
+        self, interaction: discord.Interaction, needle: str
+    ) -> List[app_commands.Choice[str]]:
         assert self.bot.help_command
         ctx = await self.bot.get_context(interaction, cls=Context)
         help_command = self.bot.help_command.copy()
         help_command.context = ctx
         if not needle:
             return [
-               app_commands.Choice(name=cog_name, value=cog_name)
-               for cog_name, cog in self.bot.cogs.items()
-               if await help_command.filter_commands(cog.get_commands())
+                app_commands.Choice(name=cog_name, value=cog_name)
+                for cog_name, cog in self.bot.cogs.items()
+                if await help_command.filter_commands(cog.get_commands())
             ][:25]
         needle = needle.lower()
         return [
-           app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
-           for command in await help_command.filter_commands(self.bot.walk_commands(), sort=True)
-           if needle in command.qualified_name
+            app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
+            for command in await help_command.filter_commands(self.bot.walk_commands(), sort=True)
+            if needle in command.qualified_name
         ][:25]
 
 
@@ -56,7 +58,7 @@ class Help(commands.MinimalHelpCommand):
     """Show help for a command or a group of commands."""
 
     def __init__(self):
-        super().__init__(command_attrs={'help': 'Show help for a command or a group of commands.'})
+        super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
         # self.verify_checks = False
 
     # !help
@@ -76,7 +78,10 @@ class Help(commands.MinimalHelpCommand):
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        em = utils.help_embed(f"Command Help - `{command.qualified_name}`", f"{command.help or 'No details provided'}")
+        em = utils.help_embed(
+            f"Command Help - `{command.qualified_name}`",
+            f"{command.help or 'No details provided'}",
+        )
         await self.get_destination().send(embed=em)
 
     @staticmethod
@@ -89,9 +94,7 @@ class Help(commands.MinimalHelpCommand):
         details = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
-            details.append(
-                f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}"
-            )
+            details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}")
         if return_as_list:
             return details
         return "".join(details)
@@ -120,8 +123,7 @@ class Help(commands.MinimalHelpCommand):
 
         commands_ = await self.filter_commands(subcommands, sort=True)
         command_details = self.get_commands_brief_details(commands_)
-        desc = \
-            f"""{group.cog.description}
+        desc = f"""{group.cog.description}
             
             Usable Subcommands: {command_details or "None"}
             
@@ -135,8 +137,7 @@ class Help(commands.MinimalHelpCommand):
         """Sends help for a cog."""
         commands_ = await self.filter_commands(cog.walk_commands(), sort=True)
         command_details = self.get_commands_brief_details(commands_)
-        desc = \
-            f"""{cog.description}
+        desc = f"""{cog.description}
             
             Usable Subcommands:{command_details or "None"}
             
@@ -146,12 +147,12 @@ class Help(commands.MinimalHelpCommand):
 
     @override
     async def command_not_found(self, string: str, /) -> str:
-        return f'Unable to find command {PREFIX}{string}. Use {PREFIX}help to get a list of available commands.'
+        return f"Unable to find command {PREFIX}{string}. Use {PREFIX}help to get a list of available commands."
 
     @override
     async def send_error_message(self, error: str, /) -> None:
         # TODO: error can be a custom Error too
-        embed = utils.error_embed('Error.', error)
+        embed = utils.error_embed("Error.", error)
         await self.get_destination().send(embed=embed)
 
 
