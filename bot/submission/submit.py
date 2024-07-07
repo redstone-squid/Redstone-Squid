@@ -137,6 +137,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         """Shows a list of versions the bot recognizes."""
         await ctx.send(str(config.VERSIONS_LIST))
 
+    # fmt: off
     class SubmitFlags(commands.FlagConverter):  # noqa: E501
         """Parameters information for the /submit command."""
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
@@ -162,8 +163,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
         coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
         command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
+    # fmt: on
 
-    @commands.hybrid_command(name='submit')
+    @commands.hybrid_command(name="submit")
     async def submit(self, ctx: Context, flags: SubmitFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
@@ -215,7 +217,8 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         await followup.send("Use the select menus then click the button", view=view)
 
-    class EditFlags(commands.FlagConverter):  # noqa: E501
+    # fmt: off
+    class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""
         submission_id: int = flag(description='The ID of the submission to edit.')
         door_width: int = flag(default=None, description='The width of the door itself. Like 2x2 piston door.')
@@ -241,8 +244,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
         coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
         command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
+    # fmt: on
 
-    @commands.hybrid_command(name='edit')
+    @commands.hybrid_command(name="edit")
     async def edit(self, ctx: Context, flags: EditFlags):
         """Edits a record in the database directly."""
         interaction = ctx.interaction

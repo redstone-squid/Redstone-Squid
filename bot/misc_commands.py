@@ -52,7 +52,7 @@ class Miscellaneous(Cog):
     @command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:  # noqa: E501
+    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:  # fmt: skip
         """Syncs the slash commands with the discord API."""
         if not guilds:
             if spec == "~":

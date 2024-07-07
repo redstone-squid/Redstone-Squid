@@ -19,6 +19,7 @@ channel_settings_roles = ["Admin", "Moderator"]
 
 # TODO: Make all commands in this cog guild only
 
+
 class SettingsCog(Cog, name="Settings"):
     def __init__(self, bot: Bot):
         self.bot = bot

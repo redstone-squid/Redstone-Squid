@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import TypedDict, Optional, Literal, TypeAlias, get_args, Tuple
 
-import discord
-from discord.ext.commands import Bot
-
 
 class SubmissionCommandResponseT(TypedDict, total=False):
     """Response from the submit or edit command."""

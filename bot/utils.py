@@ -6,7 +6,6 @@ from typing import Tuple, overload, Literal
 import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context
 from discord.ui import View
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
@@ -40,11 +39,14 @@ def help_embed(title: str, description: str | None):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
+# fmt: off
 @overload
 def parse_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]: ...
 
 @overload
 def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> Tuple[int | None, int | None, int | None]: ...
+# fmt: on
+
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> Tuple[int | None, ...]:
     """Parses a string representing dimensions. For example, '5x5' or '5x5x5'.
@@ -125,7 +127,9 @@ class RunningMessage:
     async def __aenter__(self):
         sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
         if sent_message is None:
-            raise ValueError("Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)")
+            raise ValueError(
+                "Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)"
+            )
 
         self.sent_message = sent_message
         return sent_message

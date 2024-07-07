@@ -5,7 +5,6 @@ import logging
 import os
 
 import discord
-from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
@@ -15,7 +14,6 @@ from bot.config import *
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog
-from bot.submission.submit import SubmissionsCog
 from bot.submission.voting import VotingCog
 
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
