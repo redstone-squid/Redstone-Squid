@@ -344,7 +344,7 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     else:
         fmt_data["creators_ign"] = []
 
-    fmt_data["image_url"] = data.get("link_to_image")
+    fmt_data["image_urls"] = data.get("link_to_image")
     fmt_data["video_urls"] = data.get("link_to_youtube_video")
     fmt_data["world_download_urls"] = data.get("link_to_world_download")
 

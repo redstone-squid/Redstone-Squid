@@ -20,7 +20,7 @@ class DatabaseManager:
     def __new__(cls) -> AsyncClient:
         if not cls._is_setup:
             raise Exception('DatabaseManager not setup yet. Call setup() first.')
-        return cls._client
+        return cls._client  # pyright: ignore [reportReturnType]
 
     @classmethod
     async def setup(cls) -> None:
@@ -44,13 +44,3 @@ class DatabaseManager:
         cls._is_setup = True
 
         # TODO: Create the tables if they don't exist
-
-
-async def main():
-    from pprint import pprint
-    db = DatabaseManager()
-    response = await db.table('builds').select(all_build_columns).eq('id', 30).maybe_single().execute()
-    pprint(response.data, sort_dicts=False)
-
-if __name__ == '__main__':
-    asyncio.run(main())

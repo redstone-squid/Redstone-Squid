@@ -33,7 +33,7 @@ async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_
     setting_name = get_setting_name(channel_purpose)
     db = DatabaseManager()
     response = await db.table('server_settings').select(setting_name, count=CountMethod.exact).eq('server_id', server_id).maybe_single().execute()
-    return response.data[setting_name] if response.count > 0 else None
+    return response.data[setting_name] if response else None
 
 
 async def get_server_settings(server_id: int) -> dict[str, int]:

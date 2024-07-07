@@ -42,12 +42,12 @@ class Build:
         self.door_height: int | None = None
         self.door_depth: int | None = None
 
-        self.door_type: Optional[list[str]] | None = None
+        self.door_type: Optional[Sequence[str]] | None = None
         self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | None = None
 
-        self.wiring_placement_restrictions: Optional[list[str]] | None = None
-        self.component_restrictions: Optional[list[str]] | None = None
-        self.miscellaneous_restrictions: Optional[list[str]] | None = None
+        self.wiring_placement_restrictions: Optional[Sequence[str]] | None = None
+        self.component_restrictions: Optional[Sequence[str]] | None = None
+        self.miscellaneous_restrictions: Optional[Sequence[str]] | None = None
 
         self.normal_closing_time: Optional[int] | None = None
         self.normal_opening_time: Optional[int] | None = None
@@ -56,11 +56,11 @@ class Build:
 
         # In the database, we force empty information to be {}
         self.information: dict | None = None
-        self.creators_ign: Optional[list[str]] | None = None
+        self.creators_ign: Optional[Sequence[str]] | None = None
 
-        self.image_url: Optional[list[str]] | None = None
-        self.video_urls: Optional[list[str]] | None = None
-        self.world_download_urls: Optional[list[str]] | None = None
+        self.image_urls: Optional[Sequence[str]] | None = None
+        self.video_urls: Optional[Sequence[str]] | None = None
+        self.world_download_urls: Optional[Sequence[str]] | None = None
 
         self.server_ip: Optional[str] | None = None
         self.coordinates: Optional[str] | None = None
@@ -94,7 +94,7 @@ class Build:
         self.door_width, self.door_height, self.door_depth = dimensions
 
     @property
-    def restrictions(self) -> dict[Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"], list[str] | None]:
+    def restrictions(self) -> dict[Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"], Sequence[str] | None]:
         """The restrictions of the build."""
         return {
             "wiring_placement_restrictions": self.wiring_placement_restrictions,
@@ -202,7 +202,7 @@ class Build:
         build.functional_versions = [version['full_name_temp'] for version in versions]
 
         links: list[dict] = data.get('build_links', [])
-        build.image_url = [link['url'] for link in links if link['media_type'] == 'image']
+        build.image_urls = [link['url'] for link in links if link['media_type'] == 'image']
         build.video_urls = [link['url'] for link in links if link['media_type'] == 'video']
         build.world_download_urls = [link['url'] for link in links if link['media_type'] == 'world-download']
 
@@ -214,7 +214,7 @@ class Build:
 
         build.submitter_id = data['submitter_id']
         build.completion_time = data['completion_time']
-        build.edited_time = datetime.strptime(data["edited_time"], '%Y-%m-%dT%H:%M:%S')
+        build.edited_time = data["edited_time"]
 
         return build
 
@@ -319,11 +319,13 @@ class Build:
                 await db.table('builds').update({'information': information}).eq('id', self.id).execute()
 
             # build_types table
-            if data.get("door_type"):
+            if data.get("door_type") is not None:
                 door_type = data.get("door_type")
+                if not isinstance(door_type, list):
+                    raise ValueError("Door type must be a list")
             else:
                 door_type = ["Regular"]
-            response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', door_type).execute()  # Door type defaults to Regular if none
+            response = await db.table('types').select('*').eq('build_category', data.get("category")).in_('name', door_type).execute()
             type_ids = [type_['id'] for type_ in response.data]
             build_types_data = list({'build_id': self.id, 'type_id': type_id} for type_id in type_ids)
             await db.table('build_types').upsert(build_types_data).execute()
@@ -338,9 +340,9 @@ class Build:
 
             # build_links table
             build_links_data = []
-            if data.get('image_url'):
+            if data.get('image_urls'):
                 build_links_data.extend(
-                    {'build_id': self.id, 'url': link, 'media_type': 'image'} for link in data.get("image_url", []))
+                    {'build_id': self.id, 'url': link, 'media_type': 'image'} for link in data.get("image_urls", []))
             if data.get('video_urls'):
                 build_links_data.extend(
                     {'build_id': self.id, 'url': link, 'media_type': 'video'} for link in data.get("video_urls", []))
@@ -412,8 +414,8 @@ class Build:
         for key, val in fields.items():
             em.add_field(name=key, value=val, inline=True)
 
-        if self.image_url:
-            em.set_image(url=self.image_url[0])
+        if self.image_urls:
+            em.set_image(url=self.image_urls[0])
 
         em.set_footer(text=f'Submission ID: {self.id}.')
 

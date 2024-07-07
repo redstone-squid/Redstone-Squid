@@ -62,7 +62,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
     """
     db = DatabaseManager()
     response = await db.table('messages').select('message_id', count=CountMethod.exact).eq('server_id', server_id).eq('build_id', build_id).execute()
-    if response.count == 0:
+    if not response.count:
         raise ValueError("No messages found in this server with the given submission id.")
     message_ids = [response.data[i]['message_id'] for i in range(response.count)]
     await db.table('messages').delete().in_('message_id', message_ids).execute()
@@ -114,9 +114,7 @@ async def get_build_id_by_message(message_id: int) -> int | None:
     """
     db = DatabaseManager()
     response = await db.table('messages').select('build_id', count=CountMethod.exact).eq('message_id', message_id).maybe_single().execute()
-    if response.count == 0:
-        return None
-    return response.data['build_id']
+    return response.data['build_id'] if response else None
 
 
 if __name__ == '__main__':
