@@ -8,13 +8,13 @@ from discord.ext.commands import Context, has_any_role, hybrid_group, Cog, hybri
 from discord.ui import Button, View
 
 import Database.message as msg
-import Discord.config as config
-import Discord.submission.post as post
-import Discord.utils as utils
+import bot.config as config
+import bot.submission.post as post
+import bot.utils as utils
 from Database.builds import get_all_builds, Build, get_all_restrictions
 from Database.enums import Status
-from Discord.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
-from Discord.utils import RunningMessage
+from bot.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
+from bot.utils import RunningMessage
 
 submission_roles = ['Admin', 'Moderator', 'Redstoner']
 # TODO: Set up a webhook for the bot to handle google form submissions.

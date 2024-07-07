@@ -2,7 +2,7 @@
 from postgrest.types import CountMethod
 
 from Database.database import DatabaseManager
-from Discord.config import SETTABLE_CHANNELS_TYPE, SETTABLE_CHANNELS
+from bot.config import SETTABLE_CHANNELS_TYPE, SETTABLE_CHANNELS
 
 # The names of the settings in the database, mapped from the channel purpose,
 # which is the name of the setting in the UI.

@@ -8,12 +8,12 @@ from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
 from Database.utils import utcnow
-from Discord.config import *
-from Discord.misc_commands import Miscellaneous
-from Discord.help import HelpCog
-from Discord.settings import SettingsCog
-from Discord.submission.submit import SubmissionsCog
-from Discord.submission.voting import VotingCog
+from bot.config import *
+from bot.misc_commands import Miscellaneous
+from bot.help import HelpCog
+from bot.settings import SettingsCog
+from bot.submission.submit import SubmissionsCog
+from bot.submission.voting import VotingCog
 
 # Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
 # i.e. the owner is in a server with the bot.
@@ -102,7 +102,7 @@ async def main():
     async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:
         await bot.add_cog(Miscellaneous(bot))
         await bot.add_cog(SettingsCog(bot))
-        await bot.load_extension('Discord.submission.submit')
+        await bot.load_extension('bot.submission.submit')
         await bot.add_cog(Listeners(bot))
         await bot.add_cog(HelpCog(bot))
         await bot.add_cog(VotingCog(bot))

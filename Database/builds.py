@@ -9,14 +9,14 @@ from typing import Optional, Literal, Sequence, Mapping
 import discord
 from postgrest.types import CountMethod
 
-import Discord.config
+import bot.config
 from Database.types import BuildRecord, DoorRecord
 from Database.database import DatabaseManager, all_build_columns
 from Database.utils import utcnow
 from Database.enums import Status
-from Discord import utils
-from Discord.types_ import Restriction
-from Discord.config import VERSIONS_LIST
+from bot import utils
+from bot.types_ import Restriction
+from bot.config import VERSIONS_LIST
 
 
 class Build:
@@ -458,7 +458,7 @@ class Build:
 
         if self.functional_versions is None:
             description.append("Unknown version compatibility.")
-        elif not Discord.config.VERSIONS_LIST[-1] in self.functional_versions:
+        elif not bot.config.VERSIONS_LIST[-1] in self.functional_versions:
             description.append("**Broken** in current version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -486,7 +486,7 @@ class Build:
         first_version = None
         last_version = None
 
-        for index, version in enumerate(Discord.config.VERSIONS_LIST):
+        for index, version in enumerate(bot.config.VERSIONS_LIST):
             if version in self.functional_versions:
 
                 if not linking:
@@ -507,7 +507,7 @@ class Build:
                 first_version = None
                 last_version = None
 
-            if index == len(Discord.config.VERSIONS_LIST) - 1 and linking:
+            if index == len(bot.config.VERSIONS_LIST) - 1 and linking:
                 if first_version == last_version:
                     versions.append(first_version)
                 else:

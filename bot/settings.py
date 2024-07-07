@@ -6,8 +6,8 @@ from discord import app_commands
 from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
 
 from Database.server_settings import update_server_setting, get_server_setting, get_server_settings
-import Discord.utils as utils
-from Discord.config import SETTABLE_CHANNELS, SETTABLE_CHANNELS_TYPE
+import bot.utils as utils
+from bot.config import SETTABLE_CHANNELS, SETTABLE_CHANNELS_TYPE
 
 channel_settings_roles = ['Admin', 'Moderator']
 

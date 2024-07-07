@@ -4,8 +4,8 @@ import discord
 import discord.ext.commands as commands
 from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command
 
-import Discord.utils as utils
-from Discord.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
+import bot.utils as utils
+from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 
 
 class Miscellaneous(Cog):

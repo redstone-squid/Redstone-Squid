@@ -7,8 +7,8 @@ from Database.enums import Status
 from Database.message import get_build_id_by_message
 from Database.server_settings import get_server_setting
 from Database.builds import Build
-from Discord.config import OWNER_ID
-from Discord.submission import post
+from bot.config import OWNER_ID
+from bot.submission import post
 
 
 class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):

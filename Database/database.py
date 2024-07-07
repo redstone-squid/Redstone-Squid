@@ -8,7 +8,7 @@ import git
 
 from supabase_py_async import create_client, AsyncClient
 from supabase_py_async.lib.client_options import ClientOptions
-from Discord.config import DEV_MODE
+from bot.config import DEV_MODE
 
 all_build_columns = '*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)'
 

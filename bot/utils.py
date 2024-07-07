@@ -1,4 +1,3 @@
-# FIXME: this file name can't be worse bcs dpy has a utils file
 import re
 from traceback import format_tb
 from types import TracebackType
@@ -7,7 +6,7 @@ from typing import Tuple
 import discord
 from discord.ui import View
 
-from Discord.config import OWNER_ID, PRINT_TRACEBACKS
+from bot.config import OWNER_ID, PRINT_TRACEBACKS
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A

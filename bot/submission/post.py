@@ -1,10 +1,10 @@
 """Helper functions for posting submissions to discord channels."""
 import discord
 
-import Discord.settings as settings
+import bot.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database.enums import Status
-from Discord.config import SETTABLE_CHANNELS_TYPE
+from bot.config import SETTABLE_CHANNELS_TYPE
 from Database.builds import Build
 
 
