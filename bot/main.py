@@ -5,9 +5,11 @@ import logging
 import os
 
 import discord
+from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
+from Database.database import DatabaseManager
 from Database.utils import utcnow
 from bot.config import *
 from bot.misc_commands import Miscellaneous
@@ -103,16 +105,29 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
 
 
+class RedstoneSquid(Bot):
+    def __init__(self, command_prefix: str):
+        super().__init__(
+            command_prefix=command_prefix,
+            owner_id=OWNER_ID,
+            intents=discord.Intents.all(),
+            description=f"{BOT_NAME} v{BOT_VERSION}",
+        )
+
+    async def setup_hook(self) -> None:
+        await DatabaseManager.setup()
+        await self.add_cog(Miscellaneous(self))
+        await self.add_cog(SettingsCog(self))
+        await self.load_extension("bot.submission.submit")
+        await self.add_cog(Listeners(self))
+        await self.add_cog(HelpCog(self))
+        await self.add_cog(VotingCog(self))
+
+
 async def main():
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
     # Running the application
-    async with Bot(command_prefix=prefix, owner_id=OWNER_ID, intents=discord.Intents.all(), description=f"{BOT_NAME} v{BOT_VERSION}") as bot:  # noqa: E501
-        await bot.add_cog(Miscellaneous(bot))
-        await bot.add_cog(SettingsCog(bot))
-        await bot.load_extension("bot.submission.submit")
-        await bot.add_cog(Listeners(bot))
-        await bot.add_cog(HelpCog(bot))
-        await bot.add_cog(VotingCog(bot))
+    async with RedstoneSquid(prefix) as bot:
         discord.utils.setup_logging()
 
         load_dotenv()

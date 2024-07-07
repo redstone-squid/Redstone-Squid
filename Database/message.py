@@ -10,18 +10,18 @@ from Database.database import DatabaseManager
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
 async def get_server_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('messages').select('*').eq('server_id', server_id).execute()
     return response.data
 
 async def get_build_messages(build_id: int) -> list[MessageRecord]:
     """Get all messages for a build."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('messages').select('*').eq('build_id', build_id).execute()
     return response.data
 
 async def get_message(server_id: int, submission_id: int) -> MessageRecord | None:
-    db = await DatabaseManager()
+    db = DatabaseManager()
     server_record = await db.table('messages').select('*').eq('server_id', server_id).eq('build_id', submission_id).execute()
     if len(server_record.data) == 0:
         return None
@@ -31,7 +31,7 @@ async def get_message(server_id: int, submission_id: int) -> MessageRecord | Non
 
 async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str | None = None) -> None:
     """Add a message to the database."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     await db.table('messages').insert({
         'server_id': server_id,
         'build_id': submission_id,
@@ -43,7 +43,7 @@ async def add_message(server_id: int, submission_id: int, channel_id: int, messa
 
 async def update_message(message_id: int) -> None:
     """Update the edited time of a message."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     await db.table('messages').update({'edited_time': utcnow()}).eq('message_id', message_id).execute()
 
 
@@ -60,7 +60,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
     Returns:
         A list of message ids that were deleted.
     """
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('messages').select('message_id', count=CountMethod.exact).eq('server_id', server_id).eq('build_id', build_id).execute()
     if response.count == 0:
         raise ValueError("No messages found in this server with the given submission id.")
@@ -78,7 +78,7 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     Returns:
         A list of messages.
     """
-    db = await DatabaseManager()
+    db = DatabaseManager()
     # Messages that have been updated since the last submission message update.
     response = await db.rpc('get_outdated_messages', {'server_id_input': server_id}).execute()
     server_outdated_messages = response.data
@@ -95,7 +95,7 @@ async def get_unsent_builds(server_id: int) -> list[Build]:
     Returns:
         A list of messages
     """
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
     build_ids = [row['id'] for row in response.data]
     builds = await get_builds(build_ids)
@@ -112,7 +112,7 @@ async def get_build_id_by_message(message_id: int) -> int | None:
     Returns:
         The build id of the message.
     """
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('messages').select('build_id', count=CountMethod.exact).eq('message_id', message_id).maybe_single().execute()
     if response.count == 0:
         return None

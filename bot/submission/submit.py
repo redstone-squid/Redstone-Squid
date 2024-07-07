@@ -1,5 +1,5 @@
 import re
-from typing import Literal, cast
+from typing import Literal, cast, TYPE_CHECKING
 
 import discord
 from discord import InteractionResponse, Webhook
@@ -12,7 +12,6 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
-from discord.types.interactions import SelectMessageComponentInteractionData
 from discord.ui import Button, View
 
 import Database.message as msg
@@ -23,6 +22,9 @@ from Database.builds import get_all_builds, Build, get_all_restrictions
 from Database.enums import Status
 from bot.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
 from bot.utils import RunningMessage
+
+if TYPE_CHECKING:
+    from discord.types.interactions import SelectMessageComponentInteractionData
 
 submission_roles = ["Admin", "Moderator", "Redstoner"]
 # TODO: Set up a webhook for the bot to handle google form submissions.

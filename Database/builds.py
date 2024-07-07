@@ -241,7 +241,7 @@ class Build:
         if self.id is None:
             raise ValueError("Build ID is missing.")
 
-        db = await DatabaseManager()
+        db = DatabaseManager()
         response = await db.table('builds').select(all_build_columns).eq('id', self.id).maybe_single().execute()
         if not response:
             raise ValueError("Build not found in the database.")
@@ -255,7 +255,7 @@ class Build:
         """
         self.edited_time = utcnow()
         data = {key: value for key, value in self.as_dict().items() if value is not None}
-        db = await DatabaseManager()
+        db = DatabaseManager()
 
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
         # information is a special JSON field in the database that stores various information about the build
@@ -385,7 +385,7 @@ class Build:
             ValueError: If the build could not be confirmed.
         """
         self.submission_status = Status.CONFIRMED
-        db = await DatabaseManager()
+        db = DatabaseManager()
         response = await db.table('builds').update({'submission_status': Status.CONFIRMED}, count=CountMethod.exact).eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
@@ -397,7 +397,7 @@ class Build:
             ValueError: If the build could not be denied.
         """
         self.submission_status = Status.DENIED
-        db = await DatabaseManager()
+        db = DatabaseManager()
         response = await db.table('builds').update({'submission_status': Status.DENIED}, count=CountMethod.exact).eq('id', self.id).execute()
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
@@ -573,7 +573,7 @@ async def get_all_builds(submission_status: Optional[int] = None) -> list[Build]
     Returns:
         A list of Build objects.
     """
-    db = await DatabaseManager()
+    db = DatabaseManager()
     query = db.table('builds').select(all_build_columns)
 
     if submission_status:
@@ -591,7 +591,7 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
     if len(build_ids) == 0:
         return []
 
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('builds').select(all_build_columns).in_('id', build_ids).execute()
 
     builds: list[Build | None] = [None] * len(build_ids)
@@ -603,7 +603,7 @@ async def get_builds(build_ids: list[int]) -> list[Build | None]:
 
 async def get_unsent_builds(server_id: int) -> list[Build] | None:
     """Get all the builds that have not been posted on the server"""
-    db = await DatabaseManager()
+    db = DatabaseManager()
 
     # Builds that have not been posted on the server
     response = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
@@ -615,7 +615,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 @cache
 async def get_all_restrictions() -> list[Restriction]:
     """Fetches all restrictions from the database."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('restrictions').select('*').execute()
     return response.data
 

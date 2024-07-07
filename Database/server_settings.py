@@ -31,14 +31,14 @@ def get_purpose_name(setting_name: str) -> str:
 async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_TYPE) -> int | None:
     """Gets the channel id of the specified purpose for a server."""
     setting_name = get_setting_name(channel_purpose)
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('server_settings').select(setting_name, count=CountMethod.exact).eq('server_id', server_id).maybe_single().execute()
     return response.data[setting_name] if response.count > 0 else None
 
 
 async def get_server_settings(server_id: int) -> dict[str, int]:
     """Gets a list of settings for a server."""
-    db = await DatabaseManager()
+    db = DatabaseManager()
     response = await db.table('server_settings').select('*').eq('server_id', server_id).maybe_single().execute()
     if response is None:
         return {}
@@ -51,12 +51,12 @@ async def get_server_settings(server_id: int) -> dict[str, int]:
 async def update_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_TYPE, value: int | None) -> None:
     """Updates a setting for a server."""
     setting_name = get_setting_name(channel_purpose)
-    db = await DatabaseManager()
+    db = DatabaseManager()
     await db.table('server_settings').upsert({'server_id': server_id, setting_name: value}).execute()
 
 
 async def update_server_settings(server_id: int, channel_purposes: dict[SETTABLE_CHANNELS_TYPE, int]) -> None:
     """Updates a list of settings for a server."""
     settings = {get_setting_name(purpose): value for purpose, value in channel_purposes.items()}
-    db = await DatabaseManager()
+    db = DatabaseManager()
     await db.table('server_settings').upsert({'server_id': server_id, **settings}).execute()
