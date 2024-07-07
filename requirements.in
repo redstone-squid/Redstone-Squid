@@ -5,3 +5,5 @@ supabase-py-async
 python-dotenv
 pip-tools
 GitPython
+ruff
+pyright
