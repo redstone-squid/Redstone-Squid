@@ -19,7 +19,10 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        vote_channel_id = await get_server_setting(payload.guild_id, "Vote")
+        if guild_id := payload.guild_id is None:
+            return
+
+        vote_channel_id = await get_server_setting(guild_id, "Vote")
         # Must be in the vote channel
         if vote_channel_id is None or payload.channel_id != vote_channel_id:
             return
@@ -29,8 +32,8 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             return
 
         # The message must be from the bot
-        message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        if message.author.id != self.bot.user.id:
+        message: discord.Message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)  # type: ignore[attr-defined]
+        if message.author.id != self.bot.user.id:  # type: ignore[attr-defined]
             return
 
         build_id = await get_build_id_by_message(payload.message_id)
@@ -40,6 +43,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             return
 
         submission = await Build.from_id(build_id)
+        assert submission is not None
 
         # The submission status must be pending
         if submission.submission_status != Status.PENDING:
@@ -49,12 +53,17 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         if payload.emoji.name == "👍":
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
             await submission.confirm()
-            message_ids = await msg.delete_message(payload.guild_id, build_id)
+            message_ids = await msg.delete_message(guild_id, build_id)
             await post.post_build(self.bot, submission)
             for message_id in message_ids:
-                message = await self.bot.get_channel(vote_channel_id).fetch_message(message_id)
-                await message.delete()
+                vote_channel = self.bot.get_channel(vote_channel_id)
+                if isinstance(vote_channel, discord.PartialMessageable):
+                    message = await vote_channel.fetch_message(message_id)
+                    await message.delete()
+                else:
+                    # TODO: Add a check when adding vote channels to the database
+                    raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
 
 
-def setup(bot: Bot):
-    bot.add_cog(VotingCog(bot))
+async def setup(bot: Bot):
+    await bot.add_cog(VotingCog(bot))

@@ -1,5 +1,5 @@
 import re
-from typing import Literal
+from typing import Literal, cast
 
 import discord
 from discord import InteractionResponse, Webhook
@@ -12,6 +12,7 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
+from discord.types.interactions import SelectMessageComponentInteractionData
 from discord.ui import Button, View
 
 import Database.message as msg
@@ -50,7 +51,8 @@ class SubmissionsCog(Cog, name="Submissions"):
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"
+                        # FIXME: sub.creators_ign is assumed to be a list, but it's a string
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"  # type: ignore
                     )
                 desc = "\n\n".join(desc)
 
@@ -71,7 +73,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     @staticmethod
     def is_owner_server(ctx: Context):
-        if not ctx.guild.id == config.OWNER_SERVER_ID:
+        if not ctx.guild or ctx.guild.id == config.OWNER_SERVER_ID:
             # TODO: Make a custom error for this.
             # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
             raise commands.CommandError("This command can only be executed on certain servers.")
@@ -131,7 +133,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        await ctx.send(config.VERSIONS_LIST)
+        await ctx.send(str(config.VERSIONS_LIST))
 
     class SubmitFlags(commands.FlagConverter):  # noqa: E501
         """Parameters information for the /submit command."""
@@ -164,14 +166,14 @@ class SubmissionsCog(Cog, name="Submissions"):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
-        interaction: discord.Interaction = ctx.interaction
+        interaction = cast(discord.Interaction, ctx.interaction)
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            fmt_data = format_submission_input(ctx, dict(flags))
+            fmt_data = format_submission_input(ctx, cast(SubmissionCommandResponseT, dict(flags)))
             build = Build.from_dict(fmt_data)
 
             # TODO: Stop hardcoding this
@@ -241,7 +243,9 @@ class SubmissionsCog(Cog, name="Submissions"):
     @commands.hybrid_command(name='edit')
     async def edit(self, ctx: Context, flags: EditFlags):
         """Edits a record in the database directly."""
-        interaction: discord.Interaction = ctx.interaction
+        interaction = ctx.interaction
+        assert interaction is not None
+
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
 
@@ -252,7 +256,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            update_values = format_submission_input(ctx, dict(flags))
+            update_values = format_submission_input(ctx, cast(SubmissionCommandResponseT, dict(flags)))
             submission.update_local(update_values)
             preview_embed = submission.generate_embed()
 
@@ -288,9 +292,9 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data["id"] = data.get("submission_id")
     # fmt_data['submission_status']
 
-    fmt_data["record_category"] = data["record_category"]
-    if data.get("works_in") is not None:
-        fmt_data["functional_versions"] = data["works_in"].split(", ")
+    fmt_data["record_category"] = data.get("record_category")
+    if (works_in := data.get("works_in")) is not None:
+        fmt_data["functional_versions"] = works_in.split(", ")
     else:
         fmt_data["functional_versions"] = []
 
@@ -298,8 +302,8 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     fmt_data["height"] = data.get("build_height")
     fmt_data["depth"] = data.get("build_depth")
 
-    if data.get("door_size"):
-        width, height, depth = utils.parse_dimensions(data["door_size"])
+    if (door_size := data.get("door_size")) is not None:
+        width, height, depth = utils.parse_dimensions(door_size)
         fmt_data["door_width"] = width
         fmt_data["door_height"] = height
         fmt_data["door_depth"] = depth
@@ -308,16 +312,17 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
         fmt_data["door_height"] = data.get("door_height")
     # fmt_data['door_depth']
 
-    if data.get("pattern"):
-        fmt_data["door_type"] = data.get("pattern").split(", ")
+    if (pattern := data.get("pattern")) is not None:
+        fmt_data["door_type"] = pattern.split(", ")
     fmt_data["door_orientation_type"] = data.get("door_type")
 
-    if data.get("wiring_placement_restrictions") is not None:
-        fmt_data["wiring_placement_restrictions"] = data["wiring_placement_restrictions"].split(", ")
+    if (wp_res := data.get("wiring_placement_restrictions")) is not None:
+        fmt_data["wiring_placement_restrictions"] = wp_res.split(", ")
     else:
         fmt_data["wiring_placement_restrictions"] = []
-    if data.get("component_restrictions") is not None:
-        fmt_data["component_restrictions"] = data["component_restrictions"].split(", ")
+
+    if (co_res := data.get("component_restrictions")) is not None:
+        fmt_data["component_restrictions"] = co_res.split(", ")
     else:
         fmt_data["component_restrictions"] = []
     misc_restrictions = [data.get("locationality"), data.get("directionality")]
@@ -332,14 +337,14 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
         {"user": data.get("information_about_build")} if data.get("information_about_build") is not None else None
     )
     fmt_data["information"] = information_dict
-    if data.get("in_game_name_of_creator") is not None:
-        fmt_data["creators_ign"] = data["in_game_name_of_creator"].split(", ")
+    if (ign := data.get("in_game_name_of_creator")) is not None:
+        fmt_data["creators_ign"] = ign.split(", ")
     else:
         fmt_data["creators_ign"] = []
 
     fmt_data["image_url"] = data.get("link_to_image")
-    fmt_data["video_url"] = data.get("link_to_youtube_video")
-    fmt_data["world_download_url"] = data.get("link_to_world_download")
+    fmt_data["video_urls"] = data.get("link_to_youtube_video")
+    fmt_data["world_download_urls"] = data.get("link_to_world_download")
 
     fmt_data["server_ip"] = data.get("server_ip")
     fmt_data["coordinates"] = data.get("coordinates")
@@ -392,13 +397,14 @@ class SubmissionModal(discord.ui.Modal):
 
         self.build.door_dimensions = utils.parse_hallway_dimensions(self.door_size.value)
         self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
-        self.build.dimensions = utils.parse_dimensions(self.dimensions.value)
+        self.build.dimensions = utils.parse_dimensions(self.dimensions.value)  # type: ignore
         self.build.restrictions = self.restrictions.value.split(", ")
 
         # Extract IGN
         ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
-        ign = ign_match.group(1).strip() if ign_match else None
-        self.build.creators_ign = ign
+        if ign_match:
+            igns = ign_match.groups()
+            self.build.creators_ign = [ign.strip() for ign in igns]
 
         # Extract video link
         video_match = re.search(
@@ -406,8 +412,9 @@ class SubmissionModal(discord.ui.Modal):
             self.additional_info.value,
             re.IGNORECASE,
         )
-        video_link = video_match.group(1).strip() if video_match else None
-        self.build.video_url = video_link
+        if video_match:
+            video_links = video_match.groups()
+            self.build.video_urls = [video_link.strip() for video_link in video_links]
 
         # Extract download link
         download_match = re.search(
@@ -415,8 +422,9 @@ class SubmissionModal(discord.ui.Modal):
             self.additional_info.value,
             re.IGNORECASE,
         )
-        download_link = download_match.group(1).strip() if download_match else None
-        self.build.world_download_url = download_link
+        if download_match:
+            download_links = download_match.groups()
+            self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
 class AdditionalSubmissionInfoButton(Button):
@@ -446,7 +454,8 @@ class RecordCategorySelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.build.record_category = interaction.data["values"][0]
+        data = cast(SelectMessageComponentInteractionData, interaction.data)
+        self.build.record_category = data["values"][0]  # type: ignore
         await interaction.response.defer()  # type: ignore
 
 
@@ -463,7 +472,8 @@ class DoorTypeSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.build.door_orientation_type = interaction.data["values"][0]
+        data = cast(SelectMessageComponentInteractionData, interaction.data)
+        self.build.door_orientation_type = data["values"][0]  # type: ignore
         await interaction.response.defer()  # type: ignore
 
 
@@ -480,7 +490,8 @@ class VersionsSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.build.functional_versions = interaction.data["values"]
+        data = cast(SelectMessageComponentInteractionData, interaction.data)
+        self.build.functional_versions = data["values"]
         await interaction.response.defer()  # type: ignore
 
 
@@ -501,7 +512,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.build.miscellaneous_restrictions = interaction.data["values"]
+        data = cast(SelectMessageComponentInteractionData, interaction.data)
+        self.build.miscellaneous_restrictions = data["values"]
         await interaction.response.defer()  # type: ignore
 
 

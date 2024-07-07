@@ -2,6 +2,7 @@ from typing import Optional, Literal
 
 import discord
 import discord.ext.commands as commands
+from discord import Member
 from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command
 
 import bot.utils as utils
@@ -88,11 +89,20 @@ class Miscellaneous(Cog):
     @commands.check(is_my_alt)
     async def give_redstoner(self, ctx: Context):
         """Give redstoner role to my alt for testing. Does nothing for others."""
-        redstoner_role: discord.Role = ctx.guild.get_role(433670432420397060)
-        if redstoner_role in ctx.author.roles:
-            await ctx.author.remove_roles(redstoner_role)
+        if ctx.guild is None:
+            raise ValueError("DM not supported")
+
+        my_alt: Member = ctx.author  # type: ignore
+
+        redstoner_role = ctx.guild.get_role(433670432420397060)
+        if not redstoner_role:
+            await ctx.send("Redstoner role not found.")
+            return
+
+        if redstoner_role in my_alt.roles:
+            await my_alt.remove_roles(redstoner_role)
         else:
-            await ctx.author.add_roles(redstoner_role)
+            await my_alt.add_roles(redstoner_role)
 
     @command(name="gdb", hidden=True)
     @commands.is_owner()
@@ -118,6 +128,6 @@ class Miscellaneous(Cog):
             raise ValueError("This is a test error.")
 
 
-def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_cog(Miscellaneous(bot))
+    await bot.add_cog(Miscellaneous(bot))

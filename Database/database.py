@@ -22,7 +22,7 @@ class DatabaseManager:
             # This is necessary only if you are not running from app.py.
             if DEV_MODE:
                 git_repo = git.Repo(Path(__file__), search_parent_directories=True)
-                load_dotenv(git_repo.working_dir + '/.env')
+                load_dotenv(git_repo.working_dir + '/.env')  # type: ignore
 
             url = os.environ.get('SUPABASE_URL')
             key = os.environ.get('SUPABASE_KEY')

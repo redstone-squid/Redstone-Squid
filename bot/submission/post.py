@@ -48,6 +48,9 @@ async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[
 async def post_build(client: discord.Client, build: Build) -> None:
     """Posts a submission to the appropriate channels in every server the bot is in."""
     # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
+    if build.id is None:
+        raise ValueError("Build id is None.")
+
     channels = await get_channels_to_post_to(client, build)
     em = build.generate_embed()
 
@@ -58,6 +61,9 @@ async def post_build(client: discord.Client, build: Build) -> None:
 
 async def post_build_to_server(client: discord.Client, build: Build, server_id: int) -> None:
     """Posts a submission to the appropriate channel in a specific server."""
+    if build.id is None:
+        raise ValueError("Build id is None.")
+
     channels = await get_channels_to_post_to(client, build)
     em = build.generate_embed()
 
@@ -71,8 +77,14 @@ async def edit_post(client: discord.Client, channel_id: int, message_id: int, bu
     """Updates a post according to the information given by the build_id."""
     # TODO: Check whether the message_id corresponds to the build_id
     build = await Build.from_id(build_id)
+    if build is None:
+        raise ValueError(f"Build not found with id: {build_id}")
+
     em = build.generate_embed()
     channel = client.get_channel(channel_id)
+    if not isinstance(channel, discord.PartialMessageable):
+        raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
+
     message = await channel.fetch_message(message_id)
 
     updated_message = await message.edit(embed=em)
@@ -81,12 +93,18 @@ async def edit_post(client: discord.Client, channel_id: int, message_id: int, bu
 
 async def update_build_posts(client: discord.Client, build: Build) -> None:
     """Updates all posts for a build."""
+    if build.id is None:
+        raise ValueError("Build id is None.")
+
     # Get all messages for a build
     messages = await msg.get_build_messages(build.id)
     em = build.generate_embed()
 
     for message in messages:
         channel = client.get_channel(message["channel_id"])
+        if not isinstance(channel, discord.PartialMessageable):
+            raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
+
         message = await channel.fetch_message(message["message_id"])
         await message.edit(embed=em)
         await msg.update_message(message.id)

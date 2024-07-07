@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+from typing import cast
+
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -10,8 +12,6 @@ def connect():
         'https://spreadsheets.google.com/feeds',
         'https://www.googleapis.com/auth/drive'
     ]
-
-    credentials = None
 
     if not os.path.isfile('Google/client_secret.json'):
         # Getting service account credentials from environment variables
@@ -23,20 +23,20 @@ def connect():
 
         # Formatting credentials
         credentials = json.loads(credentials)
-        credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials, scopes)
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials, scopes)  # pyright: ignore [reportArgumentType]
     else:
         # Getting service account credentials from json file
-        credentials = ServiceAccountCredentials.from_json_keyfile_name('Google/client_secret.json', scopes)
+        credentials = ServiceAccountCredentials.from_json_keyfile_name('Google/client_secret.json', scopes)  # pyright: ignore [reportArgumentType]
 
-    return credentials, gspread.authorize(credentials)
+    return credentials, gspread.authorize(credentials)  # pyright: ignore [reportPrivateImportUsage, reportArgumentType]
 
 class Connection:
     """Singleton class to manage the connection to Google Sheets."""
-    _GC = None
-    _CREDS = None
+    _CREDS: ServiceAccountCredentials | None = None
+    _GC: gspread.Client | None = None  # pyright: ignore [reportPrivateImportUsage]
 
     @staticmethod
     def get():
-        if not Connection._GC or Connection._CREDS.access_token_expired:
+        if not Connection._GC or Connection._CREDS.access_token_expired:  # type: ignore
             Connection._CREDS, Connection._GC = connect()
         return Connection._GC

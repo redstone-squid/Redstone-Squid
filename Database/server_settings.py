@@ -2,6 +2,7 @@
 from postgrest.types import CountMethod
 
 from Database.database import DatabaseManager
+from Database.types import ServerSettingsRecord
 from bot.config import SETTABLE_CHANNELS_TYPE, SETTABLE_CHANNELS
 
 # The names of the settings in the database, mapped from the channel purpose,

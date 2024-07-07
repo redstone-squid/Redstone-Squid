@@ -1,4 +1,4 @@
-from typing import TypedDict, Required
+from typing import TypedDict, Required, NotRequired
 from Database.enums import Status, Category
 
 
@@ -18,9 +18,9 @@ class BuildRecord(TypedDict, total=False):
     server_info: dict  # JSON
     submitter_id: int
 
-class MessageRecord(TypedDict, total=False):
+class MessageRecord(TypedDict):
     """A record of a message in the database."""
-    message_id: Required[int]
+    message_id: int
     server_id: int
     build_id: int
     channel_id: int
@@ -38,14 +38,24 @@ class DoorRecord(TypedDict, total=False):
     visible_opening_time: int
     visible_closing_time: int
 
-class ExtenderRecord(TypedDict, total=False):
+class ExtenderRecord(TypedDict):
     """A record of an extender in the database."""
     build_id: int
 
-class UtilityRecord(TypedDict, total=False):
+class UtilityRecord(TypedDict):
     """A record of a utility in the database."""
     build_id: int
 
-class EntranceRecord(TypedDict, total=False):
+class EntranceRecord(TypedDict):
     """A record of an entrance in the database."""
     build_id: int
+
+
+class ServerSettingsRecord(TypedDict):
+    """A record of a server's settings in the database."""
+    server_id: int
+    smallest_channel_id: NotRequired[int]
+    fastest_channel_id: NotRequired[int]
+    first_channel_id: NotRequired[int]
+    builds_channel_id: NotRequired[int]
+    voting_channel_id: NotRequired[int]

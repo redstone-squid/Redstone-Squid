@@ -4,6 +4,7 @@ from typing import Optional
 
 import discord
 from discord import app_commands
+from discord.abc import GuildChannel
 from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
 
 from Database.server_settings import (
@@ -16,6 +17,7 @@ from bot.config import SETTABLE_CHANNELS, SETTABLE_CHANNELS_TYPE
 
 channel_settings_roles = ["Admin", "Moderator"]
 
+# TODO: Make all commands in this cog guild only
 
 class SettingsCog(Cog, name="Settings"):
     def __init__(self, bot: Bot):
@@ -45,6 +47,9 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Finds which channel is set for a purpose and sends the results to the user."""
+        if ctx.guild is None:
+            raise ValueError("DM not supported")
+
         async with utils.RunningMessage(ctx) as sent_message:
             result_channel = await get_channel_for(ctx.guild, channel_purpose)
 
@@ -73,6 +78,9 @@ class SettingsCog(Cog, name="Settings"):
         channel: discord.TextChannel,
     ):
         """Sets the current channel as the channel to post this record type to."""
+        if ctx.guild is None:
+            raise ValueError("DM not supported")
+
         success_embed = utils.info_embed("Settings updated", f"{channel_purpose} channel has successfully been set.")
         failure_embed = utils.error_embed("Error", "Could not find that channel.")
 
@@ -91,6 +99,9 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Unsets the channel to post this record type to."""
+        if ctx.guild is None:
+            raise ValueError("DM not supported")
+
         success_embed = utils.info_embed(
             "Settings updated",
             f"{channel_purpose} channel has successfully been unset.",
@@ -101,26 +112,32 @@ class SettingsCog(Cog, name="Settings"):
             await sent_message.edit(embed=success_embed)
 
 
-async def get_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> discord.TextChannel | None:
+async def get_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANNELS_TYPE) -> GuildChannel | None:
     """Gets the channel for a specific purpose from the server settings table."""
     channel_id = await get_server_setting(server.id, channel_purpose)
-    return server.get_channel(channel_id)
+    if channel_id:
+        return server.get_channel(channel_id)
 
 
 async def get_settable_channels(
     server: discord.Guild,
-) -> dict[str, Optional[discord.TextChannel]]:
+) -> dict[str, Optional[GuildChannel]]:
     """Gets all record channels of a server from the server settings table."""
     settings = await get_server_settings(server.id)
+    if settings is None:
+        return {}
 
     channels = {}
     for record_type in SETTABLE_CHANNELS:
         channel_id = settings.get(record_type)
+        if channel_id is None:
+            continue
+
         channels[record_type] = server.get_channel(channel_id)
 
     return channels
 
 
-def setup(bot: Bot):
+async def setup(bot: Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_cog(SettingsCog(bot))
+    await bot.add_cog(SettingsCog(bot))

@@ -65,7 +65,8 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         if guild.id != OWNER_SERVER_ID:
             # Send a warning message in the server, and then leave
             await log(f"Bot joined server: {guild.name} with id: {guild.id}.")
-            await guild.system_channel.send("I am not supposed to be in this server. Leaving now.")
+            if guild.system_channel:
+                await guild.system_channel.send("I am not supposed to be in this server. Leaving now.")
             await guild.leave()
 
     @Cog.listener()

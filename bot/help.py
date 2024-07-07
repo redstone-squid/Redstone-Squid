@@ -146,16 +146,16 @@ class Help(commands.MinimalHelpCommand):
         await self.get_destination().send(embed=em)
 
     @override
-    async def command_not_found(self, string: str, /) -> str:
+    async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
         return f"Unable to find command {PREFIX}{string}. Use {PREFIX}help to get a list of available commands."
 
     @override
-    async def send_error_message(self, error: str, /) -> None:
+    async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
         embed = utils.error_embed("Error.", error)
         await self.get_destination().send(embed=embed)
 
 
-def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_cog(HelpCog(bot))
+    await bot.add_cog(HelpCog(bot))

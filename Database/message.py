@@ -29,7 +29,7 @@ async def get_message(server_id: int, submission_id: int) -> MessageRecord | Non
     return server_record.data[0]
 
 
-async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str = None) -> None:
+async def add_message(server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str | None = None) -> None:
     """Add a message to the database."""
     db = await DatabaseManager()
     await db.table('messages').insert({
@@ -99,7 +99,7 @@ async def get_unsent_builds(server_id: int) -> list[Build]:
     response = await db.rpc('get_unsent_builds', {'server_id_input': server_id}).execute()
     build_ids = [row['id'] for row in response.data]
     builds = await get_builds(build_ids)
-    return builds
+    return [build for build in builds if build is not None]
 
 
 async def get_build_id_by_message(message_id: int) -> int | None:

@@ -1,9 +1,12 @@
 import re
 from traceback import format_tb
 from types import TracebackType
-from typing import Tuple
+from typing import Tuple, overload, Literal
 
 import discord
+from discord import Message, Webhook
+from discord.abc import Messageable
+from discord.ext.commands import Context
 from discord.ui import View
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
@@ -13,23 +16,37 @@ discord_yellow = 0xFAA61A
 discord_green = 0x43B581
 
 
-def error_embed(title: str, description: str):
+def error_embed(title: str, description: str | None):
+    if description is None:
+        description = ""
     return discord.Embed(title=title, colour=discord_red, description=":x: " + description)
 
 
-def warning_embed(title: str, description: str):
+def warning_embed(title: str, description: str | None):
+    if description is None:
+        description = ""
     return discord.Embed(title=":warning: " + title, colour=discord_yellow, description=description)
 
 
-def info_embed(title: str, description: str):
+def info_embed(title: str, description: str | None):
+    if description is None:
+        description = ""
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-def help_embed(title: str, description: str):
+def help_embed(title: str, description: str | None):
+    if description is None:
+        description = ""
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> list[int | None]:
+@overload
+def parse_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]: ...
+
+@overload
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> Tuple[int | None, int | None, int | None]: ...
+
+def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> Tuple[int | None, ...]:
     """Parses a string representing dimensions. For example, '5x5' or '5x5x5'.
 
     Args:
@@ -40,10 +57,13 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> lis
     Returns:
         A list of the dimensions, the length of the list will be padded with None to match `max_dim`.
     """
+    if min_dim > max_dim:
+        raise ValueError(f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}.")
+
     inputs = dim_str.split("x")
     if not min_dim <= len(inputs) <= max_dim:
         raise ValueError(
-            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs)} in {dim_str}."
+            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs)} in {dim_str=}."
         )
 
     try:
@@ -52,7 +72,7 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> lis
         raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}")
 
     # Pad with None
-    return dimensions + [None] * (max_dim - len(dimensions))
+    return tuple(dimensions + [None] * (max_dim - len(dimensions)))
 
 
 def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]:
@@ -71,13 +91,13 @@ def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int 
         A tuple of the dimensions (width, height)
     """
     try:
-        return parse_dimensions(dim_str)  # type: ignore
+        return parse_dimensions(dim_str)
     except ValueError:
         if match := re.match(r"^(\d+) (wide|high)$", dim_str):
             size, direction = match.groups()
             if direction == "wide":
                 return int(size), None, None
-            elif direction == "high":
+            else:  # direction == "high"
                 return None, int(size), None
         else:
             raise ValueError(
@@ -90,7 +110,7 @@ class RunningMessage:
 
     def __init__(
         self,
-        ctx,
+        ctx: Messageable | Webhook,
         *,
         title: str = "Working",
         description: str = "Getting information...",
@@ -99,12 +119,16 @@ class RunningMessage:
         self.ctx = ctx
         self.title = title
         self.description = description
-        self.sent_message = None
         self.delete_on_exit = delete_on_exit
+        self.sent_message: Message
 
     async def __aenter__(self):
-        self.sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
-        return self.sent_message
+        sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
+        if sent_message is None:
+            raise ValueError("Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)")
+
+        self.sent_message = sent_message
+        return sent_message
 
     async def __aexit__(self, exc_type, exc_val, exc_tb: TracebackType):
         # Handle exceptions

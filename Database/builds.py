@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from functools import cache
 from datetime import datetime
-from typing import Optional, Literal, Sequence, Mapping
+from typing import Optional, Literal, Sequence, Mapping, Any
 
 import discord
 from postgrest.types import CountMethod
@@ -56,11 +56,11 @@ class Build:
 
         # In the database, we force empty information to be {}
         self.information: dict | None = None
-        self.creators_ign: Optional[str] | None = None
+        self.creators_ign: Optional[list[str]] | None = None
 
         self.image_url: Optional[list[str]] | None = None
-        self.video_url: Optional[list[str]] | None = None
-        self.world_download_url: Optional[list[str]] | None = None
+        self.video_urls: Optional[list[str]] | None = None
+        self.world_download_urls: Optional[list[str]] | None = None
 
         self.server_ip: Optional[str] | None = None
         self.coordinates: Optional[str] | None = None
@@ -68,7 +68,7 @@ class Build:
 
         self.submitter_id: int | None = None
         self.completion_time: Optional[str] | None = None
-        self.edited_time: datetime | None = None
+        self.edited_time: str | None = None
 
     def __iter__(self):
         """Iterates over the *attributes* of the Build object."""
@@ -76,7 +76,7 @@ class Build:
             yield attr
 
     @property
-    def dimensions(self) -> tuple[int, int, int]:
+    def dimensions(self) -> tuple[int | None, int | None, int | None]:
         """The dimensions of the build."""
         return self.width, self.height, self.depth
 
@@ -85,16 +85,16 @@ class Build:
         self.width, self.height, self.depth = dimensions
 
     @property
-    def door_dimensions(self) -> tuple[int, int, int]:
+    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
         """The dimensions of the door (hallway)."""
         return self.door_width, self.door_height, self.door_depth
 
     @door_dimensions.setter
-    def door_dimensions(self, dimensions: tuple[int, int, int]) -> None:
+    def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
     @property
-    def restrictions(self) -> dict[Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"], list[str]]:
+    def restrictions(self) -> dict[Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"], list[str] | None]:
         """The restrictions of the build."""
         return {
             "wiring_placement_restrictions": self.wiring_placement_restrictions,
@@ -142,7 +142,7 @@ class Build:
         return await build.load()
 
     @staticmethod
-    def from_json(data: dict) -> Build:
+    def from_json(data: dict[str, Any]) -> Build:
         """
         Converts a JSON object to a Build object.
 
@@ -203,8 +203,8 @@ class Build:
 
         links: list[dict] = data.get('build_links', [])
         build.image_url = [link['url'] for link in links if link['media_type'] == 'image']
-        build.video_url = [link['url'] for link in links if link['media_type'] == 'video']
-        build.world_download_url = [link['url'] for link in links if link['media_type'] == 'world-download']
+        build.video_urls = [link['url'] for link in links if link['media_type'] == 'video']
+        build.world_download_urls = [link['url'] for link in links if link['media_type'] == 'world-download']
 
         server_info: dict = data['server_info']
         if server_info:
@@ -214,7 +214,7 @@ class Build:
 
         build.submitter_id = data['submitter_id']
         build.completion_time = data['completion_time']
-        build.last_updated = datetime.strptime(data.get("edited_time"), '%Y-%m-%dT%H:%M:%S')
+        build.edited_time = datetime.strptime(data["edited_time"], '%Y-%m-%dT%H:%M:%S')
 
         return build
 
@@ -341,11 +341,11 @@ class Build:
             if data.get('image_url'):
                 build_links_data.extend(
                     {'build_id': self.id, 'url': link, 'media_type': 'image'} for link in data.get("image_url", []))
-            if data.get('video_url'):
+            if data.get('video_urls'):
                 build_links_data.extend(
-                    {'build_id': self.id, 'url': link, 'media_type': 'video'} for link in data.get("video_url", []))
-            if data.get('world_download_url'):
-                build_links_data.extend({'build_id': self.id, 'url': link, 'media_type': 'world_download'} for link in data.get("world_download_url", []))
+                    {'build_id': self.id, 'url': link, 'media_type': 'video'} for link in data.get("video_urls", []))
+            if data.get('world_download_urls'):
+                build_links_data.extend({'build_id': self.id, 'url': link, 'media_type': 'world_download'} for link in data.get("world_download_urls", []))
             if build_links_data:
                 await db.table('build_links').upsert(build_links_data).execute()
 
@@ -440,12 +440,14 @@ class Build:
                     title += f"{restriction} "
 
         # Pattern
-        for pattern in self.door_type:
-            if pattern != "Regular":
-                title += f"{pattern} "
+        if self.door_type is not None:
+            for pattern in self.door_type:
+                if pattern != "Regular":
+                    title += f"{pattern} "
 
         # Door type
-        title += self.door_orientation_type
+        if self.door_orientation_type is not None:
+            title += self.door_orientation_type
 
         return title
 
@@ -461,25 +463,30 @@ class Build:
         elif not bot.config.VERSIONS_LIST[-1] in self.functional_versions:
             description.append("**Broken** in current version.")
 
-        if "Locational" in self.miscellaneous_restrictions:
-            description.append("**Locational**.")
-        elif "Locational with fixes" in self.miscellaneous_restrictions:
-            description.append("**Locational** with known fixes for each location.")
+        if self.miscellaneous_restrictions is not None:
+            if "Locational" in self.miscellaneous_restrictions:
+                description.append("**Locational**.")
+            elif "Locational with fixes" in self.miscellaneous_restrictions:
+                description.append("**Locational** with known fixes for each location.")
 
-        if "Directional" in self.miscellaneous_restrictions:
-            description.append("**Directional**.")
-        elif "Directional with fixes" in self.miscellaneous_restrictions:
-            description.append("**Directional** with known fixes for each direction.")
+            if "Directional" in self.miscellaneous_restrictions:
+                description.append("**Directional**.")
+            elif "Directional with fixes" in self.miscellaneous_restrictions:
+                description.append("**Directional** with known fixes for each direction.")
 
         if self.information and self.information.get("user"):
-            description.append("\n" + self.information.get("user"))
+            description.append("\n" + self.information.get("user"))  # type: ignore
 
         if len(description) > 0:
             return "\n".join(description)
         else:
             return None
 
-    def get_versions_string(self) -> str | None:
+    # TODO: Refactor this
+    def get_versions_string(self) -> str:
+        if not self.functional_versions:
+            return ""
+
         versions = []
 
         linking = False
@@ -529,8 +536,8 @@ class Build:
 
         if self.visible_opening_time and self.visible_closing_time:
             # The times are stored as game ticks, so they need to be divided by 20 to get seconds
-            fields["Visible Opening Time"] = self.visible_opening_time / 20
-            fields["Visible Closing Time"] = self.visible_closing_time / 20
+            fields["Visible Opening Time"] = str(self.visible_opening_time / 20)
+            fields["Visible Closing Time"] = str(self.visible_closing_time / 20)
 
         if self.creators_ign:
             fields["Creators"] = ', '.join(sorted(self.creators_ign))
@@ -549,10 +556,10 @@ class Build:
             if self.command:
                 fields["Command"] = self.command
 
-        if self.world_download_url:
-            fields["World Download"] = self.world_download_url
-        if self.video_url:
-            fields["Video"] = self.video_url
+        if self.world_download_urls:
+            fields["World Download"] = str(self.world_download_urls)
+        if self.video_urls:
+            fields["Video"] = str(self.video_urls)
 
         return fields
 

@@ -47,7 +47,7 @@ DoorType: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_TYPES: Tuple[DoorType, ...] = get_args(DoorType)
 
 
-class Restriction(TypedDict, total=False):
+class Restriction(TypedDict):
     """A restriction on a build."""
 
     id: int
