@@ -53,3 +53,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             for message_id in message_ids:
                 message = await self.bot.get_channel(vote_channel_id).fetch_message(message_id)
                 await message.delete()
+
+
+def setup(bot: Bot):
+    bot.add_cog(VotingCog(bot))

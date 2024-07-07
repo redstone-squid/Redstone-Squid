@@ -525,7 +525,8 @@ class BuildSubmissionForm(View):
         await post.post_build(interaction.client, self.build)
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
+    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     # Cache the restrictions
     Build.all_restrictions = await get_all_restrictions()
     await bot.add_cog(SubmissionsCog(bot))

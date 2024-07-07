@@ -153,3 +153,8 @@ class Help(commands.MinimalHelpCommand):
         # TODO: error can be a custom Error too
         embed = utils.error_embed('Error.', error)
         await self.get_destination().send(embed=embed)
+
+
+def setup(bot: commands.Bot):
+    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_cog(HelpCog(bot))

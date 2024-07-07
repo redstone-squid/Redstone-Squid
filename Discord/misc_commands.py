@@ -111,3 +111,8 @@ class Miscellaneous(Cog):
         """Raises an error for testing purposes."""
         async with utils.RunningMessage(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")
+
+
+def setup(bot: commands.Bot):
+    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_cog(Miscellaneous(bot))

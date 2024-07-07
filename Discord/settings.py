@@ -1,3 +1,4 @@
+"""This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
 from typing import Optional
 
 import discord
@@ -99,3 +100,8 @@ async def get_settable_channels(server: discord.Guild) -> dict[str, Optional[dis
         channels[record_type] = server.get_channel(channel_id)
 
     return channels
+
+
+def setup(bot: Bot):
+    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_cog(SettingsCog(bot))
