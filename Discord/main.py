@@ -5,6 +5,7 @@ import os
 
 import discord
 from discord.ext.commands import Cog, Bot, Context, CommandError
+from dotenv import load_dotenv
 
 from Database.utils import utcnow
 from Discord.config import *
@@ -107,6 +108,7 @@ async def main():
         await bot.add_cog(VotingCog(bot))
         discord.utils.setup_logging()
 
+        load_dotenv()
         token = os.environ.get('BOT_TOKEN')
         if not token:
             raise Exception('Specify discord token either with .env file or a BOT_TOKEN environment variable.')

@@ -4,9 +4,7 @@ from Discord import config
 config.DEV_MODE = False
 
 import asyncio
-from dotenv import load_dotenv
 import Discord.main as discord
 
 
-load_dotenv()
 asyncio.run(discord.main())
