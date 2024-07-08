@@ -23,7 +23,7 @@ class DatabaseManager:
     @classmethod
     async def setup(cls) -> None:
         """Setup the database."""
-        if cls._client:
+        if cls._is_setup:
             return
 
         # Load the environment variables from the .env file, which is located in the root of the git repository.
