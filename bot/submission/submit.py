@@ -18,7 +18,7 @@ import Database.message as msg
 import bot.config as config
 import bot.submission.post as post
 import bot.utils as utils
-from Database.builds import get_all_builds, Build, get_all_restrictions
+from Database.builds import get_all_builds, Build, fetch_all_restrictions
 from Database.enums import Status
 from bot.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
 from bot.utils import RunningMessage
@@ -561,5 +561,5 @@ class BuildSubmissionForm(View):
 async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     # Cache the restrictions
-    Build.all_restrictions = await get_all_restrictions()
+    Build.all_restrictions = await fetch_all_restrictions()
     await bot.add_cog(SubmissionsCog(bot))

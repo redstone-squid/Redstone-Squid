@@ -22,8 +22,8 @@ from bot.config import VERSIONS_LIST
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
 
-    all_restrictions: list[Restriction]
-    """A list of all restrictions in the database. This is set by the DatabaseManager when the class is first initialized."""
+    all_restrictions: list[Restriction] | None = None
+    """A list of all restrictions in the database. This is set by the SubmissionsCog when the bot starts, via the setup() function."""
 
     def __init__(self):
         """Initializes an empty build.
@@ -110,10 +110,7 @@ class Build:
 
     @restrictions.setter
     def restrictions(self, restrictions: Sequence[str] | Mapping[str, Sequence[str]]) -> None:
-        """Sets the restrictions of the build.
-
-        This is relatively cheap if a dictionary is passed, as it will only set the restrictions that are present.
-        However, if a list is passed. We find the type of restriction from the database and set it accordingly."""
+        """Sets the restrictions of the build."""
         if isinstance(restrictions, Mapping):
             self.wiring_placement_restrictions = restrictions.get("wiring_placement_restrictions")
             self.component_restrictions = restrictions.get("component_restrictions")
@@ -122,6 +119,11 @@ class Build:
             self.wiring_placement_restrictions = []
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
+
+            if self.all_restrictions is None:
+                raise RuntimeError(
+                    "The class attribute Build.all_restrictions must be set if you want to use the restrictions setter with a list. Use the fetch_all_restrictions() function and bind the result to the class attribute."
+                )
 
             for restriction in self.all_restrictions:
                 for door_restriction in restrictions:
@@ -611,7 +613,7 @@ class Build:
         return fields
 
 
-async def get_all_builds(submission_status: Optional[int] = None) -> list[Build]:
+async def get_all_builds(submission_status: Optional[Status] = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:
@@ -624,7 +626,7 @@ async def get_all_builds(submission_status: Optional[int] = None) -> list[Build]
     query = db.table("builds").select(all_build_columns)
 
     if submission_status:
-        query = query.eq("submission_status", submission_status)
+        query = query.eq("submission_status", submission_status.value)
 
     response = await query.execute()
     if not response:
@@ -660,7 +662,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 # TODO: Invalidate cache every, say, 1 day
 @cache
-async def get_all_restrictions() -> list[Restriction]:
+async def fetch_all_restrictions() -> list[Restriction]:
     """Fetches all restrictions from the database."""
     db = DatabaseManager()
     response = await db.table("restrictions").select("*").execute()

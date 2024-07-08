@@ -20,4 +20,3 @@ docstring-code-format = true
 [tool.pyright]
 pythonVersion = "3.12"
 pythonPlatform = "Linux"
-reportUnnecessaryTypeIgnoreComment = "information"
