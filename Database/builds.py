@@ -290,7 +290,7 @@ class Build:
             # doors table
             if data["category"] == "Door":
                 doors_data = {key: data[key] for key in DoorRecord.__annotations__.keys() if key in data}
-                # FIXME
+                # FIXME: database and Build class have different names for the same field
                 doors_data["orientation"] = data["door_orientation_type"]
                 doors_data["build_id"] = self.id
                 await db.table("doors").upsert(doors_data).execute()
@@ -660,7 +660,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
-# TODO: Invalidate cache every, say, 1 day
+# TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
 @cache
 async def fetch_all_restrictions() -> list[Restriction]:
     """Fetches all restrictions from the database."""

@@ -131,7 +131,7 @@ async def main():
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:
-            raise Exception("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
+            raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
         await bot.start(token)
 
 

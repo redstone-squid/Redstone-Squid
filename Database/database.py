@@ -17,12 +17,14 @@ class DatabaseManager:
 
     def __new__(cls) -> AsyncClient:
         if not cls._is_setup:
-            raise Exception("DatabaseManager not setup yet. Call setup() first.")
+            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
         return cls._client  # pyright: ignore [reportReturnType]
 
     @classmethod
     async def setup(cls) -> None:
-        """Setup the database."""
+        """Connects to the Supabase database.
+
+        This method should be called before using the DatabaseManager instance. This method exists because it is hard to use async code in __init__ or __new__."""
         if cls._is_setup:
             return
 
@@ -35,10 +37,10 @@ class DatabaseManager:
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_KEY")
         if not url:
-            raise Exception("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
+            raise RuntimeError("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
         if not key:
-            raise Exception("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
+            raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
         cls._client = await create_client(url, key)
         cls._is_setup = True
 
-        # TODO: Create the tables if they don't exist
+        # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
