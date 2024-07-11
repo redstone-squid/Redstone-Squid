@@ -11,7 +11,7 @@ Setting up your own version of this bot is **NOT RECOMMENDED** as their is alrea
 
 To get this bot up and running on your machine, you will need a copy of this repository. To clone the repository, use:
 ```bash
-git clone https://github.com/Kappeh/Redstone-Squid.git
+git clone https://github.com/redstone-squid/Redstone-Squid.git
 ```
 Then you can move to the repository's root directory with
 ```bash
@@ -115,19 +115,8 @@ This list of commands is subject to change due to improvements and new features.
 
 ## Contributing
 
-Please read [CODE_OF_CONDUCT.md](https://github.com/Kappeh/Redstone-Squid/blob/master/CODE_OF_CONDUCT.md) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Authors
-
-* **Kieran Powell** - *Initial work* - [Kappeh](https://github.com/Kappeh)
-* **Savio Mak** - *Contributor* - [Glinte](https://github.com/Glinte)
+Please read [CODE_OF_CONDUCT.md](https://github.com/redstone-squid/Redstone-Squid/blob/master/CODE_OF_CONDUCT.md) for details on our code of conduct, and the process for submitting pull requests to us.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgements
-
-- Thanks to the technical Minecraft community for having me.
-- Discord and Google are awesome. Thanks for great APIs and documentation.
-- Thanks to all of the people on StackOverflow for the help and support.
+This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/redstone-squid/Redstone-Squid/blob/master/LICENSE) file for details
