@@ -71,23 +71,28 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
 
     @Cog.listener()
     async def on_message(self, message: discord.Message):
-        user_command = ""
+        # Ignore messages sent by the bot
+        if self.bot.user.id == message.author.id:
+            return
 
-        if message.content.startswith(PREFIX):
-            user_command = message.content.replace(PREFIX, "", 1)
+        # Extract command string from discord message
+        user_command = ""
+        if message.content.startswith(self.bot.command_prefix):
+            user_command = message.content.replace(self.bot.command_prefix, "", 1)
         elif not message.guild:
             user_command = message.content
+        else:
+            return # Ignore messages in servers that don't start with command prefix
 
-        if self.bot.user.id != message.author.id and user_command:
-            if message.guild:
-                log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
-            else:
-                log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
-            owner_dmed_bot = not message.guild and log_user["owner_name"] == str(message.author)
-            if owner_dmed_bot:
-                await log(log_message, dm_owner=False)
-            else:
-                await log(log_message)
+        # Create log message based on where message was sent
+        if message.guild:
+            log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
+        else:
+            log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
+
+        # Log command usage. Do not send log message to owner if the owner directly messaged the bot
+        owner_dmed_bot = not message.guild and log_user["owner_name"] == str(message.author)
+        await log(log_message, dm_owner=(not owner_dmed_bot))
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, exception: CommandError):
