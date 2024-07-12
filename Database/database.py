@@ -28,11 +28,9 @@ class DatabaseManager:
         if cls._is_setup:
             return
 
-        # Load the environment variables from the .env file, which is located in the root of the git repository.
         # This is necessary only if you are not running from app.py.
         if DEV_MODE:
-            git_repo = git.Repo(Path(__file__), search_parent_directories=True)
-            load_dotenv(git_repo.working_dir + "/.env")  # type: ignore
+            load_dotenv()
 
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_KEY")
