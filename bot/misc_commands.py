@@ -10,7 +10,7 @@ from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 
 
 class Miscellaneous(Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @hybrid_command()

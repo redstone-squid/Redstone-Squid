@@ -1,0 +1,4 @@
+pip-tools
+ruff
+pyright
+pre-commit

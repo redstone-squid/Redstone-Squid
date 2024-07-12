@@ -3,6 +3,3 @@ discord
 gspread
 supabase-py-async
 python-dotenv
-pip-tools
-ruff
-pyright

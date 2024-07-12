@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from functools import cache
-from typing import Optional, Literal, Sequence, Mapping, Any
+from collections.abc import Sequence, Mapping
+from typing import Optional, Literal, Any
 
 import discord
 from postgrest.types import CountMethod
@@ -113,7 +114,14 @@ class Build:
         }
 
     @restrictions.setter
-    def restrictions(self, restrictions: Sequence[str] | Mapping[str, Sequence[str]]) -> None:
+    def restrictions(
+        self,
+        restrictions: Sequence[str]
+        | Mapping[
+            Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
+            Sequence[str],
+        ],
+    ) -> None:
         """Sets the restrictions of the build."""
         if isinstance(restrictions, Mapping):
             self.wiring_placement_restrictions = restrictions.get("wiring_placement_restrictions")

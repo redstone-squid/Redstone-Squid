@@ -29,8 +29,6 @@ async def get_channels_to_post_to(client: discord.Client, build: Build) -> list[
     # Get channel type to post submission to
     channel_type = get_channel_type_to_post_to(build)
     # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
-    if channel_type is None:
-        return []
 
     channels = []
     # For each server the bot can see

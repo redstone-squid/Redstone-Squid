@@ -5,12 +5,13 @@ import logging
 import os
 
 import discord
+from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
 from Database.database import DatabaseManager
 from Database.utils import utcnow
-from bot.config import *
+from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX, OWNER
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog
@@ -21,7 +22,7 @@ from bot.submission.voting import VotingCog
 log_user: dict = {"owner_name": OWNER, "owner_user_object": None}
 
 
-async def log(msg: str, first_log=False, dm_owner=True) -> None:
+async def log(msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
     """
     Logs a timestamped message to stdout and to the owner of the bot via DM.
 
@@ -44,7 +45,7 @@ async def log(msg: str, first_log=False, dm_owner=True) -> None:
 class Listeners(Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @Cog.listener()
@@ -82,7 +83,7 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         elif not message.guild:
             user_command = message.content
         else:
-            return # Ignore messages in servers that don't start with command prefix
+            return  # Ignore messages in servers that don't start with command prefix
 
         # Create log message based on where message was sent
         if message.guild:

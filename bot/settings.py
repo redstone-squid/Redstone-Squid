@@ -1,6 +1,5 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
 
-from typing import Optional
 
 import discord
 from discord import app_commands
@@ -32,7 +31,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command()
     @has_any_role(*channel_settings_roles)
-    async def query_all(self, ctx):
+    async def query_all(self, ctx: Context):
         """Query all settings."""
         async with utils.RunningMessage(ctx) as sent_message:
             channels = await get_settable_channels(ctx.guild)
@@ -122,12 +121,9 @@ async def get_channel_for(server: discord.Guild, channel_purpose: SETTABLE_CHANN
 
 async def get_settable_channels(
     server: discord.Guild,
-) -> dict[str, Optional[GuildChannel]]:
+) -> dict[str, GuildChannel | None]:
     """Gets all record channels of a server from the server settings table."""
     settings = await get_server_settings(server.id)
-    if settings is None:
-        return {}
-
     channels = {}
     for record_type in SETTABLE_CHANNELS:
         channel_id = settings.get(record_type)

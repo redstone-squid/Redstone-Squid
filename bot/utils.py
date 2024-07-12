@@ -1,7 +1,7 @@
 import re
 from traceback import format_tb
 from types import TracebackType
-from typing import Tuple, overload, Literal
+from typing import overload, Literal
 
 import discord
 from discord import Message, Webhook
@@ -41,14 +41,14 @@ def help_embed(title: str, description: str | None):
 
 # fmt: off
 @overload
-def parse_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]: ...
+def parse_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]: ...
 
 @overload
-def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> Tuple[int | None, int | None, int | None]: ...
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int | None, int | None, int | None]: ...
 # fmt: on
 
 
-def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> Tuple[int | None, ...]:
+def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
     """Parses a string representing dimensions. For example, '5x5' or '5x5x5'.
 
     Args:
@@ -77,7 +77,7 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> Tup
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
 
 
-def parse_hallway_dimensions(dim_str: str) -> Tuple[int | None, int | None, int | None]:
+def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
     """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
 
     Examples:

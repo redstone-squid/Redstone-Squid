@@ -1,5 +1,5 @@
 import re
-from typing import Literal, cast, TYPE_CHECKING
+from typing import Literal, cast, TYPE_CHECKING, Any, override
 
 import discord
 from discord import InteractionResponse, Webhook
@@ -31,7 +31,7 @@ submission_roles = ["Admin", "Moderator", "Redstoner"]
 
 
 class SubmissionsCog(Cog, name="Submissions"):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @hybrid_group(name="submissions", invoke_without_command=True)
@@ -120,7 +120,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     # @submission_hybrid_group.command("send_all")
     # @has_any_role(*submission_roles)
-    async def send_all(self, ctx):
+    async def send_all(self, ctx: Context):
         """Sends all records and builds to this server, in the channels set."""
         # NOT in use right now
         async with utils.RunningMessage(ctx) as sent_message:
@@ -284,7 +284,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
 
 
-def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict:
+def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict[str, Any]:
     """Formats the submission data from what is passed in commands to something recognizable by Build."""
     # Union of all the /submit and /edit command options
     parsable_signatures = SubmissionCommandResponseT.__annotations__.keys()
@@ -294,7 +294,7 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
             f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?"
         )
 
-    fmt_data = dict()
+    fmt_data: dict[str, Any] = dict()
     fmt_data["id"] = data.get("submission_id")
     # fmt_data['submission_status']
 
@@ -398,6 +398,7 @@ class SubmissionModal(discord.ui.Modal):
         self.add_item(self.restrictions)
         self.add_item(self.additional_info)
 
+    @override
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()  # type: ignore
 
@@ -442,6 +443,7 @@ class AdditionalSubmissionInfoButton(Button):
             custom_id="open_modal",
         )
 
+    @override
     async def callback(self, interaction: discord.Interaction):
         interaction_response: InteractionResponse = interaction.response  # type: ignore
         await interaction_response.send_modal(SubmissionModal(self.build))
@@ -459,6 +461,7 @@ class RecordCategorySelect(discord.ui.Select):
             options=options,
         )
 
+    @override
     async def callback(self, interaction: discord.Interaction):
         data = cast(SelectMessageComponentInteractionData, interaction.data)
         self.build.record_category = data["values"][0]  # type: ignore
@@ -477,6 +480,7 @@ class DoorTypeSelect(discord.ui.Select):
             options=options,
         )
 
+    @override
     async def callback(self, interaction: discord.Interaction):
         data = cast(SelectMessageComponentInteractionData, interaction.data)
         self.build.door_orientation_type = data["values"][0]  # type: ignore
@@ -495,6 +499,7 @@ class VersionsSelect(discord.ui.Select):
             options=options,
         )
 
+    @override
     async def callback(self, interaction: discord.Interaction):
         data = cast(SelectMessageComponentInteractionData, interaction.data)
         self.build.functional_versions = data["values"]
@@ -517,6 +522,7 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
             options=options,
         )
 
+    @override
     async def callback(self, interaction: discord.Interaction):
         data = cast(SelectMessageComponentInteractionData, interaction.data)
         self.build.miscellaneous_restrictions = data["values"]

@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from typing import Optional, List, Any, override
+from typing import Any, override
 
 import discord
 from discord import app_commands, InteractionResponse
@@ -21,7 +21,7 @@ class HelpCog(Cog):
 
     # /help [command]
     @app_commands.command()
-    async def help(self, interaction: discord.Interaction, command: Optional[str]):
+    async def help(self, interaction: discord.Interaction, command: str | None):
         """Show help for a command or a group of commands."""
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
@@ -35,7 +35,7 @@ class HelpCog(Cog):
     @help.autocomplete("command")
     async def command_autocomplete(
         self, interaction: discord.Interaction, needle: str
-    ) -> List[app_commands.Choice[str]]:
+    ) -> list[app_commands.Choice[str]]:
         assert self.bot.help_command
         ctx = await self.bot.get_context(interaction, cls=Context)
         help_command = self.bot.help_command.copy()
@@ -63,14 +63,14 @@ class Help(commands.MinimalHelpCommand):
 
     # !help
     @override
-    async def send_bot_help(self, mapping: Mapping[Optional[Cog], List[Command[Any, ..., Any]]], /) -> None:
+    async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         # TODO: hide hidden commands
         commands_ = list(self.context.bot.commands)
         filtered_commands = await self.filter_commands(commands_, sort=True)
         desc = f"""{self.context.bot.description}
-        
+
         Commands:{self.get_commands_brief_details(filtered_commands)}
-        
+
         {MORE_INFORMATION}"""
         em = utils.help_embed("Help", desc)
         await self.context.send(embed=em)
@@ -124,9 +124,9 @@ class Help(commands.MinimalHelpCommand):
         commands_ = await self.filter_commands(subcommands, sort=True)
         command_details = self.get_commands_brief_details(commands_)
         desc = f"""{group.cog.description}
-            
+
             Usable Subcommands: {command_details or "None"}
-            
+
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
         await self.get_destination().send(embed=em)
@@ -138,9 +138,9 @@ class Help(commands.MinimalHelpCommand):
         commands_ = await self.filter_commands(cog.walk_commands(), sort=True)
         command_details = self.get_commands_brief_details(commands_)
         desc = f"""{cog.description}
-            
+
             Usable Subcommands:{command_details or "None"}
-            
+
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
         await self.get_destination().send(embed=em)

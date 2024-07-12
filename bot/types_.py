@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict, Optional, Literal, TypeAlias, get_args, Tuple
+from typing import TypedDict, Optional, Literal, TypeAlias, get_args
 
 
 class SubmissionCommandResponseT(TypedDict, total=False):
@@ -35,13 +35,13 @@ class SubmissionCommandResponseT(TypedDict, total=False):
 
 
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: Tuple[RecordCategory, ...] = get_args(RecordCategory)
+RECORD_CATEGORIES: tuple[RecordCategory, ...] = get_args(RecordCategory)
 
 BuildType: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Tuple[BuildType, ...] = get_args(BuildType)
+BUILD_TYPES: tuple[BuildType, ...] = get_args(BuildType)
 
 DoorType: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_TYPES: Tuple[DoorType, ...] = get_args(DoorType)
+DOOR_TYPES: tuple[DoorType, ...] = get_args(DoorType)
 
 
 class Restriction(TypedDict):

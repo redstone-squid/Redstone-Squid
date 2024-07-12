@@ -8,7 +8,7 @@ dynamic = ["dependencies", "optional-dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.in"] }
-optional-dependencies.test = { file = ["requirements-test.txt"] }
+optional-dependencies.test = { file = ["test-requirements.txt"] }
 
 [tool.ruff]
 line-length = 120
@@ -19,4 +19,26 @@ docstring-code-format = true
 
 [tool.pyright]
 pythonVersion = "3.12"
-pythonPlatform = "Linux"
+pythonPlatform = "All"
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+deprecateTypingAliases = true
+reportPropertyTypeMismatch = "error"
+reportImportCycles = "information"
+reportUntypedFunctionDecorator = "information"
+reportUntypedClassDecorator = "information"
+reportUntypedBaseClass = "information"
+reportUntypedNamedTuple = "information"
+reportPrivateUsage = "warning"
+reportConstantRedefinition = "information"
+reportDeprecated = "information"
+reportInconsistentConstructor = "warning"
+reportUnknownVariableType = "information"
+reportMissingParameterType = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportUnnecessaryCast = "warning"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportImplicitOverride = "error"
+reportShadowedImports = "error"
