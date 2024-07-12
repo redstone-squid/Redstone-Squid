@@ -11,12 +11,16 @@ from postgrest.types import CountMethod
 
 import bot.config
 from Database.types import BuildRecord, DoorRecord
-from Database.database import DatabaseManager, all_build_columns
+from Database.database import DatabaseManager
 from Database.utils import utcnow
 from Database.enums import Status
 from bot import utils
 from bot.types_ import Restriction
 from bot.config import VERSIONS_LIST
+
+
+all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
+"""All columns that needs to be joined in the build table to get all the information about a build."""
 
 
 class Build:
@@ -122,7 +126,8 @@ class Build:
 
             if self.all_restrictions is None:
                 raise RuntimeError(
-                    "The class attribute Build.all_restrictions must be set if you want to use the restrictions setter with a list. Use the fetch_all_restrictions() function and bind the result to the class attribute."
+                    "The class attribute Build.all_restrictions must be set if you want to use the restrictions setter with a list. "
+                    "Use the fetch_all_restrictions() function and bind the result to the class attribute."
                 )
 
             for restriction in self.all_restrictions:
