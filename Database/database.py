@@ -13,12 +13,12 @@ class DatabaseManager:
     """Singleton class for the supabase client."""
 
     _is_setup: bool = False
-    _client: AsyncClient | None = None
+    _async_client: AsyncClient | None = None
 
     def __new__(cls) -> AsyncClient:
         if not cls._is_setup:
             raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        return cls._client  # pyright: ignore [reportReturnType]
+        return cls._async_client  # pyright: ignore [reportReturnType]
 
     @classmethod
     async def setup(cls) -> None:
@@ -38,7 +38,7 @@ class DatabaseManager:
             raise RuntimeError("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
         if not key:
             raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
-        cls._client = await create_client(url, key)
+        cls._async_client = await create_client(url, key)
         cls._is_setup = True
 
         # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
