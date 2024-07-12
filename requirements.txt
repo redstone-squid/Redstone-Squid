@@ -54,11 +54,11 @@ frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-google-auth==2.31.0
+google-auth==2.32.0
     # via
     #   google-auth-oauthlib
     #   gspread
-google-auth-oauthlib==1.2.0
+google-auth-oauthlib==1.2.1
     # via gspread
 gotrue==2.5.4
     # via supabase-py-async
@@ -130,7 +130,7 @@ pyproject-hooks==1.1.0
     # via
     #   build
     #   pip-tools
-pyright==1.1.370
+pyright==1.1.371
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
@@ -172,7 +172,7 @@ supafunc==0.4.0
     # via supabase-py-async
 termcolor==2.4.0
     # via commitizen
-tomlkit==0.12.5
+tomlkit==0.13.0
     # via commitizen
 typing-extensions==4.12.2
     # via
