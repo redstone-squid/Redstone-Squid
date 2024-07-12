@@ -19,11 +19,12 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        if guild_id := payload.guild_id is None:
+        # Must be in a guild
+        if (guild_id := payload.guild_id) is None:
             return
 
-        vote_channel_id = await get_server_setting(guild_id, "Vote")
         # Must be in the vote channel
+        vote_channel_id = await get_server_setting(guild_id, "Vote")
         if vote_channel_id is None or payload.channel_id != vote_channel_id:
             return
 
@@ -36,16 +37,14 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         if message.author.id != self.bot.user.id:  # type: ignore[attr-defined]
             return
 
+        # A build ID must be associated with the message
         build_id = await get_build_id_by_message(payload.message_id)
-
-        # No submission found (message is not a submission)
         if build_id is None:
             return
 
+        # The submission status must be pending
         submission = await Build.from_id(build_id)
         assert submission is not None
-
-        # The submission status must be pending
         if submission.submission_status != Status.PENDING:
             return
 
