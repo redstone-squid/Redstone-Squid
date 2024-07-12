@@ -7,7 +7,7 @@ from supabase_py_async import create_client, AsyncClient
 from bot.config import DEV_MODE
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
-
+"""All columns that needs to be joined in the build table to get all the information about a build."""
 
 class DatabaseManager:
     """Singleton class for the supabase client."""
