@@ -152,6 +152,7 @@ class RunningMessage:
 
 
 class ConfirmationView(View):
+    """A simple Yes/No style pair of buttons for confirming an action."""
     def __init__(self, timeout: int = 60):
         super().__init__(timeout=timeout)
         self.value = None
