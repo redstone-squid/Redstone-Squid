@@ -3,7 +3,7 @@
 from postgrest.types import CountMethod
 
 from Database.database import DatabaseManager
-from bot.config import SETTABLE_CHANNELS_TYPE, SETTABLE_CHANNELS
+from bot.config import SETTABLE_CHANNEL_TYPE, SETTABLE_CHANNELS
 
 # The names of the settings in the database, mapped from the channel purpose,
 # which is the name of the setting in the UI.
@@ -30,7 +30,7 @@ def get_purpose_name(setting_name: str) -> str:
     return SETTING_TO_PURPOSE[setting_name]
 
 
-async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_TYPE) -> int | None:
+async def get_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNEL_TYPE) -> int | None:
     """Gets the channel id of the specified purpose for a server."""
     setting_name = get_setting_name(channel_purpose)
     db = DatabaseManager()
@@ -57,14 +57,14 @@ async def get_server_settings(server_id: int) -> dict[str, int]:
     }
 
 
-async def update_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNELS_TYPE, value: int | None) -> None:
+async def update_server_setting(server_id: int, channel_purpose: SETTABLE_CHANNEL_TYPE, value: int | None) -> None:
     """Updates a setting for a server."""
     setting_name = get_setting_name(channel_purpose)
     db = DatabaseManager()
     await db.table("server_settings").upsert({"server_id": server_id, setting_name: value}).execute()
 
 
-async def update_server_settings(server_id: int, channel_purposes: dict[SETTABLE_CHANNELS_TYPE, int]) -> None:
+async def update_server_settings(server_id: int, channel_purposes: dict[SETTABLE_CHANNEL_TYPE, int]) -> None:
     """Updates a list of settings for a server."""
     settings = {get_setting_name(purpose): value for purpose, value in channel_purposes.items()}
     db = DatabaseManager()

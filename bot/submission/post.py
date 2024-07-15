@@ -5,12 +5,12 @@ import discord
 import bot.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database.enums import Status
-from bot.config import SETTABLE_CHANNELS_TYPE
+from bot.config import SETTABLE_CHANNEL_TYPE
 from Database.builds import Build
 
 
 # TODO: make this inside a cog and remove the client parameter?
-def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNELS_TYPE:
+def get_channel_type_to_post_to(build: Build) -> SETTABLE_CHANNEL_TYPE:
     """Gets the type of channel to post a submission to."""
     status = build.submission_status
     if status == Status.PENDING:

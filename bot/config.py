@@ -42,5 +42,5 @@ VERSIONS_LIST = [
 ]
 
 # Used for both type hinting and command descriptions
-type SETTABLE_CHANNELS_TYPE = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-SETTABLE_CHANNELS = cast(Sequence[SETTABLE_CHANNELS_TYPE], get_args(SETTABLE_CHANNELS_TYPE))
+type SETTABLE_CHANNEL_TYPE = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+SETTABLE_CHANNELS = cast(Sequence[SETTABLE_CHANNEL_TYPE], get_args(SETTABLE_CHANNEL_TYPE))
