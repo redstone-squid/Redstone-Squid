@@ -62,8 +62,8 @@ class EntranceRecord(TypedDict):
     build_id: int
 
 
-class ServerSettingsRecord(TypedDict):
-    """A record of a server's settings in the database."""
+class ServerSettingRecord(TypedDict):
+    """A record of a server's setting in the database."""
 
     server_id: int
     smallest_channel_id: NotRequired[int]
