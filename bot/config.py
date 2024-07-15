@@ -1,6 +1,4 @@
 """Configuration file for the bot."""
-from collections.abc import Sequence
-from typing import Literal, get_args, cast
 
 DEV_MODE = False
 
@@ -11,7 +9,7 @@ PREFIX = "!"
 DEV_PREFIX = "."
 BOT_NAME = "Redstone Squid"
 BOT_VERSION = "1.5.1"
-SOURCE_CODE_URL = "https://github.com/Kappeh/Redstone-Squid"
+SOURCE_CODE_URL = "https://github.com/redstone-squid/Redstone-Squid"
 FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
 
 # Whether to print tracebacks directly to the user, may leak system information
@@ -40,7 +38,3 @@ VERSIONS_LIST = [
     "1.20",
     "1.20.4",
 ]
-
-# Used for both type hinting and command descriptions
-type ChanelPurpose = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-CHANNEL_PURPOSES = cast(Sequence[ChanelPurpose], get_args(ChanelPurpose))

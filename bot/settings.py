@@ -12,7 +12,7 @@ from Database.server_settings import (
     get_server_settings,
 )
 import bot.utils as utils
-from bot.config import CHANNEL_PURPOSES, ChanelPurpose
+from Database.schema import ChanelPurpose, CHANNEL_PURPOSES
 
 channel_settings_roles = ["Admin", "Moderator"]
 

@@ -4,8 +4,7 @@ from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
 
 from Database.database import DatabaseManager
-from Database.schema import ServerSettingRecord, DbSettingKey
-from bot.config import ChanelPurpose, CHANNEL_PURPOSES
+from Database.schema import ServerSettingRecord, DbSettingKey, ChanelPurpose, CHANNEL_PURPOSES
 
 # The names of the settings in the database, mapped from the channel purpose,
 # which is the name of the setting in the UI.

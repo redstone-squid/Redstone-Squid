@@ -5,7 +5,7 @@ import discord
 import bot.settings as settings
 import Database.message as msg  # FIXME: horrible name
 from Database.enums import Status
-from bot.config import ChanelPurpose
+from Database.schema import ChanelPurpose
 from Database.builds import Build
 
 
