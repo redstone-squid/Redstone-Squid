@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TypedDict, Literal, TypeAlias, get_args
+from typing import TypedDict
+
+from Database.schema import RecordCategory, DoorOrientationName
 
 
 class SubmissionCommandResponseT(TypedDict, total=False):
@@ -12,7 +14,7 @@ class SubmissionCommandResponseT(TypedDict, total=False):
     door_width: int | None
     door_height: int | None
     pattern: str | None
-    door_type: DoorType | None
+    door_type: DoorOrientationName | None
     build_width: int | None
     build_height: int | None
     build_depth: int | None
@@ -32,13 +34,3 @@ class SubmissionCommandResponseT(TypedDict, total=False):
     server_ip: str | None
     coordinates: str | None
     command_to_get_to_build: str | None
-
-
-RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: tuple[RecordCategory, ...] = get_args(RecordCategory)
-
-BuildType: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: tuple[BuildType, ...] = get_args(BuildType)
-
-DoorType: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_TYPES: tuple[DoorType, ...] = get_args(DoorType)

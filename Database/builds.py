@@ -12,7 +12,7 @@ from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
 import bot.config
-from Database.types import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
+from Database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
     UnknownRestrictions
 from Database.database import DatabaseManager
 from Database.utils import utcnow

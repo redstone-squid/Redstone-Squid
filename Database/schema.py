@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import TypedDict, Literal, Any
+from collections.abc import Sequence
+from typing import TypedDict, Literal, Any, get_args
 from Database.enums import Status, Category
-from bot.types_ import BuildType
-
-type RecordCategory = Literal["First", "Smallest", "Fastest"]
-
 
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
@@ -109,9 +106,20 @@ class RestrictionRecord(TypedDict):
 
 
 class VersionsRecord(TypedDict):
+    """A record of a version in the database"""
     id: int
     edition: str
     major_version: str
     minor_version: str
     patch_number: str
     full_name_temp: str  # TODO: remove
+
+
+type RecordCategory = Literal["Smallest", "Fastest", "First"]
+RECORD_CATEGORIES: Sequence[RecordCategory] = get_args(RecordCategory)
+
+type BuildType = Literal["Door", "Extender", "Utility", "Entrance"]
+BUILD_TYPES: Sequence[BuildType] = get_args(BuildType)
+
+type DoorOrientationName = Literal["Door", "Skydoor", "Trapdoor"]
+DOOR_ORIENTATION_NAMES: Sequence[DoorOrientationName] = get_args(DoorOrientationName)

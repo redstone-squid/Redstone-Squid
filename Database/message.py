@@ -3,7 +3,7 @@
 from postgrest.types import CountMethod
 
 from Database.builds import Build, get_builds
-from Database.types import MessageRecord
+from Database.schema import MessageRecord
 from Database.utils import utcnow
 from Database.database import DatabaseManager
 

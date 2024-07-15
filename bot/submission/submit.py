@@ -20,7 +20,8 @@ import bot.submission.post as post
 import bot.utils as utils
 from Database.builds import get_all_builds, Build, fetch_all_restrictions
 from Database.enums import Status
-from bot.types_ import SubmissionCommandResponseT, RECORD_CATEGORIES, DOOR_TYPES
+from bot.schema import SubmissionCommandResponseT
+from Database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
 from bot.utils import RunningMessage
 
 if TYPE_CHECKING:
@@ -473,7 +474,7 @@ class DoorTypeSelect(discord.ui.Select):
     def __init__(self, build: Build):
         self.build = build
 
-        options = [discord.SelectOption(label=door_type) for door_type in DOOR_TYPES]
+        options = [discord.SelectOption(label=door_type) for door_type in DOOR_ORIENTATION_NAMES]
         super().__init__(
             placeholder="Choose the door type",
             min_values=1,
