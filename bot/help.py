@@ -7,9 +7,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group, Context
 
 from bot import utils
-from bot.config import PREFIX
 
-MORE_INFORMATION = f"Use `{PREFIX}help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
+MORE_INFORMATION = f"Use `/help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
 
 
 class HelpCog(Cog):
@@ -147,7 +146,7 @@ class Help(commands.MinimalHelpCommand):
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        return f"Unable to find command {PREFIX}{string}. Use {PREFIX}help to get a list of available commands."
+        return f"Unable to find command `{string}`. Use /help to get a list of available commands."
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
