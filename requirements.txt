@@ -53,22 +53,28 @@ google-auth==2.32.0
     #   gspread
 google-auth-oauthlib==1.2.1
     # via gspread
-gotrue==2.5.4
+gotrue==2.5.5
     # via supabase-py-async
 gspread==6.1.2
     # via -r requirements.in
 h11==0.14.0
     # via httpcore
+h2==4.1.0
+    # via httpx
+hpack==4.0.0
+    # via h2
 httpcore==1.0.5
     # via httpx
 httplib2==0.22.0
     # via oauth2client
-httpx==0.25.2
+httpx[http2]==0.25.2
     # via
     #   gotrue
     #   postgrest
     #   storage3
     #   supafunc
+hyperframe==6.0.1
+    # via h2
 idna==3.7
     # via
     #   anyio
@@ -142,7 +148,7 @@ sniffio==1.3.1
     # via
     #   anyio
     #   httpx
-storage3==0.7.6
+storage3==0.7.7
     # via supabase-py-async
 strenum==0.4.15
     # via postgrest
