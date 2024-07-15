@@ -1,4 +1,4 @@
-from typing import TypedDict, NotRequired
+from typing import TypedDict, NotRequired, Literal
 from Database.enums import Status, Category
 
 
@@ -71,3 +71,5 @@ class ServerSettingRecord(TypedDict):
     first_channel_id: NotRequired[int]
     builds_channel_id: NotRequired[int]
     voting_channel_id: NotRequired[int]
+
+DbSettingKey = Literal["smallest_channel_id", "fastest_channel_id", "first_channel_id", "builds_channel_id", "voting_channel_id"]
