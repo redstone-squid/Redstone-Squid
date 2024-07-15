@@ -124,6 +124,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         """Sends all records and builds to this server, in the channels set."""
         # NOT in use right now
         async with utils.RunningMessage(ctx) as sent_message:
+            assert ctx.guild is not None
             unsent_builds = await msg.get_unsent_builds(ctx.guild.id)
 
             for build in unsent_builds:
