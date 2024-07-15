@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, Sequence
+from typing import TypedDict, Literal, Any, get_args, cast
 from Database.enums import Status, Category
 
 class UnknownRestrictions(TypedDict, total=False):
@@ -116,13 +116,13 @@ class VersionsRecord(TypedDict):
 
 
 type RecordCategory = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: Sequence[RecordCategory] = get_args(RecordCategory)
+RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
 type BuildType = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Sequence[BuildType] = get_args(BuildType)
+BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType))
 
 type DoorOrientationName = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_ORIENTATION_NAMES: Sequence[DoorOrientationName] = get_args(DoorOrientationName)
+DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
 type ChanelPurpose = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 CHANNEL_PURPOSES = cast(Sequence[ChanelPurpose], get_args(ChanelPurpose))
