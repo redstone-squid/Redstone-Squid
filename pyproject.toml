@@ -17,7 +17,7 @@ target-version = "py312"
 [tool.ruff.format]
 docstring-code-format = true
 
-[tool.pyright]
+[tool.basedpyright]
 pythonVersion = "3.12"
 pythonPlatform = "All"
 strictListInference = true
@@ -42,3 +42,4 @@ reportUnnecessaryComparison = "error"
 reportUnnecessaryContains = "error"
 reportImplicitOverride = "error"
 reportShadowedImports = "error"
+reportAny = false

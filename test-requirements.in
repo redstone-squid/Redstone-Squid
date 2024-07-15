@@ -1,4 +1,4 @@
 pip-tools
 ruff
-pyright
+basedpyright
 pre-commit
