@@ -116,7 +116,7 @@ class Build:
     @restrictions.setter
     def restrictions(
         self,
-        restrictions: Sequence[str]
+        restrictions: Sequence[str]  # pyright: ignore[reportPropertyTypeMismatch]  # allowing list as a convenience
         | Mapping[
             Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
             Sequence[str],
