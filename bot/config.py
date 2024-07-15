@@ -1,5 +1,6 @@
-import typing
-from typing import Literal
+"""Configuration file for the bot."""
+from collections.abc import Sequence
+from typing import Literal, get_args, cast
 
 DEV_MODE = False
 
@@ -41,5 +42,5 @@ VERSIONS_LIST = [
 ]
 
 # Used for both type hinting and command descriptions
-SETTABLE_CHANNELS_TYPE = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-SETTABLE_CHANNELS: tuple[SETTABLE_CHANNELS_TYPE, ...] = typing.get_args(SETTABLE_CHANNELS_TYPE)
+type SETTABLE_CHANNELS_TYPE = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+SETTABLE_CHANNELS = cast(Sequence[SETTABLE_CHANNELS_TYPE], get_args(SETTABLE_CHANNELS_TYPE))
