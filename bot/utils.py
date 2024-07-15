@@ -39,13 +39,12 @@ def help_embed(title: str, description: str | None):
     return discord.Embed(title=title, colour=discord_green, description=description)
 
 
-# fmt: off
 @overload
 def parse_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]: ...
 
+
 @overload
 def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int | None, int | None, int | None]: ...
-# fmt: on
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
@@ -124,7 +123,7 @@ class RunningMessage:
         self.delete_on_exit = delete_on_exit
         self.sent_message: Message
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Message:
         sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
         if sent_message is None:
             raise ValueError(
@@ -134,7 +133,7 @@ class RunningMessage:
         self.sent_message = sent_message
         return sent_message
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb: TracebackType):
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> bool:
         # Handle exceptions
         if exc_type is not None:
             description = f"{str(exc_val)}"
