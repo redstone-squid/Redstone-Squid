@@ -4,7 +4,7 @@
 import discord
 from discord import app_commands
 from discord.abc import GuildChannel
-from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group
+from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group, guild_only
 
 from Database.server_settings import (
     update_server_setting,
@@ -25,6 +25,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @has_any_role(*channel_settings_roles)
+    @guild_only()
     async def settings_hybrid_group(self, ctx: Context):
         """Allows you to configure the bot for your server."""
         await ctx.send_help("settings")
@@ -33,6 +34,7 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def query_all(self, ctx: Context):
         """Query all settings."""
+        assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
             channels = await get_settable_channels(ctx.guild)
 
@@ -47,9 +49,7 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def query_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Finds which channel is set for a purpose and sends the results to the user."""
-        if ctx.guild is None:
-            raise ValueError("DM not supported")
-
+        assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
             result_channel = await get_channel_for(ctx.guild, channel_purpose)
 
@@ -78,9 +78,7 @@ class SettingsCog(Cog, name="Settings"):
         channel: discord.TextChannel,
     ):
         """Sets the current channel as the channel to post this record type to."""
-        if ctx.guild is None:
-            raise ValueError("DM not supported")
-
+        assert ctx.guild is not None
         success_embed = utils.info_embed("Settings updated", f"{channel_purpose} channel has successfully been set.")
         failure_embed = utils.error_embed("Error", "Could not find that channel.")
 
@@ -99,9 +97,7 @@ class SettingsCog(Cog, name="Settings"):
     @has_any_role(*channel_settings_roles)
     async def unset_channel(self, ctx: Context, channel_purpose: SETTABLE_CHANNELS_TYPE):
         """Unsets the channel to post this record type to."""
-        if ctx.guild is None:
-            raise ValueError("DM not supported")
-
+        assert ctx.guild is not None
         success_embed = utils.info_embed(
             "Settings updated",
             f"{channel_purpose} channel has successfully been unset.",
