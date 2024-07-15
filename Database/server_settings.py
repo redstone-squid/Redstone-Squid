@@ -66,7 +66,7 @@ async def update_server_setting(server_id: int, channel_purpose: ChanelPurpose, 
     await DatabaseManager().table("server_settings").upsert({"server_id": server_id, setting_name: value}).execute()
 
 
-async def update_server_settings(server_id: int, channel_purposes: dict[ChanelPurpose, int]) -> None:
+async def update_server_settings(server_id: int, channel_purposes: dict[ChanelPurpose, int | None]) -> None:
     """Updates a list of settings for a server."""
     settings = {get_setting_name(purpose): value for purpose, value in channel_purposes.items()}
     await DatabaseManager().table("server_settings").upsert({"server_id": server_id, **settings}).execute()
