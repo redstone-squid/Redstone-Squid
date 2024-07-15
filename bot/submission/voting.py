@@ -1,7 +1,6 @@
 """Handles the reaction-based voting system for submissions."""
 
 import discord
-from discord.abc import MessageableChannel
 from discord.ext.commands import Bot, Cog
 
 import Database.message as msg

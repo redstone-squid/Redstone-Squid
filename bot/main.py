@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from typing import override
 
 import discord
 from discord.ext import commands
@@ -118,6 +119,7 @@ class RedstoneSquid(Bot):
             description=f"{BOT_NAME} v{BOT_VERSION}",
         )
 
+    @override
     async def setup_hook(self) -> None:
         await DatabaseManager.setup()
         await self.add_cog(Miscellaneous(self))
@@ -126,6 +128,7 @@ class RedstoneSquid(Bot):
         await self.add_cog(Listeners(self))
         await self.add_cog(HelpCog(self))
         await self.add_cog(VotingCog(self))
+        await self.load_extension("jishaku")
 
 
 async def main():
