@@ -124,5 +124,5 @@ BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType)
 type DoorOrientationName = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
-type ChanelPurpose = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-CHANNEL_PURPOSES = cast(Sequence[ChanelPurpose], get_args(ChanelPurpose))
+type ChannelPurpose = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+CHANNEL_PURPOSES = cast(Sequence[ChannelPurpose], get_args(ChannelPurpose))

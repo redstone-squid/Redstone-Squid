@@ -1,6 +1,7 @@
 """Handles the reaction-based voting system for submissions."""
 
 import discord
+from discord.abc import MessageableChannel
 from discord.ext.commands import Bot, Cog
 
 import Database.message as msg
@@ -9,6 +10,7 @@ from Database.message import get_build_id_by_message
 from Database.server_settings import get_server_setting
 from Database.builds import Build
 from bot.config import OWNER_ID
+from bot.schema import GuildMessageable
 from bot.submission import post
 
 
@@ -19,6 +21,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
+        # --- A bunch of checks to make sure the reaction is valid ---
         # Must be in a guild
         if (guild_id := payload.guild_id) is None:
             return
@@ -47,6 +50,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
         assert submission is not None
         if submission.submission_status != Status.PENDING:
             return
+        # --- End of checks ---
 
         # If the reaction is a thumbs up, confirm the submission
         if payload.emoji.name == "👍":
@@ -56,7 +60,7 @@ class VotingCog(Cog, name="vote", command_attrs=dict(hidden=True)):
             await post.post_build(self.bot, submission)
             for message_id in message_ids:
                 vote_channel = self.bot.get_channel(vote_channel_id)
-                if isinstance(vote_channel, discord.PartialMessageable):
+                if isinstance(vote_channel, GuildMessageable):
                     message = await vote_channel.fetch_message(message_id)
                     await message.delete()
                 else:

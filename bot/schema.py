@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TypedDict
 
+from discord import TextChannel, VoiceChannel, StageChannel, Thread
+
 from Database.schema import RecordCategory, DoorOrientationName
 
 
@@ -34,3 +36,6 @@ class SubmissionCommandResponseT(TypedDict, total=False):
     server_ip: str | None
     coordinates: str | None
     command_to_get_to_build: str | None
+
+
+GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread

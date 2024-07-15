@@ -1,9 +1,8 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
-
+from typing import cast
 
 import discord
 from discord import app_commands
-from discord.abc import GuildChannel
 from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group, guild_only
 
 from Database.server_settings import (
@@ -12,7 +11,8 @@ from Database.server_settings import (
     get_server_settings,
 )
 import bot.utils as utils
-from Database.schema import ChanelPurpose, CHANNEL_PURPOSES
+from Database.schema import ChannelPurpose, CHANNEL_PURPOSES
+from bot.schema import GuildMessageable
 
 channel_settings_roles = ["Admin", "Moderator"]
 
@@ -47,7 +47,7 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
     @has_any_role(*channel_settings_roles)
-    async def query_channel(self, ctx: Context, channel_purpose: ChanelPurpose):
+    async def query_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
@@ -74,8 +74,8 @@ class SettingsCog(Cog, name="Settings"):
     async def set_channel(
         self,
         ctx: Context,
-        channel_purpose: ChanelPurpose,
-        channel: discord.TextChannel,
+        channel_purpose: ChannelPurpose,
+        channel: GuildMessageable,
     ):
         """Sets the current channel as the channel to post this record type to."""
         assert ctx.guild is not None
@@ -95,7 +95,7 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="unset")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
     @has_any_role(*channel_settings_roles)
-    async def unset_channel(self, ctx: Context, channel_purpose: ChanelPurpose):
+    async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Unsets the channel to post this record type to."""
         assert ctx.guild is not None
         success_embed = utils.info_embed(
@@ -108,24 +108,24 @@ class SettingsCog(Cog, name="Settings"):
             await sent_message.edit(embed=success_embed)
 
 
-async def get_channel_for(server: discord.Guild, channel_purpose: ChanelPurpose) -> GuildChannel | None:
+async def get_channel_for(server: discord.Guild, channel_purpose: ChannelPurpose) -> GuildMessageable | None:
     """Gets the channel for a specific purpose from the server settings table."""
     channel_id = await get_server_setting(server.id, channel_purpose)
     if channel_id:
-        return server.get_channel(channel_id)
+        return server.get_channel(channel_id)  # pyright: ignore [reportReturnType]
 
 
 async def get_settable_channels(
     server: discord.Guild,
-) -> dict[str, GuildChannel | None]:
+) -> dict[ChannelPurpose, GuildMessageable | None]:
     """Gets all record channels of a server from the server settings table."""
     settings = await get_server_settings(server.id)
-    channels = {}
+    channels: dict[ChannelPurpose, GuildMessageable | None] = {}
     for record_type in CHANNEL_PURPOSES:
         channel_id = settings.get(record_type)
         if channel_id is None:
             continue
-        channels[record_type] = server.get_channel(channel_id)
+        channels[record_type] = cast(GuildMessageable | None, server.get_channel(channel_id))
 
     return channels
 
