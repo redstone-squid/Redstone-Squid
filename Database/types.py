@@ -1,23 +1,39 @@
-from typing import TypedDict, NotRequired, Literal
+from __future__ import annotations
+
+from typing import TypedDict, Literal, Any
 from Database.enums import Status, Category
+from bot.types_ import BuildType
+
+type RecordCategory = Literal["First", "Smallest", "Fastest"]
 
 
-class BuildRecord(TypedDict, total=False):
+class UnknownRestrictions(TypedDict, total=False):
+    wiring_placement_restrictions: list[str]
+    component_restrictions: list[str]
+
+
+class Info(TypedDict, total=False):
+    user: str  # An optional field provided by the submitter if they have any additional information to provide.
+    unknown_patterns: list[str]
+    unknown_restrictions: UnknownRestrictions
+
+
+class BuildRecord(TypedDict):
     """A record of a build in the database."""
 
     id: int
     submission_status: Status
-    record_category: str
-    information: dict  # JSON
+    record_category: RecordCategory | None
+    information: Info
     submission_time: str
     edited_time: str
-    width: int
-    height: int
-    depth: int
-    completion_time: str
+    width: int | None
+    height: int | None
+    depth: int | None
+    completion_time: str | None  # Given by user, not parsable as a datetime
     category: Category
-    server_info: dict  # JSON
-    submitter_id: int
+    server_info: dict[str, Any] | None  # JSON
+    submitter_id: int | None  # TODO: fix db and remove None
 
 
 class MessageRecord(TypedDict):
@@ -30,18 +46,18 @@ class MessageRecord(TypedDict):
     edited_time: str
 
 
-class DoorRecord(TypedDict, total=False):
+class DoorRecord(TypedDict):
     """A record of a door in the database."""
 
     build_id: int
     orientation: str
-    door_width: int
-    door_height: int
-    door_width: int
-    normal_opening_time: int
-    normal_closing_time: int
-    visible_opening_time: int
-    visible_closing_time: int
+    door_width: int | None
+    door_height: int | None
+    door_depth: int | None
+    normal_opening_time: int | None
+    normal_closing_time: int | None
+    visible_opening_time: int | None
+    visible_closing_time: int | None
 
 
 class ExtenderRecord(TypedDict):
@@ -66,10 +82,36 @@ class ServerSettingRecord(TypedDict):
     """A record of a server's setting in the database."""
 
     server_id: int
-    smallest_channel_id: NotRequired[int]
-    fastest_channel_id: NotRequired[int]
-    first_channel_id: NotRequired[int]
-    builds_channel_id: NotRequired[int]
-    voting_channel_id: NotRequired[int]
+    smallest_channel_id: int | None
+    fastest_channel_id: int | None
+    first_channel_id: int | None
+    builds_channel_id: int | None
+    voting_channel_id: int | None
 
 DbSettingKey = Literal["smallest_channel_id", "fastest_channel_id", "first_channel_id", "builds_channel_id", "voting_channel_id"]
+
+
+class TypeRecord(TypedDict):
+    """A record of a type in the database."""
+
+    id: int
+    build_category: Category
+    name: str
+
+
+class RestrictionRecord(TypedDict):
+    """A restriction on a build."""
+
+    id: int
+    build_category: BuildType
+    name: str
+    type: Literal["wiring-placement", "component", "miscellaneous"]
+
+
+class VersionsRecord(TypedDict):
+    id: int
+    edition: str
+    major_version: str
+    minor_version: str
+    patch_number: str
+    full_name_temp: str  # TODO: remove

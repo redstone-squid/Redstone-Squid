@@ -20,6 +20,8 @@ docstring-code-format = true
 [tool.basedpyright]
 pythonVersion = "3.12"
 pythonPlatform = "All"
+typeCheckingMode = "standard"
+
 strictListInference = true
 strictDictionaryInference = true
 strictSetInference = true

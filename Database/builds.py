@@ -1,22 +1,23 @@
+# pyright: reportRedeclaration=false
 """Submitting and retrieving submissions to/from the database"""
-
 from __future__ import annotations
 
 import asyncio
 from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Optional, Literal, Any
+from typing import Optional, Literal, Any, cast
 
 import discord
+from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
 import bot.config
-from Database.types import BuildRecord, DoorRecord
+from Database.types import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
+    UnknownRestrictions
 from Database.database import DatabaseManager
 from Database.utils import utcnow
 from Database.enums import Status
 from bot import utils
-from bot.types_ import Restriction
 from bot.config import VERSIONS_LIST
 
 
@@ -27,7 +28,7 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*)
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
 
-    all_restrictions: list[Restriction] | None = None
+    all_restrictions: list[RestrictionRecord] | None = None
     """A list of all restrictions in the database. This is set by the SubmissionsCog when the bot starts, via the setup() function."""
 
     def __init__(self):
@@ -281,7 +282,7 @@ class Build:
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
         # information is a special JSON field in the database that stores various information about the build
         # this needs to be kept because it will be updated later
-        information = build_data.pop("information", {})
+        information: Info = build_data.pop("information", {})
         build_data["information"] = information
 
         # If any error happens while doing database transactions, delete the build from the db
@@ -291,10 +292,12 @@ class Build:
                 response = (
                     await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
                 )
+                response = cast(APIResponse[BuildRecord], response)
                 if response.count != 1:
                     raise ValueError("Failed to update submission in the database.")
             else:
                 response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
+                response = cast(APIResponse[BuildRecord], response)
                 if response.count != 1:
                     raise ValueError("Failed to insert submission in the database.")
                 build_id = response.data[0]["id"]
@@ -322,7 +325,7 @@ class Build:
                 + data.get("component_restrictions", [])
                 + data.get("miscellaneous_restrictions", [])
             )
-            response = await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
+            response = cast(APIResponse[RestrictionRecord], await db.table("restrictions").select("*").in_("name", build_restrictions).execute())
             restriction_ids = [restriction["id"] for restriction in response.data]
             build_restrictions_data = list(
                 {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
@@ -330,7 +333,7 @@ class Build:
             if build_restrictions_data:
                 await db.table("build_restrictions").upsert(build_restrictions_data).execute()
 
-            unknown_restrictions = {}
+            unknown_restrictions: UnknownRestrictions = {}
             unknown_wiring_restrictions = []
             unknown_component_restrictions = []
             for wiring_restriction in data.get("wiring_placement_restrictions", []):
@@ -365,6 +368,7 @@ class Build:
                 .in_("name", door_type)
                 .execute()
             )
+            response = cast(APIResponse[TypeRecord], response)
             type_ids = [type_["id"] for type_ in response.data]
             build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
             await db.table("build_types").upsert(build_types_data).execute()
@@ -374,7 +378,7 @@ class Build:
                 if door_type not in [type_["name"] for type_ in response.data]:
                     unknown_types.append(door_type)
             if unknown_types:
-                information["unknown_types"] = unknown_types
+                information["unknown_patterns"] = unknown_types
                 await db.table("builds").update({"information": information}).eq("id", self.id).execute()
 
             # build_links table
@@ -409,6 +413,7 @@ class Build:
                 .in_("full_name_temp", data.get("functional_versions", [VERSIONS_LIST[-1]]))
                 .execute()
             )
+            response = cast(APIResponse[VersionsRecord], response)
             version_ids = [version["id"] for version in response.data]
             build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
             await db.table("build_versions").upsert(build_versions_data).execute()
@@ -417,14 +422,14 @@ class Build:
                 await db.table("builds").delete().eq("id", build_id).execute()
             raise
 
-    def update_local(self, data: dict) -> None:
+    def update_local(self, data: dict[Any, Any]) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
         # FIXME: this does not work with nested data like self.information
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[str, Any]:
         """Converts the build to a dictionary."""
         build = {}
         for attr in self:
@@ -439,7 +444,7 @@ class Build:
         """
         self.submission_status = Status.CONFIRMED
         db = DatabaseManager()
-        response = (
+        response: APIResponse[BuildRecord] = (
             await db.table("builds")
             .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
             .eq("id", self.id)
@@ -675,7 +680,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
 @cache
-async def fetch_all_restrictions() -> list[Restriction]:
+async def fetch_all_restrictions() -> list[RestrictionRecord]:
     """Fetches all restrictions from the database."""
     db = DatabaseManager()
     response = await db.table("restrictions").select("*").execute()
