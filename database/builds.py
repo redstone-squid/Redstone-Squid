@@ -569,7 +569,6 @@ class Build:
         else:
             return None
 
-    # TODO: Refactor this
     def get_versions_string(self) -> str:
         """Returns a string of the versions the build is functional in.
 
@@ -584,31 +583,19 @@ class Build:
         first_version = None
         last_version = None
 
-        for index, version in enumerate(bot.config.VERSIONS_LIST):
+        for version in bot.config.VERSIONS_LIST:
             if version in self.functional_versions:
                 if not linking:
                     linking = True
                     first_version = version
-                    last_version = version
-                else:
-                    last_version = version
+                last_version = version
 
             elif linking:
+                versions.append(first_version if first_version == last_version else f"{first_version} - {last_version}")
                 linking = False
 
-                if first_version == last_version:
-                    versions.append(first_version)
-                else:
-                    versions.append(f"{first_version} - {last_version}")
-
-                first_version = None
-                last_version = None
-
-            if index == len(bot.config.VERSIONS_LIST) - 1 and linking:
-                if first_version == last_version:
-                    versions.append(first_version)
-                else:
-                    versions.append(f"{first_version} - {last_version}")
+        if linking:  # If the last version is functional
+            versions.append(first_version if first_version == last_version else f"{first_version} - {last_version}")
 
         return ", ".join(versions)
 
