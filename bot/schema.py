@@ -4,7 +4,7 @@ from typing import TypedDict
 
 from discord import TextChannel, VoiceChannel, StageChannel, Thread
 
-from Database.schema import RecordCategory, DoorOrientationName
+from database.schema import RecordCategory, DoorOrientationName
 
 
 class SubmissionCommandResponseT(TypedDict, total=False):

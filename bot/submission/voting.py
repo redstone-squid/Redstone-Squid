@@ -3,11 +3,11 @@
 import discord
 from discord.ext.commands import Bot, Cog
 
-import Database.message as msg
-from Database.enums import Status
-from Database.message import get_build_id_by_message
-from Database.server_settings import get_server_setting
-from Database.builds import Build
+import database.message as msg
+from database.enums import Status
+from database.message import get_build_id_by_message
+from database.server_settings import get_server_setting
+from database.builds import Build
 from bot.config import OWNER_ID
 from bot.schema import GuildMessageable
 from bot.submission import post

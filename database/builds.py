@@ -12,11 +12,11 @@ from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
 import bot.config
-from Database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
+from database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
     UnknownRestrictions
-from Database.database import DatabaseManager
-from Database.utils import utcnow
-from Database.enums import Status
+from database.database import DatabaseManager
+from database.utils import utcnow
+from database.enums import Status
 from bot import utils
 from bot.config import VERSIONS_LIST
 

@@ -9,7 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 def connect():
     scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-    if not os.path.isfile("Google/client_secret.json"):
+    if not os.path.isfile("google/client_secret.json"):
         # Getting service account credentials from environment variables
         credentials = os.environ.get("GOOGLE_CREDENTIALS")
 
@@ -22,7 +22,7 @@ def connect():
         credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials, scopes)  # pyright: ignore [reportArgumentType]
     else:
         # Getting service account credentials from json file
-        credentials = ServiceAccountCredentials.from_json_keyfile_name("Google/client_secret.json", scopes)  # pyright: ignore [reportArgumentType]
+        credentials = ServiceAccountCredentials.from_json_keyfile_name("google/client_secret.json", scopes)  # pyright: ignore [reportArgumentType]
 
     return credentials, gspread.authorize(credentials)  # pyright: ignore [reportPrivateImportUsage, reportArgumentType]
 

@@ -14,14 +14,14 @@ from discord.ext.commands import (
 )
 from discord.ui import Button, View
 
-import Database.message as msg
+import database.message as msg
 import bot.config as config
 import bot.submission.post as post
 import bot.utils as utils
-from Database.builds import get_all_builds, Build, fetch_all_restrictions
-from Database.enums import Status
+from database.builds import get_all_builds, Build, fetch_all_restrictions
+from database.enums import Status
 from bot.schema import SubmissionCommandResponseT
-from Database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
+from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
 from bot.utils import RunningMessage
 
 if TYPE_CHECKING:

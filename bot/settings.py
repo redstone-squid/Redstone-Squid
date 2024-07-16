@@ -5,13 +5,13 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group, guild_only
 
-from Database.server_settings import (
+from database.server_settings import (
     update_server_setting,
     get_server_setting,
     get_server_settings,
 )
 import bot.utils as utils
-from Database.schema import ChannelPurpose, CHANNEL_PURPOSES
+from database.schema import ChannelPurpose, CHANNEL_PURPOSES
 from bot.schema import GuildMessageable
 
 channel_settings_roles = ["Admin", "Moderator"]

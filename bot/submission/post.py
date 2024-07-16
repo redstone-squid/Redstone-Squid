@@ -3,10 +3,10 @@
 import discord
 
 import bot.settings as settings
-import Database.message as msg  # FIXME: horrible name
-from Database.enums import Status
-from Database.schema import ChannelPurpose
-from Database.builds import Build
+import database.message as msg  # FIXME: horrible name
+from database.enums import Status
+from database.schema import ChannelPurpose
+from database.builds import Build
 
 
 # TODO: make this inside a cog and remove the client parameter?

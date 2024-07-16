@@ -10,8 +10,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
-from Database.database import DatabaseManager
-from Database.utils import utcnow
+from database.database import DatabaseManager
+from database.utils import utcnow
 from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX, OWNER
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog

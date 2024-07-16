@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
-from Database.enums import Status, Category
+from database.enums import Status, Category
 
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]

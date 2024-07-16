@@ -2,10 +2,10 @@
 
 from postgrest.types import CountMethod
 
-from Database.builds import Build, get_builds
-from Database.schema import MessageRecord
-from Database.utils import utcnow
-from Database.database import DatabaseManager
+from database.builds import Build, get_builds
+from database.schema import MessageRecord
+from database.utils import utcnow
+from database.database import DatabaseManager
 
 
 # FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
