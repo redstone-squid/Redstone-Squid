@@ -10,7 +10,8 @@ class UnknownRestrictions(TypedDict, total=False):
 
 
 class Info(TypedDict, total=False):
-    user: str  # An optional field provided by the submitter if they have any additional information to provide.
+    """A special JSON field in the database that stores various additional information about the build"""
+    user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
 
