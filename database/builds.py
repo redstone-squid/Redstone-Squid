@@ -12,10 +12,10 @@ from postgrest.types import CountMethod
 
 import bot.config
 from database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
-    UnknownRestrictions
+    UnknownRestrictions, RecordCategory, DoorOrientationName
 from database.database import DatabaseManager
 from database.utils import utcnow
-from database.enums import Status
+from database.enums import Status, Category
 from bot import utils
 from bot.config import VERSIONS_LIST
 
@@ -31,45 +31,45 @@ class Build:
 
         This should not be used externally. Use `from_dict()` or `from_id()` instead."""
         self.id: int | None = None
-        self.submission_status: int | None = None
-        self.category: Literal["Door", "Extender", "Utility", "Entrance"] | None = None
-        self.record_category: Literal["Smallest", "Fastest", "First"] | None = None
+        self.submission_status: Status | None = None
+        self.category: Category | None = None
+        self.record_category: RecordCategory | None = None
         self.functional_versions: list[str] | None = None
 
         self.width: int | None = None
-        self.height: Optional[int] | None = None
-        self.depth: Optional[int] | None = None
+        self.height: int | None = None
+        self.depth: int | None = None
 
         self.door_width: int | None = None
         self.door_height: int | None = None
         self.door_depth: int | None = None
 
-        self.door_type: Optional[Sequence[str]] | None = None
-        self.door_orientation_type: Literal["Door", "Trapdoor", "Skydoor"] | None = None
+        self.door_type: Sequence[str] | None = None
+        self.door_orientation_type: DoorOrientationName | None = None
 
-        self.wiring_placement_restrictions: Optional[Sequence[str]] | None = None
-        self.component_restrictions: Optional[Sequence[str]] | None = None
-        self.miscellaneous_restrictions: Optional[Sequence[str]] | None = None
+        self.wiring_placement_restrictions: Sequence[str] | None = None
+        self.component_restrictions: Sequence[str] | None = None
+        self.miscellaneous_restrictions: Sequence[str] | None = None
 
-        self.normal_closing_time: Optional[int] | None = None
-        self.normal_opening_time: Optional[int] | None = None
-        self.visible_closing_time: Optional[int] | None = None
-        self.visible_opening_time: Optional[int] | None = None
+        self.normal_closing_time: int | None = None
+        self.normal_opening_time: int | None = None
+        self.visible_closing_time: int | None = None
+        self.visible_opening_time: int | None = None
 
         # In the database, we force empty information to be {}
         self.information: Info | None = None
-        self.creators_ign: Optional[Sequence[str]] | None = None
+        self.creators_ign: Sequence[str] | None = None
 
-        self.image_urls: Optional[Sequence[str]] | None = None
-        self.video_urls: Optional[Sequence[str]] | None = None
-        self.world_download_urls: Optional[Sequence[str]] | None = None
+        self.image_urls: Sequence[str] | None = None
+        self.video_urls: Sequence[str] | None = None
+        self.world_download_urls: Sequence[str] | None = None
 
-        self.server_ip: Optional[str] | None = None
-        self.coordinates: Optional[str] | None = None
-        self.command: Optional[str] | None = None
+        self.server_ip: str | None = None
+        self.coordinates: str | None = None
+        self.command: str | None = None
 
         self.submitter_id: int | None = None
-        self.completion_time: Optional[str] | None = None
+        self.completion_time: str | None = None
         self.edited_time: str | None = None
 
     def __iter__(self):
@@ -83,7 +83,7 @@ class Build:
         return self.width, self.height, self.depth
 
     @dimensions.setter
-    def dimensions(self, dimensions: tuple[int, int, int]) -> None:
+    def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.width, self.height, self.depth = dimensions
 
     @property
