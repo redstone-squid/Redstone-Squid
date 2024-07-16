@@ -26,10 +26,6 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*)
 
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
-
-    all_restrictions: list[RestrictionRecord] | None = None
-    """A list of all restrictions in the database. This is set by the SubmissionsCog when the bot starts, via the setup() function."""
-
     def __init__(self):
         """Initializes an empty build.
 
@@ -99,8 +95,16 @@ class Build:
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
-    @property
-    def restrictions(
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @staticmethod
+    @cache
+    async def fetch_all_restrictions() -> list[RestrictionRecord]:
+        """Fetches all restrictions from the database."""
+        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
+        Build.all_restrictions = response.data
+        return response.data
+
+    def get_restrictions(
         self,
     ) -> dict[
         Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
@@ -113,10 +117,9 @@ class Build:
             "miscellaneous_restrictions": self.miscellaneous_restrictions,
         }
 
-    @restrictions.setter
-    def restrictions(
+    async def set_restrictions(
         self,
-        restrictions: Sequence[str]  # pyright: ignore[reportPropertyTypeMismatch]  # allowing list as a convenience
+        restrictions: Sequence[str]
         | Mapping[
             Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
             Sequence[str],
@@ -132,13 +135,7 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            if self.all_restrictions is None:
-                raise RuntimeError(
-                    "The class attribute Build.all_restrictions must be set if you want to use the restrictions setter with a list. "
-                    "Use the fetch_all_restrictions() function and bind the result to the class attribute."
-                )
-
-            for restriction in self.all_restrictions:
+            for restriction in await self.fetch_all_restrictions():
                 for door_restriction in restrictions:
                     if door_restriction.lower() == restriction["name"].lower():
                         if restriction["type"] == "wiring-placement":
@@ -691,15 +688,6 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     response = await db.rpc("get_unsent_builds", {"server_id_input": server_id}).execute()
     server_unsent_builds = response.data
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
-
-
-# TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-@cache
-async def fetch_all_restrictions() -> list[RestrictionRecord]:
-    """Fetches all restrictions from the database."""
-    db = DatabaseManager()
-    response = await db.table("restrictions").select("*").execute()
-    return response.data
 
 
 async def main():

@@ -18,7 +18,7 @@ import database.message as msg
 import bot.config as config
 import bot.submission.post as post
 import bot.utils as utils
-from database.builds import get_all_builds, Build, fetch_all_restrictions
+from database.builds import get_all_builds, Build
 from database.enums import Status
 from bot.schema import SubmissionCommandResponseT
 from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
@@ -407,7 +407,7 @@ class SubmissionModal(discord.ui.Modal):
         self.build.door_dimensions = utils.parse_hallway_dimensions(self.door_size.value)
         self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
         self.build.dimensions = utils.parse_dimensions(self.dimensions.value)  # type: ignore
-        self.build.restrictions = self.restrictions.value.split(", ")
+        await self.build.set_restrictions(self.restrictions.value.split(", "))
 
         # Extract IGN
         ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
@@ -569,5 +569,5 @@ class BuildSubmissionForm(View):
 async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     # Cache the restrictions
-    Build.all_restrictions = await fetch_all_restrictions()
+    await Build.fetch_all_restrictions()
     await bot.add_cog(SubmissionsCog(bot))
