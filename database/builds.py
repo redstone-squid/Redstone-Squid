@@ -490,12 +490,10 @@ class Build:
             raise ValueError("Failed to deny submission in the database.")
 
     def generate_embed(self) -> discord.Embed:
-        title = self.get_title()
-        description = self.get_description()
+        """Generates an embed for the build."""
+        em = utils.info_embed(title=self.get_title(), description=self.get_description())
 
-        em = utils.info_embed(title=title, description=description)
-
-        fields = self.get_meta_fields()
+        fields = self.get_metadata_fields()
         for key, val in fields.items():
             em.add_field(name=key, value=val, inline=True)
 
@@ -503,17 +501,24 @@ class Build:
             em.set_image(url=self.image_urls[0])
 
         em.set_footer(text=f"Submission ID: {self.id}.")
-
         return em
 
     def get_title(self) -> str:
-        title = "Pending: " if self.submission_status == Status.PENDING else ""
+        """Generates the official Redstone Squid defined title for the build."""
+        title = ""
 
+        if self.category != "Door":
+            raise NotImplementedError("Only doors are supported for now.")
+
+        if self.submission_status == Status.PENDING:
+            title += "Pending: "
         if self.record_category:
             title += f"{self.record_category} "
 
         # Door dimensions
-        if self.door_width and self.door_height:
+        if self.door_width and self.door_height and self.door_depth:
+            title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
+        elif self.door_width and self.door_height:
             title += f"{self.door_width}x{self.door_height} "
         elif self.door_width:
             title += f"{self.door_width} Wide "
@@ -523,8 +528,7 @@ class Build:
         # Wiring Placement Restrictions
         if self.wiring_placement_restrictions is not None:
             for restriction in self.wiring_placement_restrictions:
-                if restriction != "None":
-                    title += f"{restriction} "
+                title += f"{restriction} "
 
         # Pattern
         if self.door_type is not None:
@@ -533,15 +537,16 @@ class Build:
                     title += f"{pattern} "
 
         # Door type
-        if self.door_orientation_type is not None:
-            title += self.door_orientation_type
+        if self.door_orientation_type is None:
+            raise ValueError("Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing.")
+        title += self.door_orientation_type
 
         return title
 
     def get_description(self) -> str | None:
+        """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         description = []
 
-        # Component Restrictions
         if self.component_restrictions and self.component_restrictions[0] != "None":
             description.append(", ".join(self.component_restrictions))
 
@@ -562,9 +567,9 @@ class Build:
                 description.append("**Directional** with known fixes for each direction.")
 
         if self.information and self.information.get("user"):
-            description.append("\n" + self.information.get("user"))  # type: ignore
+            description.append("\n" + self.information.get("user"))
 
-        if len(description) > 0:
+        if description:
             return "\n".join(description)
         else:
             return None
@@ -599,7 +604,7 @@ class Build:
 
         return ", ".join(versions)
 
-    def get_meta_fields(self) -> dict[str, str]:
+    def get_metadata_fields(self) -> dict[str, str]:
         fields = {"Dimensions": f"{self.width or '?'} x {self.height or '?'} x {self.depth or '?'}"}
 
         if self.normal_opening_time:
