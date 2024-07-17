@@ -64,11 +64,13 @@ class Build:
         self.video_urls: Sequence[str] | None = None
         self.world_download_urls: Sequence[str] | None = None
 
+        # TODO: Put these three into server_info
         self.server_ip: str | None = None
         self.coordinates: str | None = None
         self.command: str | None = None
 
         self.submitter_id: int | None = None
+        # TODO: save the submitted time too
         self.completion_time: str | None = None
         self.edited_time: str | None = None
 
