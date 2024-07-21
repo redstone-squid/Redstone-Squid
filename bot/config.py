@@ -9,7 +9,7 @@ OWNER_SERVER_ID = 433618741528625152
 PREFIX = "!"
 DEV_PREFIX = "."
 BOT_NAME = "Redstone Squid"
-BOT_VERSION = "1.5.2"
+BOT_VERSION = "1.5.3"
 SOURCE_CODE_URL = "https://github.com/redstone-squid/Redstone-Squid"
 FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
 
