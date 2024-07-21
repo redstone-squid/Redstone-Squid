@@ -1,18 +1,29 @@
 """Submitting and retrieving submissions to/from the database"""
+
 from __future__ import annotations
 
 import asyncio
 from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Optional, Literal, Any
+from typing import Literal, Any
 
 import discord
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
 import bot.config
-from database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
-    UnknownRestrictions, RecordCategory, DoorOrientationName, ChannelPurpose
+from database.schema import (
+    BuildRecord,
+    DoorRecord,
+    TypeRecord,
+    RestrictionRecord,
+    Info,
+    VersionsRecord,
+    UnknownRestrictions,
+    RecordCategory,
+    DoorOrientationName,
+    ChannelPurpose,
+)
 from database.database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.utils import utcnow
@@ -27,6 +38,7 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*)
 
 class Build:
     """A class representing a submission to the database. This class is used to store and manipulate submissions."""
+
     def __init__(self):
         """Initializes an empty build.
 
@@ -312,9 +324,7 @@ class Build:
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
         if self.id:
-            response = (
-                await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
-            )
+            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
             assert response.count == 1
             delete_build_on_error = False
         else:
@@ -371,7 +381,9 @@ class Build:
             + data.get("component_restrictions", [])
             + data.get("miscellaneous_restrictions", [])
         )
-        response: APIResponse[RestrictionRecord] = await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
+        response: APIResponse[RestrictionRecord] = (
+            await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
+        )
         restriction_ids = [restriction["id"] for restriction in response.data]
         build_restrictions_data = list(
             {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids

@@ -16,9 +16,7 @@ PURPOSE_TO_SETTING: dict[ChannelPurpose, DbSettingKey] = {
     "Vote": "voting_channel_id",
 }
 # TODO: inconsistent naming
-SETTING_TO_PURPOSE: dict[DbSettingKey, ChannelPurpose] = {
-    value: key for key, value in PURPOSE_TO_SETTING.items()
-}
+SETTING_TO_PURPOSE: dict[DbSettingKey, ChannelPurpose] = {value: key for key, value in PURPOSE_TO_SETTING.items()}
 assert set(PURPOSE_TO_SETTING.keys()) == set(CHANNEL_PURPOSES), "The mapping is not exhaustive!"
 
 

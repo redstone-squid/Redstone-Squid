@@ -1,4 +1,5 @@
 """Main file for the discord bot, includes logging and the main event loop."""
+
 from __future__ import annotations
 
 import asyncio
@@ -22,8 +23,8 @@ from bot.help import HelpCog
 from bot.settings import SettingsCog
 
 if TYPE_CHECKING:
-    T = TypeVar('T')
-    P = ParamSpec('P')
+    T = TypeVar("T")
+    P = ParamSpec("P")
     MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]
 
 
@@ -105,7 +106,9 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
 
 
 class RedstoneSquid(Bot):
-    def __init__(self, command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]):
+    def __init__(
+        self, command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]
+    ):
         super().__init__(
             command_prefix=command_prefix,
             owner_id=OWNER_ID,

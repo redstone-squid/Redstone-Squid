@@ -1,4 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
+
 from __future__ import annotations
 
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
@@ -14,13 +15,17 @@ from database.database import DatabaseManager
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
 async def get_server_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
-    response: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").eq("server_id", server_id).execute()
+    response: APIResponse[MessageRecord] = (
+        await DatabaseManager().table("messages").select("*").eq("server_id", server_id).execute()
+    )
     return response.data
 
 
 async def get_build_messages(build_id: int) -> list[MessageRecord]:
     """Get all messages for a build."""
-    response: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").eq("build_id", build_id).execute()
+    response: APIResponse[MessageRecord] = (
+        await DatabaseManager().table("messages").select("*").eq("build_id", build_id).execute()
+    )
     return response.data
 
 
@@ -76,8 +81,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
     """
     db = DatabaseManager()
     response: APIResponse[MessageRecord] = (
-        await db
-        .table("messages")
+        await db.table("messages")
         .select("message_id", count=CountMethod.exact)
         .eq("server_id", server_id)
         .eq("build_id", build_id)

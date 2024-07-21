@@ -1,11 +1,12 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
+
 from __future__ import annotations
 
 from typing import cast, TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Context, Bot, has_any_role, Cog, hybrid_group, guild_only
+from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only
 
 from database.server_settings import (
     update_server_setting,

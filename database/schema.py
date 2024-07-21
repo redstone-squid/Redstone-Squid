@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
 from database.enums import Status, Category
 
+
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
     component_restrictions: list[str]
@@ -11,6 +12,7 @@ class UnknownRestrictions(TypedDict, total=False):
 
 class Info(TypedDict, total=False):
     """A special JSON field in the database that stores various additional information about the build"""
+
     user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
@@ -86,7 +88,10 @@ class ServerSettingRecord(TypedDict):
     builds_channel_id: int | None
     voting_channel_id: int | None
 
-DbSettingKey = Literal["smallest_channel_id", "fastest_channel_id", "first_channel_id", "builds_channel_id", "voting_channel_id"]
+
+DbSettingKey = Literal[
+    "smallest_channel_id", "fastest_channel_id", "first_channel_id", "builds_channel_id", "voting_channel_id"
+]
 
 
 class TypeRecord(TypedDict):
@@ -108,6 +113,7 @@ class RestrictionRecord(TypedDict):
 
 class VersionsRecord(TypedDict):
     """A record of a version in the database"""
+
     id: int
     edition: str
     major_version: str
