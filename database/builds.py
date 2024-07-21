@@ -103,7 +103,6 @@ class Build:
     async def fetch_all_restrictions() -> list[RestrictionRecord]:
         """Fetches all restrictions from the database."""
         response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
-        Build.all_restrictions = response.data
         return response.data
 
     def get_restrictions(
@@ -282,14 +281,15 @@ class Build:
         information: Info = build_data.get("information", {})
 
         db = DatabaseManager()
+        response: APIResponse[BuildRecord]
         if self.id:
-            response: APIResponse[BuildRecord] = (
+            response = (
                 await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
             )
             assert response.count == 1
             delete_build_on_error = False
         else:
-            response: APIResponse[BuildRecord] = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
+            response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
             assert response.count == 1
             self.id = response.data[0]["id"]
             delete_build_on_error = True
@@ -316,7 +316,7 @@ class Build:
                 await db.table("builds").delete().eq("id", self.id).execute()
             raise
 
-    async def _update_build_subcategory_table(self, data):
+    async def _update_build_subcategory_table(self, data: dict[str, Any]) -> None:
         """Updates the subcategory table with the given data."""
         db = DatabaseManager()
         if data["category"] == "Door":
@@ -334,13 +334,13 @@ class Build:
         else:
             raise ValueError("Build category must be set")
 
-    async def _update_build_restrictions_table(self, data) -> UnknownRestrictions:
+    async def _update_build_restrictions_table(self, data: dict[str, Any]) -> UnknownRestrictions:
         """Updates the build_restrictions table with the given data"""
         db = DatabaseManager()
         build_restrictions = (
-                data.get("wiring_placement_restrictions", [])
-                + data.get("component_restrictions", [])
-                + data.get("miscellaneous_restrictions", [])
+            data.get("wiring_placement_restrictions", [])
+            + data.get("component_restrictions", [])
+            + data.get("miscellaneous_restrictions", [])
         )
         response: APIResponse[RestrictionRecord] = await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
         restriction_ids = [restriction["id"] for restriction in response.data]
@@ -370,7 +370,7 @@ class Build:
             unknown_restrictions["component_restrictions"] = unknown_component_restrictions
         return unknown_restrictions
 
-    async def _update_build_types_table(self, data) -> list[str]:
+    async def _update_build_types_table(self, data: dict[str, Any]) -> list[str]:
         """Updates the build_types table with the given data.
 
         Returns:
@@ -399,7 +399,7 @@ class Build:
                 unknown_types.append(door_type)
         return unknown_types
 
-    async def _update_build_links_table(self, data) -> None:
+    async def _update_build_links_table(self, data: dict[str, Any]) -> None:
         """Updates the build_links table with the given data."""
         build_links_data = []
         if data.get("image_urls"):
@@ -418,7 +418,7 @@ class Build:
         if build_links_data:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()
 
-    async def _update_build_creators_table(self, data):
+    async def _update_build_creators_table(self, data: dict[str, Any]) -> None:
         """Updates the build_creators table with the given data."""
         build_creators_data = list(
             {"build_id": self.id, "creator_ign": creator} for creator in data.get("creators_ign", [])
@@ -426,7 +426,7 @@ class Build:
         if build_creators_data:
             await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
 
-    async def _update_build_versions_table(self, data):
+    async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
         db = DatabaseManager()
         # No error is raised if the version is not found in the database
@@ -544,34 +544,31 @@ class Build:
 
     def get_description(self) -> str | None:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
-        description = []
+        desc = []
 
         if self.component_restrictions and self.component_restrictions[0] != "None":
-            description.append(", ".join(self.component_restrictions))
+            desc.append(", ".join(self.component_restrictions))
 
         if self.functional_versions is None:
-            description.append("Unknown version compatibility.")
+            desc.append("Unknown version compatibility.")
         elif bot.config.VERSIONS_LIST[-1] not in self.functional_versions:
-            description.append("**Broken** in current version.")
+            desc.append("**Broken** in current version.")
 
         if self.miscellaneous_restrictions is not None:
             if "Locational" in self.miscellaneous_restrictions:
-                description.append("**Locational**.")
+                desc.append("**Locational**.")
             elif "Locational with fixes" in self.miscellaneous_restrictions:
-                description.append("**Locational** with known fixes for each location.")
+                desc.append("**Locational** with known fixes for each location.")
 
             if "Directional" in self.miscellaneous_restrictions:
-                description.append("**Directional**.")
+                desc.append("**Directional**.")
             elif "Directional with fixes" in self.miscellaneous_restrictions:
-                description.append("**Directional** with known fixes for each direction.")
+                desc.append("**Directional** with known fixes for each direction.")
 
-        if self.information and self.information.get("user"):
-            description.append("\n" + self.information.get("user"))
+        if self.information and (user_message := self.information.get("user")):
+            desc.append("\n" + user_message)
 
-        if description:
-            return "\n".join(description)
-        else:
-            return None
+        return "\n".join(desc) if desc else None
 
     def get_versions_string(self) -> str:
         """Returns a string of the versions the build is functional in.

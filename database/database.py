@@ -14,7 +14,8 @@ class DatabaseManager:
     def __new__(cls) -> AsyncClient:
         if not cls._is_setup:
             raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        return cls._async_client  # pyright: ignore [reportReturnType]
+        assert cls._async_client is not None
+        return cls._async_client
 
     @classmethod
     async def setup(cls) -> None:

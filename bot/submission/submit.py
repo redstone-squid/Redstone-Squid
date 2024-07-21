@@ -19,7 +19,7 @@ import bot.config as config
 import bot.submission.post as post
 import bot.utils as utils
 from database.builds import get_all_builds, Build
-from database.enums import Status
+from database.enums import Status, Category
 from bot.schema import SubmissionCommandResponseT
 from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
 from bot.utils import RunningMessage
@@ -183,7 +183,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             build = Build.from_dict(fmt_data)
 
             # TODO: Stop hardcoding this
-            build.category = "Door"
+            build.category = Category.DOOR
             build.submission_status = Status.PENDING
 
             await build.save()
@@ -538,7 +538,7 @@ class BuildSubmissionForm(View):
 
         # Assumptions
         build.submission_status = Status.PENDING
-        build.category = "Door"
+        build.category = Category.DOOR
 
         self.build = build
         self.add_item(RecordCategorySelect(self.build))

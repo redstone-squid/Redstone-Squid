@@ -1,4 +1,5 @@
 """Main file for the discord bot, includes logging and the main event loop."""
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -6,41 +7,18 @@ import os
 from typing import override
 
 import discord
+from discord import User
 from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
 from database.database import DatabaseManager
 from database.utils import utcnow
-from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX, OWNER
+from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog
 from bot.submission.voting import VotingCog
-
-# Owner of the bot, used for logging, owner_user_object is only used if the bot can see the owner's user object.
-# i.e. the owner is in a server with the bot.
-log_user: dict = {"owner_name": OWNER, "owner_user_object": None}
-
-
-async def log(msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
-    """
-    Logs a timestamped message to stdout and to the owner of the bot via DM.
-
-    Args:
-        msg: the message to log
-        first_log: if True, adds a line of dashes before the message
-        dm_owner: whether to send the message to the owner of the bot via DM
-
-    Returns:
-        None
-    """
-    timestamp_msg = utcnow() + msg
-    print(timestamp_msg)
-    if dm_owner and log_user["owner_user_object"]:
-        if first_log:
-            timestamp_msg = "-" * 90 + "\n" + timestamp_msg
-        return await log_user["owner_user_object"].send(timestamp_msg)
 
 
 class Listeners(Cog, command_attrs=dict(hidden=True)):
@@ -49,55 +27,65 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @Cog.listener()
-    async def on_ready(self):
-        # Try to get the user object of the owner of the bot, which is used for logging.
-        for member in self.bot.get_all_members():
-            if str(member) == log_user["owner_name"]:
-                log_user["owner_user_object"] = member
-        await log(
+        if not self.bot.owner_id:
+            raise RuntimeError("Owner ID not set.")
+        self.owner: User | None = self.bot.get_user(self.bot.owner_id)
+
+    async def log(self, msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
+        """
+        Logs a timestamped message to stdout and to the owner of the bot via DM.
+
+        Args:
+            msg: the message to log
+            first_log: if True, adds a line of dashes before the message
+            dm_owner: whether to send the message to the owner of the bot via DM
+
+        Returns:
+            None
+        """
+        timestamp_msg = utcnow() + msg
+        if first_log:
+            timestamp_msg = f"{"-" * 90}\n{timestamp_msg}"
+        if dm_owner and self.owner:
+            await self.owner.send(timestamp_msg)
+        print(timestamp_msg)
+
+    # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
+    # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
+    # This library implements reconnection logic and thus will end up calling this event whenever a RESUME request fails.
+    @Cog.listener("on_ready")
+    async def log_on_ready(self):
+        """Logs when the bot is ready."""
+        assert self.bot.user is not None
+        await self.log(
             f"Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.",
             first_log=True,
         )
 
     # Temporary fix
     # TODO: Remove this event after the bot doesn't break when it is in more than one server
-    @Cog.listener()
-    async def on_guild_join(self, guild: discord.Guild):
+    @Cog.listener("on_guild_join")
+    async def leave_other_servers(self, guild: discord.Guild):
         if guild.id != OWNER_SERVER_ID:
             # Send a warning message in the server, and then leave
-            await log(f"Bot joined server: {guild.name} with id: {guild.id}.")
+            await self.log(f"Bot joined server: {guild.name} with id: {guild.id}.")
             if guild.system_channel:
                 await guild.system_channel.send("I am not supposed to be in this server. Leaving now.")
             await guild.leave()
 
-    @Cog.listener()
-    async def on_message(self, message: discord.Message):
-        # Ignore messages sent by the bot
-        if self.bot.user.id == message.author.id:
-            return
-
-        # Extract command string from discord message
-        user_command = ""
-        if message.content.startswith(self.bot.command_prefix):
-            user_command = message.content.replace(self.bot.command_prefix, "", 1)
-        elif not message.guild:
-            user_command = message.content
+    @Cog.listener("on_command")
+    async def log_command_usage(self, ctx: Context[RedstoneSquid]):
+        """Logs command usage to stdout and to the owner of the bot via DM."""
+        if ctx.guild is not None:
+            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in server: {ctx.guild.name}.'
         else:
-            return  # Ignore messages in servers that don't start with command prefix
+            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in a private message.'
 
-        # Create log message based on where message was sent
-        if message.guild:
-            log_message = f'{str(message.author)} ran: "{user_command}" in server: {message.guild.name}.'
-        else:
-            log_message = f'{str(message.author)} ran: "{user_command}" in a private message.'
+        owner_dmed_bot = (ctx.guild is None) and await ctx.bot.is_owner(ctx.message.author)
+        await self.log(log_message, dm_owner=(not owner_dmed_bot))
 
-        # Log command usage. Do not send log message to owner if the owner directly messaged the bot
-        owner_dmed_bot = not message.guild and log_user["owner_name"] == str(message.author)
-        await log(log_message, dm_owner=(not owner_dmed_bot))
-
-    @Cog.listener()
-    async def on_command_error(self, ctx: Context, exception: CommandError):
+    @Cog.listener("on_command_error")
+    async def log_command_error(self, ctx: Context, exception: CommandError):
         """Global error handler for the bot."""
         command = ctx.command
         if command and command.has_error_handler():
@@ -118,6 +106,7 @@ class RedstoneSquid(Bot):
             intents=discord.Intents.all(),
             description=f"{BOT_NAME} v{BOT_VERSION}",
         )
+        assert self.owner_id is not None
 
     @override
     async def setup_hook(self) -> None:
@@ -132,11 +121,11 @@ class RedstoneSquid(Bot):
 
 
 async def main():
+    """Main entry point for the bot."""
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
-    # Running the application
+
     async with RedstoneSquid(prefix) as bot:
         discord.utils.setup_logging()
-
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:

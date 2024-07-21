@@ -1,5 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
-
+from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
 
 from database.builds import Build, get_builds
@@ -133,7 +133,7 @@ async def get_build_id_by_message(message_id: int) -> int | None:
         The build id of the message.
     """
     db = DatabaseManager()
-    response = (
+    response: SingleAPIResponse[MessageRecord] | None = (
         await db.table("messages")
         .select("build_id", count=CountMethod.exact)
         .eq("message_id", message_id)

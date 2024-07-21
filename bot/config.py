@@ -1,5 +1,6 @@
 """Configuration file for the bot."""
 
+# Does some QOL changes, like using a different command prefix and calling load_dotenv()
 DEV_MODE = False
 
 OWNER = "papetoast"
