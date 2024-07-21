@@ -33,7 +33,7 @@ def get_purpose_name(setting_name: DbSettingKey) -> ChannelPurpose:
 
 
 async def get_server_setting(server_id: int, channel_purpose: ChannelPurpose) -> int | None:
-    """Gets the channel id of the specified purpose for a server."""
+    """Gets the channel id of the specified purpose for a server. The channels fetched are always GuildMessageable unless the server admins changed them."""
     setting_name = get_setting_name(channel_purpose)
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager()

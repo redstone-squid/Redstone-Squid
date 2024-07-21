@@ -1,5 +1,7 @@
 """Some functions related to the message table, which stores message ids."""
-from postgrest.base_request_builder import SingleAPIResponse
+from __future__ import annotations
+
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
 from database.builds import Build, get_builds
@@ -12,22 +14,21 @@ from database.database import DatabaseManager
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
 async def get_server_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
-    db = DatabaseManager()
-    response = await db.table("messages").select("*").eq("server_id", server_id).execute()
+    response: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").eq("server_id", server_id).execute()
     return response.data
 
 
 async def get_build_messages(build_id: int) -> list[MessageRecord]:
     """Get all messages for a build."""
-    db = DatabaseManager()
-    response = await db.table("messages").select("*").eq("build_id", build_id).execute()
+    response: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").eq("build_id", build_id).execute()
     return response.data
 
 
-async def get_message(server_id: int, submission_id: int) -> MessageRecord | None:
+async def get_message(server_id: int, build_id: int) -> MessageRecord | None:
+    """Get the unique message for a build in a server"""
     db = DatabaseManager()
-    server_record = (
-        await db.table("messages").select("*").eq("server_id", server_id).eq("build_id", submission_id).execute()
+    server_record: APIResponse[MessageRecord] = (
+        await db.table("messages").select("*").eq("server_id", server_id).eq("build_id", build_id).execute()
     )
     if len(server_record.data) == 0:
         return None
@@ -39,9 +40,9 @@ async def add_message(
     server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str | None = None
 ) -> None:
     """Add a message to the database."""
-    db = DatabaseManager()
     await (
-        db.table("messages")
+        DatabaseManager()
+        .table("messages")
         .insert(
             {
                 "server_id": server_id,
@@ -55,10 +56,9 @@ async def add_message(
     )
 
 
-async def update_message(message_id: int) -> None:
+async def update_message_edited_time(message_id: int) -> None:
     """Update the edited time of a message."""
-    db = DatabaseManager()
-    await db.table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
+    await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
 async def delete_message(server_id: int, build_id: int) -> list[int]:
@@ -75,8 +75,9 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
         A list of message ids that were deleted.
     """
     db = DatabaseManager()
-    response = (
-        await db.table("messages")
+    response: APIResponse[MessageRecord] = (
+        await db
+        .table("messages")
         .select("message_id", count=CountMethod.exact)
         .eq("server_id", server_id)
         .eq("build_id", build_id)

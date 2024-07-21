@@ -6,8 +6,11 @@ from discord import TextChannel, VoiceChannel, StageChannel, Thread
 
 from database.schema import RecordCategory, DoorOrientationName
 
+GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread
+"""These are the types of channels in a guild that a message can be sent to."""
 
-class SubmissionCommandResponseT(TypedDict, total=False):
+
+class SubmissionCommandResponse(TypedDict, total=False):
     """Response from the submit or edit command."""
 
     submission_id: int | None
@@ -36,6 +39,3 @@ class SubmissionCommandResponseT(TypedDict, total=False):
     server_ip: str | None
     coordinates: str | None
     command_to_get_to_build: str | None
-
-
-GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread

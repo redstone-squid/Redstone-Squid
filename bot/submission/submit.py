@@ -1,8 +1,11 @@
-import re
-from typing import Literal, cast, TYPE_CHECKING, Any, override
+"""A cog with commands to submit, view, confirm and deny submissions."""
+# from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
+
+from collections.abc import Sequence
+from typing import Literal, cast, TYPE_CHECKING, Any
 
 import discord
-from discord import InteractionResponse, Webhook
+from discord import InteractionResponse, Guild
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -12,27 +15,25 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
-from discord.ui import Button, View
 
-import database.message as msg
-import bot.config as config
-import bot.submission.post as post
-import bot.utils as utils
+from bot import utils, config
+from bot.submission.ui import BuildSubmissionForm, ConfirmationView
+from database import message as msg
 from database.builds import get_all_builds, Build
 from database.enums import Status, Category
-from bot.schema import SubmissionCommandResponseT
-from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
+from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage
+from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
-    from discord.types.interactions import SelectMessageComponentInteractionData
+    from bot.main import RedstoneSquid
 
 submission_roles = ["Admin", "Moderator", "Redstoner"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
 class SubmissionsCog(Cog, name="Submissions"):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
 
     @hybrid_group(name="submissions", invoke_without_command=True)
@@ -76,7 +77,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     @staticmethod
     def is_owner_server(ctx: Context):
-        if not ctx.guild or ctx.guild.id == config.OWNER_SERVER_ID:
+        if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
             # TODO: Make a custom error for this.
             # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
             raise commands.CommandError("This command can only be executed on certain servers.")
@@ -97,9 +98,9 @@ class SubmissionsCog(Cog, name="Submissions"):
                 return await sent_message.edit(embed=error_embed)
 
             await build.confirm()
-            await post.post_build(self.bot, build)
+            await self.post_build(build)
 
-            success_embed = utils.info_embed("Success", "Submission has successfully been confirmed.")
+            success_embed = utils.info_embed("Success", "Submission has been confirmed.")
             return await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name="deny")
@@ -116,7 +117,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             await build.deny()
 
-            success_embed = utils.info_embed("Success", "Submission has successfully been denied.")
+            success_embed = utils.info_embed("Success", "Submission has been denied.")
             return await sent_message.edit(embed=success_embed)
 
     # @submission_hybrid_group.command("send_all")
@@ -129,9 +130,9 @@ class SubmissionsCog(Cog, name="Submissions"):
             unsent_builds = await msg.get_unsent_builds(ctx.guild.id)
 
             for build in unsent_builds:
-                await post.post_build_to_server(self.bot, build, ctx.guild.id)
+                await self.post_build(build, guilds=[ctx.guild])
 
-            success_embed = utils.info_embed("Success", "All posts have been successfully sent.")
+            success_embed = utils.info_embed("Success", "All posts have been sent.")
             return await sent_message.edit(embed=success_embed)
 
     @hybrid_command(name="versions")
@@ -140,7 +141,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         await ctx.send(str(config.VERSIONS_LIST))
 
     # fmt: off
-    class SubmitFlags(commands.FlagConverter):  # noqa: E501
+    class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
@@ -179,7 +180,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            fmt_data = format_submission_input(ctx, cast(SubmissionCommandResponseT, dict(flags)))
+            fmt_data = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             build = Build.from_dict(fmt_data)
 
             # TODO: Stop hardcoding this
@@ -199,7 +200,30 @@ class SubmissionsCog(Cog, name="Submissions"):
                 f"Build submitted successfully!\nThe submission ID is: {build.id}",
             )
             await message.edit(embed=success_embed)
-            await post.post_build(self.bot, build)
+            await self.post_build(build)
+
+    async def post_build(self, build: Build, *, guilds: Sequence[Guild] | None = None) -> None:
+        """Posts a submission to the appropriate discord channels.
+
+        Args:
+            build (Build): The build to post.
+            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds. Defaults to None.
+        """
+        # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
+        if build.id is None:
+            raise ValueError("Build id is None.")
+
+        if guilds is None:
+            guilds = self.bot.guilds
+
+        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
+        em = build.generate_embed()
+
+        for channel_id in channel_ids:
+            channel = self.bot.get_channel(channel_id)
+            assert isinstance(channel, GuildMessageable)
+            message = await channel.send(embed=em)
+            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id)
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
@@ -218,6 +242,20 @@ class SubmissionsCog(Cog, name="Submissions"):
         followup: discord.Webhook = ctx.interaction.followup  # type: ignore
 
         await followup.send("Use the select menus then click the button", view=view)
+        await view.wait()
+        if view.value is None:
+            return await followup.send("Submission canceled due to inactivity", ephemeral=True)
+        elif view.value is False:
+            return await followup.send("Submission canceled by user", ephemeral=True)
+        else:
+            build = view.build
+            await build.save()
+            await followup.send(
+                "Here is a preview of the submission. Use /edit if you have made a mistake",
+                embed=build.generate_embed(),
+                ephemeral=True,
+            )
+            await self.post_build(build)
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
@@ -264,13 +302,13 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            update_values = format_submission_input(ctx, cast(SubmissionCommandResponseT, dict(flags)))
+            update_values = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             submission.update_local(update_values)
             preview_embed = submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-            view = utils.ConfirmationView()
+            view = ConfirmationView()
             preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
             await view.wait()
 
@@ -280,16 +318,99 @@ class SubmissionsCog(Cog, name="Submissions"):
             elif view.value:
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await submission.save()
-                await post.update_build_posts(self.bot, submission)
+                await self.update_build_messages(submission)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
             else:
                 await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
 
+    async def update_build_message(self, channel_id: int, message_id: int, build_id: int) -> None:
+        """Updates a post according to the information given by the build_id."""
+        # TODO: Check whether the message_id corresponds to the build_id
+        build = await Build.from_id(build_id)
+        if build is None:
+            raise ValueError(f"Build not found with id: {build_id}")
 
-def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> dict[str, Any]:
+        em = build.generate_embed()
+        channel = self.bot.get_channel(channel_id)
+        if not isinstance(channel, discord.PartialMessageable):
+            raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
+
+        message = await channel.fetch_message(message_id)
+        await message.edit(embed=em)
+        await msg.update_message_edited_time(message.id)
+
+    async def update_build_messages(self, build: Build) -> None:
+        """Updates all messages which are posts for a build."""
+        if build.id is None:
+            raise ValueError("Build id is None.")
+
+        # Get all messages for a build
+        messages = await msg.get_build_messages(build.id)
+        em = build.generate_embed()
+
+        for message in messages:
+            channel = self.bot.get_channel(message["channel_id"])
+            if not isinstance(channel, discord.PartialMessageable):
+                raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
+
+            message = await channel.fetch_message(message["message_id"])
+            await message.edit(embed=em)
+            await msg.update_message_edited_time(message.id)
+
+    @Cog.listener(name="on_raw_reaction_add")
+    async def confirm_record(self, payload: discord.RawReactionActionEvent):
+        """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
+        # --- A bunch of checks to make sure the reaction is valid ---
+        # Must be in a guild
+        if (guild_id := payload.guild_id) is None:
+            return
+
+        # Must be in the vote channel
+        vote_channel_id = await get_server_setting(guild_id, "Vote")
+        if vote_channel_id is None or payload.channel_id != vote_channel_id:
+            return
+
+        # Must be users that are allowed to vote
+        if payload.user_id != config.OWNER_ID:
+            return
+
+        # The message must be from the bot
+        message: discord.Message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)  # type: ignore[attr-defined]
+        if message.author.id != self.bot.user.id:  # type: ignore[attr-defined]
+            return
+
+        # A build ID must be associated with the message
+        build_id = await msg.get_build_id_by_message(payload.message_id)
+        if build_id is None:
+            return
+
+        # The submission status must be pending
+        submission = await Build.from_id(build_id)
+        assert submission is not None
+        if submission.submission_status != Status.PENDING:
+            return
+        # --- End of checks ---
+
+        # If the reaction is a thumbs up, confirm the submission
+        if payload.emoji.name == "👍":
+            # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
+            await submission.confirm()
+            message_ids = await msg.delete_message(guild_id, build_id)
+            await self.post_build(submission)
+            for message_id in message_ids:
+                vote_channel = self.bot.get_channel(vote_channel_id)
+                if isinstance(vote_channel, GuildMessageable):
+                    message = await vote_channel.fetch_message(message_id)
+                    await message.delete()
+                else:
+                    # TODO: Add a check when adding vote channels to the database
+                    raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
+
+
+def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
     """Formats the submission data from what is passed in commands to something recognizable by Build."""
     # Union of all the /submit and /edit command options
-    parsable_signatures = SubmissionCommandResponseT.__annotations__.keys()
+    parsable_signatures = SubmissionCommandResponse.__annotations__.keys()
     if not all(key in parsable_signatures for key in data):
         unknown_keys = [key for key in data if key not in parsable_signatures]
         raise ValueError(
@@ -366,208 +487,6 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponseT) -> d
     return fmt_data
 
 
-class SubmissionModal(discord.ui.Modal):
-    def __init__(self, build: Build):
-        super().__init__(title="Submit Your Build")
-        self.build = build
-
-        # Door size
-        self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g. 2x2 (piston door)")
-
-        # Pattern
-        self.pattern = discord.ui.TextInput(label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False)
-
-        # Dimensions
-        self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=True)
-
-        # Restrictions
-        self.restrictions = discord.ui.TextInput(
-            label="Restrictions",
-            placeholder="e.g., Seamless, Full Flush",
-            required=False,
-        )
-
-        # Additional Information
-        self.additional_info = discord.ui.TextInput(
-            label="Additional Information",
-            style=discord.TextStyle.paragraph,
-            required=False,
-        )
-
-        self.add_item(self.door_size)
-        self.add_item(self.pattern)
-        self.add_item(self.dimensions)
-        self.add_item(self.restrictions)
-        self.add_item(self.additional_info)
-
-    @override
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()  # type: ignore
-
-        self.build.door_dimensions = utils.parse_hallway_dimensions(self.door_size.value)
-        self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
-        self.build.dimensions = utils.parse_dimensions(self.dimensions.value)  # type: ignore
-        await self.build.set_restrictions(self.restrictions.value.split(", "))
-
-        # Extract IGN
-        ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
-        if ign_match:
-            igns = ign_match.groups()
-            self.build.creators_ign = [ign.strip() for ign in igns]
-
-        # Extract video link
-        video_match = re.search(
-            r"\bvideo:\s*(https?://[^\s,]+)(?:,|$)",
-            self.additional_info.value,
-            re.IGNORECASE,
-        )
-        if video_match:
-            video_links = video_match.groups()
-            self.build.video_urls = [video_link.strip() for video_link in video_links]
-
-        # Extract download link
-        download_match = re.search(
-            r"\bdownload:\s*(https?://[^\s,]+)(?:,|$)",
-            self.additional_info.value,
-            re.IGNORECASE,
-        )
-        if download_match:
-            download_links = download_match.groups()
-            self.build.world_download_urls = [download_link.strip() for download_link in download_links]
-
-
-class AdditionalSubmissionInfoButton(Button):
-    def __init__(self, build: Build):
-        self.build = build
-        super().__init__(
-            label="Add more Information",
-            style=discord.ButtonStyle.primary,
-            custom_id="open_modal",
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        interaction_response: InteractionResponse = interaction.response  # type: ignore
-        await interaction_response.send_modal(SubmissionModal(self.build))
-
-
-class RecordCategorySelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=category) for category in RECORD_CATEGORIES]
-        super().__init__(
-            placeholder="Choose the record category",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast(SelectMessageComponentInteractionData, interaction.data)
-        self.build.record_category = data["values"][0]  # type: ignore
-        await interaction.response.defer()  # type: ignore
-
-
-class DoorTypeSelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=door_type) for door_type in DOOR_ORIENTATION_NAMES]
-        super().__init__(
-            placeholder="Choose the door type",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast(SelectMessageComponentInteractionData, interaction.data)
-        self.build.door_orientation_type = data["values"][0]  # type: ignore
-        await interaction.response.defer()  # type: ignore
-
-
-class VersionsSelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=version) for version in config.VERSIONS_LIST]
-        super().__init__(
-            placeholder="Choose the versions the door works in",
-            min_values=1,
-            max_values=19,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast(SelectMessageComponentInteractionData, interaction.data)
-        self.build.functional_versions = data["values"]
-        await interaction.response.defer()  # type: ignore
-
-
-class DirectonalityLocationalitySelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [
-            discord.SelectOption(label="Directional"),
-            discord.SelectOption(label="Locational"),
-        ]
-
-        super().__init__(
-            placeholder="Choose how reliable the the door is",
-            min_values=0,
-            max_values=2,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast(SelectMessageComponentInteractionData, interaction.data)
-        self.build.miscellaneous_restrictions = data["values"]
-        await interaction.response.defer()  # type: ignore
-
-
-class BuildSubmissionForm(View):
-    def __init__(self, *, timeout: float | None = 180.0):
-        super().__init__(timeout=timeout)
-        build = Build()
-
-        # Assumptions
-        build.submission_status = Status.PENDING
-        build.category = Category.DOOR
-
-        self.build = build
-        self.add_item(RecordCategorySelect(self.build))
-        self.add_item(DoorTypeSelect(self.build))
-        self.add_item(VersionsSelect(self.build))
-        self.add_item(DirectonalityLocationalitySelect(self.build))
-        self.add_item(AdditionalSubmissionInfoButton(self.build))
-
-    @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
-    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()  # type: ignore
-
-        self.build.submitter_id = interaction.user.id
-
-        await self.build.save()
-
-        followup: Webhook = interaction.followup  # type: ignore
-        # Shows the submission to the user
-        await followup.send(
-            "Here is a preview of the submission. Use /edit if you have made a mistake",
-            embed=self.build.generate_embed(),
-            ephemeral=True,
-        )
-
-        await post.post_build(interaction.client, self.build)
-
-
-async def setup(bot: commands.Bot):
+async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    # Cache the restrictions
-    await Build.fetch_all_restrictions()
     await bot.add_cog(SubmissionsCog(bot))

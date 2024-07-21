@@ -4,28 +4,34 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import override
+from collections.abc import Iterable
+from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar, Awaitable
 
 import discord
-from discord import User
+from discord import User, Message
 from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
+from bot.submission.submit import SubmissionsCog
 from database.database import DatabaseManager
 from database.utils import utcnow
 from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog
-from bot.submission.voting import VotingCog
+
+if TYPE_CHECKING:
+    T = TypeVar('T')
+    P = ParamSpec('P')
+    MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]
 
 
 class Listeners(Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
+    def __init__(self, bot: RedstoneSquid):
+        self.bot: RedstoneSquid = bot
 
         if not self.bot.owner_id:
             raise RuntimeError("Owner ID not set.")
@@ -85,7 +91,7 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         await self.log(log_message, dm_owner=(not owner_dmed_bot))
 
     @Cog.listener("on_command_error")
-    async def log_command_error(self, ctx: Context, exception: CommandError):
+    async def log_command_error(self, ctx: Context[RedstoneSquid], exception: CommandError):
         """Global error handler for the bot."""
         command = ctx.command
         if command and command.has_error_handler():
@@ -99,7 +105,7 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
 
 
 class RedstoneSquid(Bot):
-    def __init__(self, command_prefix: str):
+    def __init__(self, command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]):
         super().__init__(
             command_prefix=command_prefix,
             owner_id=OWNER_ID,
@@ -113,10 +119,9 @@ class RedstoneSquid(Bot):
         await DatabaseManager.setup()
         await self.add_cog(Miscellaneous(self))
         await self.add_cog(SettingsCog(self))
-        await self.load_extension("bot.submission.submit")
+        await self.add_cog(SubmissionsCog(self))
         await self.add_cog(Listeners(self))
         await self.add_cog(HelpCog(self))
-        await self.add_cog(VotingCog(self))
         await self.load_extension("jishaku")
 
 
@@ -124,7 +129,7 @@ async def main():
     """Main entry point for the bot."""
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
 
-    async with RedstoneSquid(prefix) as bot:
+    async with RedstoneSquid(command_prefix=commands.when_mentioned_or(prefix)) as bot:
         discord.utils.setup_logging()
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")

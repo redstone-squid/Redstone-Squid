@@ -1,4 +1,6 @@
-from typing import Optional, Literal
+from __future__ import annotations
+
+from typing import Literal, TYPE_CHECKING
 
 import discord
 import discord.ext.commands as commands
@@ -8,10 +10,13 @@ from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
+
 
 class Miscellaneous(Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
+    def __init__(self, bot: RedstoneSquid):
+        self.bot: RedstoneSquid = bot
 
     @hybrid_command()
     async def invite_link(self, ctx: Context):
@@ -52,7 +57,7 @@ class Miscellaneous(Cog):
     @command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:  # fmt: skip
+    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
         """Syncs the slash commands with the discord API."""
         if not guilds:
             if spec == "~":
@@ -128,6 +133,6 @@ class Miscellaneous(Cog):
             raise ValueError("This is a test error.")
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))

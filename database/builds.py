@@ -12,8 +12,9 @@ from postgrest.types import CountMethod
 
 import bot.config
 from database.schema import BuildRecord, DoorRecord, TypeRecord, RestrictionRecord, Info, VersionsRecord, \
-    UnknownRestrictions, RecordCategory, DoorOrientationName
+    UnknownRestrictions, RecordCategory, DoorOrientationName, ChannelPurpose
 from database.database import DatabaseManager
+from database.server_settings import get_server_setting
 from database.utils import utcnow
 from database.enums import Status, Category
 from bot import utils
@@ -247,6 +248,34 @@ class Build:
 
         return build
 
+    def get_channel_type_to_post_to(self: Build) -> ChannelPurpose:
+        """Gets the type of channel to post a submission to."""
+        status = self.submission_status
+        if status == Status.PENDING:
+            return "Vote"
+        elif status == Status.DENIED:
+            raise ValueError("Denied submissions should not be posted.")
+
+        if self.record_category is None:
+            return "Builds"
+        else:
+            return self.record_category
+
+    async def get_channel_ids_to_post_to(self: Build, guild_ids: list[int]) -> list[int]:
+        """Gets all channels which this build should be posted to."""
+        # Get channel type to post submission to
+        channel_purpose = self.get_channel_type_to_post_to()
+        # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
+
+        channels: list[int] = []
+        # For each server the bot can see
+        for guild_id in guild_ids:
+            channel_id = await get_server_setting(guild_id, channel_purpose)
+            if channel_id:
+                channels.append(channel_id)
+
+        return channels
+
     async def load(self) -> Build:
         """
         Loads the build from the database. All previous data is overwritten.
@@ -479,7 +508,7 @@ class Build:
         """
         self.submission_status = Status.DENIED
         db = DatabaseManager()
-        response = (
+        response: APIResponse[BuildRecord] = (
             await db.table("builds")
             .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
             .eq("id", self.id)
@@ -642,7 +671,7 @@ class Build:
         return fields
 
 
-async def get_all_builds(submission_status: Optional[Status] = None) -> list[Build]:
+async def get_all_builds(submission_status: Status | None = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:
