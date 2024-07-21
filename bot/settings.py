@@ -1,5 +1,7 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
-from typing import cast
+from __future__ import annotations
+
+from typing import cast, TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -12,7 +14,10 @@ from database.server_settings import (
 )
 import bot.utils as utils
 from database.schema import ChannelPurpose, CHANNEL_PURPOSES
-from bot.schema import GuildMessageable
+from bot._types import GuildMessageable
+
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 channel_settings_roles = ["Admin", "Moderator"]
 
@@ -20,7 +25,7 @@ channel_settings_roles = ["Admin", "Moderator"]
 
 
 class SettingsCog(Cog, name="Settings"):
-    def __init__(self, bot: Bot):
+    def __init__(self, bot: RedstoneSquid):
         self.bot = bot
 
     @hybrid_group(name="settings", invoke_without_command=True)
@@ -47,11 +52,15 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
     @has_any_role(*channel_settings_roles)
-    async def query_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
+    async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
-            result_channel = await get_channel_for(ctx.guild, channel_purpose)
+            channel_id = await get_server_setting(ctx.guild.id, channel_purpose)
+            if channel_id:
+                result_channel = ctx.bot.get_channel(channel_id)
+            else:
+                result_channel = None
 
             if result_channel is None:
                 em = utils.info_embed(
@@ -108,13 +117,6 @@ class SettingsCog(Cog, name="Settings"):
             await sent_message.edit(embed=success_embed)
 
 
-async def get_channel_for(server: discord.Guild, channel_purpose: ChannelPurpose) -> GuildMessageable | None:
-    """Gets the channel for a specific purpose from the server settings table."""
-    channel_id = await get_server_setting(server.id, channel_purpose)
-    if channel_id:
-        return server.get_channel(channel_id)  # pyright: ignore [reportReturnType]
-
-
 async def get_settable_channels(
     server: discord.Guild,
 ) -> dict[ChannelPurpose, GuildMessageable | None]:
@@ -130,6 +132,6 @@ async def get_settable_channels(
     return channels
 
 
-async def setup(bot: Bot):
+async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

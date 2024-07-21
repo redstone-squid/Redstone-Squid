@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
-from typing import Any, override
+from typing import Any, override, TYPE_CHECKING
 
 import discord
 from discord import app_commands, InteractionResponse
@@ -8,24 +10,27 @@ from discord.ext.commands import Cog, Command, Group, Context
 
 from bot import utils
 
-MORE_INFORMATION = f"Use `/help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
+
+MORE_INFORMATION = "Use `/help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
 
 
 class HelpCog(Cog):
     """Show help for a command or a group of commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: RedstoneSquid):
         self.bot = bot
         self.bot.help_command = Help()
 
     # /help [command]
     @app_commands.command()
-    async def help(self, interaction: discord.Interaction, command: str | None):
+    async def help(self, interaction: discord.Interaction[RedstoneSquid], command: str | None):
         """Show help for a command or a group of commands."""
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
         await response.defer()
-        ctx = await self.bot.get_context(interaction, cls=Context)
+        ctx = await self.bot.get_context(interaction, cls=Context[RedstoneSquid])
         if command is not None:
             await ctx.send_help(command)
         else:
@@ -36,7 +41,7 @@ class HelpCog(Cog):
         self, interaction: discord.Interaction, needle: str
     ) -> list[app_commands.Choice[str]]:
         assert self.bot.help_command
-        ctx = await self.bot.get_context(interaction, cls=Context)
+        ctx = await self.bot.get_context(interaction, cls=Context[RedstoneSquid])
         help_command = self.bot.help_command.copy()
         help_command.context = ctx
         if not needle:
@@ -100,7 +105,7 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        details = []
+        details: list[str] = []
         for cog in cogs:
             details.append(f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}")
         if return_as_list:
@@ -155,6 +160,6 @@ class Help(commands.MinimalHelpCommand):
         await self.get_destination().send(embed=embed)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

@@ -6,7 +6,6 @@ from typing import overload, Literal
 import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ui import View
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 
@@ -149,20 +148,3 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
-
-
-class ConfirmationView(View):
-    """A simple Yes/No style pair of buttons for confirming an action."""
-    def __init__(self, timeout: int = 60):
-        super().__init__(timeout=timeout)
-        self.value = None
-
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = False
-        self.stop()
