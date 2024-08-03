@@ -39,13 +39,13 @@ def help_embed(title: str, description: str | None):
 
 
 @overload
-def parse_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]: ...
+def parse_dimensions(dim_str: str) -> tuple[int, int, int | None]: ...
 
 
 @overload
 def parse_dimensions(
     dim_str: str, *, min_dim: int, max_dim: Literal[3]
-) -> tuple[int | None, int | None, int | None]: ...
+) -> tuple[int, int | None, int | None]: ...
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
