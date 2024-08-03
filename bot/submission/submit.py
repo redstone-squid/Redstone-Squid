@@ -165,9 +165,6 @@ class SubmissionsCog(Cog, name="Submissions"):
         link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
         link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
         link_to_world_download: str = flag(default=None, description='A link to download the world.')
-        server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
-        coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
-        command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
     # fmt: on
 
     @commands.hybrid_command(name="submit")
