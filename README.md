@@ -56,6 +56,11 @@ SUPABASE_KEY = <Replace this with your supabase api key>
 ```
 The schema for the database can be obtained by applying the SQL files in Database/migrations in order.
 
+Catbox is used as a free file hosting service.
+```
+CATBOX_USERHASH = <Replace this with your catbox user hash>
+```
+
 ### Running The Application
 
 The application can now be ran simply with:
