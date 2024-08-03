@@ -15,15 +15,18 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
+from postgrest import APIResponse
 
 from bot import utils, config
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
+from database.database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage
+from bot.utils import RunningMessage, parse_dimensions
 from database.message import get_build_id_by_message
+from database.schema import TypeRecord
 from database.server_settings import get_server_setting
 from database.utils import upload_to_catbox
 
@@ -149,9 +152,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
-        build_width: int = flag(default=None, description='The width of the build.')
-        build_height: int = flag(default=None, description='The height of the build.')
-        build_depth: int = flag(default=None, description='The depth of the build.')
+        build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(default=config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
@@ -278,9 +279,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         door_height: int = flag(default=None, description='The height of the door itself. Like 2x2 piston door.')
         pattern: str = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default=None, description='Door, Skydoor, or Trapdoor.')
-        build_width: int = flag(default=None, description='The width of the build.')
-        build_height: int = flag(default=None, description='The height of the build.')
-        build_depth: int = flag(default=None, description='The depth of the build.')
+        build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(default=None, description='The versions the build works in. Default to newest version. /versions for full list.')
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
@@ -446,19 +445,13 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> di
     else:
         fmt_data["functional_versions"] = []
 
-    fmt_data["width"] = data.get("build_width")
-    fmt_data["height"] = data.get("build_height")
-    fmt_data["depth"] = data.get("build_depth")
+    if (build_size := data.get("build_size")) is not None:
+        build_dimensions = parse_dimensions(build_size)
+        fmt_data["width"], fmt_data["height"], fmt_data["depth"] = build_dimensions
 
     if (door_size := data.get("door_size")) is not None:
-        width, height, depth = utils.parse_dimensions(door_size)
-        fmt_data["door_width"] = width
-        fmt_data["door_height"] = height
-        fmt_data["door_depth"] = depth
-    else:
-        fmt_data["door_width"] = data.get("door_width")
-        fmt_data["door_height"] = data.get("door_height")
-    # fmt_data['door_depth']
+        door_dimensions = parse_dimensions(door_size)
+        fmt_data["door_width"], fmt_data["door_height"], fmt_data["door_depth"] = door_dimensions
 
     if (pattern := data.get("pattern")) is not None:
         fmt_data["door_type"] = pattern.split(", ")

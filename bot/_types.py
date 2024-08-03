@@ -20,9 +20,7 @@ class SubmissionCommandResponse(TypedDict, total=False):
     door_height: int | None
     pattern: str | None
     door_type: DoorOrientationName | None
-    build_width: int | None
-    build_height: int | None
-    build_depth: int | None
+    build_size: str | None
     works_in: str | None
     wiring_placement_restrictions: str | None
     component_restrictions: str | None
