@@ -229,10 +229,10 @@ class SubmissionsCog(Cog, name="Submissions"):
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
 
-        first_image: discord.Attachment = flag(default=None)
-        second_image: discord.Attachment = flag(default=None)
-        third_image: discord.Attachment = flag(default=None)
-        fourth_image: discord.Attachment = flag(default=None)
+        first_attachment: discord.Attachment = flag(default=None)
+        second_attachment: discord.Attachment = flag(default=None)
+        third_attachment: discord.Attachment = flag(default=None)
+        fourth_attachment: discord.Attachment = flag(default=None)
 
     @commands.hybrid_command(name="submit_form")
     async def submit_form(self, ctx: Context, flags: SubmitFormFlags):
