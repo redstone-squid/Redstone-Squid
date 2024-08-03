@@ -184,10 +184,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
 
 
 class BuildSubmissionForm(View):
-    def __init__(self, *, timeout: float | None = 180.0):
+    def __init__(self, build: Build, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
-        build = Build()
-
         # Assumptions
         build.submission_status = Status.PENDING
         build.category = Category.DOOR

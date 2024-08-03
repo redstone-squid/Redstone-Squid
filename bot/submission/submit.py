@@ -239,7 +239,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         """Submits a build to the database."""
         await ctx.defer()
 
-        view = BuildSubmissionForm()
+        build = Build()
+        view = BuildSubmissionForm(build)
         followup: discord.Webhook = ctx.interaction.followup  # type: ignore
 
         await followup.send("Use the select menus then click the button", view=view)
@@ -249,7 +250,6 @@ class SubmissionsCog(Cog, name="Submissions"):
         elif view.value is False:
             return await followup.send("Submission canceled by user", ephemeral=True)
         else:
-            build = view.build
             await build.save()
             await followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
