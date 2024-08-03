@@ -73,9 +73,9 @@ class Build:
         self.information: Info | None = None
         self.creators_ign: Sequence[str] | None = None
 
-        self.image_urls: Sequence[str] | None = None
-        self.video_urls: Sequence[str] | None = None
-        self.world_download_urls: Sequence[str] | None = None
+        self.image_urls: list[str] = []
+        self.video_urls: list[str] = []
+        self.world_download_urls: list[str] = []
 
         # TODO: Put these three into server_info
         self.server_ip: str | None = None
@@ -227,18 +227,18 @@ class Build:
 
         build.information = data["information"]
 
-        creators: list[dict] = data.get("build_creators", [])
+        creators: list[dict[str, Any]] = data.get("build_creators", [])
         build.creators_ign = [creator["creator_ign"] for creator in creators]
 
-        versions: list[dict] = data.get("versions", [])
+        versions: list[dict[str, Any]] = data.get("versions", [])
         build.functional_versions = [version["full_name_temp"] for version in versions]
 
-        links: list[dict] = data.get("build_links", [])
+        links: list[dict[str, Any]] = data.get("build_links", [])
         build.image_urls = [link["url"] for link in links if link["media_type"] == "image"]
         build.video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         build.world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
 
-        server_info: dict = data["server_info"]
+        server_info: dict[str, Any] = data["server_info"]
         if server_info:
             build.server_ip = server_info.get("server_ip")
             build.coordinates = server_info.get("coordinates")

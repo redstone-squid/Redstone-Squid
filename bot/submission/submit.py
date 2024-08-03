@@ -240,6 +240,15 @@ class SubmissionsCog(Cog, name="Submissions"):
         await ctx.defer()
 
         build = Build()
+        for name, attachment in flags:
+            assert isinstance(attachment, discord.Attachment)
+            if attachment.content_type.startswith("image"):  # pyright: ignore [reportOptionalMemberAccess]
+                build.image_urls.append(attachment.url)  # FIXME: This won't actually work because discord will remove the attachment
+            elif attachment.content_type.startswith("video"):
+                build.video_urls.append(attachment.url)
+            else:
+                raise ValueError(f"Unsupported content type: {attachment.content_type}")
+
         view = BuildSubmissionForm(build)
         followup: discord.Webhook = ctx.interaction.followup  # type: ignore
 
@@ -326,7 +335,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
         """Updates a post according to the information given by the build."""
-        if get_build_id_by_message(message_id) != build.id:
+        if await get_build_id_by_message(message_id) != build.id:
             raise ValueError("The message_id does not correspond to the build_id.")
 
         em = build.generate_embed()
