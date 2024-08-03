@@ -11,7 +11,6 @@ from database.utils import utcnow
 from database.database import DatabaseManager
 
 
-# FIXME: (server_id, build_id) is not guaranteed to be a superkey, but it is assumed to be unique.
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
 async def get_server_messages(server_id: int) -> list[MessageRecord]:
     """Get all tracked bot messages in a server."""
@@ -29,16 +28,13 @@ async def get_build_messages(build_id: int) -> list[MessageRecord]:
     return response.data
 
 
-async def get_message(server_id: int, build_id: int) -> MessageRecord | None:
+async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     """Get the unique message for a build in a server"""
     db = DatabaseManager()
     server_record: APIResponse[MessageRecord] = (
         await db.table("messages").select("*").eq("server_id", server_id).eq("build_id", build_id).execute()
     )
-    if len(server_record.data) == 0:
-        return None
-    # FIXME: this assumes that the server_id, build_id pair is unique
-    return server_record.data[0]
+    return server_record.data
 
 
 async def add_message(
