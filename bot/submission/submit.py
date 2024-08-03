@@ -23,6 +23,7 @@ from database.builds import get_all_builds, Build
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage
+from database.message import get_build_id_by_message
 from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
@@ -323,12 +324,10 @@ class SubmissionsCog(Cog, name="Submissions"):
             else:
                 await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
 
-    async def update_build_message(self, channel_id: int, message_id: int, build_id: int) -> None:
-        """Updates a post according to the information given by the build_id."""
-        # TODO: Check whether the message_id corresponds to the build_id
-        build = await Build.from_id(build_id)
-        if build is None:
-            raise ValueError(f"Build not found with id: {build_id}")
+    async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
+        """Updates a post according to the information given by the build."""
+        if get_build_id_by_message(message_id) != build.id:
+            raise ValueError("The message_id does not correspond to the build_id.")
 
         em = build.generate_embed()
         channel = self.bot.get_channel(channel_id)
