@@ -371,6 +371,14 @@ class SubmissionsCog(Cog, name="Submissions"):
             await message.edit(embed=em)
             await msg.update_message_edited_time(message.id)
 
+    @commands.hybrid_command()
+    async def list_patterns(self, ctx: Context):
+        """Lists all the available patterns."""
+        async with RunningMessage(ctx) as sent_message:
+            patterns: APIResponse[TypeRecord] = await DatabaseManager().table("types").select("*").execute()
+            names = [pattern["name"] for pattern in patterns.data]
+            await sent_message.edit(content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names)))
+
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
