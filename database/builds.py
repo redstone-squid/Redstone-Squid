@@ -215,6 +215,7 @@ class Build:
         build.door_orientation_type = data["doors"]["orientation"]
         build.door_width = data["doors"]["door_width"]
         build.door_height = data["doors"]["door_height"]
+        build.door_depth = data["doors"]["door_depth"]
         build.normal_closing_time = data["doors"]["normal_closing_time"]
         build.normal_opening_time = data["doors"]["normal_opening_time"]
         build.visible_closing_time = data["doors"]["visible_closing_time"]
