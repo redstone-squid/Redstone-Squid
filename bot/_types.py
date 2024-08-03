@@ -13,7 +13,7 @@ GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread
 class SubmissionCommandResponse(TypedDict, total=False):
     """Response from the submit or edit command."""
 
-    submission_id: int | None
+    build_id: int | None
     record_category: RecordCategory | None
     door_size: str | None
     door_width: int | None

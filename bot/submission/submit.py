@@ -276,7 +276,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: off
     class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""
-        submission_id: int = flag(description='The ID of the submission to edit.')
+        build_id: int = flag(description='The ID of the submission.')
         door_width: int = flag(default=None, description='The width of the door itself. Like 2x2 piston door.')
         door_height: int = flag(default=None, description='The height of the door itself. Like 2x2 piston door.')
         pattern: str = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
@@ -313,7 +313,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         async with RunningMessage(followup) as sent_message:
-            submission = await Build.from_id(flags.submission_id)
+            submission = await Build.from_id(flags.build_id)
             if submission is None:
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
