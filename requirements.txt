@@ -145,9 +145,13 @@ questionary==2.0.1
 realtime==1.0.6
     # via supabase-py-async
 requests==2.32.3
-    # via requests-oauthlib
+    # via
+    #   requests-oauthlib
+    #   requests-toolbelt
 requests-oauthlib==2.0.0
     # via google-auth-oauthlib
+requests-toolbelt==1.0.0
+    # via -r requirements.in
 rsa==4.9
     # via
     #   google-auth

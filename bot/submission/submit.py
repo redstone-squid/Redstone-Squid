@@ -25,6 +25,7 @@ from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage
 from database.message import get_build_id_by_message
 from database.server_settings import get_server_setting
+from database.utils import upload_to_catbox
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -241,13 +242,18 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         build = Build()
         for name, attachment in flags:
+            if attachment is None:
+                continue
+
             assert isinstance(attachment, discord.Attachment)
-            if attachment.content_type.startswith("image"):  # pyright: ignore [reportOptionalMemberAccess]
-                build.image_urls.append(attachment.url)  # FIXME: This won't actually work because discord will remove the attachment
-            elif attachment.content_type.startswith("video"):
-                build.video_urls.append(attachment.url)
-            else:
+            if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
                 raise ValueError(f"Unsupported content type: {attachment.content_type}")
+
+            url = upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
+            if attachment.content_type.startswith("image"):  # pyright: ignore [reportOptionalMemberAccess]
+                build.image_urls.append(url)
+            elif attachment.content_type.startswith("video"):  # pyright: ignore [reportOptionalMemberAccess]
+                build.video_urls.append(url)
 
         view = BuildSubmissionForm(build)
         followup: discord.Webhook = ctx.interaction.followup  # type: ignore
