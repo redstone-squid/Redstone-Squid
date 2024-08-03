@@ -224,7 +224,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
-            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id)
+            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id, "build_post")
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""

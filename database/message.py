@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
@@ -38,7 +40,7 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
 
 
 async def add_message(
-    server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: str | None = None
+    server_id: int, submission_id: int, channel_id: int, message_id: int, purpose: Literal["build_post"]
 ) -> None:
     """Add a message to the database."""
     await (
@@ -51,6 +53,7 @@ async def add_message(
                 "channel_id": channel_id,
                 "message_id": message_id,
                 "edited_time": utcnow(),
+                "purpose": purpose,
             }
         )
         .execute()
