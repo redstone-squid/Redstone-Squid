@@ -30,7 +30,7 @@ class HelpCog(Cog):
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
         await response.defer()
-        ctx = await self.bot.get_context(interaction, cls=Context[RedstoneSquid])
+        ctx = await self.bot.get_context(interaction, cls=Context)
         if command is not None:
             await ctx.send_help(command)
         else:
