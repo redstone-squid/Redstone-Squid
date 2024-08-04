@@ -26,13 +26,14 @@ from database.schema import (
 )
 from database.database import DatabaseManager
 from database.server_settings import get_server_setting
+from database.user import add_user
 from database.utils import utcnow
 from database.enums import Status, Category
 from bot import utils
 from bot.config import VERSIONS_LIST
 
 
-all_build_columns = "*, versions(*), build_links(*), build_creators(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
+all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
@@ -228,8 +229,8 @@ class Build:
 
         build.information = data["information"]
 
-        creators: list[dict[str, Any]] = data.get("build_creators", [])
-        build.creators_ign = [creator["creator_ign"] for creator in creators]
+        creators: list[dict[str, Any]] = data.get("users", [])
+        build.creators_ign = [creator["ign"] for creator in creators]
 
         versions: list[dict[str, Any]] = data.get("versions", [])
         build.functional_versions = [version["full_name_temp"] for version in versions]
@@ -462,9 +463,17 @@ class Build:
 
     async def _update_build_creators_table(self, data: dict[str, Any]) -> None:
         """Updates the build_creators table with the given data."""
-        build_creators_data = list(
-            {"build_id": self.id, "creator_ign": creator} for creator in data.get("creators_ign", [])
-        )
+        db = DatabaseManager()
+        creator_ids = []
+        for creator_ign in data.get("creators_ign", []):
+            response = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
+            if response:
+                creator_ids.append(response.data["id"])
+            else:
+                creator_id = add_user(ign=creator_ign)
+                creator_ids.append(creator_id)
+
+        build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
         if build_creators_data:
             await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
 

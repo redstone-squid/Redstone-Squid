@@ -13,7 +13,9 @@ aiosignal==1.3.1
 annotated-types==0.7.0
     # via pydantic
 anyio==4.4.0
-    # via httpx
+    # via
+    #   httpx
+    #   starlette
 argcomplete==3.3.0
     # via commitizen
 astunparse==1.6.3
@@ -34,7 +36,9 @@ charset-normalizer==3.3.2
     #   commitizen
     #   requests
 click==8.1.7
-    # via jishaku
+    # via
+    #   jishaku
+    #   uvicorn
 colorama==0.4.6
     # via
     #   click
@@ -51,6 +55,8 @@ discord==2.3.2
     # via -r requirements.in
 discord-py==2.4.0
     # via discord
+fastapi==0.112.0
+    # via -r requirements.in
 frozenlist==1.4.1
     # via
     #   aiohttp
@@ -66,7 +72,9 @@ gotrue==2.5.5
 gspread==6.1.2
     # via -r requirements.in
 h11==0.14.0
-    # via httpcore
+    # via
+    #   httpcore
+    #   uvicorn
 h2==4.1.0
     # via httpx
 hpack==4.0.0
@@ -126,6 +134,7 @@ pyasn1-modules==0.4.0
     #   oauth2client
 pydantic==2.8.2
     # via
+    #   fastapi
     #   gotrue
     #   postgrest
 pydantic-core==2.20.1
@@ -165,6 +174,8 @@ sniffio==1.3.1
     # via
     #   anyio
     #   httpx
+starlette==0.37.2
+    # via fastapi
 storage3==0.7.7
     # via supabase-py-async
 strenum==0.4.15
@@ -179,12 +190,15 @@ tomlkit==0.13.0
     # via commitizen
 typing-extensions==4.12.2
     # via
+    #   fastapi
     #   pydantic
     #   pydantic-core
     #   realtime
     #   storage3
 urllib3==2.2.2
     # via requests
+uvicorn==0.30.5
+    # via -r requirements.in
 wcwidth==0.2.13
     # via prompt-toolkit
 websockets==12.0

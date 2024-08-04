@@ -1,13 +1,15 @@
 import re
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal
+from typing import overload, Literal, Any
 
 import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
+from database.database import DatabaseManager
+from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -152,3 +154,33 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
+
+
+async def parse_build_title(title: str) -> dict[str, Any]:
+    """Parses a title into a category and a name.
+
+    A build title should be in the format of:
+    ```
+    [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type> <orientation>
+    ```
+
+    Args:
+        title: The title to parse
+
+    Returns:
+        A dictionary containing the parsed information.
+    """
+    data = {}
+    words = title.split()
+    if words[0].title() in RECORD_CATEGORIES:
+        data["record_category"] = words.pop(0)
+
+    if words[-1].title() not in DOOR_ORIENTATION_NAMES:
+        raise ValueError(f"Invalid orientation. Expected one of {DOOR_ORIENTATION_NAMES}, found {words[-1]}")
+    else:
+        data["category"] = "Door"
+
+    db = DatabaseManager()
+    # Parse component restrictions
+    component_restrictions = await db.table("restrictions").select("name").eq("build_category", data["category"]).eq("type", "component").execute()
+

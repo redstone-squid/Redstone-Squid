@@ -15,6 +15,7 @@ from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
 from bot.submission.submit import SubmissionsCog
+from bot.verify import VerifyCog
 from database.database import DatabaseManager
 from database.utils import utcnow
 from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
@@ -126,6 +127,7 @@ class RedstoneSquid(Bot):
         await self.add_cog(Listeners(self))
         await self.add_cog(HelpCog(self))
         await self.load_extension("jishaku")
+        await self.add_cog(VerifyCog(self))
 
 
 async def main():
