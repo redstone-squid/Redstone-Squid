@@ -5,3 +5,5 @@ supabase-py-async
 python-dotenv
 jishaku
 requests-toolbelt
+fastapi
+uvicorn
