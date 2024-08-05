@@ -21,7 +21,7 @@ class User(BaseModel):
     username: str
 
 
-@app.post("/verify")
+@app.post("/verify", status_code=201)
 async def get_verification_code(user: User, authorization: Annotated[str, Header()]) -> int:
     """Generate a verification code for a user."""
     if authorization != os.environ["SYNERGY_SECRET"]:
