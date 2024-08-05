@@ -3,8 +3,8 @@ from uuid import UUID
 
 import requests
 
-from utils import utcnow
-from database import DatabaseManager
+from database.utils import utcnow
+from database.database import DatabaseManager
 
 
 async def add_user(user_id: int = None, ign: str = None) -> int:
@@ -80,4 +80,4 @@ def get_minecraft_username(user_uuid: str | UUID) -> str | None:
     elif response.status_code == 204:  # No content
         return None
     else:
-        raise ValueError(f"Failed to get username for UUID {user_uuid}.")
+        raise ValueError(f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status_code}.")
