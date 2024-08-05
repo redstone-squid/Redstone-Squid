@@ -1,4 +1,6 @@
 """Handles user data and operations."""
+from uuid import UUID
+
 import requests
 
 from utils import utcnow
@@ -62,15 +64,20 @@ async def unlink_minecraft_account(user_id: int) -> bool:
     return True
 
 
-def get_minecraft_username(user_uuid: str) -> str:
+def get_minecraft_username(user_uuid: str | UUID) -> str | None:
     """Get a user's Minecraft username from their UUID.
 
     Args:
         user_uuid: The user's Minecraft UUID.
 
     Returns:
-        The user's Minecraft username.
+        The user's Minecraft username. None if the UUID is invalid.
     """
     # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
-    response = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{user_uuid}")
-    return response.json()["name"]
+    response = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}")
+    if response.status_code == 200:
+        return response.json()["name"]
+    elif response.status_code == 204:  # No content
+        return None
+    else:
+        raise ValueError(f"Failed to get username for UUID {user_uuid}.")

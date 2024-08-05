@@ -2,11 +2,13 @@
 import os
 import random
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
 from database.database import DatabaseManager
+from database.user import get_minecraft_username
 from database.utils import utcnow
 
 app = FastAPI()
@@ -15,7 +17,7 @@ app = FastAPI()
 class User(BaseModel):
     """A user model."""
 
-    uuid: str
+    uuid: UUID
     username: str
 
 
@@ -25,12 +27,15 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    if get_minecraft_username(user.uuid) != user.username:
+        raise HTTPException(status_code=400, detail="Invalid user data")
+
     db = DatabaseManager()
     # Invalidate existing codes for this user
-    await db.table("verification_codes").update({"valid": False}).eq("minecraft_uuid", user.uuid).gt("expires", utcnow()).execute()
+    await db.table("verification_codes").update({"valid": False}).eq("minecraft_uuid", str(user.uuid)).gt("expires", utcnow()).execute()
 
     code = random.randint(100000, 999999)
-    await db.table("verification_codes").insert({"minecraft_uuid": user.uuid, "username": user.username, "code": code}).execute()
+    await db.table("verification_codes").insert({"minecraft_uuid": str(user.uuid), "username": user.username, "code": code}).execute()
     return code
 
 
