@@ -1,22 +1,36 @@
 """Simple FastAPI server to generate verification codes for users."""
 import os
 import random
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
+from pydantic import BaseModel
 
 from database.database import DatabaseManager
+from database.utils import utcnow
 
 app = FastAPI()
 
 
-@app.get("/verify")
-async def get_verification_code(uuid: str, super_duper_secret: str) -> int:
+class User(BaseModel):
+    """A user model."""
+
+    uuid: str
+    username: str
+
+
+@app.post("/verify")
+async def get_verification_code(user: User, authorization: Annotated[str, Header()]) -> int:
     """Generate a verification code for a user."""
-    if super_duper_secret != os.environ["SYNERGY_SECRET"]:
+    if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    db = DatabaseManager()
+    # Invalidate existing codes for this user
+    await db.table("verification_codes").update({"valid": False}).eq("minecraft_uuid", user.uuid).gt("expires", utcnow()).execute()
+
     code = random.randint(100000, 999999)
-    await DatabaseManager().table("verification_codes").insert({"minecraft_uuid": uuid, "code": code}).execute()
+    await db.table("verification_codes").insert({"minecraft_uuid": user.uuid, "username": user.username, "code": code}).execute()
     return code
 
 

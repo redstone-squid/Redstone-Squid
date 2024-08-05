@@ -35,15 +35,16 @@ async def link_minecraft_account(user_id: int, code: str) -> bool:
     """
     db = DatabaseManager()
 
-    response = await db.table("verification_codes").select("minecraft_uuid").eq("code", code).gt("expires", utcnow()).execute()
-    if not response.data:
+    response = await db.table("verification_codes").select("minecraft_uuid", "minecraft_username").eq("code", code).gt("expires", utcnow()).maybe_single().execute()
+    if response is None:
         return False
-    minecraft_uuid = response.data[0]["minecraft_uuid"]
+    minecraft_uuid = response.data["minecraft_uuid"]
+    minecraft_username = response.data["minecraft_username"]
 
     # TODO: This currently does not check if the ign is already in use without a UUID or discord ID given.
-    response = await db.table("users").update({"minecraft_uuid": minecraft_uuid, "ign": get_minecraft_username(minecraft_uuid)}).eq("discord_id", user_id).execute()
+    response = await db.table("users").update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username}).eq("discord_id", user_id).execute()
     if not response.data:
-        await db.table("users").insert({"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": get_minecraft_username(minecraft_uuid)}).execute()
+        await db.table("users").insert({"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username}).execute()
     return True
 
 
