@@ -97,7 +97,7 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
     try:
         return parse_dimensions(dim_str)
     except ValueError:
-        if match := re.match(r"^(\d+) (wide|high)$", dim_str):
+        if match := re.match(r"^(\d+)\s*(wide|high)$", dim_str):
             size, direction = match.groups()
             if direction == "wide":
                 return int(size), None, None
