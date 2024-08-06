@@ -92,7 +92,7 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
         https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit
 
     Returns:
-        A tuple of the dimensions (width, height)
+        A tuple of the dimensions (width, height, depth).
     """
     try:
         return parse_dimensions(dim_str)
@@ -105,7 +105,7 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
                 return None, int(size), None
         else:
             raise ValueError(
-                "Invalid hallway size. Must be in the format 'width x height' or '<width> wide' or '<height> high'"
+                "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
             )
 
 
