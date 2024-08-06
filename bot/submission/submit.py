@@ -2,10 +2,11 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
+from textwrap import dedent
 from typing import Literal, cast, TYPE_CHECKING, Any
 
 import discord
-from discord import InteractionResponse, Guild
+from discord import InteractionResponse, Guild, Message
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -16,6 +17,7 @@ from discord.ext.commands import (
     flag,
 )
 from postgrest import APIResponse
+from pydantic import ValidationError
 
 from bot import utils, config
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
@@ -24,7 +26,7 @@ from database.builds import get_all_builds, Build
 from database.database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions
+from bot.utils import RunningMessage, parse_dimensions, parse_build_title
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -423,6 +425,33 @@ class SubmissionsCog(Cog, name="Submissions"):
                 else:
                     # TODO: Add a check when adding vote channels to the database
                     raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
+
+    @Cog.listener(name="on_message")
+    async def suggest_parameters_from_title(self, message: Message):
+        """Suggests parameters from the title of the submission."""
+        if message.author.bot:
+            return
+
+        if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
+            return
+
+        title_str = message.content.splitlines()[0]
+        try:
+            title, unparsed = await parse_build_title(title_str)
+        except ValidationError:
+            return
+
+        content = dedent(f"""
+        **Record Category**: {title.record_category}
+        **Component Restrictions**: {title.component_restrictions}
+        **Door Size**: {title.door_size}
+        **Wiring Placement Restrictions**: {title.wiring_placement_restrictions}
+        **Door Type**: {title.door_types}
+        **Orientation**: {title.orientation}
+        
+        **Unparsed**: {unparsed}
+        """)
+        await message.channel.send(content)
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:

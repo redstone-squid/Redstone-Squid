@@ -1,15 +1,20 @@
+from __future__ import annotations
+
 import re
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, Any
+from typing import overload, Literal
 
 import discord
+from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database.database import DatabaseManager
-from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
+from database.schema import DoorOrientationName, RecordCategory
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -161,31 +166,172 @@ class RunningMessage:
         return False
 
 
-async def parse_build_title(title: str) -> dict[str, Any]:
+async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> tuple[DoorTitle, str]:
     """Parses a title into a category and a name.
 
     A build title should be in the format of:
     ```
-    [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type> <orientation>
+    [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
     ```
 
     Args:
         title: The title to parse
+        mode: The mode to parse the title in. Either "ai" or "manual".
 
     Returns:
         A dictionary containing the parsed information.
     """
-    data = {}
+    if mode == "ai":
+        llm = ChatOpenAI(model="gpt-4o-mini")
+        raise NotImplementedError
+    elif mode == "manual":
+        return parse_piston_door_title(title)
+
+
+class DoorTitle(BaseModel):
+    record_category: RecordCategory | None = Field(..., description="")
+    component_restrictions: list[str] = Field(..., description="")
+    door_size: tuple[int | None, int | None, int | None] = Field(..., description="")
+    wiring_placement_restrictions: list[str] = Field(..., description="")
+    door_types: list[str] = Field(..., description="")
+    orientation: DoorOrientationName | None = Field(..., description="")
+
+
+valid_component_restrictions = ['No Slime Blocks', 'No Honey Blocks', 'No Gravity Blocks', 'No Sticky Pistons', 'Contained Slime Blocks', 'Contained Honey Blocks', 'Only Wiring Slime Blocks', 'Only Wiring Honey Blocks', 'Only Wiring Gravity Blocks', 'No Observers', 'No Note Blocks', 'No Clocks', 'No Entities', 'No Flying Machines', 'Zomba', 'Zombi', 'Torch and Dust Only', 'Redstone Block Only']
+valid_wiring_placement_restrictions = ['Super Seamless', 'Full Seamless', 'Semi Seamless', 'Quart Seamless', 'Dentless', 'Full Trapdoor', 'Flush', 'Deluxe', 'Flush Layout', 'Semi Flush', 'Semi Deluxe', 'Full Floor Hipster', 'Full Ceiling Hipster', 'Full Wall Hipster', 'Semi Floor Hipster', 'Semi Ceiling Hipster', 'Semi Wall Hipster', 'Expandable', 'Full Tileable', 'Semi Tileable']
+valid_door_types = ['Regular', 'Funnel', 'Asdjke', 'Cave', 'Corner', 'Dual Cave Corner', 'Staircase', 'Gold Play Button', 'Vortex', 'Pitch', 'Bar', 'Vertical', 'Yaw', 'Reversed', 'Inverted', 'Dual', 'Vault', 'Iris', 'Onion', 'Stargate', 'Full Lamp', 'Lamp', 'Hidden Lamp', 'Sissy Bar', 'Checkerboard', 'Windows', 'Redstone Block Center', 'Sand', 'Glass Stripe', 'Center Glass', 'Always On Lamp', 'Circle', 'Triangle', 'Right Triangle', 'Banana', 'Diamond', 'Slab-Shifted', 'Rail', 'Dual Rail', 'Carpet', 'Semi TNT', 'Full TNT']
+
+
+def replace_insensitive(string: str, old: str, new: str) -> str:
+    """Replaces a substring in a string case-insensitively.
+
+    Args:
+        string: The string to search and replace in.
+        old: The substring to search for.
+        new: The substring to replace with.
+
+    Returns:
+        The modified string.
+    """
+    pattern = re.compile(re.escape(old), re.IGNORECASE)
+    return pattern.sub(new, string)
+
+
+def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
+    title = title.lower()
+
+    # Define record categories
+    record_categories = ["smallest", "fastest", "first"]
+
+    # Check for record category
+    record_category = None
+    for category in record_categories:
+        if title.startswith(category):
+            record_category = category.capitalize()
+            title = title[len(category):].strip()
+            break
+
+    # Extract door size
+    door_size_match = re.search(r'\d+x\d+(x\d+)?', title)
+    door_size = (None, None, None)
+    if door_size_match:
+        door_size_str = door_size_match.group()
+        door_size = tuple(map(int, door_size_str.split('x')))
+        if len(door_size) == 2:
+            door_size = (*door_size, None)
+        title = replace_insensitive(title, door_size_str, '').strip()
+
+    # Split the remaining title by known door types
+    door_types = []
+    for door_type in valid_door_types:
+        if door_type.lower() in title.lower():
+            door_types.append(door_type)
+            title = replace_insensitive(title, door_type, '').strip()
+
+    # Split remaining by orientation
+    orientation: DoorOrientationName | None = None
+    for orient in ["Door", "Skydoor", "Trapdoor"]:
+        if orient.lower() in title:
+            orientation = orient
+            title = replace_insensitive(title, orient, '').strip()
+            break
+
+    # Remaining words are restrictions
     words = title.split()
-    if words[0].title() in RECORD_CATEGORIES:
-        data["record_category"] = words.pop(0)
 
-    if words[-1].title() not in DOOR_ORIENTATION_NAMES:
-        raise ValueError(f"Invalid orientation. Expected one of {DOOR_ORIENTATION_NAMES}, found {words[-1]}")
-    else:
-        data["category"] = "Door"
+    component_restrictions = []
+    wiring_placement_restrictions = []
+    unparsed = []
+    for word in words:
+        if word.title() in valid_component_restrictions:
+            component_restrictions.append(word.title())
+        elif word.title() in valid_wiring_placement_restrictions:
+            wiring_placement_restrictions.append(word.title())
+        else:
+            unparsed.append(word)
 
+    return DoorTitle(
+        record_category=record_category,
+        component_restrictions=component_restrictions,
+        door_size=door_size,
+        wiring_placement_restrictions=wiring_placement_restrictions,
+        door_types=door_types,
+        orientation=orientation
+    ), ', '.join(unparsed)
+
+
+# --- Unused ---
+@alru_cache()
+async def get_valid_restrictions(type: Literal["component", "wiring-placement"]) -> list[str]:
+    """Gets a list of valid restrictions for a given type.
+
+    Args:
+        type: The type of restriction. Either "component" or "wiring-placement"
+
+    Returns:
+        A list of valid restrictions for the given type.
+    """
     db = DatabaseManager()
-    # Parse component restrictions
-    component_restrictions = await db.table("restrictions").select("name").eq("build_category", data["category"]).eq("type", "component").execute()
+    valid_restrictions_response = await db.table("restrictions").select("name").eq("type", type).execute()
+    return [restriction["name"] for restriction in valid_restrictions_response.data]
 
+
+async def validate_restrictions(restrictions: list[str], type: Literal["component", "wiring-placement"]) -> list[str]:
+    """Validates a list of restrictions to ensure all of them are valid.
+
+    Args:
+        restrictions: The list of restrictions to validate
+        type: The type of restriction. Either "component" or "wiring_placement"
+
+    Returns:
+        The original list of restrictions if all of them are valid.
+
+    Raises:
+        ValueError: If any of the restrictions are invalid.
+    """
+    valid_restrictions = await get_valid_restrictions(type)
+
+    invalid_restrictions = [r for r in restrictions if r not in valid_restrictions]
+    if invalid_restrictions:
+        raise ValueError(f"Invalid {type} restrictions. Found {invalid_restrictions} which are not one of the restrictions in the database.")
+    return restrictions
+
+async def validate_door_types(door_types: list[str]) -> list[str]:
+    """Validates a list of door types to ensure all of them are valid.
+
+    Args:
+        door_types: The list of door types to validate
+
+    Returns:
+        The original list of door types if all of them are valid.
+
+    Raises:
+        ValueError: If any of the door types are invalid.
+    """
+    db = DatabaseManager()
+    valid_door_types_response = await db.table("types").select("name").eq("build_category", "Door").execute()
+    valid_door_types_in_db = [door_type["name"] for door_type in valid_door_types_response.data]
+    invalid_door_types = [dt for dt in door_types if dt not in valid_door_types_in_db]
+    if invalid_door_types:
+        raise ValueError(f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database.")
+    return door_types
