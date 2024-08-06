@@ -108,7 +108,7 @@ class RestrictionRecord(TypedDict):
     id: int
     build_category: BuildType
     name: str
-    type: Literal["wiring-placement", "component", "miscellaneous"]
+    type: Restriction
 
 
 class VersionsRecord(TypedDict):
@@ -133,3 +133,6 @@ DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrient
 
 ChannelPurpose: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 CHANNEL_PURPOSES = cast(Sequence[ChannelPurpose], get_args(ChannelPurpose))
+
+Restriction = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
