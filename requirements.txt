@@ -4,9 +4,12 @@
 #
 #    pip-compile
 #
-aiohttp==3.9.5
+aiohappyeyeballs==2.3.4
+    # via aiohttp
+aiohttp==3.10.1
     # via
     #   discord-py
+    #   langchain
     #   supabase-py-async
 aiosignal==1.3.1
     # via aiohttp
@@ -15,16 +18,19 @@ annotated-types==0.7.0
 anyio==4.4.0
     # via
     #   httpx
+    #   openai
     #   starlette
-argcomplete==3.3.0
+argcomplete==3.4.0
     # via commitizen
 astunparse==1.6.3
     # via import-expression
-attrs==23.2.0
+async-lru==2.0.4
+    # via -r requirements.in
+attrs==24.1.0
     # via aiohttp
 braceexpand==0.1.7
     # via jishaku
-cachetools==5.3.3
+cachetools==5.4.0
     # via google-auth
 certifi==2024.7.4
     # via
@@ -43,7 +49,8 @@ colorama==0.4.6
     # via
     #   click
     #   commitizen
-commitizen==3.27.0
+    #   tqdm
+commitizen==3.28.0
     # via supabase-py-async
 decli==0.6.2
     # via commitizen
@@ -55,6 +62,8 @@ discord==2.3.2
     # via -r requirements.in
 discord-py==2.4.0
     # via discord
+distro==1.9.0
+    # via openai
 fastapi==0.112.0
     # via -r requirements.in
 frozenlist==1.4.1
@@ -67,8 +76,10 @@ google-auth==2.32.0
     #   gspread
 google-auth-oauthlib==1.2.1
     # via gspread
-gotrue==2.5.5
+gotrue==2.6.1
     # via supabase-py-async
+greenlet==3.0.3
+    # via sqlalchemy
 gspread==6.1.2
     # via -r requirements.in
 h11==0.14.0
@@ -86,6 +97,7 @@ httplib2==0.22.0
 httpx[http2]==0.25.2
     # via
     #   gotrue
+    #   openai
     #   postgrest
     #   storage3
     #   supafunc
@@ -99,27 +111,51 @@ idna==3.7
     #   yarl
 import-expression==1.1.5
     # via jishaku
-importlib-metadata==7.2.1
-    # via commitizen
 jinja2==3.1.4
     # via commitizen
 jishaku==2.5.2
     # via -r requirements.in
+jsonpatch==1.33
+    # via langchain-core
+jsonpointer==3.0.0
+    # via jsonpatch
+langchain==0.2.12
+    # via -r requirements.in
+langchain-core==0.2.28
+    # via
+    #   langchain
+    #   langchain-openai
+    #   langchain-text-splitters
+langchain-openai==0.1.20
+    # via -r requirements.in
+langchain-text-splitters==0.2.2
+    # via langchain
+langsmith==0.1.96
+    # via
+    #   langchain
+    #   langchain-core
 markupsafe==2.1.5
     # via jinja2
 multidict==6.0.5
     # via
     #   aiohttp
     #   yarl
+numpy==1.26.4
+    # via langchain
 oauth2client==4.1.3
     # via -r requirements.in
 oauthlib==3.2.2
     # via requests-oauthlib
+openai==1.38.0
+    # via langchain-openai
+orjson==3.10.6
+    # via langsmith
 packaging==24.1
     # via
     #   commitizen
     #   deprecation
-postgrest==0.16.8
+    #   langchain-core
+postgrest==0.16.9
     # via supabase-py-async
 prompt-toolkit==3.0.36
     # via questionary
@@ -136,6 +172,10 @@ pydantic==2.8.2
     # via
     #   fastapi
     #   gotrue
+    #   langchain
+    #   langchain-core
+    #   langsmith
+    #   openai
     #   postgrest
 pydantic-core==2.20.1
     # via pydantic
@@ -148,15 +188,23 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
     # via -r requirements.in
 pyyaml==6.0.1
-    # via commitizen
+    # via
+    #   commitizen
+    #   langchain
+    #   langchain-core
 questionary==2.0.1
     # via commitizen
 realtime==1.0.6
     # via supabase-py-async
+regex==2024.7.24
+    # via tiktoken
 requests==2.32.3
     # via
+    #   langchain
+    #   langsmith
     #   requests-oauthlib
     #   requests-toolbelt
+    #   tiktoken
 requests-oauthlib==2.0.0
     # via google-auth-oauthlib
 requests-toolbelt==1.0.0
@@ -174,6 +222,9 @@ sniffio==1.3.1
     # via
     #   anyio
     #   httpx
+    #   openai
+sqlalchemy==2.0.31
+    # via langchain
 starlette==0.37.2
     # via fastapi
 storage3==0.7.7
@@ -184,16 +235,27 @@ supabase-py-async==2.5.6
     # via -r requirements.in
 supafunc==0.4.0
     # via supabase-py-async
+tenacity==8.5.0
+    # via
+    #   langchain
+    #   langchain-core
 termcolor==2.4.0
     # via commitizen
+tiktoken==0.7.0
+    # via langchain-openai
 tomlkit==0.13.0
     # via commitizen
+tqdm==4.66.5
+    # via openai
 typing-extensions==4.12.2
     # via
     #   fastapi
+    #   langchain-core
+    #   openai
     #   pydantic
     #   pydantic-core
     #   realtime
+    #   sqlalchemy
     #   storage3
 urllib3==2.2.2
     # via requests
@@ -203,9 +265,7 @@ wcwidth==0.2.13
     # via prompt-toolkit
 websockets==12.0
     # via realtime
-wheel==0.43.0
+wheel==0.44.0
     # via astunparse
 yarl==1.9.4
     # via aiohttp
-zipp==3.19.2
-    # via importlib-metadata

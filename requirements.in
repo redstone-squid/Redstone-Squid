@@ -7,3 +7,6 @@ jishaku
 requests-toolbelt
 fastapi
 uvicorn
+langchain
+langchain-openai
+async_lru
