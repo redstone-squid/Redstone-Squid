@@ -6,8 +6,13 @@ from bot import config
 
 config.DEV_MODE = False  # Have to be above the import of main
 
-import asyncio  # noqa: E402
-from bot.main import main  # noqa: E402
+import asyncio
+import multiprocessing
+
+from bot.main import main
+from api import main as api_main
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    multiprocessing.Process(target=api_main).start()
+    asyncio.run(main())

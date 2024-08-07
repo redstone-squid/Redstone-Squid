@@ -38,11 +38,16 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     return code
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run the FastAPI server."""
     import asyncio
     import uvicorn
     from dotenv import load_dotenv
-    load_dotenv()
 
+    load_dotenv()
     asyncio.run(DatabaseManager.setup())
     uvicorn.run(app, host="0.0.0.0", port=3000)
+
+
+if __name__ == "__main__":
+    main()
