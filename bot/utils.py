@@ -51,7 +51,7 @@ def parse_dimensions(
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
-    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'.
+    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators.
 
     Args:
         dim_str: The string to parse
@@ -64,10 +64,15 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
     if min_dim > max_dim:
         raise ValueError(f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}.")
 
-    inputs = dim_str.split("x")
-    if not min_dim <= len(inputs) <= max_dim:
+    inputs_cross = dim_str.split("x")
+    inputs_star = dim_str.split("*")
+    if min_dim <= len(inputs_cross) <= max_dim:
+        inputs = inputs_cross
+    elif min_dim <= len(inputs_star) <= max_dim:
+        inputs = inputs_star
+    else:
         raise ValueError(
-            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs)} in {dim_str=}."
+            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs_cross)} in {dim_str=} splitting by 'x', and {len(inputs_star)} splitting by '*'."
         )
 
     try:
