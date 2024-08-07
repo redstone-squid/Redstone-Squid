@@ -453,7 +453,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         
         **Unparsed**: {unparsed}
         """)
-        await message.channel.send(content)
+        await self.bot.get_channel(536004554743873556).send(content)
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
