@@ -375,7 +375,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         async with RunningMessage(ctx) as sent_message:
             patterns: APIResponse[TypeRecord] = await DatabaseManager().table("types").select("*").execute()
             names = [pattern["name"] for pattern in patterns.data]
-            await sent_message.edit(content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names)))
+            await sent_message.edit(
+                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            )
 
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):

@@ -12,6 +12,7 @@ from database.user import link_minecraft_account, unlink_minecraft_account
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
+
 class VerifyCog(Cog, name="verify"):
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot

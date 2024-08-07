@@ -50,9 +50,7 @@ def parse_dimensions(dim_str: str) -> tuple[int, int, int | None]: ...
 
 
 @overload
-def parse_dimensions(
-    dim_str: str, *, min_dim: int, max_dim: Literal[3]
-) -> tuple[int, int | None, int | None]: ...
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int, int | None, int | None]: ...
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
@@ -197,9 +195,11 @@ class DoorTitle(BaseModel):
     orientation: DoorOrientationName | None = Field(..., description="")
 
 
+# fmt: off
 valid_component_restrictions = ['No Slime Blocks', 'No Honey Blocks', 'No Gravity Blocks', 'No Sticky Pistons', 'Contained Slime Blocks', 'Contained Honey Blocks', 'Only Wiring Slime Blocks', 'Only Wiring Honey Blocks', 'Only Wiring Gravity Blocks', 'No Observers', 'No Note Blocks', 'No Clocks', 'No Entities', 'No Flying Machines', 'Zomba', 'Zombi', 'Torch and Dust Only', 'Redstone Block Only']
 valid_wiring_placement_restrictions = ['Super Seamless', 'Full Seamless', 'Semi Seamless', 'Quart Seamless', 'Dentless', 'Full Trapdoor', 'Flush', 'Deluxe', 'Flush Layout', 'Semi Flush', 'Semi Deluxe', 'Full Floor Hipster', 'Full Ceiling Hipster', 'Full Wall Hipster', 'Semi Floor Hipster', 'Semi Ceiling Hipster', 'Semi Wall Hipster', 'Expandable', 'Full Tileable', 'Semi Tileable']
 valid_door_types = ['Regular', 'Funnel', 'Asdjke', 'Cave', 'Corner', 'Dual Cave Corner', 'Staircase', 'Gold Play Button', 'Vortex', 'Pitch', 'Bar', 'Vertical', 'Yaw', 'Reversed', 'Inverted', 'Dual', 'Vault', 'Iris', 'Onion', 'Stargate', 'Full Lamp', 'Lamp', 'Hidden Lamp', 'Sissy Bar', 'Checkerboard', 'Windows', 'Redstone Block Center', 'Sand', 'Glass Stripe', 'Center Glass', 'Always On Lamp', 'Circle', 'Triangle', 'Right Triangle', 'Banana', 'Diamond', 'Slab-Shifted', 'Rail', 'Dual Rail', 'Carpet', 'Semi TNT', 'Full TNT']
+# fmt: on
 
 
 def replace_insensitive(string: str, old: str, new: str) -> str:
@@ -228,32 +228,32 @@ def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
     for category in record_categories:
         if title.startswith(category):
             record_category = category.capitalize()
-            title = title[len(category):].strip()
+            title = title[len(category) :].strip()
             break
 
     # Extract door size
-    door_size_match = re.search(r'\d+x\d+(x\d+)?', title)
+    door_size_match = re.search(r"\d+x\d+(x\d+)?", title)
     door_size = (None, None, None)
     if door_size_match:
         door_size_str = door_size_match.group()
-        door_size = tuple(map(int, door_size_str.split('x')))
+        door_size = tuple(map(int, door_size_str.split("x")))
         if len(door_size) == 2:
             door_size = (*door_size, None)
-        title = replace_insensitive(title, door_size_str, '').strip()
+        title = replace_insensitive(title, door_size_str, "").strip()
 
     # Split the remaining title by known door types
     door_types = []
     for door_type in valid_door_types:
         if door_type.lower() in title.lower():
             door_types.append(door_type)
-            title = replace_insensitive(title, door_type, '').strip()
+            title = replace_insensitive(title, door_type, "").strip()
 
     # Split remaining by orientation
     orientation: DoorOrientationName | None = None
     for orient in ["Door", "Skydoor", "Trapdoor"]:
         if orient.lower() in title:
             orientation = orient
-            title = replace_insensitive(title, orient, '').strip()
+            title = replace_insensitive(title, orient, "").strip()
             break
 
     # Remaining words are restrictions
@@ -276,8 +276,8 @@ def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
         door_size=door_size,
         wiring_placement_restrictions=wiring_placement_restrictions,
         door_types=door_types,
-        orientation=orientation
-    ), ', '.join(unparsed)
+        orientation=orientation,
+    ), ", ".join(unparsed)
 
 
 # --- Unused ---
@@ -313,8 +313,11 @@ async def validate_restrictions(restrictions: list[str], type: Literal["componen
 
     invalid_restrictions = [r for r in restrictions if r not in valid_restrictions]
     if invalid_restrictions:
-        raise ValueError(f"Invalid {type} restrictions. Found {invalid_restrictions} which are not one of the restrictions in the database.")
+        raise ValueError(
+            f"Invalid {type} restrictions. Found {invalid_restrictions} which are not one of the restrictions in the database."
+        )
     return restrictions
+
 
 async def validate_door_types(door_types: list[str]) -> list[str]:
     """Validates a list of door types to ensure all of them are valid.
@@ -333,5 +336,7 @@ async def validate_door_types(door_types: list[str]) -> list[str]:
     valid_door_types_in_db = [door_type["name"] for door_type in valid_door_types_response.data]
     invalid_door_types = [dt for dt in door_types if dt not in valid_door_types_in_db]
     if invalid_door_types:
-        raise ValueError(f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database.")
+        raise ValueError(
+            f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database."
+        )
     return door_types
