@@ -12,5 +12,5 @@ jobs:
         uses: actions/checkout@v2
       - name: Deploy
         run: |
-          pkill -f "app.py"
+          pkill -f "app.py" || true
           nohup python3 app.py &
