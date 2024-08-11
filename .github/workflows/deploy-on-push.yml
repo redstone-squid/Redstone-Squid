@@ -10,7 +10,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Deploy
+      - name: Run python
         run: |
           pkill -f "app.py" || true
-          nohup ~/Redstone-Squid/venv/bin/python3 app.py &
+#         The following is needed to run the app in the background
+#         See: https://github.com/actions/runner/issues/598#issuecomment-1703807030
+          RUNNER_TRACKING_ID="" && (nohup ~/Redstone-Squid/venv/bin/python3 app.py &)
