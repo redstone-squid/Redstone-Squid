@@ -13,5 +13,5 @@ jobs:
       - name: Deploy
         run: |
           pkill -f "app.py" || true
-          . venv/bin/activate
+          . ~/Redstone-Squid/venv/bin/activate
           nohup python3 app.py &
