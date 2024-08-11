@@ -165,7 +165,7 @@ class RunningMessage:
 
 
 async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> tuple[DoorTitle, str]:
-    """Parses a title into a category and a name.
+    """Parses a title into its components.
 
     A build title should be in the format of:
     ```
@@ -177,7 +177,7 @@ async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual"
         mode: The mode to parse the title in. Either "ai" or "manual".
 
     Returns:
-        A dictionary containing the parsed information.
+        A tuple of the parsed door title and the unparsed part
     """
     if mode == "ai":
         llm = ChatOpenAI(model="gpt-4o-mini")
@@ -218,6 +218,7 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
 
 
 def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
+    """Parses a piston door title into its components."""
     title = title.lower()
 
     # Define record categories
