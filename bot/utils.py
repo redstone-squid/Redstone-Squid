@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import re
+from io import StringIO
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal
+from typing import overload, Literal, TYPE_CHECKING
 
 import discord
 from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
 from langchain_openai import ChatOpenAI
+from markdown import Markdown
 from pydantic import BaseModel, Field
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database.database import DatabaseManager
 from database.schema import DoorOrientationName, RecordCategory
+
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -162,6 +167,30 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
+
+
+# See https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text
+def _unmark_element(element: Element, stream=None):
+    if stream is None:
+        stream = StringIO()
+    if element.text:
+        stream.write(element.text)
+    for sub in element:
+        _unmark_element(sub, stream)
+    if element.tail:
+        stream.write(element.tail)
+    return stream.getvalue()
+
+
+# patching Markdown
+Markdown.output_formats["plain"] = _unmark_element  # type: ignore
+__md = Markdown(output_format="plain")  # type: ignore
+__md.stripTopLevelTags = False
+
+
+def remove_markdown(text: str) -> str:
+    """Removes markdown formatting from a string."""
+    return __md.convert(text)
 
 
 async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> tuple[DoorTitle, str]:
