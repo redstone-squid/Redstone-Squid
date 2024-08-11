@@ -134,6 +134,8 @@ langsmith==0.1.96
     # via
     #   langchain
     #   langchain-core
+markdown==3.6
+    # via -r requirements.in
 markupsafe==2.1.5
     # via jinja2
 multidict==6.0.5

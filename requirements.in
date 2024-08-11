@@ -10,3 +10,4 @@ uvicorn
 langchain
 langchain-openai
 async_lru
+markdown
