@@ -26,7 +26,7 @@ from database.builds import get_all_builds, Build
 from database.database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions, parse_build_title
+from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -437,7 +437,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
             return
 
-        title_str = message.content.splitlines()[0]
+        title_str = remove_markdown(message.content).splitlines()[0]
         try:
             title, unparsed = await parse_build_title(title_str)
         except ValidationError:
