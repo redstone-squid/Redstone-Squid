@@ -1,3 +1,4 @@
+"""Utility functions for the bot."""
 from __future__ import annotations
 
 import re
