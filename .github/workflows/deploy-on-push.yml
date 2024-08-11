@@ -1,0 +1,16 @@
+name: Deployment
+run-name: ${{ github.actor }} - ${{ github.event_name }} - ${{ github.sha }}
+on:
+  push:
+    branches:
+      - master
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Deploy
+        run: |
+          pkill -f "app.py"
+          nohup python3 app.py &
