@@ -407,10 +407,7 @@ async def validate_door_types(door_types: list[str]) -> list[str]:
     Raises:
         ValueError: If any of the door types are invalid.
     """
-    db = DatabaseManager()
-    valid_door_types_response = await db.table("types").select("name").eq("build_category", "Door").execute()
-    valid_door_types_in_db = [door_type["name"] for door_type in valid_door_types_response.data]
-    invalid_door_types = [dt for dt in door_types if dt not in valid_door_types_in_db]
+    invalid_door_types = [dt for dt in door_types if dt not in await get_valid_door_types()]
     if invalid_door_types:
         raise ValueError(
             f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database."
