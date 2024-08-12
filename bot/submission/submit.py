@@ -439,7 +439,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         title_str = remove_markdown(message.content).splitlines()[0]
         try:
-            title = await parse_build_title(title_str, mode="ai")
+            title = await parse_build_title(title_str, mode="ai" if len(title_str) <= 300 else "manual")
         except ValidationError:
             return
 
