@@ -329,12 +329,16 @@ async def ai_parse_piston_door_title(title: str) -> DoorTitle:
     """Parses a piston door title into its components using AI."""
     client = AsyncOpenAI()
     system_prompt = dedent("""
-            You are an expert at structured data extraction. You will be given unstructured text from a minecraft piston door name and should convert it into the given structure.
-            A build title is in the format of:
-            ```
-            [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
-            ```
-            """)
+        You are an expert at structured data extraction. You will be given unstructured text from a minecraft piston door name and should convert it into the given structure.
+        A build title is in the format of:
+        ```
+        [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
+        ```
+        
+        Examples:
+        Title: "Smallest 5 high triangle piston door"
+        Parsed: {"record_category": "Smallest", "component_restrictions": [], "door_width": null, "door_height": 5, "door_depth": null, "wiring_placement_restrictions": [], "door_types": ["Triangle"], "orientation": "Door"}
+    """)
 
     completion = await client.beta.chat.completions.parse(
         model="gpt-4o-mini",
