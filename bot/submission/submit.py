@@ -429,8 +429,8 @@ class SubmissionsCog(Cog, name="Submissions"):
                     raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
 
     @Cog.listener(name="on_message")
-    async def suggest_parameters_from_title(self, message: Message):
-        """Suggests parameters from the title of the submission."""
+    async def infer_build_from_title(self, message: Message):
+        """Infer a build from a message."""
         if message.author.bot:
             return
 
@@ -443,15 +443,18 @@ class SubmissionsCog(Cog, name="Submissions"):
         except ValidationError:
             return
 
-        content = dedent(f"""
-        **Record Category**: {title.record_category}
-        **Component Restrictions**: {title.component_restrictions}
-        **Door Size**: {title.door_width}x{title.door_height}x{title.door_depth}
-        **Wiring Placement Restrictions**: {title.wiring_placement_restrictions}
-        **Door Type**: {title.door_types}
-        **Orientation**: {title.orientation}
-        """)
-        await self.bot.get_channel(536004554743873556).send(content)
+        build = Build()
+        build.record_category = title.record_category
+        build.category = "Door"
+        build.component_restrictions = title.component_restrictions
+        build.door_width = title.door_width
+        build.door_height = title.door_height
+        build.door_depth = title.door_depth
+        build.wiring_placement_restrictions = title.wiring_placement_restrictions
+        build.door_types = title.door_types
+        build.door_orientation_type = title.orientation
+        # print(title)
+        await self.bot.get_channel(536004554743873556).send(embed=build.generate_embed())
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
