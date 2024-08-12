@@ -439,19 +439,17 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         title_str = remove_markdown(message.content).splitlines()[0]
         try:
-            title, unparsed = await parse_build_title(title_str, mode="ai")
+            title = await parse_build_title(title_str, mode="ai")
         except ValidationError:
             return
 
         content = dedent(f"""
         **Record Category**: {title.record_category}
         **Component Restrictions**: {title.component_restrictions}
-        **Door Size**: {title.door_size}
+        **Door Size**: {title.door_width}x{title.door_height}x{title.door_depth}
         **Wiring Placement Restrictions**: {title.wiring_placement_restrictions}
         **Door Type**: {title.door_types}
         **Orientation**: {title.orientation}
-        
-        **Unparsed**: {unparsed}
         """)
         await self.bot.get_channel(536004554743873556).send(content)
 
