@@ -1,8 +1,10 @@
 """Utility functions for the bot."""
+
 from __future__ import annotations
 
 import re
 from io import StringIO
+from textwrap import dedent
 from traceback import format_tb
 from types import TracebackType
 from typing import overload, Literal, TYPE_CHECKING
@@ -11,13 +13,13 @@ import discord
 from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
-from langchain_openai import ChatOpenAI
 from markdown import Markdown
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database.database import DatabaseManager
-from database.schema import DoorOrientationName, RecordCategory
+from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element
@@ -194,7 +196,7 @@ def remove_markdown(text: str) -> str:
     return __md.convert(text)
 
 
-async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> tuple[DoorTitle, str]:
+async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> DoorTitle:
     """Parses a title into its components.
 
     A build title should be in the format of:
@@ -209,20 +211,27 @@ async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual"
     Returns:
         A tuple of the parsed door title and the unparsed part
     """
+    if "\n" in title:
+        raise ValueError("Title cannot contain newlines")
+
     if mode == "ai":
-        llm = ChatOpenAI(model="gpt-4o-mini")
-        raise NotImplementedError
+        return await ai_parse_piston_door_title(title)
     elif mode == "manual":
-        return parse_piston_door_title(title)
+        title, _ = manual_parse_piston_door_title(title)
+        return title
 
 
 class DoorTitle(BaseModel):
-    record_category: RecordCategory | None = Field(..., description="")
-    component_restrictions: list[str] = Field(..., description="")
-    door_size: tuple[int | None, int | None, int | None] = Field(..., description="")
-    wiring_placement_restrictions: list[str] = Field(..., description="")
-    door_types: list[str] = Field(..., description="")
-    orientation: DoorOrientationName | None = Field(..., description="")
+    record_category: RecordCategory | None = Field(..., description="The record category of the door")
+    component_restrictions: list[str] = Field(..., description="The restrictions on the components of the door")
+    door_width: int | None = Field(..., description="the width of the door")
+    door_height: int | None = Field(..., description="the height of the door")
+    door_depth: int | None = Field(..., description="the depth of the door")
+    wiring_placement_restrictions: list[str] = Field(
+        ..., description="The restrictions on the wiring placement of the door"
+    )
+    door_types: list[str] = Field(..., description="The patterns of the door")
+    orientation: DoorOrientationName = Field(..., description="The orientation of the door")
 
 
 # fmt: off
@@ -247,7 +256,7 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
     return pattern.sub(new, string)
 
 
-def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
+def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
     """Parses a piston door title into its components."""
     title = title.lower()
 
@@ -281,11 +290,13 @@ def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
 
     # Split remaining by orientation
     orientation: DoorOrientationName | None = None
-    for orient in ["Door", "Skydoor", "Trapdoor"]:
+    for orient in DOOR_ORIENTATION_NAMES:
         if orient.lower() in title:
             orientation = orient
             title = replace_insensitive(title, orient, "").strip()
             break
+    if orientation is None:
+        orientation = "Door"
 
     # Remaining words are restrictions
     words = title.split()
@@ -301,14 +312,39 @@ def parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
         else:
             unparsed.append(word)
 
+    assert orientation is not None
     return DoorTitle(
         record_category=record_category,
         component_restrictions=component_restrictions,
-        door_size=door_size,
+        door_width=door_size[0],
+        door_height=door_size[1],
+        door_depth=door_size[2],
         wiring_placement_restrictions=wiring_placement_restrictions,
         door_types=door_types,
         orientation=orientation,
     ), ", ".join(unparsed)
+
+
+async def ai_parse_piston_door_title(title: str) -> DoorTitle:
+    """Parses a piston door title into its components using AI."""
+    client = AsyncOpenAI()
+    system_prompt = dedent("""
+            You are an expert at structured data extraction. You will be given unstructured text from a minecraft piston door name and should convert it into the given structure.
+            A build title is in the format of:
+            ```
+            [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
+            ```
+            """)
+
+    completion = await client.beta.chat.completions.parse(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Parse the following door title: {title}"},
+        ],
+        response_format=DoorTitle,
+    )
+    return completion.choices[0].message.parsed
 
 
 # --- Unused ---
