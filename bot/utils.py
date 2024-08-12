@@ -1,15 +1,28 @@
+"""Utility functions for the bot."""
+
+from __future__ import annotations
+
 import re
+from io import StringIO
+from textwrap import dedent
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, Any
+from typing import overload, Literal, TYPE_CHECKING
 
 import discord
+from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
+from markdown import Markdown
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database.database import DatabaseManager
-from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
+from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
+
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -45,9 +58,7 @@ def parse_dimensions(dim_str: str) -> tuple[int, int, int | None]: ...
 
 
 @overload
-def parse_dimensions(
-    dim_str: str, *, min_dim: int, max_dim: Literal[3]
-) -> tuple[int, int | None, int | None]: ...
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int, int | None, int | None]: ...
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
@@ -161,31 +172,244 @@ class RunningMessage:
         return False
 
 
-async def parse_build_title(title: str) -> dict[str, Any]:
-    """Parses a title into a category and a name.
+# See https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text
+def _unmark_element(element: Element, stream=None):
+    if stream is None:
+        stream = StringIO()
+    if element.text:
+        stream.write(element.text)
+    for sub in element:
+        _unmark_element(sub, stream)
+    if element.tail:
+        stream.write(element.tail)
+    return stream.getvalue()
+
+
+# patching Markdown
+Markdown.output_formats["plain"] = _unmark_element  # type: ignore
+__md = Markdown(output_format="plain")  # type: ignore
+__md.stripTopLevelTags = False
+
+
+def remove_markdown(text: str) -> str:
+    """Removes markdown formatting from a string."""
+    return __md.convert(text)
+
+
+async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> DoorTitle:
+    """Parses a title into its components.
 
     A build title should be in the format of:
     ```
-    [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type> <orientation>
+    [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
     ```
 
     Args:
         title: The title to parse
+        mode: The mode to parse the title in. Either "ai" or "manual".
 
     Returns:
-        A dictionary containing the parsed information.
+        A tuple of the parsed door title and the unparsed part
     """
-    data = {}
+    if "\n" in title:
+        raise ValueError("Title cannot contain newlines")
+
+    if mode == "ai":
+        return await ai_parse_piston_door_title(title)
+    elif mode == "manual":
+        title, _ = await manual_parse_piston_door_title(title)
+        return title
+
+
+class DoorTitle(BaseModel):
+    record_category: RecordCategory | None = Field(..., description="The record category of the door")
+    component_restrictions: list[str] = Field(..., description="The restrictions on the components of the door")
+    door_width: int | None = Field(..., description="the width of the door")
+    door_height: int | None = Field(..., description="the height of the door")
+    door_depth: int | None = Field(..., description="the depth of the door")
+    wiring_placement_restrictions: list[str] = Field(
+        ..., description="The restrictions on the wiring placement of the door"
+    )
+    door_types: list[str] = Field(..., description="The patterns of the door")
+    orientation: DoorOrientationName = Field(..., description="The orientation of the door")
+
+
+def replace_insensitive(string: str, old: str, new: str) -> str:
+    """Replaces a substring in a string case-insensitively.
+
+    Args:
+        string: The string to search and replace in.
+        old: The substring to search for.
+        new: The substring to replace with.
+
+    Returns:
+        The modified string.
+    """
+    pattern = re.compile(re.escape(old), re.IGNORECASE)
+    return pattern.sub(new, string)
+
+
+async def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
+    """Parses a piston door title into its components."""
+    title = title.lower()
+
+    # Define record categories
+    record_categories = ["smallest", "fastest", "first"]
+
+    # Check for record category
+    record_category = None
+    for category in record_categories:
+        if title.startswith(category):
+            record_category = category.capitalize()
+            title = title[len(category) :].strip()
+            break
+
+    # Extract door size
+    door_size_match = re.search(r"\d+x\d+(x\d+)?", title)
+    door_size = (None, None, None)
+    if door_size_match:
+        door_size_str = door_size_match.group()
+        door_size = tuple(map(int, door_size_str.split("x")))
+        if len(door_size) == 2:
+            door_size = (*door_size, None)
+        title = replace_insensitive(title, door_size_str, "").strip()
+
+    # Split the remaining title by known door types
+    door_types = []
+    for door_type in await get_valid_door_types():
+        if door_type.lower() in title.lower():
+            door_types.append(door_type)
+            title = replace_insensitive(title, door_type, "").strip()
+
+    # Split remaining by orientation
+    orientation: DoorOrientationName | None = None
+    for orient in DOOR_ORIENTATION_NAMES:
+        if orient.lower() in title:
+            orientation = orient
+            title = replace_insensitive(title, orient, "").strip()
+            break
+    if orientation is None:
+        orientation = "Door"
+
+    # Remaining words are restrictions
     words = title.split()
-    if words[0].title() in RECORD_CATEGORIES:
-        data["record_category"] = words.pop(0)
 
-    if words[-1].title() not in DOOR_ORIENTATION_NAMES:
-        raise ValueError(f"Invalid orientation. Expected one of {DOOR_ORIENTATION_NAMES}, found {words[-1]}")
-    else:
-        data["category"] = "Door"
+    component_restrictions = []
+    wiring_placement_restrictions = []
+    unparsed = []
+    for word in words:
+        if word.title() in await get_valid_restrictions("component"):
+            component_restrictions.append(word.title())
+        elif word.title() in await get_valid_restrictions("wiring-placement"):
+            wiring_placement_restrictions.append(word.title())
+        else:
+            unparsed.append(word)
 
+    assert orientation is not None
+    return DoorTitle(
+        record_category=record_category,
+        component_restrictions=component_restrictions,
+        door_width=door_size[0],
+        door_height=door_size[1],
+        door_depth=door_size[2],
+        wiring_placement_restrictions=wiring_placement_restrictions,
+        door_types=door_types,
+        orientation=orientation,
+    ), ", ".join(unparsed)
+
+
+async def ai_parse_piston_door_title(title: str) -> DoorTitle:
+    """Parses a piston door title into its components using AI."""
+    client = AsyncOpenAI()
+    system_prompt = dedent("""
+        You are an expert at structured data extraction. You will be given unstructured text from a minecraft piston door name and should convert it into the given structure.
+        A build title is in the format of:
+        ```
+        [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
+        ```
+        
+        Examples:
+        Title: "Smallest 5 high triangle piston door"
+        Parsed: {"record_category": "Smallest", "component_restrictions": [], "door_width": null, "door_height": 5, "door_depth": null, "wiring_placement_restrictions": [], "door_types": ["Triangle"], "orientation": "Door"}
+    """)
+
+    completion = await client.beta.chat.completions.parse(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Parse the following door title: {title}"},
+        ],
+        response_format=DoorTitle,
+    )
+    return completion.choices[0].message.parsed
+
+
+@alru_cache()
+async def get_valid_restrictions(type: Literal["component", "wiring-placement"]) -> list[str]:
+    """Gets a list of valid restrictions for a given type.
+
+    Args:
+        type: The type of restriction. Either "component" or "wiring-placement"
+
+    Returns:
+        A list of valid restrictions for the given type.
+    """
     db = DatabaseManager()
-    # Parse component restrictions
-    component_restrictions = await db.table("restrictions").select("name").eq("build_category", data["category"]).eq("type", "component").execute()
+    valid_restrictions_response = await db.table("restrictions").select("name").eq("type", type).execute()
+    return [restriction["name"] for restriction in valid_restrictions_response.data]
 
+
+@alru_cache()
+async def get_valid_door_types() -> list[str]:
+    """Gets a list of valid door types.
+
+    Returns:
+        A list of valid door types.
+    """
+    db = DatabaseManager()
+    valid_door_types_response = await db.table("types").select("name").eq("build_category", "Door").execute()
+    return [door_type["name"] for door_type in valid_door_types_response.data]
+
+
+# --- Unused ---
+async def validate_restrictions(restrictions: list[str], type: Literal["component", "wiring-placement"]) -> list[str]:
+    """Validates a list of restrictions to ensure all of them are valid.
+
+    Args:
+        restrictions: The list of restrictions to validate
+        type: The type of restriction. Either "component" or "wiring_placement"
+
+    Returns:
+        The original list of restrictions if all of them are valid.
+
+    Raises:
+        ValueError: If any of the restrictions are invalid.
+    """
+    valid_restrictions = await get_valid_restrictions(type)
+
+    invalid_restrictions = [r for r in restrictions if r not in valid_restrictions]
+    if invalid_restrictions:
+        raise ValueError(
+            f"Invalid {type} restrictions. Found {invalid_restrictions} which are not one of the restrictions in the database."
+        )
+    return restrictions
+
+
+async def validate_door_types(door_types: list[str]) -> list[str]:
+    """Validates a list of door types to ensure all of them are valid.
+
+    Args:
+        door_types: The list of door types to validate
+
+    Returns:
+        The original list of door types if all of them are valid.
+
+    Raises:
+        ValueError: If any of the door types are invalid.
+    """
+    invalid_door_types = [dt for dt in door_types if dt not in await get_valid_door_types()]
+    if invalid_door_types:
+        raise ValueError(
+            f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database."
+        )
+    return door_types

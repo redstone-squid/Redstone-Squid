@@ -1,4 +1,5 @@
 """Simple FastAPI server to generate verification codes for users."""
+
 import os
 import random
 from typing import Annotated
@@ -31,10 +32,20 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
 
     db = DatabaseManager()
     # Invalidate existing codes for this user
-    await db.table("verification_codes").update({"valid": False}).eq("minecraft_uuid", str(user.uuid)).gt("expires", utcnow()).execute()
+    await (
+        db.table("verification_codes")
+        .update({"valid": False})
+        .eq("minecraft_uuid", str(user.uuid))
+        .gt("expires", utcnow())
+        .execute()
+    )
 
     code = random.randint(100000, 999999)
-    await db.table("verification_codes").insert({"minecraft_uuid": str(user.uuid), "username": username, "code": code}).execute()
+    await (
+        db.table("verification_codes")
+        .insert({"minecraft_uuid": str(user.uuid), "username": username, "code": code})
+        .execute()
+    )
     return code
 
 

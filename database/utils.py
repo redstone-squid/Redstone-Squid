@@ -7,6 +7,7 @@ from typing import Any
 import requests
 from requests_toolbelt import MultipartEncoder
 
+
 def utcnow() -> str:
     """Returns the current time in UTC in the format of a string."""
     current_utc = datetime.now(tz=timezone.utc)
@@ -28,15 +29,11 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
     """
     catbox_url = "https://catbox.moe/user/api.php"
     data = {
-        'reqtype': 'fileupload',
-        'userhash': os.getenv('CATBOX_USERHASH'),
-        'fileToUpload': (filename, file, mimetype)
+        "reqtype": "fileupload",
+        "userhash": os.getenv("CATBOX_USERHASH"),
+        "fileToUpload": (filename, file, mimetype),
     }
     encoder = MultipartEncoder(fields=data)
-    response = requests.post(
-        catbox_url,
-        data=encoder,
-        headers={'Content-Type': encoder.content_type}
-    )
+    response = requests.post(catbox_url, data=encoder, headers={"Content-Type": encoder.content_type})
 
     return response.text

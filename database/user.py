@@ -1,4 +1,5 @@
 """Handles user data and operations."""
+
 from uuid import UUID
 
 import requests
@@ -37,16 +38,32 @@ async def link_minecraft_account(user_id: int, code: str) -> bool:
     """
     db = DatabaseManager()
 
-    response = await db.table("verification_codes").select("minecraft_uuid", "minecraft_username").eq("code", code).gt("expires", utcnow()).maybe_single().execute()
+    response = (
+        await db.table("verification_codes")
+        .select("minecraft_uuid", "minecraft_username")
+        .eq("code", code)
+        .gt("expires", utcnow())
+        .maybe_single()
+        .execute()
+    )
     if response is None:
         return False
     minecraft_uuid = response.data["minecraft_uuid"]
     minecraft_username = response.data["minecraft_username"]
 
     # TODO: This currently does not check if the ign is already in use without a UUID or discord ID given.
-    response = await db.table("users").update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username}).eq("discord_id", user_id).execute()
+    response = (
+        await db.table("users")
+        .update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username})
+        .eq("discord_id", user_id)
+        .execute()
+    )
     if not response.data:
-        await db.table("users").insert({"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username}).execute()
+        await (
+            db.table("users")
+            .insert({"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username})
+            .execute()
+        )
     return True
 
 
@@ -80,4 +97,6 @@ def get_minecraft_username(user_uuid: str | UUID) -> str | None:
     elif response.status_code == 204:  # No content
         return None
     else:
-        raise ValueError(f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status_code}.")
+        raise ValueError(
+            f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status_code}."
+        )

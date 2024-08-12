@@ -2,10 +2,11 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
+from textwrap import dedent
 from typing import Literal, cast, TYPE_CHECKING, Any
 
 import discord
-from discord import InteractionResponse, Guild
+from discord import InteractionResponse, Guild, Message
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -16,6 +17,7 @@ from discord.ext.commands import (
     flag,
 )
 from postgrest import APIResponse
+from pydantic import ValidationError
 
 from bot import utils, config
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
@@ -24,7 +26,7 @@ from database.builds import get_all_builds, Build
 from database.database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions
+from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -373,7 +375,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         async with RunningMessage(ctx) as sent_message:
             patterns: APIResponse[TypeRecord] = await DatabaseManager().table("types").select("*").execute()
             names = [pattern["name"] for pattern in patterns.data]
-            await sent_message.edit(content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names)))
+            await sent_message.edit(
+                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            )
 
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_record(self, payload: discord.RawReactionActionEvent):
@@ -423,6 +427,34 @@ class SubmissionsCog(Cog, name="Submissions"):
                 else:
                     # TODO: Add a check when adding vote channels to the database
                     raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
+
+    @Cog.listener(name="on_message")
+    async def infer_build_from_title(self, message: Message):
+        """Infer a build from a message."""
+        if message.author.bot:
+            return
+
+        if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
+            return
+
+        title_str = remove_markdown(message.content).splitlines()[0]
+        try:
+            title = await parse_build_title(title_str, mode="ai" if len(title_str) <= 300 else "manual")
+        except ValidationError:
+            return
+
+        build = Build()
+        build.record_category = title.record_category
+        build.category = "Door"
+        build.component_restrictions = title.component_restrictions
+        build.door_width = title.door_width
+        build.door_height = title.door_height
+        build.door_depth = title.door_depth
+        build.wiring_placement_restrictions = title.wiring_placement_restrictions
+        build.door_types = title.door_types
+        build.door_orientation_type = title.orientation
+        # print(title)
+        await self.bot.get_channel(536004554743873556).send(embed=build.generate_embed())
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
