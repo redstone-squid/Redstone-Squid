@@ -217,7 +217,7 @@ async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual"
     if mode == "ai":
         return await ai_parse_piston_door_title(title)
     elif mode == "manual":
-        title, _ = manual_parse_piston_door_title(title)
+        title, _ = await manual_parse_piston_door_title(title)
         return title
 
 
@@ -232,13 +232,6 @@ class DoorTitle(BaseModel):
     )
     door_types: list[str] = Field(..., description="The patterns of the door")
     orientation: DoorOrientationName = Field(..., description="The orientation of the door")
-
-
-# fmt: off
-valid_component_restrictions = ['No Slime Blocks', 'No Honey Blocks', 'No Gravity Blocks', 'No Sticky Pistons', 'Contained Slime Blocks', 'Contained Honey Blocks', 'Only Wiring Slime Blocks', 'Only Wiring Honey Blocks', 'Only Wiring Gravity Blocks', 'No Observers', 'No Note Blocks', 'No Clocks', 'No Entities', 'No Flying Machines', 'Zomba', 'Zombi', 'Torch and Dust Only', 'Redstone Block Only']
-valid_wiring_placement_restrictions = ['Super Seamless', 'Full Seamless', 'Semi Seamless', 'Quart Seamless', 'Dentless', 'Full Trapdoor', 'Flush', 'Deluxe', 'Flush Layout', 'Semi Flush', 'Semi Deluxe', 'Full Floor Hipster', 'Full Ceiling Hipster', 'Full Wall Hipster', 'Semi Floor Hipster', 'Semi Ceiling Hipster', 'Semi Wall Hipster', 'Expandable', 'Full Tileable', 'Semi Tileable']
-valid_door_types = ['Regular', 'Funnel', 'Asdjke', 'Cave', 'Corner', 'Dual Cave Corner', 'Staircase', 'Gold Play Button', 'Vortex', 'Pitch', 'Bar', 'Vertical', 'Yaw', 'Reversed', 'Inverted', 'Dual', 'Vault', 'Iris', 'Onion', 'Stargate', 'Full Lamp', 'Lamp', 'Hidden Lamp', 'Sissy Bar', 'Checkerboard', 'Windows', 'Redstone Block Center', 'Sand', 'Glass Stripe', 'Center Glass', 'Always On Lamp', 'Circle', 'Triangle', 'Right Triangle', 'Banana', 'Diamond', 'Slab-Shifted', 'Rail', 'Dual Rail', 'Carpet', 'Semi TNT', 'Full TNT']
-# fmt: on
 
 
 def replace_insensitive(string: str, old: str, new: str) -> str:
@@ -256,7 +249,7 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
     return pattern.sub(new, string)
 
 
-def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
+async def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
     """Parses a piston door title into its components."""
     title = title.lower()
 
@@ -283,7 +276,7 @@ def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
 
     # Split the remaining title by known door types
     door_types = []
-    for door_type in valid_door_types:
+    for door_type in await get_valid_door_types():
         if door_type.lower() in title.lower():
             door_types.append(door_type)
             title = replace_insensitive(title, door_type, "").strip()
@@ -305,9 +298,9 @@ def manual_parse_piston_door_title(title: str) -> tuple[DoorTitle, str]:
     wiring_placement_restrictions = []
     unparsed = []
     for word in words:
-        if word.title() in valid_component_restrictions:
+        if word.title() in await get_valid_restrictions("component"):
             component_restrictions.append(word.title())
-        elif word.title() in valid_wiring_placement_restrictions:
+        elif word.title() in await get_valid_restrictions("wiring-placement"):
             wiring_placement_restrictions.append(word.title())
         else:
             unparsed.append(word)
@@ -351,7 +344,6 @@ async def ai_parse_piston_door_title(title: str) -> DoorTitle:
     return completion.choices[0].message.parsed
 
 
-# --- Unused ---
 @alru_cache()
 async def get_valid_restrictions(type: Literal["component", "wiring-placement"]) -> list[str]:
     """Gets a list of valid restrictions for a given type.
@@ -367,6 +359,19 @@ async def get_valid_restrictions(type: Literal["component", "wiring-placement"])
     return [restriction["name"] for restriction in valid_restrictions_response.data]
 
 
+@alru_cache()
+async def get_valid_door_types() -> list[str]:
+    """Gets a list of valid door types.
+
+    Returns:
+        A list of valid door types.
+    """
+    db = DatabaseManager()
+    valid_door_types_response = await db.table("types").select("name").eq("build_category", "Door").execute()
+    return [door_type["name"] for door_type in valid_door_types_response.data]
+
+
+# --- Unused ---
 async def validate_restrictions(restrictions: list[str], type: Literal["component", "wiring-placement"]) -> list[str]:
     """Validates a list of restrictions to ensure all of them are valid.
 
