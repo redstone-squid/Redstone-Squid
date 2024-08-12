@@ -439,7 +439,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         title_str = remove_markdown(message.content).splitlines()[0]
         try:
-            title, unparsed = await parse_build_title(title_str)
+            title, unparsed = await parse_build_title(title_str, mode="ai")
         except ValidationError:
             return
 
