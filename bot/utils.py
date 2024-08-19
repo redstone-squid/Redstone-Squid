@@ -328,13 +328,22 @@ async def ai_parse_piston_door_title(title: str) -> DoorTitle:
         [Record Category] [component restrictions]+ <door size> [wiring placement restrictions]+ <door type>+ <orientation>
         ```
         
+        Non exhaustive list of component restrictions (examples only, users may use other names): 'No Slime Blocks', 'No Observers', 'No Note Blocks', 'No Clocks', 'No Entities', 'No Flying Machines', 'Zomba', 'Zombi', 'Torch and Dust Only', 'Redstone Block Only'
+        Non exhaustive list of wiring placement restrictions: 'Super Seamless', 'Full Seamless', 'Semi Seamless', 'Quart Seamless', 'Dentless', 'Full Trapdoor', 'Flush', 'Deluxe', 'Flush Layout', 'Semi Flush', 'Semi Deluxe', 'Semi Wall Hipster', 'Expandable', 'Full Tileable', 'Semi Tileable'
+        Non exhaustive list of door types: 'Regular', 'Funnel', 'Asdjke', 'Cave', 'Corner', 'Dual Cave Corner', 'Staircase', 'Gold Play Button', 'Vortex', 'Pitch', 'Bar', 'Vertical', 'Yaw', 'Reversed', 'Inverted', 'Dual', 'Vault', 'Iris', 'Onion', 'Stargate', 'Full Lamp', 'Lamp', 'Hidden Lamp', 'Sissy Bar', 'Checkerboard', 'Windows', 'Redstone Block Center', 'Sand', 'Glass Stripe', 'Center Glass', 'Always On Lamp', 'Circle', 'Triangle', 'Right Triangle', 'Banana', 'Diamond', 'Slab-Shifted', 'Rail', 'Dual Rail', 'Carpet', 'Semi TNT', 'Full TNT'
+        
         Examples:
-        Title: "Smallest 5 high triangle piston door"
-        Parsed: {"record_category": "Smallest", "component_restrictions": [], "door_width": null, "door_height": 5, "door_depth": null, "wiring_placement_restrictions": [], "door_types": ["Triangle"], "orientation": "Door"}
+        Title: "Smallest 5 high Dentless triangle cave piston door"
+        Parsed: {"record_category": "Smallest", "component_restrictions": [], "door_width": null, "door_height": 5, "door_depth": null, "wiring_placement_restrictions": ["Dentless"], "door_types": ["Triangle", "Cave"], "orientation": "Door"}
+        Title: "Zomba 2x2x6 Flush Reverse Pitch Door"
+        Parsed: {"record_category": null, "component_restrictions": ["Zomba"], "door_width": 2, "door_height": 2, "door_depth": 6, "wiring_placement_restrictions": ["Flush"], "door_types": ["Reverse", "Pitch"], "orientation": "Door"}
+        
+        1. Remember that you are allowed to put in names that does not exist in the list, as the list given to you is non exhaustive. Make sure you put in all the information given to you in the title.
+        2. If there are names that you don't recognize following the dimensions, use your best judgement to determine whether it is a wiring placement restriction or a door type. If you are unsure, assume it is a door type. (i.e. "3x3 Weird Door" -> the door type is "Weird")
     """)
 
     completion = await client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
+        model="gpt-4o-mini-2024-07-18",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Parse the following door title: {title}"},
@@ -413,3 +422,16 @@ async def validate_door_types(door_types: list[str]) -> list[str]:
             f"Invalid door types. Found {invalid_door_types} which are not one of the door types in the database."
         )
     return door_types
+
+
+async def main():
+    await DatabaseManager.setup()
+    l = await get_valid_door_types()
+    print(l)
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import asyncio
+    load_dotenv()
+    asyncio.run(main())
