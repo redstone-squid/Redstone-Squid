@@ -443,18 +443,18 @@ class SubmissionsCog(Cog, name="Submissions"):
         except ValidationError:
             return
 
-        build = Build()
-        build.record_category = title.record_category
-        build.category = "Door"
-        build.component_restrictions = title.component_restrictions
-        build.door_width = title.door_width
-        build.door_height = title.door_height
-        build.door_depth = title.door_depth
-        build.wiring_placement_restrictions = title.wiring_placement_restrictions
-        build.door_types = title.door_types
-        build.door_orientation_type = title.orientation
+        # build = Build()
+        # build.record_category = title.record_category
+        # build.category = "Door"
+        # build.component_restrictions = title.component_restrictions
+        # build.door_width = title.door_width
+        # build.door_height = title.door_height
+        # build.door_depth = title.door_depth
+        # build.wiring_placement_restrictions = title.wiring_placement_restrictions
+        # build.door_types = title.door_types
+        # build.door_orientation_type = title.orientation
         # print(title)
-        await self.bot.get_channel(536004554743873556).send(embed=build.generate_embed())
+        await self.bot.get_channel(536004554743873556).send(title.model_dump_json())
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
