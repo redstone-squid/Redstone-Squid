@@ -4,9 +4,9 @@
 #
 #    pip-compile
 #
-aiohappyeyeballs==2.3.5
+aiohappyeyeballs==2.4.0
     # via aiohttp
-aiohttp==3.10.3
+aiohttp==3.10.5
     # via
     #   discord-py
     #   supabase-py-async
@@ -29,7 +29,7 @@ attrs==24.2.0
     # via aiohttp
 braceexpand==0.1.7
     # via jishaku
-cachetools==5.4.0
+cachetools==5.5.0
     # via google-auth
 certifi==2024.7.4
     # via
@@ -63,19 +63,19 @@ discord-py==2.4.0
     # via discord
 distro==1.9.0
     # via openai
-fastapi==0.112.0
+fastapi==0.112.1
     # via -r requirements.in
 frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-google-auth==2.33.0
+google-auth==2.34.0
     # via
     #   google-auth-oauthlib
     #   gspread
 google-auth-oauthlib==1.2.1
     # via gspread
-gotrue==2.6.2
+gotrue==2.7.0
     # via supabase-py-async
 gspread==6.1.2
     # via -r requirements.in
@@ -114,7 +114,7 @@ jishaku==2.5.2
     # via -r requirements.in
 jiter==0.5.0
     # via openai
-markdown==3.6
+markdown==3.7
     # via -r requirements.in
 markupsafe==2.1.5
     # via jinja2
@@ -126,13 +126,13 @@ oauth2client==4.1.3
     # via -r requirements.in
 oauthlib==3.2.2
     # via requests-oauthlib
-openai==1.40.3
+openai==1.42.0
     # via -r requirements.in
 packaging==24.1
     # via
     #   commitizen
     #   deprecation
-postgrest==0.16.9
+postgrest==0.16.11
     # via supabase-py-async
 prompt-toolkit==3.0.36
     # via questionary
@@ -189,7 +189,7 @@ sniffio==1.3.1
     #   anyio
     #   httpx
     #   openai
-starlette==0.37.2
+starlette==0.38.2
     # via fastapi
 storage3==0.7.7
     # via supabase-py-async
@@ -201,7 +201,7 @@ supafunc==0.4.0
     # via supabase-py-async
 termcolor==2.4.0
     # via commitizen
-tomlkit==0.13.0
+tomlkit==0.13.2
     # via commitizen
 tqdm==4.66.5
     # via openai
@@ -215,7 +215,7 @@ typing-extensions==4.12.2
     #   storage3
 urllib3==2.2.2
     # via requests
-uvicorn==0.30.5
+uvicorn==0.30.6
     # via -r requirements.in
 wcwidth==0.2.13
     # via prompt-toolkit
