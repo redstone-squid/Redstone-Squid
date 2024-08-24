@@ -3,6 +3,7 @@
 
 from collections.abc import Sequence
 from typing import Literal, cast, TYPE_CHECKING, Any
+import asyncio
 
 import discord
 from discord import InteractionResponse, Guild, Message
@@ -29,7 +30,7 @@ from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remov
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord, VersionRecord
 from database.server_settings import get_server_setting
-from database.utils import upload_to_catbox
+from database.utils import upload_to_catbox, get_version_string
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -38,6 +39,9 @@ submission_roles = ["Admin", "Moderator", "Redstoner"]
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
+
+_Default = object()
+"""A default value for the flags. This is used to work around https://github.com/Rapptz/discord.py/issues/9641"""
 
 
 class SubmissionsCog(Cog, name="Submissions"):
@@ -156,12 +160,17 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
+
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str = flag(default=config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')  # FIXME: hardcoded default
+        works_in: str = flag(
+            # stupid workaround to get async code to work with flags
+            default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version())),
+            description='The versions the build works in. Default to newest version. /versions for full list.'
+        )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str = flag(default=None, description='Any additional information about the build.')

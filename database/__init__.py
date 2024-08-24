@@ -8,6 +8,7 @@ from postgrest import APIResponse
 from supabase_py_async import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
+from database.utils import get_version_string
 
 
 class DatabaseManager:
@@ -57,6 +58,13 @@ class DatabaseManager:
             await query.order("edition").order("major_version").order("minor_version").order("patch_number").execute()
         )
         return versions_response.data
+
+    @classmethod
+    @alru_cache(maxsize=3)
+    async def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> VersionRecord:
+        """Returns the newest version from the database."""
+        versions = await cls.get_versions_list(edition=edition)
+        return versions[-1]
 
 
 async def main():
