@@ -39,3 +39,15 @@ class DatabaseManager:
         cls._is_setup = True
 
         # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
+
+
+async def main():
+    await DatabaseManager.setup()
+    print(await DatabaseManager().from_("versions").select("*").execute())
+
+
+if __name__ == "__main__":
+    import asyncio
+    import dotenv
+    dotenv.load_dotenv()
+    asyncio.run(main())
