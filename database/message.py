@@ -72,9 +72,6 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
         server_id: The server id of the message to delete.
         build_id: The build id of the message to delete.
 
-    Raises:
-        ValueError: If the message is not found.
-
     Returns:
         A list of message ids that were deleted.
     """
@@ -87,7 +84,7 @@ async def delete_message(server_id: int, build_id: int) -> list[int]:
         .execute()
     )
     if not response.count:
-        raise ValueError("No messages found in this server with the given submission id.")
+        return []
     message_ids = [response.data[i]["message_id"] for i in range(response.count)]
     await db.table("messages").delete().in_("message_id", message_ids).execute()
     return message_ids
