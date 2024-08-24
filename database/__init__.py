@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 from async_lru import alru_cache
 from dotenv import load_dotenv
@@ -45,17 +46,22 @@ class DatabaseManager:
         # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
 
     @classmethod
-    @alru_cache(maxsize=1)
-    async def get_versions_list(cls) -> list[VersionRecord]:
+    @alru_cache(maxsize=3)
+    async def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
         """Returns a list of versions from the database."""
         await cls.setup()
-        versions_response: APIResponse[VersionRecord] = await DatabaseManager().table("versions").select("*").execute()
+        query = cls().table("versions").select("*")
+        if edition:
+            query = query.eq("edition", edition)
+        versions_response: APIResponse[VersionRecord] = (
+            await query.order("edition").order("major_version").order("minor_version").order("patch_number").execute()
+        )
         return versions_response.data
 
 
 async def main():
     await DatabaseManager.setup()
-    print(await DatabaseManager().from_("versions").select("*").execute())
+    print(await DatabaseManager.get_versions_list(edition="Java"))
 
 
 if __name__ == "__main__":
