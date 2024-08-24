@@ -102,6 +102,7 @@ class SettingsCog(Cog, name="Settings"):
                 return
 
             # Updating database
+            # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
             await update_server_setting(ctx.guild.id, channel_purpose, channel.id)
             await sent_message.edit(embed=success_embed)
 

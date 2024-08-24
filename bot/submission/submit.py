@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 submission_roles = ["Admin", "Moderator", "Redstoner"]
+APPROVE_EMOJIS = ["👍", "✅"]
+DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
@@ -411,22 +413,24 @@ class SubmissionsCog(Cog, name="Submissions"):
         assert submission is not None
         if submission.submission_status != Status.PENDING:
             return
+
+        if payload.emoji.name not in APPROVE_EMOJIS + DENY_EMOJIS:
+            return
         # --- End of checks ---
 
-        # If the reaction is a thumbs up, confirm the submission
-        if payload.emoji.name == "👍":
+        if payload.emoji.name in APPROVE_EMOJIS:
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
             await submission.confirm()
-            message_ids = await msg.delete_message(guild_id, build_id)
             await self.post_build(submission)
-            for message_id in message_ids:
-                vote_channel = self.bot.get_channel(vote_channel_id)
-                if isinstance(vote_channel, GuildMessageable):
-                    message = await vote_channel.fetch_message(message_id)
-                    await message.delete()
-                else:
-                    # TODO: Add a check when adding vote channels to the database
-                    raise ValueError(f"Invalid channel type for a vote channel: {type(vote_channel)}")
+        elif payload.emoji.name in DENY_EMOJIS:
+            await submission.deny()
+
+        message_ids = await msg.delete_message(guild_id, build_id)
+        vote_channel = self.bot.get_channel(vote_channel_id)
+        assert isinstance(vote_channel, GuildMessageable)
+        for message_id in message_ids:
+            message = await vote_channel.fetch_message(message_id)
+            await message.delete()
 
     @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
