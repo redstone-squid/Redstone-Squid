@@ -159,7 +159,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str = flag(default="Java 1.20.4", description='The versions the build works in. Default to newest version. /versions for full list.')  # FIXME: hardcoded default
+        works_in: str = flag(default=config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')  # FIXME: hardcoded default
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str = flag(default=None, description='Any additional information about the build.')
