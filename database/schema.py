@@ -116,9 +116,9 @@ class VersionRecord(TypedDict):
 
     id: int
     edition: str
-    major_version: str
-    minor_version: str
-    patch_number: str
+    major_version: int
+    minor_version: int
+    patch_number: int
 
 
 class QuantifiedVersionRecord(TypedDict):
