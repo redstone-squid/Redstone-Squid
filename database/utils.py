@@ -2,7 +2,6 @@
 
 import os
 from datetime import datetime, timezone
-from typing import Any
 
 import requests
 from requests_toolbelt import MultipartEncoder
@@ -47,3 +46,24 @@ def get_version_string(version: VersionsRecord) -> str:
         return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"
     else:
         return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+
+
+def parse_version_string(version_string: str) -> tuple[str, str, str, str]:
+    """Parses a version string into its components.
+
+    A version string is formatted as follows:
+    ["Java" | "Bedrock"] major_version.minor_version.patch_number
+    """
+
+    try:
+        edition_and_major, minor, patch = version_string.split(".")
+    except ValueError:
+        raise ValueError("Invalid version string format.")
+
+    if " " in edition_and_major:
+        edition, major = edition_and_major.split(" ")
+    else:
+        edition = "Java"
+        major = edition_and_major
+
+    return edition, major, minor, patch
