@@ -119,7 +119,6 @@ class VersionRecord(TypedDict):
     major_version: str
     minor_version: str
     patch_number: str
-    full_name_temp: str  # TODO: remove
 
 
 class QuantifiedVersionRecord(TypedDict):
