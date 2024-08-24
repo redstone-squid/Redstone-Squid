@@ -1,8 +1,12 @@
 import os
+
+from async_lru import alru_cache
 from dotenv import load_dotenv
+from postgrest import APIResponse
 
 from supabase_py_async import create_client, AsyncClient
 from bot.config import DEV_MODE
+from database.schema import VersionsRecord
 
 
 class DatabaseManager:
@@ -39,6 +43,14 @@ class DatabaseManager:
         cls._is_setup = True
 
         # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
+
+    @classmethod
+    @alru_cache(maxsize=1)
+    async def get_versions_list(cls) -> list[VersionsRecord]:
+        """Returns a list of versions from the database."""
+        await cls.setup()
+        versions_response: APIResponse[VersionsRecord] = await DatabaseManager().table("versions").select("*").execute()
+        return versions_response.data
 
 
 async def main():
