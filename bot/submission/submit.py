@@ -148,7 +148,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
         versions_response: APIResponse[VersionsRecord] = await DatabaseManager().table("versions").select("*").execute()
-        versions = [f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}" for v in versions_response.data if v["edition"] is not None]
+        versions = [f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}" for v in versions_response.data]
         await ctx.send(str(versions[:20]))
 
     # fmt: off
@@ -159,7 +159,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str = flag(default=config.VERSIONS_LIST[-1], description='The versions the build works in. Default to newest version. /versions for full list.')
+        works_in: str = flag(default="Java 1.20.4", description='The versions the build works in. Default to newest version. /versions for full list.')  # FIXME: hardcoded default
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str = flag(default=None, description='Any additional information about the build.')
