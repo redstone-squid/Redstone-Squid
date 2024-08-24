@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import requests
 from requests_toolbelt import MultipartEncoder
 
-from database.schema import VersionsRecord
+from database.schema import VersionRecord
 
 
 def utcnow() -> str:
@@ -40,7 +40,7 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
     return response.text
 
 
-def get_version_string(version: VersionsRecord) -> str:
+def get_version_string(version: VersionRecord) -> str:
     """Returns a formatted version string."""
     if version["edition"] == "Java":
         return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"

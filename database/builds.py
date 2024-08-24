@@ -18,16 +18,17 @@ from database.schema import (
     TypeRecord,
     RestrictionRecord,
     Info,
-    VersionsRecord,
+    VersionRecord,
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
-    ChannelPurpose, QuantifiedVersionRecord,
+    ChannelPurpose,
+    QuantifiedVersionRecord,
 )
 from database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
-from database.utils import utcnow, get_version_string, parse_version_string
+from database.utils import utcnow, get_version_string
 from database.enums import Status, Category
 from bot import utils
 from bot.config import VERSIONS_LIST
@@ -232,7 +233,7 @@ class Build:
         creators: list[dict[str, Any]] = data.get("users", [])
         build.creators_ign = [creator["ign"] for creator in creators]
 
-        versions: list[VersionsRecord] = data.get("versions", [])
+        versions: list[VersionRecord] = data.get("versions", [])
         build.functional_versions = [get_version_string(v) for v in versions]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
@@ -484,9 +485,7 @@ class Build:
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
         response: APIResponse[QuantifiedVersionRecord] = (
-            await db.rpc("get_quantified_version_names", {})
-            .in_("quantified_name", functional_versions)
-            .execute()
+            await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)

@@ -111,7 +111,7 @@ class RestrictionRecord(TypedDict):
     type: Restriction
 
 
-class VersionsRecord(TypedDict):
+class VersionRecord(TypedDict):
     """A record of a version in the database"""
 
     id: int
@@ -120,6 +120,7 @@ class VersionsRecord(TypedDict):
     minor_version: str
     patch_number: str
     full_name_temp: str  # TODO: remove
+
 
 class QuantifiedVersionRecord(TypedDict):
     """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""

@@ -2,7 +2,6 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
-from textwrap import dedent
 from typing import Literal, cast, TYPE_CHECKING, Any
 
 import discord
@@ -28,7 +27,7 @@ from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
 from database.message import get_build_id_by_message
-from database.schema import TypeRecord, VersionsRecord
+from database.schema import TypeRecord, VersionRecord
 from database.server_settings import get_server_setting
 from database.utils import upload_to_catbox
 
@@ -147,8 +146,11 @@ class SubmissionsCog(Cog, name="Submissions"):
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        versions_response: APIResponse[VersionsRecord] = await DatabaseManager().table("versions").select("*").execute()
-        versions = [f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}" for v in versions_response.data]
+        versions_response: APIResponse[VersionRecord] = await DatabaseManager().table("versions").select("*").execute()
+        versions = [
+            f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}"
+            for v in versions_response.data
+        ]
         await ctx.send(str(versions[:20]))
 
     # fmt: off

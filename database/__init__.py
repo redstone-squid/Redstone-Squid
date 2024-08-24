@@ -6,7 +6,7 @@ from postgrest import APIResponse
 
 from supabase_py_async import create_client, AsyncClient
 from bot.config import DEV_MODE
-from database.schema import VersionsRecord
+from database.schema import VersionRecord
 
 
 class DatabaseManager:
@@ -46,10 +46,10 @@ class DatabaseManager:
 
     @classmethod
     @alru_cache(maxsize=1)
-    async def get_versions_list(cls) -> list[VersionsRecord]:
+    async def get_versions_list(cls) -> list[VersionRecord]:
         """Returns a list of versions from the database."""
         await cls.setup()
-        versions_response: APIResponse[VersionsRecord] = await DatabaseManager().table("versions").select("*").execute()
+        versions_response: APIResponse[VersionRecord] = await DatabaseManager().table("versions").select("*").execute()
         return versions_response.data
 
 
@@ -61,5 +61,6 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     import dotenv
+
     dotenv.load_dotenv()
     asyncio.run(main())
