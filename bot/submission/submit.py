@@ -28,7 +28,7 @@ from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
 from database.message import get_build_id_by_message
-from database.schema import TypeRecord
+from database.schema import TypeRecord, VersionsRecord
 from database.server_settings import get_server_setting
 from database.utils import upload_to_catbox
 
@@ -147,7 +147,9 @@ class SubmissionsCog(Cog, name="Submissions"):
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        await ctx.send(str(config.VERSIONS_LIST))
+        versions_response: APIResponse[VersionsRecord] = await DatabaseManager().table("versions").select("*").execute()
+        versions = [f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}" for v in versions_response.data if v["edition"] is not None]
+        await ctx.send(str(versions[:20]))
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
