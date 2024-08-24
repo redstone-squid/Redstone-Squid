@@ -222,7 +222,7 @@ class Build:
         build.visible_closing_time = data["doors"]["visible_closing_time"]
         build.visible_opening_time = data["doors"]["visible_opening_time"]
 
-        restrictions = data.get("restrictions", [])
+        restrictions: list[RestrictionRecord] = data.get("restrictions", [])
         build.wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
         build.component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
         build.miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
@@ -232,7 +232,7 @@ class Build:
         creators: list[dict[str, Any]] = data.get("users", [])
         build.creators_ign = [creator["ign"] for creator in creators]
 
-        versions: list[dict[str, Any]] = data.get("versions", [])
+        versions: list[VersionsRecord] = data.get("versions", [])
         build.functional_versions = [version["full_name_temp"] for version in versions]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
