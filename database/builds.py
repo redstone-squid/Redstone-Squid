@@ -22,12 +22,12 @@ from database.schema import (
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
-    ChannelPurpose,
+    ChannelPurpose, QuantifiedVersionRecord,
 )
 from database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
-from database.utils import utcnow, get_version_string
+from database.utils import utcnow, get_version_string, parse_version_string
 from database.enums import Status, Category
 from bot import utils
 from bot.config import VERSIONS_LIST
@@ -479,12 +479,13 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
+        functional_versions = data.get("functional_versions", VERSIONS_LIST[-1])
+
+        # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
-        # No error is raised if the version is not found in the database
-        response: APIResponse[VersionsRecord] = (
-            await db.table("versions")
-            .select("*")
-            .in_("full_name_temp", data.get("functional_versions", [VERSIONS_LIST[-1]]))
+        response: APIResponse[QuantifiedVersionRecord] = (
+            await db.rpc("get_quantified_version_names", {})
+            .in_("quantified_name", functional_versions)
             .execute()
         )
         version_ids = [version["id"] for version in response.data]

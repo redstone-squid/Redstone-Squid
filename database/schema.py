@@ -121,6 +121,12 @@ class VersionsRecord(TypedDict):
     patch_number: str
     full_name_temp: str  # TODO: remove
 
+class QuantifiedVersionRecord(TypedDict):
+    """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""
+
+    id: int
+    quantified_name: str
+
 
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
