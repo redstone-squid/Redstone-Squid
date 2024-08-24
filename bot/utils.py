@@ -433,5 +433,6 @@ async def main():
 if __name__ == "__main__":
     from dotenv import load_dotenv
     import asyncio
+
     load_dotenv()
     asyncio.run(main())
