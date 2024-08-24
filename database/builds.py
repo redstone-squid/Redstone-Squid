@@ -27,7 +27,7 @@ from database.schema import (
 from database.database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
-from database.utils import utcnow
+from database.utils import utcnow, get_version_string
 from database.enums import Status, Category
 from bot import utils
 from bot.config import VERSIONS_LIST
@@ -233,7 +233,7 @@ class Build:
         build.creators_ign = [creator["ign"] for creator in creators]
 
         versions: list[VersionsRecord] = data.get("versions", [])
-        build.functional_versions = [version["full_name_temp"] for version in versions]
+        build.functional_versions = [get_version_string(v) for v in versions]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
         build.image_urls = [link["url"] for link in links if link["media_type"] == "image"]

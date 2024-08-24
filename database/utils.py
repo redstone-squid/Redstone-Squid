@@ -7,6 +7,8 @@ from typing import Any
 import requests
 from requests_toolbelt import MultipartEncoder
 
+from database.schema import VersionsRecord
+
 
 def utcnow() -> str:
     """Returns the current time in UTC in the format of a string."""
@@ -37,3 +39,11 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
     response = requests.post(catbox_url, data=encoder, headers={"Content-Type": encoder.content_type})
 
     return response.text
+
+
+def get_version_string(version: VersionsRecord) -> str:
+    """Returns a formatted version string."""
+    if version["edition"] == "Java":
+        return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+    else:
+        return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
