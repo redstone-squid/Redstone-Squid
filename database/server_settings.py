@@ -3,7 +3,7 @@
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
 
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.schema import ServerSettingRecord, DbSettingKey, ChannelPurpose, CHANNEL_PURPOSES
 
 # The names of the settings in the database, mapped from the channel purpose,

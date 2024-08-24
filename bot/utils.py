@@ -18,7 +18,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
 
 if TYPE_CHECKING:

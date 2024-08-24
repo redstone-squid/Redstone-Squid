@@ -5,7 +5,7 @@ from uuid import UUID
 import requests
 
 from database.utils import utcnow
-from database.database import DatabaseManager
+from database import DatabaseManager
 
 
 async def add_user(user_id: int = None, ign: str = None) -> int:

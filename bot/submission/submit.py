@@ -23,7 +23,7 @@ from bot import utils, config
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown

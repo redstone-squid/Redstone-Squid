@@ -10,7 +10,7 @@ from postgrest.types import CountMethod
 from database.builds import Build, get_builds
 from database.schema import MessageRecord
 from database.utils import utcnow
-from database.database import DatabaseManager
+from database import DatabaseManager
 
 
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.

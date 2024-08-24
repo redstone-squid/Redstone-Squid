@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.user import get_minecraft_username
 from database.utils import utcnow
 

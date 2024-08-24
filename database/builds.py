@@ -24,7 +24,7 @@ from database.schema import (
     DoorOrientationName,
     ChannelPurpose,
 )
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string

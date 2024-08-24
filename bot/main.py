@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from bot.submission.submit import SubmissionsCog
 from bot.verify import VerifyCog
-from database.database import DatabaseManager
+from database import DatabaseManager
 from database.utils import utcnow
 from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 from bot.misc_commands import Miscellaneous
