@@ -8,6 +8,7 @@ from collections.abc import Sequence, Mapping
 from typing import Literal, Any
 
 import discord
+from discord.utils import escape_markdown
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
@@ -545,7 +546,7 @@ class Build:
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
-            em.add_field(name=key, value=val, inline=True)
+            em.add_field(name=key, value=escape_markdown(val), inline=True)
 
         if self.image_urls:
             em.set_image(url=self.image_urls[0])
@@ -617,7 +618,7 @@ class Build:
                 desc.append("**Directional** with known fixes for each direction.")
 
         if self.information and (user_message := self.information.get("user")):
-            desc.append("\n" + user_message)
+            desc.append("\n" + escape_markdown(user_message))
 
         return "\n".join(desc) if desc else None
 
@@ -652,6 +653,9 @@ class Build:
         return ", ".join(versions)
 
     def get_metadata_fields(self) -> dict[str, str]:
+        """Returns a dictionary of metadata fields for the build.
+
+        The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
         fields = {"Dimensions": f"{self.width or '?'} x {self.height or '?'} x {self.depth or '?'}"}
 
         if self.normal_opening_time:
