@@ -391,7 +391,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             )
 
     @Cog.listener(name="on_raw_reaction_add")
-    async def confirm_record(self, payload: discord.RawReactionActionEvent):
+    async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
         """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
         # --- A bunch of checks to make sure the reaction is valid ---
         # Must be in a guild
