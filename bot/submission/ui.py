@@ -32,6 +32,9 @@ class SubmissionModal(discord.ui.Modal):
         # Dimensions
         self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=True)
 
+        # Versions
+        self.versions = discord.ui.TextInput(label="Versions", placeholder="e.g., 1.16.1, 1.17.3", required=False)
+
         # Restrictions
         self.restrictions = discord.ui.TextInput(
             label="Restrictions",
@@ -88,21 +91,6 @@ class SubmissionModal(discord.ui.Modal):
             self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
-class AdditionalSubmissionInfoButton(Button):
-    def __init__(self, build: Build):
-        self.build = build
-        super().__init__(
-            label="Add more Information",
-            style=discord.ButtonStyle.primary,
-            custom_id="open_modal",
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        interaction_response: InteractionResponse = interaction.response  # type: ignore
-        await interaction_response.send_modal(SubmissionModal(self.build))
-
-
 class RecordCategorySelect(discord.ui.Select):
     def __init__(self, build: Build):
         self.build = build
@@ -141,25 +129,6 @@ class DoorTypeSelect(discord.ui.Select):
         await interaction.response.defer()  # type: ignore
 
 
-class VersionsSelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=version) for version in config.VERSIONS_LIST]
-        super().__init__(
-            placeholder="Choose the versions the door works in",
-            min_values=1,
-            max_values=19,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast("SelectMessageComponentInteractionData", interaction.data)
-        self.build.functional_versions = data["values"]
-        await interaction.response.defer()  # type: ignore
-
-
 class DirectonalityLocationalitySelect(discord.ui.Select):
     def __init__(self, build: Build):
         self.build = build
@@ -194,15 +163,23 @@ class BuildSubmissionForm(View):
         self.value = None
         self.add_item(RecordCategorySelect(self.build))
         self.add_item(DoorTypeSelect(self.build))
-        self.add_item(VersionsSelect(self.build))
         self.add_item(DirectonalityLocationalitySelect(self.build))
-        self.add_item(AdditionalSubmissionInfoButton(self.build))
 
     @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.build.submitter_id = interaction.user.id
         self.value = True
+        self.stop()
+
+    @discord.ui.button(label="Add more Information", custom_id="open_modal", style=discord.ButtonStyle.primary)
+    async def add_info(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SubmissionModal(self.build))
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.value = False
         self.stop()
 
 
