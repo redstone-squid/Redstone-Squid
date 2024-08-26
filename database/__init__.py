@@ -49,7 +49,9 @@ class DatabaseManager:
     @classmethod
     @alru_cache(maxsize=3)
     async def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
-        """Returns a list of versions from the database."""
+        """Returns a list of versions from the database, sorted from oldest to newest.
+
+        If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
         query = cls().table("versions").select("*")
         if edition:
@@ -62,7 +64,7 @@ class DatabaseManager:
     @classmethod
     @alru_cache(maxsize=2)
     async def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
-        """Returns the newest version from the database."""
+        """Returns the newest version from the database. This method is cached."""
         versions = await cls.get_versions_list(edition=edition)
         return versions[-1]
 
