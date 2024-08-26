@@ -85,7 +85,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No open submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            return await sent_message.edit(embed=submission.generate_embed())
+            return await sent_message.edit(embed=await submission.generate_embed())
 
     @staticmethod
     def is_owner_server(ctx: Context):
@@ -168,7 +168,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
             # stupid workaround to get async code to work with flags
-            default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version())),
+            default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version(edition="Java"))),
             description='The versions the build works in. Default to newest version. /versions for full list.'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
@@ -208,7 +208,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             # Shows the submission to the user
             await followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=build.generate_embed(),
+                embed=await build.generate_embed(),
                 ephemeral=True,
             )
 
@@ -234,7 +234,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             guilds = self.bot.guilds
 
         channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
-        em = build.generate_embed()
+        em = await build.generate_embed()
 
         for channel_id in channel_ids:
             channel = self.bot.get_channel(channel_id)
@@ -283,7 +283,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             await build.save()
             await followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=build.generate_embed(),
+                embed=await build.generate_embed(),
                 ephemeral=True,
             )
             await self.post_build(build)
@@ -333,7 +333,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             update_values = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             submission.update_local(update_values)
-            preview_embed = submission.generate_embed()
+            preview_embed = await submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
@@ -357,7 +357,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if await get_build_id_by_message(message_id) != build.id:
             raise ValueError("The message_id does not correspond to the build_id.")
 
-        em = build.generate_embed()
+        em = await build.generate_embed()
         channel = self.bot.get_channel(channel_id)
         if not isinstance(channel, discord.PartialMessageable):
             raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
@@ -373,7 +373,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         # Get all messages for a build
         messages = await msg.get_build_messages(build.id)
-        em = build.generate_embed()
+        em = await build.generate_embed()
 
         for message in messages:
             channel = self.bot.get_channel(message["channel_id"])

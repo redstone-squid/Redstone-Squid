@@ -490,7 +490,8 @@ class Build:
         )
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
-        await db.table("build_versions").upsert(build_versions_data).execute()
+        if build_versions_data:
+            await db.table("build_versions").upsert(build_versions_data).execute()
 
     def update_local(self, data: dict[Any, Any]) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
@@ -540,9 +541,9 @@ class Build:
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
-    def generate_embed(self) -> discord.Embed:
+    async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
-        em = utils.info_embed(title=self.get_title(), description=self.get_description())
+        em = utils.info_embed(title=self.get_title(), description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -594,7 +595,7 @@ class Build:
 
         return title
 
-    def get_description(self) -> str | None:
+    async def get_description(self) -> str | None:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         desc = []
 
@@ -603,8 +604,8 @@ class Build:
 
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
-        elif bot.config.VERSIONS_LIST[-1] not in self.functional_versions:
-            desc.append("**Broken** in current version.")
+        elif await DatabaseManager.get_newest_version("Java") not in self.functional_versions:
+            desc.append("**Broken** in current (Java) version.")
 
         if self.miscellaneous_restrictions is not None:
             if "Locational" in self.miscellaneous_restrictions:
