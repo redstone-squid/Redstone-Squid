@@ -70,17 +70,6 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
             first_log=True,
         )
 
-    # Temporary fix
-    # TODO: Remove this event after the bot doesn't break when it is in more than one server
-    @Cog.listener("on_guild_join")
-    async def leave_other_servers(self, guild: discord.Guild):
-        if guild.id != OWNER_SERVER_ID:
-            # Send a warning message in the server, and then leave
-            await self.log(f"Bot joined server: {guild.name} with id: {guild.id}.")
-            if guild.system_channel:
-                await guild.system_channel.send("I am not supposed to be in this server. Leaving now.")
-            await guild.leave()
-
     @Cog.listener("on_command")
     async def log_command_usage(self, ctx: Context[RedstoneSquid]):
         """Logs command usage to stdout and to the owner of the bot via DM."""

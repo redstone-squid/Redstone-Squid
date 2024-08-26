@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only
 
+from database import DatabaseManager
 from database.server_settings import (
     update_server_setting,
     get_server_setting,
@@ -35,6 +36,11 @@ class SettingsCog(Cog, name="Settings"):
     async def settings_hybrid_group(self, ctx: Context):
         """Allows you to configure the bot for your server."""
         await ctx.send_help("settings")
+
+    @Cog.listener("on_guild_join")
+    async def on_guild_join(self, guild: discord.Guild):
+        """When the bot joins a guild, add the guild to the database."""
+        await DatabaseManager().table("server_settings").upsert({"server_id": guild.id}).execute()
 
     @settings_hybrid_group.command()
     @has_any_role(*channel_settings_roles)
