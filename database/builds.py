@@ -12,7 +12,6 @@ from discord.utils import escape_markdown
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
-import bot.config
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -32,7 +31,6 @@ from database.user import add_user
 from database.utils import utcnow, get_version_string
 from database.enums import Status, Category
 from bot import utils
-from bot.config import VERSIONS_LIST
 
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
@@ -481,7 +479,7 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("functional_versions", VERSIONS_LIST[-1])
+        functional_versions = data.get("functional_versions", await DatabaseManager.get_newest_version(edition="Java"))
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
@@ -545,7 +543,7 @@ class Build:
         """Generates an embed for the build."""
         em = utils.info_embed(title=self.get_title(), description=await self.get_description())
 
-        fields = self.get_metadata_fields()
+        fields = await self.get_metadata_fields()
         for key, val in fields.items():
             em.add_field(name=key, value=escape_markdown(val), inline=True)
 
@@ -623,7 +621,7 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    def get_versions_string(self) -> str:
+    async def get_versions_string(self) -> str:
         """Returns a string of the versions the build is functional in.
 
         The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
@@ -637,7 +635,7 @@ class Build:
         first_version = None
         last_version = None
 
-        for version in bot.config.VERSIONS_LIST:
+        for version in await DatabaseManager.get_versions_list(edition="Java"):
             if version in self.functional_versions:
                 if not linking:
                     linking = True
@@ -653,7 +651,7 @@ class Build:
 
         return ", ".join(versions)
 
-    def get_metadata_fields(self) -> dict[str, str]:
+    async def get_metadata_fields(self) -> dict[str, str]:
         """Returns a dictionary of metadata fields for the build.
 
         The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
@@ -679,7 +677,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = self.get_versions_string()
+        fields["Versions"] = await self.get_versions_string()
 
         if self.server_ip:
             fields["Server"] = self.server_ip
