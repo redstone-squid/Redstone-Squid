@@ -7,6 +7,7 @@ from typing import cast, TYPE_CHECKING
 import discord
 from discord import app_commands
 from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only
+from postgrest.types import ReturnMethod
 
 from database import DatabaseManager
 from database.server_settings import (
@@ -41,6 +42,11 @@ class SettingsCog(Cog, name="Settings"):
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, add the guild to the database."""
         await DatabaseManager().table("server_settings").upsert({"server_id": guild.id}).execute()
+
+    @Cog.listener("on_guild_remove")
+    async def on_guild_remove(self, guild: discord.Guild):
+        """When the bot leaves a guild, marks the guild as deleted in the database."""
+        await DatabaseManager().table("server_settings").update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal).execute()
 
     @settings_hybrid_group.command()
     @has_any_role(*channel_settings_roles)

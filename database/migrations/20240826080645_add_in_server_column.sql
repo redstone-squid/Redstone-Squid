@@ -1,0 +1,1 @@
+alter table server_settings add column in_server bool not null default true;
