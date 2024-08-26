@@ -25,7 +25,7 @@ There are a list of required python packages in requirements.txt. You can instal
 If you want to use a virtual environment, first create the environment in the root directory and activate it.
 ```bash
 python -m venv venv
-source venv/Lib/activate
+source venv/bin/activate
 ```
 Alternatively, you can set up a conda environment with:
 ```bash
