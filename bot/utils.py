@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from io import StringIO
 from textwrap import dedent
@@ -196,7 +197,7 @@ def remove_markdown(text: str) -> str:
     return __md.convert(text)
 
 
-async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> DoorTitle:
+async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual") -> DoorTitle | None:
     """Parses a title into its components.
 
     A build title should be in the format of:
@@ -214,7 +215,7 @@ async def parse_build_title(title: str, mode: Literal["ai", "manual"] = "manual"
     if "\n" in title:
         raise ValueError("Title cannot contain newlines")
 
-    if mode == "ai":
+    if mode == "ai" and os.getenv("OPENAI_API_KEY"):
         return await ai_parse_piston_door_title(title)
     elif mode == "manual":
         title, _ = await manual_parse_piston_door_title(title)

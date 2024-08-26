@@ -471,7 +471,12 @@ class SubmissionsCog(Cog, name="Submissions"):
         # build.door_types = title.door_types
         # build.door_orientation_type = title.orientation
         # print(title)
-        await self.bot.get_channel(536004554743873556).send(title.model_dump_json())
+
+        bot_channel = self.bot.get_channel(536004554743873556)
+        if title:
+            await bot_channel.send(title.model_dump_json())
+        else:
+            await bot_channel.send("No title found")
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
