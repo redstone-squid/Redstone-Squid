@@ -67,8 +67,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        # FIXME: sub.creators_ign is assumed to be a list, but it's a string
-                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"  # type: ignore
+                        f"**{sub.id}** - {sub.get_title()}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"
                     )
                 desc = "\n\n".join(desc)
 
