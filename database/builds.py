@@ -602,7 +602,7 @@ class Build:
 
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
-        elif await DatabaseManager.get_newest_version("Java") not in self.functional_versions:
+        elif await DatabaseManager.get_newest_version(edition="Java") not in self.functional_versions:
             desc.append("**Broken** in current (Java) version.")
 
         if self.miscellaneous_restrictions is not None:
