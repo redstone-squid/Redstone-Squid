@@ -42,10 +42,7 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
 
 def get_version_string(version: VersionRecord) -> str:
     """Returns a formatted version string."""
-    if version["edition"] == "Java":
-        return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"
-    else:
-        return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+    return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
 def parse_version_string(version_string: str) -> tuple[str, str, str, str]:
