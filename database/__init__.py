@@ -60,8 +60,8 @@ class DatabaseManager:
         return versions_response.data
 
     @classmethod
-    @alru_cache(maxsize=3)
-    async def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> VersionRecord:
+    @alru_cache(maxsize=2)
+    async def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
         """Returns the newest version from the database."""
         versions = await cls.get_versions_list(edition=edition)
         return versions[-1]
