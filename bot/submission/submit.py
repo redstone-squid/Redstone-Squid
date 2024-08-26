@@ -150,12 +150,9 @@ class SubmissionsCog(Cog, name="Submissions"):
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        versions_response: APIResponse[VersionRecord] = await DatabaseManager().table("versions").select("*").execute()
-        versions = [
-            f"{v["edition"]} {v["major_version"]}.{v["minor_version"]}.{v["patch_number"]}"
-            for v in versions_response.data
-        ]
-        await ctx.send(str(versions[:20]))
+        versions = await DatabaseManager.get_versions_list(edition="Java")
+        versions_human_readable = [get_version_string(version) for version in versions[-20:]]  # TODO: pagination
+        await ctx.send(", ".join(versions_human_readable))
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
