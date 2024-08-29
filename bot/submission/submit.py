@@ -150,7 +150,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
         versions = await DatabaseManager.get_versions_list(edition="Java")
-        versions_human_readable = [get_version_string(version) for version in versions[-20:]]  # TODO: pagination
+        versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
     # fmt: off
