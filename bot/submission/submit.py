@@ -252,11 +252,12 @@ class SubmissionsCog(Cog, name="Submissions"):
         await ctx.defer()
 
         build = Build()
-        for name, attachment in flags:
+        for _name, attachment in flags:
             if attachment is None:
                 continue
 
             assert isinstance(attachment, discord.Attachment)
+            assert attachment.content_type is not None
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
                 raise ValueError(f"Unsupported content type: {attachment.content_type}")
 
