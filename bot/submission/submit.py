@@ -81,7 +81,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             submission = await Build.from_id(submission_id)
 
             if submission is None:
-                error_embed = utils.error_embed("Error", "No open submission with that ID.")
+                error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             return await sent_message.edit(embed=await submission.generate_embed())
