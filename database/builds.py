@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Literal, Any
+from typing import Literal, Any, cast
 
 import discord
 from discord.utils import escape_markdown
@@ -37,56 +38,52 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
+@dataclass
 class Build:
-    """A class representing a submission to the database. This class is used to store and manipulate submissions."""
+    """A submission to the database."""
 
-    def __init__(self):
-        """Initializes an empty build.
+    id: int | None = None
+    submission_status: Status | None = None
+    category: Category | None = None
+    record_category: RecordCategory | None = None
+    functional_versions: list[str] | None = None
 
-        This should not be used externally. Use `from_dict()` or `from_id()` instead."""
-        self.id: int | None = None
-        self.submission_status: Status | None = None
-        self.category: Category | None = None
-        self.record_category: RecordCategory | None = None
-        self.functional_versions: list[str] | None = None
+    width: int | None = None
+    height: int | None = None
+    depth: int | None = None
 
-        self.width: int | None = None
-        self.height: int | None = None
-        self.depth: int | None = None
+    door_width: int | None = None
+    door_height: int | None = None
+    door_depth: int | None = None
 
-        self.door_width: int | None = None
-        self.door_height: int | None = None
-        self.door_depth: int | None = None
+    door_type: list[str] | None = None
+    door_orientation_type: DoorOrientationName | None = None
 
-        self.door_type: Sequence[str] | None = None
-        self.door_orientation_type: DoorOrientationName | None = None
+    wiring_placement_restrictions: list[str] = field(default_factory=list)
+    component_restrictions: list[str] = field(default_factory=list)
+    miscellaneous_restrictions: list[str] = field(default_factory=list)
 
-        self.wiring_placement_restrictions: Sequence[str] | None = None
-        self.component_restrictions: Sequence[str] | None = None
-        self.miscellaneous_restrictions: Sequence[str] | None = None
+    normal_closing_time: int | None = None
+    normal_opening_time: int | None = None
+    visible_closing_time: int | None = None
+    visible_opening_time: int | None = None
 
-        self.normal_closing_time: int | None = None
-        self.normal_opening_time: int | None = None
-        self.visible_closing_time: int | None = None
-        self.visible_opening_time: int | None = None
+    information: Info | None = None
+    creators_ign: list[str] | None = None
 
-        # In the database, we force empty information to be {}
-        self.information: Info | None = None
-        self.creators_ign: Sequence[str] | None = None
+    image_urls: list[str] = field(default_factory=list)
+    video_urls: list[str] = field(default_factory=list)
+    world_download_urls: list[str] = field(default_factory=list)
 
-        self.image_urls: list[str] = []
-        self.video_urls: list[str] = []
-        self.world_download_urls: list[str] = []
+    # TODO: Put these three into server_info
+    server_ip: str | None = None
+    coordinates: str | None = None
+    command: str | None = None
 
-        # TODO: Put these three into server_info
-        self.server_ip: str | None = None
-        self.coordinates: str | None = None
-        self.command: str | None = None
-
-        self.submitter_id: int | None = None
-        # TODO: save the submitted time too
-        self.completion_time: str | None = None
-        self.edited_time: str | None = None
+    submitter_id: int | None = None
+    # TODO: save the submitted time too
+    completion_time: str | None = None
+    edited_time: str | None = None
 
     def __iter__(self):
         """Iterates over the *attributes* of the Build object."""
@@ -142,9 +139,9 @@ class Build:
     ) -> None:
         """Sets the restrictions of the build."""
         if isinstance(restrictions, Mapping):
-            self.wiring_placement_restrictions = restrictions.get("wiring_placement_restrictions")
-            self.component_restrictions = restrictions.get("component_restrictions")
-            self.miscellaneous_restrictions = restrictions.get("miscellaneous_restrictions")
+            self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
+            self.component_restrictions = list(restrictions.get("component_restrictions", []))
+            self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
         else:
             self.wiring_placement_restrictions = []
             self.component_restrictions = []
@@ -577,9 +574,8 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
-        if self.wiring_placement_restrictions is not None:
-            for restriction in self.wiring_placement_restrictions:
-                title += f"{restriction} "
+        for restriction in self.wiring_placement_restrictions:
+            title += f"{restriction} "
 
         # Pattern
         if self.door_type is not None:
@@ -606,16 +602,15 @@ class Build:
         elif get_version_string(await DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
             desc.append("**Broken** in current (Java) version.")
 
-        if self.miscellaneous_restrictions is not None:
-            if "Locational" in self.miscellaneous_restrictions:
-                desc.append("**Locational**.")
-            elif "Locational with fixes" in self.miscellaneous_restrictions:
-                desc.append("**Locational** with known fixes for each location.")
+        if "Locational" in self.miscellaneous_restrictions:
+            desc.append("**Locational**.")
+        elif "Locational with fixes" in self.miscellaneous_restrictions:
+            desc.append("**Locational** with known fixes for each location.")
 
-            if "Directional" in self.miscellaneous_restrictions:
-                desc.append("**Directional**.")
-            elif "Directional with fixes" in self.miscellaneous_restrictions:
-                desc.append("**Directional** with known fixes for each direction.")
+        if "Directional" in self.miscellaneous_restrictions:
+            desc.append("**Directional**.")
+        elif "Directional with fixes" in self.miscellaneous_restrictions:
+            desc.append("**Directional** with known fixes for each direction.")
 
         if self.information and (user_message := self.information.get("user")):
             desc.append("\n" + escape_markdown(user_message))
