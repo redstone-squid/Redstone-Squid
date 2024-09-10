@@ -483,9 +483,10 @@ class Build:
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
-        response: APIResponse[QuantifiedVersionRecord] = (
+        response = (
             await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
+        response = cast(APIResponse[QuantifiedVersionRecord], response)
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
         if build_versions_data:
