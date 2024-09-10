@@ -45,6 +45,11 @@ def get_version_string(version: VersionRecord) -> str:
     return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
+def get_version_tuple(version: VersionRecord) -> tuple[str, int, int, int]:
+    """Returns a version tuple."""
+    return version["edition"], version["major_version"], version["minor_version"], version["patch_number"]
+
+
 def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
     """Parses a version string into its components.
 
