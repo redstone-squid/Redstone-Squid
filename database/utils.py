@@ -45,7 +45,7 @@ def get_version_string(version: VersionRecord) -> str:
     return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
-def parse_version_string(version_string: str) -> tuple[str, str, str, str]:
+def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
     """Parses a version string into its components.
 
     A version string is formatted as follows:
@@ -63,4 +63,4 @@ def parse_version_string(version_string: str) -> tuple[str, str, str, str]:
         edition = "Java"
         major = edition_and_major
 
-    return edition, major, minor, patch
+    return edition, int(major), int(minor), int(patch)
