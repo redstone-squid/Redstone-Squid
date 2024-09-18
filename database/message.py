@@ -39,9 +39,7 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     return server_record.data
 
 
-async def track_message(
-    server_id: int, build_id: int, channel_id: int, message_id: int, purpose: str
-) -> None:
+async def track_message(server_id: int, build_id: int, channel_id: int, message_id: int, purpose: str) -> None:
     """Track a message in the database.
 
     Args:
@@ -73,7 +71,9 @@ async def update_message_edited_time(message_id: int) -> None:
     await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
-async def untrack_message(server_id: int, build_id: int, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None) -> list[int]:
+async def untrack_message(
+    server_id: int, build_id: int, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None
+) -> list[int]:
     """Untrack messages from the database. The message is not deleted on discord.
 
     To also delete the message on discord, fetch the messages from discord using the returned message ids and delete them.

@@ -599,7 +599,9 @@ class Build:
 
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
-        elif get_version_string(await DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
+        elif (
+            get_version_string(await DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions
+        ):
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -642,13 +644,21 @@ class Build:
             elif linking:  # Current looped version is not functional, but the previous one was
                 assert start_version is not None
                 assert end_version is not None
-                versions.append(get_version_string(start_version) if start_version == end_version else f"{start_version} - {end_version}")
+                versions.append(
+                    get_version_string(start_version)
+                    if start_version == end_version
+                    else f"{start_version} - {end_version}"
+                )
                 linking = False
 
         if linking:  # If the last version is functional
             assert start_version is not None
             assert end_version is not None
-            versions.append(get_version_string(start_version) if start_version == end_version else f"{start_version} - {end_version}")
+            versions.append(
+                get_version_string(start_version)
+                if start_version == end_version
+                else f"{start_version} - {end_version}"
+            )
 
         return ", ".join(versions)
 

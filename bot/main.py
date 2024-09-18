@@ -18,7 +18,7 @@ from bot.submission.submit import SubmissionsCog
 from bot.verify import VerifyCog
 from database import DatabaseManager
 from database.utils import utcnow
-from bot.config import OWNER_SERVER_ID, OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
+from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog

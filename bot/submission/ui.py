@@ -6,8 +6,7 @@ import re
 from typing import override, cast, TYPE_CHECKING
 
 import discord
-from discord import InteractionResponse
-from discord.ui import Button, View
+from discord.ui import View
 
 from bot import utils as utils, config as config
 from database.builds import Build

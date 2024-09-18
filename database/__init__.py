@@ -57,7 +57,11 @@ class DatabaseManager:
         if edition:
             query = query.eq("edition", edition)
         versions_response: APIResponse[VersionRecord] = (
-            await query.order("edition").order("major_version", desc=True).order("minor_version", desc=True).order("patch_number", desc=True).execute()
+            await query.order("edition")
+            .order("major_version", desc=True)
+            .order("minor_version", desc=True)
+            .order("patch_number", desc=True)
+            .execute()
         )
         return versions_response.data
 

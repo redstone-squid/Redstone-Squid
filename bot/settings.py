@@ -46,7 +46,12 @@ class SettingsCog(Cog, name="Settings"):
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
         """When the bot leaves a guild, marks the guild as deleted in the database."""
-        await DatabaseManager().table("server_settings").update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal).execute()
+        await (
+            DatabaseManager()
+            .table("server_settings")
+            .update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal)
+            .execute()
+        )
 
     @settings_hybrid_group.command()
     @has_any_role(*channel_settings_roles)
