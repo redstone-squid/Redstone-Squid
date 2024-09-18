@@ -109,7 +109,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 return await sent_message.edit(embed=error_embed)
 
             await build.confirm()
-            await self.post_build(build)
+            await self.post_build(build, purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
             return await sent_message.edit(embed=success_embed)
@@ -141,7 +141,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             unsent_builds = await msg.get_unsent_builds(ctx.guild.id)
 
             for build in unsent_builds:
-                await self.post_build(build, guilds=[ctx.guild])
+                await self.post_build(build, guilds=[ctx.guild], purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "All posts have been sent.")
             return await sent_message.edit(embed=success_embed)
@@ -152,6 +152,30 @@ class SubmissionsCog(Cog, name="Submissions"):
         versions = await DatabaseManager.get_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
+
+    async def post_build(self, build: Build, *, purpose: str, guilds: Sequence[Guild] | None = None) -> None:
+        """Post a confirmed submission to the appropriate discord channels.
+
+        Args:
+            build (Build): The build to post.
+            purpose (str): The purpose of the post.
+            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
+        """
+        # TODO: There are no checks to see if the submission has already been posted
+        if build.id is None:
+            raise ValueError("Build id is None.")
+
+        if guilds is None:
+            guilds = self.bot.guilds
+
+        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
+        em = await build.generate_embed()
+
+        for channel_id in channel_ids:
+            channel = self.bot.get_channel(channel_id)
+            assert isinstance(channel, GuildMessageable)
+            message = await channel.send(embed=em)
+            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -213,30 +237,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 f"Build submitted successfully!\nThe submission ID is: {build.id}",
             )
             await message.edit(embed=success_embed)
-            await self.post_build(build)
-
-    async def post_build(self, build: Build, *, guilds: Sequence[Guild] | None = None) -> None:
-        """Posts a submission to the appropriate discord channels.
-
-        Args:
-            build (Build): The build to post.
-            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds. Defaults to None.
-        """
-        # TODO: There are no checks to see if the submission has already been posted, or if the submission is actually a record
-        if build.id is None:
-            raise ValueError("Build id is None.")
-
-        if guilds is None:
-            guilds = self.bot.guilds
-
-        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
-        em = await build.generate_embed()
-
-        for channel_id in channel_ids:
-            channel = self.bot.get_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
-            message = await channel.send(embed=em)
-            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id, "build_post")
+            await self.post_build(build, purpose="view_pending_build")
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
@@ -283,7 +284,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 embed=await build.generate_embed(),
                 ephemeral=True,
             )
-            await self.post_build(build)
+            await self.post_build(build, purpose="view_pending_build")
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
@@ -431,7 +432,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if payload.emoji.name in APPROVE_EMOJIS:
             # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
             await submission.confirm()
-            await self.post_build(submission)
+            await self.post_build(submission, purpose="view_confirmed_build")
         elif payload.emoji.name in DENY_EMOJIS:
             await submission.deny()
 
@@ -471,9 +472,9 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         bot_channel = self.bot.get_channel(536004554743873556)
         if title:
-            await bot_channel.send(title.model_dump_json())
+            await bot_channel.send(title.model_dump_json())  # type: ignore
         else:
-            await bot_channel.send("No title found")
+            await bot_channel.send("No title found")  # type: ignore
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
