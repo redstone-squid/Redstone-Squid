@@ -69,7 +69,7 @@ class Build:
     visible_opening_time: int | None = None
 
     information: Info | None = None
-    creators_ign: list[str] | None = None
+    creators_ign: list[str] = field(default_factory=list)
 
     image_urls: list[str] = field(default_factory=list)
     video_urls: list[str] = field(default_factory=list)
