@@ -175,7 +175,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
-            await msg.add_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
+            await msg.track_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -436,7 +436,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         elif payload.emoji.name in DENY_EMOJIS:
             await submission.deny()
 
-        message_ids = await msg.delete_message(guild_id, build_id)
+        message_ids = await msg.untrack_message(guild_id, build_id)
         vote_channel = self.bot.get_channel(vote_channel_id)
         assert isinstance(vote_channel, GuildMessageable)
         for message_id in message_ids:

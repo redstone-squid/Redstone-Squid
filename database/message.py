@@ -37,10 +37,18 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     return server_record.data
 
 
-async def add_message(
+async def track_message(
     server_id: int, build_id: int, channel_id: int, message_id: int, purpose: str
 ) -> None:
-    """Add a message to the database."""
+    """Track a message in the database.
+
+    Args:
+        server_id: The server id of the message.
+        build_id: The build id of the message.
+        channel_id: The channel id of the message.
+        message_id: The message id of the message.
+        purpose: The purpose of the message. This should be a short description of why the message was sent.
+    """
     await (
         DatabaseManager()
         .table("messages")
@@ -63,15 +71,15 @@ async def update_message_edited_time(message_id: int) -> None:
     await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
-async def delete_message(server_id: int, build_id: int) -> list[int]:
-    """Remove a message from the database.
+async def untrack_message(server_id: int, build_id: int) -> list[int]:
+    """Untrack all messages with the same server_id and build_id from the database. The message is not deleted on discord.
 
     Args:
-        server_id: The server id of the message to delete.
-        build_id: The build id of the message to delete.
+        server_id: The server id of the message to untrack.
+        build_id: The build id of the message to untrack.
 
     Returns:
-        A list of message ids that were deleted.
+        A list of message ids that were untracked.
     """
     db = DatabaseManager()
     response: APIResponse[MessageRecord] = (
