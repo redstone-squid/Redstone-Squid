@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import Task
 from dataclasses import dataclass, field
 from functools import cache
 from collections.abc import Sequence, Mapping
@@ -333,22 +334,21 @@ class Build:
             delete_build_on_error = True
 
         try:
-            await self._update_build_subcategory_table(data)
+            background_tasks: set[Task[Any]] = set()
+            async with asyncio.TaskGroup() as tg:
+                background_tasks.add(tg.create_task(self._update_build_subcategory_table(data)))
+                background_tasks.add(tg.create_task(self._update_build_links_table(data)))
+                background_tasks.add(tg.create_task(self._update_build_creators_table(data)))
+                background_tasks.add(tg.create_task(self._update_build_versions_table(data)))
+                unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
+                unknown_types = tg.create_task(self._update_build_types_table(data))
 
-            unknown_restrictions = await self._update_build_restrictions_table(data)
-            if unknown_restrictions:
-                information["unknown_restrictions"] = unknown_restrictions
-
-            unknown_types = await self._update_build_types_table(data)
-            if unknown_types:
-                information["unknown_patterns"] = unknown_types
-
+            if unknown_restrictions.result():
+                information["unknown_restrictions"] = unknown_restrictions.result()
+            if unknown_types.result():
+                information["unknown_patterns"] = unknown_types.result()
             # Update the information field in the database to store any unknown restrictions or types
             await db.table("builds").update({"information": information}).eq("id", self.id).execute()
-
-            await self._update_build_links_table(data)
-            await self._update_build_creators_table(data)
-            await self._update_build_versions_table(data)
         except:
             if delete_build_on_error:
                 await db.table("builds").delete().eq("id", self.id).execute()
