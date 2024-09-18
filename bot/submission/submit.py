@@ -443,7 +443,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             message = await vote_channel.fetch_message(message_id)
             await message.delete()
 
-    @Cog.listener(name="on_message")
+    # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
         """Infer a build from a message."""
         if message.author.bot:
