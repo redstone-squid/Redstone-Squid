@@ -142,3 +142,5 @@ CHANNEL_PURPOSES = cast(Sequence[ChannelPurpose], get_args(ChannelPurpose))
 
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
+
+MessagePurpose = Literal["view_pending_build", "view_confirmed_build"]
