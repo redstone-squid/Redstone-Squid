@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
@@ -71,24 +73,34 @@ async def update_message_edited_time(message_id: int) -> None:
     await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
-async def untrack_message(server_id: int, build_id: int) -> list[int]:
-    """Untrack all messages with the same server_id and build_id from the database. The message is not deleted on discord.
+async def untrack_message(server_id: int, build_id: int, purpose: str | Iterable[str] | None = None) -> list[int]:
+    """Untrack messages from the database. The message is not deleted on discord.
+
+    To also delete the message on discord, fetch the messages from discord using the returned message ids and delete them.
 
     Args:
         server_id: The server id of the message to untrack.
         build_id: The build id of the message to untrack.
+        purpose: The purpose(s) of the message to untrack. If None, all messages with the same server_id and build_id are untracked.
 
     Returns:
         A list of message ids that were untracked.
     """
     db = DatabaseManager()
-    response: APIResponse[MessageRecord] = (
-        await db.table("messages")
+    query = (
+        db.table("messages")
         .select("message_id", count=CountMethod.exact)
         .eq("server_id", server_id)
         .eq("build_id", build_id)
-        .execute()
     )
+    if purpose is None:
+        pass
+    elif isinstance(purpose, str):
+        query = query.eq("purpose", purpose)
+    else:  # isinstance(purpose, Iterable)
+        query = query.in_("purpose", purpose)
+
+    response: APIResponse[MessageRecord] = await query.execute()
     if not response.count:
         return []
     message_ids = [response.data[i]["message_id"] for i in range(response.count)]
