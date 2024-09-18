@@ -618,32 +618,37 @@ class Build:
         return "\n".join(desc) if desc else None
 
     async def get_versions_string(self) -> str:
-        """Returns a string of the versions the build is functional in.
+        """Returns a string representation of the versions the build is functional in.
 
         The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
         """
         if not self.functional_versions:
             return ""
 
-        versions = []
+        versions: list[str] = []
 
         linking = False
-        first_version = None
-        last_version = None
+        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2-1.18)."""
+        start_version: VersionRecord | None = None
+        end_version: VersionRecord | None = None
 
         for version in await DatabaseManager.get_versions_list(edition="Java"):
-            if get_version_string(version) in self.functional_versions:
+            if get_version_string(version, no_edition=True) in self.functional_versions:
                 if not linking:
                     linking = True
-                    first_version = version
-                last_version = version
+                    start_version = version
+                end_version = version
 
-            elif linking:
-                versions.append(first_version if first_version == last_version else f"{first_version} - {last_version}")
+            elif linking:  # Current looped version is not functional, but the previous one was
+                assert start_version is not None
+                assert end_version is not None
+                versions.append(get_version_string(start_version) if start_version == end_version else f"{start_version} - {end_version}")
                 linking = False
 
         if linking:  # If the last version is functional
-            versions.append(first_version if first_version == last_version else f"{first_version} - {last_version}")
+            assert start_version is not None
+            assert end_version is not None
+            versions.append(get_version_string(start_version) if start_version == end_version else f"{start_version} - {end_version}")
 
         return ", ".join(versions)
 

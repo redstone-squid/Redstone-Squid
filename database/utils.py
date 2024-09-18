@@ -40,9 +40,12 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
     return response.text
 
 
-def get_version_string(version: VersionRecord) -> str:
+def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:
     """Returns a formatted version string."""
-    return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+    if no_edition:
+        return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+    else:
+        return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
 def get_version_tuple(version: VersionRecord) -> tuple[str, int, int, int]:
