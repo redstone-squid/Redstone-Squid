@@ -20,6 +20,7 @@ from postgrest import APIResponse
 from pydantic import ValidationError
 
 from bot import utils, config
+from bot.vote_session import VoteSessionBase
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
@@ -44,9 +45,16 @@ _Default = object()
 """A default value for the flags. This is used to work around https://github.com/Rapptz/discord.py/issues/9641"""
 
 
+class BuildVoteSession(VoteSessionBase):
+    def __init__(self, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
+        super().__init__(message, threshold)
+        self.negative_threshold = negative_threshold
+
+
 class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
+        self.active_vote_sessions = {}
 
     @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
@@ -176,6 +184,18 @@ class SubmissionsCog(Cog, name="Submissions"):
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
             await msg.track_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
+
+            if purpose == "view_pending_build":
+                # Add initial reactions
+                try:
+                    await message.add_reaction(APPROVE_EMOJIS[0])
+                    await message.add_reaction(DENY_EMOJIS[0])
+                except discord.Forbidden:
+                    pass  # Bot doesn't have permission to add reactions
+
+                # Initialize the BuildVoteSession
+                session = BuildVoteSession(message)
+                self.active_vote_sessions[message.id] = session
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -392,56 +412,110 @@ class SubmissionsCog(Cog, name="Submissions"):
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
 
-    @Cog.listener(name="on_raw_reaction_add")
-    async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
-        """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        # --- A bunch of checks to make sure the reaction is valid ---
-        # Must be in a guild
-        if (guild_id := payload.guild_id) is None:
-            return
 
-        # Must be in the vote channel
-        vote_channel_id = await get_server_setting(guild_id, "Vote")
-        if vote_channel_id is None or payload.channel_id != vote_channel_id:
-            return
+@Cog.listener(name="on_raw_reaction_add")
+async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
+    """Handles anonymous voting with initial reactions."""
+    # --- A bunch of checks to make sure the reaction is valid ---
+    # Must be in a guild
+    if (guild_id := payload.guild_id) is None:
+        return
 
-        # Must be users that are allowed to vote
-        if payload.user_id != config.OWNER_ID:
-            return
+    # Ignore bot reactions
+    user = self.bot.get_user(payload.user_id)
+    if user is None:
+        user = await self.bot.fetch_user(payload.user_id)
+    if user.bot:
+        return  # Ignore bot reactions
 
-        # The message must be from the bot
-        message: discord.Message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)  # type: ignore[attr-defined]
-        if message.author.id != self.bot.user.id:  # type: ignore[attr-defined]
-            return
+    # Must be in the vote channel
+    vote_channel_id = await get_server_setting(guild_id, "Vote")
+    if vote_channel_id is None or payload.channel_id != vote_channel_id:
+        return
 
-        # A build ID must be associated with the message
-        build_id = await msg.get_build_id_by_message(payload.message_id)
-        if build_id is None:
-            return
+    # The message must be from the bot
+    channel = self.bot.get_channel(payload.channel_id)
+    if channel is None:
+        channel = await self.bot.fetch_channel(payload.channel_id)
+    message: Message = await channel.fetch_message(payload.message_id)
 
-        # The submission status must be pending
-        submission = await Build.from_id(build_id)
-        assert submission is not None
-        if submission.submission_status != Status.PENDING:
-            return
+    if message.author.id != self.bot.user.id:
+        return
 
-        if payload.emoji.name not in APPROVE_EMOJIS + DENY_EMOJIS:
-            return
-        # --- End of checks ---
+    # A build ID must be associated with the message
+    build_id = await msg.get_build_id_by_message(payload.message_id)
+    if build_id is None:
+        return
 
-        if payload.emoji.name in APPROVE_EMOJIS:
-            # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
-            await submission.confirm()
-            await self.post_build(submission, purpose="view_confirmed_build")
-        elif payload.emoji.name in DENY_EMOJIS:
-            await submission.deny()
+    # The submission status must be pending
+    submission = await Build.from_id(build_id)
+    if submission is None or submission.submission_status != Status.PENDING:
+        return
+    # --- End of checks ---
 
+    # Remove the user's reaction to keep votes anonymous
+    try:
+        await message.remove_reaction(payload.emoji, user)
+    except (discord.Forbidden, discord.NotFound):
+        pass  # Ignore if we can't remove the reaction
+
+    # Get the BuildVoteSession
+    session = self.active_vote_sessions.get(payload.message_id)
+    if not session:
+        # Session should have been initialized when message was sent
+        # If not, create it now (though this shouldn't happen)
+        session = BuildVoteSession(message)
+        self.active_vote_sessions[payload.message_id] = session
+
+    # Update votes based on the reaction
+    emoji_name = str(payload.emoji)
+    user_id = payload.user_id
+
+    if emoji_name in APPROVE_EMOJIS:
+        current_vote_set = session.upvotes
+        other_vote_set = session.downvotes
+    elif emoji_name in DENY_EMOJIS:
+        current_vote_set = session.downvotes
+        other_vote_set = session.upvotes
+    else:
+        return  # Ignore other reactions
+
+    # Toggle the vote
+    if user_id in current_vote_set:
+        current_vote_set.discard(user_id)
+    else:
+        other_vote_set.discard(user_id)
+        current_vote_set.add(user_id)
+
+    # Check thresholds and act accordingly
+    net_votes = session.net_votes()
+    if net_votes >= session.threshold:
+        await submission.confirm()
+        # Clean up
         message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
         vote_channel = self.bot.get_channel(vote_channel_id)
         assert isinstance(vote_channel, GuildMessageable)
         for message_id in message_ids:
-            message = await vote_channel.fetch_message(message_id)
-            await message.delete()
+            try:
+                msg_to_delete = await vote_channel.fetch_message(message_id)
+                await msg_to_delete.delete()
+            except discord.NotFound:
+                pass  # Message already deleted
+        del self.active_vote_sessions[payload.message_id]
+
+    elif net_votes <= session.negative_threshold:
+        await submission.deny()
+        # Clean up
+        message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
+        vote_channel = self.bot.get_channel(vote_channel_id)
+        assert isinstance(vote_channel, GuildMessageable)
+        for message_id in message_ids:
+            try:
+                msg_to_delete = await vote_channel.fetch_message(message_id)
+                await msg_to_delete.delete()
+            except discord.NotFound:
+                pass  # Message already deleted
+        del self.active_vote_sessions[payload.message_id]
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
