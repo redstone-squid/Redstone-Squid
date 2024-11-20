@@ -73,7 +73,7 @@ async def update_message_edited_time(message_id: int) -> None:
 
 async def untrack_message(
     server_id: int | None = None, build_id: int | None = None, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None
-) -> list[int]:
+) -> list[MessageRecord]:
     """Untrack messages from the database. The message is not deleted on discord.
 
     To also delete the message on discord, fetch the messages from discord using the returned message ids and delete them.
@@ -84,7 +84,7 @@ async def untrack_message(
         purpose: The purpose(s) of the message to untrack. If None, all messages with the same server_id and build_id are untracked.
 
     Returns:
-        A list of message ids that were untracked.
+        A list of MessageRecords that were untracked.
 
     Raises:
         ValueError: If both server_id and build_id are None. This is to prevent accidentally deleting all messages.
@@ -95,7 +95,7 @@ async def untrack_message(
     db = DatabaseManager()
     query = (
         db.table("messages")
-        .select("message_id", count=CountMethod.exact)
+        .select("message_id")
     )
 
     if server_id is not None:
@@ -112,9 +112,9 @@ async def untrack_message(
     response: APIResponse[MessageRecord] = await query.execute()
     if not response.count:
         return []
-    message_ids = [response.data[i]["message_id"] for i in range(response.count)]
+    message_ids = [record["message_id"] for record in response.data]
     await db.table("messages").delete().in_("message_id", message_ids).execute()
-    return message_ids
+    return response.data
 
 
 async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
