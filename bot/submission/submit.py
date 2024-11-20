@@ -443,20 +443,11 @@ class SubmissionsCog(Cog, name="Submissions"):
         user_id = payload.user_id
 
         if emoji_name in APPROVE_EMOJIS:
-            current_vote_set = session.upvotes
-            other_vote_set = session.downvotes
+            session.votes[user_id] = 1
         elif emoji_name in DENY_EMOJIS:
-            current_vote_set = session.downvotes
-            other_vote_set = session.upvotes
+            session.votes[user_id] = -1
         else:
-            return  # Ignore other reactions
-
-        # Toggle the vote
-        if user_id in current_vote_set:
-            current_vote_set.discard(user_id)
-        else:
-            other_vote_set.discard(user_id)
-            current_vote_set.add(user_id)
+            return
 
         # Check thresholds and act accordingly
         if session.net_votes >= session.threshold:

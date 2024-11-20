@@ -25,12 +25,12 @@ class VoteSessionBase:
     def __init__(self, message: discord.Message, threshold: int = 7):
         self.message = message  # The message that shows the voting embed
         self.threshold = threshold  # Threshold for net upvotes
-        self.upvotes: Set[int] = set()  # User IDs who upvoted
-        self.downvotes: Set[int] = set()  # User IDs who downvoted
+        self.votes: dict[int, int] = {}  # Dict of user_id: weight
 
     @property
     def net_votes(self) -> int:
-        return len(self.upvotes) - len(self.downvotes)
+        """Calculate the net votes"""
+        return sum(self.votes.values())
 
     async def update_embed(self, description: str = None):
         """Update the embed with new counts"""
