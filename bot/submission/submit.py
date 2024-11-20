@@ -55,7 +55,7 @@ class BuildVoteSession(VoteSessionBase):
 class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
-        self.active_vote_sessions = {}
+        self.active_vote_sessions: dict[int, BuildVoteSession] = {}
 
     @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
