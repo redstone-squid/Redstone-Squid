@@ -28,31 +28,12 @@ class DeleteLogCog(Cog, name="Vote"):
         self.tracked_messages: Dict[int, DeleteLogSession] = {}
 
     @command(name="start_vote")
-    async def start_vote(self, ctx: Context, message_url: Optional[str] = None):
+    async def start_vote(self, ctx: Context, target_message: Optional[discord.Message] = None):
         """Starts a vote. If a message URL is provided, starts a vote to delete that message."""
-        if message_url:
-            # Parse the message URL
-            regex = r"https?://discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)"
-            match = re.match(regex, message_url)
-            if not match:
-                await ctx.send("Invalid message URL.")
-                return
-
-            guild_id, channel_id, message_id = map(int, match.groups())
+        if target_message:
             # Check if guild_id matches the current guild
-            if ctx.guild.id != guild_id:
+            if ctx.guild != target_message.guild:
                 await ctx.send("The message is not from this guild.")
-                return
-
-            channel = self.bot.get_channel(channel_id)
-            if not channel:
-                await ctx.send("Channel not found.")
-                return
-
-            try:
-                target_message = await channel.fetch_message(message_id)
-            except discord.NotFound:
-                await ctx.send("Message not found.")
                 return
 
             embed = discord.Embed(
