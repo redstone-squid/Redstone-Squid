@@ -461,31 +461,26 @@ class SubmissionsCog(Cog, name="Submissions"):
         # Check thresholds and act accordingly
         if session.net_votes >= session.threshold:
             await vote.build.confirm()
-            # Clean up
-            message_ids = await msg.untrack_message(vote.guild.id, vote.build.id, purpose="view_pending_build")
-            vote_channel = self.bot.get_channel(vote.channel.id)
-            assert isinstance(vote_channel, GuildMessageable)
-            for message_id in message_ids:
-                try:
-                    msg_to_delete = await vote_channel.fetch_message(message_id)
-                    await msg_to_delete.delete()
-                except discord.NotFound:
-                    pass  # Message already deleted
             del self.active_vote_sessions[payload.message_id]
-
+            await self._remove_vote_messages(vote.build)
         elif session.net_votes <= session.negative_threshold:
             await vote.build.deny()
-            # Clean up
-            message_ids = await msg.untrack_message(vote.guild.id, vote.build.id, purpose="view_pending_build")
-            vote_channel = self.bot.get_channel(vote.channel.id)
-            assert isinstance(vote_channel, GuildMessageable)
-            for message_id in message_ids:
-                try:
-                    msg_to_delete = await vote_channel.fetch_message(message_id)
-                    await msg_to_delete.delete()
-                except discord.NotFound:
-                    pass  # Message already deleted
             del self.active_vote_sessions[payload.message_id]
+            await self._remove_vote_messages(vote.build)
+        else:
+            await session.update_embed()
+
+    async def _remove_vote_messages(self, build: Build):
+        """Removes all messages associated with votes for a build."""
+
+        message_records = await msg.untrack_message(build_id=build.id, purpose="view_pending_build")
+        for record in message_records:
+            try:
+                channel = self.bot.get_channel(record["channel_id"])
+                msg_to_delete = await channel.fetch_message(record["message_id"])
+                await msg_to_delete.delete()
+            except discord.NotFound:
+                pass  # Message already deleted
 
     async def _validate_vote(self, payload: discord.RawReactionActionEvent) -> Vote | None:
         """Check if a reaction is a valid vote."""
