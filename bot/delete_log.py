@@ -101,23 +101,12 @@ class DeleteLogCog(Cog, name="Vote"):
             except discord.Forbidden:
                 pass
 
-            # Determine the vote value
-            if str(reaction.emoji) == APPROVE_EMOJI:
-                vote_value = 1
-            elif str(reaction.emoji) == DENY_EMOJI:
-                vote_value = -1
+            if reaction.emoji == APPROVE_EMOJI:
+                vote_session.votes[user.id] = 1
+            elif reaction.emoji == DENY_EMOJI:
+                vote_session.votes[user.id] = -1
             else:
-                return  # Ignore other reactions
-
-            # Update the user's vote
-            previous_vote = vote_session.votes.get(user.id, 0)
-
-            if previous_vote == vote_value:
-                # User clicked the same reaction again, remove their vote
-                del vote_session.votes[user.id]
-            else:
-                # Update the user's vote
-                vote_session.votes[user.id] = vote_value
+                return
 
             # Update the embed
             embed = vote_session.message.embeds[0]
