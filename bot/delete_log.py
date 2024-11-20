@@ -123,8 +123,8 @@ class DeleteLogCog(Cog, name="Vote"):
             embed = vote_session.message.embeds[0]
             embed.description = (
                 f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-                f"**Upvotes:** {vote_session.approve_count}\n"
-                f"**Downvotes:** {vote_session.deny_count}"
+                f"**Upvotes:** {len(vote_session.upvotes)}\n"
+                f"**Downvotes:** {len(vote_session.downvotes)}"
             )
             await vote_session.message.edit(embed=embed)
 

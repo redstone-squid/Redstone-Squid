@@ -12,24 +12,16 @@ class VoteSessionBase:
         self.upvotes: Set[int] = set()  # User IDs who upvoted
         self.downvotes: Set[int] = set()  # User IDs who downvoted
 
-    @property
-    def approve_count(self) -> int:
-        return len(self.upvotes)
-
-    @property
-    def deny_count(self) -> int:
-        return len(self.downvotes)
-
     def net_votes(self) -> int:
-        return self.approve_count - self.deny_count
+        return len(self.upvotes) - len(self.downvotes)
 
     async def update_embed(self, description: str = None):
         # Update the embed with new counts
         embed = self.message.embeds[0]
         if description:
             embed.description = description
-        embed.set_field_at(0, name="upvotes", value=str(self.approve_count), inline=True)
-        embed.set_field_at(1, name="downvotes", value=str(self.deny_count), inline=True)
+        embed.set_field_at(0, name="upvotes", value=str(len(self.upvotes)), inline=True)
+        embed.set_field_at(1, name="downvotes", value=str(len(self.downvotes)), inline=True)
         await self.message.edit(embed=embed)
 
     async def remove_user_reaction(self, user: discord.User, emojis: list):
