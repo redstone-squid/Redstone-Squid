@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Set
 
 import discord
 
@@ -44,18 +43,10 @@ class VoteSessionBase:
 
     async def update_embed(self, description: str = None):
         """Update the embed with new counts"""
-        
+
         embed = self.message.embeds[0]
         if description is not None:
             embed.description = description
         embed.set_field_at(0, name="upvotes", value=str(self.upvotes), inline=True)
         embed.set_field_at(1, name="downvotes", value=str(self.downvotes), inline=True)
         await self.message.edit(embed=embed)
-
-    async def remove_user_reaction(self, user: discord.User, emojis: list):
-        """Helper method to remove specific reactions from a user."""
-        for emoji in emojis:
-            for reaction in self.message.reactions:
-                if str(reaction.emoji) == emoji:
-                    await reaction.remove(user)
-                    break
