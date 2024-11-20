@@ -16,7 +16,7 @@ class DeleteLogSession(VoteSessionBase):
         self,
         message: discord.Message,
         target_message: Optional[discord.Message] = None,
-        threshold: int = 1,
+        threshold: int = 7,
     ):
         super().__init__(message, threshold)
         self.target_message = target_message
@@ -101,33 +101,34 @@ class DeleteLogCog(Cog, name="Vote"):
             except discord.Forbidden:
                 pass
 
-            # Determine the vote type
+            # Determine the vote value
             if str(reaction.emoji) == APPROVE_EMOJI:
-                current_vote_set = vote_session.upvotes
-                other_vote_set = vote_session.downvotes
+                vote_value = 1
             elif str(reaction.emoji) == DENY_EMOJI:
-                current_vote_set = vote_session.downvotes
-                other_vote_set = vote_session.upvotes
+                vote_value = -1
             else:
                 return  # Ignore other reactions
 
-            # Check if user has already voted with this reaction
-            if user.id in current_vote_set:
-                current_vote_set.discard(user.id)
-            else:
-                # Remove user from other vote set if they had voted before
-                other_vote_set.discard(user.id)
-                # Add user to current vote set
-                current_vote_set.add(user.id)
+            # Update the user's vote
+            previous_vote = vote_session.votes.get(user.id, 0)
 
+            if previous_vote == vote_value:
+                # User clicked the same reaction again, remove their vote
+                del vote_session.votes[user.id]
+            else:
+                # Update the user's vote
+                vote_session.votes[user.id] = vote_value
+
+            # Update the embed
             embed = vote_session.message.embeds[0]
             embed.description = (
                 f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-                f"**Upvotes:** {len(vote_session.upvotes)}\n"
-                f"**Downvotes:** {len(vote_session.downvotes)}"
+                f"**Upvotes:** {vote_session.upvotes}\n"
+                f"**Downvotes:** {vote_session.downvotes}"
             )
             await vote_session.message.edit(embed=embed)
 
+            # Check if the threshold has been met
             if vote_session.net_votes >= vote_session.threshold:
                 await vote_session.message.channel.send("Vote passed")
                 if vote_session.target_message:
