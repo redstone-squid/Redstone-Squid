@@ -47,8 +47,10 @@ _Default = object()
 
 
 class BuildVoteSession(VoteSessionBase):
-    def __init__(self, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
+    """A vote session for a confirming or denying a build."""
+    def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
         super().__init__(message, threshold)
+        self.build = build
         self.negative_threshold = negative_threshold
 
 
@@ -195,7 +197,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                     pass  # Bot doesn't have permission to add reactions
 
                 # Initialize the BuildVoteSession
-                session = BuildVoteSession(message)
+                session = BuildVoteSession(build, message)
                 self.active_vote_sessions[message.id] = session
 
     # fmt: off
