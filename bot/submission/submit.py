@@ -2,6 +2,7 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Literal, cast, TYPE_CHECKING, Any
 import asyncio
 
@@ -20,7 +21,7 @@ from postgrest import APIResponse
 from pydantic import ValidationError
 
 from bot import utils, config
-from bot.vote_session import VoteSessionBase
+from bot.vote_session import VoteSessionBase, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
@@ -416,46 +417,14 @@ class SubmissionsCog(Cog, name="Submissions"):
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
         """Handles anonymous voting with initial reactions."""
-        # --- A bunch of checks to make sure the reaction is valid ---
-        # Must be in a guild
-        if (guild_id := payload.guild_id) is None:
+
+        vote = await self._validate_vote(payload)
+        if vote is None:
             return
-
-        # Ignore bot reactions
-        user = self.bot.get_user(payload.user_id)
-        if user is None:
-            user = await self.bot.fetch_user(payload.user_id)
-        if user.bot:
-            return  # Ignore bot reactions
-
-        # Must be in the vote channel
-        vote_channel_id = await get_server_setting(guild_id, "Vote")
-        if vote_channel_id is None or payload.channel_id != vote_channel_id:
-            return
-
-        # The message must be from the bot
-        channel = self.bot.get_channel(payload.channel_id)
-        if channel is None:
-            channel = await self.bot.fetch_channel(payload.channel_id)
-        message: Message = await channel.fetch_message(payload.message_id)
-
-        if message.author.id != self.bot.user.id:
-            return
-
-        # A build ID must be associated with the message
-        build_id = await msg.get_build_id_by_message(payload.message_id)
-        if build_id is None:
-            return
-
-        # The submission status must be pending
-        submission = await Build.from_id(build_id)
-        if submission is None or submission.submission_status != Status.PENDING:
-            return
-        # --- End of checks ---
 
         # Remove the user's reaction to keep votes anonymous
         try:
-            await message.remove_reaction(payload.emoji, user)
+            await vote.message.remove_reaction(payload.emoji, vote.user)
         except (discord.Forbidden, discord.NotFound):
             pass  # Ignore if we can't remove the reaction
 
@@ -464,7 +433,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if not session:
             # Session should have been initialized when message was sent
             # If not, create it now (though this shouldn't happen)
-            session = BuildVoteSession(message)
+            session = BuildVoteSession(vote.message)
             self.active_vote_sessions[payload.message_id] = session
 
         # Update votes based on the reaction
@@ -489,10 +458,10 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         # Check thresholds and act accordingly
         if session.net_votes >= session.threshold:
-            await submission.confirm()
+            await vote.build.confirm()
             # Clean up
-            message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
-            vote_channel = self.bot.get_channel(vote_channel_id)
+            message_ids = await msg.untrack_message(vote.guild.id, vote.build.id, purpose="view_pending_build")
+            vote_channel = self.bot.get_channel(vote.channel.id)
             assert isinstance(vote_channel, GuildMessageable)
             for message_id in message_ids:
                 try:
@@ -503,10 +472,10 @@ class SubmissionsCog(Cog, name="Submissions"):
             del self.active_vote_sessions[payload.message_id]
 
         elif session.net_votes <= session.negative_threshold:
-            await submission.deny()
+            await vote.build.deny()
             # Clean up
-            message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
-            vote_channel = self.bot.get_channel(vote_channel_id)
+            message_ids = await msg.untrack_message(vote.guild.id, vote.build.id, purpose="view_pending_build")
+            vote_channel = self.bot.get_channel(vote.channel.id)
             assert isinstance(vote_channel, GuildMessageable)
             for message_id in message_ids:
                 try:
@@ -515,6 +484,46 @@ class SubmissionsCog(Cog, name="Submissions"):
                 except discord.NotFound:
                     pass  # Message already deleted
             del self.active_vote_sessions[payload.message_id]
+
+    async def _validate_vote(self, payload: discord.RawReactionActionEvent) -> Vote | None:
+        """Check if a reaction is a valid vote."""
+
+        # Must be in a guild
+        if (guild_id := payload.guild_id) is None:
+            return
+
+        # Ignore bot reactions
+        user = self.bot.get_user(payload.user_id)
+        if user is None:
+            user = await self.bot.fetch_user(payload.user_id)
+        if user.bot:
+            return
+
+        # Must be in the vote channel
+        vote_channel_id = await get_server_setting(guild_id, "Vote")
+        if vote_channel_id is None or payload.channel_id != vote_channel_id:
+            return
+
+        # The message must be from the bot
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None:
+            channel = await self.bot.fetch_channel(payload.channel_id)
+        message: Message = await channel.fetch_message(payload.message_id)
+
+        if message.author.id != self.bot.user.id:
+            return
+
+        # A build ID must be associated with the message
+        build_id = await msg.get_build_id_by_message(payload.message_id)
+        if build_id is None:
+            return
+
+        # The build status must be pending
+        build = await Build.from_id(build_id)
+        if build is None or build.submission_status != Status.PENDING:
+            return
+
+        return Vote(guild=self.bot.get_guild(guild_id), channel=channel, message=message, build=build, user=user)
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):

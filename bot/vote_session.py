@@ -1,8 +1,24 @@
+from dataclasses import dataclass
 from typing import Set
+
 import discord
+
+from bot._types import GuildMessageable
+from database.builds import Build
 
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
+
+
+@dataclass
+class Vote:
+    """Represents a vote on a build."""
+
+    guild: discord.Guild
+    channel: GuildMessageable
+    message: discord.Message
+    build: Build
+    user: discord.User
 
 
 class VoteSessionBase:
