@@ -33,7 +33,8 @@ class VoteSessionBase:
         return len(self.upvotes) - len(self.downvotes)
 
     async def update_embed(self, description: str = None):
-        # Update the embed with new counts
+        """Update the embed with new counts"""
+        
         embed = self.message.embeds[0]
         if description is not None:
             embed.description = description
