@@ -28,6 +28,16 @@ class VoteSessionBase:
         self.votes: dict[int, int] = {}  # Dict of user_id: weight
 
     @property
+    def upvotes(self) -> int:
+        """Calculate the upvotes"""
+        return sum(vote for user_id, vote in self.votes.items() if vote > 0)
+
+    @property
+    def downvotes(self) -> int:
+        """Calculate the downvotes"""
+        return sum(-vote for user_id, vote in self.votes.items() if vote < 0)
+
+    @property
     def net_votes(self) -> int:
         """Calculate the net votes"""
         return sum(self.votes.values())
@@ -38,8 +48,8 @@ class VoteSessionBase:
         embed = self.message.embeds[0]
         if description is not None:
             embed.description = description
-        embed.set_field_at(0, name="upvotes", value=str(len(self.upvotes)), inline=True)
-        embed.set_field_at(1, name="downvotes", value=str(len(self.downvotes)), inline=True)
+        embed.set_field_at(0, name="upvotes", value=str(self.upvotes), inline=True)
+        embed.set_field_at(1, name="downvotes", value=str(self.downvotes), inline=True)
         await self.message.edit(embed=embed)
 
     async def remove_user_reaction(self, user: discord.User, emojis: list):

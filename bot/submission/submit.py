@@ -433,10 +433,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         # Get the BuildVoteSession
         session = self.active_vote_sessions.get(payload.message_id)
         if not session:
-            # Session should have been initialized when message was sent
-            # If not, create it now (though this shouldn't happen)
-            session = BuildVoteSession(vote.message)
-            self.active_vote_sessions[payload.message_id] = session
+            raise ValueError("No active vote session found for this message.")
 
         # Update votes based on the reaction
         emoji_name = str(payload.emoji)
