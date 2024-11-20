@@ -72,27 +72,36 @@ async def update_message_edited_time(message_id: int) -> None:
 
 
 async def untrack_message(
-    server_id: int, build_id: int, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None
+    server_id: int | None = None, build_id: int | None = None, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None
 ) -> list[int]:
     """Untrack messages from the database. The message is not deleted on discord.
 
     To also delete the message on discord, fetch the messages from discord using the returned message ids and delete them.
 
     Args:
-        server_id: The server id of the message to untrack.
-        build_id: The build id of the message to untrack.
+        server_id: The server id of the message to untrack. If None, all messages with the same build_id are untracked.
+        build_id: The build id of the message to untrack. If None, all messages with the same server_id are untracked.
         purpose: The purpose(s) of the message to untrack. If None, all messages with the same server_id and build_id are untracked.
 
     Returns:
         A list of message ids that were untracked.
+
+    Raises:
+        ValueError: If both server_id and build_id are None. This is to prevent accidentally deleting all messages.
     """
+    if server_id is None and build_id is None:
+        raise ValueError("server_id and build_id cannot both be None.")
+
     db = DatabaseManager()
     query = (
         db.table("messages")
         .select("message_id", count=CountMethod.exact)
-        .eq("server_id", server_id)
-        .eq("build_id", build_id)
     )
+
+    if server_id is not None:
+        query = query.eq("server_id", server_id)
+    if build_id is not None:
+        query = query.eq("build_id", build_id)
     if purpose is None:
         pass
     elif isinstance(purpose, str):
