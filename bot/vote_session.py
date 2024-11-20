@@ -12,13 +12,14 @@ class VoteSessionBase:
         self.upvotes: Set[int] = set()  # User IDs who upvoted
         self.downvotes: Set[int] = set()  # User IDs who downvoted
 
+    @property
     def net_votes(self) -> int:
         return len(self.upvotes) - len(self.downvotes)
 
     async def update_embed(self, description: str = None):
         # Update the embed with new counts
         embed = self.message.embeds[0]
-        if description:
+        if description is not None:
             embed.description = description
         embed.set_field_at(0, name="upvotes", value=str(len(self.upvotes)), inline=True)
         embed.set_field_at(1, name="downvotes", value=str(len(self.downvotes)), inline=True)

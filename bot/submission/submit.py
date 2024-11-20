@@ -488,8 +488,7 @@ async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionAc
         current_vote_set.add(user_id)
 
     # Check thresholds and act accordingly
-    net_votes = session.net_votes()
-    if net_votes >= session.threshold:
+    if session.net_votes >= session.threshold:
         await submission.confirm()
         # Clean up
         message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
@@ -503,7 +502,7 @@ async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionAc
                 pass  # Message already deleted
         del self.active_vote_sessions[payload.message_id]
 
-    elif net_votes <= session.negative_threshold:
+    elif session.net_votes <= session.negative_threshold:
         await submission.deny()
         # Clean up
         message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")

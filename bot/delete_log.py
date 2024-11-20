@@ -128,7 +128,7 @@ class DeleteLogCog(Cog, name="Vote"):
             )
             await vote_session.message.edit(embed=embed)
 
-            if vote_session.net_votes() >= vote_session.threshold:
+            if vote_session.net_votes >= vote_session.threshold:
                 await vote_session.message.channel.send("Vote passed")
                 if vote_session.target_message:
                     try:
