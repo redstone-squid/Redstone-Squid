@@ -413,108 +413,108 @@ class SubmissionsCog(Cog, name="Submissions"):
             )
 
 
-@Cog.listener(name="on_raw_reaction_add")
-async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
-    """Handles anonymous voting with initial reactions."""
-    # --- A bunch of checks to make sure the reaction is valid ---
-    # Must be in a guild
-    if (guild_id := payload.guild_id) is None:
-        return
+    @Cog.listener(name="on_raw_reaction_add")
+    async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
+        """Handles anonymous voting with initial reactions."""
+        # --- A bunch of checks to make sure the reaction is valid ---
+        # Must be in a guild
+        if (guild_id := payload.guild_id) is None:
+            return
 
-    # Ignore bot reactions
-    user = self.bot.get_user(payload.user_id)
-    if user is None:
-        user = await self.bot.fetch_user(payload.user_id)
-    if user.bot:
-        return  # Ignore bot reactions
+        # Ignore bot reactions
+        user = self.bot.get_user(payload.user_id)
+        if user is None:
+            user = await self.bot.fetch_user(payload.user_id)
+        if user.bot:
+            return  # Ignore bot reactions
 
-    # Must be in the vote channel
-    vote_channel_id = await get_server_setting(guild_id, "Vote")
-    if vote_channel_id is None or payload.channel_id != vote_channel_id:
-        return
+        # Must be in the vote channel
+        vote_channel_id = await get_server_setting(guild_id, "Vote")
+        if vote_channel_id is None or payload.channel_id != vote_channel_id:
+            return
 
-    # The message must be from the bot
-    channel = self.bot.get_channel(payload.channel_id)
-    if channel is None:
-        channel = await self.bot.fetch_channel(payload.channel_id)
-    message: Message = await channel.fetch_message(payload.message_id)
+        # The message must be from the bot
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None:
+            channel = await self.bot.fetch_channel(payload.channel_id)
+        message: Message = await channel.fetch_message(payload.message_id)
 
-    if message.author.id != self.bot.user.id:
-        return
+        if message.author.id != self.bot.user.id:
+            return
 
-    # A build ID must be associated with the message
-    build_id = await msg.get_build_id_by_message(payload.message_id)
-    if build_id is None:
-        return
+        # A build ID must be associated with the message
+        build_id = await msg.get_build_id_by_message(payload.message_id)
+        if build_id is None:
+            return
 
-    # The submission status must be pending
-    submission = await Build.from_id(build_id)
-    if submission is None or submission.submission_status != Status.PENDING:
-        return
-    # --- End of checks ---
+        # The submission status must be pending
+        submission = await Build.from_id(build_id)
+        if submission is None or submission.submission_status != Status.PENDING:
+            return
+        # --- End of checks ---
 
-    # Remove the user's reaction to keep votes anonymous
-    try:
-        await message.remove_reaction(payload.emoji, user)
-    except (discord.Forbidden, discord.NotFound):
-        pass  # Ignore if we can't remove the reaction
+        # Remove the user's reaction to keep votes anonymous
+        try:
+            await message.remove_reaction(payload.emoji, user)
+        except (discord.Forbidden, discord.NotFound):
+            pass  # Ignore if we can't remove the reaction
 
-    # Get the BuildVoteSession
-    session = self.active_vote_sessions.get(payload.message_id)
-    if not session:
-        # Session should have been initialized when message was sent
-        # If not, create it now (though this shouldn't happen)
-        session = BuildVoteSession(message)
-        self.active_vote_sessions[payload.message_id] = session
+        # Get the BuildVoteSession
+        session = self.active_vote_sessions.get(payload.message_id)
+        if not session:
+            # Session should have been initialized when message was sent
+            # If not, create it now (though this shouldn't happen)
+            session = BuildVoteSession(message)
+            self.active_vote_sessions[payload.message_id] = session
 
-    # Update votes based on the reaction
-    emoji_name = str(payload.emoji)
-    user_id = payload.user_id
+        # Update votes based on the reaction
+        emoji_name = str(payload.emoji)
+        user_id = payload.user_id
 
-    if emoji_name in APPROVE_EMOJIS:
-        current_vote_set = session.upvotes
-        other_vote_set = session.downvotes
-    elif emoji_name in DENY_EMOJIS:
-        current_vote_set = session.downvotes
-        other_vote_set = session.upvotes
-    else:
-        return  # Ignore other reactions
+        if emoji_name in APPROVE_EMOJIS:
+            current_vote_set = session.upvotes
+            other_vote_set = session.downvotes
+        elif emoji_name in DENY_EMOJIS:
+            current_vote_set = session.downvotes
+            other_vote_set = session.upvotes
+        else:
+            return  # Ignore other reactions
 
-    # Toggle the vote
-    if user_id in current_vote_set:
-        current_vote_set.discard(user_id)
-    else:
-        other_vote_set.discard(user_id)
-        current_vote_set.add(user_id)
+        # Toggle the vote
+        if user_id in current_vote_set:
+            current_vote_set.discard(user_id)
+        else:
+            other_vote_set.discard(user_id)
+            current_vote_set.add(user_id)
 
-    # Check thresholds and act accordingly
-    if session.net_votes >= session.threshold:
-        await submission.confirm()
-        # Clean up
-        message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
-        vote_channel = self.bot.get_channel(vote_channel_id)
-        assert isinstance(vote_channel, GuildMessageable)
-        for message_id in message_ids:
-            try:
-                msg_to_delete = await vote_channel.fetch_message(message_id)
-                await msg_to_delete.delete()
-            except discord.NotFound:
-                pass  # Message already deleted
-        del self.active_vote_sessions[payload.message_id]
+        # Check thresholds and act accordingly
+        if session.net_votes >= session.threshold:
+            await submission.confirm()
+            # Clean up
+            message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
+            vote_channel = self.bot.get_channel(vote_channel_id)
+            assert isinstance(vote_channel, GuildMessageable)
+            for message_id in message_ids:
+                try:
+                    msg_to_delete = await vote_channel.fetch_message(message_id)
+                    await msg_to_delete.delete()
+                except discord.NotFound:
+                    pass  # Message already deleted
+            del self.active_vote_sessions[payload.message_id]
 
-    elif session.net_votes <= session.negative_threshold:
-        await submission.deny()
-        # Clean up
-        message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
-        vote_channel = self.bot.get_channel(vote_channel_id)
-        assert isinstance(vote_channel, GuildMessageable)
-        for message_id in message_ids:
-            try:
-                msg_to_delete = await vote_channel.fetch_message(message_id)
-                await msg_to_delete.delete()
-            except discord.NotFound:
-                pass  # Message already deleted
-        del self.active_vote_sessions[payload.message_id]
+        elif session.net_votes <= session.negative_threshold:
+            await submission.deny()
+            # Clean up
+            message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
+            vote_channel = self.bot.get_channel(vote_channel_id)
+            assert isinstance(vote_channel, GuildMessageable)
+            for message_id in message_ids:
+                try:
+                    msg_to_delete = await vote_channel.fetch_message(message_id)
+                    await msg_to_delete.delete()
+                except discord.NotFound:
+                    pass  # Message already deleted
+            del self.active_vote_sessions[payload.message_id]
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
