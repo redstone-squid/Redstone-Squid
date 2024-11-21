@@ -82,10 +82,11 @@ class DeleteLogCog(Cog, name="Vote"):
             except discord.Forbidden:
                 pass
 
+            original_vote = vote_session.votes.get(user.id, 0)
             if reaction.emoji == APPROVE_EMOJI:
-                vote_session.votes[user.id] = 1
+                vote_session.votes[user.id] = 1 if original_vote != 1 else 0
             elif reaction.emoji == DENY_EMOJI:
-                vote_session.votes[user.id] = -1
+                vote_session.votes[user.id] = -1 if original_vote != -1 else 0
             else:
                 return
 

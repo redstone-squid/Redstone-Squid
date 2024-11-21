@@ -439,10 +439,11 @@ class SubmissionsCog(Cog, name="Submissions"):
         emoji_name = str(payload.emoji)
         user_id = payload.user_id
 
+        original_vote = session.votes.get(user_id, 0)
         if emoji_name in APPROVE_EMOJIS:
-            session.votes[user_id] = 1
+            session.votes[user_id] = 1 if original_vote != 1 else 0
         elif emoji_name in DENY_EMOJIS:
-            session.votes[user_id] = -1
+            session.votes[user_id] = -1 if original_vote != -1 else 0
         else:
             return
 
