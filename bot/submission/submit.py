@@ -20,6 +20,7 @@ from postgrest import APIResponse
 from pydantic import ValidationError
 
 from bot import utils, config
+from bot.vote_session import VoteSessionBase, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
@@ -44,9 +45,19 @@ _Default = object()
 """A default value for the flags. This is used to work around https://github.com/Rapptz/discord.py/issues/9641"""
 
 
+class BuildVoteSession(VoteSessionBase):
+    """A vote session for a confirming or denying a build."""
+
+    def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
+        super().__init__(message, threshold)
+        self.build = build
+        self.negative_threshold = negative_threshold
+
+
 class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
+        self.active_vote_sessions: dict[int, BuildVoteSession] = {}
 
     @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
@@ -176,6 +187,19 @@ class SubmissionsCog(Cog, name="Submissions"):
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
             await msg.track_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
+
+            if purpose == "view_pending_build":
+                # Add initial reactions
+                try:
+                    await message.add_reaction(APPROVE_EMOJIS[0])
+                    await asyncio.sleep(1)
+                    await message.add_reaction(DENY_EMOJIS[0])
+                except discord.Forbidden:
+                    pass  # Bot doesn't have permission to add reactions
+
+                # Initialize the BuildVoteSession
+                session = BuildVoteSession(build, message)
+                self.active_vote_sessions[message.id] = session
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -394,10 +418,71 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
-        """Listens for reactions on the vote channel and confirms the submission if the reaction is a thumbs up."""
-        # --- A bunch of checks to make sure the reaction is valid ---
+        """Handles anonymous voting with initial reactions."""
+
+        vote = await self._validate_vote(payload)
+        if vote is None:
+            return
+
+        # Remove the user's reaction to keep votes anonymous
+        try:
+            await vote.message.remove_reaction(payload.emoji, vote.user)
+        except (discord.Forbidden, discord.NotFound):
+            pass  # Ignore if we can't remove the reaction
+
+        # Get the BuildVoteSession
+        session = self.active_vote_sessions.get(payload.message_id)
+        if not session:
+            raise ValueError("No active vote session found for this message.")
+
+        # Update votes based on the reaction
+        emoji_name = str(payload.emoji)
+        user_id = payload.user_id
+
+        original_vote = session.votes.get(user_id, 0)
+        if emoji_name in APPROVE_EMOJIS:
+            session.votes[user_id] = 1 if original_vote != 1 else 0
+        elif emoji_name in DENY_EMOJIS:
+            session.votes[user_id] = -1 if original_vote != -1 else 0
+        else:
+            return
+
+        # Check thresholds and act accordingly
+        if session.net_votes >= session.threshold:
+            await vote.build.confirm()
+            del self.active_vote_sessions[payload.message_id]
+            await self._remove_vote_messages(vote.build)
+        elif session.net_votes <= session.negative_threshold:
+            await vote.build.deny()
+            del self.active_vote_sessions[payload.message_id]
+            await self._remove_vote_messages(vote.build)
+        else:
+            await session.update_embed()
+
+    async def _remove_vote_messages(self, build: Build):
+        """Removes all messages associated with votes for a build."""
+
+        message_records = await msg.untrack_message(build_id=build.id, purpose="view_pending_build")
+        for record in message_records:
+            try:
+                channel = self.bot.get_channel(record["channel_id"])
+                msg_to_delete = await channel.fetch_message(record["message_id"])
+                await msg_to_delete.delete()
+            except discord.NotFound:
+                pass  # Message already deleted
+
+    async def _validate_vote(self, payload: discord.RawReactionActionEvent) -> Vote | None:
+        """Check if a reaction is a valid vote."""
+
         # Must be in a guild
         if (guild_id := payload.guild_id) is None:
+            return
+
+        # Ignore bot reactions
+        user = self.bot.get_user(payload.user_id)
+        if user is None:
+            user = await self.bot.fetch_user(payload.user_id)
+        if user.bot:
             return
 
         # Must be in the vote channel
@@ -405,13 +490,13 @@ class SubmissionsCog(Cog, name="Submissions"):
         if vote_channel_id is None or payload.channel_id != vote_channel_id:
             return
 
-        # Must be users that are allowed to vote
-        if payload.user_id != config.OWNER_ID:
-            return
-
         # The message must be from the bot
-        message: discord.Message = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)  # type: ignore[attr-defined]
-        if message.author.id != self.bot.user.id:  # type: ignore[attr-defined]
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None:
+            channel = await self.bot.fetch_channel(payload.channel_id)
+        message: Message = await channel.fetch_message(payload.message_id)
+
+        if message.author.id != self.bot.user.id:
             return
 
         # A build ID must be associated with the message
@@ -419,29 +504,12 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build_id is None:
             return
 
-        # The submission status must be pending
-        submission = await Build.from_id(build_id)
-        assert submission is not None
-        if submission.submission_status != Status.PENDING:
+        # The build status must be pending
+        build = await Build.from_id(build_id)
+        if build is None or build.submission_status != Status.PENDING:
             return
 
-        if payload.emoji.name not in APPROVE_EMOJIS + DENY_EMOJIS:
-            return
-        # --- End of checks ---
-
-        if payload.emoji.name in APPROVE_EMOJIS:
-            # TODO: Count the number of thumbs up reactions and confirm if it passes a threshold
-            await submission.confirm()
-            await self.post_build(submission, purpose="view_confirmed_build")
-        elif payload.emoji.name in DENY_EMOJIS:
-            await submission.deny()
-
-        message_ids = await msg.untrack_message(guild_id, build_id, purpose="view_pending_build")
-        vote_channel = self.bot.get_channel(vote_channel_id)
-        assert isinstance(vote_channel, GuildMessageable)
-        for message_id in message_ids:
-            message = await vote_channel.fetch_message(message_id)
-            await message.delete()
+        return Vote(guild=self.bot.get_guild(guild_id), channel=channel, message=message, build=build, user=user)
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):

@@ -22,6 +22,7 @@ from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PR
 from bot.misc_commands import Miscellaneous
 from bot.help import HelpCog
 from bot.settings import SettingsCog
+from bot.delete_log import DeleteLogCog
 
 if TYPE_CHECKING:
     T = TypeVar("T")
@@ -97,7 +98,8 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
 
 class RedstoneSquid(Bot):
     def __init__(
-        self, command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]
+        self,
+        command_prefix: (Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]),
     ):
         super().__init__(
             command_prefix=command_prefix,
@@ -117,6 +119,7 @@ class RedstoneSquid(Bot):
         await self.add_cog(HelpCog(self))
         await self.load_extension("jishaku")
         await self.add_cog(VerifyCog(self))
+        await self.add_cog(DeleteLogCog(self))
 
 
 async def main():
