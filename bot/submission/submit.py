@@ -2,7 +2,6 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Literal, cast, TYPE_CHECKING, Any
 import asyncio
 
@@ -48,6 +47,7 @@ _Default = object()
 
 class BuildVoteSession(VoteSessionBase):
     """A vote session for a confirming or denying a build."""
+
     def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
         super().__init__(message, threshold)
         self.build = build
@@ -192,6 +192,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 # Add initial reactions
                 try:
                     await message.add_reaction(APPROVE_EMOJIS[0])
+                    await asyncio.sleep(1)
                     await message.add_reaction(DENY_EMOJIS[0])
                 except discord.Forbidden:
                     pass  # Bot doesn't have permission to add reactions
@@ -414,7 +415,6 @@ class SubmissionsCog(Cog, name="Submissions"):
             await sent_message.edit(
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
-
 
     @Cog.listener(name="on_raw_reaction_add")
     async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):

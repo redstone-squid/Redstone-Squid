@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING, Dict, Optional
@@ -45,6 +47,7 @@ class DeleteLogCog(Cog, name="Vote"):
             message = await ctx.send(embed=embed)
             # Add initial reactions
             await message.add_reaction(APPROVE_EMOJI)
+            await asyncio.sleep(1)
             await message.add_reaction(DENY_EMOJI)
             self.tracked_messages[message.id] = DeleteLogSession(message, target_message=target_message)
         else:
