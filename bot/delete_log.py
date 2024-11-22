@@ -1,7 +1,6 @@
 import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING, Dict, Optional
-import re
 from bot.vote_session import VoteSessionBase
 
 if TYPE_CHECKING:
@@ -29,7 +28,7 @@ class DeleteLogCog(Cog, name="Vote"):
 
     @command(name="start_vote")
     async def start_vote(self, ctx: Context, target_message: Optional[discord.Message] = None):
-        """Starts a vote. If a message URL is provided, starts a vote to delete that message."""
+        """Starts a vote to delete a specified message by providing its URL."""
         if target_message:
             # Check if guild_id matches the current guild
             if ctx.guild != target_message.guild:
@@ -49,17 +48,8 @@ class DeleteLogCog(Cog, name="Vote"):
             await message.add_reaction(DENY_EMOJI)
             self.tracked_messages[message.id] = DeleteLogSession(message, target_message=target_message)
         else:
-            # Behavior without message URL
-            embed = discord.Embed(
-                title="Voting",
-                description=f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.",
-            )
-            message = await ctx.send(embed=embed)
-            # Add initial reactions
-            await message.add_reaction(APPROVE_EMOJI)
-            await message.add_reaction(DENY_EMOJI)
-            # Store the VoteSession for tracking
-            self.tracked_messages[message.id] = DeleteLogSession(message)
+            await ctx.send("Must provide a log to delete")
+            return
 
     @Cog.listener()
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
