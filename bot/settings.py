@@ -22,14 +22,21 @@ from bot._types import GuildMessageable
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-channel_settings_roles = ["Admin", "Moderator"]
-
 # TODO: Make all commands in this cog guild only
 
 
 class SettingsCog(Cog, name="Settings"):
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot
+
+    channel_settings_roles = (
+        DatabaseManager()
+        .table("server_settings")
+        .select("staff_roles_ids")
+        .eq("server_id", discord.Guild.id)
+        .maybe_single()
+        .execute()
+    )
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @has_any_role(*channel_settings_roles)
@@ -152,6 +159,17 @@ async def get_settable_channels(
         channels[record_type] = cast(GuildMessageable | None, server.get_channel(channel_id))
 
     return channels
+
+
+# def is_trusted() -> Check[Any]:
+#     async def predicate(ctx: Context[BotT]) -> bool:
+#         if has_any_role(
+#             get_server_setting(
+#                 ctx.guild,
+#             )
+#         ):
+#             return True
+#         return False
 
 
 async def setup(bot: RedstoneSquid):

@@ -4,35 +4,69 @@ from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
 
 from database import DatabaseManager
-from database.schema import ServerSettingRecord, DbSettingKey, ChannelPurpose, CHANNEL_PURPOSES
+from database.schema import (
+    ServerSettingRecord,
+    DbSettingKey,
+    ChannelPurpose,
+    RoleSetting,
+    Setting,
+    CHANNEL_PURPOSES,
+    SETTINGS,
+)
 
-# The names of the settings in the database, mapped from the channel purpose,
-# which is the name of the setting in the UI.
-PURPOSE_TO_SETTING: dict[ChannelPurpose, DbSettingKey] = {
+from typing import List
+
+CHANNEL_PURPOSE_TO_DB_SETTING: dict[ChannelPurpose, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",
     "First": "first_channel_id",
     "Builds": "builds_channel_id",
     "Vote": "voting_channel_id",
 }
-# TODO: inconsistent naming
-SETTING_TO_PURPOSE: dict[DbSettingKey, ChannelPurpose] = {value: key for key, value in PURPOSE_TO_SETTING.items()}
-assert set(PURPOSE_TO_SETTING.keys()) == set(CHANNEL_PURPOSES), "The mapping is not exhaustive!"
+
+ROLE_SETTING_TO_DB_SETTING: dict[RoleSetting, DbSettingKey] = {
+    "Staff": "staff_roles_ids",
+    "Trusted": "trusted_roles_ids",
+}
+
+SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
+    **CHANNEL_PURPOSE_TO_DB_SETTING,
+    **ROLE_SETTING_TO_DB_SETTING,
+}
+
+DB_SETTING_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in SETTING_TO_DB_SETTING.items()}
+assert set(SETTING_TO_DB_SETTING.keys()) == set(SETTINGS), "The mapping is not exhaustive!"
 
 
-def get_setting_name(channel_purpose: ChannelPurpose) -> DbSettingKey:
-    """Maps a channel purpose to the column name in the database."""
-    return PURPOSE_TO_SETTING[channel_purpose]
+def get_setting_name(setting: Setting) -> DbSettingKey:
+    """Maps a setting to the column name in the database."""
+    return SETTING_TO_DB_SETTING[setting]
 
 
-def get_purpose_name(setting_name: DbSettingKey) -> ChannelPurpose:
-    """Maps a column name in the database to the channel purpose."""
-    return SETTING_TO_PURPOSE[setting_name]
+def get_purpose_name(setting_name: DbSettingKey) -> Setting:
+    """Maps a column name in the database to the setting."""
+    return DB_SETTING_TO_SETTING[setting_name]
 
 
-async def get_server_setting(server_id: int, channel_purpose: ChannelPurpose) -> int | None:
-    """Gets the channel id of the specified purpose for a server. The channels fetched are always GuildMessageable unless the server admins changed them."""
-    setting_name = get_setting_name(channel_purpose)
+# async def get_server_channel_purpose(server_id: int, channel_purpose: ChannelPurpose) -> int | None:
+#     """Gets the channel id of the specified purpose for a server. The channels fetched are always GuildMessageable unless the server admins changed them."""
+#     setting_name = get_setting_name(channel_purpose)
+#     response: SingleAPIResponse[ServerSettingRecord] | None = (
+#         await DatabaseManager()
+#         .table("server_settings")
+#         .select(setting_name, count=CountMethod.exact)
+#         .eq("server_id", server_id)
+#         .maybe_single()
+#         .execute()
+#     )
+#     if response is None:
+#         return None
+#     return response.data.get(setting_name)
+
+
+async def get_server_setting(server_id: int, setting: Setting) -> int | None:
+    """Gets a channel id or role list id for a server depending on the type of setting. The channels fetched are always GuildMessageable unless the server admins changed them."""
+    setting_name = get_setting_name(setting)
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager()
         .table("server_settings")
@@ -46,7 +80,7 @@ async def get_server_setting(server_id: int, channel_purpose: ChannelPurpose) ->
     return response.data.get(setting_name)
 
 
-async def get_server_settings(server_id: int) -> dict[ChannelPurpose, int]:
+async def get_server_settings(server_id: int) -> dict[Setting, List[int]]:
     """Gets the settings for a server."""
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager().table("server_settings").select("*").eq("server_id", server_id).maybe_single().execute()

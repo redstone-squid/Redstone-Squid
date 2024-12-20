@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
+from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias, List
 from database.enums import Status, Category
 
 
@@ -87,10 +87,18 @@ class ServerSettingRecord(TypedDict):
     first_channel_id: int | None
     builds_channel_id: int | None
     voting_channel_id: int | None
+    staff_roles_ids: List[int] | None
+    trusted_roles_ids: List[int] | None
 
 
 DbSettingKey = Literal[
-    "smallest_channel_id", "fastest_channel_id", "first_channel_id", "builds_channel_id", "voting_channel_id"
+    "smallest_channel_id",
+    "fastest_channel_id",
+    "first_channel_id",
+    "builds_channel_id",
+    "voting_channel_id",
+    "staff_ids",
+    "trusted_ids",
 ]
 
 
@@ -139,6 +147,12 @@ DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrient
 
 ChannelPurpose: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 CHANNEL_PURPOSES = cast(Sequence[ChannelPurpose], get_args(ChannelPurpose))
+
+RoleSetting: TypeAlias = Literal["Staff", "Trusted"]
+ROLE_SETTINGS = cast(Sequence[RoleSetting], get_args(RoleSetting))
+
+Setting: TypeAlias = ChannelPurpose | RoleSetting
+SETTINGS = cast(Sequence[Setting], list(CHANNEL_PURPOSES) + list(ROLE_SETTINGS))
 
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
