@@ -4,6 +4,7 @@ import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING, Dict, Optional
 from bot.vote_session import VoteSessionBase
+from bot.settings import has_x_role
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -17,7 +18,7 @@ class DeleteLogSession(VoteSessionBase):
         self,
         message: discord.Message,
         target_message: Optional[discord.Message] = None,
-        threshold: int = 7,
+        threshold: int = 3,
     ):
         super().__init__(message, threshold)
         self.target_message = target_message
@@ -27,6 +28,12 @@ class DeleteLogCog(Cog, name="Vote"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
         self.tracked_messages: Dict[int, DeleteLogSession] = {}
+
+    @command(name="test_role")
+    @has_x_role("Staff")
+    async def test_role(self, ctx: Context):
+        """Test command to check role-based access."""
+        print("You have the role")
 
     @command(name="start_vote")
     async def start_vote(self, ctx: Context, target_message: Optional[discord.Message] = None):
@@ -55,6 +62,7 @@ class DeleteLogCog(Cog, name="Vote"):
             return
 
     @Cog.listener()
+    @has_x_role("Trusted")
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Handles reactions to update vote counts anonymously."""
         if user.bot:

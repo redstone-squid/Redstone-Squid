@@ -6,7 +6,7 @@ from typing import cast, TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only
+from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only, check
 from postgrest.types import ReturnMethod
 
 from database import DatabaseManager
@@ -25,13 +25,16 @@ if TYPE_CHECKING:
 # TODO: Make all commands in this cog guild only
 
 
-def has_x_role(x: RoleSetting, ctx: Context) -> bool:
-    if has_any_role(get_server_setting(server_id=ctx.guild, setting=x)):
-        return True
-    return False
+def has_x_role(x: RoleSetting):
+    async def predicate(ctx: Context) -> bool:
+        server_id = ctx.guild.id
+        role_ids = await get_server_setting(server_id=server_id, setting=x)
+        if role_ids is None:
+            return False
+        has_role = has_any_role(role_ids)
+        return has_role
 
-
-channel_settings_roles = has_x_role("Staff")
+    return check(predicate)
 
 
 class SettingsCog(Cog, name="Settings"):
@@ -39,7 +42,7 @@ class SettingsCog(Cog, name="Settings"):
         self.bot = bot
 
     @hybrid_group(name="settings", invoke_without_command=True)
-    @has_any_role(*channel_settings_roles)
+    @has_x_role("Staff")
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context):
         """Allows you to configure the bot for your server."""
@@ -61,7 +64,7 @@ class SettingsCog(Cog, name="Settings"):
         )
 
     @settings_hybrid_group.command()
-    @has_any_role(*channel_settings_roles)
+    @has_x_role("Staff")
     async def query_all(self, ctx: Context):
         """Query all settings."""
         assert ctx.guild is not None
@@ -76,7 +79,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @has_any_role(*channel_settings_roles)
+    @has_x_role("Staff")
     async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
         assert ctx.guild is not None
@@ -107,7 +110,7 @@ class SettingsCog(Cog, name="Settings"):
         channel_purpose=", ".join(CHANNEL_PURPOSES),
         channel="The channel that you want to set to send this record type to.",
     )
-    @has_any_role(*channel_settings_roles)
+    @has_x_role("Staff")
     async def set_channel(
         self,
         ctx: Context,
@@ -132,7 +135,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="unset")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @has_any_role(*channel_settings_roles)
+    @has_x_role("Staff")
     async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Unsets the channel to post this record type to."""
         assert ctx.guild is not None
