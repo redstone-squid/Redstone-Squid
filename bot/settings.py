@@ -16,7 +16,7 @@ from database.server_settings import (
     get_server_settings,
 )
 import bot.utils as utils
-from database.schema import ChannelPurpose, CHANNEL_PURPOSES
+from database.schema import ChannelPurpose, CHANNEL_PURPOSES, RoleSetting
 from bot._types import GuildMessageable
 
 if TYPE_CHECKING:
@@ -25,18 +25,18 @@ if TYPE_CHECKING:
 # TODO: Make all commands in this cog guild only
 
 
+def has_x_role(x: RoleSetting, ctx: Context) -> bool:
+    if has_any_role(get_server_setting(server_id=ctx.guild, setting=x)):
+        return True
+    return False
+
+
+channel_settings_roles = has_x_role("Staff")
+
+
 class SettingsCog(Cog, name="Settings"):
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot
-
-    channel_settings_roles = (
-        DatabaseManager()
-        .table("server_settings")
-        .select("staff_roles_ids")
-        .eq("server_id", discord.Guild.id)
-        .maybe_single()
-        .execute()
-    )
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @has_any_role(*channel_settings_roles)
@@ -159,17 +159,6 @@ async def get_settable_channels(
         channels[record_type] = cast(GuildMessageable | None, server.get_channel(channel_id))
 
     return channels
-
-
-# def is_trusted() -> Check[Any]:
-#     async def predicate(ctx: Context[BotT]) -> bool:
-#         if has_any_role(
-#             get_server_setting(
-#                 ctx.guild,
-#             )
-#         ):
-#             return True
-#         return False
 
 
 async def setup(bot: RedstoneSquid):
