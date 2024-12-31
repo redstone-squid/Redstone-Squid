@@ -6,9 +6,10 @@ from typing import cast, TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Context, Cog, hybrid_group, guild_only, check, NoPrivateMessage, MissingAnyRole
+from discord.ext.commands import Context, Cog, hybrid_group, guild_only
 from postgrest.types import ReturnMethod
 
+from bot.utils import is_staff
 from database import DatabaseManager
 from database.server_settings import (
     update_server_setting,
@@ -23,56 +24,6 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 # TODO: Make all commands in this cog guild only
-
-
-def is_staff():
-    """Check if the user has a staff role, as defined in the server settings."""
-
-    async def predicate(ctx: Context) -> bool:
-        if ctx.guild is None:
-            raise NoPrivateMessage()
-
-        server_id = ctx.guild.id
-        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
-        if staff_role_ids is None:
-            return False
-
-        # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(
-            ctx.author.get_role(item) is not None
-            if isinstance(item, int)
-            else discord.utils.get(ctx.author.roles, name=item) is not None
-            for item in staff_role_ids
-        ):
-            return True
-        raise MissingAnyRole(list(staff_role_ids))
-
-    return check(predicate)
-
-
-def is_trusted():
-    """Check if the user has a trusted role, as defined in the server settings."""
-
-    async def predicate(ctx: Context) -> bool:
-        if ctx.guild is None:
-            raise NoPrivateMessage()
-
-        server_id = ctx.guild.id
-        trusted_role_ids = await get_server_setting(server_id=server_id, setting="Trusted")
-        if trusted_role_ids is None:
-            return False
-
-        # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(
-            ctx.author.get_role(item) is not None
-            if isinstance(item, int)
-            else discord.utils.get(ctx.author.roles, name=item) is not None
-            for item in trusted_role_ids
-        ):
-            return True
-        raise MissingAnyRole(list(trusted_role_ids))
-
-    return check(predicate)
 
 
 class SettingsCog(Cog, name="Settings"):

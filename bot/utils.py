@@ -14,6 +14,7 @@ import discord
 from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
+from discord.ext.commands import Context, NoPrivateMessage, MissingAnyRole, check
 from markdown import Markdown
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -21,6 +22,7 @@ from pydantic import BaseModel, Field
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
 from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
+from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element
@@ -437,3 +439,53 @@ if __name__ == "__main__":
 
     load_dotenv()
     asyncio.run(main())
+
+
+def is_staff():
+    """Check if the user has a staff role, as defined in the server settings."""
+
+    async def predicate(ctx: Context) -> bool:
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+
+        server_id = ctx.guild.id
+        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
+        if staff_role_ids is None:
+            return False
+
+        # ctx.guild is None doesn't narrow ctx.author to Member
+        if any(
+            ctx.author.get_role(item) is not None
+            if isinstance(item, int)
+            else discord.utils.get(ctx.author.roles, name=item) is not None
+            for item in staff_role_ids
+        ):
+            return True
+        raise MissingAnyRole(list(staff_role_ids))
+
+    return check(predicate)
+
+
+def is_trusted():
+    """Check if the user has a trusted role, as defined in the server settings."""
+
+    async def predicate(ctx: Context) -> bool:
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+
+        server_id = ctx.guild.id
+        trusted_role_ids = await get_server_setting(server_id=server_id, setting="Trusted")
+        if trusted_role_ids is None:
+            return False
+
+        # ctx.guild is None doesn't narrow ctx.author to Member
+        if any(
+            ctx.author.get_role(item) is not None
+            if isinstance(item, int)
+            else discord.utils.get(ctx.author.roles, name=item) is not None
+            for item in trusted_role_ids
+        ):
+            return True
+        raise MissingAnyRole(list(trusted_role_ids))
+
+    return check(predicate)

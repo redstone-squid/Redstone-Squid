@@ -4,7 +4,7 @@ import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING, Dict, Optional
 from bot.vote_session import VoteSessionBase
-from bot.settings import is_staff, is_trusted
+from bot.utils import is_staff, is_trusted
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
