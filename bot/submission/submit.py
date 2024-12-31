@@ -41,9 +41,6 @@ APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
-_Default = object()
-"""A default value for the flags. This is used to work around https://github.com/Rapptz/discord.py/issues/9641"""
-
 
 class BuildVoteSession(VoteSessionBase):
     """A vote session for a confirming or denying a build."""
