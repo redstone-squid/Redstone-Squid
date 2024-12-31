@@ -5,7 +5,7 @@ from async_lru import alru_cache
 from dotenv import load_dotenv
 from postgrest import APIResponse
 
-from supabase_py_async import create_client, AsyncClient
+from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
 from database.utils import get_version_string

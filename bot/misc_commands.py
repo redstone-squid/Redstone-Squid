@@ -5,10 +5,12 @@ from typing import Literal, TYPE_CHECKING
 import discord
 import discord.ext.commands as commands
 from discord import Member
+from discord.ext import tasks
 from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
+from database import DatabaseManager
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -44,6 +46,11 @@ class Miscellaneous(Cog):
     async def docs(self, ctx: Context):
         """Links you to our regulations."""
         await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
+
+    @tasks.loop(hours=24)
+    async def call_supabase_to_prevent_deactivation(self):
+        db = DatabaseManager()
+        await db.table("submissions").select("submission_id").limit(1).execute()
 
     # ----------------- Owner only commands -----------------
     # These commands are only available to the bot owner.
