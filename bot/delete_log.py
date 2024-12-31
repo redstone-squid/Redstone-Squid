@@ -29,30 +29,26 @@ class DeleteLogCog(Cog, name="Vote"):
         self.tracked_messages: Dict[int, DeleteLogSession] = {}
 
     @command(name="start_vote")
-    async def start_vote(self, ctx: Context, target_message: Optional[discord.Message] = None):
+    async def start_vote(self, ctx: Context, target_message: discord.Message):
         """Starts a vote to delete a specified message by providing its URL."""
-        if target_message:
-            # Check if guild_id matches the current guild
-            if ctx.guild != target_message.guild:
-                await ctx.send("The message is not from this guild.")
-                return
-
-            embed = discord.Embed(
-                title="Vote to Delete Log",
-                description=(
-                    f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-                    f"**Log Content:**\n{target_message.content}"
-                ),
-            )
-            message = await ctx.send(embed=embed)
-            # Add initial reactions
-            await message.add_reaction(APPROVE_EMOJI)
-            await asyncio.sleep(1)
-            await message.add_reaction(DENY_EMOJI)
-            self.tracked_messages[message.id] = DeleteLogSession(message, target_message=target_message)
-        else:
-            await ctx.send("Must provide a log to delete")
+        # Check if guild_id matches the current guild
+        if ctx.guild != target_message.guild:
+            await ctx.send("The message is not from this guild.")
             return
+
+        embed = discord.Embed(
+            title="Vote to Delete Log",
+            description=(
+                f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
+                f"**Log Content:**\n{target_message.content}"
+            ),
+        )
+        message = await ctx.send(embed=embed)
+        # Add initial reactions
+        await message.add_reaction(APPROVE_EMOJI)
+        await asyncio.sleep(1)
+        await message.add_reaction(DENY_EMOJI)
+        self.tracked_messages[message.id] = DeleteLogSession(message, target_message=target_message)
 
     @Cog.listener()
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
