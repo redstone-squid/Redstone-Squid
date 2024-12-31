@@ -432,8 +432,8 @@ class SubmissionsCog(Cog, name="Submissions"):
             )
 
     @Cog.listener(name="on_raw_reaction_add")
-    async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
-        """Handles anonymous voting with initial reactions."""
+    async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
+        """Handles reactions to update vote counts anonymously."""
 
         vote = await self._validate_vote(payload)
         if vote is None:
@@ -481,6 +481,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         for record in message_records:
             try:
                 channel = self.bot.get_channel(record["channel_id"])
+                assert isinstance(channel, GuildMessageable)
                 msg_to_delete = await channel.fetch_message(record["message_id"])
                 await msg_to_delete.delete()
             except discord.NotFound:
@@ -509,9 +510,10 @@ class SubmissionsCog(Cog, name="Submissions"):
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
             channel = await self.bot.fetch_channel(payload.channel_id)
+        assert isinstance(channel, GuildMessageable)
         message: Message = await channel.fetch_message(payload.message_id)
 
-        if message.author.id != self.bot.user.id:
+        if message.author.id != self.bot.user.id:  # type: ignore
             return
 
         # A build ID must be associated with the message
@@ -523,8 +525,10 @@ class SubmissionsCog(Cog, name="Submissions"):
         build = await Build.from_id(build_id)
         if build is None or build.submission_status != Status.PENDING:
             return
-
-        return Vote(guild=self.bot.get_guild(guild_id), channel=channel, message=message, build=build, user=user)
+        
+        guild = self.bot.get_guild(guild_id)
+        assert guild is not None
+        return Vote(guild=guild, channel=channel, message=message, build=build, user=user)
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
