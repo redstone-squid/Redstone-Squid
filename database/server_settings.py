@@ -70,6 +70,7 @@ async def get_server_setting(server_id: int, setting: ChannelPurpose) -> int | N
 @overload
 async def get_server_setting(server_id: int, setting: RoleSetting) -> list[int] | None: ...
 
+
 async def get_server_setting(server_id: int, setting: Setting) -> Any:
     """
     Gets a channel id or role list id for a server depending on the type of setting.
@@ -90,7 +91,7 @@ async def get_server_setting(server_id: int, setting: Setting) -> Any:
     return response.data.get(setting_name)
 
 
-async def get_server_settings(server_id: int) -> dict[Setting, List[int]]:
+async def get_server_settings(server_id: int) -> dict[Setting, int | list[int]]:
     """Gets the settings for a server."""
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager().table("server_settings").select("*").eq("server_id", server_id).maybe_single().execute()
@@ -102,13 +103,13 @@ async def get_server_settings(server_id: int) -> dict[Setting, List[int]]:
     return {get_purpose_name(setting_name): id for setting_name, id in settings.items() if setting_name != "server_id"}  # type: ignore
 
 
-async def update_server_setting(server_id: int, channel_purpose: ChannelPurpose, value: int | None) -> None:
+async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None:
     """Updates a setting for a server."""
-    setting_name = get_setting_name(channel_purpose)
+    setting_name = get_setting_name(setting)
     await DatabaseManager().table("server_settings").update({"server_id": server_id, setting_name: value}).execute()
 
 
-async def update_server_settings(server_id: int, channel_purposes: dict[ChannelPurpose, int | None]) -> None:
+async def update_server_settings(server_id: int, settings: dict[Setting, int | list[int] | None]) -> None:
     """Updates a list of settings for a server."""
-    settings = {get_setting_name(purpose): value for purpose, value in channel_purposes.items()}
+    settings = {get_setting_name(purpose): value for purpose, value in settings.items()}
     await DatabaseManager().table("server_settings").update({"server_id": server_id, **settings}).execute()
