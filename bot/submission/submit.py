@@ -108,7 +108,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            return await sent_message.edit(embed=await submission.generate_embed())
+            await sent_message.edit(embed=await submission.generate_embed())
 
     @staticmethod
     def is_owner_server(ctx: Context):
@@ -131,13 +131,14 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                await sent_message.edit(embed=error_embed)
+                return
 
             await build.confirm()
             await self.post_build(build, purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name="deny")
     @app_commands.describe(submission_id="The ID of the build you want to deny.")
@@ -150,12 +151,13 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                await sent_message.edit(embed=error_embed)
+                return
 
             await build.deny()
 
             success_embed = utils.info_embed("Success", "Submission has been denied.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     # @submission_hybrid_group.command("send_all")
     # @has_any_role(*submission_roles)
@@ -170,7 +172,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 await self.post_build(build, guilds=[ctx.guild], purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "All posts have been sent.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
@@ -178,43 +180,6 @@ class SubmissionsCog(Cog, name="Submissions"):
         versions = await DatabaseManager.get_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
-
-    async def post_build(self, build: Build, *, purpose: MessagePurpose, guilds: Sequence[Guild] | None = None) -> None:
-        """Post a confirmed submission to the appropriate discord channels.
-
-        Args:
-            build (Build): The build to post.
-            purpose (str): The purpose of the post.
-            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
-        """
-        # TODO: There are no checks to see if the submission has already been posted
-        if build.id is None:
-            raise ValueError("Build id is None.")
-
-        if guilds is None:
-            guilds = self.bot.guilds
-
-        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
-        em = await build.generate_embed()
-
-        for channel_id in channel_ids:
-            channel = self.bot.get_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
-            message = await channel.send(embed=em)
-            await msg.track_message(message, purpose, build.id)
-
-            if purpose == "view_pending_build":
-                # Add initial reactions
-                try:
-                    await message.add_reaction(APPROVE_EMOJIS[0])
-                    await asyncio.sleep(1)
-                    await message.add_reaction(DENY_EMOJIS[0])
-                except discord.Forbidden:
-                    pass  # Bot doesn't have permission to add reactions
-
-                # Initialize the BuildVoteSession
-                session = BuildVoteSession(build, message)
-                self.active_vote_sessions[message.id] = session
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -313,9 +278,11 @@ class SubmissionsCog(Cog, name="Submissions"):
         await followup.send("Use the select menus then click the button", view=view)
         await view.wait()
         if view.value is None:
-            return await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            return
         elif view.value is False:
-            return await followup.send("Submission canceled by user", ephemeral=True)
+            await followup.send("Submission canceled by user", ephemeral=True)
+            return
         else:
             await build.save()
             await followup.send(
@@ -324,6 +291,43 @@ class SubmissionsCog(Cog, name="Submissions"):
                 ephemeral=True,
             )
             await self.post_build(build, purpose="view_pending_build")
+
+    async def post_build(self, build: Build, *, purpose: MessagePurpose, guilds: Sequence[Guild] | None = None) -> None:
+        """Post a confirmed submission to the appropriate discord channels.
+
+        Args:
+            build (Build): The build to post.
+            purpose (str): The purpose of the post.
+            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
+        """
+        # TODO: There are no checks to see if the submission has already been posted
+        if build.id is None:
+            raise ValueError("Build id is None.")
+
+        if guilds is None:
+            guilds = self.bot.guilds
+
+        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
+        em = await build.generate_embed()
+
+        for channel_id in channel_ids:
+            channel = self.bot.get_channel(channel_id)
+            assert isinstance(channel, GuildMessageable)
+            message = await channel.send(embed=em)
+            await msg.track_message(message, purpose, build.id)
+
+            if purpose == "view_pending_build":
+                # Add initial reactions
+                try:
+                    await message.add_reaction(APPROVE_EMOJIS[0])
+                    await asyncio.sleep(1)
+                    await message.add_reaction(DENY_EMOJIS[0])
+                except discord.Forbidden:
+                    pass  # Bot doesn't have permission to add reactions
+
+                # Initialize the BuildVoteSession
+                session = BuildVoteSession(build, message)
+                self.active_vote_sessions[message.id] = session
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
