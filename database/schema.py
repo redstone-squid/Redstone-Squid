@@ -97,8 +97,8 @@ DbSettingKey = Literal[
     "first_channel_id",
     "builds_channel_id",
     "voting_channel_id",
-    "staff_ids",
-    "trusted_ids",
+    "staff_role_ids",
+    "trusted_role_ids",
 ]
 
 
