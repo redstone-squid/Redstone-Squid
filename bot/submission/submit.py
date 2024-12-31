@@ -20,7 +20,7 @@ from postgrest import APIResponse
 from pydantic import ValidationError
 from typing_extensions import override
 
-from bot import utils, config
+from bot import utils
 from bot.vote_session import AbstractVoteSession, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
@@ -28,7 +28,7 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
+from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown, is_owner_server
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord, MessagePurpose
 from database.server_settings import get_server_setting
@@ -109,14 +109,6 @@ class SubmissionsCog(Cog, name="Submissions"):
                 return await sent_message.edit(embed=error_embed)
 
             await sent_message.edit(embed=await submission.generate_embed())
-
-    @staticmethod
-    def is_owner_server(ctx: Context):
-        if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
-            # TODO: Make a custom error for this.
-            # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
-            raise commands.CommandError("This command can only be executed on certain servers.")
-        return True
 
     @submission_hybrid_group.command(name="confirm")
     @app_commands.describe(submission_id="The ID of the build you want to confirm.")

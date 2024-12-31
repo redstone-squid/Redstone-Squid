@@ -14,11 +14,12 @@ import discord
 from async_lru import alru_cache
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context, NoPrivateMessage, MissingAnyRole, check
+from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
 from markdown import Markdown
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+from bot import config
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
 from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
@@ -173,6 +174,16 @@ class RunningMessage:
         if self.delete_on_exit:
             await self.sent_message.delete()
         return False
+
+
+def is_owner_server(ctx: Context):
+    """Check if the command is executed on the owner's server."""
+
+    if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
+        # TODO: Make a custom error for this.
+        # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
+        raise CommandError("This command can only be executed on certain servers.")
+    return True
 
 
 # See https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text
