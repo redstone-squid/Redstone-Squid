@@ -30,7 +30,7 @@ from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
 from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
 from database.message import get_build_id_by_message
-from database.schema import TypeRecord
+from database.schema import TypeRecord, MessagePurpose
 from database.server_settings import get_server_setting
 from database.utils import upload_to_catbox, get_version_string
 
@@ -179,7 +179,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
-    async def post_build(self, build: Build, *, purpose: str, guilds: Sequence[Guild] | None = None) -> None:
+    async def post_build(self, build: Build, *, purpose: MessagePurpose, guilds: Sequence[Guild] | None = None) -> None:
         """Post a confirmed submission to the appropriate discord channels.
 
         Args:
