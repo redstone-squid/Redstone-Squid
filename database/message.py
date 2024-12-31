@@ -40,13 +40,13 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     return server_record.data
 
 
-async def track_message(message: discord.Message, purpose: str, build_id: int | None = None) -> None:
+async def track_message(message: discord.Message, purpose: MessagePurpose, build_id: int | None = None) -> None:
     """Track a message in the database.
 
     Args:
         message: The message to track.
         build_id: The associated build id, can be None.
-        purpose: The purpose of the message. This should be a short description of why the message was sent.
+        purpose: The purpose of the message.
     """
     if message.guild is None:
         raise NotImplementedError("Cannot track messages in DMs.")  # TODO
