@@ -6,7 +6,7 @@ from typing import cast, TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Context, has_any_role, Cog, hybrid_group, guild_only, check
+from discord.ext.commands import Context, Cog, hybrid_group, guild_only, check, NoPrivateMessage, MissingAnyRole
 from postgrest.types import ReturnMethod
 
 from database import DatabaseManager
@@ -16,7 +16,7 @@ from database.server_settings import (
     get_server_settings,
 )
 import bot.utils as utils
-from database.schema import ChannelPurpose, CHANNEL_PURPOSES, RoleSetting
+from database.schema import ChannelPurpose, CHANNEL_PURPOSES
 from bot._types import GuildMessageable
 
 if TYPE_CHECKING:
@@ -25,14 +25,52 @@ if TYPE_CHECKING:
 # TODO: Make all commands in this cog guild only
 
 
-def has_x_role(x: RoleSetting):
+def is_staff():
+    """Check if the user has a staff role, as defined in the server settings."""
+
     async def predicate(ctx: Context) -> bool:
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+
         server_id = ctx.guild.id
-        role_ids = await get_server_setting(server_id=server_id, setting=x)
-        if role_ids is None:
+        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
+        if staff_role_ids is None:
             return False
-        has_role = has_any_role(role_ids)
-        return has_role
+
+        # ctx.guild is None doesn't narrow ctx.author to Member
+        if any(
+            ctx.author.get_role(item) is not None
+            if isinstance(item, int)
+            else discord.utils.get(ctx.author.roles, name=item) is not None
+            for item in staff_role_ids
+        ):
+            return True
+        raise MissingAnyRole(list(staff_role_ids))
+
+    return check(predicate)
+
+
+def is_trusted():
+    """Check if the user has a trusted role, as defined in the server settings."""
+
+    async def predicate(ctx: Context) -> bool:
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+
+        server_id = ctx.guild.id
+        trusted_role_ids = await get_server_setting(server_id=server_id, setting="Trusted")
+        if trusted_role_ids is None:
+            return False
+
+        # ctx.guild is None doesn't narrow ctx.author to Member
+        if any(
+            ctx.author.get_role(item) is not None
+            if isinstance(item, int)
+            else discord.utils.get(ctx.author.roles, name=item) is not None
+            for item in trusted_role_ids
+        ):
+            return True
+        raise MissingAnyRole(list(trusted_role_ids))
 
     return check(predicate)
 
@@ -42,7 +80,7 @@ class SettingsCog(Cog, name="Settings"):
         self.bot = bot
 
     @hybrid_group(name="settings", invoke_without_command=True)
-    @has_x_role("Staff")
+    @is_staff()
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context):
         """Allows you to configure the bot for your server."""
@@ -64,7 +102,7 @@ class SettingsCog(Cog, name="Settings"):
         )
 
     @settings_hybrid_group.command()
-    @has_x_role("Staff")
+    @is_staff()
     async def query_all(self, ctx: Context):
         """Query all settings."""
         assert ctx.guild is not None
@@ -79,7 +117,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @has_x_role("Staff")
+    @is_staff()
     async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
         assert ctx.guild is not None
@@ -110,7 +148,7 @@ class SettingsCog(Cog, name="Settings"):
         channel_purpose=", ".join(CHANNEL_PURPOSES),
         channel="The channel that you want to set to send this record type to.",
     )
-    @has_x_role("Staff")
+    @is_staff()
     async def set_channel(
         self,
         ctx: Context,
@@ -135,7 +173,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="unset")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @has_x_role("Staff")
+    @is_staff()
     async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Unsets the channel to post this record type to."""
         assert ctx.guild is not None
