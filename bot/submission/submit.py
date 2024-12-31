@@ -18,6 +18,7 @@ from discord.ext.commands import (
 )
 from postgrest import APIResponse
 from pydantic import ValidationError
+from typing_extensions import override
 
 from bot import utils, config
 from bot.vote_session import VoteSessionBase, Vote
@@ -49,6 +50,21 @@ class BuildVoteSession(VoteSessionBase):
         super().__init__(message, threshold)
         self.build = build
         self.negative_threshold = negative_threshold
+        embed = self.message.embeds[0]
+        embed.add_field(name="upvotes", value=0)
+        embed.add_field(name="downvotes", value=0)
+        self.embed_upvote_index = len(embed.fields) - 2
+        self.embed_downvote_index = len(embed.fields) - 1
+
+
+    @override
+    async def update_embed(self, description: str = None):
+        """Update the embed with new counts"""
+
+        embed = self.message.embeds[0]
+        embed.set_field_at(self.embed_upvote_index, name="upvotes", value=str(self.upvotes), inline=True)
+        embed.set_field_at(self.embed_downvote_index, name="downvotes", value=str(self.downvotes), inline=True)
+        await self.message.edit(embed=embed)
 
 
 class SubmissionsCog(Cog, name="Submissions"):
