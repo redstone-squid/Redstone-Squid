@@ -2,6 +2,7 @@
 
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
+from typing_extensions import overload
 
 from database import DatabaseManager
 from database.schema import (
@@ -14,7 +15,7 @@ from database.schema import (
     SETTINGS,
 )
 
-from typing import List
+from typing import List, Any
 
 CHANNEL_PURPOSE_TO_DB_SETTING: dict[ChannelPurpose, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
@@ -64,8 +65,17 @@ def get_purpose_name(setting_name: DbSettingKey) -> Setting:
 #     return response.data.get(setting_name)
 
 
-async def get_server_setting(server_id: int, setting: Setting) -> int | None:
-    """Gets a channel id or role list id for a server depending on the type of setting. The returned channel ids are always a ``GuildMessageable``."""
+@overload
+async def get_server_setting(server_id: int, setting: ChannelPurpose) -> int | None: ...
+@overload
+async def get_server_setting(server_id: int, setting: RoleSetting) -> list[int] | None: ...
+
+async def get_server_setting(server_id: int, setting: Setting) -> Any:
+    """
+    Gets a channel id or role list id for a server depending on the type of setting.
+
+    The returned channel ids are always a ``GuildMessageable``.
+    """
     setting_name = get_setting_name(setting)
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager()
