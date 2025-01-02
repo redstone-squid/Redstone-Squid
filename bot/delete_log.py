@@ -14,13 +14,23 @@ APPROVE_EMOJI = "✅"
 DENY_EMOJI = "❌"
 
 
-class DeleteLogSession(VoteSessionBase):
+class DeleteLogVoteSession(VoteSessionBase):
+    """A vote session for deleting a message."""
+
     def __init__(
         self,
         message: discord.Message,
         target_message: discord.Message | None = None,
         threshold: int = 3,
     ):
+        """
+        Initializes the vote session.
+        
+        Args:
+            message: The message to track votes on.
+            target_message: The message to delete if the vote passes.
+            threshold: The number of votes required to pass the vote.
+        """
         super().__init__(message, threshold)
         self.target_message = target_message
 
@@ -28,7 +38,7 @@ class DeleteLogSession(VoteSessionBase):
 class DeleteLogCog(Cog, name="Vote"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
-        self.tracked_messages: dict[int, DeleteLogSession] = {}
+        self.tracked_messages: dict[int, DeleteLogVoteSession] = {}
 
     @command(name="test_role")
     @check_is_staff()
@@ -57,7 +67,7 @@ class DeleteLogCog(Cog, name="Vote"):
             await message.add_reaction(APPROVE_EMOJI)
             await asyncio.sleep(1)
             await message.add_reaction(DENY_EMOJI)
-            self.tracked_messages[message.id] = DeleteLogSession(message, target_message=target_message)
+            self.tracked_messages[message.id] = DeleteLogVoteSession(message, target_message=target_message)
         else:
             await ctx.send("Must provide a log to delete")
             return
