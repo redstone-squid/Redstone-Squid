@@ -30,7 +30,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     ):
         """
         Initializes the vote session.
-        
+
         Args:
             message: The message to track votes on.
             target_message: The message to delete if the vote passes.
@@ -44,14 +44,14 @@ class DeleteLogVoteSession(AbstractVoteSession):
         """Updates the message with the current vote count."""
         embed = discord.Embed(
             title="Vote to Delete Log",
-            description = (
+            description=(
                 dedent(f"""
                 React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
                 **Log Content:**\n{self.target_message.content}\n\n
                 **Upvotes:** {self.upvotes}
                 **Downvotes:** {self.downvotes}
                 **Net Votes:** {self.net_votes}""")
-            )
+            ),
         )
         await self.message.edit(embed=embed)
 
@@ -89,7 +89,7 @@ class DeleteLogCog(Cog, name="Vote"):
         """Handles reactions to update vote counts anonymously."""
         if user.bot:
             return  # Ignore bot reactions
-        
+
         if (guild := reaction.message.guild) is None:
             return
 
@@ -97,7 +97,7 @@ class DeleteLogCog(Cog, name="Vote"):
         message_id = reaction.message.id
         if message_id not in self.tracked_messages:
             return
-        
+
         vote_session = self.tracked_messages[message_id]
         # We should remove the reaction of all users except the bot, thus this should be placed before the trusted role check
         try:

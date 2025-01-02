@@ -72,7 +72,10 @@ async def update_message_edited_time(message_id: int) -> None:
 
 
 async def untrack_message(
-    server_id: int | None = None, build_id: int | None = None, *, purpose: MessagePurpose | Iterable[MessagePurpose] | None = None
+    server_id: int | None = None,
+    build_id: int | None = None,
+    *,
+    purpose: MessagePurpose | Iterable[MessagePurpose] | None = None,
 ) -> list[MessageRecord]:
     """Untrack messages from the database. The message is not deleted on discord.
 
@@ -93,10 +96,7 @@ async def untrack_message(
         raise ValueError("server_id and build_id cannot both be None.")
 
     db = DatabaseManager()
-    query = (
-        db.table("messages")
-        .select("message_id")
-    )
+    query = db.table("messages").select("message_id")
 
     if server_id is not None:
         query = query.eq("server_id", server_id)
