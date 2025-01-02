@@ -136,6 +136,17 @@ class QuantifiedVersionRecord(TypedDict):
     quantified_name: str
 
 
+class VoteSessionRecord(TypedDict):
+    """A record of a vote session in the database."""
+
+    id: int
+    created_at: str
+    status: str
+    build_id: int
+    changes: list[tuple[str, Any, Any]]
+    author_id: int
+
+
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
