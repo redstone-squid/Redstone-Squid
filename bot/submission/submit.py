@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from typing_extensions import override
 
 from bot import utils, config
-from bot.vote_session import VoteSessionBase, Vote
+from bot.vote_session import AbstractVoteSession, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
@@ -43,7 +43,7 @@ DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildVoteSession(VoteSessionBase):
+class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
     def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
@@ -56,9 +56,8 @@ class BuildVoteSession(VoteSessionBase):
         self.embed_upvote_index = len(embed.fields) - 2
         self.embed_downvote_index = len(embed.fields) - 1
 
-
     @override
-    async def update_embed(self, description: str = None):
+    async def update_message(self):
         """Update the embed with new counts"""
 
         embed = self.message.embeds[0]
@@ -473,7 +472,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             del self.active_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)
         else:
-            await session.update_embed()
+            await session.update_message()
 
     async def _remove_vote_messages(self, build: Build):
         """Removes all messages associated with votes for a build."""
