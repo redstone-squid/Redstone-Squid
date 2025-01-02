@@ -3,7 +3,7 @@ import asyncio
 import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING
-from bot.vote_session import VoteSessionBase
+from bot.vote_session import AbstractVoteSession
 from bot.utils import check_is_staff
 from database.server_settings import get_server_setting
 
@@ -14,7 +14,7 @@ APPROVE_EMOJI = "✅"
 DENY_EMOJI = "❌"
 
 
-class DeleteLogVoteSession(VoteSessionBase):
+class DeleteLogVoteSession(AbstractVoteSession):
     """A vote session for deleting a message."""
 
     def __init__(

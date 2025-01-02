@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from typing_extensions import override
 
 from bot import utils, config
-from bot.vote_session import VoteSessionBase, Vote
+from bot.vote_session import AbstractVoteSession, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
@@ -43,7 +43,7 @@ DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildVoteSession(VoteSessionBase):
+class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
     def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
