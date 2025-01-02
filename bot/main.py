@@ -93,6 +93,11 @@ class Listeners(Cog, command_attrs=dict(hidden=True)):
         if cog and cog.has_error_handler():
             return
 
+        if isinstance(exception, commands.CommandNotFound):
+            return
+
+        await ctx.send(f"An error occurred: {exception}")
+
         logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
 
 

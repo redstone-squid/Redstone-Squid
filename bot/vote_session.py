@@ -21,6 +21,8 @@ class Vote:
 
 
 class VoteSessionBase:
+    """A vote session that represents a change to a build."""
+
     def __init__(self, message: discord.Message, threshold: int = 7):
         self.message = message  # The message that shows the voting embed
         self.threshold = threshold  # Threshold for net upvotes
@@ -41,12 +43,10 @@ class VoteSessionBase:
         """Calculate the net votes"""
         return sum(self.votes.values())
 
-    async def update_embed(self, description: str | None = None):
-        """Update the embed with new counts"""
+    async def update_message(self):
+        """Update the message with an embed with new counts"""
 
         embed = self.message.embeds[0]
-        if description is not None:
-            embed.description = description
         embed.set_field_at(0, name="upvotes", value=str(self.upvotes), inline=True)
         embed.set_field_at(1, name="downvotes", value=str(self.downvotes), inline=True)
         await self.message.edit(embed=embed)

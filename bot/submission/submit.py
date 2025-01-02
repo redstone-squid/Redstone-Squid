@@ -18,6 +18,7 @@ from discord.ext.commands import (
 )
 from postgrest import APIResponse
 from pydantic import ValidationError
+from typing_extensions import override
 
 from bot import utils, config
 from bot.vote_session import VoteSessionBase, Vote
@@ -41,9 +42,6 @@ APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
-_Default = object()
-"""A default value for the flags. This is used to work around https://github.com/Rapptz/discord.py/issues/9641"""
-
 
 class BuildVoteSession(VoteSessionBase):
     """A vote session for a confirming or denying a build."""
@@ -52,6 +50,20 @@ class BuildVoteSession(VoteSessionBase):
         super().__init__(message, threshold)
         self.build = build
         self.negative_threshold = negative_threshold
+        embed = self.message.embeds[0]
+        embed.add_field(name="upvotes", value=0)
+        embed.add_field(name="downvotes", value=0)
+        self.embed_upvote_index = len(embed.fields) - 2
+        self.embed_downvote_index = len(embed.fields) - 1
+
+    @override
+    async def update_message(self):
+        """Update the embed with new counts"""
+
+        embed = self.message.embeds[0]
+        embed.set_field_at(self.embed_upvote_index, name="upvotes", value=str(self.upvotes), inline=True)
+        embed.set_field_at(self.embed_downvote_index, name="downvotes", value=str(self.downvotes), inline=True)
+        await self.message.edit(embed=embed)
 
 
 class SubmissionsCog(Cog, name="Submissions"):
@@ -457,7 +469,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             del self.active_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)
         else:
-            await session.update_embed()
+            await session.update_message()
 
     async def _remove_vote_messages(self, build: Build):
         """Removes all messages associated with votes for a build."""
