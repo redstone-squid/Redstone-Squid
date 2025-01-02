@@ -427,20 +427,6 @@ async def validate_door_types(door_types: list[str]) -> list[str]:
     return door_types
 
 
-async def main():
-    await DatabaseManager.setup()
-    l = await get_valid_door_types()
-    print(l)
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import asyncio
-
-    load_dotenv()
-    asyncio.run(main())
-
-
 def is_staff():
     """Check if the user has a staff role, as defined in the server settings."""
 
@@ -489,3 +475,17 @@ def is_trusted():
         raise MissingAnyRole(list(trusted_role_ids))
 
     return check(predicate)
+
+
+async def main():
+    await DatabaseManager.setup()
+    l = await get_valid_door_types()
+    print(l)
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import asyncio
+
+    load_dotenv()
+    asyncio.run(main())
