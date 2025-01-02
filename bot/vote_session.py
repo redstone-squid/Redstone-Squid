@@ -41,7 +41,7 @@ class VoteSessionBase:
         """Calculate the net votes"""
         return sum(self.votes.values())
 
-    async def update_embed(self, description: str = None):
+    async def update_embed(self, description: str | None = None):
         """Update the embed with new counts"""
 
         embed = self.message.embeds[0]
