@@ -1,3 +1,4 @@
+import asyncio
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import Any
@@ -38,24 +39,8 @@ class AbstractVoteSession(ABC):
         self.threshold = threshold
         self.negative_threshold = negative_threshold
         self.votes: dict[int, int] = {}  # Dict of user_id: weight
-
-    @classmethod
-    @abstractmethod
-    async def create(cls, *args: Any, **kwargs: Any) -> "AbstractVoteSession":
-        """
-        Initialize a vote session.
-
-        Actually the correct signature is `async def create(cls, message: discord.Message, *args: Any, **kwargs: Any)`,
-        but static type checkers will complain about incompatible overrides if we add it.
-
-        A standard implementation would look like this:
-        ```python
-        self = cls(message, target_message, threshold, negative_threshold)
-        await self.update_message()
-        return self
-        ```
-        However, we intentionally leave this method abstract to force subclasses to implement it and match the signature to their `__init__` method.
-        """
+        self.background_tasks = set()
+        self.background_tasks.add(asyncio.create_task(self.update_message()))
 
     @property
     def upvotes(self) -> int:

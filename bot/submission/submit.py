@@ -64,25 +64,6 @@ class BuildVoteSession(AbstractVoteSession):
         self.embed_upvote_index = len(embed.fields) - 2
         self.embed_downvote_index = len(embed.fields) - 1
 
-    @classmethod
-    @override
-    async def create(cls, message: discord.Message, build: Build, threshold: int = 3, negative_threshold: int = -3) -> "BuildVoteSession":
-        """
-        Create a vote session from a message.
-
-        Args:
-            build: The build which the vote session is for.
-            message: The message to track votes on.
-            threshold: The number of votes required to pass the vote.
-            negative_threshold: The number of votes required to fail the vote.
-
-        Returns:
-            The vote session.
-        """
-        session = cls(message, build, threshold, negative_threshold)
-        await session.update_message()
-        return session
-
     @override
     async def update_message(self):
         """Update the embed with new counts"""
@@ -345,7 +326,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                     pass  # Bot doesn't have permission to add reactions
 
                 # Initialize the BuildVoteSession
-                session = await BuildVoteSession.create(message, build)
+                session = BuildVoteSession(message, build)
                 self.active_vote_sessions[message.id] = session
 
     # fmt: off
