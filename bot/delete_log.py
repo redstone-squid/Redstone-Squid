@@ -27,6 +27,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         message: discord.Message,
         target_message: discord.Message,
         threshold: int = 3,
+        negative_threshold: int = -3,
     ):
         """
         Initializes the vote session.
@@ -36,8 +37,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             target_message: The message to delete if the vote passes.
             threshold: The number of votes required to pass the vote.
         """
-        super().__init__(message, threshold)
         self.target_message = target_message
+        super().__init__(message, threshold, negative_threshold)
 
     @override
     async def update_message(self):

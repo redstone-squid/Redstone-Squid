@@ -47,9 +47,17 @@ class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
     def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
-        super().__init__(message, threshold)
+        """
+        Initialize the vote session.
+
+        Args:
+            build: The build which the vote session is for.
+            message: The message to track votes on.
+            threshold: The number of votes required to pass the vote.
+            negative_threshold: The number of votes required to fail the vote.
+        """
+        super().__init__(message, threshold, negative_threshold)
         self.build = build
-        self.negative_threshold = negative_threshold
         embed = self.message.embeds[0]
         embed.add_field(name="upvotes", value=0)
         embed.add_field(name="downvotes", value=0)
