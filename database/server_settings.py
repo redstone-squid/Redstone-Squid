@@ -71,7 +71,7 @@ async def get_server_setting(server_id: int, setting: ChannelPurpose) -> int | N
 async def get_server_setting(server_id: int, setting: RoleSetting) -> list[int] | None: ...
 
 
-async def get_server_setting(server_id: int, setting: Setting) -> Any:
+async def get_server_setting(server_id: int, setting: Setting) -> int | list[int] | None:
     """
     Gets a channel id or role list id for a server depending on the type of setting.
 
