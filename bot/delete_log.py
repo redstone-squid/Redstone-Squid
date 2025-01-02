@@ -2,7 +2,7 @@ import asyncio
 
 import discord
 from discord.ext.commands import command, Cog, Context
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 from bot.vote_session import VoteSessionBase
 from bot.utils import is_staff, is_trusted
 
@@ -17,7 +17,7 @@ class DeleteLogSession(VoteSessionBase):
     def __init__(
         self,
         message: discord.Message,
-        target_message: Optional[discord.Message] = None,
+        target_message: discord.Message | None = None,
         threshold: int = 3,
     ):
         super().__init__(message, threshold)
@@ -27,7 +27,7 @@ class DeleteLogSession(VoteSessionBase):
 class DeleteLogCog(Cog, name="Vote"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
-        self.tracked_messages: Dict[int, DeleteLogSession] = {}
+        self.tracked_messages: dict[int, DeleteLogSession] = {}
 
     @command(name="test_role")
     @is_staff()
@@ -36,7 +36,7 @@ class DeleteLogCog(Cog, name="Vote"):
         print("You have the role")
 
     @command(name="start_vote")
-    async def start_vote(self, ctx: Context, target_message: Optional[discord.Message] = None):
+    async def start_vote(self, ctx: Context, target_message: discord.Message | None = None):
         """Starts a vote to delete a specified message by providing its URL."""
         if target_message:
             # Check if guild_id matches the current guild
