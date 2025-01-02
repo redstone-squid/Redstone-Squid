@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from discord import app_commands
 from discord.ext.commands import Cog, hybrid_command, Context
 
 from bot.submission.ui import ConfirmationView
@@ -18,6 +19,7 @@ class VerifyCog(Cog, name="verify"):
         self.bot = bot
 
     @hybrid_command()
+    @app_commands.describe(code="The code you received by running /link in the game.")
     async def link(self, ctx: Context, code: str):
         """Link your minecraft account."""
         if await link_minecraft_account(ctx.author.id, code):

@@ -6,7 +6,7 @@ from typing import Literal, cast, TYPE_CHECKING, Any
 import asyncio
 
 import discord
-from discord import InteractionResponse, Guild, Message
+from discord import InteractionResponse, Guild, Message, app_commands
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -99,6 +99,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             await sent_message.edit(embed=em)
 
     @submission_hybrid_group.command(name="view")
+    @app_commands.describe(submission_id="The ID of the build you want to see.")
     async def view_function(self, ctx: Context, submission_id: int):
         """Displays a submission."""
         async with utils.RunningMessage(ctx) as sent_message:
@@ -119,6 +120,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         return True
 
     @submission_hybrid_group.command(name="confirm")
+    @app_commands.describe(submission_id="The ID of the build you want to confirm.")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def confirm_function(self, ctx: Context, submission_id: int):
@@ -139,6 +141,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             return await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name="deny")
+    @app_commands.describe(submission_id="The ID of the build you want to deny.")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
     async def deny_function(self, ctx: Context, submission_id: int):

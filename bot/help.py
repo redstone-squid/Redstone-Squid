@@ -25,6 +25,7 @@ class HelpCog(Cog):
 
     # /help [command]
     @app_commands.command()
+    @app_commands.describe(command="The command to get help for.")
     async def help(self, interaction: discord.Interaction[RedstoneSquid], command: str | None):
         """Show help for a command or a group of commands."""
         # noinspection PyTypeChecker
