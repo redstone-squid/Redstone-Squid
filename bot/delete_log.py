@@ -5,6 +5,7 @@ from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING
 from bot.vote_session import VoteSessionBase
 from bot.utils import is_staff, is_trusted
+from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -62,15 +63,29 @@ class DeleteLogCog(Cog, name="Vote"):
             return
 
     @Cog.listener()
-    @is_trusted()
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Handles reactions to update vote counts anonymously."""
         if user.bot:
             return  # Ignore bot reactions
-
-        message_id = reaction.message.id
+        
+        if (guild := reaction.message.guild) is None:
+            return
+        
+        # Check if the user has a trusted role
+        trusted_role_ids = await get_server_setting(server_id=guild.id, setting="Trusted")
+        if trusted_role_ids is None:
+            return
+        
+        member = guild.get_member(user.id)
+        assert member is not None
+        for role in member.roles:
+            if role.id in trusted_role_ids:
+                break
+            else:
+                return
 
         # Check if the message is being tracked
+        message_id = reaction.message.id
         if message_id in self.tracked_messages:
             vote_session = self.tracked_messages[message_id]
 
