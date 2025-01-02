@@ -39,6 +39,13 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
+# This is a very large class, the methods are ordered as follows:
+# - Static constructors
+# - Magic (dunder) methods
+# - Properties
+# - Normal methods
+# - load(), save() and the helper methods it calls
+
 @dataclass
 class Build:
     """A submission to the database."""
