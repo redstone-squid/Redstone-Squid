@@ -1,8 +1,13 @@
 import asyncio
+from textwrap import dedent
 
 import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING
+
+from typing_extensions import override
+
+from bot import utils
 from bot.vote_session import AbstractVoteSession
 from bot.utils import check_is_staff
 from database.server_settings import get_server_setting
@@ -20,7 +25,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     def __init__(
         self,
         message: discord.Message,
-        target_message: discord.Message | None = None,
+        target_message: discord.Message,
         threshold: int = 3,
     ):
         """
@@ -33,6 +38,22 @@ class DeleteLogVoteSession(AbstractVoteSession):
         """
         super().__init__(message, threshold)
         self.target_message = target_message
+
+    @override
+    async def update_message(self):
+        """Updates the message with the current vote count."""
+        embed = discord.Embed(
+            title="Vote to Delete Log",
+            description = (
+                dedent(f"""
+                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
+                **Log Content:**\n{self.target_message.content}\n\n
+                **Upvotes:** {self.upvotes}
+                **Downvotes:** {self.downvotes}
+                **Net Votes:** {self.net_votes}""")
+            )
+        )
+        await self.message.edit(embed=embed)
 
 
 class DeleteLogCog(Cog, name="Vote"):
@@ -54,19 +75,14 @@ class DeleteLogCog(Cog, name="Vote"):
             await ctx.send("The message is not from this guild.")
             return
 
-        embed = discord.Embed(
-            title="Vote to Delete Log",
-            description=(
-                f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-                f"**Log Content:**\n{target_message.content}"
-            ),
-        )
-        message = await ctx.send(embed=embed)
-        # Add initial reactions
-        await message.add_reaction(APPROVE_EMOJI)
-        await asyncio.sleep(1)
-        await message.add_reaction(DENY_EMOJI)
-        self.tracked_messages[message.id] = DeleteLogVoteSession(message, target_message=target_message)
+        async with utils.RunningMessage(ctx) as message:
+            # Add initial reactions
+            await message.add_reaction(APPROVE_EMOJI)
+            await asyncio.sleep(1)
+            await message.add_reaction(DENY_EMOJI)
+            vote_session = DeleteLogVoteSession(message, target_message=target_message)
+            self.tracked_messages[message.id] = vote_session
+            await vote_session.update_message()
 
     @Cog.listener("on_reaction_add")
     async def update_delete_log_vote_sessions(self, reaction: discord.Reaction, user: discord.User):
@@ -111,13 +127,7 @@ class DeleteLogCog(Cog, name="Vote"):
             return
 
         # Update the embed
-        embed = vote_session.message.embeds[0]
-        embed.description = (
-            f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-            f"**Upvotes:** {vote_session.upvotes}\n"
-            f"**Downvotes:** {vote_session.downvotes}"
-        )
-        await vote_session.message.edit(embed=embed)
+        await vote_session.update_message()
 
         # Check if the threshold has been met
         if vote_session.net_votes >= vote_session.threshold:
