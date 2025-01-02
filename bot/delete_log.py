@@ -4,7 +4,7 @@ import discord
 from discord.ext.commands import command, Cog, Context
 from typing import TYPE_CHECKING
 from bot.vote_session import VoteSessionBase
-from bot.utils import is_staff, is_trusted
+from bot.utils import check_is_staff
 from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ class DeleteLogCog(Cog, name="Vote"):
         self.tracked_messages: dict[int, DeleteLogSession] = {}
 
     @command(name="test_role")
-    @is_staff()
+    @check_is_staff()
     async def test_role(self, ctx: Context):
         """Test command to check role-based access."""
         print("You have the role")

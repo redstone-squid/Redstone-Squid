@@ -427,7 +427,7 @@ async def validate_door_types(door_types: list[str]) -> list[str]:
     return door_types
 
 
-def is_staff():
+def check_is_staff():
     """Check if the user has a staff role, as defined in the server settings."""
 
     async def predicate(ctx: Context) -> bool:
@@ -447,7 +447,7 @@ def is_staff():
     return check(predicate)
 
 
-def is_trusted():
+def check_is_trusted():
     """Check if the user has a trusted role, as defined in the server settings."""
 
     async def predicate(ctx: Context) -> bool:

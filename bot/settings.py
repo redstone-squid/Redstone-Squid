@@ -9,7 +9,7 @@ from discord import app_commands
 from discord.ext.commands import Context, Cog, hybrid_group, guild_only
 from postgrest.types import ReturnMethod
 
-from bot.utils import is_staff
+from bot.utils import check_is_staff
 from database import DatabaseManager
 from database.server_settings import (
     update_server_setting,
@@ -31,7 +31,7 @@ class SettingsCog(Cog, name="Settings"):
         self.bot = bot
 
     @hybrid_group(name="settings", invoke_without_command=True)
-    @is_staff()
+    @check_is_staff()
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context):
         """Allows you to configure the bot for your server."""
@@ -53,7 +53,7 @@ class SettingsCog(Cog, name="Settings"):
         )
 
     @settings_hybrid_group.command()
-    @is_staff()
+    @check_is_staff()
     async def query_all(self, ctx: Context):
         """Query all settings."""
         assert ctx.guild is not None
@@ -68,7 +68,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @is_staff()
+    @check_is_staff()
     async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
         assert ctx.guild is not None
@@ -99,7 +99,7 @@ class SettingsCog(Cog, name="Settings"):
         channel_purpose=", ".join(CHANNEL_PURPOSES),
         channel="The channel that you want to set to send this record type to.",
     )
-    @is_staff()
+    @check_is_staff()
     async def set_channel(
         self,
         ctx: Context,
@@ -124,7 +124,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="unset")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
-    @is_staff()
+    @check_is_staff()
     async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Unsets the channel to post this record type to."""
         assert ctx.guild is not None
