@@ -440,12 +440,7 @@ def is_staff():
             return False
 
         # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(
-            ctx.author.get_role(item) is not None
-            if isinstance(item, int)
-            else discord.utils.get(ctx.author.roles, name=item) is not None
-            for item in staff_role_ids
-        ):
+        if any(ctx.author.get_role(item) is not None for item in staff_role_ids):
             return True
         raise MissingAnyRole(list(staff_role_ids))
 
@@ -465,12 +460,7 @@ def is_trusted():
             return False
 
         # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(
-            ctx.author.get_role(item) is not None
-            if isinstance(item, int)
-            else discord.utils.get(ctx.author.roles, name=item) is not None
-            for item in trusted_role_ids
-        ):
+        if any(ctx.author.get_role(item) is not None for item in trusted_role_ids):
             return True
         raise MissingAnyRole(list(trusted_role_ids))
 
