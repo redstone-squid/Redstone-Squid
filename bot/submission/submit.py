@@ -46,13 +46,13 @@ DENY_EMOJIS = ["👎", "❌"]
 class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
-    def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
+    def __init__(self, message: discord.Message, build: Build, threshold: int = 3, negative_threshold: int = -3):
         """
         Initialize the vote session.
 
         Args:
-            build: The build which the vote session is for.
             message: The message to track votes on.
+            build: The build which the vote session is for.
             threshold: The number of votes required to pass the vote.
             negative_threshold: The number of votes required to fail the vote.
         """
@@ -63,6 +63,25 @@ class BuildVoteSession(AbstractVoteSession):
         embed.add_field(name="downvotes", value=0)
         self.embed_upvote_index = len(embed.fields) - 2
         self.embed_downvote_index = len(embed.fields) - 1
+
+    @classmethod
+    @override
+    async def create(cls, message: discord.Message, build: Build, threshold: int = 3, negative_threshold: int = -3) -> "BuildVoteSession":
+        """
+        Create a vote session from a message.
+
+        Args:
+            build: The build which the vote session is for.
+            message: The message to track votes on.
+            threshold: The number of votes required to pass the vote.
+            negative_threshold: The number of votes required to fail the vote.
+
+        Returns:
+            The vote session.
+        """
+        session = cls(message, build, threshold, negative_threshold)
+        await session.update_message()
+        return session
 
     @override
     async def update_message(self):
@@ -326,7 +345,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                     pass  # Bot doesn't have permission to add reactions
 
                 # Initialize the BuildVoteSession
-                session = BuildVoteSession(build, message)
+                session = await BuildVoteSession.create(message, build)
                 self.active_vote_sessions[message.id] = session
 
     # fmt: off
@@ -343,7 +362,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str = flag(default=None, description='Any additional information about the build.')
         normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int = flag(default=None,
+                                        description='The time it takes to open the door, in gameticks. (1s = 20gt)')
         date_of_creation: str = flag(default=None, description='The date the build was created.')
         in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
         locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
@@ -529,7 +549,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         build = await Build.from_id(build_id)
         if build is None or build.submission_status != Status.PENDING:
             return
-        
+
         guild = self.bot.get_guild(guild_id)
         assert guild is not None
         return Vote(guild=guild, channel=channel, message=message, build=build, user=user)

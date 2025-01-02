@@ -28,7 +28,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         target_message: discord.Message,
         threshold: int = 3,
         negative_threshold: int = -3,
-    ):
+    ) -> None:
         """
         Initializes the vote session.
 
@@ -40,8 +40,33 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self.target_message = target_message
         super().__init__(message, threshold, negative_threshold)
 
+    @classmethod
     @override
-    async def update_message(self):
+    async def create(
+        cls,
+        message: discord.Message,
+        target_message: discord.Message,
+        threshold: int = 3,
+        negative_threshold: int = -3,
+    ) -> "DeleteLogVoteSession":
+        """
+        Create a vote session from a message. This method updates the message while creating the vote session.
+
+        Args:
+            message: The message to track votes on.
+            target_message: The message to delete if the vote passes.
+            threshold: The number of votes required to pass the vote.
+            negative_threshold: The number of votes required to fail the vote.
+
+        Returns:
+            The vote session.
+        """
+        self = cls(message, target_message, threshold, negative_threshold)
+        await self.update_message()
+        return self
+
+    @override
+    async def update_message(self) -> None:
         """Updates the message with the current vote count."""
         embed = discord.Embed(
             title="Vote to Delete Log",
@@ -81,9 +106,8 @@ class DeleteLogCog(Cog, name="Vote"):
             await message.add_reaction(APPROVE_EMOJI)
             await asyncio.sleep(1)
             await message.add_reaction(DENY_EMOJI)
-            vote_session = DeleteLogVoteSession(message, target_message=target_message)
+            vote_session = await DeleteLogVoteSession.create(message, target_message=target_message)
             self.tracked_messages[message.id] = vote_session
-            await vote_session.update_message()
 
     @Cog.listener("on_reaction_add")
     async def update_delete_log_vote_sessions(self, reaction: discord.Reaction, user: discord.User):
