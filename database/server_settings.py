@@ -11,11 +11,8 @@ from database.schema import (
     ChannelPurpose,
     RoleSetting,
     Setting,
-    CHANNEL_PURPOSES,
     SETTINGS,
 )
-
-from typing import List, Any
 
 CHANNEL_PURPOSE_TO_DB_SETTING: dict[ChannelPurpose, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
