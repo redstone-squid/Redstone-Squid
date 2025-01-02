@@ -8,7 +8,7 @@ from database.utils import utcnow
 from database import DatabaseManager
 
 
-async def add_user(user_id: int = None, ign: str = None) -> int:
+async def add_user(user_id: int | None = None, ign: str | None = None) -> int:
     """Add a user to the database.
 
     Args:
