@@ -68,8 +68,8 @@ class DeleteLogCog(Cog, name="Vote"):
         await message.add_reaction(DENY_EMOJI)
         self.tracked_messages[message.id] = DeleteLogVoteSession(message, target_message=target_message)
 
-    @Cog.listener()
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
+    @Cog.listener("on_reaction_add")
+    async def update_delete_log_vote_sessions(self, reaction: discord.Reaction, user: discord.User):
         """Handles reactions to update vote counts anonymously."""
         if user.bot:
             return  # Ignore bot reactions
