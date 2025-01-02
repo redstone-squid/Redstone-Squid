@@ -7,7 +7,7 @@ from asyncio import Task
 from dataclasses import dataclass, field
 from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Literal, Any, cast
+from typing import Literal, Any, cast, TypeVar
 
 import discord
 from discord.utils import escape_markdown
@@ -33,6 +33,9 @@ from database.user import add_user
 from database.utils import utcnow, get_version_string
 from database.enums import Status, Category
 from bot import utils
+
+
+T = TypeVar("T")
 
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
@@ -294,6 +297,32 @@ class Build:
                 channels.append(channel_id)
 
         return channels
+
+    def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+        """
+        Returns the differences between this build and another
+
+        Args:
+            other: Another build to compare to.
+            allow_different_id: Whether the ID of the builds can be different.
+
+        Returns:
+            A list of tuples containing the attribute name, the value of this build, and the value of the other build.
+
+        Raises:
+            ValueError: If the IDs of the builds are different and allow_different_id is False.
+        """
+        if self.id != other.id and not allow_different_id:
+            raise ValueError("The IDs of the builds are different.")
+
+        differences: list[tuple[str, T, T]] = []
+        for attr in self:
+            if attr == "id":
+                continue
+            if getattr(self, attr) != getattr(other, attr):
+                differences.append((attr, getattr(self, attr), getattr(other, attr)))
+
+        return differences
 
     async def load(self) -> Build:
         """
@@ -762,7 +791,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    pass
+    print(Build(id=1,submission_status=Status.PENDING).diff(Build(id=1,submission_status=Status.CONFIRMED)))
 
 
 if __name__ == "__main__":
