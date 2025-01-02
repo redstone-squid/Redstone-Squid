@@ -116,6 +116,7 @@ class DeleteLogCog(Cog, name="Vote"):
             if role.id in trusted_role_ids:
                 break
         else:
+            vote_session.message.channel.send("You do not have a trusted role.")
             return  # User does not have a trusted role
 
         original_vote = vote_session.votes.get(user.id, 0)
