@@ -76,63 +76,61 @@ class DeleteLogCog(Cog, name="Vote"):
         
         if (guild := reaction.message.guild) is None:
             return
+
+        # Check if the message is being tracked
+        message_id = reaction.message.id
+        if message_id not in self.tracked_messages:
+            return
         
+        vote_session = self.tracked_messages[message_id]
+        # We should remove the reaction of all users except the bot, thus this should be placed before the trusted role check
+        try:
+            await reaction.remove(user)
+        except discord.Forbidden:
+            pass
+
         # Check if the user has a trusted role
         trusted_role_ids = await get_server_setting(server_id=guild.id, setting="Trusted")
         if trusted_role_ids is None:
             return
-        
+
         member = guild.get_member(user.id)
         assert member is not None
         for role in member.roles:
             if role.id in trusted_role_ids:
                 break
-            else:
-                return
+        else:
+            return  # User does not have a trusted role
 
-        # Check if the message is being tracked
-        message_id = reaction.message.id
-        if message_id in self.tracked_messages:
-            vote_session = self.tracked_messages[message_id]
+        original_vote = vote_session.votes.get(user.id, 0)
+        if reaction.emoji == APPROVE_EMOJI:
+            vote_session.votes[user.id] = 1 if original_vote != 1 else 0
+        elif reaction.emoji == DENY_EMOJI:
+            vote_session.votes[user.id] = -1 if original_vote != -1 else 0
+        else:
+            return
 
-            # Ensure the reaction is on the correct message
-            if reaction.message.id != vote_session.message.id:
-                return
+        # Update the embed
+        embed = vote_session.message.embeds[0]
+        embed.description = (
+            f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
+            f"**Upvotes:** {vote_session.upvotes}\n"
+            f"**Downvotes:** {vote_session.downvotes}"
+        )
+        await vote_session.message.edit(embed=embed)
 
-            try:
-                await reaction.remove(user)
-            except discord.Forbidden:
-                pass
-
-            original_vote = vote_session.votes.get(user.id, 0)
-            if reaction.emoji == APPROVE_EMOJI:
-                vote_session.votes[user.id] = 1 if original_vote != 1 else 0
-            elif reaction.emoji == DENY_EMOJI:
-                vote_session.votes[user.id] = -1 if original_vote != -1 else 0
-            else:
-                return
-
-            # Update the embed
-            embed = vote_session.message.embeds[0]
-            embed.description = (
-                f"React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n"
-                f"**Upvotes:** {vote_session.upvotes}\n"
-                f"**Downvotes:** {vote_session.downvotes}"
-            )
-            await vote_session.message.edit(embed=embed)
-
-            # Check if the threshold has been met
-            if vote_session.net_votes >= vote_session.threshold:
-                await vote_session.message.channel.send("Vote passed")
-                if vote_session.target_message:
-                    try:
-                        await vote_session.target_message.delete()
-                        await vote_session.message.channel.send("Message deleted.")
-                    except discord.Forbidden:
-                        await vote_session.message.channel.send("Bot lacks permissions to delete the message.")
-                    except discord.NotFound:
-                        await vote_session.message.channel.send("The target message was not found.")
-                del self.tracked_messages[message_id]
+        # Check if the threshold has been met
+        if vote_session.net_votes >= vote_session.threshold:
+            await vote_session.message.channel.send("Vote passed")
+            if vote_session.target_message:
+                try:
+                    await vote_session.target_message.delete()
+                    await vote_session.message.channel.send("Message deleted.")
+                except discord.Forbidden:
+                    await vote_session.message.channel.send("Bot lacks permissions to delete the message.")
+                except discord.NotFound:
+                    await vote_session.message.channel.send("The target message was not found.")
+            del self.tracked_messages[message_id]
 
 
 async def setup(bot: "RedstoneSquid"):
