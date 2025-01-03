@@ -201,7 +201,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
-            await msg.track_message(channel.guild.id, build.id, message.channel.id, message.id, purpose)
+            await msg.track_message(message, purpose, build.id)
 
             if purpose == "view_pending_build":
                 # Add initial reactions
