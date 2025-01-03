@@ -46,17 +46,17 @@ DENY_EMOJIS = ["👎", "❌"]
 class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
-    def __init__(self, message: discord.Message, build: Build, threshold: int = 3, negative_threshold: int = -3):
+    def __init__(self, message: discord.Message, build: Build, pass_threshold: int = 3, fail_threshold: int = -3):
         """
         Initialize the vote session.
 
         Args:
             message: The message to track votes on.
             build: The build which the vote session is for.
-            threshold: The number of votes required to pass the vote.
-            negative_threshold: The number of votes required to fail the vote.
+            pass_threshold: The number of votes required to pass the vote.
+            fail_threshold: The number of votes required to fail the vote.
         """
-        super().__init__(message, threshold, negative_threshold)
+        super().__init__(message, pass_threshold, fail_threshold)
         self.build = build
         embed = self.message.embeds[0]
         embed.add_field(name="upvotes", value=0)
@@ -468,11 +468,11 @@ class SubmissionsCog(Cog, name="Submissions"):
             return
 
         # Check thresholds and act accordingly
-        if session.net_votes >= session.threshold:
+        if session.net_votes >= session.pass_threshold:
             await vote.build.confirm()
             del self.active_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)
-        elif session.net_votes <= session.negative_threshold:
+        elif session.net_votes <= session.fail_threshold:
             await vote.build.deny()
             del self.active_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)

@@ -26,8 +26,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self,
         message: discord.Message,
         target_message: discord.Message,
-        threshold: int = 3,
-        negative_threshold: int = -3,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
     ) -> None:
         """
         Initializes the vote session.
@@ -35,10 +35,11 @@ class DeleteLogVoteSession(AbstractVoteSession):
         Args:
             message: The message to track votes on.
             target_message: The message to delete if the vote passes.
-            threshold: The number of votes required to pass the vote.
+            pass_threshold: The number of votes required to pass the vote.
+            fail_threshold: The number of votes required to fail the vote.
         """
         self.target_message = target_message
-        super().__init__(message, threshold, negative_threshold)
+        super().__init__(message, pass_threshold, fail_threshold)
 
     @override
     async def update_message(self) -> None:
@@ -131,7 +132,7 @@ class DeleteLogCog(Cog, name="Vote"):
         await vote_session.update_message()
 
         # Check if the threshold has been met
-        if vote_session.net_votes >= vote_session.threshold:
+        if vote_session.net_votes >= vote_session.pass_threshold:
             await vote_session.message.channel.send("Vote passed")
             if vote_session.target_message:
                 try:

@@ -26,18 +26,18 @@ class Vote:
 class AbstractVoteSession(ABC):
     """A vote session that represents a change to something."""
 
-    def __init__(self, message: discord.Message, threshold: int = 7, negative_threshold: int = 7):
+    def __init__(self, message: discord.Message, pass_threshold: int = 7, fail_threshold: int = 7):
         """
         Initialize the vote session.
 
         Args:
             message: The message to track votes on.
-            threshold: The number of votes required to pass the vote.
-            negative_threshold: The number of votes required to fail the vote.
+            pass_threshold: The number of votes required to pass the vote.
+            fail_threshold: The number of votes required to fail the vote.
         """
         self.message = message  # The message that shows the voting embed
-        self.threshold = threshold
-        self.negative_threshold = negative_threshold
+        self.pass_threshold = pass_threshold
+        self.fail_threshold = fail_threshold
         self.votes: dict[int, int] = {}  # Dict of user_id: weight
         self.background_tasks = set()
         self.background_tasks.add(asyncio.create_task(self.update_message()))
