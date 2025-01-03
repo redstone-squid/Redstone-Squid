@@ -3,6 +3,7 @@ Handles database interactions for the bot.
 
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
+
 import os
 from typing import Literal
 
@@ -58,7 +59,7 @@ class DatabaseManager:
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
-        query = cls().table("versions").select("*")
+        query = cls.__new__(cls).table("versions").select("*")
         if edition:
             query = query.eq("edition", edition)
         versions_response: APIResponse[VersionRecord] = (
