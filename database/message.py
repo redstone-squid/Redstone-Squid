@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
@@ -39,25 +40,26 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     return server_record.data
 
 
-async def track_message(server_id: int, build_id: int, channel_id: int, message_id: int, purpose: str) -> None:
+async def track_message(message: discord.Message, purpose: str, build_id: int | None = None) -> None:
     """Track a message in the database.
 
     Args:
-        server_id: The server id of the message.
-        build_id: The build id of the message.
-        channel_id: The channel id of the message.
-        message_id: The message id of the message.
+        message: The message to track.
+        build_id: The associated build id, can be None.
         purpose: The purpose of the message. This should be a short description of why the message was sent.
     """
+    if message.guild is None:
+        raise NotImplementedError("Cannot track messages in DMs.")  # TODO
+
     await (
         DatabaseManager()
         .table("messages")
         .insert(
             {
-                "server_id": server_id,
+                "server_id": message.guild.id,
                 "build_id": build_id,
-                "channel_id": channel_id,
-                "message_id": message_id,
+                "channel_id": message.channel.id,
+                "message_id": message.id,
                 "edited_time": utcnow(),
                 "purpose": purpose,
             }
