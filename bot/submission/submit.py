@@ -16,7 +16,7 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 from pydantic import ValidationError
 from typing_extensions import override
 

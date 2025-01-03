@@ -8,7 +8,7 @@ from typing import Literal
 
 from async_lru import alru_cache
 from dotenv import load_dotenv
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
