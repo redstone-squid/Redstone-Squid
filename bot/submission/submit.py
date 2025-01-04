@@ -280,21 +280,6 @@ class SubmissionsCog(Cog, name="Submissions"):
             success_embed = utils.info_embed("Success", "Submission has been denied.")
             await sent_message.edit(embed=success_embed)
 
-    # @submission_hybrid_group.command("send_all")
-    # @has_any_role(*submission_roles)
-    async def send_all(self, ctx: Context):
-        """Sends all records and builds to this server, in the channels set."""
-        # NOT in use right now
-        async with utils.RunningMessage(ctx) as sent_message:
-            assert ctx.guild is not None
-            unsent_builds = await msg.get_unsent_builds(ctx.guild.id)
-
-            for build in unsent_builds:
-                await self.post_build(build, guilds=[ctx.guild], purpose="view_confirmed_build")
-
-            success_embed = utils.info_embed("Success", "All posts have been sent.")
-            await sent_message.edit(embed=success_embed)
-
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
