@@ -280,8 +280,6 @@ class Build:
             bot: A bot instance to get the channels from.
         """
 
-        target: ChannelPurpose
-
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
         match (self.submission_status, self.record_category):
