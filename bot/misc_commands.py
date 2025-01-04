@@ -6,7 +6,7 @@ import discord
 import discord.ext.commands as commands
 from discord import Member
 from discord.ext import tasks
-from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command
+from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command, Bot
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
@@ -55,22 +55,16 @@ class Miscellaneous(Cog):
     # ----------------- Owner only commands -----------------
     # These commands are only available to the bot owner.
     # I use them for debugging and testing purposes.
-    @command()
-    @commands.is_owner()
-    async def logs(self, ctx: Context):
-        """Sends the Heroku logs link"""
-        await ctx.send("https://dashboard.heroku.com/apps/redstone-squid/logs")
-
     @command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context, guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
+    async def sync(self, ctx: Context[Bot], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
         """Syncs the slash commands with the discord API."""
         if not guilds:
             if spec == "~":
                 synced = await ctx.bot.tree.sync(guild=ctx.guild)
             elif spec == "*":
-                ctx.bot.tree.copy_global_to(guild=ctx.guild)
+                ctx.bot.tree.copy_global_to(guild=ctx.guild)  # type: ignore
                 synced = await ctx.bot.tree.sync(guild=ctx.guild)
             elif spec == "^":
                 ctx.bot.tree.clear_commands(guild=ctx.guild)
