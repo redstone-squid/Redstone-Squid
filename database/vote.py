@@ -25,6 +25,7 @@ async def track_vote_session(message: discord.Message, author_id: int, kind: Vot
         kind: The type of vote session.
         pass_threshold: The number of votes required to pass the vote.
         fail_threshold: The number of votes required to fail the vote.
+        build_id: The id of the build to vote on. None if the vote is not about a build.
 
     Returns:
         The id of the vote session.
