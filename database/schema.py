@@ -45,6 +45,7 @@ class MessageRecord(TypedDict):
     edited_time: str
     server_id: int
     channel_id: int
+    purpose: MessagePurpose
     build_id: int
     vote_session_id: int
 
