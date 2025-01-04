@@ -273,16 +273,22 @@ class Build:
 
     def get_channel_type_to_post_to(self: Build) -> ChannelPurpose:
         """Gets the type of channel to post a submission to."""
-        status = self.submission_status
-        if status == Status.PENDING:
-            return "Vote"
-        elif status == Status.DENIED:
-            raise ValueError("Denied submissions should not be posted.")
 
-        if self.record_category is None:
-            return "Builds"
-        else:
-            return self.record_category
+        match (self.submission_status, self.record_category):
+            case (Status.PENDING, None):
+                return "Vote"
+            case (Status.DENIED, _):
+                raise ValueError("Denied submissions should not be posted.")
+            case (Status.CONFIRMED, None):
+                return "Builds"
+            case (Status.CONFIRMED, "Smallest"):
+                return "Smallest"
+            case (Status.CONFIRMED, "Fastest"):
+                return "Fastest"
+            case (Status.CONFIRMED, "First"):
+                return "First"
+            case _:
+                raise ValueError("Invalid status or record category")
 
     def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
