@@ -14,15 +14,9 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Bot, Context, CommandError
 from dotenv import load_dotenv
 
-from bot.submission.submit import SubmissionsCog
-from bot.verify import VerifyCog
 from database import DatabaseManager
 from database.utils import utcnow
 from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
-from bot.misc_commands import Miscellaneous
-from bot.help import HelpCog
-from bot.settings import SettingsCog
-from bot.delete_log import DeleteLogCog
 
 if TYPE_CHECKING:
     T = TypeVar("T")
@@ -117,14 +111,14 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         await DatabaseManager.setup()
-        await self.add_cog(Miscellaneous(self))
-        await self.add_cog(SettingsCog(self))
-        await self.add_cog(SubmissionsCog(self))
+        await self.load_extension("bot.misc_commands")
+        await self.load_extension("bot.settings")
+        await self.load_extension("bot.submission.submit")
         await self.add_cog(Listeners(self))
-        await self.add_cog(HelpCog(self))
+        await self.load_extension("bot.help")
         await self.load_extension("jishaku")
-        await self.add_cog(VerifyCog(self))
-        await self.add_cog(DeleteLogCog(self))
+        await self.load_extension("bot.verify")
+        await self.load_extension("bot.delete_log")
 
 
 async def main():

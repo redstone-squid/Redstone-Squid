@@ -11,11 +11,8 @@ from database.schema import (
     ChannelPurpose,
     RoleSetting,
     Setting,
-    CHANNEL_PURPOSES,
     SETTINGS,
 )
-
-from typing import List, Any
 
 CHANNEL_PURPOSE_TO_DB_SETTING: dict[ChannelPurpose, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
@@ -106,10 +103,10 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int]]:
 async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None:
     """Updates a setting for a server."""
     setting_name = get_setting_name(setting)
-    await DatabaseManager().table("server_settings").update({"server_id": server_id, setting_name: value}).execute()
+    await DatabaseManager().table("server_settings").upsert({"server_id": server_id, setting_name: value}).execute()
 
 
 async def update_server_settings(server_id: int, settings: dict[Setting, int | list[int] | None]) -> None:
     """Updates a list of settings for a server."""
-    settings = {get_setting_name(purpose): value for purpose, value in settings.items()}
-    await DatabaseManager().table("server_settings").update({"server_id": server_id, **settings}).execute()
+    db_cols_mapping = {get_setting_name(purpose): value for purpose, value in settings.items()}
+    await DatabaseManager().table("server_settings").upsert({"server_id": server_id, **db_cols_mapping}).execute()

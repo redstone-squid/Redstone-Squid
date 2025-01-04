@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias, List
+
+from pydantic.types import Json
 from database.enums import Status, Category
 
 
@@ -40,10 +42,11 @@ class MessageRecord(TypedDict):
     """A record of a message in the database."""
 
     message_id: int
-    server_id: int
-    build_id: int
-    channel_id: int
     edited_time: str
+    server_id: int
+    channel_id: int
+    build_id: int
+    vote_session_id: int
 
 
 class DoorRecord(TypedDict):
@@ -136,6 +139,26 @@ class QuantifiedVersionRecord(TypedDict):
     quantified_name: str
 
 
+class VoteSessionRecord(TypedDict):
+    """A record of a vote session in the database."""
+
+    id: int
+    created_at: str
+    status: Literal["open", "closed"]
+    author_id: int
+    kind: str
+    pass_threshold: int
+    fail_threshold: int
+
+
+class BuildVoteSessionRecord(TypedDict):
+    """A record of a build vote session in the database."""
+
+    session_id: int
+    build_id: int
+    changes: Json[list]
+
+
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
@@ -157,4 +180,6 @@ SETTINGS = cast(Sequence[Setting], list(CHANNEL_PURPOSES) + list(ROLE_SETTINGS))
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
 
-MessagePurpose = Literal["view_pending_build", "view_confirmed_build"]
+MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote"]
+
+VoteKind = Literal["build", "delete_log"]

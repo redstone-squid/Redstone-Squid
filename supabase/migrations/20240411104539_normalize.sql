@@ -88,52 +88,6 @@ CREATE TABLE restrictions (
   name TEXT UNIQUE,
   type TEXT
 );
-insert into restrictions(build_category, name, type)
-values
-('Door', 'Super Seamless', 'wiring-placement'),
-('Door', 'Full Seamless', 'wiring-placement'),
-('Door', 'Semi Seamless', 'wiring-placement'),
-('Door', 'Quart Seamless', 'wiring-placement'),
-('Door', 'Dentless', 'wiring-placement'),
-('Door', 'Full Trapdoor', 'wiring-placement'),
-('Door', 'Flush', 'wiring-placement'),
-('Door', 'Deluxe', 'wiring-placement'),
-('Door', 'Flush Layout', 'wiring-placement'),
-('Door', 'Semi Flush', 'wiring-placement'),
-('Door', 'Semi Deluxe', 'wiring-placement'),
-('Door', 'Full Floor Hipster', 'wiring-placement'),
-('Door', 'Full Ceiling Hipster', 'wiring-placement'),
-('Door', 'Full Wall Hipster', 'wiring-placement'),
-('Door', 'Semi Floor Hipster', 'wiring-placement'),
-('Door', 'Semi Ceiling Hipster', 'wiring-placement'),
-('Door', 'Semi Wall Hipster', 'wiring-placement'),
-('Door', 'Expandable', 'wiring-placement'),
-('Door', 'Full Tileable', 'wiring-placement'),
-('Door', 'Semi Tileable', 'wiring-placement'),
-('Door', 'No Slime Blocks', 'component'),
-('Door', 'No Honey Blocks', 'component'),
-('Door', 'No Gravity Blocks', 'component'),
-('Door', 'No Sticky Pistons', 'component'),
-('Door', 'Contained Slime Blocks', 'component'),
-('Door', 'Contained Honey Blocks', 'component'),
-('Door', 'Only Wiring Slime Blocks', 'component'),
-('Door', 'Only Wiring Honey Blocks', 'component'),
-('Door', 'Only Wiring Gravity Blocks', 'component'),
-('Door', 'No Observers', 'component'),
-('Door', 'No Note Blocks', 'component'),
-('Door', 'No Clocks', 'component'),
-('Door', 'No Entities', 'component'),
-('Door', 'No Flying Machines', 'component'),
-('Door', 'Zomba', 'component'),
-('Door', 'Zombi', 'component'),
-('Door', 'Torch and Dust Only', 'component'),
-('Door', 'Redstone Block Only', 'component'),
-('Door', 'Not Locational', 'miscellaneous'),
-('Door', 'Not Directional', 'miscellaneous'),
-('Door', 'Locational With Fixes', 'miscellaneous'),
-('Door', 'Directional With Fixes', 'miscellaneous'),
-('Door', 'Locational', 'miscellaneous'),
-('Door', 'Directional', 'miscellaneous');
 
 CREATE TABLE build_restrictions (
   build_id BIGINT,
@@ -181,51 +135,6 @@ CREATE TABLE types (
   name TEXT UNIQUE
 );
 
-insert into types(build_category, name)
-values
-('Door', 'Regular'),
-('Door', 'Funnel'),
-('Door', 'Asdjke'),
-('Door', 'Cave'),
-('Door', 'Corner'),
-('Door', 'Dual Cave Corner'),
-('Door', 'Staircase'),
-('Door', 'Gold Play Button'),
-('Door', 'Vortex'),
-('Door', 'Pitch'),
-('Door', 'Bar'),
-('Door', 'Vertical'),
-('Door', 'Yaw'),
-('Door', 'Reversed'),
-('Door', 'Inverted'),
-('Door', 'Dual'),
-('Door', 'Vault'),
-('Door', 'Iris'),
-('Door', 'Onion'),
-('Door', 'Stargate'),
-('Door', 'Full Lamp'),
-('Door', 'Lamp'),
-('Door', 'Hidden Lamp'),
-('Door', 'Sissy Bar'),
-('Door', 'Checkerboard'),
-('Door', 'Windows'),
-('Door', 'Redstone Block Center'),
-('Door', 'Sand'),
-('Door', 'Glass Stripe'),
-('Door', 'Center Glass'),
-('Door', 'Always On Lamp'),
-('Door', 'Circle'),
-('Door', 'Triangle'),
-('Door', 'Right Triangle'),
-('Door', 'Banana'),
-('Door', 'Diamond'),
-('Door', 'Slab-Shifted'),
-('Door', 'Rail'),
-('Door', 'Dual Rail'),
-('Door', 'Carpet'),
-('Door', 'Semi TNT'),
-('Door', 'Full TNT');
-
 CREATE TABLE build_types (
   build_id BIGINT,
   type_id SMALLINT,
@@ -269,29 +178,6 @@ CREATE TABLE build_versions (
   FOREIGN KEY (build_id) REFERENCES builds(id),
   FOREIGN KEY (version_id) REFERENCES versions(id)
 );
-
-insert into versions(full_name_temp)
-values
-('Pre 1.5'),
-('1.5'),
-('1.6'),
-('1.7'),
-('1.8'),
-('1.9'),
-('1.10'),
-('1.11'),
-('1.12'),
-('1.13'),
-('1.13.1 / 1.13.2'),
-('1.14'),
-('1.14.1'),
-('1.15'),
-('1.16'),
-('1.17'),
-('1.18'),
-('1.19'),
-('1.20'),
-('1.20.4');
 
 insert into versions(full_name_temp)
 select distinct functional_versions

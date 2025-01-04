@@ -2,7 +2,7 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Sequence
-from typing import Literal, cast, TYPE_CHECKING, Any
+from typing import Literal, cast, TYPE_CHECKING, Any, final
 import asyncio
 
 import discord
@@ -16,11 +16,11 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from pydantic import ValidationError
 from typing_extensions import override
 
-from bot import utils, config
+from bot import utils
 from bot.vote_session import AbstractVoteSession, Vote
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
@@ -28,11 +28,12 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import SubmissionCommandResponse, GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown
+from bot.utils import RunningMessage, parse_dimensions, parse_build_title, remove_markdown, is_owner_server
 from database.message import get_build_id_by_message
-from database.schema import TypeRecord
+from database.schema import TypeRecord, MessagePurpose
 from database.server_settings import get_server_setting
 from database.utils import upload_to_catbox, get_version_string
+from database.vote import track_build_vote_session, track_vote_session, close_vote_session
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -43,33 +44,161 @@ DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
+@final
 class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
-    def __init__(self, build: Build, message: discord.Message, threshold: int = 3, negative_threshold: int = -3):
-        super().__init__(message, threshold)
+    kind = "build"
+
+    def __init__(
+        self, message: discord.Message, author_id: int, build: Build, pass_threshold: int = 3, fail_threshold: int = -3
+    ):
+        """
+        Initialize the vote session.
+
+        Args:
+            message: The message to track votes on.
+            author_id: The discord id of the author of the vote session.
+            build: The build which the vote session is for.
+            pass_threshold: The number of votes required to pass the vote.
+            fail_threshold: The number of votes required to fail the vote.
+        """
+        super().__init__(message, author_id, pass_threshold, fail_threshold)
         self.build = build
-        self.negative_threshold = negative_threshold
         embed = self.message.embeds[0]
-        embed.add_field(name="upvotes", value=0)
-        embed.add_field(name="downvotes", value=0)
-        self.embed_upvote_index = len(embed.fields) - 2
-        self.embed_downvote_index = len(embed.fields) - 1
+        fields = embed.fields
+
+        self.embed_upvote_index = -1
+        self.embed_downvote_index = -1
+        for i, field in enumerate(fields):
+            if field.name == "upvotes":
+                self.embed_upvote_index = i
+            elif field.name == "downvotes":
+                self.embed_downvote_index = i
+
+        if self.embed_upvote_index == -1:
+            embed.add_field(name="upvotes", value=0, inline=True)
+            self.embed_upvote_index = len(embed.fields) - 1
+        if self.embed_downvote_index == -1:
+            embed.add_field(name="downvotes", value=0, inline=True)
+            self.embed_downvote_index = len(embed.fields) - 1
+
+    @override
+    async def _async_init(self) -> None:
+        """Track the vote session in the database."""
+        self.id = await track_vote_session(self.message, self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id)
+        await self.update_message()
+        await track_build_vote_session(self.id, self.build)
+
+    @classmethod
+    @override
+    async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "BuildVoteSession | None":
+        db = DatabaseManager()
+        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
+            await db.table("vote_sessions").select("*, messages(*)").eq("id", vote_session_id).eq("kind", cls.kind).maybe_single().execute()
+        )
+        if vote_session_response is None:
+            return None
+
+        vote_session_record = vote_session_response.data
+        message_id = vote_session_record["messages"][0]["message_id"]
+        channel_id = vote_session_record["messages"][0]["channel_id"]
+        build_id = vote_session_record["messages"][0]["build_id"]
+
+        channel = bot.get_channel(channel_id)
+        assert isinstance(channel, GuildMessageable)
+        message = await channel.fetch_message(message_id)
+        build = await Build.from_id(build_id)
+        if build is None:
+            raise ValueError(f"The message record for this vote session is associated with a non-existent build id: {build_id}.")
+
+        self = cls.__new__(cls)
+        self._allow_init = True
+        self.__init__(
+            message,
+            vote_session_record["author_id"],
+            build,
+            vote_session_record["pass_threshold"],
+            vote_session_record["fail_threshold"],
+        )
+        self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
+        return self
+
+    @classmethod
+    @override
+    async def create(
+        cls,
+        message: discord.Message,
+        author_id: int,
+        build: Build,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
+    ) -> "BuildVoteSession":
+
+        self = await super().create(message, author_id, build, pass_threshold, fail_threshold)
+        assert isinstance(self, BuildVoteSession)
+        return self
 
     @override
     async def update_message(self):
-        """Update the embed with new counts"""
-
         embed = self.message.embeds[0]
         embed.set_field_at(self.embed_upvote_index, name="upvotes", value=str(self.upvotes), inline=True)
         embed.set_field_at(self.embed_downvote_index, name="downvotes", value=str(self.downvotes), inline=True)
         await self.message.edit(embed=embed)
 
+    @override
+    async def close(self) -> None:
+        if self.is_closed:
+            return
+
+        self.is_closed = True
+        if self.net_votes <= self.pass_threshold:
+            await self.build.deny()
+        else:
+            await self.build.confirm()
+
+        if self.id is not None:
+            await close_vote_session(self.id)
+
+    @classmethod
+    async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: discord.Client) -> list["BuildVoteSession"]:
+        """Get all open vote sessions from the database."""
+        db = DatabaseManager()
+        records = (await db.table("vote_sessions").select("*, messages(*), votes(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
+
+        sessions = []
+        for record in records:
+            channel_id: int = record["messages"][0]["channel_id"]
+            message_id: int = record["messages"][0]["message_id"]
+            build_id: int = record["messages"][0]["build_id"]
+
+            channel = await bot.fetch_channel(channel_id)  # Usually we use get_channel, but we need to fetch the channel here because this is called before the bot cache is built
+            assert isinstance(channel, GuildMessageable)
+            message = await channel.fetch_message(message_id)
+            build = await Build.from_id(build_id)
+
+            assert build is not None
+            session = cls.__new__(cls)
+            session._allow_init = True
+            session.__init__(
+                message,
+                record["author_id"],
+                build,
+                record["pass_threshold"],
+                record["fail_threshold"],
+            )
+            session.id = record["id"]
+            session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+
+            sessions.append(session)
+
+        return sessions
+
 
 class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
-        self.active_vote_sessions: dict[int, BuildVoteSession] = {}
+        self.open_vote_sessions: dict[int, BuildVoteSession] = {}
 
     @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
@@ -108,15 +237,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            return await sent_message.edit(embed=await submission.generate_embed())
-
-    @staticmethod
-    def is_owner_server(ctx: Context):
-        if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
-            # TODO: Make a custom error for this.
-            # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
-            raise commands.CommandError("This command can only be executed on certain servers.")
-        return True
+            await sent_message.edit(embed=await submission.generate_embed())
 
     @submission_hybrid_group.command(name="confirm")
     @app_commands.describe(submission_id="The ID of the build you want to confirm.")
@@ -131,13 +252,14 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                await sent_message.edit(embed=error_embed)
+                return
 
             await build.confirm()
             await self.post_build(build, purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     @submission_hybrid_group.command(name="deny")
     @app_commands.describe(submission_id="The ID of the build you want to deny.")
@@ -150,12 +272,13 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                await sent_message.edit(embed=error_embed)
+                return
 
             await build.deny()
 
             success_embed = utils.info_embed("Success", "Submission has been denied.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     # @submission_hybrid_group.command("send_all")
     # @has_any_role(*submission_roles)
@@ -170,7 +293,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 await self.post_build(build, guilds=[ctx.guild], purpose="view_confirmed_build")
 
             success_embed = utils.info_embed("Success", "All posts have been sent.")
-            return await sent_message.edit(embed=success_embed)
+            await sent_message.edit(embed=success_embed)
 
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
@@ -178,43 +301,6 @@ class SubmissionsCog(Cog, name="Submissions"):
         versions = await DatabaseManager.get_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
-
-    async def post_build(self, build: Build, *, purpose: str, guilds: Sequence[Guild] | None = None) -> None:
-        """Post a confirmed submission to the appropriate discord channels.
-
-        Args:
-            build (Build): The build to post.
-            purpose (str): The purpose of the post.
-            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
-        """
-        # TODO: There are no checks to see if the submission has already been posted
-        if build.id is None:
-            raise ValueError("Build id is None.")
-
-        if guilds is None:
-            guilds = self.bot.guilds
-
-        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
-        em = await build.generate_embed()
-
-        for channel_id in channel_ids:
-            channel = self.bot.get_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
-            message = await channel.send(embed=em)
-            await msg.track_message(message, purpose, build.id)
-
-            if purpose == "view_pending_build":
-                # Add initial reactions
-                try:
-                    await message.add_reaction(APPROVE_EMOJIS[0])
-                    await asyncio.sleep(1)
-                    await message.add_reaction(DENY_EMOJIS[0])
-                except discord.Forbidden:
-                    pass  # Bot doesn't have permission to add reactions
-
-                # Initialize the BuildVoteSession
-                session = BuildVoteSession(build, message)
-                self.active_vote_sessions[message.id] = session
 
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
@@ -227,7 +313,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
             # stupid workaround to get async code to work with flags
-            default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version(edition="Java"))),
+            default="1.20.5",  # FIXME
+            # default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version(edition="Java"))),
             description='The versions the build works in. Default to newest version. /versions for full list.'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
@@ -313,9 +400,11 @@ class SubmissionsCog(Cog, name="Submissions"):
         await followup.send("Use the select menus then click the button", view=view)
         await view.wait()
         if view.value is None:
-            return await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            return
         elif view.value is False:
-            return await followup.send("Submission canceled by user", ephemeral=True)
+            await followup.send("Submission canceled by user", ephemeral=True)
+            return
         else:
             await build.save()
             await followup.send(
@@ -324,6 +413,50 @@ class SubmissionsCog(Cog, name="Submissions"):
                 ephemeral=True,
             )
             await self.post_build(build, purpose="view_pending_build")
+
+    async def post_build(self, build: Build, *, purpose: MessagePurpose, guilds: Sequence[Guild] | None = None) -> None:
+        """Post a confirmed submission to the appropriate discord channels.
+
+        Args:
+            build (Build): The build to post.
+            purpose (str): The purpose of the post.
+            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
+        """
+        # TODO: There are no checks to see if the submission has already been posted
+        if build.id is None:
+            raise ValueError("Build id is None.")
+
+        if guilds is None:
+            guilds = self.bot.guilds
+
+        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
+        em = await build.generate_embed()
+
+        for channel_id in channel_ids:
+            channel = self.bot.get_channel(channel_id)
+            assert isinstance(channel, GuildMessageable)
+            # message = await channel.send(embed=em)
+            # await msg.track_message(message, purpose, build_id=build.id)
+
+            if purpose == "view_pending_build":
+                # Initialize the BuildVoteSession
+                vote_channel_id = await get_server_setting(channel.guild.id, "Vote")
+                if vote_channel_id is not None:
+                    vote_channel = self.bot.get_channel(vote_channel_id)
+                    assert isinstance(vote_channel, GuildMessageable)
+                    vote_message = await vote_channel.send(embed=em)
+
+                    # Add initial reactions
+                    try:
+                        await vote_message.add_reaction(APPROVE_EMOJIS[0])
+                        await asyncio.sleep(1)
+                        await vote_message.add_reaction(DENY_EMOJIS[0])
+                    except discord.Forbidden:
+                        pass  # Bot doesn't have permission to add reactions
+
+                    assert build.submitter_id is not None
+                    session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
+                    self.open_vote_sessions[vote_message.id] = session
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
@@ -339,7 +472,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str = flag(default=None, description='Any additional information about the build.')
         normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int = flag(default=None,
+                                        description='The time it takes to open the door, in gameticks. (1s = 20gt)')
         date_of_creation: str = flag(default=None, description='The date the build was created.')
         in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
         locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
@@ -432,8 +566,8 @@ class SubmissionsCog(Cog, name="Submissions"):
             )
 
     @Cog.listener(name="on_raw_reaction_add")
-    async def confirm_or_deny_build_by_reaction(self, payload: discord.RawReactionActionEvent):
-        """Handles anonymous voting with initial reactions."""
+    async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
+        """Handles reactions to update vote counts anonymously."""
 
         vote = await self._validate_vote(payload)
         if vote is None:
@@ -446,7 +580,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             pass  # Ignore if we can't remove the reaction
 
         # Get the BuildVoteSession
-        session = self.active_vote_sessions.get(payload.message_id)
+        session = self.open_vote_sessions.get(payload.message_id)
         if not session:
             raise ValueError("No active vote session found for this message.")
 
@@ -454,22 +588,22 @@ class SubmissionsCog(Cog, name="Submissions"):
         emoji_name = str(payload.emoji)
         user_id = payload.user_id
 
-        original_vote = session.votes.get(user_id, 0)
+        original_vote = session[user_id]
         if emoji_name in APPROVE_EMOJIS:
-            session.votes[user_id] = 1 if original_vote != 1 else 0
+            session[user_id] = 1 if original_vote != 1 else 0
         elif emoji_name in DENY_EMOJIS:
-            session.votes[user_id] = -1 if original_vote != -1 else 0
+            session[user_id] = -1 if original_vote != -1 else 0
         else:
             return
 
         # Check thresholds and act accordingly
-        if session.net_votes >= session.threshold:
+        if session.net_votes >= session.pass_threshold:
             await vote.build.confirm()
-            del self.active_vote_sessions[payload.message_id]
+            del self.open_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)
-        elif session.net_votes <= session.negative_threshold:
+        elif session.net_votes <= session.fail_threshold:
             await vote.build.deny()
-            del self.active_vote_sessions[payload.message_id]
+            del self.open_vote_sessions[payload.message_id]
             await self._remove_vote_messages(vote.build)
         else:
             await session.update_message()
@@ -481,6 +615,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         for record in message_records:
             try:
                 channel = self.bot.get_channel(record["channel_id"])
+                assert isinstance(channel, GuildMessageable)
                 msg_to_delete = await channel.fetch_message(record["message_id"])
                 await msg_to_delete.delete()
             except discord.NotFound:
@@ -488,7 +623,6 @@ class SubmissionsCog(Cog, name="Submissions"):
 
     async def _validate_vote(self, payload: discord.RawReactionActionEvent) -> Vote | None:
         """Check if a reaction is a valid vote."""
-
         # Must be in a guild
         if (guild_id := payload.guild_id) is None:
             return
@@ -509,9 +643,10 @@ class SubmissionsCog(Cog, name="Submissions"):
         channel = self.bot.get_channel(payload.channel_id)
         if channel is None:
             channel = await self.bot.fetch_channel(payload.channel_id)
+        assert isinstance(channel, GuildMessageable)
         message: Message = await channel.fetch_message(payload.message_id)
 
-        if message.author.id != self.bot.user.id:
+        if message.author.id != self.bot.user.id:  # type: ignore
             return
 
         # A build ID must be associated with the message
@@ -524,7 +659,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build is None or build.submission_status != Status.PENDING:
             return
 
-        return Vote(guild=self.bot.get_guild(guild_id), channel=channel, message=message, build=build, user=user)
+        guild = self.bot.get_guild(guild_id)
+        assert guild is not None
+        return Vote(guild=guild, channel=channel, message=message, build=build, user=user)
 
     # @Cog.listener(name="on_message")
     async def infer_build_from_title(self, message: Message):
@@ -636,4 +773,8 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> di
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(SubmissionsCog(bot))
+    cog = SubmissionsCog(bot)
+    open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(bot)
+    cog.open_vote_sessions = {session.message.id: session for session in open_vote_sessions}
+
+    await bot.add_cog(cog)

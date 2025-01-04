@@ -3,17 +3,17 @@ Handles database interactions for the bot.
 
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
+
 import os
 from typing import Literal
 
 from async_lru import alru_cache
 from dotenv import load_dotenv
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
-from database.utils import get_version_string
 
 
 class DatabaseManager:
@@ -58,7 +58,7 @@ class DatabaseManager:
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
-        query = cls().table("versions").select("*")
+        query = cls.__new__(cls).table("versions").select("*")
         if edition:
             query = query.eq("edition", edition)
         versions_response: APIResponse[VersionRecord] = (

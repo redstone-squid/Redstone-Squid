@@ -7,7 +7,7 @@ from asyncio import Task
 from dataclasses import dataclass, field
 from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Literal, Any, cast
+from typing import Literal, Any, cast, TypeVar
 
 import discord
 from discord.utils import escape_markdown
@@ -35,13 +35,24 @@ from database.enums import Status, Category
 from bot import utils
 
 
+T = TypeVar("T")
+
+
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
 @dataclass
 class Build:
-    """A submission to the database."""
+    """A submission to the database.
+
+    This is a very large class, the methods are ordered as follows:
+    - Static constructors
+    - Magic (dunder) methods
+    - Properties
+    - Normal methods
+    - load(), save() and the helper methods it calls
+    """
 
     id: int | None = None
     submission_status: Status | None = None
@@ -86,78 +97,6 @@ class Build:
     completion_time: str | None = None
     edited_time: str | None = None
 
-    def __iter__(self):
-        """Iterates over the *attributes* of the Build object."""
-        for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
-            yield attr
-
-    @property
-    def dimensions(self) -> tuple[int | None, int | None, int | None]:
-        """The dimensions of the build."""
-        return self.width, self.height, self.depth
-
-    @dimensions.setter
-    def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
-        self.width, self.height, self.depth = dimensions
-
-    @property
-    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
-        """The dimensions of the door (hallway)."""
-        return self.door_width, self.door_height, self.door_depth
-
-    @door_dimensions.setter
-    def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
-        self.door_width, self.door_height, self.door_depth = dimensions
-
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @staticmethod
-    @cache
-    async def fetch_all_restrictions() -> list[RestrictionRecord]:
-        """Fetches all restrictions from the database."""
-        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
-        return response.data
-
-    def get_restrictions(
-        self,
-    ) -> dict[
-        Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
-        Sequence[str] | None,
-    ]:
-        """The restrictions of the build."""
-        return {
-            "wiring_placement_restrictions": self.wiring_placement_restrictions,
-            "component_restrictions": self.component_restrictions,
-            "miscellaneous_restrictions": self.miscellaneous_restrictions,
-        }
-
-    async def set_restrictions(
-        self,
-        restrictions: Sequence[str]
-        | Mapping[
-            Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
-            Sequence[str],
-        ],
-    ) -> None:
-        """Sets the restrictions of the build."""
-        if isinstance(restrictions, Mapping):
-            self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
-            self.component_restrictions = list(restrictions.get("component_restrictions", []))
-            self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
-        else:
-            self.wiring_placement_restrictions = []
-            self.component_restrictions = []
-            self.miscellaneous_restrictions = []
-
-            for restriction in await self.fetch_all_restrictions():
-                for door_restriction in restrictions:
-                    if door_restriction.lower() == restriction["name"].lower():
-                        if restriction["type"] == "wiring-placement":
-                            self.wiring_placement_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "component":
-                            self.component_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "miscellaneous":
-                            self.miscellaneous_restrictions.append(restriction["name"])
-
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -171,6 +110,16 @@ class Build:
         build = Build()
         build.id = build_id
         return await build.load()
+
+    @staticmethod
+    def from_dict(submission: dict) -> Build:
+        """Creates a new Build object from a dictionary. No validation is done on the data."""
+        build = Build()
+        for attr in build:
+            if attr in submission:
+                setattr(build, attr, submission[attr])
+
+        return build
 
     @staticmethod
     def from_json(data: dict[str, Any]) -> Build:
@@ -250,15 +199,77 @@ class Build:
 
         return build
 
-    @staticmethod
-    def from_dict(submission: dict) -> Build:
-        """Creates a new Build object from a dictionary. No validation is done on the data."""
-        build = Build()
-        for attr in build:
-            if attr in submission:
-                setattr(build, attr, submission[attr])
+    def __iter__(self):
+        """Iterates over the *attributes* of the Build object."""
+        for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
+            yield attr
 
-        return build
+    @property
+    def dimensions(self) -> tuple[int | None, int | None, int | None]:
+        """The dimensions of the build."""
+        return self.width, self.height, self.depth
+
+    @dimensions.setter
+    def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
+        self.width, self.height, self.depth = dimensions
+
+    @property
+    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
+        """The dimensions of the door (hallway)."""
+        return self.door_width, self.door_height, self.door_depth
+
+    @door_dimensions.setter
+    def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
+        self.door_width, self.door_height, self.door_depth = dimensions
+
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @staticmethod
+    @cache
+    async def fetch_all_restrictions() -> list[RestrictionRecord]:
+        """Fetches all restrictions from the database."""
+        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
+        return response.data
+
+    def get_restrictions(
+        self,
+    ) -> dict[
+        Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
+        Sequence[str] | None,
+    ]:
+        """The restrictions of the build."""
+        return {
+            "wiring_placement_restrictions": self.wiring_placement_restrictions,
+            "component_restrictions": self.component_restrictions,
+            "miscellaneous_restrictions": self.miscellaneous_restrictions,
+        }
+
+    async def set_restrictions(
+        self,
+        restrictions: Sequence[str]
+        | Mapping[
+            Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
+            Sequence[str],
+        ],
+    ) -> None:
+        """Sets the restrictions of the build."""
+        if isinstance(restrictions, Mapping):
+            self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
+            self.component_restrictions = list(restrictions.get("component_restrictions", []))
+            self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
+        else:
+            self.wiring_placement_restrictions = []
+            self.component_restrictions = []
+            self.miscellaneous_restrictions = []
+
+            for restriction in await self.fetch_all_restrictions():
+                for door_restriction in restrictions:
+                    if door_restriction.lower() == restriction["name"].lower():
+                        if restriction["type"] == "wiring-placement":
+                            self.wiring_placement_restrictions.append(restriction["name"])
+                        elif restriction["type"] == "component":
+                            self.component_restrictions.append(restriction["name"])
+                        elif restriction["type"] == "miscellaneous":
+                            self.miscellaneous_restrictions.append(restriction["name"])
 
     def get_channel_type_to_post_to(self: Build) -> ChannelPurpose:
         """Gets the type of channel to post a submission to."""
@@ -287,6 +298,32 @@ class Build:
                 channels.append(channel_id)
 
         return channels
+
+    def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+        """
+        Returns the differences between this build and another
+
+        Args:
+            other: Another build to compare to.
+            allow_different_id: Whether the ID of the builds can be different.
+
+        Returns:
+            A list of tuples containing the attribute name, the value of this build, and the value of the other build.
+
+        Raises:
+            ValueError: If the IDs of the builds are different and allow_different_id is False.
+        """
+        if self.id != other.id and not allow_different_id:
+            raise ValueError("The IDs of the builds are different.")
+
+        differences: list[tuple[str, T, T]] = []
+        for attr in self:
+            if attr == "id":
+                continue
+            if getattr(self, attr) != getattr(other, attr):
+                differences.append((attr, getattr(self, attr), getattr(other, attr)))
+
+        return differences
 
     async def load(self) -> Build:
         """
@@ -755,7 +792,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    pass
+    print(Build(id=1, submission_status=Status.PENDING).diff(Build(id=1, submission_status=Status.CONFIRMED)))
 
 
 if __name__ == "__main__":
