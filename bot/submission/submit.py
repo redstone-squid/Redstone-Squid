@@ -292,7 +292,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     @hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        versions = await DatabaseManager.get_versions_list(edition="Java")
+        versions = await DatabaseManager.fetch_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
@@ -307,8 +307,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
             # stupid workaround to get async code to work with flags
-            default="1.20.5",  # FIXME
-            # default=get_version_string(asyncio.get_event_loop().run_until_complete(DatabaseManager.get_newest_version(edition="Java"))),
+            default=get_version_string(DatabaseManager.get_newest_version(edition="Java")),  # type: ignore
             description='The versions the build works in. Default to newest version. /versions for full list.'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
