@@ -429,7 +429,13 @@ class SubmissionsCog(Cog, name="Submissions"):
         if guilds is None:
             guilds = self.bot.guilds
 
-        channel_ids = await build.get_channel_ids_to_post_to([guild.id for guild in guilds])
+        channel_purpose = build.get_channel_type_to_post_to()
+        channel_ids: list[int] = []
+        for guild in guilds:
+            channel_id = await get_server_setting(guild.id, channel_purpose)
+            if channel_id:
+                channel_ids.append(channel_id)
+
         em = await build.generate_embed()
 
         for channel_id in channel_ids:
