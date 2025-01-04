@@ -256,7 +256,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 return
 
             await build.confirm()
-            await self.post_confirmed_build(build, purpose="view_confirmed_build")
+            await self.post_confirmed_build(build)
 
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
             await sent_message.edit(embed=success_embed)
@@ -348,7 +348,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 f"Build submitted successfully!\nThe submission ID is: {build.id}",
             )
             await message.edit(embed=success_embed)
-            await self.post_pending_build(build, purpose="view_pending_build")
+            await self.post_pending_build(build)
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
@@ -397,14 +397,13 @@ class SubmissionsCog(Cog, name="Submissions"):
                 embed=await build.generate_embed(),
                 ephemeral=True,
             )
-            await self.post_pending_build(build, purpose="view_pending_build")
+            await self.post_pending_build(build)
 
-    async def post_confirmed_build(self, build: Build, *, purpose: MessagePurpose) -> None:
+    async def post_confirmed_build(self, build: Build) -> None:
         """Post a confirmed submission to the appropriate discord channels.
 
         Args:
             build (Build): The build to post.
-            purpose (str): The purpose of the post.
         """
         # TODO: There are no checks to see if the submission has already been posted
         if build.id is None:
@@ -423,9 +422,9 @@ class SubmissionsCog(Cog, name="Submissions"):
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
-            await msg.track_message(message, purpose, build_id=build.id)
+            await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
-    async def post_pending_build(self, build: Build, *, purpose: MessagePurpose) -> None:
+    async def post_pending_build(self, build: Build) -> None:
         """Post a pending submission to the appropriate discord channels."""
         # TODO: There are no checks to see if the submission has already been posted
         if build.id is None:
@@ -444,27 +443,26 @@ class SubmissionsCog(Cog, name="Submissions"):
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
             message = await channel.send(embed=em)
-            await msg.track_message(message, purpose, build_id=build.id)
+            await msg.track_message(message, purpose="view_pending_build", build_id=build.id)
 
-            if purpose == "view_pending_build":
-                # Initialize the BuildVoteSession
-                vote_channel_id = await get_server_setting(channel.guild.id, "Vote")
-                if vote_channel_id is not None:
-                    vote_channel = self.bot.get_channel(vote_channel_id)
-                    assert isinstance(vote_channel, GuildMessageable)
-                    vote_message = await vote_channel.send(embed=em)
+            # Initialize the BuildVoteSession
+            vote_channel_id = await get_server_setting(channel.guild.id, "Vote")
+            if vote_channel_id is not None:
+                vote_channel = self.bot.get_channel(vote_channel_id)
+                assert isinstance(vote_channel, GuildMessageable)
+                vote_message = await vote_channel.send(embed=em)
 
-                    # Add initial reactions
-                    try:
-                        await vote_message.add_reaction(APPROVE_EMOJIS[0])
-                        await asyncio.sleep(1)
-                        await vote_message.add_reaction(DENY_EMOJIS[0])
-                    except discord.Forbidden:
-                        pass  # Bot doesn't have permission to add reactions
+                # Add initial reactions
+                try:
+                    await vote_message.add_reaction(APPROVE_EMOJIS[0])
+                    await asyncio.sleep(1)
+                    await vote_message.add_reaction(DENY_EMOJIS[0])
+                except discord.Forbidden:
+                    pass  # Bot doesn't have permission to add reactions
 
-                    assert build.submitter_id is not None
-                    session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
-                    self.open_vote_sessions[vote_message.id] = session
+                assert build.submitter_id is not None
+                session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
+                self.open_vote_sessions[vote_message.id] = session
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
