@@ -46,8 +46,8 @@ class MessageRecord(TypedDict):
     server_id: int
     channel_id: int
     purpose: MessagePurpose
-    build_id: int
-    vote_session_id: int
+    build_id: int | None
+    vote_session_id: int | None
 
 
 class DoorRecord(TypedDict):
