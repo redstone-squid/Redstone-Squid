@@ -293,21 +293,6 @@ class Build:
 
         return target
 
-    async def get_channel_ids_to_post_to(self: Build, guild_ids: list[int]) -> list[int]:
-        """Gets all channels which this build should be posted to."""
-        # Get channel type to post submission to
-        channel_purpose = self.get_channel_type_to_post_to()
-        # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
-
-        channels: list[int] = []
-        # For each server the bot can see
-        for guild_id in guild_ids:
-            channel_id = await get_server_setting(guild_id, channel_purpose)
-            if channel_id:
-                channels.append(channel_id)
-
-        return channels
-
     def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
         Returns the differences between this build and another
