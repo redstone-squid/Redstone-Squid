@@ -14,7 +14,6 @@ from postgrest.base_request_builder import APIResponse
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
-from database.utils import get_version_string
 
 
 class DatabaseManager:
