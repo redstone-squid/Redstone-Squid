@@ -8,7 +8,7 @@ from io import StringIO
 from textwrap import dedent
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, TYPE_CHECKING
+from typing import overload, Literal, TYPE_CHECKING, Any
 
 import discord
 from async_lru import alru_cache
@@ -176,7 +176,7 @@ class RunningMessage:
         return False
 
 
-def is_owner_server(ctx: Context):
+def is_owner_server(ctx: Context[Any]):
     """Check if the command is executed on the owner's server."""
 
     if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
