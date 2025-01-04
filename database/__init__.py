@@ -72,9 +72,12 @@ class DatabaseManager:
         return versions_response.data
 
     @classmethod
-    def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord] | None:
+    def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
         """Returns a list of all minecraft versions, or None if the database is not set up."""
-        return cls.version_cache.get(edition)
+        versions = cls.version_cache.get(edition)
+        if versions is None:
+            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
+        return versions
 
     @classmethod
     @alru_cache(maxsize=2)
@@ -84,10 +87,9 @@ class DatabaseManager:
         return versions[-1]
 
     @classmethod
-    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord | None:
+    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
         """Returns the newest version from the cache, or None if the database is not set up."""
-        versions = cls.get_versions_list(edition=edition)
-        return versions[-1] if versions else None
+        return cls.get_versions_list(edition=edition)[-1]
 
 
 async def main():
