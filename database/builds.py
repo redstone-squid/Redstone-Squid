@@ -797,7 +797,8 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    print(Build(id=1, submission_status=Status.PENDING).diff(Build(id=1, submission_status=Status.CONFIRMED)))
+    build = Build()
+    print(build.as_dict())
 
 
 if __name__ == "__main__":
