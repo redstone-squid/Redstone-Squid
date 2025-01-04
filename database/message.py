@@ -40,16 +40,28 @@ async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
     return server_record.data
 
 
-async def track_message(message: discord.Message, purpose: MessagePurpose, build_id: int | None = None) -> None:
+async def track_message(
+    message: discord.Message,
+    purpose: MessagePurpose,
+    *,
+    build_id: int | None = None,
+    vote_session_id: int | None = None,
+) -> None:
     """Track a message in the database.
 
     Args:
         message: The message to track.
         build_id: The associated build id, can be None.
         purpose: The purpose of the message.
+        vote_session_id: The vote session id of the message.
     """
     if message.guild is None:
         raise NotImplementedError("Cannot track messages in DMs.")  # TODO
+
+    if purpose in ["view_pending_build", "confirm_pending_build"] and build_id is None:
+        raise ValueError("build_id cannot be None for this purpose.")
+    elif purpose == "vote" and vote_session_id is None:
+        raise ValueError("vote_session_id cannot be None for this purpose.")
 
     await (
         DatabaseManager()
@@ -57,9 +69,10 @@ async def track_message(message: discord.Message, purpose: MessagePurpose, build
         .insert(
             {
                 "server_id": message.guild.id,
-                "build_id": build_id,
                 "channel_id": message.channel.id,
                 "message_id": message.id,
+                "build_id": build_id,
+                "vote_session_id": vote_session_id,
                 "edited_time": utcnow(),
                 "purpose": purpose,
             }
