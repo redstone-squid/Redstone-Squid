@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import discord
@@ -16,11 +17,11 @@ if TYPE_CHECKING:
     pass
 
 
-async def track_vote_session(message: discord.Message, author_id: int, kind: VoteKind, pass_threshold: int, fail_threshold: int, *, build_id: int | None = None) -> int:
+async def track_vote_session(messages: list[discord.Message], author_id: int, kind: VoteKind, pass_threshold: int, fail_threshold: int, *, build_id: int | None = None) -> int:
     """Track a vote session in the database.
 
     Args:
-        message: The id of the message that started the vote session.
+        messages: The messages belonging to the vote session.
         author_id: The discord id of the author of the vote session.
         kind: The type of vote session.
         pass_threshold: The number of votes required to pass the vote.
@@ -45,7 +46,8 @@ async def track_vote_session(message: discord.Message, author_id: int, kind: Vot
         .execute()
     )
     session_id = response.data[0]["id"]
-    await track_message(message, "vote", build_id=build_id, vote_session_id=session_id)
+    coros = [track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages]
+    await asyncio.gather(*coros)
     return session_id
 
 

@@ -3,7 +3,7 @@ from textwrap import dedent
 
 import discord
 from discord.ext.commands import command, Cog, Context
-from typing import TYPE_CHECKING, Any, final
+from typing import TYPE_CHECKING, Any, final, cast
 
 from postgrest.base_request_builder import SingleAPIResponse
 from typing_extensions import override
@@ -31,7 +31,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        message: discord.Message,
+        messages: list[discord.Message],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int = 3,
@@ -41,73 +41,81 @@ class DeleteLogVoteSession(AbstractVoteSession):
         Initialize the delete log vote session.
 
         Args:
-            message: The message to track votes on.
+            messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             target_message: The message to delete if the vote passes.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
-        super().__init__(message, author_id, pass_threshold, fail_threshold)
+        super().__init__(messages, author_id, pass_threshold, fail_threshold)
         self.target_message = target_message
 
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
-        self.id = await track_vote_session(self.message, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
+        self.id = await track_vote_session(self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
         await track_delete_log_vote_session(self.id, self.target_message)
-        await self.update_message()
+        await self.update_messages()
 
     @classmethod
     @override
     async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "DeleteLogVoteSession | None":
         db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await db.table("vote_sessions").select("*, messages(*), delete_log_vote_sessions(*)").eq("id", vote_session_id).eq("kind", cls.kind).maybe_single().execute()
+            await db.table("vote_sessions").select("*, messages(*), votes(*), delete_log_vote_sessions(*)").eq("id", vote_session_id).eq("kind", cls.kind).maybe_single().execute()
         )
         if vote_session_response is None:
             return None
 
         vote_session_record = vote_session_response.data
-        message_id = vote_session_record["messages"][0]["message_id"]
-        channel_id = vote_session_record["messages"][0]["channel_id"]
-        channel = bot.get_channel(channel_id)
-        assert isinstance(channel, GuildMessageable)
-        message = await channel.fetch_message(message_id)
-
-        target_message_id = vote_session_record["delete_log_vote_sessions"][0]["target_message_id"]
-        target_channel_id = vote_session_record["delete_log_vote_sessions"][0]["target_channel_id"]
-        target_channel = bot.get_channel(target_channel_id)
-        assert isinstance(target_channel, GuildMessageable)
-        target_message = await target_channel.fetch_message(target_message_id)
+        messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in vote_session_record["messages"]])
+        target_message = await utils.fetch(bot, vote_session_record["delete_log_vote_sessions"])
 
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
-            message,
+            messages,
             vote_session_record["author_id"],
             target_message,
             vote_session_record["pass_threshold"],
             vote_session_record["fail_threshold"],
         )
         self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
+        self._votes = {vote["user_id"]: vote["weight"] for vote in vote_session_record["votes"]}
         return self
 
     @classmethod
     @override
     async def create(
         cls,
-        message: discord.Message,
+        messages: list[discord.Message],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "DeleteLogVoteSession":
-        self = await super().create(message, author_id, target_message, pass_threshold, fail_threshold)
+        self = await super().create(messages, author_id, target_message, pass_threshold, fail_threshold)
         assert isinstance(self, DeleteLogVoteSession)
         return self
 
     @override
-    async def update_message(self) -> None:
+    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
+        """Send the initial message to the channel."""
+        embed = discord.Embed(
+            title="Vote to Delete Log",
+            description=(
+                dedent(f"""
+                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
+                **Log Content:**\n{self.target_message.content}\n\n
+                **Upvotes:** {self.upvotes}
+                **Downvotes:** {self.downvotes}
+                **Net Votes:** {self.net_votes}""")
+            ),
+        )
+        return await channel.send(embed=embed)
+
+    @override
+    async def update_messages(self) -> None:
         """Updates the message with the current vote count."""
         embed = discord.Embed(
             title="Vote to Delete Log",
@@ -120,7 +128,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
                 **Net Votes:** {self.net_votes}""")
             ),
         )
-        await self.message.edit(embed=embed)
+        await asyncio.gather(*[message.edit(embed=embed) for message in self.messages])
 
     @override
     async def close(self) -> None:
@@ -129,7 +137,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
         self.is_closed = True
         if self.net_votes <= self.pass_threshold:
-            await self.message.channel.send("Vote failed.")
+            await asyncio.gather(*[message.channel.send("Vote failed") for message in self.messages])
         else:
             await self.target_message.delete()
 
@@ -142,24 +150,14 @@ class DeleteLogVoteSession(AbstractVoteSession):
         db = DatabaseManager()
         records = (await db.table("vote_sessions").select("*, messages(*), votes(*), delete_log_vote_sessions(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
 
-        sessions = []
-        for record in records:
-            message_id = record["messages"][0]["message_id"]
-            channel_id = record["messages"][0]["channel_id"]
-            channel = await bot.fetch_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
-            message = await channel.fetch_message(message_id)
-
-            target_message_id = record["delete_log_vote_sessions"]["target_message_id"]
-            target_channel_id = record["delete_log_vote_sessions"]["target_channel_id"]
-            target_channel = await bot.fetch_channel(target_channel_id)
-            assert isinstance(target_channel, GuildMessageable)
-            target_message = await target_channel.fetch_message(target_message_id)
+        async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession":
+            messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in record["messages"]])
+            target_message = await utils.fetch(bot, record["delete_log_vote_sessions"])
 
             session = cls.__new__(cls)
             session._allow_init = True
             session.__init__(
-                message,
+                messages,
                 record["author_id"],
                 target_message,
                 record["pass_threshold"],
@@ -167,10 +165,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
             )
             session.id = record["id"]
             session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+            return session
 
-            sessions.append(session)
-
-        return sessions
+        return await asyncio.gather(*[_get_session(record) for record in records])
 
 
 class DeleteLogCog(Cog, name="Vote"):
@@ -197,7 +194,7 @@ class DeleteLogCog(Cog, name="Vote"):
             await message.add_reaction(APPROVE_EMOJI)
             await asyncio.sleep(1)
             await message.add_reaction(DENY_EMOJI)
-            vote_session = await DeleteLogVoteSession.create(message, author_id=ctx.author.id, target_message=target_message)
+            vote_session = await DeleteLogVoteSession.create([message], author_id=ctx.author.id, target_message=target_message)
             self.open_vote_sessions[message.id] = vote_session
 
     @Cog.listener("on_raw_reaction_add")
@@ -216,8 +213,7 @@ class DeleteLogCog(Cog, name="Vote"):
         message_id = payload.message_id
         if message_id not in self.open_vote_sessions:
             return
-        channel = self.bot.get_channel(payload.channel_id)
-        assert isinstance(channel, GuildMessageable)
+        channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
         message = await channel.fetch_message(message_id)
 
         vote_session = self.open_vote_sessions[message_id]
@@ -240,7 +236,7 @@ class DeleteLogCog(Cog, name="Vote"):
             if role.id in trusted_role_ids:
                 break
         else:
-            await vote_session.message.channel.send("You do not have a trusted role.")
+            await channel.send("You do not have a trusted role.")
             return  # User does not have a trusted role
 
         original_vote = vote_session[user.id]
@@ -252,19 +248,17 @@ class DeleteLogCog(Cog, name="Vote"):
             return
 
         # Update the embed
-        await vote_session.update_message()
+        await vote_session.update_messages()
 
         # Check if the threshold has been met
         if vote_session.net_votes >= vote_session.pass_threshold:
-            await vote_session.message.channel.send("Vote passed")
             if vote_session.target_message:
                 try:
                     await vote_session.target_message.delete()
-                    await vote_session.message.channel.send("Message deleted.")
                 except discord.Forbidden:
-                    await vote_session.message.channel.send("Bot lacks permissions to delete the message.")
+                    pass
                 except discord.NotFound:
-                    await vote_session.message.channel.send("The target message was not found.")
+                    pass
             del self.open_vote_sessions[message_id]
 
 
@@ -272,6 +266,8 @@ async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     cog = DeleteLogCog(bot)
     open_vote_sessions = await DeleteLogVoteSession.get_open_vote_sessions(bot)
-    cog.open_vote_sessions = {session.message.id: session for session in open_vote_sessions}
+    for session in open_vote_sessions:
+        for message in session.messages:
+            cog.open_vote_sessions[message.id] = session
 
     await bot.add_cog(cog)
