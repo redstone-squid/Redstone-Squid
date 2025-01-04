@@ -357,7 +357,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 f"Build submitted successfully!\nThe submission ID is: {build.id}",
             )
             await message.edit(embed=success_embed)
-            await self.post_pending_build(build)
+            await self.post_build_for_voting(build)
 
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
@@ -406,7 +406,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 embed=await build.generate_embed(),
                 ephemeral=True,
             )
-            await self.post_pending_build(build)
+            await self.post_build_for_voting(build)
 
     async def post_confirmed_build(self, build: Build) -> None:
         """Post a confirmed submission to the appropriate discord channels.
@@ -424,13 +424,17 @@ class SubmissionsCog(Cog, name="Submissions"):
             message = await channel.send(embed=em)
             await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
-    async def post_pending_build(self, build: Build) -> None:
+    async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
         """
-        Post a pending submission for voting.
+        Post a build for voting.
 
         Args:
             build (Build): The build to post.
+            type (Literal["add", "update"]): Whether to add or update the build.
         """
+        if type == "update":
+            raise NotImplementedError("Updating builds is not yet implemented.")
+
         # TODO: There are no checks to see if the submission has already been posted
         assert build.id is not None
         if build.submission_status != Status.PENDING:
