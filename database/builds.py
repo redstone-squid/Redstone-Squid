@@ -10,10 +10,12 @@ from collections.abc import Sequence, Mapping
 from typing import Literal, Any, cast, TypeVar
 
 import discord
+from discord.ext.commands import Bot
 from discord.utils import escape_markdown
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
+from bot._types import GuildMessageable
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -271,24 +273,39 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    def get_channel_type_to_post_to(self: Build) -> ChannelPurpose:
-        """Gets the type of channel to post a submission to."""
+    async def get_channels_to_post_to(self: Build, bot: Bot) -> list[GuildMessageable]:
+        """
+        Gets the channels in which this build should be posted to.
+
+        Args:
+            bot: A bot instance to get the channels from.
+        """
+
+        target: ChannelPurpose
 
         match (self.submission_status, self.record_category):
             case (Status.PENDING, None):
-                return "Vote"
+                target = "Vote"
             case (Status.DENIED, _):
                 raise ValueError("Denied submissions should not be posted.")
             case (Status.CONFIRMED, None):
-                return "Builds"
+                target = "Builds"
             case (Status.CONFIRMED, "Smallest"):
-                return "Smallest"
+                target = "Smallest"
             case (Status.CONFIRMED, "Fastest"):
-                return "Fastest"
+                target = "Fastest"
             case (Status.CONFIRMED, "First"):
-                return "First"
+                target = "First"
             case _:
                 raise ValueError("Invalid status or record category")
+
+        channels: list[GuildMessageable] = []
+        for guild in bot.guilds:
+            channel_id = await get_server_setting(guild.id, target)
+            if channel_id:
+                channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
+
+        return channels
 
     def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
