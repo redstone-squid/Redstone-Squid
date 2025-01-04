@@ -88,6 +88,14 @@ class BuildVoteSession(AbstractVoteSession):
         """Track the vote session in the database."""
         self.id = await track_vote_session(self.message, self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id)
         await self.update_message()
+
+        try:
+            await self.message.add_reaction(APPROVE_EMOJIS[0])
+            await asyncio.sleep(1)
+            await self.message.add_reaction(DENY_EMOJIS[0])
+        except discord.Forbidden:
+            pass  # Bot doesn't have permission to add reactions
+
         await track_build_vote_session(self.id, self.build)
 
     @classmethod
@@ -425,14 +433,6 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         for vote_channel in await build.get_channels_to_post_to(self.bot):
             vote_message = await vote_channel.send(embed=em)
-
-            # Add initial reactions
-            try:
-                await vote_message.add_reaction(APPROVE_EMOJIS[0])
-                await asyncio.sleep(1)
-                await vote_message.add_reaction(DENY_EMOJIS[0])
-            except discord.Forbidden:
-                pass  # Bot doesn't have permission to add reactions
 
             assert build.submitter_id is not None
             session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
