@@ -646,7 +646,7 @@ class Build:
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
         elif (
-            get_version_string(await DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions
+                get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions
         ):
             desc.append("**Broken** in current (Java) version.")
 
@@ -680,7 +680,7 @@ class Build:
         start_version: VersionRecord | None = None
         end_version: VersionRecord | None = None
 
-        for version in await DatabaseManager.get_versions_list(edition="Java"):
+        for version in DatabaseManager.get_versions_list(edition="Java"):
             if get_version_string(version, no_edition=True) in self.functional_versions:
                 if not linking:
                     linking = True
