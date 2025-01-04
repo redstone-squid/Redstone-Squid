@@ -449,8 +449,8 @@ class SubmissionsCog(Cog, name="Submissions"):
             tasks.append(asyncio.create_task(vote_channel.send(embed=em)))
         messages = await asyncio.gather(*tasks)
 
-        assert build.submitter_id is not None
-        session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build)
+            assert build.submitter_id is not None
+            session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build)
         for message in messages:
             self.open_vote_sessions[message.id] = session
 
