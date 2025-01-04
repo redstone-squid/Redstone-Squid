@@ -246,7 +246,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            await sent_message.edit(embed=await submission.generate_embed())
+            await sent_message.edit(embed=submission.generate_embed())
 
     @submission_hybrid_group.command(name="confirm")
     @app_commands.describe(submission_id="The ID of the build you want to confirm.")
@@ -347,7 +347,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             # Shows the submission to the user
             await followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await build.generate_embed(),
+                embed=build.generate_embed(),
                 ephemeral=True,
             )
 
@@ -402,7 +402,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             await build.save()
             await followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await build.generate_embed(),
+                embed=build.generate_embed(),
                 ephemeral=True,
             )
             await self.post_build_for_voting(build)
@@ -418,7 +418,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build.submission_status != Status.CONFIRMED:
             raise ValueError("The build must be confirmed to post it.")
 
-        em = await build.generate_embed()
+        em = build.generate_embed()
         for channel in await build.get_channels_to_post_to(self.bot):
             message = await channel.send(embed=em)
             await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
@@ -439,7 +439,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build.submission_status != Status.PENDING:
             raise ValueError("The build must be pending to post it.")
 
-        em = await build.generate_embed()
+        em = build.generate_embed()
         for vote_channel in await build.get_channels_to_post_to(self.bot):
             vote_message = await vote_channel.send(embed=em)
 
@@ -493,7 +493,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             update_values = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             submission.update_local(update_values)
-            preview_embed = await submission.generate_embed()
+            preview_embed = submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
@@ -517,7 +517,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if await get_build_id_by_message(message_id) != build.id:
             raise ValueError("The message_id does not correspond to the build_id.")
 
-        em = await build.generate_embed()
+        em = build.generate_embed()
         channel = self.bot.get_channel(channel_id)
         if not isinstance(channel, discord.PartialMessageable):
             raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
@@ -533,7 +533,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         # Get all messages for a build
         messages = await msg.get_build_messages(build.id)
-        em = await build.generate_embed()
+        em = build.generate_embed()
 
         for message in messages:
             channel = self.bot.get_channel(message["channel_id"])
