@@ -42,16 +42,17 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
-# This is a very large class, the methods are ordered as follows:
-# - Static constructors
-# - Magic (dunder) methods
-# - Properties
-# - Normal methods
-# - load(), save() and the helper methods it calls
-
 @dataclass
 class Build:
-    """A submission to the database."""
+    """A submission to the database.
+
+    This is a very large class, the methods are ordered as follows:
+    - Static constructors
+    - Magic (dunder) methods
+    - Properties
+    - Normal methods
+    - load(), save() and the helper methods it calls
+    """
 
     id: int | None = None
     submission_status: Status | None = None
@@ -791,7 +792,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    print(Build(id=1,submission_status=Status.PENDING).diff(Build(id=1,submission_status=Status.CONFIRMED)))
+    print(Build(id=1, submission_status=Status.PENDING).diff(Build(id=1, submission_status=Status.CONFIRMED)))
 
 
 if __name__ == "__main__":
