@@ -92,7 +92,7 @@ class BuildVoteSession(AbstractVoteSession):
 
         vote_session_record = vote_session_response.data
 
-        messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in vote_session_record["messages"]])
+        messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in vote_session_record["messages"]])
 
         build_id = vote_session_record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
@@ -161,7 +161,7 @@ class BuildVoteSession(AbstractVoteSession):
         records = (await db.table("vote_sessions").select("*, messages(*), votes(*), build_vote_sessions(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
 
         async def _get_session(record: dict[str, Any]) -> "BuildVoteSession":
-            messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in record["messages"]])
+            messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in record["messages"]])
 
             build_id: int = record["build_vote_sessions"]["build_id"]
             build = await Build.from_id(build_id)

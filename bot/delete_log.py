@@ -68,8 +68,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return None
 
         vote_session_record = vote_session_response.data
-        messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in vote_session_record["messages"]])
-        target_message = await utils.fetch(bot, vote_session_record["delete_log_vote_sessions"])
+        messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in vote_session_record["messages"]])
+        target_message = await utils.getch(bot, vote_session_record["delete_log_vote_sessions"])
 
         self = cls.__new__(cls)
         self._allow_init = True
@@ -151,8 +151,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         records = (await db.table("vote_sessions").select("*, messages(*), votes(*), delete_log_vote_sessions(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
 
         async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession":
-            messages = await asyncio.gather(*[utils.fetch(bot, msg) for msg in record["messages"]])
-            target_message = await utils.fetch(bot, record["delete_log_vote_sessions"])
+            messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in record["messages"]])
+            target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
 
             session = cls.__new__(cls)
             session._allow_init = True
