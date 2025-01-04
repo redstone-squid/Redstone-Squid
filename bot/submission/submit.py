@@ -207,6 +207,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
         self.open_vote_sessions: dict[int, BuildVoteSession] = {}
+        """A cache of open vote sessions. The key is the message id of the vote message."""
 
     @hybrid_group(name="submissions", invoke_without_command=True)
     async def submission_hybrid_group(self, ctx: Context):
