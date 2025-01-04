@@ -399,24 +399,20 @@ class SubmissionsCog(Cog, name="Submissions"):
             )
             await self.post_build(build, purpose="view_pending_build")
 
-    async def post_build(self, build: Build, *, purpose: MessagePurpose, guilds: Sequence[Guild] | None = None) -> None:
+    async def post_build(self, build: Build, *, purpose: MessagePurpose) -> None:
         """Post a confirmed submission to the appropriate discord channels.
 
         Args:
             build (Build): The build to post.
             purpose (str): The purpose of the post.
-            guilds (list[Guild], optional): The guilds to post to. If None, posts to all guilds.
         """
         # TODO: There are no checks to see if the submission has already been posted
         if build.id is None:
             raise ValueError("Build id is None.")
 
-        if guilds is None:
-            guilds = self.bot.guilds
-
         channel_purpose = build.get_channel_type_to_post_to()
         channel_ids: list[int] = []
-        for guild in guilds:
+        for guild in self.bot.guilds:
             channel_id = await get_server_setting(guild.id, channel_purpose)
             if channel_id:
                 channel_ids.append(channel_id)
