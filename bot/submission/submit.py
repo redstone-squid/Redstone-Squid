@@ -414,23 +414,28 @@ class SubmissionsCog(Cog, name="Submissions"):
             build (Build): The build to post.
         """
         # TODO: There are no checks to see if the submission has already been posted
-        if build.id is None:
-            raise ValueError("Build id is None.")
+        assert build.id is not None
+        if build.submission_status != Status.CONFIRMED:
+            raise ValueError("The build must be confirmed to post it.")
 
         em = await build.generate_embed()
-
         for channel in await build.get_channels_to_post_to(self.bot):
             message = await channel.send(embed=em)
             await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
     async def post_pending_build(self, build: Build) -> None:
-        """Post a pending submission to the appropriate discord channels."""
+        """
+        Post a pending submission for voting.
+
+        Args:
+            build (Build): The build to post.
+        """
         # TODO: There are no checks to see if the submission has already been posted
-        if build.id is None:
-            raise ValueError("Build id is None.")
+        assert build.id is not None
+        if build.submission_status != Status.PENDING:
+            raise ValueError("The build must be pending to post it.")
 
         em = await build.generate_embed()
-
         for vote_channel in await build.get_channels_to_post_to(self.bot):
             vote_message = await vote_channel.send(embed=em)
 
