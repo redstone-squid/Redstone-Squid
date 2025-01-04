@@ -1,3 +1,7 @@
+insert into server_settings(server_id, smallest_channel_id, fastest_channel_id, first_channel_id, builds_channel_id, voting_channel_id, in_server, staff_roles_ids, trusted_roles_ids)
+values
+(433618741528625152, 536004554743873556, 536004554743873556, 536004554743873556, 536004554743873556, 536004554743873556, TRUE, ARRAY[525738486637002762], ARRAY[525738486637002762]);
+
 insert into types(build_category, name)
 values
 ('Door', 'Regular'),
