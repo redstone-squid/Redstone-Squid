@@ -23,7 +23,8 @@ from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
-from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES, MessageRecord
+from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES, MessageRecord, \
+    DeleteLogVoteSessionRecord
 from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
@@ -480,7 +481,7 @@ def check_is_trusted():
 
 
 @overload
-async def fetch(bot: discord.Client, record: MessageRecord) -> Message:
+async def fetch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message:
     ...
 
 async def fetch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
@@ -491,8 +492,19 @@ async def fetch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
         message_adapter.validate_python(record)
         message_id = record["message_id"]
         channel_id = record["channel_id"]
-        channel = bot.get_channel(channel_id)
-        assert isinstance(channel, GuildMessageable)
+        channel = await bot.fetch_channel(channel_id)
+        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
+        return await channel.fetch_message(message_id)
+    except ValidationError:
+        pass
+
+    try:
+        message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
+        message_adapter.validate_python(record)
+        message_id = record["target_message_id"]
+        channel_id = record["target_channel_id"]
+        channel = await bot.fetch_channel(channel_id)
+        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
         return await channel.fetch_message(message_id)
     except ValidationError:
         pass
