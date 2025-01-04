@@ -8,7 +8,7 @@ from io import StringIO
 from textwrap import dedent
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, TYPE_CHECKING, Any, Mapping
+from typing import overload, Literal, TYPE_CHECKING, Any, Mapping, cast
 
 import discord
 from async_lru import alru_cache
@@ -481,10 +481,10 @@ def check_is_trusted():
 
 
 @overload
-async def fetch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message:
+async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message:
     ...
 
-async def fetch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
+async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
     """Fetch discord objects from database records."""
 
     try:
@@ -492,7 +492,10 @@ async def fetch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
         message_adapter.validate_python(record)
         message_id = record["message_id"]
         channel_id = record["channel_id"]
-        channel = await bot.fetch_channel(channel_id)
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(channel_id)
+        channel = cast(GuildMessageable, channel)
         assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
         return await channel.fetch_message(message_id)
     except ValidationError:
@@ -503,7 +506,10 @@ async def fetch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
         message_adapter.validate_python(record)
         message_id = record["target_message_id"]
         channel_id = record["target_channel_id"]
-        channel = await bot.fetch_channel(channel_id)
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(channel_id)
+        channel = cast(GuildMessageable, channel)
         assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
         return await channel.fetch_message(message_id)
     except ValidationError:
