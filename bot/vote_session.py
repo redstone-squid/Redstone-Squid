@@ -1,11 +1,13 @@
 """A vote session that represents a change to something."""
+from __future__ import annotations
+
 import inspect
 from abc import abstractmethod, ABC
 import asyncio
 from asyncio import Task
 from dataclasses import dataclass
 from types import MethodType
-from typing import Any, TypeVar, Union
+from typing import Any, TypeVar, Union, TYPE_CHECKING
 
 import discord
 
@@ -13,6 +15,9 @@ from bot._types import GuildMessageable
 from database.builds import Build
 from database.schema import VoteKind
 from database.vote import close_vote_session, track_vote_session, upsert_vote
+
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]
@@ -49,14 +54,14 @@ class AbstractVoteSession(ABC):
 
     kind: VoteKind
 
-    def __init__(self, message: discord.Message, author_id: int, pass_threshold: int, fail_threshold: int):
+    def __init__(self, messages: list[discord.Message], author_id: int, pass_threshold: int, fail_threshold: int):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
 
         If you use this constructor directly, you must call _async_init() afterwards, or else the vote session will not be tracked.
 
         Args:
-            message: The message to track votes on.
+            messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
@@ -70,7 +75,9 @@ class AbstractVoteSession(ABC):
         self.id: int | None = None
         """The id of the vote session in the database. If None, we are not tracking the vote session and thus no async operations are performed."""
         self.is_closed = False
-        self.message = message
+        self.messages = messages
+        if len(messages) >= 10:
+            raise ValueError("Found a vote session with more than 10 messages, we need to change the update_message logic.")
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
@@ -80,8 +87,8 @@ class AbstractVoteSession(ABC):
     @abstractmethod
     async def _async_init(self) -> None:
         """Perform async initialization. Called by create()."""
-        self.id = await track_vote_session(self.message, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
-        await self.update_message()
+        self.id = await track_vote_session(self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
+        await self.update_messages()
 
     @classmethod
     @abstractmethod
@@ -132,7 +139,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def from_id(cls: type[T], bot: discord.Client, vote_session_id: int) -> Union[T, None]:
+    async def from_id(cls: type[T], bot: RedstoneSquid, vote_session_id: int) -> Union[T, None]:
         """
         Create a vote session from an id.
 
@@ -160,8 +167,12 @@ class AbstractVoteSession(ABC):
         return sum(self._votes.values())
 
     @abstractmethod
-    async def update_message(self) -> None:
-        """Update the message with an embed with new counts"""
+    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
+        """Send a vote session message to a channel"""
+
+    @abstractmethod
+    async def update_messages(self) -> None:
+        """Update the messages with an embed of new vote counts"""
 
     @abstractmethod
     async def close(self) -> None:
@@ -170,7 +181,7 @@ class AbstractVoteSession(ABC):
         # Wait for any pending vote operations
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=False)
-        await self.update_message()
+        await self.update_messages()
         assert self.id is not None
         await close_vote_session(self.id)
 
@@ -195,7 +206,7 @@ class AbstractVoteSession(ABC):
 
         # Create tasks for the updates
         if self.id is not None:
-            update_task = asyncio.create_task(self.update_message())
+            update_task = asyncio.create_task(self.update_messages())
             db_task = asyncio.create_task(upsert_vote(self.id, user_id, weight))
             self._tasks.add(update_task)
             self._tasks.add(db_task)
@@ -218,4 +229,4 @@ class AbstractVoteSession(ABC):
             await self.close()
 
         if self.id is not None:
-            await asyncio.gather(self.update_message(), upsert_vote(self.id, user_id, weight), return_exceptions=False)
+            await asyncio.gather(self.update_messages(), upsert_vote(self.id, user_id, weight), return_exceptions=False)
