@@ -580,7 +580,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             pass  # Ignore if we can't remove the reaction
 
         # Get the BuildVoteSession
-        session = self.open_vote_sessions.get(payload.message_id)  # TODO
+        session = self.open_vote_sessions.get(payload.message_id)
         if not session:
             raise ValueError("No active vote session found for this message.")
 
