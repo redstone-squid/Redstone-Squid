@@ -426,8 +426,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         for channel_id in channel_ids:
             channel = self.bot.get_channel(channel_id)
             assert isinstance(channel, GuildMessageable)
-            # message = await channel.send(embed=em)
-            # await msg.track_message(message, purpose, build_id=build.id)
+            message = await channel.send(embed=em)
+            await msg.track_message(message, purpose, build_id=build.id)
 
             if purpose == "view_pending_build":
                 # Initialize the BuildVoteSession
