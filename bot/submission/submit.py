@@ -409,18 +409,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build.id is None:
             raise ValueError("Build id is None.")
 
-        channel_purpose = build.get_channel_type_to_post_to()
-        channel_ids: list[int] = []
-        for guild in self.bot.guilds:
-            channel_id = await get_server_setting(guild.id, channel_purpose)
-            if channel_id:
-                channel_ids.append(channel_id)
-
         em = await build.generate_embed()
 
-        for channel_id in channel_ids:
-            channel = self.bot.get_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
+        for channel in await build.get_channels_to_post_to(self.bot):
             message = await channel.send(embed=em)
             await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
@@ -430,39 +421,22 @@ class SubmissionsCog(Cog, name="Submissions"):
         if build.id is None:
             raise ValueError("Build id is None.")
 
-        channel_purpose = build.get_channel_type_to_post_to()
-        channel_ids: list[int] = []
-        for guild in self.bot.guilds:
-            channel_id = await get_server_setting(guild.id, channel_purpose)
-            if channel_id:
-                channel_ids.append(channel_id)
-
         em = await build.generate_embed()
 
-        for channel_id in channel_ids:
-            channel = self.bot.get_channel(channel_id)
-            assert isinstance(channel, GuildMessageable)
-            message = await channel.send(embed=em)
-            await msg.track_message(message, purpose="view_pending_build", build_id=build.id)
+        for vote_channel in await build.get_channels_to_post_to(self.bot):
+            vote_message = await vote_channel.send(embed=em)
 
-            # Initialize the BuildVoteSession
-            vote_channel_id = await get_server_setting(channel.guild.id, "Vote")
-            if vote_channel_id is not None:
-                vote_channel = self.bot.get_channel(vote_channel_id)
-                assert isinstance(vote_channel, GuildMessageable)
-                vote_message = await vote_channel.send(embed=em)
+            # Add initial reactions
+            try:
+                await vote_message.add_reaction(APPROVE_EMOJIS[0])
+                await asyncio.sleep(1)
+                await vote_message.add_reaction(DENY_EMOJIS[0])
+            except discord.Forbidden:
+                pass  # Bot doesn't have permission to add reactions
 
-                # Add initial reactions
-                try:
-                    await vote_message.add_reaction(APPROVE_EMOJIS[0])
-                    await asyncio.sleep(1)
-                    await vote_message.add_reaction(DENY_EMOJIS[0])
-                except discord.Forbidden:
-                    pass  # Bot doesn't have permission to add reactions
-
-                assert build.submitter_id is not None
-                session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
-                self.open_vote_sessions[vote_message.id] = session
+            assert build.submitter_id is not None
+            session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
+            self.open_vote_sessions[vote_message.id] = session
 
     # fmt: off
     class EditFlags(commands.FlagConverter):

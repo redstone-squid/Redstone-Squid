@@ -10,10 +10,12 @@ from collections.abc import Sequence, Mapping
 from typing import Literal, Any, cast, TypeVar
 
 import discord
+from discord.ext.commands import Bot
 from discord.utils import escape_markdown
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
+from bot._types import GuildMessageable
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -270,8 +272,15 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    async def get_channel_type_to_post_to(self: Build) -> Literal["Smallest", "Fastest", "First", "Builds", "Vote"]:
-        """Gets the type of channel to post a submission to."""
+    async def get_channels_to_post_to(self: Build, bot: Bot) -> list[GuildMessageable]:
+        """
+        Gets the channels in which this build should be posted to.
+
+        Args:
+            bot: A bot instance to get the channels from.
+        """
+
+        target: ChannelPurpose
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
@@ -291,7 +300,13 @@ class Build:
             case _:
                 raise ValueError("Invalid status or record category")
 
-        return target
+        channels: list[GuildMessageable] = []
+        for guild in bot.guilds:
+            channel_id = await get_server_setting(guild.id, target)
+            if channel_id:
+                channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
+
+        return channels
 
     def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
