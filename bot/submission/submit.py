@@ -444,7 +444,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             vote_message = await vote_channel.send(embed=em)
 
             assert build.submitter_id is not None
-            session = await BuildVoteSession.create(vote_message, build.submitter_id, build)
+            session = await BuildVoteSession.create([vote_message], build.submitter_id, build)
             self.open_vote_sessions[vote_message.id] = session
 
     # fmt: off
