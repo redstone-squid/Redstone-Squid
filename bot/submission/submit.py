@@ -686,7 +686,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
             return
 
-        build = await parse_build(message.content)
+        build = await parse_build(f"{message.author.display_name} wrote the following message:\n{message.clean_content}")  # type: ignore
         if build is None:
             return
 
