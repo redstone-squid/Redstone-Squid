@@ -50,21 +50,18 @@ class DatabaseManager:
             raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
         cls._async_client = await create_client(url, key)
         cls._is_setup = True
-        cls.version_cache["Java"] = await cls.fetch_versions_list(edition="Java")
-        cls.version_cache["Bedrock"] = await cls.fetch_versions_list(edition="Bedrock")
-        cls.version_cache[None] = await cls.fetch_versions_list()
+        cls.version_cache["Java"] = await cls.fetch_versions_list("Java")
+        cls.version_cache["Bedrock"] = await cls.fetch_versions_list("Bedrock")
 
     @classmethod
-    async def fetch_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
+    async def fetch_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from newest to oldest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
         query = cls.__new__(cls).table("versions").select("*")
-        if edition:
-            query = query.eq("edition", edition)
         versions_response: APIResponse[VersionRecord] = (
-            await query.order("edition")
+            await query.eq("edition", edition)
             .order("major_version", desc=True)
             .order("minor_version", desc=True)
             .order("patch_number", desc=True)
@@ -73,7 +70,7 @@ class DatabaseManager:
         return versions_response.data
 
     @classmethod
-    def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
+    def get_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of all minecraft versions"""
         versions = cls.version_cache.get(edition)
         if versions is None:
@@ -81,7 +78,6 @@ class DatabaseManager:
         return versions
 
     @classmethod
-    @alru_cache(maxsize=2)
     async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await cls.fetch_versions_list(edition=edition)
