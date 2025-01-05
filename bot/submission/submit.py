@@ -312,7 +312,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
             default=DatabaseManager.get_newest_version(edition="Java"),
-            description='The versions the build works in. Default to newest version. /versions for full list.'
+            description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
