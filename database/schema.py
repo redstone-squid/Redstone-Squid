@@ -37,6 +37,10 @@ class BuildRecord(TypedDict):
     category: Category
     server_info: dict[str, Any] | None  # JSON
     submitter_id: int
+    original_message_id: int
+    original_message: str
+    version_spec: str
+    ai_generated: bool
 
 
 class MessageRecord(TypedDict):
