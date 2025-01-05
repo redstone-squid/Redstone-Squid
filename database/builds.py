@@ -53,6 +53,7 @@ class Build:
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
+    - generate_embed() and the methods it calls
     """
 
     id: int | None = None
@@ -352,6 +353,54 @@ class Build:
             raise ValueError("Build not found in the database.")
         return Build.from_json(response.data)
 
+    def update_local(self, data: dict[Any, Any]) -> None:
+        """Updates the build locally with the given data. No validation is done on the data."""
+        # FIXME: this does not work with nested data like self.information
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def as_dict(self) -> dict[str, Any]:
+        """Converts the build to a dictionary."""
+        build = {}
+        for attr in self:
+            build[attr] = getattr(self, attr)
+        return build
+
+    async def confirm(self) -> None:
+        """Marks the build as confirmed.
+
+        Raises:
+            ValueError: If the build could not be confirmed.
+        """
+        self.submission_status = Status.CONFIRMED
+        db = DatabaseManager()
+        response: APIResponse[BuildRecord] = (
+            await db.table("builds")
+            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
+            .eq("id", self.id)
+            .execute()
+        )
+        if response.count != 1:
+            raise ValueError("Failed to confirm submission in the database.")
+
+    async def deny(self) -> None:
+        """Marks the build as denied.
+
+        Raises:
+            ValueError: If the build could not be denied.
+        """
+        self.submission_status = Status.DENIED
+        db = DatabaseManager()
+        response: APIResponse[BuildRecord] = (
+            await db.table("builds")
+            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
+            .eq("id", self.id)
+            .execute()
+        )
+        if response.count != 1:
+            raise ValueError("Failed to deny submission in the database.")
+
     async def save(self) -> None:
         """
         Updates the build in the database with the given data.
@@ -534,54 +583,6 @@ class Build:
         if build_versions_data:
             await db.table("build_versions").upsert(build_versions_data).execute()
 
-    def update_local(self, data: dict[Any, Any]) -> None:
-        """Updates the build locally with the given data. No validation is done on the data."""
-        # FIXME: this does not work with nested data like self.information
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-    def as_dict(self) -> dict[str, Any]:
-        """Converts the build to a dictionary."""
-        build = {}
-        for attr in self:
-            build[attr] = getattr(self, attr)
-        return build
-
-    async def confirm(self) -> None:
-        """Marks the build as confirmed.
-
-        Raises:
-            ValueError: If the build could not be confirmed.
-        """
-        self.submission_status = Status.CONFIRMED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
-        if response.count != 1:
-            raise ValueError("Failed to confirm submission in the database.")
-
-    async def deny(self) -> None:
-        """Marks the build as denied.
-
-        Raises:
-            ValueError: If the build could not be denied.
-        """
-        self.submission_status = Status.DENIED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
-        if response.count != 1:
-            raise ValueError("Failed to deny submission in the database.")
-
     def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         em = utils.info_embed(title=self.get_title(), description=self.get_description())
@@ -666,7 +667,7 @@ class Build:
     def get_version_spec(self) -> str:
         """Returns a string representation of the versions the build is functional in.
 
-        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
+        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19.2, 1.20+".
         """
         if not self.versions:
             return ""
@@ -674,7 +675,7 @@ class Build:
         versions: list[str] = []
 
         linking = False
-        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2-1.18)."""
+        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2 - 1.18)."""
         start_version: VersionRecord | None = None
         end_version: VersionRecord | None = None
 
@@ -697,11 +698,8 @@ class Build:
 
         if linking:  # If the last version is functional
             assert start_version is not None
-            assert end_version is not None
             versions.append(
-                get_version_string(start_version)
-                if start_version == end_version
-                else f"{start_version} - {end_version}"
+                f"{start_version}+"
             )
 
         return ", ".join(versions)
