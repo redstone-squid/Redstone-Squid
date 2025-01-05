@@ -31,15 +31,6 @@ async def get_build_messages(build_id: int) -> list[MessageRecord]:
     return response.data
 
 
-async def get_messages(server_id: int, build_id: int) -> list[MessageRecord]:
-    """Get the unique message for a build in a server"""
-    db = DatabaseManager()
-    server_record: APIResponse[MessageRecord] = (
-        await db.table("messages").select("*").eq("server_id", server_id).eq("build_id", build_id).execute()
-    )
-    return server_record.data
-
-
 async def track_message(
     message: discord.Message,
     purpose: MessagePurpose,
