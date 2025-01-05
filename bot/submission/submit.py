@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from typing_extensions import override
 
 from bot import utils
-from bot.submission.parse import remove_markdown, parse_build_title
+from bot.submission.parse import remove_markdown, parse_build
 from bot.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
@@ -32,7 +32,7 @@ from bot.utils import RunningMessage, parse_dimensions, is_owner_server
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
-from database.utils import upload_to_catbox, get_version_string
+from database.utils import get_version_string, upload_to_catbox
 from database.vote import track_build_vote_session, track_vote_session, close_vote_session
 
 if TYPE_CHECKING:
@@ -386,7 +386,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
                 raise ValueError(f"Unsupported content type: {attachment.content_type}")
 
-            url = upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
+            url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
             if attachment.content_type.startswith("image"):  # pyright: ignore [reportOptionalMemberAccess]
                 build.image_urls.append(url)
             elif attachment.content_type.startswith("video"):  # pyright: ignore [reportOptionalMemberAccess]
@@ -596,8 +596,8 @@ class SubmissionsCog(Cog, name="Submissions"):
             return
         await vote_session.update_messages()
 
-    # @Cog.listener(name="on_message")
-    async def infer_build_from_title(self, message: Message):
+    @Cog.listener(name="on_message")
+    async def infer_build_from_message(self, message: Message):
         """Infer a build from a message."""
         if message.author.bot:
             return
@@ -605,29 +605,26 @@ class SubmissionsCog(Cog, name="Submissions"):
         if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
             return
 
-        title_str = remove_markdown(message.content).splitlines()[0]
-        try:
-            title = await parse_build_title(title_str, mode="ai" if len(title_str) <= 300 else "manual")
-        except ValidationError:
+        build = await parse_build(message.content)
+        if build is None:
             return
 
-        # build = Build()
-        # build.record_category = title.record_category
-        # build.category = "Door"
-        # build.component_restrictions = title.component_restrictions
-        # build.door_width = title.door_width
-        # build.door_height = title.door_height
-        # build.door_depth = title.door_depth
-        # build.wiring_placement_restrictions = title.wiring_placement_restrictions
-        # build.door_types = title.door_types
-        # build.door_orientation_type = title.orientation
-        # print(title)
+        for attachment in message.attachments:
+            if attachment.content_type is None:
+                continue
+            url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
+            if attachment.content_type.startswith("image"):
+                build.image_urls.append(url)
+            elif attachment.content_type.startswith("video"):
+                build.video_urls.append(url)
 
-        bot_channel = self.bot.get_channel(536004554743873556)
-        if title:
-            await bot_channel.send(title.model_dump_json())  # type: ignore
-        else:
-            await bot_channel.send("No title found")  # type: ignore
+        bot_channel = cast(GuildMessageable, self.bot.get_channel(536004554743873556))
+        build.submission_status = Status.PENDING
+        build.category = Category.DOOR
+        build.submitter_id = message.author.id
+        # await build.save()
+        await bot_channel.send(repr(build))
+        await bot_channel.send(embed=build.generate_embed())
 
 
 def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:

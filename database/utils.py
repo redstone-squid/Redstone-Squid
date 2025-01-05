@@ -3,6 +3,7 @@
 import os
 from datetime import datetime, timezone
 
+import aiohttp
 import requests
 from requests_toolbelt import MultipartEncoder
 
@@ -16,9 +17,8 @@ def utcnow() -> str:
     return formatted_time
 
 
-# A minimal version of https://github.com/yukinotenshi/pyupload
-def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
-    """Uploads a file to catbox.moe.
+async def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
+    """Uploads a file to catbox.moe asynchronously.
 
     Args:
         filename: The name of the file.
@@ -29,15 +29,19 @@ def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
         The link to the uploaded file.
     """
     catbox_url = "https://catbox.moe/user/api.php"
-    data = {
-        "reqtype": "fileupload",
-        "userhash": os.getenv("CATBOX_USERHASH"),
-        "fileToUpload": (filename, file, mimetype),
-    }
-    encoder = MultipartEncoder(fields=data)
-    response = requests.post(catbox_url, data=encoder, headers={"Content-Type": encoder.content_type})
+    userhash = os.getenv("CATBOX_USERHASH")
 
-    return response.text
+    data = aiohttp.FormData()
+    data.add_field('reqtype', 'fileupload')
+    if userhash:
+        data.add_field('userhash', userhash)
+    data.add_field('fileToUpload', file, filename=filename, content_type=mimetype)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(catbox_url, data=data) as response:
+            response_text = await response.text()
+            return response_text
+
 
 
 def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:

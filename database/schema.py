@@ -10,6 +10,7 @@ from database.enums import Status, Category
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
     component_restrictions: list[str]
+    miscellaneous_restrictions: list[str]
 
 
 class Info(TypedDict, total=False):

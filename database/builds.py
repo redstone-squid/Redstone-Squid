@@ -81,7 +81,7 @@ class Build:
     visible_closing_time: int | None = None
     visible_opening_time: int | None = None
 
-    information: Info | None = None
+    information: Info = field(default_factory=dict)  # type: ignore
     creators_ign: list[str] = field(default_factory=list)
 
     image_urls: list[str] = field(default_factory=list)
@@ -644,7 +644,8 @@ class Build:
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
         elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
-            desc.append("**Broken** in current (Java) version.")
+            pass
+            # desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
             desc.append("**Locational**.")
