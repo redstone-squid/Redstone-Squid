@@ -525,7 +525,8 @@ class Build:
         )
         type_ids = [type_["id"] for type_ in response.data]
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
-        await db.table("build_types").upsert(build_types_data).execute()
+        if build_types_data:
+            await db.table("build_types").upsert(build_types_data).execute()
         unknown_types = []
         for door_type in data.get("door_type", []):
             if door_type not in [type_["name"] for type_ in response.data]:
