@@ -314,18 +314,18 @@ class SubmissionsCog(Cog, name="Submissions"):
             default=DatabaseManager.get_newest_version(edition="Java"),
             description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".'
         )
-        wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
-        information_about_build: str = flag(default=None, description='Any additional information about the build.')
-        normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
-        date_of_creation: str = flag(default=None, description='The date the build was created.')
-        in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes"] = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
-        link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
-        link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
-        link_to_world_download: str = flag(default=None, description='A link to download the world.')
+        wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
+        normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        date_of_creation: str | None = flag(default=None, description='The date the build was created.')
+        in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
+        link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
+        link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
     # fmt: on
 
     @commands.hybrid_command(name="submit")
@@ -340,8 +340,49 @@ class SubmissionsCog(Cog, name="Submissions"):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            fmt_data = self.format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
-            build = Build.from_dict(fmt_data)
+            build = Build()
+            build.record_category = flags.record_category
+            build.version_spec = flags.works_in
+            build.versions = DatabaseManager.filter_versions(flags.works_in)
+
+            if (build_size := flags.build_size) is not None:
+                build_dimensions = parse_dimensions(build_size)
+                build.width, build.height, build.depth = build_dimensions
+
+            door_dimensions = parse_dimensions(flags.door_size)
+            build.door_width, build.door_height, build.door_depth = door_dimensions
+
+            build.door_type = flags.pattern.split(", ")
+            build.door_orientation_type = flags.door_type
+
+            if (wp_res := flags.wiring_placement_restrictions) is not None:
+                build.wiring_placement_restrictions = wp_res.split(", ")
+            else:
+                build.wiring_placement_restrictions = []
+
+            if (co_res := flags.component_restrictions) is not None:
+                build.component_restrictions = co_res.split(", ")
+            else:
+                build.component_restrictions = []
+            misc_restrictions = [flags.locationality, flags.directionality]
+            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+
+            build.normal_closing_time = flags.normal_closing_time
+            build.normal_opening_time = flags.normal_opening_time
+
+            if flags.information_about_build is not None:
+                build.information["user"] = flags.information_about_build
+            if (ign := flags.in_game_name_of_creator) is not None:
+                build.creators_ign = ign.split(", ")
+            else:
+                build.creators_ign = []
+
+            build.image_urls = [flags.link_to_image] if flags.link_to_image is not None else []
+            build.video_urls = [flags.link_to_youtube_video] if flags.link_to_youtube_video is not None else []
+            build.world_download_urls = [flags.link_to_world_download] if flags.link_to_world_download is not None else []
+
+            build.submitter_id = ctx.author.id
+            build.completion_time = flags.date_of_creation
 
             # TODO: Stop hardcoding this
             build.category = Category.DOOR
@@ -457,29 +498,29 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: off
     class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""
+        _Default = object()
         build_id: int = flag(description='The ID of the submission.')
-        door_width: int = flag(default=None, description='The width of the door itself. Like 2x2 piston door.')
-        door_height: int = flag(default=None, description='The height of the door itself. Like 2x2 piston door.')
-        pattern: str = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
-        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default=None, description='Door, Skydoor, or Trapdoor.')
+        door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
+        pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | None = flag(default=None, description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str = flag(default=None, description='The versions the build works in. Default to newest version. /versions for full list.')
-        wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: str = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
-        information_about_build: str = flag(default=None, description='Any additional information about the build.')
-        normal_closing_time: int = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int = flag(default=None,
+        works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
+        wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
+        normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int | None = flag(default=None,
                                         description='The time it takes to open the door, in gameticks. (1s = 20gt)')
-        date_of_creation: str = flag(default=None, description='The date the build was created.')
-        in_game_name_of_creator: str = flag(default=None, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes"] = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes"] = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
-        link_to_image: str = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
-        link_to_youtube_video: str = flag(default=None, description='A link to a video of the build.')
-        link_to_world_download: str = flag(default=None, description='A link to download the world.')
-        server_ip: str = flag(default=None, description='The IP of the server where the build is located.')
-        coordinates: str = flag(default=None, description='The coordinates of the build in the server.')
-        command_to_get_to_build: str = flag(default=None, description='The command to get to the build in the server.')
+        date_of_creation: str | None = flag(default=None, description='The date the build was created.')
+        in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
+        link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
+        link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
+        server_ip: str | None = flag(default=None, description='The IP of the server where the build is located.')
+        coordinates: str | None = flag(default=None, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
     # fmt: on
 
     @commands.hybrid_command(name="edit")
@@ -493,14 +534,55 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         async with RunningMessage(followup) as sent_message:
-            submission = await Build.from_id(flags.build_id)
-            if submission is None:
+            build = await Build.from_id(flags.build_id)
+            if build is None:
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            update_values = self.format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
-            submission.update_local(**update_values)
-            preview_embed = submission.generate_embed()
+            # FIXME: need to distinguish between None and removing the value
+            if (works_in := flags.works_in) is not None:
+                build.version_spec = works_in
+                build.versions = DatabaseManager.filter_versions(works_in)
+            if (build_size := flags.build_size) is not None:
+                build_dimensions = parse_dimensions(build_size)
+                build.width, build.height, build.depth = build_dimensions
+            if (door_size := flags.door_size) is not None:
+                door_dimensions = parse_dimensions(door_size)
+                build.door_width, build.door_height, build.door_depth = door_dimensions
+            if (pattern := flags.pattern) is not None:
+                build.door_type = pattern.split(", ")
+            if (door_type := flags.door_type) is not None:
+                build.door_orientation_type = door_type
+            if (wp_res := flags.wiring_placement_restrictions) is not None:
+                build.wiring_placement_restrictions = wp_res.split(", ")
+            if (co_res := flags.component_restrictions) is not None:
+                build.component_restrictions = co_res.split(", ")
+            misc_restrictions = [flags.locationality, flags.directionality]
+            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+            if flags.normal_closing_time is not None:
+                build.normal_closing_time = flags.normal_closing_time
+            if flags.normal_opening_time is not None:
+                build.normal_opening_time = flags.normal_opening_time
+            if flags.information_about_build is not None:
+                build.information["user"] = flags.information_about_build
+            if (ign := flags.in_game_name_of_creator) is not None:
+                build.creators_ign = ign.split(", ")
+            if flags.link_to_image is not None:
+                build.image_urls = [flags.link_to_image]
+            if flags.link_to_youtube_video is not None:
+                build.video_urls = [flags.link_to_youtube_video]
+            if flags.link_to_world_download is not None:
+                build.world_download_urls = [flags.link_to_world_download]
+            if flags.server_ip is not None:
+                build.server_ip = flags.server_ip
+            if flags.coordinates is not None:
+                build.coordinates = flags.coordinates
+            if flags.command_to_get_to_build is not None:
+                build.command = flags.command_to_get_to_build
+            if flags.date_of_creation is not None:
+                build.completion_time = flags.date_of_creation
+
+            preview_embed = build.generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
@@ -513,85 +595,11 @@ class SubmissionsCog(Cog, name="Submissions"):
                 await sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity."))
             elif view.value:
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                await submission.save()
-                await self.update_build_messages(submission)
+                await build.save()
+                await self.update_build_messages(build)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
             else:
                 await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
-
-    @staticmethod
-    def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
-        """Formats the submission data from what is passed in commands to something recognizable by Build."""
-        # Union of all the /submit and /edit command options
-        parsable_signatures = SubmissionCommandResponse.__annotations__.keys()
-        if not all(key in parsable_signatures for key in data):
-            unknown_keys = [key for key in data if key not in parsable_signatures]
-            raise ValueError(
-                f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?"
-            )
-
-        fmt_data: dict[str, Any] = dict()
-        fmt_data["id"] = data.get("submission_id")
-        # fmt_data['submission_status']
-
-        fmt_data["record_category"] = data.get("record_category")
-        if (works_in := data.get("works_in")) is not None:
-            fmt_data["versions"] = works_in.split(", ")
-        else:
-            fmt_data["versions"] = []
-
-        if (build_size := data.get("build_size")) is not None:
-            build_dimensions = parse_dimensions(build_size)
-            fmt_data["width"], fmt_data["height"], fmt_data["depth"] = build_dimensions
-
-        if (door_size := data.get("door_size")) is not None:
-            door_dimensions = parse_dimensions(door_size)
-            fmt_data["door_width"], fmt_data["door_height"], fmt_data["door_depth"] = door_dimensions
-
-        if (pattern := data.get("pattern")) is not None:
-            fmt_data["door_type"] = pattern.split(", ")
-        fmt_data["door_orientation_type"] = data.get("door_type")
-
-        if (wp_res := data.get("wiring_placement_restrictions")) is not None:
-            fmt_data["wiring_placement_restrictions"] = wp_res.split(", ")
-        else:
-            fmt_data["wiring_placement_restrictions"] = []
-
-        if (co_res := data.get("component_restrictions")) is not None:
-            fmt_data["component_restrictions"] = co_res.split(", ")
-        else:
-            fmt_data["component_restrictions"] = []
-        misc_restrictions = [data.get("locationality"), data.get("directionality")]
-        fmt_data["miscellaneous_restrictions"] = [x for x in misc_restrictions if x is not None]
-
-        fmt_data["normal_closing_time"] = data.get("normal_closing_time")
-        fmt_data["normal_opening_time"] = data.get("normal_opening_time")
-        # fmt_data['visible_closing_time']
-        # fmt_data['visible_opening_time']
-
-        information_dict = (
-            {"user": data.get("information_about_build")} if data.get("information_about_build") is not None else None
-        )
-        fmt_data["information"] = information_dict
-        if (ign := data.get("in_game_name_of_creator")) is not None:
-            fmt_data["creators_ign"] = ign.split(", ")
-        else:
-            fmt_data["creators_ign"] = []
-
-        fmt_data["image_urls"] = data.get("link_to_image")
-        fmt_data["video_urls"] = data.get("link_to_youtube_video")
-        fmt_data["world_download_urls"] = data.get("link_to_world_download")
-
-        fmt_data["server_ip"] = data.get("server_ip")
-        fmt_data["coordinates"] = data.get("coordinates")
-        fmt_data["command"] = data.get("command_to_get_to_build")
-
-        fmt_data["submitter_id"] = ctx.author.id
-        fmt_data["completion_time"] = data.get("date_of_creation")
-        # fmt_data['edited_time'] = get_current_utc()
-
-        fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
-        return fmt_data
 
     async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
         """Updates a post according to the information given by the build."""
