@@ -7,14 +7,13 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 import os
 from typing import Literal
 
-from async_lru import alru_cache
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
-from database.utils import get_version_string
+from database.utils import get_version_string, filter_versions
 
 
 class DatabaseManager:
@@ -85,21 +84,15 @@ class DatabaseManager:
 
     @classmethod
     def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
-        """
-        Returns the newest version
-
-        Examples:
-        >>> DatabaseManager.get_newest_version(edition="Java")
-        '1.20.5'
-        """
+        """Returns the newest version, formatted like '1.17.1'."""
         versions = cls.get_versions_list(edition=edition)[0]
         return get_version_string(versions, no_edition=True)
 
 
 async def main():
     await DatabaseManager.setup()
-    print(await DatabaseManager.fetch_versions_list(edition="Java"))
-
+    spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
+    print(await filter_versions(spec_string))
 
 if __name__ == "__main__":
     import asyncio
