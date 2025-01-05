@@ -643,9 +643,9 @@ def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> di
 
     fmt_data["record_category"] = data.get("record_category")
     if (works_in := data.get("works_in")) is not None:
-        fmt_data["functional_versions"] = works_in.split(", ")
+        fmt_data["versions"] = works_in.split(", ")
     else:
-        fmt_data["functional_versions"] = []
+        fmt_data["versions"] = []
 
     if (build_size := data.get("build_size")) is not None:
         build_dimensions = parse_dimensions(build_size)

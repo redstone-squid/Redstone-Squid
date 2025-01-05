@@ -59,7 +59,7 @@ class Build:
     submission_status: Status | None = None
     category: Category | None = None
     record_category: RecordCategory | None = None
-    functional_versions: list[str] | None = None
+    versions: list[str] | None = None
 
     width: int | None = None
     height: int | None = None
@@ -181,7 +181,7 @@ class Build:
         build.creators_ign = [creator["ign"] for creator in creators]
 
         versions: list[VersionRecord] = data.get("versions", [])
-        build.functional_versions = [get_version_string(v) for v in versions]
+        build.versions = [get_version_string(v) for v in versions]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
         build.image_urls = [link["url"] for link in links if link["media_type"] == "image"]
@@ -520,7 +520,7 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("functional_versions", DatabaseManager.get_newest_version(edition="Java"))
+        functional_versions = data.get("versions", DatabaseManager.get_newest_version(edition="Java"))
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
@@ -641,9 +641,9 @@ class Build:
         if self.component_restrictions and self.component_restrictions[0] != "None":
             desc.append(", ".join(self.component_restrictions))
 
-        if self.functional_versions is None:
+        if self.versions is None:
             desc.append("Unknown version compatibility.")
-        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
+        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.versions:
             pass
             # desc.append("**Broken** in current (Java) version.")
 
@@ -667,7 +667,7 @@ class Build:
 
         The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
         """
-        if not self.functional_versions:
+        if not self.versions:
             return ""
 
         versions: list[str] = []
@@ -678,7 +678,7 @@ class Build:
         end_version: VersionRecord | None = None
 
         for version in DatabaseManager.get_versions_list(edition="Java"):
-            if get_version_string(version, no_edition=True) in self.functional_versions:
+            if get_version_string(version, no_edition=True) in self.versions:
                 if not linking:
                     linking = True
                     start_version = version
