@@ -674,21 +674,22 @@ class Build:
 
         linking = False
         """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2 - 1.18)."""
-        start_version: VersionRecord | None = None
-        end_version: VersionRecord | None = None
+        start_version: str | None = None
+        end_version: str | None = None
 
         for version in DatabaseManager.get_versions_list(edition="Java"):
-            if get_version_string(version, no_edition=True) in self.versions:
+            version_str = get_version_string(version)
+            if version_str in self.versions:
                 if not linking:
                     linking = True
-                    start_version = version
-                end_version = version
+                    start_version = version_str
+                end_version = version_str
 
             elif linking:  # Current looped version is not functional, but the previous one was
                 assert start_version is not None
                 assert end_version is not None
                 versions.append(
-                    get_version_string(start_version)
+                    start_version
                     if start_version == end_version
                     else f"{start_version} - {end_version}"
                 )
