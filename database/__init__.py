@@ -54,23 +54,23 @@ class DatabaseManager:
 
     @classmethod
     async def fetch_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
-        """Returns a list of versions from the database, sorted from newest to oldest.
+        """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
         query = cls.__new__(cls).table("versions").select("*")
         versions_response: APIResponse[VersionRecord] = (
             await query.eq("edition", edition)
-            .order("major_version", desc=True)
-            .order("minor_version", desc=True)
-            .order("patch_number", desc=True)
+            .order("major_version")
+            .order("minor_version")
+            .order("patch_number")
             .execute()
         )
         return versions_response.data
 
     @classmethod
     def get_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
-        """Returns a list of all minecraft versions"""
+        """Returns a list of all minecraft versions, sorted from oldest to newest"""
         versions = cls.version_cache.get(edition)
         if versions is None:
             raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
@@ -80,12 +80,12 @@ class DatabaseManager:
     async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await cls.fetch_versions_list(edition=edition)
-        return get_version_string(versions[0], no_edition=True)
+        return get_version_string(versions[-1], no_edition=True)
 
     @classmethod
     def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version, formatted like '1.17.1'."""
-        versions = cls.get_versions_list(edition=edition)[0]
+        versions = cls.get_versions_list(edition=edition)[-1]
         return get_version_string(versions, no_edition=True)
 
 

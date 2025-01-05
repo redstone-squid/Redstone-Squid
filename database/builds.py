@@ -569,7 +569,7 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("versions", DatabaseManager.get_versions_list(edition="Java")[0])
+        functional_versions = data.get("versions", DatabaseManager.get_versions_list(edition="Java")[-1])
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
