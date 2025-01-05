@@ -12,7 +12,7 @@ from typing import Literal, Any, cast, TypeVar
 import discord
 from discord.ext.commands import Bot
 from discord.utils import escape_markdown
-from postgrest.base_request_builder import APIResponse
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
 from bot._types import GuildMessageable
@@ -569,14 +569,13 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("versions", DatabaseManager.get_versions_list(edition="Java")[-1])
+        functional_versions = data.get("versions", DatabaseManager.get_newest_version(edition="Java"))
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
-        response = (
+        response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
             await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
-        response = cast(APIResponse[QuantifiedVersionRecord], response)
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
         if build_versions_data:

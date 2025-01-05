@@ -80,13 +80,13 @@ class DatabaseManager:
     async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await cls.fetch_versions_list(edition=edition)
-        return get_version_string(versions[-1], no_edition=True)
+        return get_version_string(versions[-1])
 
     @classmethod
     def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version, formatted like '1.17.1'."""
-        versions = cls.get_versions_list(edition=edition)[-1]
-        return get_version_string(versions, no_edition=True)
+        versions = cls.get_versions_list(edition=edition)
+        return get_version_string(versions[-1])
 
     @classmethod
     def filter_versions(cls, spec: str) -> list[str]:
