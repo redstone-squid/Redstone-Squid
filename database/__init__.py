@@ -55,7 +55,7 @@ class DatabaseManager:
 
     @classmethod
     async def fetch_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
-        """Returns a list of versions from the database, sorted from oldest to newest.
+        """Returns a list of versions from the database, sorted from newest to oldest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
         await cls.setup()
@@ -84,12 +84,12 @@ class DatabaseManager:
     async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
         """Returns the newest version from the database. This method is cached."""
         versions = await cls.fetch_versions_list(edition=edition)
-        return versions[-1]
+        return versions[0]
 
     @classmethod
     def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
         """Returns the newest version from the cache, or None if the database is not set up."""
-        return cls.get_versions_list(edition=edition)[-1]
+        return cls.get_versions_list(edition=edition)[0]
 
 
 async def main():
