@@ -608,7 +608,7 @@ class Build:
             title += f"{self.record_category} "
 
         # Door dimensions
-        if self.door_width and self.door_height and self.door_depth:
+        if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
             title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
         elif self.door_width and self.door_height:
             title += f"{self.door_width}x{self.door_height} "
