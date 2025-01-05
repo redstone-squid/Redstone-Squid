@@ -1,4 +1,5 @@
 """A vote session that represents a change to something."""
+
 from __future__ import annotations
 
 import inspect
@@ -77,7 +78,9 @@ class AbstractVoteSession(ABC):
         self.is_closed = False
         self.messages = messages
         if len(messages) >= 10:
-            raise ValueError("Found a vote session with more than 10 messages, we need to change the update_message logic.")
+            raise ValueError(
+                "Found a vote session with more than 10 messages, we need to change the update_message logic."
+            )
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
@@ -87,7 +90,9 @@ class AbstractVoteSession(ABC):
     @abstractmethod
     async def _async_init(self) -> None:
         """Perform async initialization. Called by create()."""
-        self.id = await track_vote_session(self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
+        self.id = await track_vote_session(
+            self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+        )
         await self.update_messages()
 
     @classmethod
@@ -116,7 +121,7 @@ class AbstractVoteSession(ABC):
         init_signature = inspect.Signature(parameters=init_params)
 
         # Retrieve the 'create' method
-        create_method = getattr(cls, 'create', None)
+        create_method = getattr(cls, "create", None)
         if create_method is None:
             raise TypeError(f"Class '{cls.__name__}' must implement a 'create' method.")
 

@@ -17,7 +17,15 @@ if TYPE_CHECKING:
     pass
 
 
-async def track_vote_session(messages: list[discord.Message], author_id: int, kind: VoteKind, pass_threshold: int, fail_threshold: int, *, build_id: int | None = None) -> int:
+async def track_vote_session(
+    messages: list[discord.Message],
+    author_id: int,
+    kind: VoteKind,
+    pass_threshold: int,
+    fail_threshold: int,
+    *,
+    build_id: int | None = None,
+) -> int:
     """Track a vote session in the database.
 
     Args:

@@ -50,7 +50,12 @@ class BuildVoteSession(AbstractVoteSession):
     kind = "build"
 
     def __init__(
-        self, messages: list[discord.Message], author_id: int, build: Build, pass_threshold: int = 3, fail_threshold: int = -3
+        self,
+        messages: list[discord.Message],
+        author_id: int,
+        build: Build,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
     ):
         """
         Initialize the vote session.
@@ -68,7 +73,9 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
-        self.id = await track_vote_session(self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id)
+        self.id = await track_vote_session(
+            self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id
+        )
         await self.update_messages()
 
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self.messages]
@@ -85,7 +92,12 @@ class BuildVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "BuildVoteSession | None":
         db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await db.table("vote_sessions").select("*, messages(*), votes(*), build_vote_sessions(*)").eq("id", vote_session_id).eq("kind", cls.kind).maybe_single().execute()
+            await db.table("vote_sessions")
+            .select("*, messages(*), votes(*), build_vote_sessions(*)")
+            .eq("id", vote_session_id)
+            .eq("kind", cls.kind)
+            .maybe_single()
+            .execute()
         )
         if vote_session_response is None:
             return None
@@ -97,7 +109,9 @@ class BuildVoteSession(AbstractVoteSession):
         build_id = vote_session_record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
         if build is None:
-            raise ValueError(f"The message record for this vote session is associated with a non-existent build id: {build_id}.")
+            raise ValueError(
+                f"The message record for this vote session is associated with a non-existent build id: {build_id}."
+            )
 
         self = cls.__new__(cls)
         self._allow_init = True
@@ -121,7 +135,6 @@ class BuildVoteSession(AbstractVoteSession):
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "BuildVoteSession":
-
         self = await super().create(messages, author_id, build, pass_threshold, fail_threshold)
         assert isinstance(self, BuildVoteSession)
         return self
@@ -158,7 +171,13 @@ class BuildVoteSession(AbstractVoteSession):
     async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: discord.Client) -> list["BuildVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
-        records = (await db.table("vote_sessions").select("*, messages(*), votes(*), build_vote_sessions(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
+        records = (
+            await db.table("vote_sessions")
+            .select("*, messages(*), votes(*), build_vote_sessions(*)")
+            .eq("status", "open")
+            .eq("kind", cls.kind)
+            .execute()
+        ).data
 
         async def _get_session(record: dict[str, Any]) -> "BuildVoteSession":
             messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in record["messages"]])
