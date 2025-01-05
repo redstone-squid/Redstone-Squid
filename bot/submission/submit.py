@@ -704,8 +704,8 @@ class SubmissionsCog(Cog, name="Submissions"):
         build.category = Category.DOOR
         build.submitter_id = message.author.id
         # await build.save()
-        await bot_channel.send(repr(build))
-        await bot_channel.send(embed=build.generate_embed())
+        await bot_channel.send(repr(build), allowed_mentions=discord.AllowedMentions.none())
+        await bot_channel.send(embed=build.generate_embed(), allowed_mentions=discord.AllowedMentions.none())
 
 
 async def setup(bot: "RedstoneSquid"):
