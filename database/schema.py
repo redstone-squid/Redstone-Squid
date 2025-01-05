@@ -36,7 +36,7 @@ class BuildRecord(TypedDict):
     completion_time: str | None  # Given by user, not parsable as a datetime
     category: Category
     server_info: dict[str, Any] | None  # JSON
-    submitter_id: int | None  # TODO: fix db and remove None
+    submitter_id: int
 
 
 class MessageRecord(TypedDict):
