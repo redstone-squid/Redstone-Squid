@@ -56,7 +56,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         self.id = await track_vote_session(
-            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
         await track_delete_log_vote_session(self.id, self.target_message)
         await self.update_messages()
@@ -98,7 +98,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def create(
         cls,
         bot: discord.Client,
-        messages: list[discord.Message],
+        messages: list[discord.Message] | list[int],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int = 3,
