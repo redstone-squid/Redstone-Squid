@@ -311,8 +311,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
-            # stupid workaround to get async code to work with flags
-            default=get_version_string(DatabaseManager.get_newest_version(edition="Java")),  # type: ignore
+            default=get_version_string(DatabaseManager.get_newest_version(edition="Java")),
             description='The versions the build works in. Default to newest version. /versions for full list.'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
@@ -387,9 +386,9 @@ class SubmissionsCog(Cog, name="Submissions"):
                 raise ValueError(f"Unsupported content type: {attachment.content_type}")
 
             url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
-            if attachment.content_type.startswith("image"):  # pyright: ignore [reportOptionalMemberAccess]
+            if attachment.content_type.startswith("image"):
                 build.image_urls.append(url)
-            elif attachment.content_type.startswith("video"):  # pyright: ignore [reportOptionalMemberAccess]
+            elif attachment.content_type.startswith("video"):
                 build.video_urls.append(url)
 
         view = BuildSubmissionForm(build)
