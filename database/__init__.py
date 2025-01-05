@@ -92,6 +92,20 @@ class DatabaseManager:
     def filter_versions(cls, spec: str) -> list[str]:
         """Return all versions that match the version specification."""
 
+        # See if the spec specifies no edition (default to Java), one edition, or both
+        bedrock = spec.find("Bedrock") != -1
+        java = spec.find("Java") != -1
+        if not bedrock and not java:
+            edition = "Java"  # Default to Java if no edition specified
+        elif bedrock and not java:
+            edition = "Bedrock"
+        elif not bedrock and java:
+            edition = "Java"
+        else:
+            raise ValueError("Cannot specify both Java and Bedrock in the version spec.")
+
+        spec = spec.replace("Java", "").replace("Bedrock", "").strip()
+
         def parse_version(version_str: str):
             major, minor, patch = version_str.split('.')
             return int(major), int(minor), int(patch)
@@ -146,7 +160,7 @@ class DatabaseManager:
                     # Optionally, handle malformed inputs or major-only specs
                     pass
 
-        return [f"{major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
+        return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
 
 
 async def main():
