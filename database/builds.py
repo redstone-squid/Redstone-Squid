@@ -355,7 +355,6 @@ class Build:
 
     def update_local(self, data: dict[Any, Any]) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
-        # FIXME: this does not work with nested data like self.information
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
