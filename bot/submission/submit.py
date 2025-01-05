@@ -340,7 +340,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            fmt_data = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
+            fmt_data = self.format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             build = Build.from_dict(fmt_data)
 
             # TODO: Stop hardcoding this
@@ -498,7 +498,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            update_values = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
+            update_values = self.format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
             submission.update_local(**update_values)
             preview_embed = submission.generate_embed()
 
@@ -518,6 +518,80 @@ class SubmissionsCog(Cog, name="Submissions"):
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
             else:
                 await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+
+    @staticmethod
+    def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
+        """Formats the submission data from what is passed in commands to something recognizable by Build."""
+        # Union of all the /submit and /edit command options
+        parsable_signatures = SubmissionCommandResponse.__annotations__.keys()
+        if not all(key in parsable_signatures for key in data):
+            unknown_keys = [key for key in data if key not in parsable_signatures]
+            raise ValueError(
+                f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?"
+            )
+
+        fmt_data: dict[str, Any] = dict()
+        fmt_data["id"] = data.get("submission_id")
+        # fmt_data['submission_status']
+
+        fmt_data["record_category"] = data.get("record_category")
+        if (works_in := data.get("works_in")) is not None:
+            fmt_data["versions"] = works_in.split(", ")
+        else:
+            fmt_data["versions"] = []
+
+        if (build_size := data.get("build_size")) is not None:
+            build_dimensions = parse_dimensions(build_size)
+            fmt_data["width"], fmt_data["height"], fmt_data["depth"] = build_dimensions
+
+        if (door_size := data.get("door_size")) is not None:
+            door_dimensions = parse_dimensions(door_size)
+            fmt_data["door_width"], fmt_data["door_height"], fmt_data["door_depth"] = door_dimensions
+
+        if (pattern := data.get("pattern")) is not None:
+            fmt_data["door_type"] = pattern.split(", ")
+        fmt_data["door_orientation_type"] = data.get("door_type")
+
+        if (wp_res := data.get("wiring_placement_restrictions")) is not None:
+            fmt_data["wiring_placement_restrictions"] = wp_res.split(", ")
+        else:
+            fmt_data["wiring_placement_restrictions"] = []
+
+        if (co_res := data.get("component_restrictions")) is not None:
+            fmt_data["component_restrictions"] = co_res.split(", ")
+        else:
+            fmt_data["component_restrictions"] = []
+        misc_restrictions = [data.get("locationality"), data.get("directionality")]
+        fmt_data["miscellaneous_restrictions"] = [x for x in misc_restrictions if x is not None]
+
+        fmt_data["normal_closing_time"] = data.get("normal_closing_time")
+        fmt_data["normal_opening_time"] = data.get("normal_opening_time")
+        # fmt_data['visible_closing_time']
+        # fmt_data['visible_opening_time']
+
+        information_dict = (
+            {"user": data.get("information_about_build")} if data.get("information_about_build") is not None else None
+        )
+        fmt_data["information"] = information_dict
+        if (ign := data.get("in_game_name_of_creator")) is not None:
+            fmt_data["creators_ign"] = ign.split(", ")
+        else:
+            fmt_data["creators_ign"] = []
+
+        fmt_data["image_urls"] = data.get("link_to_image")
+        fmt_data["video_urls"] = data.get("link_to_youtube_video")
+        fmt_data["world_download_urls"] = data.get("link_to_world_download")
+
+        fmt_data["server_ip"] = data.get("server_ip")
+        fmt_data["coordinates"] = data.get("coordinates")
+        fmt_data["command"] = data.get("command_to_get_to_build")
+
+        fmt_data["submitter_id"] = ctx.author.id
+        fmt_data["completion_time"] = data.get("date_of_creation")
+        # fmt_data['edited_time'] = get_current_utc()
+
+        fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
+        return fmt_data
 
     async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
         """Updates a post according to the information given by the build."""
@@ -624,80 +698,6 @@ class SubmissionsCog(Cog, name="Submissions"):
         # await build.save()
         await bot_channel.send(repr(build))
         await bot_channel.send(embed=build.generate_embed())
-
-
-def format_submission_input(ctx: Context, data: SubmissionCommandResponse) -> dict[str, Any]:
-    """Formats the submission data from what is passed in commands to something recognizable by Build."""
-    # Union of all the /submit and /edit command options
-    parsable_signatures = SubmissionCommandResponse.__annotations__.keys()
-    if not all(key in parsable_signatures for key in data):
-        unknown_keys = [key for key in data if key not in parsable_signatures]
-        raise ValueError(
-            f"found unknown keys {unknown_keys} in data, did the command signature of /submit or /edit change?"
-        )
-
-    fmt_data: dict[str, Any] = dict()
-    fmt_data["id"] = data.get("submission_id")
-    # fmt_data['submission_status']
-
-    fmt_data["record_category"] = data.get("record_category")
-    if (works_in := data.get("works_in")) is not None:
-        fmt_data["versions"] = works_in.split(", ")
-    else:
-        fmt_data["versions"] = []
-
-    if (build_size := data.get("build_size")) is not None:
-        build_dimensions = parse_dimensions(build_size)
-        fmt_data["width"], fmt_data["height"], fmt_data["depth"] = build_dimensions
-
-    if (door_size := data.get("door_size")) is not None:
-        door_dimensions = parse_dimensions(door_size)
-        fmt_data["door_width"], fmt_data["door_height"], fmt_data["door_depth"] = door_dimensions
-
-    if (pattern := data.get("pattern")) is not None:
-        fmt_data["door_type"] = pattern.split(", ")
-    fmt_data["door_orientation_type"] = data.get("door_type")
-
-    if (wp_res := data.get("wiring_placement_restrictions")) is not None:
-        fmt_data["wiring_placement_restrictions"] = wp_res.split(", ")
-    else:
-        fmt_data["wiring_placement_restrictions"] = []
-
-    if (co_res := data.get("component_restrictions")) is not None:
-        fmt_data["component_restrictions"] = co_res.split(", ")
-    else:
-        fmt_data["component_restrictions"] = []
-    misc_restrictions = [data.get("locationality"), data.get("directionality")]
-    fmt_data["miscellaneous_restrictions"] = [x for x in misc_restrictions if x is not None]
-
-    fmt_data["normal_closing_time"] = data.get("normal_closing_time")
-    fmt_data["normal_opening_time"] = data.get("normal_opening_time")
-    # fmt_data['visible_closing_time']
-    # fmt_data['visible_opening_time']
-
-    information_dict = (
-        {"user": data.get("information_about_build")} if data.get("information_about_build") is not None else None
-    )
-    fmt_data["information"] = information_dict
-    if (ign := data.get("in_game_name_of_creator")) is not None:
-        fmt_data["creators_ign"] = ign.split(", ")
-    else:
-        fmt_data["creators_ign"] = []
-
-    fmt_data["image_urls"] = data.get("link_to_image")
-    fmt_data["video_urls"] = data.get("link_to_youtube_video")
-    fmt_data["world_download_urls"] = data.get("link_to_world_download")
-
-    fmt_data["server_ip"] = data.get("server_ip")
-    fmt_data["coordinates"] = data.get("coordinates")
-    fmt_data["command"] = data.get("command_to_get_to_build")
-
-    fmt_data["submitter_id"] = ctx.author.id
-    fmt_data["completion_time"] = data.get("date_of_creation")
-    # fmt_data['edited_time'] = get_current_utc()
-
-    fmt_data = {k: v for k, v in fmt_data.items() if v is not None}
-    return fmt_data
 
 
 async def setup(bot: "RedstoneSquid"):
