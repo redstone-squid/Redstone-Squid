@@ -237,7 +237,7 @@ async def parse_build(message: str) -> Build | None:
     build.creators_ign = variables["creators"].split(", ")
     build.functional_versions = variables["version"].split(", ") if variables["version"] else [get_version_string(DatabaseManager.get_newest_version(edition="Java"))]
     build.image_urls = variables["image"].split(", ") if variables["image"] else []
-    build.information = {"user": variables["author_note"]}
+    build.information["user"] = variables["author_note"].replace("\\n", "\n")
     return build
 
 
