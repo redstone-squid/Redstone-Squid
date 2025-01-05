@@ -14,6 +14,7 @@ from postgrest.base_request_builder import APIResponse
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
 from database.schema import VersionRecord
+from database.utils import get_version_string
 
 
 class DatabaseManager:
@@ -81,15 +82,22 @@ class DatabaseManager:
 
     @classmethod
     @alru_cache(maxsize=2)
-    async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
+    async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await cls.fetch_versions_list(edition=edition)
-        return versions[0]
+        return get_version_string(versions[0], no_edition=True)
 
     @classmethod
-    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
-        """Returns the newest version from the cache, or None if the database is not set up."""
-        return cls.get_versions_list(edition=edition)[0]
+    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
+        """
+        Returns the newest version from the cache, or None if the database is not set up.
+
+        Examples:
+        >>> DatabaseManager.get_newest_version(edition="Java")
+        '1.20.5'
+        """
+        versions = cls.get_versions_list(edition=edition)[0]
+        return get_version_string(versions, no_edition=True)
 
 
 async def main():
