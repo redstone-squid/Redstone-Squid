@@ -43,7 +43,6 @@ async def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
             return response_text
 
 
-
 def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:
     """Returns a formatted version string."""
     if no_edition:

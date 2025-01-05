@@ -663,7 +663,7 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    def get_versions_string(self) -> str:
+    def get_version_spec(self) -> str:
         """Returns a string representation of the versions the build is functional in.
 
         The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
@@ -732,7 +732,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = self.get_versions_string()
+        fields["Versions"] = self.get_version_spec()
 
         if self.server_ip:
             fields["Server"] = self.server_ip
