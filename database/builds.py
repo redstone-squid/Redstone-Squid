@@ -641,8 +641,7 @@ class Build:
             desc.append(", ".join(self.component_restrictions))
 
         if DatabaseManager.get_newest_version(edition="Java") not in self.versions:
-            pass
-            # desc.append("**Broken** in current (Java) version.")
+            desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
             desc.append("**Locational**.")
