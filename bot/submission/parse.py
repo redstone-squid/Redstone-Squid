@@ -162,7 +162,7 @@ async def parse_build(message: str) -> Build | None:
     content = match.group(1).strip()
 
     # Step 2: Split content into lines and parse key-value pairs
-    variables: dict[str, str] = {}
+    variables: dict[str, str | None] = {}
     for line in content.split('\n'):
         # Skip empty lines
         if not line.strip():
@@ -175,7 +175,7 @@ async def parse_build(message: str) -> Build | None:
         key = key.strip()
         value = value.strip()
         if value.lower() in ["none", "null", "unknown"]:
-            value = ""
+            value = None
 
         variables[key] = value
 
@@ -208,24 +208,28 @@ async def parse_build(message: str) -> Build | None:
 
     build = Build()
     build.record_category = variables["record_category"]
-    comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
-    build.component_restrictions = comps[0]
-    build.information["unknown_restrictions"] = {"component_restrictions": comps[1]}
-    wirings = await validate_restrictions(variables["wiring_placement_restrictions"].split(", "), "wiring-placement")
-    build.wiring_placement_restrictions = wirings[0]
-    build.information["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
-    miscs = await validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
-    build.miscellaneous_restrictions = miscs[0]
-    build.information["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
-    # build.door_type = await validate_door_types(variables["piston_door_type"].split(", "))
-    door_types = await validate_door_types(variables["piston_door_type"].split(", "))
-    build.door_type = door_types[0]
-    build.information["unknown_patterns"] = door_types[1]
+    build.information["unknown_restrictions"] = {}
+    if variables["component_restriction"] is not None:
+        comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
+        build.component_restrictions = comps[0]
+        build.information["unknown_restrictions"]["component_restrictions"] = comps[1]
+    if variables["wiring_placement_restrictions"] is not None:
+        wirings = await validate_restrictions(variables["wiring_placement_restrictions"].split(", "), "wiring-placement")
+        build.wiring_placement_restrictions = wirings[0]
+        build.information["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
+    if variables["miscellaneous_restrictions"] is not None:
+        miscs = await validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
+        build.miscellaneous_restrictions = miscs[0]
+        build.information["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
+    if variables["piston_door_type"] is not None:
+        door_types = await validate_door_types(variables["piston_door_type"].split(", "))
+        build.door_type = door_types[0]
+        build.information["unknown_patterns"] = door_types[1]
     orientation = variables["door_orientation"]
     if orientation == "Normal":
         build.door_orientation_type = "Door"
     else:
-        build.door_orientation_type = orientation
+        build.door_orientation_type = orientation or "Door"
     build.door_width = int(variables["door_width"]) if variables["door_width"] else None
     build.door_height = int(variables["door_height"]) if variables["door_height"] else None
     build.door_depth = int(variables["door_depth"]) if variables["door_depth"] else None
@@ -234,10 +238,11 @@ async def parse_build(message: str) -> Build | None:
     build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
     build.normal_opening_time = parse_time_string(variables["opening_time"])
     build.normal_closing_time = parse_time_string(variables["closing_time"])
-    build.creators_ign = variables["creators"].split(", ")
+    build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
     build.versions = variables["version"].split(", ") if variables["version"] else [DatabaseManager.get_newest_version(edition="Java")]
     build.image_urls = variables["image"].split(", ") if variables["image"] else []
-    build.information["user"] = variables["author_note"].replace("\\n", "\n")
+    if variables["author_note"] is not None:
+        build.information["user"] = variables["author_note"].replace("\\n", "\n")
     return build
 
 
