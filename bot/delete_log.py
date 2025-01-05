@@ -53,7 +53,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
-        self.id = await track_vote_session(self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold)
+        self.id = await track_vote_session(
+            self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+        )
         await track_delete_log_vote_session(self.id, self.target_message)
         await self.update_messages()
 
@@ -62,7 +64,12 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "DeleteLogVoteSession | None":
         db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await db.table("vote_sessions").select("*, messages(*), votes(*), delete_log_vote_sessions(*)").eq("id", vote_session_id).eq("kind", cls.kind).maybe_single().execute()
+            await db.table("vote_sessions")
+            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
+            .eq("id", vote_session_id)
+            .eq("kind", cls.kind)
+            .maybe_single()
+            .execute()
         )
         if vote_session_response is None:
             return None
@@ -145,10 +152,18 @@ class DeleteLogVoteSession(AbstractVoteSession):
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(cls: type["DeleteLogVoteSession"], bot: discord.Client) -> list["DeleteLogVoteSession"]:
+    async def get_open_vote_sessions(
+        cls: type["DeleteLogVoteSession"], bot: discord.Client
+    ) -> list["DeleteLogVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
-        records = (await db.table("vote_sessions").select("*, messages(*), votes(*), delete_log_vote_sessions(*)").eq("status", "open").eq("kind", cls.kind).execute()).data
+        records = (
+            await db.table("vote_sessions")
+            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
+            .eq("status", "open")
+            .eq("kind", cls.kind)
+            .execute()
+        ).data
 
         async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession":
             messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in record["messages"]])
@@ -194,7 +209,9 @@ class DeleteLogCog(Cog, name="Vote"):
             await message.add_reaction(APPROVE_EMOJI)
             await asyncio.sleep(1)
             await message.add_reaction(DENY_EMOJI)
-            vote_session = await DeleteLogVoteSession.create([message], author_id=ctx.author.id, target_message=target_message)
+            vote_session = await DeleteLogVoteSession.create(
+                [message], author_id=ctx.author.id, target_message=target_message
+            )
             self.open_vote_sessions[message.id] = vote_session
 
     @Cog.listener("on_raw_reaction_add")

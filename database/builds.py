@@ -645,9 +645,7 @@ class Build:
 
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
-        elif (
-                get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions
-        ):
+        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:

@@ -23,8 +23,13 @@ from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
-from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES, MessageRecord, \
-    DeleteLogVoteSessionRecord
+from database.schema import (
+    DoorOrientationName,
+    RecordCategory,
+    DOOR_ORIENTATION_NAMES,
+    MessageRecord,
+    DeleteLogVoteSessionRecord,
+)
 from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
@@ -481,8 +486,8 @@ def check_is_trusted():
 
 
 @overload
-async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message:
-    ...
+async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message: ...
+
 
 async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
     """Fetch discord objects from database records."""
