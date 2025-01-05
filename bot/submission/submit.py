@@ -703,8 +703,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         build.submission_status = Status.PENDING
         build.category = Category.DOOR
         build.submitter_id = message.author.id
-        # await build.save()
-        await bot_channel.send(repr(build), allowed_mentions=discord.AllowedMentions.none())
+        build.original_message_id = message.id
+        build.original_message = message.clean_content
+        await build.save()
         await bot_channel.send(embed=build.generate_embed(), allowed_mentions=discord.AllowedMentions.none())
 
 

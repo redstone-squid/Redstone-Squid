@@ -99,6 +99,9 @@ class Build:
     # TODO: save the submitted time too
     completion_time: str | None = None
     edited_time: str | None = None
+    original_message_id: int | None = None
+    original_message: str | None = None
+    ai_generated: bool | None = None
 
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
@@ -182,6 +185,7 @@ class Build:
         creators: list[dict[str, Any]] = data.get("users", [])
         build.creators_ign = [creator["ign"] for creator in creators]
 
+        build.version_spec = data["version_spec"]
         versions: list[VersionRecord] = data.get("versions", [])
         build.versions = [get_version_string(v) for v in versions]
 
@@ -199,6 +203,9 @@ class Build:
         build.submitter_id = data["submitter_id"]
         build.completion_time = data["completion_time"]
         build.edited_time = data["edited_time"]
+        build.original_message_id = data["original_message_id"]
+        build.original_message = data["original_message"]
+        build.ai_generated = data["ai_generated"]
 
         return build
 

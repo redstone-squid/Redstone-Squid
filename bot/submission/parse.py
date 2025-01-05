@@ -207,6 +207,7 @@ async def parse_build(message: str) -> Build | None:
         return
 
     build = Build()
+    build.ai_generated = True
     build.record_category = variables["record_category"]
     build.information["unknown_restrictions"] = {}
     if variables["component_restriction"] is not None:
@@ -239,7 +240,8 @@ async def parse_build(message: str) -> Build | None:
     build.normal_opening_time = parse_time_string(variables["opening_time"])
     build.normal_closing_time = parse_time_string(variables["closing_time"])
     build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-    build.versions = variables["version"].split(", ") if variables["version"] else [DatabaseManager.get_newest_version(edition="Java")]
+    build.version_spec = variables["version"] or DatabaseManager.get_newest_version(edition="Java")
+    build.versions = DatabaseManager.filter_versions(build.version_spec)
     build.image_urls = variables["image"].split(", ") if variables["image"] else []
     if variables["author_note"] is not None:
         build.information["user"] = variables["author_note"].replace("\\n", "\n")
