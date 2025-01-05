@@ -555,13 +555,13 @@ class Build:
     async def _update_build_creators_table(self, data: dict[str, Any]) -> None:
         """Updates the build_creators table with the given data."""
         db = DatabaseManager()
-        creator_ids = []
+        creator_ids: list[int] = []
         for creator_ign in data.get("creators_ign", []):
             response = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
             if response:
                 creator_ids.append(response.data["id"])
             else:
-                creator_id = add_user(ign=creator_ign)
+                creator_id = await add_user(ign=creator_ign)
                 creator_ids.append(creator_id)
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
