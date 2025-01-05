@@ -311,7 +311,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str = flag(
-            default=get_version_string(DatabaseManager.get_newest_version(edition="Java")),
+            default=DatabaseManager.get_newest_version(edition="Java"),
             description='The versions the build works in. Default to newest version. /versions for full list.'
         )
         wiring_placement_restrictions: str = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')

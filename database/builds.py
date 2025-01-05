@@ -60,6 +60,7 @@ class Build:
     category: Category | None = None
     record_category: RecordCategory | None = None
     versions: list[str] | None = None
+    version_spec: str | None = None
 
     width: int | None = None
     height: int | None = None
@@ -520,7 +521,7 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("versions", DatabaseManager.get_newest_version(edition="Java"))
+        functional_versions = data.get("versions", DatabaseManager.get_versions_list(edition="Java")[0])
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
@@ -643,7 +644,7 @@ class Build:
 
         if self.versions is None:
             desc.append("Unknown version compatibility.")
-        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.versions:
+        elif DatabaseManager.get_newest_version(edition="Java") not in self.versions:
             pass
             # desc.append("**Broken** in current (Java) version.")
 
