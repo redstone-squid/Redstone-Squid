@@ -74,7 +74,7 @@ class DatabaseManager:
 
     @classmethod
     def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
-        """Returns a list of all minecraft versions, or None if the database is not set up."""
+        """Returns a list of all minecraft versions"""
         versions = cls.version_cache.get(edition)
         if versions is None:
             raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
@@ -90,7 +90,7 @@ class DatabaseManager:
     @classmethod
     def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
         """
-        Returns the newest version from the cache, or None if the database is not set up.
+        Returns the newest version
 
         Examples:
         >>> DatabaseManager.get_newest_version(edition="Java")
