@@ -60,7 +60,7 @@ class Build:
     submission_status: Status | None = None
     category: Category | None = None
     record_category: RecordCategory | None = None
-    versions: list[str] | None = None
+    versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
     width: int | None = None
@@ -71,7 +71,7 @@ class Build:
     door_height: int | None = None
     door_depth: int | None = None
 
-    door_type: list[str] | None = None
+    door_type: list[str] = field(default_factory=list)
     door_orientation_type: DoorOrientationName | None = None
 
     wiring_placement_restrictions: list[str] = field(default_factory=list)
@@ -622,10 +622,9 @@ class Build:
             title += f"{restriction} "
 
         # Pattern
-        if self.door_type is not None:
-            for pattern in self.door_type:
-                if pattern != "Regular":
-                    title += f"{pattern} "
+        for pattern in self.door_type:
+            if pattern != "Regular":
+                title += f"{pattern} "
 
         # Door type
         if self.door_orientation_type is None:
@@ -641,9 +640,7 @@ class Build:
         if self.component_restrictions and self.component_restrictions[0] != "None":
             desc.append(", ".join(self.component_restrictions))
 
-        if self.versions is None:
-            desc.append("Unknown version compatibility.")
-        elif DatabaseManager.get_newest_version(edition="Java") not in self.versions:
+        if DatabaseManager.get_newest_version(edition="Java") not in self.versions:
             pass
             # desc.append("**Broken** in current (Java) version.")
 
