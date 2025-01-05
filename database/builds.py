@@ -618,13 +618,22 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
+        # ```ansi
+        # [2;45mJust select[0m [2;34msome text[0m and [2;32mclick[0m on the [2;31m[1;31mcolor[0m[2;31m[0m or [4;2mformat that you like[0m![2;31m[0m
+        # ```
         for restriction in self.wiring_placement_restrictions:
             title += f"{restriction} "
+
+        for restriction in self.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
+            title += f"*{restriction}* "
 
         # Pattern
         for pattern in self.door_type:
             if pattern != "Regular":
                 title += f"{pattern} "
+
+        for pattern in self.information.get("unknown_patterns", []):
+            title += f"*{pattern}* "
 
         # Door type
         if self.door_orientation_type is None:
