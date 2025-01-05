@@ -192,7 +192,7 @@ class AbstractVoteSession(ABC):
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(*(utils.getch(self.bot, record) for record in messages_record.data if record["message_id"] not in cached_ids))
         self._messages.extend(new_messages)
-        assert len(self._messages) == len(self.message_ids)
+        assert len(self._messages) == len(self.message_ids), "There is some race condition in fetching messages where one message is fetched multiple times, need to investigate."  # TODO
         return self._messages
 
     @abstractmethod
@@ -231,13 +231,8 @@ class AbstractVoteSession(ABC):
 
         # Create tasks for the updates
         if self.id is not None:
-            update_task = asyncio.create_task(self.update_messages())
             db_task = asyncio.create_task(upsert_vote(self.id, user_id, weight))
-            self._tasks.add(update_task)
             self._tasks.add(db_task)
-
-            # Remove tasks when they complete
-            update_task.add_done_callback(self._tasks.discard)
             db_task.add_done_callback(self._tasks.discard)
 
     async def set_vote(self, user_id: int, weight: int | None) -> None:
@@ -254,4 +249,4 @@ class AbstractVoteSession(ABC):
             await self.close()
 
         if self.id is not None:
-            await asyncio.gather(self.update_messages(), upsert_vote(self.id, user_id, weight), return_exceptions=False)
+            await upsert_vote(self.id, user_id, weight)
