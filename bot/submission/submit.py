@@ -499,7 +499,7 @@ class SubmissionsCog(Cog, name="Submissions"):
                 return await sent_message.edit(embed=error_embed)
 
             update_values = format_submission_input(ctx, cast(SubmissionCommandResponse, dict(flags)))
-            submission.update_local(update_values)
+            submission.update_local(**update_values)
             preview_embed = submission.generate_embed()
 
             # Show a preview of the changes and ask for confirmation

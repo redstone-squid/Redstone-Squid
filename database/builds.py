@@ -353,7 +353,7 @@ class Build:
             raise ValueError("Build not found in the database.")
         return Build.from_json(response.data)
 
-    def update_local(self, data: dict[Any, Any]) -> None:
+    def update_local(self, **data: Any) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
         for key, value in data.items():
             if hasattr(self, key):
