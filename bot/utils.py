@@ -16,11 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
-from database import DatabaseManager
 from database.schema import (
-    DoorOrientationName,
-    RecordCategory,
-    DOOR_ORIENTATION_NAMES,
     MessageRecord,
     DeleteLogVoteSessionRecord,
 )
@@ -267,6 +263,7 @@ async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
 
 async def main():
     pass
+
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

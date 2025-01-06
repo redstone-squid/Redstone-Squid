@@ -107,7 +107,7 @@ class DatabaseManager:
         spec = spec.replace("Java", "").replace("Bedrock", "").strip()
 
         def parse_version(version_str: str):
-            major, minor, patch = version_str.split('.')
+            major, minor, patch = version_str.split(".")
             return int(major), int(minor), int(patch)
 
         all_versions = cls.get_versions_list("Java")
@@ -115,27 +115,27 @@ class DatabaseManager:
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+"
-        parts = [part.strip() for part in spec.split(',')]
+        parts = [part.strip() for part in spec.split(",")]
 
         valid_tuples: list[tuple[int, int, int]] = []
 
         for part in parts:
             # Case 1: range like "1.14 - 1.16.1"
-            if '-' in part:
-                start_str, end_str = [p.strip() for p in part.split('-')]
-                start_tuple = parse_version(start_str) if start_str.count('.') == 2 else parse_version(start_str + '.0')
-                end_tuple = parse_version(end_str) if end_str.count('.') == 2 else parse_version(end_str + '.0')
+            if "-" in part:
+                start_str, end_str = [p.strip() for p in part.split("-")]
+                start_tuple = parse_version(start_str) if start_str.count(".") == 2 else parse_version(start_str + ".0")
+                end_tuple = parse_version(end_str) if end_str.count(".") == 2 else parse_version(end_str + ".0")
 
                 for v_tuple in all_version_tuples:
                     if start_tuple <= v_tuple <= end_tuple:
                         valid_tuples.append(v_tuple)
 
             # Case 2: trailing plus like "1.19+"
-            elif part.endswith('+'):
+            elif part.endswith("+"):
                 base_str = part[:-1].strip()
                 # If user just wrote "1.19+", assume "1.19.0"
-                if base_str.count('.') == 1:
-                    base_str += '.0'
+                if base_str.count(".") == 1:
+                    base_str += ".0"
                 base_tuple = parse_version(base_str)
 
                 for v_tuple in all_version_tuples:
@@ -144,7 +144,7 @@ class DatabaseManager:
 
             # Case 3: exact version or prefix, e.g. "1.17" or "1.17.1"
             else:
-                subparts = part.split('.')
+                subparts = part.split(".")
                 # If only major.minor specified (like "1.17"), match all "1.17.x"
                 if len(subparts) == 2:
                     major, minor = map(int, subparts)
@@ -167,6 +167,7 @@ async def main():
     await DatabaseManager.setup()
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
     print(DatabaseManager.filter_versions(spec_string))
+
 
 if __name__ == "__main__":
     import asyncio

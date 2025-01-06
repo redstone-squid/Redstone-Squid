@@ -30,10 +30,10 @@ async def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
     userhash = os.getenv("CATBOX_USERHASH")
 
     data = aiohttp.FormData()
-    data.add_field('reqtype', 'fileupload')
+    data.add_field("reqtype", "fileupload")
     if userhash:
-        data.add_field('userhash', userhash)
-    data.add_field('fileToUpload', file, filename=filename, content_type=mimetype)
+        data.add_field("userhash", userhash)
+    data.add_field("fileToUpload", file, filename=filename, content_type=mimetype)
 
     async with aiohttp.ClientSession() as session:
         async with session.post(catbox_url, data=data) as response:

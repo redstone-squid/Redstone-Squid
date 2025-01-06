@@ -16,18 +16,17 @@ from discord.ext.commands import (
     flag,
 )
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from pydantic import ValidationError
 from typing_extensions import override
 
 from bot import utils
-from bot.submission.parse import remove_markdown, parse_build
+from bot.submission.parse import parse_build
 from bot.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
-from bot._types import SubmissionCommandResponse, GuildMessageable
+from bot._types import GuildMessageable
 from bot.utils import RunningMessage, parse_dimensions, is_owner_server
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
@@ -379,7 +378,9 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             build.image_urls = [flags.link_to_image] if flags.link_to_image is not None else []
             build.video_urls = [flags.link_to_youtube_video] if flags.link_to_youtube_video is not None else []
-            build.world_download_urls = [flags.link_to_world_download] if flags.link_to_world_download is not None else []
+            build.world_download_urls = (
+                [flags.link_to_world_download] if flags.link_to_world_download is not None else []
+            )
 
             build.submitter_id = ctx.author.id
             build.completion_time = flags.date_of_creation
@@ -686,7 +687,9 @@ class SubmissionsCog(Cog, name="Submissions"):
         if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
             return
 
-        build = await parse_build(f"{message.author.display_name} wrote the following message:\n{message.clean_content}")  # type: ignore
+        build = await parse_build(
+            f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
+        )  # type: ignore
         if build is None:
             return
 

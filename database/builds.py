@@ -701,18 +701,12 @@ class Build:
             elif linking:  # Current looped version is not functional, but the previous one was
                 assert start_version is not None
                 assert end_version is not None
-                versions.append(
-                    start_version
-                    if start_version == end_version
-                    else f"{start_version} - {end_version}"
-                )
+                versions.append(start_version if start_version == end_version else f"{start_version} - {end_version}")
                 linking = False
 
         if linking:  # If the last version is functional
             assert start_version is not None
-            versions.append(
-                f"{start_version}+"
-            )
+            versions.append(f"{start_version}+")
 
         return ", ".join(versions)
 
