@@ -293,7 +293,7 @@ class Build:
         target: ChannelPurpose
 
         match (self.submission_status, self.record_category):
-            case (Status.PENDING, None):
+            case (Status.PENDING, _):
                 target = "Vote"
             case (Status.DENIED, _):
                 raise ValueError("Denied submissions should not be posted.")
