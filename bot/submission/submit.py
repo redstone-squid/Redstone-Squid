@@ -1,7 +1,7 @@
 """A cog with commands to submit, view, confirm and deny submissions."""
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
-from typing import Literal, cast, TYPE_CHECKING, Any, final
+from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
 import asyncio
 
 import discord
@@ -440,12 +440,15 @@ class SubmissionsCog(Cog, name="Submissions"):
             raise ValueError("The build must be pending to post it.")
 
         em = build.generate_embed()
+        tasks: list[asyncio.Task[discord.Message]] = []
         for vote_channel in await build.get_channels_to_post_to(self.bot):
-            vote_message = await vote_channel.send(embed=em)
+            tasks.append(asyncio.create_task(vote_channel.send(embed=em)))
+        messages = await asyncio.gather(*tasks)
 
-            assert build.submitter_id is not None
-            session = await BuildVoteSession.create([vote_message], build.submitter_id, build)
-            self.open_vote_sessions[vote_message.id] = session
+        assert build.submitter_id is not None
+        session = await BuildVoteSession.create(messages, build.submitter_id, build)
+        for message in messages:
+            self.open_vote_sessions[message.id] = session
 
     # fmt: off
     class EditFlags(commands.FlagConverter):
