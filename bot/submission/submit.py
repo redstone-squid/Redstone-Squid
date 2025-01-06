@@ -684,7 +684,11 @@ class SubmissionsCog(Cog, name="Submissions"):
         if message.author.bot:
             return
 
-        if message.channel.id not in [726156829629087814, 667401499554611210, 536004554743873556]:
+        build_logs = 726156829629087814
+        record_logs = 667401499554611210
+        public_bot_usage = 536004554743873556
+
+        if message.channel.id not in [public_bot_usage, build_logs, record_logs]:
             return
 
         build = await parse_build(
@@ -702,14 +706,13 @@ class SubmissionsCog(Cog, name="Submissions"):
             elif attachment.content_type.startswith("video"):
                 build.video_urls.append(url)
 
-        bot_channel = cast(GuildMessageable, self.bot.get_channel(536004554743873556))
         build.submission_status = Status.PENDING
         build.category = Category.DOOR
         build.submitter_id = message.author.id
         build.original_message_id = message.id
         build.original_message = message.clean_content
         await build.save()
-        await bot_channel.send(embed=build.generate_embed(), allowed_mentions=discord.AllowedMentions.none())
+        await self.post_build_for_voting(build, type="add")
 
 
 async def setup(bot: "RedstoneSquid"):
