@@ -708,7 +708,7 @@ async def setup(bot: "RedstoneSquid"):
     cog = SubmissionsCog(bot)
     open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(bot)
     for session in open_vote_sessions:
-        for message in session._messages:
-            cog.open_vote_sessions[message.id] = session
+        for message_id in session.message_ids:
+            cog.open_vote_sessions[message_id] = session
 
     await bot.add_cog(cog)
