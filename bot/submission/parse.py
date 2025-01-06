@@ -139,7 +139,8 @@ async def parse_build(message: str) -> Build | None:
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
-    with open(f"{__file__}/../prompt.txt", "r", encoding="utf-8") as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(f"{current_dir}/prompt.txt", "r", encoding="utf-8") as f:
         prompt = f.read()
     completion = await client.beta.chat.completions.parse(
         model="deepseek/deepseek-chat",
