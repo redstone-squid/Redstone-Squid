@@ -3,20 +3,14 @@ import logging
 import os
 import re
 from io import StringIO
-from textwrap import dedent
-from typing import Literal, Any
+from typing import Literal
 from xml.etree.ElementTree import Element
 
-from async_lru import alru_cache
 from markdown import Markdown
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from database import DatabaseManager
 from database.builds import Build
-from database.schema import RecordCategory, DoorOrientationName, DOOR_ORIENTATION_NAMES
-from database.utils import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +79,9 @@ async def get_valid_door_types() -> list[str]:
     return [door_type["name"] for door_type in valid_door_types_response.data]
 
 
-async def validate_restrictions(restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]) -> tuple[list[str], list[str]]:
+async def validate_restrictions(
+    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
+) -> tuple[list[str], list[str]]:
     """Validates a list of restrictions for a given type.
 
     Args:
@@ -101,6 +97,7 @@ async def validate_restrictions(restrictions: list[str], type: Literal["componen
     invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
     return valid_restrictions, invalid_restrictions
 
+
 async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
     """Validates a list of door types.
 
@@ -115,6 +112,7 @@ async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[st
     valid_door_types = [r for r in door_types if r in all_valid_door_types]
     invalid_door_types = [r for r in door_types if r not in all_valid_door_types]
     return valid_door_types, invalid_door_types
+
 
 def parse_time_string(time_string: str | None) -> int | None:
     """Parses a time string into an integer.
@@ -132,6 +130,7 @@ def parse_time_string(time_string: str | None) -> int | None:
         return int(float(time_string) * 20)
     except ValueError:
         return None
+
 
 async def parse_build(message: str) -> Build | None:
     """Parses a build from a message using AI."""
@@ -156,7 +155,7 @@ async def parse_build(message: str) -> Build | None:
         return None
 
     # Step 1: Extract content between <target> and </target>
-    match = re.search(r'<target>(.*?)</target>', output, re.DOTALL)
+    match = re.search(r"<target>(.*?)</target>", output, re.DOTALL)
     if not match:
         return None
 
@@ -164,15 +163,15 @@ async def parse_build(message: str) -> Build | None:
 
     # Step 2: Split content into lines and parse key-value pairs
     variables: dict[str, str | None] = {}
-    for line in content.split('\n'):
+    for line in content.split("\n"):
         # Skip empty lines
         if not line.strip():
             continue
         # Split only on the first ':'
-        if ':' not in line:
+        if ":" not in line:
             print(f"Skipping malformed line: {line}")
             continue
-        key, value = line.split(':', 1)
+        key, value = line.split(":", 1)
         key = key.strip()
         value = value.strip()
         if value.lower() in ["none", "null", "unknown"]:
@@ -199,7 +198,7 @@ async def parse_build(message: str) -> Build | None:
         "creators",
         "version",
         "image",
-        "author_note"
+        "author_note",
     ]
 
     # All keys must be present
@@ -216,7 +215,9 @@ async def parse_build(message: str) -> Build | None:
         build.component_restrictions = comps[0]
         build.information["unknown_restrictions"]["component_restrictions"] = comps[1]
     if variables["wiring_placement_restrictions"] is not None:
-        wirings = await validate_restrictions(variables["wiring_placement_restrictions"].split(", "), "wiring-placement")
+        wirings = await validate_restrictions(
+            variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
+        )
         build.wiring_placement_restrictions = wirings[0]
         build.information["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
     if variables["miscellaneous_restrictions"] is not None:
@@ -251,9 +252,12 @@ async def parse_build(message: str) -> Build | None:
 
 async def main():
     import dotenv
+
     dotenv.load_dotenv()
     await DatabaseManager.setup()
-    build = await parse_build("https://imgur.com/a/ipYjpMj\n\nNot the best, but my first ever RBO\n\n585 Blocks 3x3 Corner Door\n\nSubtract 0.2 seconds from closing/opening time because of the 2 reps used for a good activation point, otherwise its almost impossible to get back from activation point to see door close/open\n\n0.9s Open\n1.2 Close\n(Creeper's timing measurements)\n\nAlso this is tied fastest with || @Cwee957 and @Ashley || so far\n\nSpecial thanks to Toppish for doing the last retraction of the DPE")
+    build = await parse_build(
+        "https://imgur.com/a/ipYjpMj\n\nNot the best, but my first ever RBO\n\n585 Blocks 3x3 Corner Door\n\nSubtract 0.2 seconds from closing/opening time because of the 2 reps used for a good activation point, otherwise its almost impossible to get back from activation point to see door close/open\n\n0.9s Open\n1.2 Close\n(Creeper's timing measurements)\n\nAlso this is tied fastest with || @Cwee957 and @Ashley || so far\n\nSpecial thanks to Toppish for doing the last retraction of the DPE"
+    )
     print(build)
 
 
