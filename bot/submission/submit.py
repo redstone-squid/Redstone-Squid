@@ -686,9 +686,8 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         build_logs = 726156829629087814
         record_logs = 667401499554611210
-        public_bot_usage = 536004554743873556
 
-        if message.channel.id not in [public_bot_usage, build_logs, record_logs]:
+        if message.channel.id not in [build_logs, record_logs]:
             return
 
         build = await parse_build(
