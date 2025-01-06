@@ -27,7 +27,7 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions, is_owner_server
+from bot.utils import RunningMessage, parse_dimensions, is_owner_server, check_is_staff
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -713,6 +713,12 @@ class SubmissionsCog(Cog, name="Submissions"):
         build.original_message = message.clean_content
         await build.save()
         await self.post_build_for_voting(build, type="add")
+
+    @submission_hybrid_group.command("recalc")
+    @check_is_staff()
+    async def recalc(self, ctx: Context, message: discord.Message):
+        """Recalculate a build from a message."""
+        await self.infer_build_from_message(message)
 
 
 async def setup(bot: "RedstoneSquid"):
