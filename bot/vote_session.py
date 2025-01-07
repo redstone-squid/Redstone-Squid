@@ -90,14 +90,6 @@ class AbstractVoteSession(ABC):
         self._votes: dict[int, int] = {}  # Dict of user_id: weight
         self._tasks: set[Task[Any]] = set()
 
-    @abstractmethod
-    async def _async_init(self) -> None:
-        """Perform async initialization. Called by create()."""
-        self.id = await track_vote_session(
-            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
-        )
-        await self.update_messages()
-
     @classmethod
     @abstractmethod
     async def create(cls: type[T], *args, **kwargs) -> T:
@@ -109,6 +101,14 @@ class AbstractVoteSession(ABC):
         self.__init__(*args, **kwargs)
         await self._async_init()
         return self
+
+    @abstractmethod
+    async def _async_init(self) -> None:
+        """Perform async initialization. Called by create()."""
+        self.id = await track_vote_session(
+            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+        )
+        await self.update_messages()
 
     def __init_subclass__(cls, **kwargs):
         """Check that the 'create' method signature matches the '__init__' method signature."""

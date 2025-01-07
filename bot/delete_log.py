@@ -52,6 +52,21 @@ class DeleteLogVoteSession(AbstractVoteSession):
         super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
         self.target_message = target_message
 
+    @classmethod
+    @override
+    async def create(
+        cls,
+        bot: discord.Client,
+        messages: list[discord.Message] | list[int],
+        author_id: int,
+        target_message: discord.Message,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
+    ) -> "DeleteLogVoteSession":
+        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold)
+        assert isinstance(self, DeleteLogVoteSession)
+        return self
+
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
@@ -91,21 +106,6 @@ class DeleteLogVoteSession(AbstractVoteSession):
         )
         self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote["user_id"]: vote["weight"] for vote in vote_session_record["votes"]}
-        return self
-
-    @classmethod
-    @override
-    async def create(
-        cls,
-        bot: discord.Client,
-        messages: list[discord.Message] | list[int],
-        author_id: int,
-        target_message: discord.Message,
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "DeleteLogVoteSession":
-        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold)
-        assert isinstance(self, DeleteLogVoteSession)
         return self
 
     @override
