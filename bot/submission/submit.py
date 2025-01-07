@@ -659,15 +659,8 @@ class BuildCog(Cog, name="Build"):
         em = build.generate_embed()
 
         for record in message_records:
-            channel = self.bot.get_channel(record["channel_id"])
-            if not isinstance(channel, GuildMessageable):
-                raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
-            try:
-                message = await channel.fetch_message(record["message_id"])
-            except discord.NotFound:
-                await untrack_message(record["message_id"])
-                continue
-            except discord.Forbidden:
+            message = await utils.getch(self.bot, record)
+            if message is None:
                 continue
             await message.edit(embed=em)
             await msg.update_message_edited_time(message.id)
