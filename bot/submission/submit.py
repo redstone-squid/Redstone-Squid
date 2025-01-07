@@ -328,7 +328,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: on
 
     @commands.hybrid_command(name="submit")
-    async def submit(self, ctx: Context, flags: SubmitFlags):
+    async def submit(self, ctx: Context, *, flags: SubmitFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
@@ -413,7 +413,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         fourth_attachment: discord.Attachment = flag(default=None)
 
     @commands.hybrid_command(name="submit_form")
-    async def submit_form(self, ctx: Context, flags: SubmitFormFlags):
+    async def submit_form(self, ctx: Context, *, flags: SubmitFormFlags):
         """Submits a build to the database."""
         await ctx.defer()
 
@@ -525,7 +525,7 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: on
 
     @commands.hybrid_command(name="edit")
-    async def edit(self, ctx: Context, flags: EditFlags):
+    async def edit(self, ctx: Context, *, flags: EditFlags):
         """Edits a record in the database directly."""
         interaction = ctx.interaction
         assert interaction is not None
