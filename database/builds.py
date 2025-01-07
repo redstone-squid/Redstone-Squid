@@ -628,9 +628,6 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
-        # ```ansi
-        # [2;45mJust select[0m [2;34msome text[0m and [2;32mclick[0m on the [2;31m[1;31mcolor[0m[2;31m[0m or [4;2mformat that you like[0m![2;31m[0m
-        # ```
         for restriction in self.wiring_placement_restrictions:
             title += f"{restriction} "
 
