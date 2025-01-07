@@ -161,7 +161,7 @@ class BuildVoteSession(AbstractVoteSession):
             return
 
         self.is_closed = True
-        if self.net_votes <= self.pass_threshold:
+        if self.net_votes < self.pass_threshold:
             await self.build.deny()
         else:
             await self.build.confirm()
