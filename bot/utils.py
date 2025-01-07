@@ -130,8 +130,11 @@ def check_is_staff():
     return check(predicate)
 
 
-async def is_staff(bot: discord.Client, server_id: int, user_id: int) -> bool:
+async def is_staff(bot: discord.Client, server_id: int | None, user_id: int) -> bool:
     """Check if the user has a staff role, as defined in the server settings."""
+    if server_id is None:
+        return False  # TODO: global staff role
+
     staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
     server = bot.get_guild(server_id)
     if server is None:
