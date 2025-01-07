@@ -79,6 +79,13 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] |
     return {get_purpose_name(setting_name): id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
 
 
+@overload
+async def update_server_setting(server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None) -> None: ...
+@overload
+async def update_server_setting(server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None) -> None: ...
+@overload
+async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None: ...
+
 async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None:
     """Updates a setting for a server."""
     setting_name = get_setting_name(setting)
