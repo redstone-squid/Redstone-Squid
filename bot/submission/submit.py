@@ -342,6 +342,7 @@ class BuildCog(Cog, name="Build"):
             build.world_download_urls = (
                 [self.link_to_world_download] if self.link_to_world_download is not None else []
             )
+            build.completion_time = self.date_of_creation
             return build
 
         # Intentionally moved closer to the submit command
@@ -381,7 +382,6 @@ class BuildCog(Cog, name="Build"):
         async with RunningMessage(followup) as message:
             build = flags.to_build()
             build.submitter_id = ctx.author.id
-            build.completion_time = flags.date_of_creation
             build.ai_generated = False
 
             # TODO: Stop hardcoding this
