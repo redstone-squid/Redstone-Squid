@@ -94,6 +94,7 @@ class ServerSettingRecord(TypedDict):
     trusted_roles_ids: list[int] | None
 
 
+# Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
 DbSettingKey = Literal[
     "smallest_channel_id",
     "fastest_channel_id",
