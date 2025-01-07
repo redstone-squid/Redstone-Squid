@@ -90,9 +90,9 @@ async def untrack_message(message_id: int) -> MessageRecord:
         ValueError: If the message is not found.
     """
     db = DatabaseManager()
-    response: SingleAPIResponse[MessageRecord] = await db.table("messages").delete().eq("message_id", message_id).maybe_single().execute()
+    response: APIResponse[MessageRecord] = await db.table("messages").delete().eq("message_id", message_id).execute()
     if response.data:
-        return response.data
+        return response.data[0]
     else:
         raise ValueError(f"Message with id {message_id} not found.")
 
