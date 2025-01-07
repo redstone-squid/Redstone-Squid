@@ -93,6 +93,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
         vote_session_record = vote_session_response.data
         target_message = await utils.getch(bot, vote_session_record["delete_log_vote_sessions"])
+        if target_message is None:
+            return None
 
         self = cls.__new__(cls)
         self._allow_init = True
@@ -168,8 +170,10 @@ class DeleteLogVoteSession(AbstractVoteSession):
             .execute()
         ).data
 
-        async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession":
+        async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession | None":
             target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
+            if target_message is None:
+                return None
 
             session = cls.__new__(cls)
             session._allow_init = True
@@ -185,7 +189,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
             return session
 
-        return await asyncio.gather(*[_get_session(record) for record in records])
+        sessions = await asyncio.gather(*[_get_session(record) for record in records])
+        return [session for session in sessions if session is not None]
 
 
 class DeleteLogCog(Cog, name="Vote"):
