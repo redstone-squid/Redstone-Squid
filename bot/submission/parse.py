@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from io import StringIO
-from typing import Literal
+from typing import Literal, overload
 from xml.etree.ElementTree import Element
 
 from markdown import Markdown
@@ -130,6 +130,78 @@ def parse_time_string(time_string: str | None) -> int | None:
         return int(float(time_string) * 20)
     except ValueError:
         return None
+
+
+@overload
+def parse_dimensions(dim_str: str) -> tuple[int, int, int | None]: ...
+
+
+@overload
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int, int | None, int | None]: ...
+
+
+def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
+    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators.
+
+    Args:
+        dim_str: The string to parse
+        min_dim: The minimum number of dimensions
+        max_dim: The maximum number of dimensions
+
+    Returns:
+        A list of the dimensions, the length of the list will be padded with None to match `max_dim`.
+    """
+    if min_dim > max_dim:
+        raise ValueError(f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}.")
+
+    inputs_cross = dim_str.split("x")
+    inputs_star = dim_str.split("*")
+    if min_dim <= len(inputs_cross) <= max_dim:
+        inputs = inputs_cross
+    elif min_dim <= len(inputs_star) <= max_dim:
+        inputs = inputs_star
+    else:
+        raise ValueError(
+            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs_cross)} in {dim_str=} splitting by 'x', and {len(inputs_star)} splitting by '*'."
+        )
+
+    try:
+        dimensions = list(map(int, inputs))
+    except ValueError:
+        raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}")
+
+    # Pad with None
+    return tuple(dimensions + [None] * (max_dim - len(dimensions)))
+
+
+def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
+    """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
+
+    Examples:
+        "5x5x5" -> (5, 5, 5)
+        "5x5" -> (5, 5, None)
+        "5 wide" -> (5, None, None)
+        "5 high" -> (None, 5, None)
+
+    References:
+        https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit
+
+    Returns:
+        A tuple of the dimensions (width, height, depth).
+    """
+    try:
+        return parse_dimensions(dim_str)
+    except ValueError:
+        if match := re.match(r"^(\d+)\s*(wide|high)$", dim_str):
+            size, direction = match.groups()
+            if direction == "wide":
+                return int(size), None, None
+            else:  # direction == "high"
+                return None, int(size), None
+        else:
+            raise ValueError(
+                "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
+            )
 
 
 async def parse_build(message: str) -> Build | None:
