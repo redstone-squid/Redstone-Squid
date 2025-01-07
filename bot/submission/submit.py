@@ -146,6 +146,7 @@ class BuildVoteSession(AbstractVoteSession):
             [record["message_id"] for record in vote_session_record["messages"]],
             vote_session_record["author_id"],
             build,
+            "add",  # FIXME: Stop hardcoding this
             vote_session_record["pass_threshold"],
             vote_session_record["fail_threshold"],
         )
@@ -162,8 +163,9 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def update_messages(self):
         embed = self.build.generate_embed()
-        embed.add_field(name="upvotes", value=str(self.upvotes), inline=True)
-        embed.add_field(name="downvotes", value=str(self.downvotes), inline=True)
+        embed.add_field(name='', value='', inline=False)  # Add a blank field to separate the vote count
+        embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
+        embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
         await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @override
