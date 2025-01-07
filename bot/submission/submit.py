@@ -643,9 +643,8 @@ class BuildCog(Cog, name="Build"):
 
         for message in messages:
             channel = self.bot.get_channel(message["channel_id"])
-            if not isinstance(channel, discord.PartialMessageable):
+            if not isinstance(channel, GuildMessageable):
                 raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
-
             message = await channel.fetch_message(message["message_id"])
             await message.edit(embed=em)
             await msg.update_message_edited_time(message.id)
