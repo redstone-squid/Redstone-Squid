@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias, List
+from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
 
 from pydantic.types import Json
 from database.enums import Status, Category
@@ -90,8 +90,8 @@ class ServerSettingRecord(TypedDict):
     first_channel_id: int | None
     builds_channel_id: int | None
     voting_channel_id: int | None
-    staff_roles_ids: List[int] | None
-    trusted_roles_ids: List[int] | None
+    staff_roles_ids: list[int] | None
+    trusted_roles_ids: list[int] | None
 
 
 DbSettingKey = Literal[
