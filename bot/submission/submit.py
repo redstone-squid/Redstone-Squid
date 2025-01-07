@@ -293,13 +293,6 @@ class SubmissionsCog(Cog, name="Submissions"):
             success_embed = utils.info_embed("Success", "Submission has been denied.")
             await sent_message.edit(embed=success_embed)
 
-    @hybrid_command(name="versions")
-    async def versions(self, ctx: Context):
-        """Shows a list of versions the bot recognizes."""
-        versions = await DatabaseManager.fetch_versions_list(edition="Java")
-        versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
-        await ctx.send(", ".join(versions_human_readable))
-
     # fmt: off
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""

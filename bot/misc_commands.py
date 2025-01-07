@@ -10,7 +10,7 @@ from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command, 
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
-from database import DatabaseManager
+from database import DatabaseManager, get_version_string
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -46,6 +46,13 @@ class Miscellaneous(Cog):
     async def docs(self, ctx: Context):
         """Links you to our regulations."""
         await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
+
+    @hybrid_command(name="versions")
+    async def versions(self, ctx: Context):
+        """Shows a list of versions the bot recognizes."""
+        versions = await DatabaseManager.fetch_versions_list(edition="Java")
+        versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
+        await ctx.send(", ".join(versions_human_readable))
 
     @tasks.loop(hours=24)
     async def call_supabase_to_prevent_deactivation(self):
