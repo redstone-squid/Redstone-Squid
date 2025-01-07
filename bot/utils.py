@@ -16,6 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
+from database.message import untrack_message
 from database.schema import (
     MessageRecord,
     DeleteLogVoteSessionRecord,
@@ -150,7 +151,7 @@ def check_is_trusted_or_staff():
 
 
 @overload
-async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message: ...
+async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message | None: ...
 
 
 async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
@@ -159,32 +160,35 @@ async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
     try:
         message_adapter = TypeAdapter(MessageRecord)
         message_adapter.validate_python(record)
-        message_id = record["message_id"]
-        channel_id = record["channel_id"]
-        channel = bot.get_channel(channel_id)
-        if channel is None:
-            channel = await bot.fetch_channel(channel_id)
-        channel = cast(GuildMessageable, channel)
-        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
-        return await channel.fetch_message(message_id)
+        return await getch_message(bot, record["channel_id"], record["message_id"])
     except ValidationError:
         pass
 
     try:
         message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
         message_adapter.validate_python(record)
-        message_id = record["target_message_id"]
-        channel_id = record["target_channel_id"]
-        channel = bot.get_channel(channel_id)
-        if channel is None:
-            channel = await bot.fetch_channel(channel_id)
-        channel = cast(GuildMessageable, channel)
-        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
-        return await channel.fetch_message(message_id)
+        return await getch_message(bot, record["target_channel_id"], record["target_message_id"])
     except ValidationError:
         pass
 
     raise ValueError("Invalid object to fetch.")
+
+
+async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -> Message | None:
+    """Fetch a message from a channel."""
+
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        channel = await bot.fetch_channel(channel_id)
+    channel = cast(GuildMessageable, channel)
+    assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
+    try:
+        return await channel.fetch_message(message_id)
+    except discord.NotFound:
+        await untrack_message(message_id)
+    except discord.Forbidden:
+        pass
+    return None
 
 
 async def main():
