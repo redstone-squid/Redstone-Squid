@@ -5,7 +5,7 @@ from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
 import asyncio
 
 import discord
-from discord import InteractionResponse, Message, app_commands
+from discord import InteractionResponse, Message, app_commands, Interaction
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -412,7 +412,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         third_attachment: discord.Attachment = flag(default=None)
         fourth_attachment: discord.Attachment = flag(default=None)
 
-    @commands.hybrid_command(name="submit_form")
+    @commands.command(name="submit_form")
     async def submit_form(self, ctx: Context, *, flags: SubmitFormFlags):
         """Submits a build to the database."""
         await ctx.defer()
