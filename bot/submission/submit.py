@@ -37,7 +37,6 @@ from database.vote import track_build_vote_session, track_vote_session, close_vo
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-submission_roles = ["Admin", "Moderator", "Redstoner"]
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
@@ -269,8 +268,8 @@ class BuildCog(Cog, name="Build"):
 
     @build_hybrid_group.command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
+    @check_is_staff()
     @commands.check(is_owner_server)
-    @has_any_role(*submission_roles)
     async def confirm_build(self, ctx: Context, build_id: int):
         """Marks a submission as confirmed.
 
@@ -291,8 +290,8 @@ class BuildCog(Cog, name="Build"):
 
     @build_hybrid_group.command(name="deny")
     @app_commands.describe(build_id="The ID of the build you want to deny.")
+    @check_is_staff()
     @commands.check(is_owner_server)
-    @has_any_role(*submission_roles)
     async def deny_build(self, ctx: Context, build_id: int):
         """Marks a submission as denied."""
         async with utils.RunningMessage(ctx) as sent_message:

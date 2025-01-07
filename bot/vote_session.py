@@ -191,6 +191,7 @@ class AbstractVoteSession(ABC):
         messages_record: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(*(utils.getch(self.bot, record) for record in messages_record.data if record["message_id"] not in cached_ids))
+        new_messages = [message for message in new_messages if message is not None]
         self._messages.extend(new_messages)
         assert len(self._messages) == len(self.message_ids), "There is some race condition in fetching messages where one message is fetched multiple times, need to investigate."  # TODO
         return self._messages
