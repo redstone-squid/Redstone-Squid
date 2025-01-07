@@ -27,7 +27,7 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
-from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
+from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
 from database.message import get_build_id_by_message, untrack_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -700,13 +700,21 @@ class BuildCog(Cog, name="Build"):
 
         # The vote session will handle the closing of the vote session
         original_vote = vote_session[user_id]
+        guild_id = payload.guild_id
+        weight = await self.get_voting_weight(payload.guild_id, user_id)
         if emoji_name in APPROVE_EMOJIS:
-            vote_session[user_id] = 1 if original_vote != 1 else 0
+            vote_session[user_id] = weight if original_vote != weight else 0
         elif emoji_name in DENY_EMOJIS:
-            vote_session[user_id] = -1 if original_vote != -1 else 0
+            vote_session[user_id] = -weight if original_vote != -weight else 0
         else:
             return
         await vote_session.update_messages()
+
+    async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
+        """Get the voting weight of a user."""
+        if await is_staff(self.bot, server_id, user_id):
+            return 3
+        return 1
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
