@@ -68,6 +68,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="query")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
+    @app_commands.rename(channel_purpose="type")
     @check_is_staff()
     async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
         """Finds which channel is set for a purpose and sends the results to the user."""
@@ -99,6 +100,7 @@ class SettingsCog(Cog, name="Settings"):
         channel_purpose=", ".join(CHANNEL_PURPOSES),
         channel="The channel that you want to set to send this record type to.",
     )
+    @app_commands.rename(channel_purpose="type")
     @check_is_staff()
     async def set_channel(
         self,
@@ -124,6 +126,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="unset")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
+    @app_commands.rename(channel_purpose="type")
     @check_is_staff()
     async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
         """Unsets the channel to post this record type to."""
