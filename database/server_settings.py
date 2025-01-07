@@ -16,7 +16,7 @@ from database.schema import (
 
 # Mapping of settings to the column names in the database.
 # This file should be the only place that is aware of the database column names.
-SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
+_SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",
     "First": "first_channel_id",
@@ -26,13 +26,13 @@ SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
     "Trusted": "trusted_roles_ids",
 }
 
-DB_SETTING_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in SETTING_TO_DB_SETTING.items()}
-assert set(SETTING_TO_DB_SETTING.keys()) == set(SETTINGS), "The mapping is not exhaustive!"
+_DB_KEY_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in _SETTING_TO_DB_KEY.items()}
+assert set(_SETTING_TO_DB_KEY.keys()) == set(SETTINGS), "The mapping is not exhaustive!"
 
 
 def get_setting_name(setting: Setting) -> DbSettingKey:
     """Maps a setting to the column name in the database."""
-    return SETTING_TO_DB_SETTING[setting]
+    return _SETTING_TO_DB_KEY[setting]
 
 
 @overload
@@ -74,7 +74,7 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] |
     settings = response.data
 
     excluded_columns = ["server_id", "in_server"]
-    return {DB_SETTING_TO_SETTING[setting_name]: id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
+    return {_DB_KEY_TO_SETTING[setting_name]: id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
 
 
 @overload
