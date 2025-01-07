@@ -331,7 +331,6 @@ class SubmissionsCog(Cog, name="Submissions"):
     async def submit(self, ctx: Context, *, flags: SubmitFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
-        # FIXME: Discord WILL pass integers even if we specify a string. Need to convert them to strings.
         interaction = cast(discord.Interaction, ctx.interaction)
         response: InteractionResponse = interaction.response  # type: ignore
         await response.defer()
