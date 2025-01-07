@@ -94,6 +94,7 @@ class ServerSettingRecord(TypedDict):
     trusted_roles_ids: list[int] | None
 
 
+# Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
 DbSettingKey = Literal[
     "smallest_channel_id",
     "fastest_channel_id",
@@ -103,6 +104,10 @@ DbSettingKey = Literal[
     "staff_roles_ids",
     "trusted_roles_ids",
 ]
+
+Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+SETTINGS = cast(Sequence[Setting], get_args(Setting))
+assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
 
 class TypeRecord(TypedDict):
@@ -167,9 +172,6 @@ BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType)
 
 DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
-
-Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
-SETTINGS = cast(Sequence[Setting], get_args(Setting))
 
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
