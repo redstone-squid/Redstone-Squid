@@ -87,5 +87,5 @@ async def update_server_setting(server_id: int, setting: Setting, value: int | l
 
 async def update_server_settings(server_id: int, settings: dict[Setting, int | list[int] | None]) -> None:
     """Updates a list of settings for a server."""
-    data = {_SETTING_TO_DB_KEY[purpose]: value for purpose, value in settings.items()}
+    data = {_SETTING_TO_DB_KEY[setting]: value for setting, value in settings.items()}
     await DatabaseManager().table("server_settings").upsert({"server_id": server_id, **data}).execute()
