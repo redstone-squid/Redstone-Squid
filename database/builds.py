@@ -602,7 +602,7 @@ class Build:
         if self.image_urls:
             em.set_image(url=self.image_urls[0])
 
-        em.set_footer(text=f"Submission ID: {self.id}.")
+        em.set_footer(text=f"Submission ID: {self.id}")
         return em
 
     def get_title(self) -> str:
