@@ -27,7 +27,7 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
-from bot.utils import RunningMessage, is_owner_server, check_is_staff
+from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
@@ -55,7 +55,7 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
-        type: Literal["add", "update"] = "add",
+        type: Literal["add", "update"],
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ):
@@ -130,6 +130,7 @@ class BuildVoteSession(AbstractVoteSession):
             [record["message_id"] for record in vote_session_record["messages"]],
             vote_session_record["author_id"],
             build,
+            "add",  # FIXME: Stop hardcoding this
             vote_session_record["pass_threshold"],
             vote_session_record["fail_threshold"],
         )
@@ -144,7 +145,7 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
-        type: Literal["add", "update"] = "add",
+        type: Literal["add", "update"],
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "BuildVoteSession":
@@ -162,8 +163,9 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def update_messages(self):
         embed = self.build.generate_embed()
-        embed.add_field(name="upvotes", value=str(self.upvotes), inline=True)
-        embed.add_field(name="downvotes", value=str(self.downvotes), inline=True)
+        embed.add_field(name='', value='', inline=False)  # Add a blank field to separate the vote count
+        embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
+        embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
         await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @override
@@ -203,12 +205,13 @@ class BuildVoteSession(AbstractVoteSession):
             session = cls.__new__(cls)
             session._allow_init = True
             session.__init__(
-                bot,
-                [msg["message_id"] for msg in record["messages"]],
-                record["author_id"],
-                build,
-                record["pass_threshold"],
-                record["fail_threshold"],
+                bot=bot,
+                messages=[msg["message_id"] for msg in record["messages"]],
+                author_id=record["author_id"],
+                build=build,
+                type="add",
+                pass_threshold=record["pass_threshold"],
+                fail_threshold=record["fail_threshold"],
             )
             session.id = record["id"]
             session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
@@ -305,9 +308,14 @@ class BuildCog(Cog, name="Build"):
             success_embed = utils.info_embed("Success", "Submission has been denied.")
             await sent_message.edit(embed=success_embed)
 
+    @commands.hybrid_group(name="submit")
+    async def submit_group(self, ctx: Context):
+        """Submit a build to the database."""
+        await ctx.send_help("submit")
+
     # fmt: off
-    class SubmitFlags(commands.FlagConverter):
-        """Parameters information for the /submit command."""
+    class SubmitDoorFlags(commands.FlagConverter):
+        """Parameters information for the /submit door command."""
 
         def to_build(self) -> Build:
             """Convert the flags to a build object."""
@@ -380,8 +388,8 @@ class BuildCog(Cog, name="Build"):
         link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
     # fmt: on
 
-    @commands.hybrid_command(name="submit")
-    async def submit(self, ctx: Context, *, flags: SubmitFlags):
+    @submit_group.command(name="door")
+    async def submit_door(self, ctx: Context, *, flags: SubmitDoorFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         interaction = cast(discord.Interaction, ctx.interaction)
@@ -394,8 +402,6 @@ class BuildCog(Cog, name="Build"):
             build = flags.to_build()
             build.submitter_id = ctx.author.id
             build.ai_generated = False
-
-            # TODO: Stop hardcoding this
             build.category = Category.DOOR
             build.submission_status = Status.PENDING
 
@@ -502,13 +508,20 @@ class BuildCog(Cog, name="Build"):
         messages = await asyncio.gather(*tasks)
 
         assert build.submitter_id is not None
-        session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build)
+        session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
         for message in messages:
             self.open_vote_sessions[message.id] = session
 
+    @commands.hybrid_group(name="edit")
+    @check_is_trusted_or_staff()
+    @commands.check(is_owner_server)
+    async def edit_group(self, ctx: Context):
+        """Edits a record in the database directly."""
+        await ctx.send_help("edit")
+
     # fmt: off
-    class EditFlags(commands.FlagConverter):
-        """Parameters information for the /edit command."""
+    class EditDoorFlags(commands.FlagConverter):
+        """Parameters information for the `/edit door` command."""
         async def to_build(self) -> Build | None:
             """Convert the flags to a build object, returns None if the build_id is invalid."""
             build = await Build.from_id(self.build_id)
@@ -583,9 +596,9 @@ class BuildCog(Cog, name="Build"):
         command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
     # fmt: on
 
-    @commands.hybrid_command(name="edit")
-    async def edit(self, ctx: Context, *, flags: EditFlags):
-        """Edits a record in the database directly."""
+    @edit_group.command(name="door")
+    async def edit_door(self, ctx: Context, *, flags: EditDoorFlags):
+        """Edits a door record in the database directly."""
         interaction = ctx.interaction
         assert interaction is not None
 
@@ -666,8 +679,8 @@ class BuildCog(Cog, name="Build"):
             return
 
         if vote_session.is_closed:
-            for message in vote_session.messages:
-                self.open_vote_sessions.pop(message.id, None)
+            for message_id in vote_session.message_ids:
+                self.open_vote_sessions.pop(message_id, None)
 
         # Remove the user's reaction to keep votes anonymous
         channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
