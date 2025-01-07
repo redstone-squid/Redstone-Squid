@@ -207,20 +207,21 @@ class BuildVoteSession(AbstractVoteSession):
         return await asyncio.gather(*[_get_session(record) for record in records])
 
 
-class SubmissionsCog(Cog, name="Submissions"):
+class BuildCog(Cog, name="Build"):
+    """A cog with commands to submit, view, confirm and deny submissions."""
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
         self.open_vote_sessions: dict[int, BuildVoteSession] = {}
         """A cache of open vote sessions. The key is the message id of the vote message."""
 
-    @hybrid_group(name="submissions", invoke_without_command=True)
-    async def submission_hybrid_group(self, ctx: Context):
-        """View, confirm and deny submissions."""
-        await ctx.send_help("submissions")
+    @hybrid_group(name="build", invoke_without_command=True)
+    async def build_hybrid_group(self, ctx: Context):
+        """Submit, view, confirm and deny submissions."""
+        await ctx.send_help("build")
 
-    @submission_hybrid_group.command(name="pending")
+    @build_hybrid_group.command(name="pending")
     async def get_pending_submissions(self, ctx: Context):
-        """Shows an overview of all submissions pending review."""
+        """Shows an overview of all submitted builds pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
             pending_submissions = await get_all_builds(Status.PENDING)
 
@@ -239,32 +240,32 @@ class SubmissionsCog(Cog, name="Submissions"):
             em = utils.info_embed(title="Open Records", description=desc)
             await sent_message.edit(embed=em)
 
-    @submission_hybrid_group.command(name="view")
-    @app_commands.describe(submission_id="The ID of the build you want to see.")
-    async def view_function(self, ctx: Context, submission_id: int):
+    @build_hybrid_group.command(name="view")
+    @app_commands.describe(build_id="The ID of the build you want to see.")
+    async def view_build(self, ctx: Context, build_id: int):
         """Displays a submission."""
         async with utils.RunningMessage(ctx) as sent_message:
-            submission = await Build.from_id(submission_id)
+            submission = await Build.from_id(build_id)
 
             if submission is None:
-                error_embed = utils.error_embed("Error", "No submission with that ID.")
+                error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             await sent_message.edit(embed=submission.generate_embed())
 
-    @submission_hybrid_group.command(name="confirm")
-    @app_commands.describe(submission_id="The ID of the build you want to confirm.")
+    @build_hybrid_group.command(name="confirm")
+    @app_commands.describe(build_id="The ID of the build you want to confirm.")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
-    async def confirm_function(self, ctx: Context, submission_id: int):
+    async def confirm_build(self, ctx: Context, build_id: int):
         """Marks a submission as confirmed.
 
         This posts the submission to all the servers which configured the bot."""
         async with utils.RunningMessage(ctx) as sent_message:
-            build = await Build.from_id(submission_id)
+            build = await Build.from_id(build_id)
 
             if build is None:
-                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
+                error_embed = utils.error_embed("Error", "No pending build with that ID.")
                 await sent_message.edit(embed=error_embed)
                 return
 
@@ -274,14 +275,14 @@ class SubmissionsCog(Cog, name="Submissions"):
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
             await sent_message.edit(embed=success_embed)
 
-    @submission_hybrid_group.command(name="deny")
-    @app_commands.describe(submission_id="The ID of the build you want to deny.")
+    @build_hybrid_group.command(name="deny")
+    @app_commands.describe(build_id="The ID of the build you want to deny.")
     @commands.check(is_owner_server)
     @has_any_role(*submission_roles)
-    async def deny_function(self, ctx: Context, submission_id: int):
+    async def deny_build(self, ctx: Context, build_id: int):
         """Marks a submission as denied."""
         async with utils.RunningMessage(ctx) as sent_message:
-            build = await Build.from_id(submission_id)
+            build = await Build.from_id(build_id)
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
@@ -397,7 +398,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
             success_embed = utils.info_embed(
                 "Success",
-                f"Build submitted successfully!\nThe submission ID is: {build.id}",
+                f"Build submitted successfully!\nThe build ID is: {build.id}",
             )
             await message.edit(embed=success_embed)
             await self.post_build_for_voting(build)
@@ -452,7 +453,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             await self.post_build_for_voting(build)
 
     async def post_confirmed_build(self, build: Build) -> None:
-        """Post a confirmed submission to the appropriate discord channels.
+        """Post a confirmed build to the appropriate discord channels.
 
         Args:
             build (Build): The build to post.
@@ -583,7 +584,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         async with RunningMessage(followup) as sent_message:
             build = await flags.to_build()
             if build is None:
-                error_embed = utils.error_embed("Error", "No submission with that ID.")
+                error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
             preview_embed = build.generate_embed()
@@ -716,7 +717,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         await build.save()
         await self.post_build_for_voting(build, type="add")
 
-    @submission_hybrid_group.command("recalc")
+    @build_hybrid_group.command("recalc")
     @check_is_staff()
     async def recalc(self, ctx: Context, message: discord.Message):
         """Recalculate a build from a message."""
@@ -725,7 +726,7 @@ class SubmissionsCog(Cog, name="Submissions"):
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    cog = SubmissionsCog(bot)
+    cog = BuildCog(bot)
     open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(bot)
     for session in open_vote_sessions:
         for message_id in session.message_ids:
