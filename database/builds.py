@@ -113,9 +113,11 @@ class Build:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
-        build = Build()
-        build.id = build_id
-        return await build.load()
+        db = DatabaseManager()
+        response = await db.table("builds").select(all_build_columns).eq("id", build_id).maybe_single().execute()
+        if not response:
+            return None
+        return Build.from_json(response.data)
 
     @staticmethod
     def from_dict(submission: dict) -> Build:
