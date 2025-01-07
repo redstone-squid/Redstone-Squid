@@ -519,7 +519,6 @@ class BuildCog(Cog, name="Build"):
         """Edits a record in the database directly."""
         await ctx.send_help("edit")
 
-    # fmt: off
     class EditDoorFlags(commands.FlagConverter):
         """Parameters information for the `/edit door` command."""
         async def to_build(self) -> Build | None:
@@ -572,6 +571,7 @@ class BuildCog(Cog, name="Build"):
                 build.completion_time = self.date_of_creation
             return build
 
+    # fmt: off
         build_id: int = flag(description='The ID of the submission.')
         door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
@@ -582,8 +582,7 @@ class BuildCog(Cog, name="Build"):
         component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
         normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int | None = flag(default=None,
-                                        description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
         date_of_creation: str | None = flag(default=None, description='The date the build was created.')
         in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
         locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
