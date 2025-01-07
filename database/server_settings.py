@@ -32,11 +32,6 @@ def get_setting_name(setting: Setting) -> DbSettingKey:
     return SETTING_TO_DB_SETTING[setting]
 
 
-def get_purpose_name(setting_name: DbSettingKey) -> Setting:
-    """Maps a column name in the database to the setting."""
-    return DB_SETTING_TO_SETTING[setting_name]
-
-
 @overload
 async def get_server_setting(server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]) -> int | None: ...
 @overload
@@ -76,7 +71,7 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] |
     settings = response.data
 
     excluded_columns = ["server_id", "in_server"]
-    return {get_purpose_name(setting_name): id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
+    return {DB_SETTING_TO_SETTING[setting_name]: id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
 
 
 @overload
