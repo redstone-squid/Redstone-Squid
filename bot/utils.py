@@ -192,33 +192,31 @@ def check_is_staff():
 
         server_id = ctx.guild.id
         staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
-        if staff_role_ids is None:
-            return False
 
         # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(ctx.author.get_role(item) is not None for item in staff_role_ids):
+        if any(ctx.author.get_role(item) is not None for item in staff_role_ids):  # type: ignore
             return True
         raise MissingAnyRole(list(staff_role_ids))
 
     return check(predicate)
 
 
-def check_is_trusted():
-    """Check if the user has a trusted role, as defined in the server settings."""
+def check_is_trusted_or_staff():
+    """Check if the user has a trusted or staff role, as defined in the server settings."""
 
     async def predicate(ctx: Context) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
         server_id = ctx.guild.id
+        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
         trusted_role_ids = await get_server_setting(server_id=server_id, setting="Trusted")
-        if trusted_role_ids is None:
-            return False
+        allowed_role_ids = staff_role_ids + trusted_role_ids
 
         # ctx.guild is None doesn't narrow ctx.author to Member
-        if any(ctx.author.get_role(item) is not None for item in trusted_role_ids):
+        if any(ctx.author.get_role(item) is not None for item in allowed_role_ids):  # type: ignore
             return True
-        raise MissingAnyRole(list(trusted_role_ids))
+        raise MissingAnyRole(list(allowed_role_ids))
 
     return check(predicate)
 
