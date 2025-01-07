@@ -52,9 +52,9 @@ class SettingsCog(Cog, name="Settings"):
             .execute()
         )
 
-    @settings_hybrid_group.command()
+    @settings_hybrid_group.command(name="list")
     @check_is_staff()
-    async def query_all(self, ctx: Context):
+    async def show_server_settings(self, ctx: Context):
         """Query all settings."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
