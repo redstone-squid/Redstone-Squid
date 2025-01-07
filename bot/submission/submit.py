@@ -388,6 +388,7 @@ class SubmissionsCog(Cog, name="Submissions"):
             build = flags.to_build()
             build.submitter_id = ctx.author.id
             build.completion_time = flags.date_of_creation
+            build.ai_generated = False
 
             # TODO: Stop hardcoding this
             build.category = Category.DOOR
@@ -421,7 +422,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         """Submits a build to the database."""
         await ctx.defer()
 
-        build = Build()
+        build = Build(ai_generated=False)
         for _name, attachment in flags:
             if attachment is None:
                 continue
