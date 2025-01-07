@@ -17,7 +17,7 @@ from database.server_settings import (
     get_server_settings,
 )
 import bot.utils as utils
-from database.schema import ChannelPurpose, CHANNEL_PURPOSES
+from database.schema import Setting, SETTINGS
 from bot._types import GuildMessageable
 
 if TYPE_CHECKING:
@@ -58,19 +58,25 @@ class SettingsCog(Cog, name="Settings"):
         """Query all settings."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
-            channels = await get_settable_channels(ctx.guild)
+            settings = await get_server_settings(ctx.guild.id)
+            channels: dict[Setting, GuildMessageable | None] = {}
+            for record_type in SETTINGS:
+                channel_id = settings.get(record_type)
+                if channel_id is None:
+                    continue
+                channels[record_type] = cast(GuildMessageable | None, ctx.guild.get_channel(channel_id))
 
             desc = ""
-            for channel_type in CHANNEL_PURPOSES:
+            for channel_type in SETTINGS:
                 desc += f"`{channel_type.lower()} channel`: {channels.get(channel_type, '_Not set_')}\n"
 
             await sent_message.edit(embed=utils.info_embed(title="Current Settings", description=desc))
 
     @settings_hybrid_group.command(name="search")
-    @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
+    @app_commands.describe(channel_purpose=", ".join(SETTINGS))
     @app_commands.rename(channel_purpose="type")
     @check_is_staff()
-    async def search_setting(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
+    async def search_setting(self, ctx: Context[RedstoneSquid], channel_purpose: Setting):
         """Show the server's current setting."""
         assert ctx.guild is not None
         unset_em = utils.info_embed(
@@ -97,7 +103,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="set")
     @app_commands.describe(
-        channel_purpose=", ".join(CHANNEL_PURPOSES),
+        channel_purpose=", ".join(SETTINGS),
         channel="The channel that you want to set to send this record type to.",
     )
     @app_commands.rename(channel_purpose="type")
@@ -105,7 +111,7 @@ class SettingsCog(Cog, name="Settings"):
     async def change_setting(
         self,
         ctx: Context,
-        channel_purpose: ChannelPurpose,
+        channel_purpose: Setting,
         channel: GuildMessageable,
     ):
         """Change the server's setting."""
@@ -125,10 +131,10 @@ class SettingsCog(Cog, name="Settings"):
             await sent_message.edit(embed=success_embed)
 
     @settings_hybrid_group.command(name="clear")
-    @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
+    @app_commands.describe(channel_purpose=", ".join(SETTINGS))
     @app_commands.rename(channel_purpose="type")
     @check_is_staff()
-    async def clear_setting(self, ctx: Context, channel_purpose: ChannelPurpose):
+    async def clear_setting(self, ctx: Context, channel_purpose: Setting):
         """Set this setting to None."""
         assert ctx.guild is not None
         success_embed = utils.info_embed(
@@ -139,21 +145,6 @@ class SettingsCog(Cog, name="Settings"):
         async with utils.RunningMessage(ctx) as sent_message:
             await update_server_setting(ctx.guild.id, channel_purpose, None)
             await sent_message.edit(embed=success_embed)
-
-
-async def get_settable_channels(
-    server: discord.Guild,
-) -> dict[ChannelPurpose, GuildMessageable | None]:
-    """Gets all record channels of a server from the server settings table."""
-    settings = await get_server_settings(server.id)
-    channels: dict[ChannelPurpose, GuildMessageable | None] = {}
-    for record_type in CHANNEL_PURPOSES:
-        channel_id = settings.get(record_type)
-        if channel_id is None:
-            continue
-        channels[record_type] = cast(GuildMessageable | None, server.get_channel(channel_id))
-
-    return channels
 
 
 async def setup(bot: RedstoneSquid):

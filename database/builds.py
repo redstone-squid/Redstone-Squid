@@ -26,7 +26,6 @@ from database.schema import (
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
-    ChannelPurpose,
     QuantifiedVersionRecord,
 )
 from database import DatabaseManager
@@ -290,7 +289,7 @@ class Build:
             bot: A bot instance to get the channels from.
         """
 
-        target: ChannelPurpose
+        target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
         match (self.submission_status, self.record_category):
             case (Status.PENDING, _):
