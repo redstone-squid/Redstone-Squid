@@ -87,7 +87,7 @@ class AbstractVoteSession(ABC):
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
-        self._votes: dict[int, int] = {}  # Dict of user_id: weight
+        self._votes: dict[int, float] = {}  # Dict of user_id: weight
         self._tasks: set[Task[Any]] = set()
 
     @classmethod
@@ -160,17 +160,17 @@ class AbstractVoteSession(ABC):
         """
 
     @property
-    def upvotes(self) -> int:
+    def upvotes(self) -> float:
         """Calculate the upvotes"""
         return sum(vote for vote in self._votes.values() if vote > 0)
 
     @property
-    def downvotes(self) -> int:
+    def downvotes(self) -> float:
         """Calculate the downvotes"""
         return -sum(vote for vote in self._votes.values() if vote < 0)
 
     @property
-    def net_votes(self) -> int:
+    def net_votes(self) -> float:
         """Calculate the net votes"""
         return sum(self._votes.values())
 
@@ -211,10 +211,10 @@ class AbstractVoteSession(ABC):
         assert self.id is not None
         await close_vote_session(self.id)
 
-    def __getitem__(self, user_id: int) -> int | None:
+    def __getitem__(self, user_id: int) -> float | None:
         return self._votes.get(user_id)
 
-    def __setitem__(self, user_id: int, weight: int | None) -> None:
+    def __setitem__(self, user_id: int, weight: float | None) -> None:
         """
         Set a vote synchronously, creating background tasks for updates.
         For direct async access, use set_vote() instead.

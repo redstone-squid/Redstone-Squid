@@ -119,7 +119,7 @@ async def close_vote_session(vote_session_id: int) -> None:
     await db.table("vote_sessions").update({"status": "closed"}).eq("id", vote_session_id).execute()
 
 
-async def upsert_vote(vote_session_id: int, user_id: int, weight: int | None) -> None:
+async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
     """Upsert a vote in the database.
 
     Args:
