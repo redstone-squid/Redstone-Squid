@@ -158,6 +158,7 @@ class SettingsCog(Cog, name="Settings"):
                         return
 
                     await update_server_setting(ctx.guild.id, setting, role_ids)
+                    await sent_message.edit(embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set."))
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
 
