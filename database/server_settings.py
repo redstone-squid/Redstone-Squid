@@ -1,4 +1,5 @@
 """Some functions related to storing and changing server ids for sending records."""
+import typing
 from typing import Literal, cast
 
 from postgrest.base_request_builder import SingleAPIResponse
@@ -13,6 +14,8 @@ from database.schema import (
     SETTINGS,
 )
 
+# Mapping of settings to the column names in the database.
+# This file should be the only place that is aware of the database column names.
 SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",
