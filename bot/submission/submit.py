@@ -304,6 +304,53 @@ class SubmissionsCog(Cog, name="Submissions"):
     class SubmitFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
 
+        def to_build(self) -> Build:
+            """Convert the flags to a build object."""
+            build = Build()
+            build.record_category = self.record_category
+            build.version_spec = self.works_in
+            build.versions = DatabaseManager.filter_versions(self.works_in)
+
+            if (build_size := self.build_size) is not None:
+                build_dimensions = parse_dimensions(build_size)
+                build.width, build.height, build.depth = build_dimensions
+
+            door_dimensions = parse_dimensions(self.door_size)
+            build.door_width, build.door_height, build.door_depth = door_dimensions
+
+            build.door_type = self.pattern.split(", ")
+            build.door_orientation_type = self.door_type
+
+            if (wp_res := self.wiring_placement_restrictions) is not None:
+                build.wiring_placement_restrictions = wp_res.split(", ")
+            else:
+                build.wiring_placement_restrictions = []
+
+            if (co_res := self.component_restrictions) is not None:
+                build.component_restrictions = co_res.split(", ")
+            else:
+                build.component_restrictions = []
+            misc_restrictions = [self.locationality, self.directionality]
+            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+
+            build.normal_closing_time = self.normal_closing_time
+            build.normal_opening_time = self.normal_opening_time
+
+            if self.information_about_build is not None:
+                build.information["user"] = self.information_about_build
+            if (ign := self.in_game_name_of_creator) is not None:
+                build.creators_ign = ign.split(", ")
+            else:
+                build.creators_ign = []
+
+            build.image_urls = [self.link_to_image] if self.link_to_image is not None else []
+            build.video_urls = [self.link_to_youtube_video] if self.link_to_youtube_video is not None else []
+            build.world_download_urls = (
+                [self.link_to_world_download] if self.link_to_world_download is not None else []
+            )
+            return build
+
+        # Intentionally moved closer to the submit command
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
@@ -338,49 +385,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         followup: discord.Webhook = interaction.followup  # type: ignore
 
         async with RunningMessage(followup) as message:
-            build = Build()
-            build.record_category = flags.record_category
-            build.version_spec = flags.works_in
-            build.versions = DatabaseManager.filter_versions(flags.works_in)
-
-            if (build_size := flags.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
-
-            door_dimensions = parse_dimensions(flags.door_size)
-            build.door_width, build.door_height, build.door_depth = door_dimensions
-
-            build.door_type = flags.pattern.split(", ")
-            build.door_orientation_type = flags.door_type
-
-            if (wp_res := flags.wiring_placement_restrictions) is not None:
-                build.wiring_placement_restrictions = wp_res.split(", ")
-            else:
-                build.wiring_placement_restrictions = []
-
-            if (co_res := flags.component_restrictions) is not None:
-                build.component_restrictions = co_res.split(", ")
-            else:
-                build.component_restrictions = []
-            misc_restrictions = [flags.locationality, flags.directionality]
-            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
-
-            build.normal_closing_time = flags.normal_closing_time
-            build.normal_opening_time = flags.normal_opening_time
-
-            if flags.information_about_build is not None:
-                build.information["user"] = flags.information_about_build
-            if (ign := flags.in_game_name_of_creator) is not None:
-                build.creators_ign = ign.split(", ")
-            else:
-                build.creators_ign = []
-
-            build.image_urls = [flags.link_to_image] if flags.link_to_image is not None else []
-            build.video_urls = [flags.link_to_youtube_video] if flags.link_to_youtube_video is not None else []
-            build.world_download_urls = (
-                [flags.link_to_world_download] if flags.link_to_world_download is not None else []
-            )
-
+            build = flags.to_build()
             build.submitter_id = ctx.author.id
             build.completion_time = flags.date_of_creation
 
@@ -498,7 +503,55 @@ class SubmissionsCog(Cog, name="Submissions"):
     # fmt: off
     class EditFlags(commands.FlagConverter):
         """Parameters information for the /edit command."""
-        _Default = object()
+        async def to_build(self) -> Build | None:
+            """Convert the flags to a build object, returns None if the build_id is invalid."""
+            build = await Build.from_id(self.build_id)
+            if build is None:
+                return None
+
+            # FIXME: need to distinguish between None and removing the value
+            if (works_in := self.works_in) is not None:
+                build.version_spec = works_in
+                build.versions = DatabaseManager.filter_versions(works_in)
+            if (build_size := self.build_size) is not None:
+                build_dimensions = parse_dimensions(build_size)
+                build.width, build.height, build.depth = build_dimensions
+            if (door_size := self.door_size) is not None:
+                door_dimensions = parse_dimensions(door_size)
+                build.door_width, build.door_height, build.door_depth = door_dimensions
+            if (pattern := self.pattern) is not None:
+                build.door_type = pattern.split(", ")
+            if (door_type := self.door_type) is not None:
+                build.door_orientation_type = door_type
+            if (wp_res := self.wiring_placement_restrictions) is not None:
+                build.wiring_placement_restrictions = wp_res.split(", ")
+            if (co_res := self.component_restrictions) is not None:
+                build.component_restrictions = co_res.split(", ")
+            misc_restrictions = [self.locationality, self.directionality]
+            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+            if self.normal_closing_time is not None:
+                build.normal_closing_time = self.normal_closing_time
+            if self.normal_opening_time is not None:
+                build.normal_opening_time = self.normal_opening_time
+            if self.information_about_build is not None:
+                build.information["user"] = self.information_about_build
+            if (ign := self.in_game_name_of_creator) is not None:
+                build.creators_ign = ign.split(", ")
+            if self.link_to_image is not None:
+                build.image_urls = [self.link_to_image]
+            if self.link_to_youtube_video is not None:
+                build.video_urls = [self.link_to_youtube_video]
+            if self.link_to_world_download is not None:
+                build.world_download_urls = [self.link_to_world_download]
+            if self.server_ip is not None:
+                build.server_ip = self.server_ip
+            if self.coordinates is not None:
+                build.coordinates = self.coordinates
+            if self.command_to_get_to_build is not None:
+                build.command = self.command_to_get_to_build
+            if self.date_of_creation is not None:
+                build.completion_time = self.date_of_creation
+
         build_id: int = flag(description='The ID of the submission.')
         door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
@@ -534,53 +587,10 @@ class SubmissionsCog(Cog, name="Submissions"):
 
         followup: discord.Webhook = interaction.followup  # type: ignore
         async with RunningMessage(followup) as sent_message:
-            build = await Build.from_id(flags.build_id)
+            build = await flags.to_build()
             if build is None:
                 error_embed = utils.error_embed("Error", "No submission with that ID.")
                 return await sent_message.edit(embed=error_embed)
-
-            # FIXME: need to distinguish between None and removing the value
-            if (works_in := flags.works_in) is not None:
-                build.version_spec = works_in
-                build.versions = DatabaseManager.filter_versions(works_in)
-            if (build_size := flags.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
-            if (door_size := flags.door_size) is not None:
-                door_dimensions = parse_dimensions(door_size)
-                build.door_width, build.door_height, build.door_depth = door_dimensions
-            if (pattern := flags.pattern) is not None:
-                build.door_type = pattern.split(", ")
-            if (door_type := flags.door_type) is not None:
-                build.door_orientation_type = door_type
-            if (wp_res := flags.wiring_placement_restrictions) is not None:
-                build.wiring_placement_restrictions = wp_res.split(", ")
-            if (co_res := flags.component_restrictions) is not None:
-                build.component_restrictions = co_res.split(", ")
-            misc_restrictions = [flags.locationality, flags.directionality]
-            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
-            if flags.normal_closing_time is not None:
-                build.normal_closing_time = flags.normal_closing_time
-            if flags.normal_opening_time is not None:
-                build.normal_opening_time = flags.normal_opening_time
-            if flags.information_about_build is not None:
-                build.information["user"] = flags.information_about_build
-            if (ign := flags.in_game_name_of_creator) is not None:
-                build.creators_ign = ign.split(", ")
-            if flags.link_to_image is not None:
-                build.image_urls = [flags.link_to_image]
-            if flags.link_to_youtube_video is not None:
-                build.video_urls = [flags.link_to_youtube_video]
-            if flags.link_to_world_download is not None:
-                build.world_download_urls = [flags.link_to_world_download]
-            if flags.server_ip is not None:
-                build.server_ip = flags.server_ip
-            if flags.coordinates is not None:
-                build.coordinates = flags.coordinates
-            if flags.command_to_get_to_build is not None:
-                build.command = flags.command_to_get_to_build
-            if flags.date_of_creation is not None:
-                build.completion_time = flags.date_of_creation
 
             preview_embed = build.generate_embed()
 
