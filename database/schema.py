@@ -10,6 +10,7 @@ from database.enums import Status, Category
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
     component_restrictions: list[str]
+    miscellaneous_restrictions: list[str]
 
 
 class Info(TypedDict, total=False):
@@ -35,7 +36,11 @@ class BuildRecord(TypedDict):
     completion_time: str | None  # Given by user, not parsable as a datetime
     category: Category
     server_info: dict[str, Any] | None  # JSON
-    submitter_id: int | None  # TODO: fix db and remove None
+    submitter_id: int
+    original_message_id: int
+    original_message: str
+    version_spec: str
+    ai_generated: bool
 
 
 class MessageRecord(TypedDict):
