@@ -8,7 +8,7 @@ from typing import override, cast, TYPE_CHECKING
 import discord
 from discord.ui import View
 
-from bot import utils as utils, config as config
+from bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from database.builds import Build
 from database.enums import Status, Category
 from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
@@ -58,9 +58,9 @@ class SubmissionModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()  # type: ignore
 
-        self.build.door_dimensions = utils.parse_hallway_dimensions(self.door_size.value)
+        self.build.door_dimensions = parse_hallway_dimensions(self.door_size.value)
         self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
-        self.build.dimensions = utils.parse_dimensions(self.dimensions.value)  # type: ignore
+        self.build.dimensions = parse_dimensions(self.dimensions.value)  # type: ignore
         await self.build.set_restrictions(self.restrictions.value.split(", "))
 
         # Extract IGN

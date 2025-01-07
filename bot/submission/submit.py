@@ -19,7 +19,7 @@ from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from typing_extensions import override
 
 from bot import utils
-from bot.submission.parse import parse_build
+from bot.submission.parse import parse_build, parse_dimensions
 from bot.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
@@ -27,7 +27,7 @@ from database.builds import get_all_builds, Build
 from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
-from bot.utils import RunningMessage, parse_dimensions, is_owner_server, check_is_staff
+from bot.utils import RunningMessage, is_owner_server, check_is_staff
 from database.message import get_build_id_by_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
