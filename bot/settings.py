@@ -66,12 +66,12 @@ class SettingsCog(Cog, name="Settings"):
 
             await sent_message.edit(embed=utils.info_embed(title="Current Settings", description=desc))
 
-    @settings_hybrid_group.command(name="query")
+    @settings_hybrid_group.command(name="search")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
     @app_commands.rename(channel_purpose="type")
     @check_is_staff()
-    async def query_channel(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
-        """Finds which channel is set for a purpose and sends the results to the user."""
+    async def search_setting(self, ctx: Context[RedstoneSquid], channel_purpose: ChannelPurpose):
+        """Show the server's current setting."""
         assert ctx.guild is not None
         unset_em = utils.info_embed(
             f"{channel_purpose} Channel Info",
@@ -102,13 +102,13 @@ class SettingsCog(Cog, name="Settings"):
     )
     @app_commands.rename(channel_purpose="type")
     @check_is_staff()
-    async def set_channel(
+    async def change_setting(
         self,
         ctx: Context,
         channel_purpose: ChannelPurpose,
         channel: GuildMessageable,
     ):
-        """Sets the current channel as the channel to post this record type to."""
+        """Change the server's setting."""
         assert ctx.guild is not None
         success_embed = utils.info_embed("Settings updated", f"{channel_purpose} channel has successfully been set.")
         failure_embed = utils.error_embed("Error", "Could not find that channel.")
@@ -124,12 +124,12 @@ class SettingsCog(Cog, name="Settings"):
             await update_server_setting(ctx.guild.id, channel_purpose, channel.id)
             await sent_message.edit(embed=success_embed)
 
-    @settings_hybrid_group.command(name="unset")
+    @settings_hybrid_group.command(name="clear")
     @app_commands.describe(channel_purpose=", ".join(CHANNEL_PURPOSES))
     @app_commands.rename(channel_purpose="type")
     @check_is_staff()
-    async def unset_channel(self, ctx: Context, channel_purpose: ChannelPurpose):
-        """Unsets the channel to post this record type to."""
+    async def clear_setting(self, ctx: Context, channel_purpose: ChannelPurpose):
+        """Set this setting to None."""
         assert ctx.guild is not None
         success_embed = utils.info_embed(
             "Settings updated",
