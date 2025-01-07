@@ -24,7 +24,6 @@ from database.schema import (
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
-    ChannelPurpose,
     QuantifiedVersionRecord,
 )
 from database import DatabaseManager
@@ -271,18 +270,28 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    def get_channel_type_to_post_to(self: Build) -> ChannelPurpose:
+    async def get_channel_type_to_post_to(self: Build) -> Literal["Smallest", "Fastest", "First", "Builds", "Vote"]:
         """Gets the type of channel to post a submission to."""
-        status = self.submission_status
-        if status == Status.PENDING:
-            return "Vote"
-        elif status == Status.DENIED:
-            raise ValueError("Denied submissions should not be posted.")
 
-        if self.record_category is None:
-            return "Builds"
-        else:
-            return self.record_category
+        target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+
+        match (self.submission_status, self.record_category):
+            case (Status.PENDING, _):
+                target = "Vote"
+            case (Status.DENIED, _):
+                raise ValueError("Denied submissions should not be posted.")
+            case (Status.CONFIRMED, None):
+                target = "Builds"
+            case (Status.CONFIRMED, "Smallest"):
+                target = "Smallest"
+            case (Status.CONFIRMED, "Fastest"):
+                target = "Fastest"
+            case (Status.CONFIRMED, "First"):
+                target = "First"
+            case _:
+                raise ValueError("Invalid status or record category")
+
+        return target
 
     async def get_channel_ids_to_post_to(self: Build, guild_ids: list[int]) -> list[int]:
         """Gets all channels which this build should be posted to."""

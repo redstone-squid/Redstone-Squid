@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias, List
+from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
 
 from pydantic.types import Json
 from database.enums import Status, Category
@@ -90,8 +90,8 @@ class ServerSettingRecord(TypedDict):
     first_channel_id: int | None
     builds_channel_id: int | None
     voting_channel_id: int | None
-    staff_roles_ids: List[int] | None
-    trusted_roles_ids: List[int] | None
+    staff_roles_ids: list[int] | None
+    trusted_roles_ids: list[int] | None
 
 
 DbSettingKey = Literal[
@@ -168,14 +168,8 @@ BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType)
 DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
-ChannelPurpose: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-CHANNEL_PURPOSES = cast(Sequence[ChannelPurpose], get_args(ChannelPurpose))
-
-RoleSetting: TypeAlias = Literal["Staff", "Trusted"]
-ROLE_SETTINGS = cast(Sequence[RoleSetting], get_args(RoleSetting))
-
-Setting: TypeAlias = ChannelPurpose | RoleSetting
-SETTINGS = cast(Sequence[Setting], list(CHANNEL_PURPOSES) + list(ROLE_SETTINGS))
+Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+SETTINGS = cast(Sequence[Setting], get_args(Setting))
 
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))

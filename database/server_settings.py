@@ -1,4 +1,5 @@
 """Some functions related to storing and changing server ids for sending records."""
+from typing import Literal, cast
 
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
@@ -8,28 +9,18 @@ from database import DatabaseManager
 from database.schema import (
     ServerSettingRecord,
     DbSettingKey,
-    ChannelPurpose,
-    RoleSetting,
     Setting,
     SETTINGS,
 )
 
-CHANNEL_PURPOSE_TO_DB_SETTING: dict[ChannelPurpose, DbSettingKey] = {
+SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",
     "First": "first_channel_id",
     "Builds": "builds_channel_id",
     "Vote": "voting_channel_id",
-}
-
-ROLE_SETTING_TO_DB_SETTING: dict[RoleSetting, DbSettingKey] = {
     "Staff": "staff_roles_ids",
     "Trusted": "trusted_roles_ids",
-}
-
-SETTING_TO_DB_SETTING: dict[Setting, DbSettingKey] = {
-    **CHANNEL_PURPOSE_TO_DB_SETTING,
-    **ROLE_SETTING_TO_DB_SETTING,
 }
 
 DB_SETTING_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in SETTING_TO_DB_SETTING.items()}
@@ -46,26 +37,12 @@ def get_purpose_name(setting_name: DbSettingKey) -> Setting:
     return DB_SETTING_TO_SETTING[setting_name]
 
 
-# async def get_server_channel_purpose(server_id: int, channel_purpose: ChannelPurpose) -> int | None:
-#     """Gets the channel id of the specified purpose for a server. The channels fetched are always GuildMessageable unless the server admins changed them."""
-#     setting_name = get_setting_name(channel_purpose)
-#     response: SingleAPIResponse[ServerSettingRecord] | None = (
-#         await DatabaseManager()
-#         .table("server_settings")
-#         .select(setting_name, count=CountMethod.exact)
-#         .eq("server_id", server_id)
-#         .maybe_single()
-#         .execute()
-#     )
-#     if response is None:
-#         return None
-#     return response.data.get(setting_name)
-
-
 @overload
-async def get_server_setting(server_id: int, setting: ChannelPurpose) -> int | None: ...
+async def get_server_setting(server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]) -> int | None: ...
 @overload
-async def get_server_setting(server_id: int, setting: RoleSetting) -> list[int] | None: ...
+async def get_server_setting(server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int] | None: ...
+@overload
+async def get_server_setting(server_id: int, setting: Setting) -> int | list[int] | None: ...
 
 
 async def get_server_setting(server_id: int, setting: Setting) -> int | list[int] | None:
@@ -88,7 +65,7 @@ async def get_server_setting(server_id: int, setting: Setting) -> int | list[int
     return response.data.get(setting_name)
 
 
-async def get_server_settings(server_id: int) -> dict[Setting, int | list[int]]:
+async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] | None]:
     """Gets the settings for a server."""
     response: SingleAPIResponse[ServerSettingRecord] | None = (
         await DatabaseManager().table("server_settings").select("*").eq("server_id", server_id).maybe_single().execute()
@@ -97,7 +74,9 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int]]:
         return {}
 
     settings = response.data
-    return {get_purpose_name(setting_name): id for setting_name, id in settings.items() if setting_name != "server_id"}  # type: ignore
+
+    excluded_columns = ["server_id", "in_server"]
+    return {get_purpose_name(setting_name): id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
 
 
 async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None:
