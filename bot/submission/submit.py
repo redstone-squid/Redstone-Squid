@@ -75,6 +75,22 @@ class BuildVoteSession(AbstractVoteSession):
         self.build = build
         self.type = type
 
+    @classmethod
+    @override
+    async def create(
+        cls,
+        bot: discord.Client,
+        messages: list[discord.Message] | list[int],
+        author_id: int,
+        build: Build,
+        type: Literal["add", "update"],
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
+    ) -> "BuildVoteSession":
+        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
+        assert isinstance(self, BuildVoteSession)
+        return self
+
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
@@ -135,22 +151,6 @@ class BuildVoteSession(AbstractVoteSession):
             vote_session_record["fail_threshold"],
         )
         self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
-        return self
-
-    @classmethod
-    @override
-    async def create(
-        cls,
-        bot: discord.Client,
-        messages: list[discord.Message] | list[int],
-        author_id: int,
-        build: Build,
-        type: Literal["add", "update"],
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
-        assert isinstance(self, BuildVoteSession)
         return self
 
     @override
