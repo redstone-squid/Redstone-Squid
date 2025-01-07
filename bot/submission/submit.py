@@ -55,6 +55,7 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
+        type: Literal["add", "update"] = "add",
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ):
@@ -65,12 +66,14 @@ class BuildVoteSession(AbstractVoteSession):
             bot: The discord client.
             messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
-            build: The build which the vote session is for.
+            build: The build which the vote session is for. If type is "update", this is the updated build.
+            type: Whether to add or update the build.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
         super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
         self.build = build
+        self.type = type
 
     @override
     async def _async_init(self) -> None:
@@ -87,7 +90,14 @@ class BuildVoteSession(AbstractVoteSession):
         except discord.Forbidden:
             pass  # Bot doesn't have permission to add reactions
 
-        await track_build_vote_session(self.id, self.build)
+        assert self.build.id is not None
+        if self.type == "add":
+            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
+        else:
+            original = await Build.from_id(self.build.id)
+            assert original is not None
+            changes = original.diff(self.build)
+        await track_build_vote_session(self.id, self.build.id, changes)
 
     @classmethod
     @override
@@ -134,10 +144,11 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
+        type: Literal["add", "update"] = "add",
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, pass_threshold, fail_threshold)
+        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
         assert isinstance(self, BuildVoteSession)
         return self
 
@@ -546,6 +557,7 @@ class BuildCog(Cog, name="Build"):
                 build.command = self.command_to_get_to_build
             if self.date_of_creation is not None:
                 build.completion_time = self.date_of_creation
+            return build
 
         build_id: int = flag(description='The ID of the submission.')
         door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
