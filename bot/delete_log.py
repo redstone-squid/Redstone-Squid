@@ -245,8 +245,6 @@ class DeleteLogCog(Cog, name="Vote"):
 
         # Check if the user has a trusted role
         trusted_role_ids = await get_server_setting(server_id=payload.guild_id, setting="Trusted")
-        if trusted_role_ids is None:
-            return
 
         guild = self.bot.get_guild(payload.guild_id)
         assert guild is not None
