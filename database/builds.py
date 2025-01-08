@@ -16,6 +16,7 @@ from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
 from bot._types import GuildMessageable
+from bot.utils import get_website_preview
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -600,7 +601,12 @@ class Build:
             em.add_field(name=key, value=escape_markdown(val), inline=True)
 
         if self.image_urls:
-            em.set_image(url=self.image_urls[0])
+            url = self.image_urls[0]
+            if url.endswith(".jpg") or url.endswith(".png"):
+                em.set_image(url=url)
+            else:
+                preview = get_website_preview(url)
+                em.set_image(url=preview["image"])
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
         return em

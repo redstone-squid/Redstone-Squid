@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from traceback import format_tb
 from types import TracebackType
 from typing import overload, Literal, TYPE_CHECKING, Any, Mapping, cast
 
 import discord
+import requests
+import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
@@ -29,6 +32,9 @@ if TYPE_CHECKING:
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
 discord_green = 0x43B581
+
+
+logger = logging.getLogger(__name__)
 
 
 def error_embed(title: str, description: str | None):
@@ -209,8 +215,79 @@ async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -
     return None
 
 
+def get_website_preview(url: str) -> dict[str, str | None]:
+    """
+    Fetches a webpage and tries to extract metadata in a manner similar to social platforms (e.g., Twitter or Discord previews).
+
+    Returns:
+        A dict with the following keys
+        - title
+        - description
+        - image
+        - site_name
+        - url
+    """
+    preview_data: dict[str, str | None] = {
+        "title": None,
+        "description": None,
+        "image": None,
+        "site_name": None,
+        "url": None
+    }
+
+    try:
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        response = requests.get(url, headers={"User-Agent": user_agent}, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(e)
+        logger.debug(f"Failed to retrieve URL '{url}': {e}")
+        return preview_data  # returns empty data if request fails
+
+    soup = bs4.BeautifulSoup(response.text, "html.parser")
+
+    def get_meta_content(property_name: str, attribute_type: str = "property") -> str | None:
+        """Helper function to extract content from meta tags."""
+        tag = soup.find("meta", attrs={attribute_type: property_name})
+
+        assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
+        if tag and tag.get("content"):
+            content = tag["content"]
+            assert isinstance(content, str), "tag['content'] is not a string"
+            return content.strip()
+        return None
+
+    # Check Open Graph first (e.g. <meta property="og:title" content="..." />)
+    preview_data["title"] = get_meta_content("og:title") or get_meta_content("twitter:title", "name")
+    preview_data["description"] = get_meta_content("og:description") or get_meta_content("twitter:description", "name")
+    preview_data["image"] = get_meta_content("og:image") or get_meta_content("twitter:image", "name")
+    preview_data["site_name"] = get_meta_content("og:site_name")
+    preview_data["url"] = get_meta_content("og:url")
+
+    # Fallbacks if OG/Twitter meta not found:
+    # 1) title: <title> tag
+    if not preview_data["title"]:
+        if soup.title and soup.title.string:
+            preview_data["title"] = soup.title.string.strip()
+
+    # 2) description: <meta name="description" content="..." />
+    if not preview_data["description"]:
+        preview_data["description"] = get_meta_content("description", "name")
+
+    # 3) If site_name still not found, try domain from given url
+    if not preview_data["site_name"]:
+        preview_data["site_name"] = url.split("//")[-1].split("/")[0]
+
+    # 4) If url not found, use the original
+    if not preview_data["url"]:
+        preview_data["url"] = url
+
+    return preview_data
+
 async def main():
-    pass
+    test_url = "https://imgur.com/WwsKLH5"
+    preview = get_website_preview(test_url)
+    print(preview)
 
 
 if __name__ == "__main__":
