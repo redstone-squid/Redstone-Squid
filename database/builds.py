@@ -473,7 +473,7 @@ class Build:
                 background_tasks.add(tg.create_task(self._update_build_versions_table(data)))
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
                 unknown_types = tg.create_task(self._update_build_types_table(data))
-            build_vecs = vx.get_collection("builds")
+            build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
             self.embedding = await self.generate_embedding()
             build_vecs.upsert(
                 records=[(str(self.id), self.embedding, {})]
