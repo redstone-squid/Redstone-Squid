@@ -3,6 +3,7 @@
 
 from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
 import asyncio
+import os
 
 import discord
 from discord import InteractionResponse, Message, app_commands, Interaction
@@ -15,8 +16,10 @@ from discord.ext.commands import (
     hybrid_command,
     flag,
 )
+from openai import AsyncOpenAI
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from typing_extensions import override
+import vecs
 
 from bot import utils
 from bot.submission.parse import parse_build, parse_dimensions
@@ -267,6 +270,29 @@ class BuildCog(Cog, name="Build"):
                 return await sent_message.edit(embed=error_embed)
 
             await sent_message.edit(embed=submission.generate_embed())
+
+    @commands.hybrid_command("search")
+    async def search_builds(self, ctx: Context, query: str):
+        """
+        Searches for a build with natural language.
+
+        Args:
+            query: The query to search for.
+        """
+        client = AsyncOpenAI()
+        response = await client.embeddings.create(
+            input=query,
+            model="text-embedding-3-small"
+        )
+        query_vec = response.data[0].embedding
+        vx = vecs.create_client(os.environ["DB_CONNECTION"])
+        build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
+        result: list[str] = build_vecs.query(query_vec, limit=1)  # type: ignore
+        assert len(result) == 1
+        build_id = int(result[0])
+        build = await Build.from_id(build_id)
+        assert build is not None
+        await ctx.send(embed=build.generate_embed())
 
     @build_hybrid_group.command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
