@@ -1,6 +1,7 @@
 """A cog with commands to submit, view, confirm and deny submissions."""
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
+from collections.abc import Iterable
 from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
 import asyncio
 import os
@@ -54,7 +55,7 @@ class BuildVoteSession(AbstractVoteSession):
     def __init__(
         self,
         bot: discord.Client,
-        messages: list[discord.Message] | list[int],
+        messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
         type: Literal["add", "update"],
@@ -82,7 +83,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def create(
         cls,
         bot: discord.Client,
-        messages: list[discord.Message] | list[int],
+        messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
         type: Literal["add", "update"],
@@ -159,7 +160,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         message = await channel.send(embed=self.build.generate_embed())
         await msg.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
-        self._messages.append(message)
+        self._messages.add(message)
         return message
 
     @override

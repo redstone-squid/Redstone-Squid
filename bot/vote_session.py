@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import inspect
 from abc import abstractmethod, ABC
 import asyncio
@@ -47,7 +48,7 @@ class AbstractVoteSession(ABC):
 
     kind: VoteKind
 
-    def __init__(self, bot: discord.Client, messages: list[discord.Message] | list[int], author_id: int, pass_threshold: int, fail_threshold: int):
+    def __init__(self, bot: discord.Client, messages: Iterable[discord.Message] | Iterable[int], author_id: int, pass_threshold: int, fail_threshold: int):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
 
@@ -70,16 +71,16 @@ class AbstractVoteSession(ABC):
         """The id of the vote session in the database. If None, we are not tracking the vote session and thus no async operations are performed."""
         self.is_closed = False
         self.bot = bot
-        self._messages: list[discord.Message]
-        self.message_ids: list[int]
+        self._messages: set[discord.Message]
+        self.message_ids: set[int]
         if all(isinstance(message, int) for message in messages):
             messages = cast(list[int], messages)
-            self._messages = []
-            self.message_ids = messages
+            self._messages = set()
+            self.message_ids = set(messages)
         else:
             messages = cast(list[discord.Message], messages)
-            self._messages = messages
-            self.message_ids = [message.id for message in messages]
+            self._messages = set(messages)
+            self.message_ids = set(message.id for message in messages)
         if len(messages) >= 10:
             raise ValueError(
                 "Found a vote session with more than 10 messages, we need to change the update_message logic."
@@ -178,12 +179,12 @@ class AbstractVoteSession(ABC):
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send a vote session message to a channel"""
 
-    async def get_messages(self) -> list[discord.Message] | None:
+    async def get_messages(self) -> set[discord.Message] | None:
         """Get the messages of the vote session if they exist in the cache"""
         if len(self.message_ids) == len(self._messages):
             return self._messages
 
-    async def fetch_messages(self) -> list[discord.Message]:
+    async def fetch_messages(self) -> set[discord.Message]:
         """Fetch the messages of the vote session"""
         if len(self.message_ids) == len(self._messages):
             return self._messages
@@ -191,9 +192,9 @@ class AbstractVoteSession(ABC):
         messages_record: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(*(utils.getch(self.bot, record) for record in messages_record.data if record["message_id"] not in cached_ids))
-        new_messages = [message for message in new_messages if message is not None]
-        self._messages.extend(new_messages)
-        assert len(self._messages) == len(self.message_ids), "There is some race condition in fetching messages where one message is fetched multiple times, need to investigate."  # TODO
+        new_messages = (message for message in new_messages if message is not None)
+        self._messages.update(new_messages)
+        assert len(self._messages) == len(self.message_ids)
         return self._messages
 
     @abstractmethod

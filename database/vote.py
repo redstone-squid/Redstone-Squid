@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, TypeVar
 
 import discord
@@ -21,7 +22,7 @@ T = TypeVar("T")
 
 
 async def track_vote_session(
-    messages: list[discord.Message],
+    messages: Iterable[discord.Message],
     author_id: int,
     kind: VoteKind,
     pass_threshold: int,

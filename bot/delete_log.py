@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterable
 from textwrap import dedent
 
 import discord
@@ -32,7 +33,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     def __init__(
         self,
         bot: discord.Client,
-        messages: list[discord.Message] | list[int],
+        messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int = 3,
@@ -57,7 +58,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def create(
         cls,
         bot: discord.Client,
-        messages: list[discord.Message] | list[int],
+        messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int = 3,
