@@ -11,7 +11,7 @@ from types import MethodType
 from typing import Any, TypeVar, Union, TYPE_CHECKING, cast
 
 import discord
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 
 from bot import utils
 from bot._types import GuildMessageable
