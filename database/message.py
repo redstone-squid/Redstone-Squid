@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
-from database.builds import Build, get_builds
 from database.schema import MessageRecord, MessagePurpose
 from database.utils import utcnow
 from database import DatabaseManager
@@ -111,23 +108,6 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     response = await db.rpc("get_outdated_messages", {"server_id_input": server_id}).execute()
     server_outdated_messages = response.data
     return server_outdated_messages
-
-
-async def get_unsent_builds(server_id: int) -> list[Build]:
-    """
-    Gets all the builds without messages in this server.
-
-    Args:
-        server_id: The server id to check for.
-
-    Returns:
-        A list of messages
-    """
-    db = DatabaseManager()
-    response = await db.rpc("get_unsent_builds", {"server_id_input": server_id}).execute()
-    build_ids = [row["id"] for row in response.data]
-    builds = await get_builds(build_ids)
-    return [build for build in builds if build is not None]
 
 
 async def get_build_id_by_message(message_id: int) -> int | None:
