@@ -10,3 +10,4 @@ uvicorn
 openai
 async_lru
 markdown
+beautifulsoup4
