@@ -650,6 +650,9 @@ class Build:
             else:
                 preview = get_website_preview(url)
                 em.set_image(url=preview["image"])
+        elif self.video_urls:
+            preview = get_website_preview(self.video_urls[0])
+            em.set_image(url=preview["image"])
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
         return em
