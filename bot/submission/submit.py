@@ -196,7 +196,9 @@ class BuildVoteSession(AbstractVoteSession):
             .execute()
         ).data
 
-        async def _get_session(record: dict[str, Any]) -> "BuildVoteSession":
+        async def _get_session(record: dict[str, Any] | None) -> "BuildVoteSession":
+            if record is None:
+                raise ValueError("Found a build vote session with no associated build id.")
             build_id: int = record["build_vote_sessions"]["build_id"]
             build = await Build.from_id(build_id)
 
