@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import asyncio
 import logging
 from asyncio import Task
@@ -16,6 +17,7 @@ from discord.utils import escape_markdown
 from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
+import vecs
 
 from bot._types import GuildMessageable
 from bot.utils import get_website_preview
@@ -461,6 +463,7 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
 
+        vx = vecs.create_client(os.environ["DB_CONNECTION"])
         try:
             background_tasks: set[Task[Any]] = set()
             async with asyncio.TaskGroup() as tg:
@@ -470,6 +473,11 @@ class Build:
                 background_tasks.add(tg.create_task(self._update_build_versions_table(data)))
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
                 unknown_types = tg.create_task(self._update_build_types_table(data))
+            build_vecs = vx.get_collection("builds")
+            self.embedding = await self.generate_embedding()
+            build_vecs.upsert(
+                records=[(str(self.id), self.embedding, {})]
+            )
 
             if unknown_restrictions.result():
                 information["unknown_restrictions"] = unknown_restrictions.result()
@@ -478,6 +486,7 @@ class Build:
             # Update the information field in the database to store any unknown restrictions or types
             await db.table("builds").update({"information": information}).eq("id", self.id).execute()
         except:
+            vx.disconnect()
             if delete_build_on_error:
                 await db.table("builds").delete().eq("id", self.id).execute()
             raise
