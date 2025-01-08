@@ -521,6 +521,7 @@ class Build:
         unknown_restrictions: UnknownRestrictions = {}
         unknown_wiring_restrictions = []
         unknown_component_restrictions = []
+        unknown_miscellaneous_restrictions = []
         for wiring_restriction in data.get("wiring_placement_restrictions", []):
             if wiring_restriction not in [
                 restriction["name"] for restriction in response.data if restriction["type"] == "wiring-placement"
@@ -531,11 +532,19 @@ class Build:
                 restriction["name"] for restriction in response.data if restriction["type"] == "component"
             ]:
                 unknown_component_restrictions.append(component_restriction)
+        for miscellaneous_restriction in data.get("miscellaneous_restrictions", []):
+            if miscellaneous_restriction not in [
+                restriction["name"] for restriction in response.data if restriction["type"] == "miscellaneous"
+            ]:
+                unknown_miscellaneous_restrictions.append(miscellaneous_restriction)
         # TODO: miscellaneous restrictions?
         if unknown_wiring_restrictions:
             unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring_restrictions
         if unknown_component_restrictions:
             unknown_restrictions["component_restrictions"] = unknown_component_restrictions
+        if unknown_miscellaneous_restrictions:
+            unknown_restrictions["miscellaneous_restrictions"] = unknown_miscellaneous_restrictions
+
         return unknown_restrictions
 
     async def _update_build_types_table(self, data: dict[str, Any]) -> list[str]:
