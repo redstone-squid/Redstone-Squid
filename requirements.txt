@@ -44,6 +44,8 @@ colorama==0.4.6
     # via
     #   click
     #   tqdm
+deprecated==1.2.15
+    # via vecs
 deprecation==2.1.0
     # via postgrest
 discord==2.3.2
@@ -56,6 +58,8 @@ distro==1.9.0
     # via openai
 fastapi==0.115.6
     # via -r requirements.in
+flupy==1.2.1
+    # via vecs
 frozenlist==1.5.0
     # via
     #   aiohttp
@@ -68,6 +72,8 @@ google-auth-oauthlib==1.2.1
     # via gspread
 gotrue==2.11.1
     # via supabase
+greenlet==3.1.1
+    # via sqlalchemy
 gspread==6.1.4
     # via -r requirements.in
 h11==0.14.0
@@ -110,6 +116,8 @@ multidict==6.1.0
     # via
     #   aiohttp
     #   yarl
+numpy==2.2.1
+    # via pgvector
 oauth2client==4.1.3
     # via -r requirements.in
 oauthlib==3.2.2
@@ -118,12 +126,16 @@ openai==1.58.1
     # via -r requirements.in
 packaging==24.2
     # via deprecation
+pgvector==0.3.6
+    # via vecs
 postgrest==0.19.1
     # via supabase
 propcache==0.2.1
     # via
     #   aiohttp
     #   yarl
+psycopg2-binary==2.9.10
+    # via vecs
 pyasn1==0.6.1
     # via
     #   oauth2client
@@ -174,6 +186,8 @@ sniffio==1.3.1
     #   openai
 soupsieve==2.6
     # via beautifulsoup4
+sqlalchemy==2.0.36
+    # via vecs
 starlette==0.41.3
     # via fastapi
 storage3==0.11.0
@@ -192,16 +206,22 @@ typing-extensions==4.12.2
     # via
     #   anyio
     #   fastapi
+    #   flupy
     #   jishaku
     #   openai
     #   pydantic
     #   pydantic-core
     #   realtime
+    #   sqlalchemy
 urllib3==2.3.0
     # via requests
 uvicorn==0.34.0
     # via -r requirements.in
+vecs==0.4.5
+    # via -r requirements.in
 websockets==13.1
     # via realtime
+wrapt==1.17.0
+    # via deprecated
 yarl==1.18.3
     # via aiohttp
