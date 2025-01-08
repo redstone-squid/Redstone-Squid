@@ -192,6 +192,6 @@ DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrient
 Restriction = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
 
-MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote"]
+MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
 VoteKind = Literal["build", "delete_log"]

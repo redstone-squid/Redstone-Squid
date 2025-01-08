@@ -32,7 +32,7 @@ from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
-from database.message import get_build_id_by_message, untrack_message
+from database.message import get_build_id_by_message, track_message, untrack_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
 from database.utils import get_version_string, upload_to_catbox
@@ -777,8 +777,11 @@ class BuildCog(Cog, name="Build"):
         build.submitter_id = message.author.id
         build.original_message_id = message.id
         build.original_message = message.clean_content
-        await build.save()
-        await self.post_build_for_voting(build, type="add")
+        await asyncio.gather(*(
+            build.save(),
+            self.post_build_for_voting(build, type="add"),
+            track_message(message, purpose="build_original_message", build_id=build.id)
+        ))
 
     @build_hybrid_group.command("recalc")
     @check_is_staff()
