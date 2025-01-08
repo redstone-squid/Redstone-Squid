@@ -796,9 +796,9 @@ class Build:
                 fields["Command"] = self.command
 
         if self.world_download_urls:
-            fields["World Download"] = str(self.world_download_urls)
+            fields["World Download"] = ", ".join(self.world_download_urls)
         if self.video_urls:
-            fields["Video"] = str(self.video_urls)
+            fields["Video"] = ", ".join(self.video_urls)
 
         return fields
 
