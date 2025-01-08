@@ -41,6 +41,7 @@ class BuildRecord(TypedDict):
     original_message: str
     version_spec: str
     ai_generated: bool
+    embedding: list[float] | None
 
 
 class MessageRecord(TypedDict):
