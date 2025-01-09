@@ -55,6 +55,7 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
+        type: Literal["add", "update"] = "add",
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ):
@@ -65,12 +66,14 @@ class BuildVoteSession(AbstractVoteSession):
             bot: The discord client.
             messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
-            build: The build which the vote session is for.
+            build: The build which the vote session is for. If type is "update", this is the updated build.
+            type: Whether to add or update the build.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
         super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
         self.build = build
+        self.type = type
 
     @override
     async def _async_init(self) -> None:
