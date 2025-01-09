@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import discord
 from postgrest.base_request_builder import APIResponse
@@ -15,6 +15,9 @@ from database.schema import VoteSessionRecord, VoteKind
 
 if TYPE_CHECKING:
     pass
+
+
+T = TypeVar("T")
 
 
 async def track_vote_session(
@@ -59,33 +62,25 @@ async def track_vote_session(
     return session_id
 
 
-async def track_build_vote_session(vote_session_id: int, proposed_changes: Build) -> None:
+async def track_build_vote_session(vote_session_id: int, build_id: int, changes: list[tuple[str, T, T]]) -> None:
     """Track a build vote session in the database.
 
     Args:
         vote_session_id: The id of the vote session.
-        proposed_changes: The proposed changes for the vote session.
+        build_id: The id of the build to vote on.
+        changes: The proposed changes for the vote session.
 
     Raises:
         ValueError: If the proposed changes are empty.
     """
-    if proposed_changes.id is None:
-        raise ValueError("The build proposed for voting has no id.")
-    original_build = await Build.from_id(proposed_changes.id)
-    if original_build is None:
-        raise ValueError("The build proposed for voting does not exist.")
-
-    if proposed_changes == original_build:
-        raise ValueError("There are no changes to vote on.")
-
     db = DatabaseManager()
     await (
         db.table("build_vote_sessions")
         .insert(
             {
                 "vote_session_id": vote_session_id,
-                "build_id": proposed_changes.id,
-                "changes": original_build.diff(proposed_changes),
+                "build_id": build_id,
+                "changes": changes,
             }
         )
         .execute()

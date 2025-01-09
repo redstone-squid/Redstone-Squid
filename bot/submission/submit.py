@@ -90,7 +90,14 @@ class BuildVoteSession(AbstractVoteSession):
         except discord.Forbidden:
             pass  # Bot doesn't have permission to add reactions
 
-        await track_build_vote_session(self.id, self.build)
+        assert self.build.id is not None
+        if self.type == "add":
+            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
+        else:
+            original = await Build.from_id(self.build.id)
+            assert original is not None
+            changes = original.diff(self.build)
+        await track_build_vote_session(self.id, self.build.id, changes)
 
     @classmethod
     @override
@@ -137,10 +144,11 @@ class BuildVoteSession(AbstractVoteSession):
         messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
+        type: Literal["add", "update"] = "add",
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, pass_threshold, fail_threshold)
+        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
         assert isinstance(self, BuildVoteSession)
         return self
 
