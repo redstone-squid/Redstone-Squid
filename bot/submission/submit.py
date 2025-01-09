@@ -779,7 +779,8 @@ class BuildCog(Cog, name="Build"):
         ))
 
     @build_hybrid_group.command("recalc")
-    @check_is_staff()
+    @check_is_trusted_or_staff()
+    @commands.check(is_owner_server)
     async def recalc(self, ctx: Context, message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
