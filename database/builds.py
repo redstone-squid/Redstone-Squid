@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from _typeshed import DataclassInstance
 import os
 import asyncio
 import logging
@@ -456,6 +455,15 @@ class Build:
         """Iterates over the *attributes* of the Build object."""
         for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
             yield attr
+
+    @property
+    def original_link(self) -> str | None:
+        """The link to the original message of the build."""
+        if self.original_message_id and self.original_channel_id:
+            if self.original_server_id is None:
+                raise NotImplementedError("This message is from DMs.")
+            return f"https://discord.com/channels/{self.original_server_id}/{self.original_channel_id}/{self.original_message_id}"
+        return None
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:

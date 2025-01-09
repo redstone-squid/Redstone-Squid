@@ -8,7 +8,6 @@ from xml.etree.ElementTree import Element
 from markdown import Markdown
 
 from database import DatabaseManager
-from database.builds import parse_build
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +206,6 @@ async def main():
 
     dotenv.load_dotenv()
     await DatabaseManager.setup()
-    build = await parse_build(
-        "https://imgur.com/a/ipYjpMj\n\nNot the best, but my first ever RBO\n\n585 Blocks 3x3 Corner Door\n\nSubtract 0.2 seconds from closing/opening time because of the 2 reps used for a good activation point, otherwise its almost impossible to get back from activation point to see door close/open\n\n0.9s Open\n1.2 Close\n(Creeper's timing measurements)\n\nAlso this is tied fastest with || @Cwee957 and @Ashley || so far\n\nSpecial thanks to Toppish for doing the last retraction of the DPE"
-    )
-    print(build)
 
 
 if __name__ == "__main__":
