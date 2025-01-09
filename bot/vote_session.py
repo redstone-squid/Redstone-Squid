@@ -8,13 +8,16 @@ import asyncio
 from asyncio import Task
 from dataclasses import dataclass
 from types import MethodType
-from typing import Any, TypeVar, Union, TYPE_CHECKING
+from typing import Any, TypeVar, Union, TYPE_CHECKING, cast
 
 import discord
+from postgrest import APIResponse
 
+from bot import utils
 from bot._types import GuildMessageable
+from database import DatabaseManager
 from database.builds import Build
-from database.schema import VoteKind
+from database.schema import VoteKind, MessageRecord
 from database.vote import close_vote_session, track_vote_session, upsert_vote
 
 if TYPE_CHECKING:
@@ -44,14 +47,15 @@ class AbstractVoteSession(ABC):
 
     kind: VoteKind
 
-    def __init__(self, messages: list[discord.Message], author_id: int, pass_threshold: int, fail_threshold: int):
+    def __init__(self, bot: discord.Client, messages: list[discord.Message] | list[int], author_id: int, pass_threshold: int, fail_threshold: int):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
 
         If you use this constructor directly, you must call _async_init() afterwards, or else the vote session will not be tracked.
 
         Args:
-            messages: The messages belonging to the vote session.
+            bot: The discord client for fetching messages.
+            messages: The messages (or their ids) belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
@@ -65,7 +69,17 @@ class AbstractVoteSession(ABC):
         self.id: int | None = None
         """The id of the vote session in the database. If None, we are not tracking the vote session and thus no async operations are performed."""
         self.is_closed = False
-        self.messages = messages
+        self.bot = bot
+        self._messages: list[discord.Message]
+        self.message_ids: list[int]
+        if all(isinstance(message, int) for message in messages):
+            messages = cast(list[int], messages)
+            self._messages = []
+            self.message_ids = messages
+        else:
+            messages = cast(list[discord.Message], messages)
+            self._messages = messages
+            self.message_ids = [message.id for message in messages]
         if len(messages) >= 10:
             raise ValueError(
                 "Found a vote session with more than 10 messages, we need to change the update_message logic."
@@ -80,7 +94,7 @@ class AbstractVoteSession(ABC):
     async def _async_init(self) -> None:
         """Perform async initialization. Called by create()."""
         self.id = await track_vote_session(
-            self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
         await self.update_messages()
 
@@ -133,7 +147,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def from_id(cls: type[T], bot: RedstoneSquid, vote_session_id: int) -> Union[T, None]:
+    async def from_id(cls: type[T], bot: discord.Client, vote_session_id: int) -> Union[T, None]:
         """
         Create a vote session from an id.
 
@@ -163,6 +177,23 @@ class AbstractVoteSession(ABC):
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send a vote session message to a channel"""
+
+    async def get_messages(self) -> list[discord.Message] | None:
+        """Get the messages of the vote session if they exist in the cache"""
+        if len(self.message_ids) == len(self._messages):
+            return self._messages
+
+    async def fetch_messages(self) -> list[discord.Message]:
+        """Fetch the messages of the vote session"""
+        if len(self.message_ids) == len(self._messages):
+            return self._messages
+
+        messages_record: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
+        cached_ids = {message.id for message in self._messages}
+        new_messages = await asyncio.gather(*(utils.getch(self.bot, record) for record in messages_record.data if record["message_id"] not in cached_ids))
+        self._messages.extend(new_messages)
+        assert len(self._messages) == len(self.message_ids), "There is some race condition in fetching messages where one message is fetched multiple times, need to investigate."  # TODO
+        return self._messages
 
     @abstractmethod
     async def update_messages(self) -> None:
@@ -200,13 +231,8 @@ class AbstractVoteSession(ABC):
 
         # Create tasks for the updates
         if self.id is not None:
-            update_task = asyncio.create_task(self.update_messages())
             db_task = asyncio.create_task(upsert_vote(self.id, user_id, weight))
-            self._tasks.add(update_task)
             self._tasks.add(db_task)
-
-            # Remove tasks when they complete
-            update_task.add_done_callback(self._tasks.discard)
             db_task.add_done_callback(self._tasks.discard)
 
     async def set_vote(self, user_id: int, weight: int | None) -> None:
@@ -223,4 +249,4 @@ class AbstractVoteSession(ABC):
             await self.close()
 
         if self.id is not None:
-            await asyncio.gather(self.update_messages(), upsert_vote(self.id, user_id, weight), return_exceptions=False)
+            await upsert_vote(self.id, user_id, weight)

@@ -51,7 +51,8 @@ class BuildVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        messages: list[discord.Message],
+        bot: discord.Client,
+        messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
         pass_threshold: int = 3,
@@ -61,25 +62,26 @@ class BuildVoteSession(AbstractVoteSession):
         Initialize the vote session.
 
         Args:
+            bot: The discord client.
             messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             build: The build which the vote session is for.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
-        super().__init__(messages, author_id, pass_threshold, fail_threshold)
+        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
         self.build = build
 
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         self.id = await track_vote_session(
-            self.messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id
+            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id
         )
         await self.update_messages()
 
-        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self.messages]
-        reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self.messages])
+        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
+        reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self._messages])
         try:
             await asyncio.gather(*reaction_tasks)
         except discord.Forbidden:
@@ -104,8 +106,6 @@ class BuildVoteSession(AbstractVoteSession):
 
         vote_session_record = vote_session_response.data
 
-        messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in vote_session_record["messages"]])
-
         build_id = vote_session_record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
         if build is None:
@@ -116,7 +116,8 @@ class BuildVoteSession(AbstractVoteSession):
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
-            messages,
+            bot,
+            [record["message_id"] for record in vote_session_record["messages"]],
             vote_session_record["author_id"],
             build,
             vote_session_record["pass_threshold"],
@@ -129,13 +130,14 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        messages: list[discord.Message],
+        bot: discord.Client,
+        messages: list[discord.Message] | list[int],
         author_id: int,
         build: Build,
         pass_threshold: int = 3,
         fail_threshold: int = -3,
     ) -> "BuildVoteSession":
-        self = await super().create(messages, author_id, build, pass_threshold, fail_threshold)
+        self = await super().create(bot, messages, author_id, build, pass_threshold, fail_threshold)
         assert isinstance(self, BuildVoteSession)
         return self
 
@@ -143,7 +145,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         message = await channel.send(embed=self.build.generate_embed())
         await msg.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
-        self.messages.append(message)
+        self._messages.append(message)
         return message
 
     @override
@@ -151,7 +153,7 @@ class BuildVoteSession(AbstractVoteSession):
         embed = self.build.generate_embed()
         embed.add_field(name="upvotes", value=str(self.upvotes), inline=True)
         embed.add_field(name="downvotes", value=str(self.downvotes), inline=True)
-        await asyncio.gather(*[message.edit(embed=embed) for message in self.messages])
+        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @override
     async def close(self) -> None:
@@ -164,6 +166,8 @@ class BuildVoteSession(AbstractVoteSession):
         else:
             await self.build.confirm()
         # TODO: decide whether to delete the messages or not
+
+        await self.update_messages()
 
         if self.id is not None:
             await close_vote_session(self.id)
@@ -181,8 +185,6 @@ class BuildVoteSession(AbstractVoteSession):
         ).data
 
         async def _get_session(record: dict[str, Any]) -> "BuildVoteSession":
-            messages = await asyncio.gather(*[utils.getch(bot, msg) for msg in record["messages"]])
-
             build_id: int = record["build_vote_sessions"]["build_id"]
             build = await Build.from_id(build_id)
 
@@ -190,7 +192,8 @@ class BuildVoteSession(AbstractVoteSession):
             session = cls.__new__(cls)
             session._allow_init = True
             session.__init__(
-                messages,
+                bot,
+                [msg["message_id"] for msg in record["messages"]],
                 record["author_id"],
                 build,
                 record["pass_threshold"],
@@ -447,7 +450,7 @@ class SubmissionsCog(Cog, name="Submissions"):
         messages = await asyncio.gather(*tasks)
 
         assert build.submitter_id is not None
-        session = await BuildVoteSession.create(messages, build.submitter_id, build)
+        session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build)
         for message in messages:
             self.open_vote_sessions[message.id] = session
 
@@ -705,7 +708,7 @@ async def setup(bot: "RedstoneSquid"):
     cog = SubmissionsCog(bot)
     open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(bot)
     for session in open_vote_sessions:
-        for message in session.messages:
-            cog.open_vote_sessions[message.id] = session
+        for message_id in session.message_ids:
+            cog.open_vote_sessions[message_id] = session
 
     await bot.add_cog(cog)
