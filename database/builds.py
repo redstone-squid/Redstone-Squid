@@ -51,7 +51,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages(*)"
+all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
