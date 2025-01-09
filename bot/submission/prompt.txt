@@ -1,0 +1,112 @@
+I need you to convert the messages to a structured format. The messages are about Minecraft redstone contraptions. If the message is not about a redstone contraption, you can just say "not a contraption".
+
+Here are some explanations about the fields:
+- record_category: The category of the record. It can be "Smallest", "Fastest" or "First". None if it is not a record.
+- build_category: The category of the build. We are only interested in piston doors for now.
+- component_restriction: The restriction on the components used in the contraption. Typically contains "-less" or "...only". Some examples are OBSLESS, NO NOTE BLOCKS, TORCH AND DUST ONLY, RBO (redstone block only), DUSTLESS
+- wiring_placement_restrictions: The restrictions on the placement of the wiring. This differs from the component restriction as it is about the placement of the wiring, not the components themselves. Some examples are SEAMLESS, FLUSH, HIPSTER, EXPANDABLE, TILEABLE
+- miscellaneous_restrictions: Any other restrictions that do not fit in the other categories. Sometimes there are also size/speed restrictions here, a fast door may restrict its size and a small door may restrict its speed, so if you see something like "Smallest 2.1s 6x6 Door" or "Fastest 270 blocks 4x4 Door", the 2.1s and the 270 blocks are restrictions. These restrictions are usually mentioned in the title, if you see them elsewhere, the author is likely just describing the speed/size of their size, use your best judgement. Some examples are DIRECTIONAL, LOCATIONAL, n-BLOCKS, m-SECONDS
+- piston_door_type: The type/shape of the door. A normal piston door is a flat nxn door, but people make doors in different shapes and sizes. Can be combined, but keep in submission's order, some examples are REGULAR, TNT, GLASS, TURBINE, PITCH, YAW, BAR, SISSYBAR, FUNNEL, ASDJKE, CAVE, CORNER, DUAL CAVE CORNER. Default is REGULAR.
+- door_orientation: The orientation of the door. It can be NORMAL, SKYDOOR, TRAPDOOR. Basically all doors are NORMAL unless the author specifies otherwise.
+- creators: A comma-separated list of the creators of the contraption.
+
+The examples are only examples and people may not follow the terminology exactly.
+
+<original>
+**Smallest 1.05s 5x4 piston door**
+Closes in: 0.85s + 0.1s input delay (0.8s + 0.1s newest terms)
+Opens in: 1.05s (1.00s newest terms)
+3x11x11 = 363 blocks
+No non-piston sounds, fully reliable
+Made by @SpitNight (credit to lum3nd0 in spirit)
+1.16+
+(if this has already been done let me know, but afaik this is wr)
+https://imgur.com/nVyy6yw
+</original>
+<target>
+record_category: Smallest
+build_category: Piston Door
+component_restriction: None
+wiring_placement_restrictions: None
+miscellaneous_restrictions: No non-piston sounds, fully reliable, 1.05s
+piston_door_type: Regular
+door_orientation: Normal
+door_width: 5
+door_height: 4
+door_depth: 1
+build_width: 11
+build_height: 11
+build_depth: 3
+opening_time: 1.05
+closing_time: 0.85
+creators: SpitNight
+version: 1.16+
+image: https://imgur.com/nVyy6yw
+author_note: credit to lum3nd0 in spirit, (if this has already been done let me know, but afaik this is wr)
+</target>
+
+<original>
+Smallest 3x3 Full Deluxe Door
+By: @Cwee957 
+Size: 294 Blocks (14x3x7)
+Speed:
+- Closing & Opening: ~8s
+Entities: 4
+- 3 Minecarts with furnace
+- 1 Minecart chest
+Directional (works in 2 adjacent directions), 1.18+, uses update suppression for closing side hook :/
+</original>
+<target>
+record_category: Smallest
+component_restriction: None
+wiring_placement_restrictions: None
+miscellaneous_restrictions: Directional
+piston_door_type: Full Deluxe
+door_orientation: Normal
+door_width: 3
+door_height:3
+door_depth: 1
+build_width: 14
+build_height: 3
+build_depth: 7
+opening_time: ~8s
+closing_time: ~8s
+creators: Cwee957
+version: 1.18+
+image: None
+author_note: Entities: 4\n- 3 Minecarts with furnace\n- 1 Minecart chest\nuses update suppression for closing side hook :/
+</target>
+
+<original>
+**Smallest Obsless 6x6 (Full Flush) Cave Door**
+Size: 12x14x4=672 Blocks
+Done On: 12/01/2022
+Made By: @_Reds_XD @Hi30
+*This was actually way easier than the 720b design,also removed a ton of mobs(only chickens now) and its not loc anymore :D*
+**UPDATE:** apparently this top design is unreliable,u can find the fix here:
+https://discord.com/channels/433618741528625152/433631997978476554/933120849949622323
+</original>
+<target>
+record_category: Smallest
+component_restriction: Obsless
+wiring_placement_restrictions: Full Flush
+miscellaneous_restrictions: None
+piston_door_type: Cave
+door_orientation: Normal
+door_width: 6
+door_height: 6
+door_depth: 1
+build_width: 12
+build_height: 14
+build_depth: 4
+opening_time: unknown
+closing_time: unknown
+creators: _Reds_XD, Hi30
+version: unknown
+image: None
+author_note: Done On: 12/01/2022\n*This was actually way easier than the 720b design,also removed a ton of mobs(only chickens now) and its not loc anymore :D*\n**UPDATE:** apparently this top design is unreliable,u can find the fix here:\nhttps://discord.com/channels/433618741528625152/433631997978476554/933120849949622323
+</target>
+
+<original>
+{message}
+</original>

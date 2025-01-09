@@ -12,7 +12,7 @@ from typing import Literal, Any, cast, TypeVar
 import discord
 from discord.ext.commands import Bot
 from discord.utils import escape_markdown
-from postgrest.base_request_builder import APIResponse
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
 from bot._types import GuildMessageable
@@ -53,13 +53,15 @@ class Build:
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
+    - generate_embed() and the methods it calls
     """
 
     id: int | None = None
     submission_status: Status | None = None
     category: Category | None = None
     record_category: RecordCategory | None = None
-    functional_versions: list[str] | None = None
+    versions: list[str] = field(default_factory=list)
+    version_spec: str | None = None
 
     width: int | None = None
     height: int | None = None
@@ -69,7 +71,7 @@ class Build:
     door_height: int | None = None
     door_depth: int | None = None
 
-    door_type: list[str] | None = None
+    door_type: list[str] = field(default_factory=list)
     door_orientation_type: DoorOrientationName | None = None
 
     wiring_placement_restrictions: list[str] = field(default_factory=list)
@@ -81,7 +83,7 @@ class Build:
     visible_closing_time: int | None = None
     visible_opening_time: int | None = None
 
-    information: Info | None = None
+    information: Info = field(default_factory=dict)  # type: ignore
     creators_ign: list[str] = field(default_factory=list)
 
     image_urls: list[str] = field(default_factory=list)
@@ -97,6 +99,9 @@ class Build:
     # TODO: save the submitted time too
     completion_time: str | None = None
     edited_time: str | None = None
+    original_message_id: int | None = None
+    original_message: str | None = None
+    ai_generated: bool | None = None
 
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
@@ -180,8 +185,9 @@ class Build:
         creators: list[dict[str, Any]] = data.get("users", [])
         build.creators_ign = [creator["ign"] for creator in creators]
 
+        build.version_spec = data["version_spec"]
         versions: list[VersionRecord] = data.get("versions", [])
-        build.functional_versions = [get_version_string(v) for v in versions]
+        build.versions = [get_version_string(v) for v in versions]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
         build.image_urls = [link["url"] for link in links if link["media_type"] == "image"]
@@ -197,6 +203,9 @@ class Build:
         build.submitter_id = data["submitter_id"]
         build.completion_time = data["completion_time"]
         build.edited_time = data["edited_time"]
+        build.original_message_id = data["original_message_id"]
+        build.original_message = data["original_message"]
+        build.ai_generated = data["ai_generated"]
 
         return build
 
@@ -351,6 +360,53 @@ class Build:
             raise ValueError("Build not found in the database.")
         return Build.from_json(response.data)
 
+    def update_local(self, **data: Any) -> None:
+        """Updates the build locally with the given data. No validation is done on the data."""
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def as_dict(self) -> dict[str, Any]:
+        """Converts the build to a dictionary."""
+        build = {}
+        for attr in self:
+            build[attr] = getattr(self, attr)
+        return build
+
+    async def confirm(self) -> None:
+        """Marks the build as confirmed.
+
+        Raises:
+            ValueError: If the build could not be confirmed.
+        """
+        self.submission_status = Status.CONFIRMED
+        db = DatabaseManager()
+        response: APIResponse[BuildRecord] = (
+            await db.table("builds")
+            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
+            .eq("id", self.id)
+            .execute()
+        )
+        if response.count != 1:
+            raise ValueError("Failed to confirm submission in the database.")
+
+    async def deny(self) -> None:
+        """Marks the build as denied.
+
+        Raises:
+            ValueError: If the build could not be denied.
+        """
+        self.submission_status = Status.DENIED
+        db = DatabaseManager()
+        response: APIResponse[BuildRecord] = (
+            await db.table("builds")
+            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
+            .eq("id", self.id)
+            .execute()
+        )
+        if response.count != 1:
+            raise ValueError("Failed to deny submission in the database.")
+
     async def save(self) -> None:
         """
         Updates the build in the database with the given data.
@@ -476,7 +532,8 @@ class Build:
         )
         type_ids = [type_["id"] for type_ in response.data]
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
-        await db.table("build_types").upsert(build_types_data).execute()
+        if build_types_data:
+            await db.table("build_types").upsert(build_types_data).execute()
         unknown_types = []
         for door_type in data.get("door_type", []):
             if door_type not in [type_["name"] for type_ in response.data]:
@@ -505,13 +562,13 @@ class Build:
     async def _update_build_creators_table(self, data: dict[str, Any]) -> None:
         """Updates the build_creators table with the given data."""
         db = DatabaseManager()
-        creator_ids = []
+        creator_ids: list[int] = []
         for creator_ign in data.get("creators_ign", []):
             response = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
             if response:
                 creator_ids.append(response.data["id"])
             else:
-                creator_id = add_user(ign=creator_ign)
+                creator_id = await add_user(ign=creator_ign)
                 creator_ids.append(creator_id)
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
@@ -520,66 +577,17 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("functional_versions", DatabaseManager.get_newest_version(edition="Java"))
+        functional_versions = data.get("versions", DatabaseManager.get_newest_version(edition="Java"))
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
-        response = (
+        response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
             await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
-        response = cast(APIResponse[QuantifiedVersionRecord], response)
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
         if build_versions_data:
             await db.table("build_versions").upsert(build_versions_data).execute()
-
-    def update_local(self, data: dict[Any, Any]) -> None:
-        """Updates the build locally with the given data. No validation is done on the data."""
-        # FIXME: this does not work with nested data like self.information
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-    def as_dict(self) -> dict[str, Any]:
-        """Converts the build to a dictionary."""
-        build = {}
-        for attr in self:
-            build[attr] = getattr(self, attr)
-        return build
-
-    async def confirm(self) -> None:
-        """Marks the build as confirmed.
-
-        Raises:
-            ValueError: If the build could not be confirmed.
-        """
-        self.submission_status = Status.CONFIRMED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
-        if response.count != 1:
-            raise ValueError("Failed to confirm submission in the database.")
-
-    async def deny(self) -> None:
-        """Marks the build as denied.
-
-        Raises:
-            ValueError: If the build could not be denied.
-        """
-        self.submission_status = Status.DENIED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
-        if response.count != 1:
-            raise ValueError("Failed to deny submission in the database.")
 
     def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
@@ -608,7 +616,7 @@ class Build:
             title += f"{self.record_category} "
 
         # Door dimensions
-        if self.door_width and self.door_height and self.door_depth:
+        if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
             title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
         elif self.door_width and self.door_height:
             title += f"{self.door_width}x{self.door_height} "
@@ -618,14 +626,22 @@ class Build:
             title += f"{self.door_height} High "
 
         # Wiring Placement Restrictions
+        # ```ansi
+        # [2;45mJust select[0m [2;34msome text[0m and [2;32mclick[0m on the [2;31m[1;31mcolor[0m[2;31m[0m or [4;2mformat that you like[0m![2;31m[0m
+        # ```
         for restriction in self.wiring_placement_restrictions:
             title += f"{restriction} "
 
+        for restriction in self.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
+            title += f"*{restriction}* "
+
         # Pattern
-        if self.door_type is not None:
-            for pattern in self.door_type:
-                if pattern != "Regular":
-                    title += f"{pattern} "
+        for pattern in self.door_type:
+            if pattern != "Regular":
+                title += f"{pattern} "
+
+        for pattern in self.information.get("unknown_patterns", []):
+            title += f"*{pattern}* "
 
         # Door type
         if self.door_orientation_type is None:
@@ -641,9 +657,7 @@ class Build:
         if self.component_restrictions and self.component_restrictions[0] != "None":
             desc.append(", ".join(self.component_restrictions))
 
-        if self.functional_versions is None:
-            desc.append("Unknown version compatibility.")
-        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
+        if DatabaseManager.get_newest_version(edition="Java") not in self.versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -661,46 +675,38 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    def get_versions_string(self) -> str:
+    def get_version_spec(self) -> str:
         """Returns a string representation of the versions the build is functional in.
 
-        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
+        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19.2, 1.20+".
         """
-        if not self.functional_versions:
+        if not self.versions:
             return ""
 
         versions: list[str] = []
 
         linking = False
-        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2-1.18)."""
-        start_version: VersionRecord | None = None
-        end_version: VersionRecord | None = None
+        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2 - 1.18)."""
+        start_version: str | None = None
+        end_version: str | None = None
 
         for version in DatabaseManager.get_versions_list(edition="Java"):
-            if get_version_string(version, no_edition=True) in self.functional_versions:
+            version_str = get_version_string(version)
+            if version_str in self.versions:
                 if not linking:
                     linking = True
-                    start_version = version
-                end_version = version
+                    start_version = version_str
+                end_version = version_str
 
             elif linking:  # Current looped version is not functional, but the previous one was
                 assert start_version is not None
                 assert end_version is not None
-                versions.append(
-                    get_version_string(start_version)
-                    if start_version == end_version
-                    else f"{start_version} - {end_version}"
-                )
+                versions.append(start_version if start_version == end_version else f"{start_version} - {end_version}")
                 linking = False
 
         if linking:  # If the last version is functional
             assert start_version is not None
-            assert end_version is not None
-            versions.append(
-                get_version_string(start_version)
-                if start_version == end_version
-                else f"{start_version} - {end_version}"
-            )
+            versions.append(f"{start_version}+")
 
         return ", ".join(versions)
 
@@ -730,7 +736,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = self.get_versions_string()
+        fields["Versions"] = self.get_version_spec()
 
         if self.server_ip:
             fields["Server"] = self.server_ip
@@ -797,7 +803,8 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 
 async def main():
-    print(Build(id=1, submission_status=Status.PENDING).diff(Build(id=1, submission_status=Status.CONFIRMED)))
+    build = Build()
+    print(build.as_dict())
 
 
 if __name__ == "__main__":
