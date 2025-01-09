@@ -763,7 +763,7 @@ class BuildCog(Cog, name="Build"):
             original_message_id=message.id,
             original_message=message.clean_content,
         )
-        await build.parse_build(
+        await build.ai_fill_metadata_from_message(
             f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
         )
 

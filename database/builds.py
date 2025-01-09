@@ -547,7 +547,7 @@ class Build:
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
-    async def parse_build(self, message: str) -> None:
+    async def ai_fill_metadata_from_message(self, message: str) -> None:
         """Parses a build from a message using AI."""
         client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -622,7 +622,7 @@ class Build:
             return
 
         self.ai_generated = True
-        self.record_category = variables["record_category"]
+        self.record_category = variables["record_category"]  # type: ignore
         self.information["unknown_restrictions"] = {}
         if variables["component_restriction"] is not None:
             comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
@@ -646,7 +646,7 @@ class Build:
         if orientation == "Normal":
             self.door_orientation_type = "Door"
         else:
-            self.door_orientation_type = orientation or "Door"
+            self.door_orientation_type = orientation or "Door"  # type: ignore
         self.door_width = int(variables["door_width"]) if variables["door_width"] else None
         self.door_height = int(variables["door_height"]) if variables["door_height"] else None
         self.door_depth = int(variables["door_depth"]) if variables["door_depth"] else None
