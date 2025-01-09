@@ -452,6 +452,7 @@ class Build:
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
             build.information["user"] = variables["author_note"].replace("\\n", "\n")
+        return build
 
     def __iter__(self):
         """Iterates over the *attributes* of the Build object."""
