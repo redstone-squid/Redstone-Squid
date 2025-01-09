@@ -918,6 +918,13 @@ class Build:
         if self.record_category:
             title += f"{self.record_category} "
 
+        # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
+        for restriction in self.information.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
+            if re.match(r"\d+\.\d+\s*s", restriction):
+                title += f"{restriction} "
+            elif re.match(r"\d+\s*[Bb]locks", restriction):
+                title += f"{restriction} "
+
         # Door dimensions
         if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
             title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
@@ -1103,9 +1110,11 @@ async def main():
     from dotenv import load_dotenv
     load_dotenv()
     await DatabaseManager.setup()
-    build = await Build.from_id(36)
+    build = await Build.from_id(43)
     if build:
-        print(build.as_dict())
+        print(repr(build))
+        # await build.save()
+        # print(build.as_dict())
 
 
 if __name__ == "__main__":
