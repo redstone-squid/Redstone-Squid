@@ -757,7 +757,12 @@ class BuildCog(Cog, name="Build"):
         if message.channel.id not in [build_logs, record_logs]:
             return
 
-        build = Build()
+        build = Build(
+            original_server_id=message.guild.id if message.guild is not None else None,
+            original_channel_id=message.channel.id,
+            original_message_id=message.id,
+            original_message=message.clean_content,
+        )
         await build.parse_build(
             f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
         )
@@ -774,10 +779,6 @@ class BuildCog(Cog, name="Build"):
         build.submission_status = Status.PENDING
         build.category = Category.DOOR
         build.submitter_id = message.author.id
-        build.original_server_id = message.guild.id if message.guild is not None else None
-        build.original_channel_id = message.channel.id
-        build.original_message_id = message.id
-        build.original_message = message.clean_content
         await asyncio.gather(*(
             build.save(),
             self.post_build_for_voting(build, type="add"),

@@ -178,10 +178,10 @@ class Build:
     completion_time: str | None = None
     edited_time: str | None = None
 
-    original_server_id: int | None = None
-    original_channel_id: int | None = None
-    original_message_id: int | None = None
-    original_message: str | None = None
+    original_server_id: Final[int | None] = frozen_field(default=None)
+    original_channel_id: Final[int | None] = frozen_field(default=None)
+    original_message_id: Final[int | None] = frozen_field(default=None)
+    original_message: Final[str | None] = frozen_field(default=None)
 
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
