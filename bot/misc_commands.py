@@ -143,23 +143,6 @@ class Miscellaneous(Cog):
             raise ValueError("This is a test error.")
 
 
-    @commands.command("aaa")
-    async def force_build_message_consistency(self, ctx: Context):
-        """For migration 20250108120722_build_message_link."""
-        builds = await get_all_builds()
-        channel1 = self.bot.get_channel(726156829629087814)
-        channel2 = self.bot.get_channel(667401499554611210)
-        for build in builds:
-            if build.original_message_id is None:
-                continue
-            else:
-                try:
-                    message = await channel1.fetch_message(build.original_message_id)
-                except discord.NotFound:
-                    message = await channel2.fetch_message(build.original_message_id)
-                await track_message(message, purpose="build_original_message", build_id=build.id)
-
-
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))
