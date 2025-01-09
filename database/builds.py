@@ -1015,19 +1015,18 @@ class Build:
         The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
         fields = {"Dimensions": f"{self.width or '?'} x {self.height or '?'} x {self.depth or '?'}"}
 
-        if self.normal_opening_time:
-            fields["Opening Time"] = str(self.normal_opening_time)
-
-        if self.normal_closing_time:
-            fields["Opening Time"] = str(self.normal_closing_time)
-
         if self.width and self.height and self.depth:
             fields["Volume"] = str(self.width * self.height * self.depth)
 
+        if self.normal_opening_time:
+            fields["Opening Time"] = f"{self.normal_opening_time / 20}s"
+        if self.normal_closing_time:
+            fields["Closing Time"] = f"{self.normal_closing_time / 20}s"
+
         if self.visible_opening_time and self.visible_closing_time:
             # The times are stored as game ticks, so they need to be divided by 20 to get seconds
-            fields["Visible Opening Time"] = str(self.visible_opening_time / 20)
-            fields["Visible Closing Time"] = str(self.visible_closing_time / 20)
+            fields["Visible Opening Time"] = f"{self.visible_opening_time / 20}s"
+            fields["Visible Closing Time"] = f"{self.visible_closing_time / 20}s"
 
         if self.creators_ign:
             fields["Creators"] = ", ".join(sorted(self.creators_ign))
@@ -1047,7 +1046,7 @@ class Build:
         if self.world_download_urls:
             fields["World Download"] = ", ".join(self.world_download_urls)
         if self.video_urls:
-            fields["Video"] = ", ".join(self.video_urls)
+            fields["Videos"] = ", ".join(self.video_urls)
 
         return fields
 
