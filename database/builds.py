@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from _typeshed import DataclassInstance
 import os
 import asyncio
 import logging
@@ -10,7 +11,7 @@ from asyncio import Task
 from dataclasses import dataclass, field, MISSING, fields
 from functools import cache, wraps
 from collections.abc import Sequence, Mapping
-from typing import Callable, Generic, Literal, Any, cast, TypeVar,ParamSpec
+from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
 
 import discord
 from discord.ext.commands import Bot
@@ -50,7 +51,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
+all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
@@ -174,8 +175,12 @@ class Build:
     # TODO: save the submitted time too
     completion_time: str | None = None
     edited_time: str | None = None
+
+    original_server_id: int | None = None
+    original_channel_id: int | None = None
     original_message_id: int | None = None
     original_message: str | None = None
+
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
 
@@ -217,15 +222,14 @@ class Build:
         Returns:
             A Build object.
         """
-        build = Build()
-        build.id = data["id"]
-        build.submission_status = data["submission_status"]
-        build.record_category = data["record_category"]
-        build.category = data["category"]
+        id = data["id"]
+        submission_status = data["submission_status"]
+        record_category = data["record_category"]
+        category = data["category"]
 
-        build.width = data["width"]
-        build.height = data["height"]
-        build.depth = data["depth"]
+        width = data["width"]
+        height = data["height"]
+        depth = data["depth"]
 
         match data["category"]:
             case "Door":
@@ -240,49 +244,90 @@ class Build:
         # FIXME: This is hardcoded for now
         if data.get("types"):
             types = data["types"]
-            build.door_type = [type_["name"] for type_ in types]
+            door_type = [type_["name"] for type_ in types]
         else:
-            build.door_type = ["Regular"]
+            door_type = ["Regular"]
 
-        build.door_orientation_type = data["doors"]["orientation"]
-        build.door_width = data["doors"]["door_width"]
-        build.door_height = data["doors"]["door_height"]
-        build.door_depth = data["doors"]["door_depth"]
-        build.normal_closing_time = data["doors"]["normal_closing_time"]
-        build.normal_opening_time = data["doors"]["normal_opening_time"]
-        build.visible_closing_time = data["doors"]["visible_closing_time"]
-        build.visible_opening_time = data["doors"]["visible_opening_time"]
+        door_orientation_type = data["doors"]["orientation"]
+        door_width = data["doors"]["door_width"]
+        door_height = data["doors"]["door_height"]
+        door_depth = data["doors"]["door_depth"]
+        normal_closing_time = data["doors"]["normal_closing_time"]
+        normal_opening_time = data["doors"]["normal_opening_time"]
+        visible_closing_time = data["doors"]["visible_closing_time"]
+        visible_opening_time = data["doors"]["visible_opening_time"]
 
         restrictions: list[RestrictionRecord] = data.get("restrictions", [])
-        build.wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
-        build.component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
-        build.miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
+        wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
+        component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
+        miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
 
-        build.information = data["information"]
+        information = data["information"]
 
         creators: list[dict[str, Any]] = data.get("users", [])
-        build.creators_ign = [creator["ign"] for creator in creators]
+        creators_ign = [creator["ign"] for creator in creators]
 
-        build.version_spec = data["version_spec"]
-        versions: list[VersionRecord] = data.get("versions", [])
-        build.versions = [get_version_string(v) for v in versions]
+        version_spec = data["version_spec"]
+        version_records: list[VersionRecord] = data.get("versions", [])
+        versions = [get_version_string(v) for v in version_records]
 
         links: list[dict[str, Any]] = data.get("build_links", [])
-        build.image_urls = [link["url"] for link in links if link["media_type"] == "image"]
-        build.video_urls = [link["url"] for link in links if link["media_type"] == "video"]
-        build.world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
+        image_urls = [link["url"] for link in links if link["media_type"] == "image"]
+        video_urls = [link["url"] for link in links if link["media_type"] == "video"]
+        world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
 
-        build.server_info = data["server_info"]
+        server_info = data["server_info"]
 
-        build.submitter_id = data["submitter_id"]
-        build.completion_time = data["completion_time"]
-        build.edited_time = data["edited_time"]
-        build.original_message_id = data["original_message_id"]
-        build.original_message = data["original_message"]
-        build.ai_generated = data["ai_generated"]
-        build.embedding = data["embedding"]
+        submitter_id = data["submitter_id"]
+        completion_time = data["completion_time"]
+        edited_time = data["edited_time"]
 
-        return build
+        original_server_id = data["messages"]["server_id"]
+        original_channel_id = data["messages"]["channel_id"]
+        original_message_id = data["original_message_id"]
+        original_message = data["original_message"]
+
+        ai_generated = data["ai_generated"]
+        embedding = data["embedding"]
+
+        return Build(
+            id=id,
+            submission_status=submission_status,
+            record_category=record_category,
+            category=category,
+            versions=versions,
+            version_spec=version_spec,
+            width=width,
+            height=height,
+            depth=depth,
+            door_width=door_width,
+            door_height=door_height,
+            door_depth=door_depth,
+            door_type=door_type,
+            door_orientation_type=door_orientation_type,
+            wiring_placement_restrictions=wiring_placement_restrictions,
+            component_restrictions=component_restrictions,
+            miscellaneous_restrictions=miscellaneous_restrictions,
+            normal_closing_time=normal_closing_time,
+            normal_opening_time=normal_opening_time,
+            visible_closing_time=visible_closing_time,
+            visible_opening_time=visible_opening_time,
+            information=information,
+            creators_ign=creators_ign,
+            image_urls=image_urls,
+            video_urls=video_urls,
+            world_download_urls=world_download_urls,
+            server_info=server_info,
+            submitter_id=submitter_id,
+            completion_time=completion_time,
+            edited_time=edited_time,
+            original_server_id=original_server_id,
+            original_channel_id=original_channel_id,
+            original_message_id=original_message_id,
+            original_message=original_message,
+            ai_generated=ai_generated,
+            embedding=embedding,
+        )
 
     def __iter__(self):
         """Iterates over the *attributes* of the Build object."""
