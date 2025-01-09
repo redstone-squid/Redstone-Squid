@@ -27,6 +27,7 @@ from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
     DoorRecord,
+    MessageRecord,
     ServerInfo,
     TypeRecord,
     RestrictionRecord,
@@ -282,8 +283,9 @@ class Build:
         completion_time = data["completion_time"]
         edited_time = data["edited_time"]
 
-        original_server_id = data["messages"]["server_id"]
-        original_channel_id = data["messages"]["channel_id"]
+        message_record: MessageRecord = data["messages"] or {}  # type: ignore
+        original_server_id = message_record.get("server_id")
+        original_channel_id = message_record.get("channel_id")
         original_message_id = data["original_message_id"]
         original_message = data["original_message"]
 
