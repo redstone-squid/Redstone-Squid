@@ -781,7 +781,9 @@ class BuildCog(Cog, name="Build"):
     @check_is_staff()
     async def recalc(self, ctx: Context, message: discord.Message):
         """Recalculate a build from a message."""
+        await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
+        await ctx.send("Build recalculated.", ephemeral=True)
 
 
 async def setup(bot: "RedstoneSquid"):
