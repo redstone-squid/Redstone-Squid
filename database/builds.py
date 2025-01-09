@@ -23,7 +23,7 @@ from postgrest.types import CountMethod
 import vecs
 
 from bot._types import GuildMessageable
-from bot.submission.parse import logger, validate_restrictions, validate_door_types, parse_time_string
+from bot.submission.parse import validate_restrictions, validate_door_types, parse_time_string
 from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
