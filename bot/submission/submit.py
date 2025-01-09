@@ -158,7 +158,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        message = await channel.send(embed=self.build.generate_embed())
+        message = await channel.send(content=self.build.original_link, embed=self.build.generate_embed())
         await msg.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
         self._messages.add(message)
         return message
@@ -169,7 +169,7 @@ class BuildVoteSession(AbstractVoteSession):
         embed.add_field(name='', value='', inline=False)  # Add a blank field to separate the vote count
         embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
         embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
-        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
+        await asyncio.gather(*[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()])
 
     @override
     async def close(self) -> None:
@@ -270,7 +270,7 @@ class BuildCog(Cog, name="Build"):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            await sent_message.edit(embed=submission.generate_embed())
+            await sent_message.edit(content=submission.original_link, embed=submission.generate_embed())
 
     @commands.hybrid_command("search")
     async def search_builds(self, ctx: Context, query: str):
@@ -293,7 +293,7 @@ class BuildCog(Cog, name="Build"):
         build_id = int(result[0])
         build = await Build.from_id(build_id)
         assert build is not None
-        await ctx.send(embed=build.generate_embed())
+        await ctx.send(content=build.original_link, embed=build.generate_embed())
 
     @build_hybrid_group.command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
@@ -510,7 +510,7 @@ class BuildCog(Cog, name="Build"):
 
         em = build.generate_embed()
         for channel in await build.get_channels_to_post_to(self.bot):
-            message = await channel.send(embed=em)
+            message = await channel.send(content=build.original_link, embed=em)
             await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
     async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
@@ -532,7 +532,7 @@ class BuildCog(Cog, name="Build"):
         em = build.generate_embed()
         tasks: list[asyncio.Task[discord.Message]] = []
         for vote_channel in await build.get_channels_to_post_to(self.bot):
-            tasks.append(asyncio.create_task(vote_channel.send(embed=em)))
+            tasks.append(asyncio.create_task(vote_channel.send(content=build.original_link, embed=em)))
         messages = await asyncio.gather(*tasks)
 
         assert build.submitter_id is not None
@@ -674,7 +674,7 @@ class BuildCog(Cog, name="Build"):
             raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
 
         message = await channel.fetch_message(message_id)
-        await message.edit(embed=em)
+        await message.edit(content=build.original_link, embed=em)
         await msg.update_message_edited_time(message.id)
 
     async def update_build_messages(self, build: Build) -> None:
@@ -690,7 +690,7 @@ class BuildCog(Cog, name="Build"):
             message = await utils.getch(self.bot, record)
             if message is None:
                 continue
-            await message.edit(embed=em)
+            await message.edit(content=build.original_link, embed=em)
             await msg.update_message_edited_time(message.id)
 
     @commands.hybrid_command()
