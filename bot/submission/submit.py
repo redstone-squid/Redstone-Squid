@@ -757,15 +757,9 @@ class BuildCog(Cog, name="Build"):
         if message.channel.id not in [build_logs, record_logs]:
             return
 
-        build = Build(
-            original_server_id=message.guild.id if message.guild is not None else None,
-            original_channel_id=message.channel.id,
-            original_message_id=message.id,
-            original_message=message.clean_content,
-        )
-        await build.ai_fill_metadata_from_message(
-            f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
-        )
+        build = await Build.ai_generate_from_message(message)
+        if build is None:
+            return
 
         for attachment in message.attachments:
             if attachment.content_type is None:
