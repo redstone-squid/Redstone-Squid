@@ -598,14 +598,8 @@ class BuildCog(Cog, name="Build"):
     @edit_group.command(name="door")
     async def edit_door(self, ctx: Context, *, flags: EditDoorFlags):
         """Edits a door record in the database directly."""
-        interaction = ctx.interaction
-        assert interaction is not None
-
-        response: InteractionResponse = interaction.response  # type: ignore
-        await response.defer()
-
-        followup: discord.Webhook = interaction.followup  # type: ignore
-        async with RunningMessage(followup) as sent_message:
+        await ctx.defer()
+        async with RunningMessage(ctx) as sent_message:
             build = await flags.to_build()
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
@@ -615,20 +609,31 @@ class BuildCog(Cog, name="Build"):
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-            view = ConfirmationView()
-            preview = await followup.send(embed=preview_embed, view=view, ephemeral=True, wait=True)
-            await view.wait()
-
-            await preview.delete()
-            if view.value is None:
-                await sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity."))
-            elif view.value:
+            if ctx.interaction:
+                view = ConfirmationView()
+                preview = await ctx.interaction.followup.send(
+                    "Here is a preview of the changes. Use the buttons to confirm or cancel.",
+                    embed=preview_embed,
+                    view=view,
+                    ephemeral=True,
+                    wait=True
+                )
+                await view.wait()
+                await preview.delete()
+                if view.value is None:
+                    await sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity."))
+                elif view.value:
+                    await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+                    await build.save()
+                    await self.update_build_messages(build)
+                    await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+                else:
+                    await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+            else:  # Not an interaction, so we can't use buttons for confirmation
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await build.save()
                 await self.update_build_messages(build)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
-            else:
-                await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
 
     async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
         """Updates a post according to the information given by the build."""
