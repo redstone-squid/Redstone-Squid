@@ -5,11 +5,12 @@ from __future__ import annotations
 import os
 import asyncio
 import logging
+import inspect
 from asyncio import Task
-from dataclasses import dataclass, field
-from functools import cache
+from dataclasses import dataclass, field, MISSING, fields
+from functools import cache, wraps
 from collections.abc import Sequence, Mapping
-from typing import Literal, Any, cast, TypeVar
+from typing import Callable, Generic, Literal, Any, cast, TypeVar,ParamSpec
 
 import discord
 from discord.ext.commands import Bot
@@ -45,12 +46,81 @@ logger = logging.getLogger(__name__)
 
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 
+class FrozenField(Generic[T]):
+    """A descriptor that makes an attribute immutable after it has been set."""
+
+    __slots__ = ("private_name",)
+
+    def __init__(self, name: str) -> None:
+        self.private_name = "_" + name
+
+    def __get__(self, instance: object | None, owner: type[object] | None = None) -> T:
+        value = getattr(instance, self.private_name)
+        return value
+
+    def __set__(self, instance: object, value: T) -> None:
+        if hasattr(instance, self.private_name):
+            msg = f"Attribute `{self.private_name[1:]}` is immutable!"
+            raise TypeError(msg) from None
+
+        setattr(instance, self.private_name, value)
+
+
+# https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
+def signature_from(_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Copies the signature of a function to another function."""
+
+    def _fnc(fnc: Callable[P, T]) -> Callable[P, T]:
+        return fnc
+
+    return _fnc
+
+
+@signature_from(field)
+def frozen_field(**kwargs: Any):
+    """A field that is immutable after it has been set. See `dataclasses.field` for more information."""
+    metadata = kwargs.pop("metadata", {}) | {"frozen": True}
+    return field(**kwargs, metadata=metadata)
+
+
+def freeze_fields(cls: type[T]) -> type[T]:
+    """
+    A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
+
+    This is done by replacing the fields with FrozenField descriptors.
+
+    Args:
+        cls: The class to make immutable, must be a dataclass.
+
+    Raises:
+        TypeError: If cls is not a dataclass
+    """
+
+    cls_fields = getattr(cls, "__dataclass_fields__", None)
+    if cls_fields is None:
+        raise TypeError(f"{cls} is not a dataclass")
+
+    params = getattr(cls, "__dataclass_params__")
+    # _DataclassParams(init=True,repr=True,eq=True,order=True,unsafe_hash=False,
+    #                   frozen=True,match_args=True,kw_only=False,slots=False,
+    #                   weakref_slot=False)
+    if params.frozen:
+        return cls
+
+    for f in fields(cls):  # type: ignore
+        if "frozen" in f.metadata:
+            setattr(cls, f.name, FrozenField(f.name))
+    return cls
+
+
+@freeze_fields
 @dataclass
 class Build:
     """A submission to the database.
