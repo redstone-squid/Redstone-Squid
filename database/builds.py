@@ -24,7 +24,7 @@ import vecs
 
 from bot._types import GuildMessageable
 from bot.submission.parse import logger, validate_restrictions, validate_door_types, parse_time_string
-from bot.utils import get_website_preview,getch_message
+from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -528,7 +528,7 @@ class Build:
         """Gets the original message of the build."""
         if self.original_channel_id:
             assert self.original_message_id is not None
-            return await getch_message(bot, self.original_channel_id, self.original_message_id)
+            return await bot_utils.getch_message(bot, self.original_channel_id, self.original_message_id)
         return None
 
     async def generate_embedding(self) -> list[float] | None:
@@ -875,7 +875,7 @@ class Build:
 
     def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
-        em = utils.info_embed(title=self.get_title(), description=self.get_description())
+        em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -886,10 +886,10 @@ class Build:
             if url.endswith(".jpg") or url.endswith(".png"):
                 em.set_image(url=url)
             else:
-                preview = get_website_preview(url)
+                preview = bot_utils.get_website_preview(url)
                 em.set_image(url=preview["image"])
         elif self.video_urls:
-            preview = get_website_preview(self.video_urls[0])
+            preview = bot_utils.get_website_preview(self.video_urls[0])
             em.set_image(url=preview["image"])
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
