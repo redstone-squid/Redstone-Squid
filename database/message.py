@@ -77,50 +77,24 @@ async def update_message_edited_time(message_id: int) -> None:
     await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
-async def untrack_message(
-    server_id: int | None = None,
-    build_id: int | None = None,
-    *,
-    purpose: MessagePurpose | Iterable[MessagePurpose] | None = None,
-) -> list[MessageRecord]:
-    """Untrack messages from the database. The message is not deleted on discord.
-
-    To also delete the message on discord, fetch the messages from discord using the returned message ids and delete them.
+async def untrack_message(message_id: int) -> MessageRecord:
+    """Untrack message from the database. The message is not deleted on discord.
 
     Args:
-        server_id: The server id of the message to untrack. If None, all messages with the same build_id are untracked.
-        build_id: The build id of the message to untrack. If None, all messages with the same server_id are untracked.
-        purpose: The purpose(s) of the message to untrack. If None, all messages with the same server_id and build_id are untracked.
+        message_id: The message id to untrack.
 
     Returns:
-        A list of MessageRecords that were untracked.
+        A MessageRecords that is untracked.
 
     Raises:
-        ValueError: If both server_id and build_id are None. This is to prevent accidentally deleting all messages.
+        ValueError: If the message is not found.
     """
-    if server_id is None and build_id is None:
-        raise ValueError("server_id and build_id cannot both be None.")
-
     db = DatabaseManager()
-    query = db.table("messages").select("message_id")
-
-    if server_id is not None:
-        query = query.eq("server_id", server_id)
-    if build_id is not None:
-        query = query.eq("build_id", build_id)
-    if purpose is None:
-        pass
-    elif isinstance(purpose, str):
-        query = query.eq("purpose", purpose)
-    else:  # isinstance(purpose, Iterable)
-        query = query.in_("purpose", purpose)
-
-    response: APIResponse[MessageRecord] = await query.execute()
-    if not response.count:
-        return []
-    message_ids = [record["message_id"] for record in response.data]
-    await db.table("messages").delete().in_("message_id", message_ids).execute()
-    return response.data
+    response: APIResponse[MessageRecord] = await db.table("messages").delete().eq("message_id", message_id).execute()
+    if response.data:
+        return response.data[0]
+    else:
+        raise ValueError(f"Message with id {message_id} not found.")
 
 
 async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:

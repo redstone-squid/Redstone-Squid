@@ -28,7 +28,7 @@ from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
-from database.message import get_build_id_by_message
+from database.message import get_build_id_by_message, untrack_message
 from database.schema import TypeRecord
 from database.server_settings import get_server_setting
 from database.utils import get_version_string, upload_to_catbox
