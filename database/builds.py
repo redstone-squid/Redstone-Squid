@@ -24,7 +24,7 @@ import vecs
 
 from bot._types import GuildMessageable
 from bot.submission.parse import logger, validate_restrictions, validate_door_types, parse_time_string
-from bot.utils import get_website_preview
+from bot.utils import get_website_preview,getch_message
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -43,7 +43,6 @@ from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string
 from database.enums import Status, Category
-from bot import utils
 
 
 logger = logging.getLogger(__name__)
@@ -524,6 +523,13 @@ class Build:
                             self.component_restrictions.append(restriction["name"])
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
+
+    async def get_original_message(self, bot: Bot) -> discord.Message | None:
+        """Gets the original message of the build."""
+        if self.original_channel_id:
+            assert self.original_message_id is not None
+            return await getch_message(bot, self.original_channel_id, self.original_message_id)
+        return None
 
     async def generate_embedding(self) -> list[float] | None:
         """
