@@ -280,6 +280,7 @@ class BuildCog(Cog, name="Build"):
         Args:
             query: The query to search for.
         """
+        await ctx.defer()
         client = AsyncOpenAI()
         response = await client.embeddings.create(
             input=query,
