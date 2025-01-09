@@ -10,10 +10,12 @@ from collections.abc import Sequence, Mapping
 from typing import Literal, Any, cast, TypeVar
 
 import discord
+from discord.ext.commands import Bot
 from discord.utils import escape_markdown
 from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 
+from bot._types import GuildMessageable
 from database.schema import (
     BuildRecord,
     DoorRecord,
@@ -270,8 +272,15 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    async def get_channel_type_to_post_to(self: Build) -> Literal["Smallest", "Fastest", "First", "Builds", "Vote"]:
-        """Gets the type of channel to post a submission to."""
+    async def get_channels_to_post_to(self: Build, bot: Bot) -> list[GuildMessageable]:
+        """
+        Gets the channels in which this build should be posted to.
+
+        Args:
+            bot: A bot instance to get the channels from.
+        """
+
+        target: ChannelPurpose
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
@@ -291,20 +300,11 @@ class Build:
             case _:
                 raise ValueError("Invalid status or record category")
 
-        return target
-
-    async def get_channel_ids_to_post_to(self: Build, guild_ids: list[int]) -> list[int]:
-        """Gets all channels which this build should be posted to."""
-        # Get channel type to post submission to
-        channel_purpose = self.get_channel_type_to_post_to()
-        # TODO: Special handling for "Vote" channel type, it should only be posted to OWNER_SERVER
-
-        channels: list[int] = []
-        # For each server the bot can see
-        for guild_id in guild_ids:
-            channel_id = await get_server_setting(guild_id, channel_purpose)
+        channels: list[GuildMessageable] = []
+        for guild in bot.guilds:
+            channel_id = await get_server_setting(guild.id, target)
             if channel_id:
-                channels.append(channel_id)
+                channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
 
         return channels
 
@@ -522,7 +522,7 @@ class Build:
 
     async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("functional_versions", await DatabaseManager.get_newest_version(edition="Java"))
+        functional_versions = data.get("functional_versions", DatabaseManager.get_newest_version(edition="Java"))
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
@@ -583,11 +583,11 @@ class Build:
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
-    async def generate_embed(self) -> discord.Embed:
+    def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
-        em = utils.info_embed(title=self.get_title(), description=await self.get_description())
+        em = utils.info_embed(title=self.get_title(), description=self.get_description())
 
-        fields = await self.get_metadata_fields()
+        fields = self.get_metadata_fields()
         for key, val in fields.items():
             em.add_field(name=key, value=escape_markdown(val), inline=True)
 
@@ -636,7 +636,7 @@ class Build:
 
         return title
 
-    async def get_description(self) -> str | None:
+    def get_description(self) -> str | None:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         desc = []
 
@@ -645,9 +645,7 @@ class Build:
 
         if self.functional_versions is None:
             desc.append("Unknown version compatibility.")
-        elif (
-            get_version_string(await DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions
-        ):
+        elif get_version_string(DatabaseManager.get_newest_version(edition="Java")) not in self.functional_versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -665,7 +663,7 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    async def get_versions_string(self) -> str:
+    def get_versions_string(self) -> str:
         """Returns a string representation of the versions the build is functional in.
 
         The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19".
@@ -680,7 +678,7 @@ class Build:
         start_version: VersionRecord | None = None
         end_version: VersionRecord | None = None
 
-        for version in await DatabaseManager.get_versions_list(edition="Java"):
+        for version in DatabaseManager.get_versions_list(edition="Java"):
             if get_version_string(version, no_edition=True) in self.functional_versions:
                 if not linking:
                     linking = True
@@ -708,7 +706,7 @@ class Build:
 
         return ", ".join(versions)
 
-    async def get_metadata_fields(self) -> dict[str, str]:
+    def get_metadata_fields(self) -> dict[str, str]:
         """Returns a dictionary of metadata fields for the build.
 
         The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
@@ -734,7 +732,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = await self.get_versions_string()
+        fields["Versions"] = self.get_versions_string()
 
         if self.server_ip:
             fields["Server"] = self.server_ip

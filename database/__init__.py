@@ -21,6 +21,7 @@ class DatabaseManager:
 
     _is_setup: bool = False
     _async_client: AsyncClient | None = None
+    version_cache: dict[str | None, list[VersionRecord]] = {}
 
     def __new__(cls) -> AsyncClient:
         if not cls._is_setup:
@@ -48,12 +49,12 @@ class DatabaseManager:
             raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
         cls._async_client = await create_client(url, key)
         cls._is_setup = True
-
-        # TODO: Create the tables if they don't exist (helpful for making new instances of the bot)
+        cls.version_cache["Java"] = await cls.fetch_versions_list(edition="Java")
+        cls.version_cache["Bedrock"] = await cls.fetch_versions_list(edition="Bedrock")
+        cls.version_cache[None] = await cls.fetch_versions_list()
 
     @classmethod
-    @alru_cache(maxsize=3)
-    async def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
+    async def fetch_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
@@ -71,16 +72,29 @@ class DatabaseManager:
         return versions_response.data
 
     @classmethod
+    def get_versions_list(cls, *, edition: Literal["Java", "Bedrock"] | None = None) -> list[VersionRecord]:
+        """Returns a list of all minecraft versions, or None if the database is not set up."""
+        versions = cls.version_cache.get(edition)
+        if versions is None:
+            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
+        return versions
+
+    @classmethod
     @alru_cache(maxsize=2)
-    async def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
+    async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
         """Returns the newest version from the database. This method is cached."""
-        versions = await cls.get_versions_list(edition=edition)
+        versions = await cls.fetch_versions_list(edition=edition)
         return versions[-1]
+
+    @classmethod
+    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> VersionRecord:
+        """Returns the newest version from the cache, or None if the database is not set up."""
+        return cls.get_versions_list(edition=edition)[-1]
 
 
 async def main():
     await DatabaseManager.setup()
-    print(await DatabaseManager.get_versions_list(edition="Java"))
+    print(await DatabaseManager.fetch_versions_list(edition="Java"))
 
 
 if __name__ == "__main__":

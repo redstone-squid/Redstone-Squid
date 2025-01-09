@@ -8,7 +8,7 @@ from io import StringIO
 from textwrap import dedent
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, TYPE_CHECKING, Any
+from typing import overload, Literal, TYPE_CHECKING, Any, Mapping, cast
 
 import discord
 from async_lru import alru_cache
@@ -17,12 +17,19 @@ from discord.abc import Messageable
 from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
 from markdown import Markdown
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from bot import config
+from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
-from database.schema import DoorOrientationName, RecordCategory, DOOR_ORIENTATION_NAMES
+from database.schema import (
+    DoorOrientationName,
+    RecordCategory,
+    DOOR_ORIENTATION_NAMES,
+    MessageRecord,
+    DeleteLogVoteSessionRecord,
+)
 from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
@@ -476,6 +483,44 @@ def check_is_trusted():
         raise MissingAnyRole(list(trusted_role_ids))
 
     return check(predicate)
+
+
+@overload
+async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message: ...
+
+
+async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
+    """Fetch discord objects from database records."""
+
+    try:
+        message_adapter = TypeAdapter(MessageRecord)
+        message_adapter.validate_python(record)
+        message_id = record["message_id"]
+        channel_id = record["channel_id"]
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(channel_id)
+        channel = cast(GuildMessageable, channel)
+        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
+        return await channel.fetch_message(message_id)
+    except ValidationError:
+        pass
+
+    try:
+        message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
+        message_adapter.validate_python(record)
+        message_id = record["target_message_id"]
+        channel_id = record["target_channel_id"]
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(channel_id)
+        channel = cast(GuildMessageable, channel)
+        assert isinstance(channel, GuildMessageable), f"{type(channel)=}"
+        return await channel.fetch_message(message_id)
+    except ValidationError:
+        pass
+
+    raise ValueError("Invalid object to fetch.")
 
 
 async def main():

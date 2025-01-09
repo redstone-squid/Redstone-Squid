@@ -45,8 +45,9 @@ class MessageRecord(TypedDict):
     edited_time: str
     server_id: int
     channel_id: int
-    build_id: int
-    vote_session_id: int
+    purpose: MessagePurpose
+    build_id: int | None
+    vote_session_id: int | None
 
 
 class DoorRecord(TypedDict):
@@ -159,9 +160,18 @@ class VoteSessionRecord(TypedDict):
 class BuildVoteSessionRecord(TypedDict):
     """A record of a build vote session in the database."""
 
-    session_id: int
+    vote_session_id: int
     build_id: int
     changes: Json[list]
+
+
+class DeleteLogVoteSessionRecord(TypedDict):
+    """A record of a delete log vote session in the database."""
+
+    vote_session_id: int
+    target_message_id: int
+    target_channel_id: int
+    target_server_id: int
 
 
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
