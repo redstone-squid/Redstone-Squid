@@ -277,7 +277,7 @@ class Build:
         video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
 
-        server_info = data["server_info"]
+        server_info: ServerInfo = data["server_info"] or {}
 
         submitter_id = data["submitter_id"]
         completion_time = data["completion_time"]
