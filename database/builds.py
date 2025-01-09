@@ -25,6 +25,7 @@ from bot.utils import get_website_preview
 from database.schema import (
     BuildRecord,
     DoorRecord,
+    ServerInfo,
     TypeRecord,
     RestrictionRecord,
     Info,
@@ -167,11 +168,7 @@ class Build:
     image_urls: list[str] = field(default_factory=list)
     video_urls: list[str] = field(default_factory=list)
     world_download_urls: list[str] = field(default_factory=list)
-
-    # TODO: Put these three into server_info
-    server_ip: str | None = None
-    coordinates: str | None = None
-    command: str | None = None
+    server_info: ServerInfo = field(default_factory=dict)  # type: ignore
 
     submitter_id: int | None = None
     # TODO: save the submitted time too
@@ -275,11 +272,7 @@ class Build:
         build.video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         build.world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
 
-        server_info: dict[str, Any] = data["server_info"]
-        if server_info:
-            build.server_ip = server_info.get("server_ip")
-            build.coordinates = server_info.get("coordinates")
-            build.command = server_info.get("command_to_build")
+        build.server_info = data["server_info"]
 
         build.submitter_id = data["submitter_id"]
         build.completion_time = data["completion_time"]
@@ -859,14 +852,12 @@ class Build:
 
         fields["Versions"] = self.get_version_spec()
 
-        if self.server_ip:
-            fields["Server"] = self.server_ip
-
-            if self.coordinates:
-                fields["Coordinates"] = self.coordinates
-
-            if self.command:
-                fields["Command"] = self.command
+        if ip := self.server_info.get("server_ip"):
+            fields["Server"] = ip
+            if coordinates := self.server_info.get("coordinates"):
+                fields["Coordinates"] = coordinates
+            if command := self.server_info.get("command_to_build"):
+                fields["Command"] = command
 
         if self.world_download_urls:
             fields["World Download"] = ", ".join(self.world_download_urls)

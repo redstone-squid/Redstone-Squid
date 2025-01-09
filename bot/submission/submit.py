@@ -590,11 +590,11 @@ class BuildCog(Cog, name="Build"):
             if self.link_to_world_download is not None:
                 build.world_download_urls = [self.link_to_world_download]
             if self.server_ip is not None:
-                build.server_ip = self.server_ip
+                build.server_info["server_ip"] = self.server_ip
             if self.coordinates is not None:
-                build.coordinates = self.coordinates
+                build.server_info["coordinates"] = self.coordinates
             if self.command_to_get_to_build is not None:
-                build.command = self.command_to_get_to_build
+                build.server_info["command_to_build"] = self.command_to_get_to_build
             if self.date_of_creation is not None:
                 build.completion_time = self.date_of_creation
             return build

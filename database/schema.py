@@ -21,6 +21,14 @@ class Info(TypedDict, total=False):
     unknown_restrictions: UnknownRestrictions
 
 
+class ServerInfo(TypedDict, total=False):
+    """Various additional information about the server"""
+
+    server_ip: str
+    coordinates: str
+    command_to_build: str
+
+
 class BuildRecord(TypedDict):
     """A record of a build in the database."""
 
