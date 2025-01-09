@@ -11,6 +11,8 @@ from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command, 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 from database import DatabaseManager, get_version_string
+from database.builds import get_all_builds
+from database.message import track_message
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -139,6 +141,23 @@ class Miscellaneous(Cog):
         """Raises an error for testing purposes."""
         async with utils.RunningMessage(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")
+
+
+    @commands.command("aaa")
+    async def force_build_message_consistency(self, ctx: Context):
+        """For migration 20250108120722_build_message_link."""
+        builds = await get_all_builds()
+        channel1 = self.bot.get_channel(726156829629087814)
+        channel2 = self.bot.get_channel(667401499554611210)
+        for build in builds:
+            if build.original_message_id is None:
+                continue
+            else:
+                try:
+                    message = await channel1.fetch_message(build.original_message_id)
+                except discord.NotFound:
+                    message = await channel2.fetch_message(build.original_message_id)
+                await track_message(message, purpose="build_original_message", build_id=build.id)
 
 
 async def setup(bot: RedstoneSquid):
