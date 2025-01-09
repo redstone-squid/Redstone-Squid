@@ -655,14 +655,20 @@ class BuildCog(Cog, name="Build"):
             raise ValueError("Build id is None.")
 
         # Get all messages for a build
-        messages = await msg.get_build_messages(build.id)
+        message_records = await msg.get_build_messages(build.id)
         em = build.generate_embed()
 
-        for message in messages:
-            channel = self.bot.get_channel(message["channel_id"])
+        for record in message_records:
+            channel = self.bot.get_channel(record["channel_id"])
             if not isinstance(channel, GuildMessageable):
                 raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
-            message = await channel.fetch_message(message["message_id"])
+            try:
+                message = await channel.fetch_message(record["message_id"])
+            except discord.NotFound:
+                await untrack_message(record["message_id"])
+                continue
+            except discord.Forbidden:
+                continue
             await message.edit(embed=em)
             await msg.update_message_edited_time(message.id)
 
