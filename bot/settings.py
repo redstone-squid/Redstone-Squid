@@ -81,7 +81,6 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="search")
     @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
-    @app_commands.rename(channel_purpose="type")
     @check_is_staff()
     async def search_setting(self, ctx: Context[RedstoneSquid], setting: Setting):
         """Show the server's current setting."""
@@ -166,7 +165,6 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="clear")
     @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
-    @app_commands.rename(channel_purpose="type")
     @check_is_staff()
     async def clear_setting(self, ctx: Context, setting: Setting):
         """Set this setting to None."""
