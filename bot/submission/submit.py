@@ -557,6 +557,7 @@ class BuildCog(Cog, name="Build"):
                 build.command = self.command_to_get_to_build
             if self.date_of_creation is not None:
                 build.completion_time = self.date_of_creation
+            return build
 
         build_id: int = flag(description='The ID of the submission.')
         door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
