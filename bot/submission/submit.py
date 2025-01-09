@@ -23,7 +23,7 @@ from typing_extensions import override
 import vecs
 
 from bot import utils
-from bot.submission.parse import parse_build, parse_dimensions
+from bot.submission.parse import parse_dimensions
 from bot.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
@@ -757,11 +757,10 @@ class BuildCog(Cog, name="Build"):
         if message.channel.id not in [build_logs, record_logs]:
             return
 
-        build = await parse_build(
+        build = Build()
+        await build.parse_build(
             f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
-        )  # type: ignore
-        if build is None:
-            return
+        )
 
         for attachment in message.attachments:
             if attachment.content_type is None:

@@ -1,16 +1,14 @@
 import asyncio
 import logging
-import os
 import re
 from io import StringIO
 from typing import Literal, overload
 from xml.etree.ElementTree import Element
 
 from markdown import Markdown
-from openai import AsyncOpenAI
 
 from database import DatabaseManager
-from database.builds import Build
+from database.builds import parse_build
 
 logger = logging.getLogger(__name__)
 
@@ -202,124 +200,6 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
             raise ValueError(
                 "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
             )
-
-
-async def parse_build(message: str) -> Build | None:
-    """Parses a build from a message using AI."""
-    client = AsyncOpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(f"{current_dir}/prompt.txt", "r", encoding="utf-8") as f:
-        prompt = f.read()
-    completion = await client.beta.chat.completions.parse(
-        model="deepseek/deepseek-chat",
-        messages=[
-            {"role": "user", "content": prompt.format(message=message)},
-        ],
-    )
-    output = completion.choices[0].message.content
-
-    logger.debug(f"AI Output: {output}")
-
-    if output is None:
-        return None
-
-    # Step 1: Extract content between <target> and </target>
-    match = re.search(r"<target>(.*?)</target>", output, re.DOTALL)
-    if not match:
-        return None
-
-    content = match.group(1).strip()
-
-    # Step 2: Split content into lines and parse key-value pairs
-    variables: dict[str, str | None] = {}
-    for line in content.split("\n"):
-        # Skip empty lines
-        if not line.strip():
-            continue
-        # Split only on the first ':'
-        if ":" not in line:
-            print(f"Skipping malformed line: {line}")
-            continue
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        if value.lower() in ["none", "null", "unknown"]:
-            value = None
-
-        variables[key] = value
-
-    # Step 3: Validate and convert variables
-    acceptable_keys = [
-        "record_category",
-        "component_restriction",
-        "wiring_placement_restrictions",
-        "miscellaneous_restrictions",
-        "piston_door_type",
-        "door_orientation",
-        "door_width",
-        "door_height",
-        "door_depth",
-        "build_width",
-        "build_height",
-        "build_depth",
-        "opening_time",
-        "closing_time",
-        "creators",
-        "version",
-        "image",
-        "author_note",
-    ]
-
-    # All keys must be present
-    if not all(key in variables for key in acceptable_keys):
-        logging.debug("Missing keys in AI output variables")
-        return
-
-    build = Build()
-    build.ai_generated = True
-    build.record_category = variables["record_category"]
-    build.information["unknown_restrictions"] = {}
-    if variables["component_restriction"] is not None:
-        comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
-        build.component_restrictions = comps[0]
-        build.information["unknown_restrictions"]["component_restrictions"] = comps[1]
-    if variables["wiring_placement_restrictions"] is not None:
-        wirings = await validate_restrictions(
-            variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
-        )
-        build.wiring_placement_restrictions = wirings[0]
-        build.information["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
-    if variables["miscellaneous_restrictions"] is not None:
-        miscs = await validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
-        build.miscellaneous_restrictions = miscs[0]
-        build.information["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
-    if variables["piston_door_type"] is not None:
-        door_types = await validate_door_types(variables["piston_door_type"].split(", "))
-        build.door_type = door_types[0]
-        build.information["unknown_patterns"] = door_types[1]
-    orientation = variables["door_orientation"]
-    if orientation == "Normal":
-        build.door_orientation_type = "Door"
-    else:
-        build.door_orientation_type = orientation or "Door"
-    build.door_width = int(variables["door_width"]) if variables["door_width"] else None
-    build.door_height = int(variables["door_height"]) if variables["door_height"] else None
-    build.door_depth = int(variables["door_depth"]) if variables["door_depth"] else None
-    build.width = int(variables["build_width"]) if variables["build_width"] else None
-    build.height = int(variables["build_height"]) if variables["build_height"] else None
-    build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
-    build.normal_opening_time = parse_time_string(variables["opening_time"])
-    build.normal_closing_time = parse_time_string(variables["closing_time"])
-    build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-    build.version_spec = variables["version"] or DatabaseManager.get_newest_version(edition="Java")
-    build.versions = DatabaseManager.filter_versions(build.version_spec)
-    build.image_urls = variables["image"].split(", ") if variables["image"] else []
-    if variables["author_note"] is not None:
-        build.information["user"] = variables["author_note"].replace("\\n", "\n")
-    return build
 
 
 async def main():
