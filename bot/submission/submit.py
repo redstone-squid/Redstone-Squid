@@ -524,8 +524,6 @@ class BuildCog(Cog, name="Build"):
         if type == "update":
             raise NotImplementedError("Updating builds is not yet implemented.")
 
-        # TODO: There are no checks to see if the submission has already been posted
-        assert build.id is not None
         if build.submission_status != Status.PENDING:
             raise ValueError("The build must be pending to post it.")
 
