@@ -925,6 +925,12 @@ class Build:
             elif re.match(r"\d+\s*[Bb]locks", restriction):
                 title += f"{restriction} "
 
+        # FIXME: This is included in the title for now to match people's expectations
+        for restriction in self.component_restrictions:
+            title += f"{restriction} "
+        for restriction in self.information.get("unknown_restrictions", {}).get("component_restrictions", []):
+            title += f"*{restriction}* "
+
         # Door dimensions
         if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
             title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
