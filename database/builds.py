@@ -80,10 +80,10 @@ class FrozenField(Generic[T]):
 def signature_from(_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Copies the signature of a function to another function."""
 
-    def _fnc(fnc: Callable[P, T]) -> Callable[P, T]:
-        return fnc
+    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
+        return func
 
-    return _fnc
+    return _decorator
 
 
 @signature_from(field)
