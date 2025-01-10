@@ -11,8 +11,6 @@ from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command, 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 from database import DatabaseManager, get_version_string
-from database.builds import get_all_builds
-from database.message import track_message
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid

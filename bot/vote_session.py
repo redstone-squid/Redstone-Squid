@@ -7,7 +7,6 @@ import inspect
 from abc import abstractmethod, ABC
 import asyncio
 from asyncio import Task
-from dataclasses import dataclass
 from types import MethodType
 from typing import Any, TypeVar, Union, TYPE_CHECKING, cast
 
@@ -15,15 +14,13 @@ import discord
 from postgrest.base_request_builder import APIResponse
 
 from bot import utils
-from bot._types import GuildMessageable
 from database import DatabaseManager
-from database.builds import Build
 from database.schema import VoteKind, MessageRecord
 from database.vote import close_vote_session, track_vote_session, upsert_vote
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
-
+    # from bot.main import RedstoneSquid
+    pass
 
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]

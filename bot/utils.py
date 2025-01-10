@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import re
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, TYPE_CHECKING, Any, Mapping, cast
+from typing import overload, TYPE_CHECKING, Any, Mapping, cast
 
 import discord
 import requests

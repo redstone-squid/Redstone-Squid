@@ -1,7 +1,6 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-import typing
-from typing import Literal, cast
+from typing import Literal
 
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
