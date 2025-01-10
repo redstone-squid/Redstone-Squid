@@ -344,7 +344,12 @@ class Build:
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
-                {"role": "user", "content": prompt.format(message=f"{message.author.display_name} wrote the following message:\n{message.clean_content}")},
+                {
+                    "role": "user",
+                    "content": prompt.format(
+                        message=f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
+                    ),
+                },
             ],
         )
         output = completion.choices[0].message.content
@@ -551,10 +556,7 @@ class Build:
         """
         try:
             client = AsyncOpenAI()
-            response = await client.embeddings.create(
-                input=str(self),
-                model="text-embedding-3-small"
-            )
+            response = await client.embeddings.create(input=str(self), model="text-embedding-3-small")
             return response.data[0].embedding
         except OpenAIError as e:
             logger.error(f"Failed to generate embedding for build {self.id}: {e}")
@@ -724,9 +726,7 @@ class Build:
                 unknown_types = tg.create_task(self._update_build_types_table(data))
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
             self.embedding = await self.generate_embedding()
-            build_vecs.upsert(
-                records=[(str(self.id), self.embedding, {})]
-            )
+            build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
                 information["unknown_restrictions"] = unknown_restrictions.result()
@@ -1114,6 +1114,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 async def main():
     from dotenv import load_dotenv
+
     load_dotenv()
     await DatabaseManager.setup()
     build = await Build.from_id(43)

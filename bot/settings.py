@@ -97,7 +97,9 @@ class SettingsCog(Cog, name="Settings"):
                         description = "_Not set_"
                     else:
                         channel = ctx.guild.get_channel(value)
-                        description = f"ID: {channel.id} \n Name: {channel.name}" if channel is not None else "_Not found_"
+                        description = (
+                            f"ID: {channel.id} \n Name: {channel.name}" if channel is not None else "_Not found_"
+                        )
                 case "Staff" | "Trusted":
                     title = f"{setting} Roles Info"
                     value = await get_server_setting(ctx.guild.id, setting)
@@ -130,14 +132,18 @@ class SettingsCog(Cog, name="Settings"):
         assert ctx.guild is not None
 
         if channel is not None and roles is not None:
-            await ctx.send(embed=utils.error_embed("Error", "You can only provide a channel or a list of roles, not both."))
+            await ctx.send(
+                embed=utils.error_embed("Error", "You can only provide a channel or a list of roles, not both.")
+            )
             return
 
         async with utils.RunningMessage(ctx) as sent_message:
             match setting:
                 case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
                     if channel is None:
-                        await sent_message.edit(embed=utils.error_embed("Error", "You must provide a channel for this setting."))
+                        await sent_message.edit(
+                            embed=utils.error_embed("Error", "You must provide a channel for this setting.")
+                        )
                         return
 
                     if ctx.guild.get_channel(channel.id) is None:
@@ -146,10 +152,14 @@ class SettingsCog(Cog, name="Settings"):
 
                     # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
                     await update_server_setting(ctx.guild.id, setting, channel.id)
-                    await sent_message.edit(embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set."))
+                    await sent_message.edit(
+                        embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
+                    )
                 case "Staff" | "Trusted":
                     if roles is None:
-                        await sent_message.edit(embed=utils.error_embed("Error", "You must provide a list of roles for this setting."))
+                        await sent_message.edit(
+                            embed=utils.error_embed("Error", "You must provide a list of roles for this setting.")
+                        )
                         return
 
                     role_ids = [role.id for role in roles]
@@ -158,7 +168,9 @@ class SettingsCog(Cog, name="Settings"):
                         return
 
                     await update_server_setting(ctx.guild.id, setting, role_ids)
-                    await sent_message.edit(embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set."))
+                    await sent_message.edit(
+                        embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
+                    )
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
 

@@ -98,7 +98,12 @@ class BuildVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         self.id = await track_vote_session(
-            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id
+            await self.fetch_messages(),
+            self.author_id,
+            self.kind,
+            self.pass_threshold,
+            self.fail_threshold,
+            build_id=self.build.id,
         )
         await self.update_messages()
 
@@ -166,10 +171,12 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def update_messages(self):
         embed = self.build.generate_embed()
-        embed.add_field(name='', value='', inline=False)  # Add a blank field to separate the vote count
+        embed.add_field(name="", value="", inline=False)  # Add a blank field to separate the vote count
         embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
         embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
-        await asyncio.gather(*[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()])
+        await asyncio.gather(
+            *[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()]
+        )
 
     @override
     async def close(self) -> None:
@@ -228,6 +235,7 @@ class BuildVoteSession(AbstractVoteSession):
 
 class BuildCog(Cog, name="Build"):
     """A cog with commands to submit, view, confirm and deny submissions."""
+
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
         self.open_vote_sessions: dict[int, BuildVoteSession] = {}
@@ -282,10 +290,7 @@ class BuildCog(Cog, name="Build"):
         """
         await ctx.defer()
         client = AsyncOpenAI()
-        response = await client.embeddings.create(
-            input=query,
-            model="text-embedding-3-small"
-        )
+        response = await client.embeddings.create(input=query, model="text-embedding-3-small")
         query_vec = response.data[0].embedding
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
         build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
@@ -548,6 +553,7 @@ class BuildCog(Cog, name="Build"):
 
     class EditDoorFlags(commands.FlagConverter):
         """Parameters information for the `/edit door` command."""
+
         async def to_build(self) -> Build | None:
             """Convert the flags to a build object, returns None if the build_id is invalid."""
             build = await Build.from_id(self.build_id)
@@ -598,7 +604,7 @@ class BuildCog(Cog, name="Build"):
                 build.completion_time = self.date_of_creation
             return build
 
-    # fmt: off
+        # fmt: off
         build_id: int = flag(description='The ID of the submission.')
         door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
@@ -620,6 +626,7 @@ class BuildCog(Cog, name="Build"):
         server_ip: str | None = flag(default=None, description='The IP of the server where the build is located.')
         coordinates: str | None = flag(default=None, description='The coordinates of the build in the server.')
         command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
+
     # fmt: on
 
     @edit_group.command(name="door")
@@ -643,12 +650,14 @@ class BuildCog(Cog, name="Build"):
                     embed=preview_embed,
                     view=view,
                     ephemeral=True,
-                    wait=True
+                    wait=True,
                 )
                 await view.wait()
                 await preview.delete()
                 if view.value is None:
-                    await sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity."))
+                    await sent_message.edit(
+                        embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                    )
                 elif view.value:
                     await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                     await build.save()
@@ -773,10 +782,12 @@ class BuildCog(Cog, name="Build"):
         build.category = Category.DOOR
         build.submitter_id = message.author.id
         await build.save()
-        await asyncio.gather(*(
-            self.post_build_for_voting(build, type="add"),
-            track_message(message, purpose="build_original_message", build_id=build.id)
-        ))
+        await asyncio.gather(
+            *(
+                self.post_build_for_voting(build, type="add"),
+                track_message(message, purpose="build_original_message", build_id=build.id),
+            )
+        )
 
     @build_hybrid_group.command("recalc")
     @check_is_trusted_or_staff()

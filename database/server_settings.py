@@ -1,4 +1,5 @@
 """Some functions related to storing and changing server ids for sending records."""
+
 import typing
 from typing import Literal, cast
 
@@ -31,7 +32,9 @@ assert set(_SETTING_TO_DB_KEY.keys()) == set(SETTINGS), "The mapping is not exha
 
 
 @overload
-async def get_server_setting(server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]) -> int | None: ...
+async def get_server_setting(
+    server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+) -> int | None: ...
 @overload
 async def get_server_setting(server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int]: ...
 @overload
@@ -69,15 +72,24 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] |
     settings = response.data
 
     excluded_columns = ["server_id", "in_server"]
-    return {_DB_KEY_TO_SETTING[setting_name]: id for setting_name, id in settings.items() if setting_name not in excluded_columns}  # type: ignore
+    return {
+        _DB_KEY_TO_SETTING[setting_name]: id
+        for setting_name, id in settings.items()
+        if setting_name not in excluded_columns
+    }  # type: ignore
 
 
 @overload
-async def update_server_setting(server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None) -> None: ...
+async def update_server_setting(
+    server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None
+) -> None: ...
 @overload
-async def update_server_setting(server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None) -> None: ...
+async def update_server_setting(
+    server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None
+) -> None: ...
 @overload
 async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None: ...
+
 
 async def update_server_setting(server_id: int, setting: Setting, value: int | list[int] | None) -> None:
     """Updates a setting for a server."""
