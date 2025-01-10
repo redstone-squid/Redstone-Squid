@@ -772,8 +772,8 @@ class BuildCog(Cog, name="Build"):
         build.submission_status = Status.PENDING
         build.category = Category.DOOR
         build.submitter_id = message.author.id
+        await build.save()
         await asyncio.gather(*(
-            build.save(),
             self.post_build_for_voting(build, type="add"),
             track_message(message, purpose="build_original_message", build_id=build.id)
         ))
