@@ -56,6 +56,7 @@ class Miscellaneous(Cog):
 
     @tasks.loop(hours=24)
     async def call_supabase_to_prevent_deactivation(self):
+        """Supabase deactivates a database in the free tier if it's not used for 7 days."""
         db = DatabaseManager()
         await db.table("submissions").select("submission_id").limit(1).execute()
 
