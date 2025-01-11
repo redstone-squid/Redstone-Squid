@@ -14,6 +14,7 @@ jobs:
           git pull
       - name: Run python
         run: |
+          pwd
           pkill -f "app.py" || true
           source ~/Redstone-Squid/venv/bin/activate
           pip-sync requirements.txt
