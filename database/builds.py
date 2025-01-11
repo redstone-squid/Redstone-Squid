@@ -181,7 +181,7 @@ class Build:
     original_channel_id: Final[int | None] = frozen_field(default=None)
     original_message_id: Final[int | None] = frozen_field(default=None)
     original_message: Final[str | None] = frozen_field(default=None)
-    _original_message: discord.Message | None = field(default=None, init=False, repr=False)
+    _original_message_obj: discord.Message | None = field(default=None, init=False, repr=False)
     """Cache for the original message of the build."""
 
     ai_generated: bool | None = None
@@ -548,8 +548,8 @@ class Build:
 
     async def get_original_message(self, bot: Bot) -> discord.Message | None:
         """Gets the original message of the build."""
-        if self._original_message:
-            return self._original_message
+        if self._original_message_obj:
+            return self._original_message_obj
 
         if self.original_channel_id:
             assert self.original_message_id is not None
