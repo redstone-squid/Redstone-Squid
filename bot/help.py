@@ -8,6 +8,7 @@ import discord
 from discord import app_commands, InteractionResponse
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group, Context
+import git
 
 from bot import utils
 
@@ -71,6 +72,7 @@ class Help(commands.MinimalHelpCommand):
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
         filtered_commands = await self.filter_commands(commands_, sort=True)
+        repo = git.Repo(search_parent_directories=True)
         desc = dedent(
             f"""\
             {self.context.bot.description}
@@ -81,6 +83,7 @@ class Help(commands.MinimalHelpCommand):
             """
         )
         em = utils.help_embed("Help", desc)
+        em.set_footer(text=f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}")
         await self.get_destination().send(embed=em)
 
     # !help <command>
