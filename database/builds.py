@@ -181,7 +181,7 @@ class Build:
     original_channel_id: Final[int | None] = frozen_field(default=None)
     original_message_id: Final[int | None] = frozen_field(default=None)
     original_message: Final[str | None] = frozen_field(default=None)
-    _original_message: discord.Message | None = field(default=None, init=False, repr=False)
+    _original_message_obj: discord.Message | None = field(default=None, init=False, repr=False)
     """Cache for the original message of the build."""
 
     ai_generated: bool | None = None
@@ -548,8 +548,8 @@ class Build:
 
     async def get_original_message(self, bot: Bot) -> discord.Message | None:
         """Gets the original message of the build."""
-        if self._original_message:
-            return self._original_message
+        if self._original_message_obj:
+            return self._original_message_obj
 
         if self.original_channel_id:
             assert self.original_message_id is not None
@@ -711,7 +711,7 @@ class Build:
         # this needs to be kept because it will be updated later
         information: Info = build_data.pop("information", {})
         # Original message id cannot be populated in the build table unless after it is inserted
-        original_message_io = build_data.pop("original_message_id", None)
+        original_message_id = build_data.pop("original_message_id", None)
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
@@ -745,11 +745,11 @@ class Build:
             if unknown_types.result():
                 information["unknown_patterns"] = unknown_types.result()
             # Update the information field in the database to store any unknown restrictions or types
-            # original_message_io has a foreign key constraint with the messages table
+            # original_message_id has a foreign key constraint with the messages table
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"information": information, "original_message_io": original_message_io})
+                .update({"information": information, "original_message_id": original_message_id})
                 .eq("id", self.id)
                 .execute()
             )
