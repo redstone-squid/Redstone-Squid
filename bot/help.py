@@ -13,7 +13,7 @@ from bot import utils
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-MORE_INFORMATION = "Use `/help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
+MORE_INFORMATION = "Use `/help <command>` to get more information."
 
 
 class HelpCog(Cog):
