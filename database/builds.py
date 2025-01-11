@@ -350,7 +350,12 @@ class Build:
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
-                {"role": "user", "content": prompt.format(message=f"{message.author.display_name} wrote the following message:\n{message.clean_content}")},
+                {
+                    "role": "user",
+                    "content": prompt.format(
+                        message=f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
+                    ),
+                },
             ],
         )
         output = completion.choices[0].message.content
@@ -707,7 +712,9 @@ class Build:
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
         # information is a special JSON field in the database that stores various information about the build
         # this needs to be kept because it will be updated later
-        information: Info = build_data.get("information", {})
+        information: Info = build_data.pop("information", {})
+        # Original message id cannot be populated in the build table unless after it is inserted
+        original_message_io = build_data.pop("original_message_id", None)
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
@@ -721,6 +728,7 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
 
+        message_insert_task = asyncio.create_task(self._update_messages_table(data))
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
         try:
             async with asyncio.TaskGroup() as tg:
@@ -741,7 +749,14 @@ class Build:
             if unknown_types.result():
                 information["unknown_patterns"] = unknown_types.result()
             # Update the information field in the database to store any unknown restrictions or types
-            await db.table("builds").update({"information": information}).eq("id", self.id).execute()
+            # original_message_io has a foreign key constraint with the messages table
+            await message_insert_task
+            await (
+                db.table("builds")
+                .update({"information": information, "original_message_io": original_message_io})
+                .eq("id", self.id)
+                .execute()
+            )
         except:
             vx.disconnect()
             if delete_build_on_error:
@@ -891,6 +906,24 @@ class Build:
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
         if build_versions_data:
             await db.table("build_versions").upsert(build_versions_data).execute()
+
+    async def _update_messages_table(self, data: dict[str, Any]) -> None:
+        """Updates the messages table with the given data."""
+        await (
+            DatabaseManager()
+            .table("messages")
+            .insert(
+                {
+                    "server_id": self.original_server_id,
+                    "channel_id": self.original_channel_id,
+                    "message_id": self.original_message_id,
+                    "build_id": self.id,
+                    "edited_time": utcnow(),
+                    "purpose": "build_original_message",
+                }
+            )
+            .execute()
+        )
 
     def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
@@ -1122,6 +1155,7 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
 
 async def main():
     from dotenv import load_dotenv
+
     load_dotenv()
     await DatabaseManager.setup()
     build = await Build.from_id(43)
