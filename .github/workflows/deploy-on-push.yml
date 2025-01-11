@@ -8,10 +8,10 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Dotenv Action
-        uses: falti/dotenv-action@v1.1.4
+      - name: Pull latest changes
+        run: |
+          cd ~/Redstone-Squid
+          git pull
       - name: Run python
         run: |
           pkill -f "app.py" || true
