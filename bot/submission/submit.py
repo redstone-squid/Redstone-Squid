@@ -98,7 +98,12 @@ class BuildVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         self.id = await track_vote_session(
-            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold, build_id=self.build.id
+            await self.fetch_messages(),
+            self.author_id,
+            self.kind,
+            self.pass_threshold,
+            self.fail_threshold,
+            build_id=self.build.id,
         )
         await self.update_messages()
 

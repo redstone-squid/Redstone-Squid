@@ -565,10 +565,7 @@ class Build:
         """
         try:
             client = AsyncOpenAI()
-            response = await client.embeddings.create(
-                input=str(self),
-                model="text-embedding-3-small"
-            )
+            response = await client.embeddings.create(input=str(self), model="text-embedding-3-small")
             return response.data[0].embedding
         except OpenAIError as e:
             logger.error(f"Failed to generate embedding for build {self.id}: {e}")
@@ -738,11 +735,10 @@ class Build:
                 tg.create_task(self._update_build_versions_table(data))
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
                 unknown_types = tg.create_task(self._update_build_types_table(data))
+                embedding_task = tg.create_task(self.generate_embedding())
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
-            self.embedding = await self.generate_embedding()
-            build_vecs.upsert(
-                records=[(str(self.id), self.embedding, {})]
-            )
+            self.embedding = await embedding_task
+            build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
                 information["unknown_restrictions"] = unknown_restrictions.result()

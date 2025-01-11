@@ -48,7 +48,14 @@ class AbstractVoteSession(ABC):
 
     kind: VoteKind
 
-    def __init__(self, bot: discord.Client, messages: Iterable[discord.Message] | Iterable[int], author_id: int, pass_threshold: int, fail_threshold: int):
+    def __init__(
+        self,
+        bot: discord.Client,
+        messages: Iterable[discord.Message] | Iterable[int],
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+    ):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
 
@@ -189,9 +196,17 @@ class AbstractVoteSession(ABC):
         if len(self.message_ids) == len(self._messages):
             return self._messages
 
-        messages_record: APIResponse[MessageRecord] = await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
+        messages_record: APIResponse[MessageRecord] = (
+            await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
+        )
         cached_ids = {message.id for message in self._messages}
-        new_messages = await asyncio.gather(*(utils.getch(self.bot, record) for record in messages_record.data if record["message_id"] not in cached_ids))
+        new_messages = await asyncio.gather(
+            *(
+                utils.getch(self.bot, record)
+                for record in messages_record.data
+                if record["message_id"] not in cached_ids
+            )
+        )
         new_messages = (message for message in new_messages if message is not None)
         self._messages.update(new_messages)
         assert len(self._messages) == len(self.message_ids)

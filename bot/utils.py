@@ -233,7 +233,7 @@ def get_website_preview(url: str) -> dict[str, str | None]:
         "description": None,
         "image": None,
         "site_name": None,
-        "url": None
+        "url": None,
     }
 
     try:
@@ -284,6 +284,7 @@ def get_website_preview(url: str) -> dict[str, str | None]:
         preview_data["url"] = url
 
     return preview_data
+
 
 async def main():
     test_url = "https://imgur.com/WwsKLH5"
