@@ -234,13 +234,26 @@ class Build:
 
         match data["category"]:
             case "Door":
-                category_data = data["doors"]
+                assert data["doors"] is not None
+                door_orientation_type = data["doors"]["orientation"]
+                door_width = data["doors"]["door_width"]
+                door_height = data["doors"]["door_height"]
+                door_depth = data["doors"]["door_depth"]
+                normal_closing_time = data["doors"]["normal_closing_time"]
+                normal_opening_time = data["doors"]["normal_opening_time"]
+                visible_closing_time = data["doors"]["visible_closing_time"]
+                visible_opening_time = data["doors"]["visible_opening_time"]
             case "Extender":
                 category_data = data["extenders"]
+                raise NotImplementedError
             case "Utility":
                 category_data = data["utilities"]
+                raise NotImplementedError
             case "Entrance":
                 category_data = data["entrances"]
+                raise NotImplementedError
+            case _:
+                raise ValueError("Invalid category")
 
         # FIXME: This is hardcoded for now
         if data.get("types"):
@@ -248,15 +261,6 @@ class Build:
             door_type = [type_["name"] for type_ in types]
         else:
             door_type = ["Regular"]
-
-        door_orientation_type = data["doors"]["orientation"]
-        door_width = data["doors"]["door_width"]
-        door_height = data["doors"]["door_height"]
-        door_depth = data["doors"]["door_depth"]
-        normal_closing_time = data["doors"]["normal_closing_time"]
-        normal_opening_time = data["doors"]["normal_opening_time"]
-        visible_closing_time = data["doors"]["visible_closing_time"]
-        visible_opening_time = data["doors"]["visible_opening_time"]
 
         restrictions: list[RestrictionRecord] = data.get("restrictions", [])
         wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
