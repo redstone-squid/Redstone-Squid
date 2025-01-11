@@ -65,12 +65,10 @@ class Help(commands.MinimalHelpCommand):
 
     def __init__(self):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
-        # self.verify_checks = False
 
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        # TODO: hide hidden commands
         commands_ = list(self.context.bot.commands)
         filtered_commands = await self.filter_commands(commands_, sort=True)
         desc = dedent(
@@ -83,7 +81,7 @@ class Help(commands.MinimalHelpCommand):
             """
         )
         em = utils.help_embed("Help", desc)
-        await self.context.send(embed=em)
+        await self.get_destination().send(embed=em)
 
     # !help <command>
     @override
