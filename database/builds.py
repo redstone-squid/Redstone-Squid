@@ -905,6 +905,9 @@ class Build:
 
     async def _update_messages_table(self, data: dict[str, Any]) -> None:
         """Updates the messages table with the given data."""
+        if self.original_message_id is None:
+            return
+
         await (
             DatabaseManager()
             .table("messages")
