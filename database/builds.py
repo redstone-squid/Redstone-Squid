@@ -293,7 +293,7 @@ class Build:
         original_server_id = message_record.get("server_id")
         original_channel_id = message_record.get("channel_id")
         original_message_id = data["original_message_id"]
-        original_message = data["original_message"]
+        original_message = message_record.get("content")
 
         ai_generated = data["ai_generated"]
         embedding = data["embedding"]
@@ -916,6 +916,7 @@ class Build:
                     "build_id": self.id,
                     "edited_time": utcnow(),
                     "purpose": "build_original_message",
+                    "content": self.original_message,
                 }
             )
             .execute()

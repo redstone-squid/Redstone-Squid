@@ -46,7 +46,6 @@ class BuildRecord(TypedDict):
     server_info: dict[str, Any] | None  # JSON
     submitter_id: int
     original_message_id: int
-    original_message: str
     version_spec: str
     ai_generated: bool
     embedding: list[float] | None
@@ -62,6 +61,7 @@ class MessageRecord(TypedDict):
     purpose: MessagePurpose
     build_id: int | None
     vote_session_id: int | None
+    content: str | None
 
 
 class DoorRecord(TypedDict):
