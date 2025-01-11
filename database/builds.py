@@ -718,12 +718,11 @@ class Build:
 
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
         try:
-            background_tasks: set[Task[Any]] = set()
             async with asyncio.TaskGroup() as tg:
-                background_tasks.add(tg.create_task(self._update_build_subcategory_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_links_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_creators_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_versions_table(data)))
+                tg.create_task(self._update_build_subcategory_table(data))
+                tg.create_task(self._update_build_links_table(data))
+                tg.create_task(self._update_build_creators_table(data))
+                tg.create_task(self._update_build_versions_table(data))
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
                 unknown_types = tg.create_task(self._update_build_types_table(data))
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
