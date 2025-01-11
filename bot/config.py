@@ -1,4 +1,5 @@
 """Configuration file for the bot."""
+# git update-index --skip-worktree <file> can be used to ignore changes to this file
 
 # Does some QOL changes, like using a different command prefix and calling load_dotenv()
 DEV_MODE = False

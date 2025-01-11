@@ -1,10 +1,8 @@
-"""https://github.com/redstone-squid/Redstone-Squid
+"""
+Entry point of the bot and the API.
 
-This is the main entry point of the bot for Heroku."""
-
-from bot import config
-
-config.DEV_MODE = False  # Have to be above the import of main
+https://github.com/redstone-squid/Redstone-Squid"
+"""
 
 import asyncio
 import multiprocessing
@@ -14,5 +12,6 @@ from api import main as api_main
 
 
 if __name__ == "__main__":
+    # Check bot/config.py for configuration, .env.example for environment variables
     multiprocessing.Process(target=api_main).start()
     asyncio.run(main())
