@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from textwrap import dedent
 from collections.abc import Mapping, Sequence
 from typing import Any, override, TYPE_CHECKING
 
@@ -72,11 +73,15 @@ class Help(commands.MinimalHelpCommand):
         # TODO: hide hidden commands
         commands_ = list(self.context.bot.commands)
         filtered_commands = await self.filter_commands(commands_, sort=True)
-        desc = f"""{self.context.bot.description}
-
-        Commands:{self.get_commands_brief_details(filtered_commands)}
-
-        {MORE_INFORMATION}"""
+        desc = dedent(
+            f"""\
+            {self.context.bot.description}
+    
+            Commands:{self.get_commands_brief_details(filtered_commands)}
+    
+            {MORE_INFORMATION}
+            """
+        )
         em = utils.help_embed("Help", desc)
         await self.context.send(embed=em)
 
