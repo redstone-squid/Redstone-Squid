@@ -736,7 +736,6 @@ class BuildCog(Cog, name="Build"):
 
         # The vote session will handle the closing of the vote session
         original_vote = vote_session[user_id]
-        guild_id = payload.guild_id
         weight = await self.get_voting_weight(payload.guild_id, user_id)
         if emoji_name in APPROVE_EMOJIS:
             vote_session[user_id] = weight if original_vote != weight else 0
