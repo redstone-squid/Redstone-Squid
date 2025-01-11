@@ -6,13 +6,11 @@ import discord
 import discord.ext.commands as commands
 from discord import Member
 from discord.ext import tasks
-from discord.ext.commands import command, Context, Cog, Greedy, hybrid_command, Bot
+from discord.ext.commands import Context, Cog, Greedy, Bot
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 from database import DatabaseManager, get_version_string
-from database.builds import get_all_builds
-from database.message import track_message
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -22,7 +20,7 @@ class Miscellaneous(Cog):
     def __init__(self, bot: RedstoneSquid):
         self.bot: RedstoneSquid = bot
 
-    @hybrid_command()
+    @commands.hybrid_command()
     async def invite_link(self, ctx: Context):
         """Invite me to your other servers!"""
         await ctx.send(
@@ -30,11 +28,11 @@ class Miscellaneous(Cog):
         )
 
     # Docstring can't be an f-string, so we use the help parameter instead.
-    @hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
+    @commands.hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
     async def source_code(self, ctx: Context):
         await ctx.send(f"Source code can be found at: {SOURCE_CODE_URL}.")
 
-    @hybrid_command()
+    @commands.hybrid_command()
     async def google_forms(self, ctx: Context):
         """Links you to our record submission form. You want to use /submit instead."""
         em = discord.Embed(
@@ -44,12 +42,12 @@ class Miscellaneous(Cog):
         )
         await ctx.send(embed=em)
 
-    @hybrid_command()
+    @commands.hybrid_command()
     async def docs(self, ctx: Context):
         """Links you to our regulations."""
         await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
 
-    @hybrid_command(name="versions")
+    @commands.hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
         versions = await DatabaseManager.fetch_versions_list(edition="Java")
@@ -64,7 +62,7 @@ class Miscellaneous(Cog):
     # ----------------- Owner only commands -----------------
     # These commands are only available to the bot owner.
     # I use them for debugging and testing purposes.
-    @command(name="s", hidden=True)
+    @commands.command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
     async def sync(self, ctx: Context[Bot], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
@@ -100,7 +98,7 @@ class Miscellaneous(Cog):
     async def is_my_alt(ctx: Context):
         return ctx.author.id == 1146802450100138004
 
-    @command(name="r", hidden=True)
+    @commands.command(name="r", hidden=True)
     @commands.check(is_my_alt)
     async def give_redstoner(self, ctx: Context):
         """Give redstoner role to my alt for testing. Does nothing for others."""
@@ -119,7 +117,7 @@ class Miscellaneous(Cog):
         else:
             await my_alt.add_roles(redstoner_role)
 
-    @command(name="gdb", hidden=True)
+    @commands.command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context):
         """Sends the google sheets link"""
@@ -127,7 +125,7 @@ class Miscellaneous(Cog):
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221"
         )
 
-    @command(name="db", hidden=True)
+    @commands.command(name="db", hidden=True)
     @commands.is_owner()
     async def get_database_link(self, ctx: Context):
         """Sends the database link"""
@@ -135,7 +133,7 @@ class Miscellaneous(Cog):
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc"
         )
 
-    @command(name="error", aliases=["e"], hidden=True)
+    @commands.command(name="error", aliases=["e"], hidden=True)
     @commands.is_owner()
     async def error(self, ctx: Context):
         """Raises an error for testing purposes."""
