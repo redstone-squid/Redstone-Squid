@@ -50,9 +50,12 @@ deprecation==2.1.0
     # via postgrest
 discord==2.3.2
     # via -r requirements.in
+discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus
+    # via -r requirements.in
 discord-py==2.4.0
     # via
     #   discord
+    #   discord-ext-menus
     #   jishaku
 distro==1.9.0
     # via openai
