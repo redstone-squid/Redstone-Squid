@@ -20,4 +20,4 @@ jobs:
           pip-sync requirements.txt
           # The following is needed to run the app in the background
           # See: https://github.com/actions/runner/issues/598#issuecomment-1703807030
-          RUNNER_TRACKING_ID="" && (nohup ~/Redstone-Squid/venv/bin/python3 app.py &)
+          RUNNER_TRACKING_ID="" && (nohup ~/Redstone-Squid/venv/bin/python3 app.py > app.log 2>&1 &)
