@@ -423,8 +423,8 @@ class Build:
             original_channel_id=message.channel.id,
             original_message_id=message.id,
             original_message=message.clean_content,
+            ai_generated=True,
         )
-        build.ai_generated = True
         build.record_category = variables["record_category"]  # type: ignore
         build.information["unknown_restrictions"] = {}
         if variables["component_restriction"] is not None:
