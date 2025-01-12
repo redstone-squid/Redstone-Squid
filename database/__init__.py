@@ -102,7 +102,7 @@ class DatabaseManager:
         elif not bedrock and java:
             edition = "Java"
         else:
-            raise ValueError("Cannot specify both Java and Bedrock in the version spec.")
+            raise NotImplementedError("Cannot specify both Java and Bedrock in the version spec.")
 
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
