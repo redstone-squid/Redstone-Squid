@@ -31,7 +31,7 @@ from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
 from database.message import get_build_id_by_message
-from database.schema import TypeRecord
+from database.schema import TypeRecord, RestrictionRecord
 from database.utils import upload_to_catbox
 from database.vote import track_build_vote_session, track_vote_session, close_vote_session
 
@@ -797,6 +797,20 @@ class BuildCog(Cog, name="Build"):
         async with RunningMessage(ctx) as sent_message:
             await DatabaseManager().table("restriction_aliases").insert({"restriction_id": restriction_id, "alias": alias}).execute()
             await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+
+    @commands.command("search_restrictions")
+    @check_is_staff()
+    @commands.check(is_owner_server)
+    async def search_restrictions(self, ctx: Context, query: str | None):
+        """This runs a substring search on the restriction names."""
+        async with RunningMessage(ctx) as sent_message:
+            if query:
+                response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").ilike("name", f"%{query}%").execute()
+            else:
+                response = await DatabaseManager().table("restrictions").select("*").execute()
+            restrictions = response.data
+            description = "\n".join([f"{restriction['id']}: {restriction['name']}" for restriction in restrictions])
+            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
 
 async def setup(bot: "RedstoneSquid"):
