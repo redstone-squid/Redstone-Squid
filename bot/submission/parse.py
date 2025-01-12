@@ -54,7 +54,7 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
 
 
 async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
-    """Gets a list of valid restrictions for a given type.
+    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
 
     Args:
         type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
@@ -68,7 +68,7 @@ async def get_valid_restrictions(type: Literal["component", "wiring-placement", 
 
 
 async def get_valid_door_types() -> list[str]:
-    """Gets a list of valid door types.
+    """Gets a list of valid door types. The door types are returned in the original case.
 
     Returns:
         A list of valid door types.
@@ -90,9 +90,9 @@ async def validate_restrictions(
     Returns:
         (valid_restrictions, invalid_restrictions)
     """
-    all_valid_restrictions = await get_valid_restrictions(type)
+    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
 
-    valid_restrictions = [r for r in restrictions if r in all_valid_restrictions]
+    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
     invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
     return valid_restrictions, invalid_restrictions
 
@@ -106,10 +106,10 @@ async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[st
     Returns:
         (valid_door_types, invalid_door_types)
     """
-    all_valid_door_types = await get_valid_door_types()
+    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
 
-    valid_door_types = [r for r in door_types if r in all_valid_door_types]
-    invalid_door_types = [r for r in door_types if r not in all_valid_door_types]
+    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
+    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
     return valid_door_types, invalid_door_types
 
 
