@@ -30,6 +30,7 @@ class Miscellaneous(Cog):
     # Docstring can't be an f-string, so we use the help parameter instead.
     @commands.hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
     async def source_code(self, ctx: Context):
+        """Send a link to the source code."""
         await ctx.send(f"Source code can be found at: {SOURCE_CODE_URL}.")
 
     @commands.hybrid_command()
