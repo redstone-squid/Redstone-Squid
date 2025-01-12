@@ -7,9 +7,11 @@ import discord.ext.commands as commands
 from discord import Member
 from discord.ext import tasks
 from discord.ext.commands import Context, Cog, Greedy, Bot
+from discord.utils import escape_markdown
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
+from bot.utils import check_is_staff, RunningMessage
 from database import DatabaseManager, get_version_string
 
 if TYPE_CHECKING:
@@ -54,6 +56,21 @@ class Miscellaneous(Cog):
         versions = await DatabaseManager.fetch_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
+
+    @commands.hybrid_command(name="archive")
+    @check_is_staff()
+    async def archive_message(self, ctx: Context, message: discord.Message, delete_original: bool = False):
+        """Makes a copy of the message in the current channel."""
+        async with RunningMessage(ctx, delete_on_exit=True):
+            await ctx.send(
+                content=f"```\n{message.clean_content}```",
+                embeds=message.embeds,
+                files=[await attachment.to_file() for attachment in message.attachments],
+                stickers=message.stickers,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        if delete_original:
+            await message.delete()
 
     @tasks.loop(hours=24)
     async def call_supabase_to_prevent_deactivation(self):
