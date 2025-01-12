@@ -61,14 +61,13 @@ class Miscellaneous(Cog):
     @check_is_staff()
     async def archive_message(self, ctx: Context, message: discord.Message, delete_original: bool = False):
         """Makes a copy of the message in the current channel."""
-        async with RunningMessage(ctx, delete_on_exit=True):
-            await ctx.send(
-                content=f"```\n{message.clean_content}```",
-                embeds=message.embeds,
-                files=[await attachment.to_file() for attachment in message.attachments],
-                stickers=message.stickers,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+        await ctx.send(
+            content=f"```\n{message.clean_content}```",
+            embeds=message.embeds,
+            files=[await attachment.to_file() for attachment in message.attachments],
+            stickers=message.stickers,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
         if delete_original:
             await message.delete()
 
