@@ -459,7 +459,7 @@ class Build:
         build.normal_closing_time = parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
         build.version_spec = variables["version"] or DatabaseManager.get_newest_version(edition="Java")
-        build.versions = DatabaseManager.filter_versions(build.version_spec)
+        build.versions = DatabaseManager.find_versions_from_spec(build.version_spec)
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
             build.information["user"] = variables["author_note"].replace("\\n", "\n")

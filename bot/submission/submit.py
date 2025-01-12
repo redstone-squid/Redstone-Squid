@@ -356,7 +356,7 @@ class BuildCog(Cog, name="Build"):
             build = Build()
             build.record_category = self.record_category
             build.version_spec = self.works_in
-            build.versions = DatabaseManager.filter_versions(self.works_in)
+            build.versions = DatabaseManager.find_versions_from_spec(self.works_in)
 
             if (build_size := self.build_size) is not None:
                 build_dimensions = parse_dimensions(build_size)
@@ -563,7 +563,7 @@ class BuildCog(Cog, name="Build"):
             # FIXME: need to distinguish between None and removing the value
             if (works_in := self.works_in) is not None:
                 build.version_spec = works_in
-                build.versions = DatabaseManager.filter_versions(works_in)
+                build.versions = DatabaseManager.find_versions_from_spec(works_in)
             if (build_size := self.build_size) is not None:
                 build_dimensions = parse_dimensions(build_size)
                 build.width, build.height, build.depth = build_dimensions

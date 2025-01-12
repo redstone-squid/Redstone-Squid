@@ -89,12 +89,12 @@ class DatabaseManager:
         return get_version_string(versions[-1])
 
     @classmethod
-    def filter_versions(cls, spec: str) -> list[str]:
+    def find_versions_from_spec(cls, version_spec: str) -> list[str]:
         """Return all versions that match the version specification."""
 
         # See if the spec specifies no edition (default to Java), one edition, or both
-        bedrock = spec.find("Bedrock") != -1
-        java = spec.find("Java") != -1
+        bedrock = version_spec.find("Bedrock") != -1
+        java = version_spec.find("Java") != -1
         if not bedrock and not java:
             edition = "Java"  # Default to Java if no edition specified
         elif bedrock and not java:
@@ -104,7 +104,7 @@ class DatabaseManager:
         else:
             raise ValueError("Cannot specify both Java and Bedrock in the version spec.")
 
-        spec = spec.replace("Java", "").replace("Bedrock", "").strip()
+        version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
         def parse_version(version_str: str):
             major, minor, patch = version_str.split(".")
@@ -115,7 +115,7 @@ class DatabaseManager:
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+"
-        parts = [part.strip() for part in spec.split(",")]
+        parts = [part.strip() for part in version_spec.split(",")]
 
         valid_tuples: list[tuple[int, int, int]] = []
 
@@ -166,7 +166,7 @@ class DatabaseManager:
 async def main():
     await DatabaseManager.setup()
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
-    print(DatabaseManager.filter_versions(spec_string))
+    print(DatabaseManager.find_versions_from_spec(spec_string))
 
 
 if __name__ == "__main__":
