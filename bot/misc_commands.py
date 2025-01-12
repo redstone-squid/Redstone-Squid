@@ -61,8 +61,14 @@ class Miscellaneous(Cog):
     @check_is_staff()
     async def archive_message(self, ctx: Context, message: discord.Message, delete_original: bool = False):
         """Makes a copy of the message in the current channel."""
+        if isinstance(message.author, discord.User):
+            user = message.author
+        else:
+            user = self.bot.get_user(message.author.id)
+        username_description = f" (username: {user.name})" if user else ""
+
         await ctx.send(
-            content=f"```\n{message.clean_content}```",
+            content=f"{message.author.mention}{username_description} wrote:\n```\n{message.clean_content}```",
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
             stickers=message.stickers,
