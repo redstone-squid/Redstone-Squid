@@ -956,6 +956,8 @@ class Build:
 
         if self.submission_status == Status.PENDING:
             title += "Pending: "
+        elif self.submission_status == Status.DENIED:
+            title += "Denied: "
         if self.record_category:
             title += f"{self.record_category} "
 
