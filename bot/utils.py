@@ -208,7 +208,8 @@ async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -
     try:
         return await channel.fetch_message(message_id)
     except discord.NotFound:
-        await untrack_message(message_id)
+        pass
+        # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
     except discord.Forbidden:
         pass
     return None

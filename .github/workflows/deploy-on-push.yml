@@ -8,15 +8,16 @@ jobs:
   deploy:
     runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Dotenv Action
-        uses: falti/dotenv-action@v1.1.4
+      - name: Pull latest changes
+        run: |
+          cd ~/Redstone-Squid
+          git pull
       - name: Run python
         run: |
+          cd ~/Redstone-Squid
           pkill -f "app.py" || true
           source ~/Redstone-Squid/venv/bin/activate
           pip-sync requirements.txt
           # The following is needed to run the app in the background
           # See: https://github.com/actions/runner/issues/598#issuecomment-1703807030
-          RUNNER_TRACKING_ID="" && (nohup ~/Redstone-Squid/venv/bin/python3 app.py &)
+          RUNNER_TRACKING_ID="" && (nohup ~/Redstone-Squid/venv/bin/python3 app.py > app.log 2>&1 &)

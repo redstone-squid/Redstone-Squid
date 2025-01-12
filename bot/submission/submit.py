@@ -623,8 +623,7 @@ class BuildCog(Cog, name="Build"):
         server_ip: str | None = flag(default=None, description='The IP of the server where the build is located.')
         coordinates: str | None = flag(default=None, description='The coordinates of the build in the server.')
         command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
-
-    # fmt: on
+        # fmt: on
 
     @edit_group.command(name="door")
     async def edit_door(self, ctx: Context, *, flags: EditDoorFlags):
@@ -734,7 +733,6 @@ class BuildCog(Cog, name="Build"):
 
         # The vote session will handle the closing of the vote session
         original_vote = vote_session[user_id]
-        guild_id = payload.guild_id
         weight = await self.get_voting_weight(payload.guild_id, user_id)
         if emoji_name in APPROVE_EMOJIS:
             vote_session[user_id] = weight if original_vote != weight else 0
@@ -778,13 +776,9 @@ class BuildCog(Cog, name="Build"):
         build.submission_status = Status.PENDING
         build.category = Category.DOOR
         build.submitter_id = message.author.id
+        # Order is important here.
         await build.save()
-        await asyncio.gather(
-            *(
-                self.post_build_for_voting(build, type="add"),
-                track_message(message, purpose="build_original_message", build_id=build.id),
-            )
-        )
+        await self.post_build_for_voting(build, type="add")
 
     @build_hybrid_group.command("recalc")
     @check_is_trusted_or_staff()

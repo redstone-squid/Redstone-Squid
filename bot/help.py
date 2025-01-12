@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from textwrap import dedent
 from collections.abc import Mapping, Sequence
 from typing import Any, override, TYPE_CHECKING
 
@@ -7,13 +8,14 @@ import discord
 from discord import app_commands, InteractionResponse
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group, Context
+import git
 
 from bot import utils
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-MORE_INFORMATION = "Use `/help <command>` to get more information.\nNote that this command does not contain certain commands that are only usable as slash commands, like /submit"
+MORE_INFORMATION = "Use `/help <command>` to get more information."
 
 
 class HelpCog(Cog):
@@ -64,21 +66,25 @@ class Help(commands.MinimalHelpCommand):
 
     def __init__(self):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
-        # self.verify_checks = False
 
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        # TODO: hide hidden commands
         commands_ = list(self.context.bot.commands)
         filtered_commands = await self.filter_commands(commands_, sort=True)
-        desc = f"""{self.context.bot.description}
-
-        Commands:{self.get_commands_brief_details(filtered_commands)}
-
-        {MORE_INFORMATION}"""
+        repo = git.Repo(search_parent_directories=True)
+        desc = dedent(
+            f"""\
+            {self.context.bot.description}
+    
+            Commands:{self.get_commands_brief_details(filtered_commands)}
+    
+            {MORE_INFORMATION}
+            """
+        )
         em = utils.help_embed("Help", desc)
-        await self.context.send(embed=em)
+        em.set_footer(text=f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}")
+        await self.get_destination().send(embed=em)
 
     # !help <command>
     @override

@@ -12,3 +12,4 @@ async_lru
 markdown
 beautifulsoup4
 vecs
+GitPython

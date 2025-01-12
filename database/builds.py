@@ -180,6 +180,8 @@ class Build:
     original_channel_id: Final[int | None] = frozen_field(default=None)
     original_message_id: Final[int | None] = frozen_field(default=None)
     original_message: Final[str | None] = frozen_field(default=None)
+    _original_message_obj: discord.Message | None = field(default=None, init=False, repr=False)
+    """Cache for the original message of the build."""
 
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
@@ -233,13 +235,26 @@ class Build:
 
         match data["category"]:
             case "Door":
-                category_data = data["doors"]
+                assert data["doors"] is not None
+                door_orientation_type = data["doors"]["orientation"]
+                door_width = data["doors"]["door_width"]
+                door_height = data["doors"]["door_height"]
+                door_depth = data["doors"]["door_depth"]
+                normal_closing_time = data["doors"]["normal_closing_time"]
+                normal_opening_time = data["doors"]["normal_opening_time"]
+                visible_closing_time = data["doors"]["visible_closing_time"]
+                visible_opening_time = data["doors"]["visible_opening_time"]
             case "Extender":
                 category_data = data["extenders"]
+                raise NotImplementedError
             case "Utility":
                 category_data = data["utilities"]
+                raise NotImplementedError
             case "Entrance":
                 category_data = data["entrances"]
+                raise NotImplementedError
+            case _:
+                raise ValueError("Invalid category")
 
         # FIXME: This is hardcoded for now
         if data.get("types"):
@@ -247,15 +262,6 @@ class Build:
             door_type = [type_["name"] for type_ in types]
         else:
             door_type = ["Regular"]
-
-        door_orientation_type = data["doors"]["orientation"]
-        door_width = data["doors"]["door_width"]
-        door_height = data["doors"]["door_height"]
-        door_depth = data["doors"]["door_depth"]
-        normal_closing_time = data["doors"]["normal_closing_time"]
-        normal_opening_time = data["doors"]["normal_opening_time"]
-        visible_closing_time = data["doors"]["visible_closing_time"]
-        visible_opening_time = data["doors"]["visible_opening_time"]
 
         restrictions: list[RestrictionRecord] = data.get("restrictions", [])
         wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
@@ -286,7 +292,7 @@ class Build:
         original_server_id = message_record.get("server_id")
         original_channel_id = message_record.get("channel_id")
         original_message_id = data["original_message_id"]
-        original_message = data["original_message"]
+        original_message = message_record.get("content")
 
         ai_generated = data["ai_generated"]
         embedding = data["embedding"]
@@ -541,6 +547,9 @@ class Build:
 
     async def get_original_message(self, bot: Bot) -> discord.Message | None:
         """Gets the original message of the build."""
+        if self._original_message_obj:
+            return self._original_message_obj
+
         if self.original_channel_id:
             assert self.original_message_id is not None
             return await bot_utils.getch_message(bot, self.original_channel_id, self.original_message_id)
@@ -699,7 +708,9 @@ class Build:
         build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
         # information is a special JSON field in the database that stores various information about the build
         # this needs to be kept because it will be updated later
-        information: Info = build_data.get("information", {})
+        information: Info = build_data.pop("information", {})
+        # Original message id cannot be populated in the build table unless after it is inserted
+        original_message_id = build_data.pop("original_message_id", None)
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
@@ -713,18 +724,19 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
 
+        message_insert_task = asyncio.create_task(self._update_messages_table(data))
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
         try:
-            background_tasks: set[Task[Any]] = set()
             async with asyncio.TaskGroup() as tg:
-                background_tasks.add(tg.create_task(self._update_build_subcategory_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_links_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_creators_table(data)))
-                background_tasks.add(tg.create_task(self._update_build_versions_table(data)))
+                tg.create_task(self._update_build_subcategory_table(data))
+                tg.create_task(self._update_build_links_table(data))
+                tg.create_task(self._update_build_creators_table(data))
+                tg.create_task(self._update_build_versions_table(data))
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
                 unknown_types = tg.create_task(self._update_build_types_table(data))
+                embedding_task = tg.create_task(self.generate_embedding())
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
-            self.embedding = await self.generate_embedding()
+            self.embedding = await embedding_task
             build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
@@ -732,7 +744,14 @@ class Build:
             if unknown_types.result():
                 information["unknown_patterns"] = unknown_types.result()
             # Update the information field in the database to store any unknown restrictions or types
-            await db.table("builds").update({"information": information}).eq("id", self.id).execute()
+            # original_message_id has a foreign key constraint with the messages table
+            await message_insert_task
+            await (
+                db.table("builds")
+                .update({"information": information, "original_message_id": original_message_id})
+                .eq("id", self.id)
+                .execute()
+            )
         except:
             vx.disconnect()
             if delete_build_on_error:
@@ -883,6 +902,28 @@ class Build:
         if build_versions_data:
             await db.table("build_versions").upsert(build_versions_data).execute()
 
+    async def _update_messages_table(self, data: dict[str, Any]) -> None:
+        """Updates the messages table with the given data."""
+        if self.original_message_id is None:
+            return
+
+        await (
+            DatabaseManager()
+            .table("messages")
+            .insert(
+                {
+                    "server_id": self.original_server_id,
+                    "channel_id": self.original_channel_id,
+                    "message_id": self.original_message_id,
+                    "build_id": self.id,
+                    "edited_time": utcnow(),
+                    "purpose": "build_original_message",
+                    "content": self.original_message,
+                }
+            )
+            .execute()
+        )
+
     def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
@@ -914,6 +955,8 @@ class Build:
 
         if self.submission_status == Status.PENDING:
             title += "Pending: "
+        elif self.submission_status == Status.DENIED:
+            title += "Denied: "
         if self.record_category:
             title += f"{self.record_category} "
 
