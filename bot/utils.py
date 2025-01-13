@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-import re
+import io
 from traceback import format_tb
 from types import TracebackType
-from typing import overload, Literal, TYPE_CHECKING, Any, Mapping, cast
+from typing import TypedDict, overload, Literal, TYPE_CHECKING, Any, Mapping, cast
+import mimetypes
+import subprocess
 
 import discord
 import requests
@@ -15,6 +17,7 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
 from pydantic import TypeAdapter, ValidationError
+from PIL import Image
 
 from bot import config
 from bot._types import GuildMessageable
@@ -216,7 +219,15 @@ async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -
     return None
 
 
-def get_website_preview(url: str) -> dict[str, str | None]:
+class Preview(TypedDict):
+    title: str | None
+    description: str | None
+    image: str | io.BytesIO | None
+    site_name: str | None
+    url: str | None
+
+
+def get_website_preview(url: str) -> Preview:
     """
     Fetches a webpage and tries to extract metadata in a manner similar to social platforms (e.g., Twitter or Discord previews).
 
@@ -228,7 +239,7 @@ def get_website_preview(url: str) -> dict[str, str | None]:
         - site_name
         - url
     """
-    preview_data: dict[str, str | None] = {
+    preview: Preview = {
         "title": None,
         "description": None,
         "image": None,
@@ -243,47 +254,89 @@ def get_website_preview(url: str) -> dict[str, str | None]:
     except requests.RequestException as e:
         print(e)
         logger.debug(f"Failed to retrieve URL '{url}': {e}")
-        return preview_data  # returns empty data if request fails
+        return preview  # returns empty data if request fails
 
-    soup = bs4.BeautifulSoup(response.text, "html.parser")
+    content_type = response.headers.get('Content-Type')
+    if not content_type:
+        # If Content-Type is not available, use the URL to guess the MIME type
+        content_type, _ = mimetypes.guess_type(url, strict=False)
 
-    def get_meta_content(property_name: str, attribute_type: str = "property") -> str | None:
-        """Helper function to extract content from meta tags."""
-        tag = soup.find("meta", attrs={attribute_type: property_name})
+    if content_type is None:
+        return preview
 
-        assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
-        if tag and tag.get("content"):
-            content = tag["content"]
-            assert isinstance(content, str), "tag['content'] is not a string"
-            return content.strip()
-        return None
+    if content_type.startswith("video/"):
+        preview["image"] = extract_first_frame(url)
+        preview["url"] = url
+        return preview
+    else:  # assume text/html
+        soup = bs4.BeautifulSoup(response.text, "html.parser")
 
-    # Check Open Graph first (e.g. <meta property="og:title" content="..." />)
-    preview_data["title"] = get_meta_content("og:title") or get_meta_content("twitter:title", "name")
-    preview_data["description"] = get_meta_content("og:description") or get_meta_content("twitter:description", "name")
-    preview_data["image"] = get_meta_content("og:image") or get_meta_content("twitter:image", "name")
-    preview_data["site_name"] = get_meta_content("og:site_name")
-    preview_data["url"] = get_meta_content("og:url")
+        def get_meta_content(property_name: str, attribute_type: str = "property") -> str | None:
+            """Helper function to extract content from meta tags."""
+            tag = soup.find("meta", attrs={attribute_type: property_name})
 
-    # Fallbacks if OG/Twitter meta not found:
-    # 1) title: <title> tag
-    if not preview_data["title"]:
-        if soup.title and soup.title.string:
-            preview_data["title"] = soup.title.string.strip()
+            assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
+            if tag and tag.get("content"):
+                content = tag["content"]
+                assert isinstance(content, str), "tag['content'] is not a string"
+                return content.strip()
+            return None
 
-    # 2) description: <meta name="description" content="..." />
-    if not preview_data["description"]:
-        preview_data["description"] = get_meta_content("description", "name")
+        # Check Open Graph first (e.g. <meta property="og:title" content="..." />)
+        preview["title"] = get_meta_content("og:title") or get_meta_content("twitter:title", "name")
+        preview["description"] = get_meta_content("og:description") or get_meta_content("twitter:description", "name")
+        preview["image"] = get_meta_content("og:image") or get_meta_content("twitter:image", "name")
+        preview["site_name"] = get_meta_content("og:site_name")
+        preview["url"] = get_meta_content("og:url")
 
-    # 3) If site_name still not found, try domain from given url
-    if not preview_data["site_name"]:
-        preview_data["site_name"] = url.split("//")[-1].split("/")[0]
+        # Fallbacks if OG/Twitter meta not found:
+        # title: <title> tag
+        if not preview["title"]:
+            if soup.title and soup.title.string:
+                preview["title"] = soup.title.string.strip()
+        # description: <meta name="description" content="..." />
+        if not preview["description"]:
+            preview["description"] = get_meta_content("description", "name")
+        # site_name: domain from given url
+        if not preview["site_name"]:
+            preview["site_name"] = url.split("//")[-1].split("/")[0]
+        # url: use the original
+        if not preview["url"]:
+            preview["url"] = url
 
-    # 4) If url not found, use the original
-    if not preview_data["url"]:
-        preview_data["url"] = url
+        return preview
 
-    return preview_data
+
+def extract_first_frame(video_url: str) -> io.BytesIO:
+    """
+    Extract the first frame from a remote video URL and return it as a BytesIO object.
+
+    Args:
+        video_url: the URL of the video to extract the frame from
+
+    Returns:
+        A BytesIO object containing the extracted frame
+
+    Raises:
+        RuntimeError: if the ffmpeg process fails
+    """
+    cmd = [
+        'ffmpeg',
+        '-i', video_url,
+        '-frames:v', '1',  # Extract only one frame
+        '-f', 'image2pipe',  # Output format to a pipe
+        '-vcodec', 'png',  # Encode as PNG
+        'pipe:1'  # Output to stdout
+    ]
+
+    # Run ffmpeg as a subprocess, capturing stdout (the image data)
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = process.communicate()
+
+    if process.returncode != 0:
+        raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
+
+    return io.BytesIO(out)
 
 
 async def main():
