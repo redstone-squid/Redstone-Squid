@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import mimetypes
 import re
 import os
 import asyncio
@@ -934,15 +936,26 @@ class Build:
             em.add_field(name=key, value=escape_markdown(val), inline=True)
 
         if self.image_urls:
-            url = self.image_urls[0]
-            if url.endswith(".jpg") or url.endswith(".png"):
-                em.set_image(url=url)
-            else:
-                preview = await bot_utils.get_website_preview(url)
-                em.set_image(url=preview["image"])
+            for url in self.image_urls:
+                mimetype, _ = mimetypes.guess_type(url)
+                if mimetype is not None and mimetype.startswith("image"):
+                    em.set_image(url=url)
+                    break
+                else:
+                    preview = await bot_utils.get_website_preview(url)
+                    em.set_image(url=preview["image"])
         elif self.video_urls:
-            preview = await bot_utils.get_website_preview(self.video_urls[0])
-            em.set_image(url=preview["image"])
+            for url in self.video_urls:
+                preview = await bot_utils.get_website_preview(url)
+                if image := preview["image"]:
+                    if isinstance(image, str):
+                        em.set_image(url=image)
+                        break
+                    else:  # isinstance(image, io.BytesIO)
+                        # We have to somehow also return the File object to the caller, so this is not possible for now
+                        # f = discord.File(image, filename="video_preview.png")
+                        # em.set_image(url="attachment://video_preview.png")
+                        pass
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
         return em
