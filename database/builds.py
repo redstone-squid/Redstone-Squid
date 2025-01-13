@@ -57,6 +57,8 @@ P = ParamSpec("P")
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
+background_tasks: set[Task] = set()
+
 
 class FrozenField(Generic[T]):
     """A descriptor that makes an attribute immutable after it has been set."""
@@ -954,7 +956,14 @@ class Build:
                         preview_url = await upload_to_catbox(filename="video_preview.png", file=image, mimetype="image/png")
                         self.image_urls.append(preview_url)
                         if self.id is not None:
-                            await DatabaseManager().table("build_links").upsert({"build_id": self.id, "url": url, "media_type": "image"}).execute()
+                            background_tasks.add(
+                                asyncio.create_task(
+                                    DatabaseManager()
+                                    .table("build_links")
+                                    .upsert({"build_id": self.id, "url": url, "media_type": "image"})
+                                    .execute()
+                                )
+                            )
                         em.set_image(url=preview_url)
                     break
 
