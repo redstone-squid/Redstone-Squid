@@ -49,10 +49,8 @@ from database.enums import Status, Category
 
 logger = logging.getLogger(__name__)
 
-
 T = TypeVar("T")
 P = ParamSpec("P")
-
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
@@ -953,7 +951,9 @@ class Build:
                     if isinstance(image, str):
                         em.set_image(url=image)
                     else:  # isinstance(image, io.BytesIO)
-                        preview_url = await upload_to_catbox(filename="video_preview.png", file=image, mimetype="image/png")
+                        preview_url = await upload_to_catbox(
+                            filename="video_preview.png", file=image, mimetype="image/png"
+                        )
                         self.image_urls.append(preview_url)
                         if self.id is not None:
                             background_tasks.add(
