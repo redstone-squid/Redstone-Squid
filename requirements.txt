@@ -171,13 +171,9 @@ python-dotenv==1.0.1
 realtime==2.1.0
     # via supabase
 requests==2.32.3
-    # via
-    #   requests-oauthlib
-    #   requests-toolbelt
+    # via requests-oauthlib
 requests-oauthlib==2.0.0
     # via google-auth-oauthlib
-requests-toolbelt==1.0.0
-    # via -r requirements.in
 rsa==4.9
     # via
     #   google-auth

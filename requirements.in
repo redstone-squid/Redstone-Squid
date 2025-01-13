@@ -4,7 +4,6 @@ gspread
 supabase
 python-dotenv
 jishaku
-requests-toolbelt
 fastapi
 uvicorn
 openai
