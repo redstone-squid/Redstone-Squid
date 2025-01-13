@@ -982,6 +982,8 @@ class Build:
             title += "Pending: "
         elif self.submission_status == Status.DENIED:
             title += "Denied: "
+        if self.ai_generated:
+            title += "\N{ROBOT FACE}"
         if self.record_category:
             title += f"{self.record_category} "
 
