@@ -330,6 +330,7 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
     Raises:
         RuntimeError: if the ffmpeg process fails
     """
+    # fmt: off
     cmd = [
         "ffmpeg",
         "-i", video_url,
@@ -338,19 +339,14 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
         "-vcodec", "png",
         "pipe:1"
     ]
+    # fmt: on
 
     # Run ffmpeg asynchronously
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
+    process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await process.communicate()
 
     if process.returncode != 0:
-        raise RuntimeError(
-            f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}"
-        )
+        raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
 
     return io.BytesIO(out)
 
