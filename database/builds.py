@@ -925,7 +925,7 @@ class Build:
             .execute()
         )
 
-    def generate_embed(self) -> discord.Embed:
+    async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
 
@@ -938,10 +938,10 @@ class Build:
             if url.endswith(".jpg") or url.endswith(".png"):
                 em.set_image(url=url)
             else:
-                preview = bot_utils.get_website_preview(url)
+                preview = await bot_utils.get_website_preview(url)
                 em.set_image(url=preview["image"])
         elif self.video_urls:
-            preview = bot_utils.get_website_preview(self.video_urls[0])
+            preview = await bot_utils.get_website_preview(self.video_urls[0])
             em.set_image(url=preview["image"])
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
