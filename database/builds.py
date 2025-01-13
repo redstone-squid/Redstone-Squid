@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import mimetypes
 import re
 import os
 import asyncio
@@ -41,19 +43,19 @@ from database.schema import (
 from database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
-from database.utils import utcnow, get_version_string
+from database.utils import utcnow, get_version_string, upload_to_catbox
 from database.enums import Status, Category
 
 
 logger = logging.getLogger(__name__)
 
-
 T = TypeVar("T")
 P = ParamSpec("P")
 
-
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
+
+background_tasks: set[Task] = set()
 
 
 class FrozenField(Generic[T]):
@@ -925,7 +927,7 @@ class Build:
             .execute()
         )
 
-    def generate_embed(self) -> discord.Embed:
+    async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
 
@@ -934,15 +936,36 @@ class Build:
             em.add_field(name=key, value=escape_markdown(val), inline=True)
 
         if self.image_urls:
-            url = self.image_urls[0]
-            if url.endswith(".jpg") or url.endswith(".png"):
-                em.set_image(url=url)
-            else:
-                preview = bot_utils.get_website_preview(url)
-                em.set_image(url=preview["image"])
+            for url in self.image_urls:
+                mimetype, _ = mimetypes.guess_type(url)
+                if mimetype is not None and mimetype.startswith("image"):
+                    em.set_image(url=url)
+                    break
+                else:
+                    preview = await bot_utils.get_website_preview(url)
+                    em.set_image(url=preview["image"])
         elif self.video_urls:
-            preview = bot_utils.get_website_preview(self.video_urls[0])
-            em.set_image(url=preview["image"])
+            for url in self.video_urls:
+                preview = await bot_utils.get_website_preview(url)
+                if image := preview["image"]:
+                    if isinstance(image, str):
+                        em.set_image(url=image)
+                    else:  # isinstance(image, io.BytesIO)
+                        preview_url = await upload_to_catbox(
+                            filename="video_preview.png", file=image, mimetype="image/png"
+                        )
+                        self.image_urls.append(preview_url)
+                        if self.id is not None:
+                            background_tasks.add(
+                                asyncio.create_task(
+                                    DatabaseManager()
+                                    .table("build_links")
+                                    .upsert({"build_id": self.id, "url": url, "media_type": "image"})
+                                    .execute()
+                                )
+                            )
+                        em.set_image(url=preview_url)
+                    break
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
         return em
