@@ -781,11 +781,12 @@ class Build:
     async def _update_build_restrictions_table(self, data: dict[str, Any]) -> UnknownRestrictions:
         """Updates the build_restrictions table with the given data"""
         db = DatabaseManager()
-        build_restrictions = (
+        build_restrictions: list[str] = (
             data.get("wiring_placement_restrictions", [])
             + data.get("component_restrictions", [])
             + data.get("miscellaneous_restrictions", [])
         )
+        build_restrictions = [restriction.title() for restriction in build_restrictions]
         response: APIResponse[RestrictionRecord] = (
             await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
         )
@@ -835,6 +836,7 @@ class Build:
             door_type = data.get("door_type")
             if not isinstance(door_type, list):
                 raise ValueError("Door type must be a list")
+            door_type = [type_.title() for type_ in door_type]
         else:
             door_type = ["Regular"]
         response: APIResponse[TypeRecord] = (
