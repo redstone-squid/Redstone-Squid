@@ -1,7 +1,6 @@
 """A cog with commands to submit, view, confirm and deny submissions."""
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
-import logging
 from collections.abc import Iterable
 from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
 import asyncio
@@ -45,8 +44,6 @@ if TYPE_CHECKING:
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Set up a webhook for the bot to handle google form submissions.
-
-logger = logging.getLogger(__name__)
 
 
 @final
@@ -281,9 +278,7 @@ class BuildCog(Cog, name="Build"):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            em = await submission.generate_embed()
-            logger.debug(f"Viewing build %s, generated embed: %s", build_id, em.to_dict())
-            await sent_message.edit(content=submission.original_link, embed=em)
+            await sent_message.edit(content=submission.original_link, embed=await submission.generate_embed())
 
     @commands.hybrid_command("search")
     async def search_builds(self, ctx: Context, query: str):
