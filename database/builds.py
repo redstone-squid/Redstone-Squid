@@ -815,7 +815,6 @@ class Build:
                 restriction["name"] for restriction in response.data if restriction["type"] == "miscellaneous"
             ]:
                 unknown_miscellaneous_restrictions.append(miscellaneous_restriction)
-        # TODO: miscellaneous restrictions?
         if unknown_wiring_restrictions:
             unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring_restrictions
         if unknown_component_restrictions:
