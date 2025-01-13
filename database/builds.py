@@ -839,11 +839,8 @@ class Build:
             A list of unknown types.
         """
         db = DatabaseManager()
-        if self.door_type is not None:
-            door_type = self.door_type
-            if not isinstance(door_type, list):
-                raise ValueError("Door type must be a list")
-            door_type = [type_.title() for type_ in door_type]
+        if self.door_type:
+            door_type = [type_.title() for type_ in self.door_type]
         else:
             door_type = ["Regular"]
         response: APIResponse[TypeRecord] = (
@@ -857,7 +854,7 @@ class Build:
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
         if build_types_data:
             await db.table("build_types").upsert(build_types_data).execute()
-        unknown_types = []
+        unknown_types: list[str] = []
         for door_type in self.door_type:
             if door_type not in [type_["name"] for type_ in response.data]:
                 unknown_types.append(door_type)
