@@ -43,7 +43,7 @@ class BuildRecord(TypedDict):
     depth: int | None
     completion_time: str | None  # Given by user, not parsable as a datetime
     category: Category
-    server_info: dict[str, Any] | None  # JSON
+    server_info: ServerInfo | None
     submitter_id: int
     original_message_id: int
     version_spec: str
