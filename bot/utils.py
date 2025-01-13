@@ -18,7 +18,6 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
 from pydantic import TypeAdapter, ValidationError
-from PIL import Image
 
 from bot import config
 from bot._types import GuildMessageable
