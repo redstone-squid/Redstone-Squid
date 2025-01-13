@@ -1,6 +1,7 @@
 """Utility functions for the database module."""
 
 import os
+import io
 from datetime import datetime, timezone
 
 import aiohttp
@@ -15,7 +16,7 @@ def utcnow() -> str:
     return formatted_time
 
 
-async def upload_to_catbox(filename: str, file: bytes, mimetype: str) -> str:
+async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: str) -> str:
     """Uploads a file to catbox.moe asynchronously.
 
     Args:
