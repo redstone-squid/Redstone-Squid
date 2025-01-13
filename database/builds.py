@@ -726,16 +726,16 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
 
-        message_insert_task = asyncio.create_task(self._update_messages_table(data))
+        message_insert_task = asyncio.create_task(self._update_messages_table())
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
         try:
             async with asyncio.TaskGroup() as tg:
-                tg.create_task(self._update_build_subcategory_table(data))
-                tg.create_task(self._update_build_links_table(data))
-                tg.create_task(self._update_build_creators_table(data))
-                tg.create_task(self._update_build_versions_table(data))
-                unknown_restrictions = tg.create_task(self._update_build_restrictions_table(data))
-                unknown_types = tg.create_task(self._update_build_types_table(data))
+                tg.create_task(self._update_build_subcategory_table())
+                tg.create_task(self._update_build_links_table())
+                tg.create_task(self._update_build_creators_table())
+                tg.create_task(self._update_build_versions_table())
+                unknown_restrictions = tg.create_task(self._update_build_restrictions_table())
+                unknown_types = tg.create_task(self._update_build_types_table())
                 embedding_task = tg.create_task(self.generate_embedding())
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
             self.embedding = await embedding_task
@@ -760,31 +760,38 @@ class Build:
                 await db.table("builds").delete().eq("id", self.id).execute()
             raise
 
-    async def _update_build_subcategory_table(self, data: dict[str, Any]) -> None:
+    async def _update_build_subcategory_table(self) -> None:
         """Updates the subcategory table with the given data."""
         db = DatabaseManager()
-        if data["category"] == "Door":
-            doors_data = {key: data[key] for key in DoorRecord.__annotations__.keys() if key in data}
-            # FIXME: database and Build class have different names for the same field
-            doors_data["orientation"] = data["door_orientation_type"]
-            doors_data["build_id"] = self.id
+        if self.category == "Door":
+            doors_data = {
+                "build_id": self.id,
+                "orientation": self.door_orientation_type,
+                "door_width": self.door_width,
+                "door_height": self.door_height,
+                "door_depth": self.door_depth,
+                "normal_closing_time": self.normal_closing_time,
+                "normal_opening_time": self.normal_opening_time,
+                "visible_closing_time": self.visible_closing_time,
+                "visible_opening_time": self.visible_opening_time,
+            }
             await db.table("doors").upsert(doors_data).execute()
-        elif data["category"] == "Extender":
+        elif self.category == "Extender":
             raise NotImplementedError
-        elif data["category"] == "Utility":
+        elif self.category == "Utility":
             raise NotImplementedError
-        elif data["category"] == "Entrance":
+        elif self.category == "Entrance":
             raise NotImplementedError
         else:
             raise ValueError("Build category must be set")
 
-    async def _update_build_restrictions_table(self, data: dict[str, Any]) -> UnknownRestrictions:
+    async def _update_build_restrictions_table(self) -> UnknownRestrictions:
         """Updates the build_restrictions table with the given data"""
         db = DatabaseManager()
         build_restrictions: list[str] = (
-            data.get("wiring_placement_restrictions", [])
-            + data.get("component_restrictions", [])
-            + data.get("miscellaneous_restrictions", [])
+            self.wiring_placement_restrictions
+            + self.component_restrictions
+            + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
         response: APIResponse[RestrictionRecord] = (
@@ -801,17 +808,17 @@ class Build:
         unknown_wiring_restrictions = []
         unknown_component_restrictions = []
         unknown_miscellaneous_restrictions = []
-        for wiring_restriction in data.get("wiring_placement_restrictions", []):
+        for wiring_restriction in self.wiring_placement_restrictions:
             if wiring_restriction not in [
                 restriction["name"] for restriction in response.data if restriction["type"] == "wiring-placement"
             ]:
                 unknown_wiring_restrictions.append(wiring_restriction)
-        for component_restriction in data.get("component_restrictions", []):
+        for component_restriction in self.component_restrictions:
             if component_restriction not in [
                 restriction["name"] for restriction in response.data if restriction["type"] == "component"
             ]:
                 unknown_component_restrictions.append(component_restriction)
-        for miscellaneous_restriction in data.get("miscellaneous_restrictions", []):
+        for miscellaneous_restriction in self.miscellaneous_restrictions:
             if miscellaneous_restriction not in [
                 restriction["name"] for restriction in response.data if restriction["type"] == "miscellaneous"
             ]:
@@ -825,15 +832,15 @@ class Build:
 
         return unknown_restrictions
 
-    async def _update_build_types_table(self, data: dict[str, Any]) -> list[str]:
+    async def _update_build_types_table(self) -> list[str]:
         """Updates the build_types table with the given data.
 
         Returns:
             A list of unknown types.
         """
         db = DatabaseManager()
-        if data.get("door_type") is not None:
-            door_type = data.get("door_type")
+        if self.door_type is not None:
+            door_type = self.door_type
             if not isinstance(door_type, list):
                 raise ValueError("Door type must be a list")
             door_type = [type_.title() for type_ in door_type]
@@ -842,7 +849,7 @@ class Build:
         response: APIResponse[TypeRecord] = (
             await db.table("types")
             .select("*")
-            .eq("build_category", data.get("category"))
+            .eq("build_category", self.category)
             .in_("name", door_type)
             .execute()
         )
@@ -851,35 +858,35 @@ class Build:
         if build_types_data:
             await db.table("build_types").upsert(build_types_data).execute()
         unknown_types = []
-        for door_type in data.get("door_type", []):
+        for door_type in self.door_type:
             if door_type not in [type_["name"] for type_ in response.data]:
                 unknown_types.append(door_type)
         return unknown_types
 
-    async def _update_build_links_table(self, data: dict[str, Any]) -> None:
+    async def _update_build_links_table(self) -> None:
         """Updates the build_links table with the given data."""
         build_links_data = []
-        if data.get("image_urls"):
+        if self.image_urls:
             build_links_data.extend(
-                {"build_id": self.id, "url": link, "media_type": "image"} for link in data.get("image_urls", [])
+                {"build_id": self.id, "url": link, "media_type": "image"} for link in self.image_urls
             )
-        if data.get("video_urls"):
+        if self.video_urls:
             build_links_data.extend(
-                {"build_id": self.id, "url": link, "media_type": "video"} for link in data.get("video_urls", [])
+                {"build_id": self.id, "url": link, "media_type": "video"} for link in self.video_urls
             )
-        if data.get("world_download_urls"):
+        if self.world_download_urls:
             build_links_data.extend(
                 {"build_id": self.id, "url": link, "media_type": "world_download"}
-                for link in data.get("world_download_urls", [])
+                for link in self.world_download_urls
             )
         if build_links_data:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()
 
-    async def _update_build_creators_table(self, data: dict[str, Any]) -> None:
+    async def _update_build_creators_table(self) -> None:
         """Updates the build_creators table with the given data."""
         db = DatabaseManager()
         creator_ids: list[int] = []
-        for creator_ign in data.get("creators_ign", []):
+        for creator_ign in self.creators_ign:
             response = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
             if response:
                 creator_ids.append(response.data["id"])
@@ -891,9 +898,9 @@ class Build:
         if build_creators_data:
             await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
 
-    async def _update_build_versions_table(self, data: dict[str, Any]) -> None:
+    async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = data.get("versions", DatabaseManager.get_newest_version(edition="Java"))
+        functional_versions = self.versions or DatabaseManager.get_newest_version(edition="Java")
 
         # TODO: raise an error if any versions are not found in the database
         db = DatabaseManager()
@@ -905,7 +912,7 @@ class Build:
         if build_versions_data:
             await db.table("build_versions").upsert(build_versions_data).execute()
 
-    async def _update_messages_table(self, data: dict[str, Any]) -> None:
+    async def _update_messages_table(self) -> None:
         """Updates the messages table with the given data."""
         if self.original_message_id is None:
             return
