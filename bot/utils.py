@@ -6,13 +6,13 @@ import logging
 import io
 from traceback import format_tb
 from types import TracebackType
-from typing import TypedDict, overload, Literal, TYPE_CHECKING, Any, Mapping, cast
+from typing import TypedDict, overload, TYPE_CHECKING, Any, cast
+from collections.abc import Mapping
 import mimetypes
 import asyncio
 import aiohttp
 
 import discord
-import requests
 import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
@@ -22,7 +22,6 @@ from pydantic import TypeAdapter, ValidationError
 from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
-from database.message import untrack_message
 from database.schema import (
     MessageRecord,
     DeleteLogVoteSessionRecord,
@@ -178,7 +177,7 @@ def check_is_trusted_or_staff():
 
 
 @overload
-async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message | None: ...
+async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message | None: ...  # pyright: ignore
 
 
 async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:

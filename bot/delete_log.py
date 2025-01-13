@@ -1,5 +1,6 @@
+"""This module contains the DeleteLogCog class, which is a cog for voting to delete a message."""
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from textwrap import dedent
 
 import discord
@@ -14,6 +15,7 @@ from bot._types import GuildMessageable
 from bot.vote_session import AbstractVoteSession
 from bot.utils import check_is_staff
 from database import DatabaseManager
+from database.schema import VoteSessionRecord
 from database.server_settings import get_server_setting
 from database.vote import track_vote_session, track_delete_log_vote_session, close_vote_session
 
@@ -163,7 +165,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     ) -> list["DeleteLogVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
-        records = (
+        records: list[VoteSessionRecord] = (
             await db.table("vote_sessions")
             .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
             .eq("status", "open")
@@ -171,7 +173,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             .execute()
         ).data
 
-        async def _get_session(record: dict[str, Any]) -> "DeleteLogVoteSession | None":
+        async def _get_session(record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
             target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
             if target_message is None:
                 return None

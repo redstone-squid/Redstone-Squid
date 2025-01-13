@@ -103,11 +103,8 @@ class SettingsCog(Cog, name="Settings"):
                 case "Staff" | "Trusted":
                     title = f"{setting} Roles Info"
                     value = await get_server_setting(ctx.guild.id, setting)
-                    if value is None:
-                        description = "_Not set_"
-                    else:
-                        roles = [role for role in ctx.guild.roles if role.id in value]
-                        description = ", ".join(role.name for role in roles) or "_Not set_"
+                    roles = [role for role in ctx.guild.roles if role.id in value]
+                    description = ", ".join(role.name for role in roles) or "_Not set_"
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     title = setting
                     description = str(get_server_setting(ctx.guild.id, setting))

@@ -10,7 +10,6 @@ import discord
 from postgrest.base_request_builder import APIResponse
 
 from database import DatabaseManager
-from database.builds import Build
 from database.message import track_message
 from database.schema import VoteSessionRecord, VoteKind
 

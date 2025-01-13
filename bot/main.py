@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Iterable
-from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar, Awaitable
+from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar
 
 import discord
 from discord import User, Message
@@ -19,6 +18,7 @@ from database.utils import utcnow
 from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Awaitable
     T = TypeVar("T")
     P = ParamSpec("P")
     MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]

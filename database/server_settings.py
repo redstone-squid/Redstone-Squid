@@ -1,7 +1,6 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-import typing
-from typing import Literal, cast
+from typing import Literal
 
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
@@ -41,6 +40,7 @@ async def get_server_setting(server_id: int, setting: Literal["Staff", "Trusted"
 async def get_server_setting(server_id: int, setting: Setting) -> int | list[int] | None: ...
 
 
+# noinspection PyTypedDict
 async def get_server_setting(server_id: int, setting: Setting) -> int | list[int] | None:
     """
     Gets a channel id or role list id for a server depending on the type of setting.
@@ -73,7 +73,7 @@ async def get_server_settings(server_id: int) -> dict[Setting, int | list[int] |
 
     excluded_columns = ["server_id", "in_server"]
     return {
-        _DB_KEY_TO_SETTING[setting_name]: id
+        _DB_KEY_TO_SETTING[setting_name]: id  # type: ignore
         for setting_name, id in settings.items()
         if setting_name not in excluded_columns
     }  # type: ignore

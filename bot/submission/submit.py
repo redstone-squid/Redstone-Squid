@@ -2,19 +2,17 @@
 # from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
 
 from collections.abc import Iterable
-from typing import Literal, cast, TYPE_CHECKING, Any, final, Coroutine
+from typing import Literal, cast, TYPE_CHECKING, Any, final
 import asyncio
 import os
 
 import discord
-from discord import InteractionResponse, Message, app_commands, Interaction
+from discord import InteractionResponse, Message, app_commands
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
-    has_any_role,
     hybrid_group,
     Cog,
-    hybrid_command,
     flag,
 )
 from openai import AsyncOpenAI
@@ -32,10 +30,9 @@ from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
-from database.message import get_build_id_by_message, track_message, untrack_message
+from database.message import get_build_id_by_message
 from database.schema import TypeRecord
-from database.server_settings import get_server_setting
-from database.utils import get_version_string, upload_to_catbox
+from database.utils import upload_to_catbox
 from database.vote import track_build_vote_session, track_vote_session, close_vote_session
 
 if TYPE_CHECKING:

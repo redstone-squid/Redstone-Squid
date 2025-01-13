@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 # See https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text
-def _unmark_element(element: Element, stream=None):
+def _unmark_element(element: Element, stream: StringIO | None = None):
     if stream is None:
         stream = StringIO()
     if element.text:
@@ -32,7 +32,7 @@ __md.stripTopLevelTags = False
 
 
 def remove_markdown(text: str) -> str:
-    """Removes markdown formatting from a string."""
+    """Removes Markdown formatting from a string."""
     return __md.convert(text)
 
 

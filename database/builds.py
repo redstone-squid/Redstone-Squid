@@ -8,10 +8,9 @@ import re
 import os
 import asyncio
 import logging
-import inspect
 from asyncio import Task
-from dataclasses import dataclass, field, MISSING, fields
-from functools import cache, wraps
+from dataclasses import dataclass, field, fields
+from functools import cache
 from collections.abc import Sequence, Mapping
 from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
 
@@ -55,7 +54,7 @@ P = ParamSpec("P")
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
-background_tasks: set[Task] = set()
+background_tasks: set[Task[Any]] = set()
 
 
 class FrozenField(Generic[T]):
@@ -362,7 +361,7 @@ class Build:
         )
         output = completion.choices[0].message.content
 
-        logger.debug(f"AI Output: %s", output)
+        logger.debug("AI Output: %s", output)
 
         if output is None:
             return None

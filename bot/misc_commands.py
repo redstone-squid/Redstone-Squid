@@ -1,3 +1,4 @@
+"""A cog for miscellaneous commands."""
 from __future__ import annotations
 
 from typing import Literal, TYPE_CHECKING
@@ -7,11 +8,10 @@ import discord.ext.commands as commands
 from discord import Member
 from discord.ext import tasks
 from discord.ext.commands import Context, Cog, Greedy, Bot
-from discord.utils import escape_markdown
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
-from bot.utils import check_is_staff, RunningMessage
+from bot.utils import check_is_staff
 from database import DatabaseManager, get_version_string
 
 if TYPE_CHECKING:
@@ -120,6 +120,7 @@ class Miscellaneous(Cog):
 
     @staticmethod
     async def is_my_alt(ctx: Context):
+        """Alt of @papetoast"""
         return ctx.author.id == 1146802450100138004
 
     @commands.command(name="r", hidden=True)
