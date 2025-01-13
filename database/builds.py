@@ -943,6 +943,8 @@ class Build:
                     break
                 else:
                     preview = await bot_utils.get_website_preview(url)
+                    if isinstance(preview["image"], io.BytesIO):
+                        raise RuntimeError("Got a BytesIO object instead of a URL.")
                     em.set_image(url=preview["image"])
         elif self.video_urls:
             for url in self.video_urls:
