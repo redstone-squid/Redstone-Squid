@@ -962,7 +962,7 @@ class Build:
                                 asyncio.create_task(
                                     DatabaseManager()
                                     .table("build_links")
-                                    .upsert({"build_id": self.id, "url": url, "media_type": "image"})
+                                    .insert({"build_id": self.id, "url": preview_url, "media_type": "image"})
                                     .execute()
                                 )
                             )
