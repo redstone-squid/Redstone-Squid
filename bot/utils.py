@@ -8,7 +8,8 @@ from traceback import format_tb
 from types import TracebackType
 from typing import TypedDict, overload, Literal, TYPE_CHECKING, Any, Mapping, cast
 import mimetypes
-import subprocess
+import asyncio
+import aiohttp
 
 import discord
 import requests
@@ -227,7 +228,7 @@ class Preview(TypedDict):
     url: str | None
 
 
-def get_website_preview(url: str) -> Preview:
+async def get_website_preview(url: str) -> Preview:
     """
     Fetches a webpage and tries to extract metadata in a manner similar to social platforms (e.g., Twitter or Discord previews).
 
@@ -247,69 +248,78 @@ def get_website_preview(url: str) -> Preview:
         "url": None,
     }
 
+    user_agent = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    )
+
     try:
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        response = requests.get(url, headers={"User-Agent": user_agent}, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print(e)
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, headers={"User-Agent": user_agent}) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("Content-Type")
+                if not content_type:
+                    content_type, _ = mimetypes.guess_type(url, strict=False)
+
+                # If we can't find a content type, assume it's a webpage
+                if not content_type:
+                    logger.warning(f"Could not determine content type for URL '{url}'")
+                    content_type = "text/html"
+
+                # If it's a video, extract first frame
+                if content_type.startswith("video/"):
+                    preview["image"] = await extract_first_frame(url)
+                    preview["url"] = url
+                    return preview
+
+                page_text = await response.text()
+    except aiohttp.ClientError as e:
         logger.debug(f"Failed to retrieve URL '{url}': {e}")
-        return preview  # returns empty data if request fails
-
-    content_type = response.headers.get('Content-Type')
-    if not content_type:
-        # If Content-Type is not available, use the URL to guess the MIME type
-        content_type, _ = mimetypes.guess_type(url, strict=False)
-
-    if content_type is None:
         return preview
 
-    if content_type.startswith("video/"):
-        preview["image"] = extract_first_frame(url)
+    soup = bs4.BeautifulSoup(page_text, "html.parser")
+
+    def get_meta_content(property_name: str, attribute_type: str = "property") -> str | None:
+        """Helper function to extract content from meta tags."""
+        tag = soup.find("meta", attrs={attribute_type: property_name})
+
+        assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
+        if tag and tag.get("content"):
+            content = tag["content"]
+            assert isinstance(content, str), "tag['content'] is not a string"
+            return content.strip()
+        return None
+
+    # Check Open Graph first (e.g. <meta property="og:title" content="..." />)
+    preview["title"] = get_meta_content("og:title") or get_meta_content("twitter:title", "name")
+    preview["description"] = get_meta_content("og:description") or get_meta_content("twitter:description", "name")
+    preview["image"] = get_meta_content("og:image") or get_meta_content("twitter:image", "name")
+    preview["site_name"] = get_meta_content("og:site_name")
+    preview["url"] = get_meta_content("og:url")
+
+    # Fallbacks if OG/Twitter meta not found:
+    # title: <title> tag
+    if not preview["title"]:
+        if soup.title and soup.title.string:
+            preview["title"] = soup.title.string.strip()
+    # description: <meta name="description" content="..." />
+    if not preview["description"]:
+        preview["description"] = get_meta_content("description", "name")
+    # site_name: domain from given url
+    if not preview["site_name"]:
+        preview["site_name"] = url.split("//")[-1].split("/")[0]
+    # url: use the original
+    if not preview["url"]:
         preview["url"] = url
-        return preview
-    else:  # assume text/html
-        soup = bs4.BeautifulSoup(response.text, "html.parser")
 
-        def get_meta_content(property_name: str, attribute_type: str = "property") -> str | None:
-            """Helper function to extract content from meta tags."""
-            tag = soup.find("meta", attrs={attribute_type: property_name})
-
-            assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
-            if tag and tag.get("content"):
-                content = tag["content"]
-                assert isinstance(content, str), "tag['content'] is not a string"
-                return content.strip()
-            return None
-
-        # Check Open Graph first (e.g. <meta property="og:title" content="..." />)
-        preview["title"] = get_meta_content("og:title") or get_meta_content("twitter:title", "name")
-        preview["description"] = get_meta_content("og:description") or get_meta_content("twitter:description", "name")
-        preview["image"] = get_meta_content("og:image") or get_meta_content("twitter:image", "name")
-        preview["site_name"] = get_meta_content("og:site_name")
-        preview["url"] = get_meta_content("og:url")
-
-        # Fallbacks if OG/Twitter meta not found:
-        # title: <title> tag
-        if not preview["title"]:
-            if soup.title and soup.title.string:
-                preview["title"] = soup.title.string.strip()
-        # description: <meta name="description" content="..." />
-        if not preview["description"]:
-            preview["description"] = get_meta_content("description", "name")
-        # site_name: domain from given url
-        if not preview["site_name"]:
-            preview["site_name"] = url.split("//")[-1].split("/")[0]
-        # url: use the original
-        if not preview["url"]:
-            preview["url"] = url
-
-        return preview
+    return preview
 
 
-def extract_first_frame(video_url: str) -> io.BytesIO:
+async def extract_first_frame(video_url: str) -> io.BytesIO:
     """
-    Extract the first frame from a remote video URL and return it as a BytesIO object.
+    Asynchronously extract the first frame from a remote video URL
 
     Args:
         video_url: the URL of the video to extract the frame from
@@ -321,33 +331,40 @@ def extract_first_frame(video_url: str) -> io.BytesIO:
         RuntimeError: if the ffmpeg process fails
     """
     cmd = [
-        'ffmpeg',
-        '-i', video_url,
-        '-frames:v', '1',  # Extract only one frame
-        '-f', 'image2pipe',  # Output format to a pipe
-        '-vcodec', 'png',  # Encode as PNG
-        'pipe:1'  # Output to stdout
+        "ffmpeg",
+        "-i", video_url,
+        "-frames:v", "1",
+        "-f", "image2pipe",
+        "-vcodec", "png",
+        "pipe:1"
     ]
 
-    # Run ffmpeg as a subprocess, capturing stdout (the image data)
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = process.communicate()
+    # Run ffmpeg asynchronously
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    out, err = await process.communicate()
 
     if process.returncode != 0:
-        raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
+        raise RuntimeError(
+            f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}"
+        )
 
     return io.BytesIO(out)
 
 
 async def main():
-    test_url = "https://imgur.com/WwsKLH5"
-    preview = get_website_preview(test_url)
+    image_url = "https://imgur.com/WwsKLH5"
+    video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    video_url2 = "https://files.catbox.moe/uadbru.mp4"
+    preview = await get_website_preview(video_url2)
     print(preview)
 
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    import asyncio
 
     load_dotenv()
     asyncio.run(main())
