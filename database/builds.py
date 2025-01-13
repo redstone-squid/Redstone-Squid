@@ -706,13 +706,26 @@ class Build:
         """
         self.edited_time = utcnow()
 
-        data = {key: value for key, value in self.as_dict().items() if value is not None}
-        build_data = {key: data[key] for key in BuildRecord.__annotations__.keys() if key in data}
-        # information is a special JSON field in the database that stores various information about the build
-        # this needs to be kept because it will be updated later
-        information: Info = build_data.pop("information", {})
-        # Original message id cannot be populated in the build table unless after it is inserted
-        original_message_id = build_data.pop("original_message_id", None)
+        # Regarding the commented out fields:
+        # They are added later in the process.
+        # - information may be modified if unknown restrictions or types are found
+        # - original_message_id is a foreign key to the messages table
+        build_data = {
+            "submission_status": self.submission_status,
+            "record_category": self.record_category,
+            # "information": self.information,
+            "edited_time": self.edited_time,
+            "width": self.width,
+            "height": self.height,
+            "depth": self.depth,
+            "completion_time": self.completion_time,
+            "category": self.category,
+            "submitter_id": self.submitter_id,
+            # "original_message_id": self.original_message_id,
+            "version_spec": self.version_spec,
+            "ai_generated": self.ai_generated,
+            "embedding": self.embedding,
+        }
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
@@ -742,15 +755,14 @@ class Build:
             build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
-                information["unknown_restrictions"] = unknown_restrictions.result()
+                self.information["unknown_restrictions"] = self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
             if unknown_types.result():
-                information["unknown_patterns"] = unknown_types.result()
-            # Update the information field in the database to store any unknown restrictions or types
-            # original_message_id has a foreign key constraint with the messages table
+                self.information["unknown_patterns"] = self.information.get("unknown_patterns", []) + unknown_types.result()
+
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"information": information, "original_message_id": original_message_id})
+                .update({"information": self.information, "original_message_id": self.original_message_id})
                 .eq("id", self.id)
                 .execute()
             )
