@@ -43,7 +43,7 @@ from database.schema import (
 from database import DatabaseManager
 from database.server_settings import get_server_setting
 from database.user import add_user
-from database.utils import utcnow, get_version_string
+from database.utils import utcnow, get_version_string, upload_to_catbox
 from database.enums import Status, Category
 
 
@@ -950,12 +950,13 @@ class Build:
                 if image := preview["image"]:
                     if isinstance(image, str):
                         em.set_image(url=image)
-                        break
                     else:  # isinstance(image, io.BytesIO)
-                        # We have to somehow also return the File object to the caller, so this is not possible for now
-                        # f = discord.File(image, filename="video_preview.png")
-                        # em.set_image(url="attachment://video_preview.png")
-                        pass
+                        preview_url = await upload_to_catbox(filename="video_preview.png", file=image, mimetype="image/png")
+                        self.image_urls.append(preview_url)
+                        if self.id is not None:
+                            await DatabaseManager().table("build_links").upsert({"build_id": self.id, "url": url, "media_type": "image"}).execute()
+                        em.set_image(url=preview_url)
+                    break
 
         em.set_footer(text=f"Submission ID: {self.id} • Last Update {utcnow()}")
         return em
