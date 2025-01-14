@@ -1080,14 +1080,14 @@ class Build:
         if self.width and self.height and self.depth:
             fields["Volume"] = str(self.width * self.height * self.depth)
 
+        # The times are stored as game ticks, so they need to be divided by 20 to get seconds
         if self.normal_opening_time:
             fields["Opening Time"] = f"{self.normal_opening_time / 20}s"
         if self.normal_closing_time:
             fields["Closing Time"] = f"{self.normal_closing_time / 20}s"
-
-        if self.visible_opening_time and self.visible_closing_time:
-            # The times are stored as game ticks, so they need to be divided by 20 to get seconds
+        if self.visible_opening_time:
             fields["Visible Opening Time"] = f"{self.visible_opening_time / 20}s"
+        if self.visible_closing_time:
             fields["Visible Closing Time"] = f"{self.visible_closing_time / 20}s"
 
         if self.creators_ign:
