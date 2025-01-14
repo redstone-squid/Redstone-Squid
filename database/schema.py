@@ -124,6 +124,12 @@ Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
+class LinkRecord(TypedDict):
+    """A record of a link in the database."""
+
+    build_id: int
+    url: str
+    media_type: Literal["image", "video", "world_download"]
 
 class TypeRecord(TypedDict):
     """A record of a type in the database."""
