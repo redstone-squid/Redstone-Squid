@@ -124,12 +124,24 @@ Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
+
 class LinkRecord(TypedDict):
     """A record of a link in the database."""
 
     build_id: int
     url: str
     media_type: Literal["image", "video", "world_download"]
+
+
+class UserRecord(TypedDict):
+    """A record of a user in the database."""
+
+    id: int
+    discord_id: int | None
+    minecraft_uuid: str | None
+    ign: str | None
+    created_at: str
+
 
 class TypeRecord(TypedDict):
     """A record of a type in the database."""
