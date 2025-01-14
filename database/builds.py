@@ -807,7 +807,7 @@ class Build:
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
         response: APIResponse[RestrictionRecord] = (
-            await db.table("restrictions").select("*").in_("name", build_restrictions).execute()
+            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
         )
         restriction_ids = [restriction["id"] for restriction in response.data]
         build_restrictions_data = list(

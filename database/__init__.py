@@ -167,6 +167,8 @@ async def main():
     await DatabaseManager.setup()
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
     print(DatabaseManager.find_versions_from_spec(spec_string))
+    r = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": ["Seamless", "No Observers"]}).execute()
+    print(r.data)
 
 
 if __name__ == "__main__":
