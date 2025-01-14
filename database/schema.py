@@ -141,6 +141,13 @@ class RestrictionRecord(TypedDict):
     name: str
     type: Restriction
 
+class RestrictionAliasRecord(TypedDict):
+    """An alias for a restriction on a build."""
+
+    restriction_id: int
+    alias: str
+    created_at: str
+
 
 class VersionRecord(TypedDict):
     """A record of a version in the database"""
