@@ -38,7 +38,7 @@ from database.schema import (
     DoorOrientationName,
     QuantifiedVersionRecord,
 )
-from database import DatabaseManager
+from database import DatabaseManager, message as msg
 from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string, upload_to_catbox
@@ -537,6 +537,22 @@ class Build:
                             self.component_restrictions.append(restriction["name"])
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
+
+    async def update_messages(self, bot: discord.Client) -> None:
+        """Updates all messages which for this build."""
+        if self.id is None:
+            raise ValueError("Build id is None.")
+
+        # Get all messages for a build
+        message_records = await msg.get_build_messages(self.id)
+        em = await self.generate_embed()
+
+        for record in message_records:
+            message = await bot_utils.getch(bot, record)
+            if message is None:
+                continue
+            await message.edit(content=self.original_link, embed=em)
+            await msg.update_message_edited_time(message.id)
 
     async def get_original_message(self, bot: discord.Client) -> discord.Message | None:
         """Gets the original message of the build."""

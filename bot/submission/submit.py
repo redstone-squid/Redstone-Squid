@@ -658,14 +658,14 @@ class BuildCog(Cog, name="Build"):
                 elif view.value:
                     await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                     await build.save()
-                    await self.update_build_messages(build)
+                    await build.update_messages(self.bot)
                     await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
                 else:
                     await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
             else:  # Not an interaction, so we can't use buttons for confirmation
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await build.save()
-                await self.update_build_messages(build)
+                await build.update_messages(self.bot)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
     async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
@@ -681,22 +681,6 @@ class BuildCog(Cog, name="Build"):
         message = await channel.fetch_message(message_id)
         await message.edit(content=build.original_link, embed=em)
         await msg.update_message_edited_time(message.id)
-
-    async def update_build_messages(self, build: Build) -> None:
-        """Updates all messages which are posts for a build."""
-        if build.id is None:
-            raise ValueError("Build id is None.")
-
-        # Get all messages for a build
-        message_records = await msg.get_build_messages(build.id)
-        em = await build.generate_embed()
-
-        for record in message_records:
-            message = await utils.getch(self.bot, record)
-            if message is None:
-                continue
-            await message.edit(content=build.original_link, embed=em)
-            await msg.update_message_edited_time(message.id)
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context):
