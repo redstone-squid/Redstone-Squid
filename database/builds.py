@@ -1071,41 +1071,6 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    def get_version_spec(self) -> str:
-        """Returns a string representation of the versions the build is functional in.
-
-        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19.2, 1.20+".
-        """
-        if not self.versions:
-            return ""
-
-        versions: list[str] = []
-
-        linking = False
-        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2 - 1.18)."""
-        start_version: str | None = None
-        end_version: str | None = None
-
-        for version in DatabaseManager.get_versions_list(edition="Java"):
-            version_str = get_version_string(version)
-            if version_str in self.versions:
-                if not linking:
-                    linking = True
-                    start_version = version_str
-                end_version = version_str
-
-            elif linking:  # Current looped version is not functional, but the previous one was
-                assert start_version is not None
-                assert end_version is not None
-                versions.append(start_version if start_version == end_version else f"{start_version} - {end_version}")
-                linking = False
-
-        if linking:  # If the last version is functional
-            assert start_version is not None
-            versions.append(f"{start_version}+")
-
-        return ", ".join(versions)
-
     def get_metadata_fields(self) -> dict[str, str]:
         """Returns a dictionary of metadata fields for the build.
 
@@ -1131,7 +1096,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = self.get_version_spec()
+        fields["Versions"] = self.version_spec or "Unknown"
 
         if ip := self.server_info.get("server_ip"):
             fields["Server"] = ip
