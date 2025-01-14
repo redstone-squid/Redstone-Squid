@@ -130,7 +130,7 @@ class LinkRecord(TypedDict):
 
     build_id: int
     url: str
-    media_type: Literal["image", "video", "world_download"]
+    media_type: Literal["image", "video", "world-download"]
 
 
 class UserRecord(TypedDict):
