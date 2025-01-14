@@ -30,7 +30,6 @@ from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
-from database.message import get_build_id_by_message
 from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord
 from database.utils import upload_to_catbox
 from database.vote import track_build_vote_session, track_vote_session, close_vote_session
@@ -667,20 +666,6 @@ class BuildCog(Cog, name="Build"):
                 await build.save()
                 await build.update_messages(self.bot)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
-
-    async def update_build_message(self, build: Build, channel_id: int, message_id: int) -> None:
-        """Updates a post according to the information given by the build."""
-        if await get_build_id_by_message(message_id) != build.id:
-            raise ValueError("The message_id does not correspond to the build_id.")
-
-        em = await build.generate_embed()
-        channel = self.bot.get_channel(channel_id)
-        if not isinstance(channel, discord.PartialMessageable):
-            raise ValueError(f"Invalid channel type for a post channel: {type(channel)}")
-
-        message = await channel.fetch_message(message_id)
-        await message.edit(content=build.original_link, embed=em)
-        await msg.update_message_edited_time(message.id)
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context):
