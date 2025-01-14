@@ -9,6 +9,7 @@ import os
 import asyncio
 import logging
 from asyncio import Task
+from functools import cached_property
 from dataclasses import dataclass, field, fields
 from collections.abc import Sequence, Mapping
 from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
@@ -469,7 +470,7 @@ class Build:
         for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
             yield attr
 
-    @property
+    @cached_property
     def original_link(self) -> str | None:
         """The link to the original message of the build."""
         if self.original_message_id and self.original_channel_id:
