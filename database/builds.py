@@ -9,6 +9,7 @@ import os
 import asyncio
 import logging
 from asyncio import Task
+from importlib import resources
 from functools import cached_property
 from dataclasses import dataclass, field, fields
 from collections.abc import Sequence, Mapping
@@ -367,9 +368,8 @@ class Build:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(f"{current_dir}/prompt.txt", "r", encoding="utf-8") as f:
-            prompt = f.read()
+
+        prompt =  resources.files("database").joinpath("prompt.txt").read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
