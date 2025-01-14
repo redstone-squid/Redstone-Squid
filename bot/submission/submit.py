@@ -795,7 +795,12 @@ class BuildCog(Cog, name="Build"):
     async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
         """Add an alias for a restriction."""
         async with RunningMessage(ctx) as sent_message:
-            await DatabaseManager().table("restriction_aliases").insert({"restriction_id": restriction_id, "alias": alias}).execute()
+            await (
+                DatabaseManager()
+                .table("restriction_aliases")
+                .insert({"restriction_id": restriction_id, "alias": alias})
+                .execute()
+            )
             await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
 
     @commands.command("search_restrictions")
@@ -805,8 +810,16 @@ class BuildCog(Cog, name="Build"):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
             if query:
-                response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").ilike("name", f"%{query}%").execute()
-                response_alias: APIResponse[RestrictionAliasRecord] = await DatabaseManager().table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
+                response: APIResponse[RestrictionRecord] = (
+                    await DatabaseManager().table("restrictions").select("*").ilike("name", f"%{query}%").execute()
+                )
+                response_alias: APIResponse[RestrictionAliasRecord] = (
+                    await DatabaseManager()
+                    .table("restriction_aliases")
+                    .select("*")
+                    .ilike("alias", f"%{query}%")
+                    .execute()
+                )
             else:
                 response = await DatabaseManager().table("restrictions").select("*").execute()
                 response_alias = await DatabaseManager().table("restriction_aliases").select("*").execute()

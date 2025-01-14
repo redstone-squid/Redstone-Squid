@@ -27,7 +27,6 @@ from bot.submission.parse import validate_restrictions, validate_door_types, par
 from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
-    DoorRecord,
     MessageRecord,
     ServerInfo,
     TypeRecord,
@@ -755,9 +754,13 @@ class Build:
             build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
-                self.information["unknown_restrictions"] = self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                self.information["unknown_restrictions"] = (
+                    self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                )
             if unknown_types.result():
-                self.information["unknown_patterns"] = self.information.get("unknown_patterns", []) + unknown_types.result()
+                self.information["unknown_patterns"] = (
+                    self.information.get("unknown_patterns", []) + unknown_types.result()
+                )
 
             await message_insert_task
             await (
@@ -801,14 +804,12 @@ class Build:
         """Updates the build_restrictions table with the given data"""
         db = DatabaseManager()
         build_restrictions: list[str] = (
-            self.wiring_placement_restrictions
-            + self.component_restrictions
-            + self.miscellaneous_restrictions
+            self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
         response = cast(
             APIResponse[RestrictionRecord],
-            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
+            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute(),
         )
         restriction_ids = [restriction["id"] for restriction in response.data]
         build_restrictions_data = list(
@@ -857,11 +858,7 @@ class Build:
         else:
             door_type = ["Regular"]
         response: APIResponse[TypeRecord] = (
-            await db.table("types")
-            .select("*")
-            .eq("build_category", self.category)
-            .in_("name", door_type)
-            .execute()
+            await db.table("types").select("*").eq("build_category", self.category).in_("name", door_type).execute()
         )
         type_ids = [type_["id"] for type_ in response.data]
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
@@ -886,8 +883,7 @@ class Build:
             )
         if self.world_download_urls:
             build_links_data.extend(
-                {"build_id": self.id, "url": link, "media_type": "world_download"}
-                for link in self.world_download_urls
+                {"build_id": self.id, "url": link, "media_type": "world_download"} for link in self.world_download_urls
             )
         if build_links_data:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()

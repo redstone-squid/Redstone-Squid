@@ -1,4 +1,5 @@
 """A cog for miscellaneous commands."""
+
 from __future__ import annotations
 
 from typing import Literal, TYPE_CHECKING

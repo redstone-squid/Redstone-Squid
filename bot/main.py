@@ -20,6 +20,7 @@ from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Awaitable
+
     T = TypeVar("T")
     P = ParamSpec("P")
     MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]

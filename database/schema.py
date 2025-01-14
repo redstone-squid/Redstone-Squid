@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
+from typing import TypedDict, Literal, get_args, cast, TypeAlias
 
 from pydantic.types import Json
 from database.enums import Status, Category
@@ -140,6 +140,7 @@ class RestrictionRecord(TypedDict):
     build_category: BuildType
     name: str
     type: Restriction
+
 
 class RestrictionAliasRecord(TypedDict):
     """An alias for a restriction on a build."""
