@@ -10,7 +10,6 @@ import asyncio
 import logging
 from asyncio import Task
 from dataclasses import dataclass, field, fields
-from functools import cache
 from collections.abc import Sequence, Mapping
 from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
 
@@ -497,14 +496,6 @@ class Build:
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @staticmethod
-    @cache
-    async def fetch_all_restrictions() -> list[RestrictionRecord]:
-        """Fetches all restrictions from the database."""
-        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
-        return response.data
-
     def get_restrictions(
         self,
     ) -> dict[
@@ -536,7 +527,7 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            for restriction in await self.fetch_all_restrictions():
+            for restriction in await DatabaseManager.fetch_all_restrictions():
                 for door_restriction in restrictions:
                     if door_restriction.lower() == restriction["name"].lower():
                         if restriction["type"] == "wiring-placement":

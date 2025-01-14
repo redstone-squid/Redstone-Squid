@@ -6,13 +6,14 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 
 import os
 from typing import Literal
+from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
 from supabase._async.client import create_client, AsyncClient
 from bot.config import DEV_MODE
-from database.schema import VersionRecord
+from database.schema import RestrictionRecord, VersionRecord
 from database.utils import get_version_string
 
 
@@ -67,6 +68,14 @@ class DatabaseManager:
             .execute()
         )
         return versions_response.data
+
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @staticmethod
+    @cache
+    async def fetch_all_restrictions() -> list[RestrictionRecord]:
+        """Fetches all restrictions from the database."""
+        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
+        return response.data
 
     @classmethod
     def get_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
