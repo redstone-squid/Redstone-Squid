@@ -139,7 +139,7 @@ class UserRecord(TypedDict):
     id: int
     discord_id: int | None
     minecraft_uuid: str | None
-    ign: str | None
+    ign: str
     created_at: str
 
 
