@@ -405,6 +405,7 @@ class BuildCog(Cog, name="Build"):
             default=DatabaseManager.get_newest_version(edition="Java"),
             description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".'
         )
+        # TODO: merge all restrictions into one field and use build.set_restrictions
         wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
