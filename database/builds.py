@@ -204,6 +204,29 @@ class Build:
         return Build.from_json(response.data)
 
     @staticmethod
+    async def from_message_id(message_id: int) -> Build | None:
+        """
+        Get the build by a message id.
+
+        Args:
+            message_id: The message id to get the build from.
+
+        Returns:
+            The Build object with the specified message id, or None if the build was not found.
+        """
+        db = DatabaseManager()
+        response: SingleAPIResponse[MessageRecord] | None = (
+            await db.table("messages")
+            .select("build_id", count=CountMethod.exact)
+            .eq("message_id", message_id)
+            .maybe_single()
+            .execute()
+        )
+        if response and response.data["build_id"]:
+            return await Build.from_id(response.data["build_id"])
+        return None
+
+    @staticmethod
     def from_dict(submission: dict) -> Build:
         """Creates a new Build object from a dictionary. No validation is done on the data."""
         build = Build()

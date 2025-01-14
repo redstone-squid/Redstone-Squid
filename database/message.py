@@ -110,27 +110,6 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     return server_outdated_messages
 
 
-async def get_build_id_by_message(message_id: int) -> int | None:
-    """
-    Get the build id by the message id.
-
-    Args:
-        message_id: The message id to get the build id from.
-
-    Returns:
-        The build id of the message.
-    """
-    db = DatabaseManager()
-    response: SingleAPIResponse[MessageRecord] | None = (
-        await db.table("messages")
-        .select("build_id", count=CountMethod.exact)
-        .eq("message_id", message_id)
-        .maybe_single()
-        .execute()
-    )
-    return response.data["build_id"] if response else None
-
-
 if __name__ == "__main__":
     # print(get_outdated_message(433618741528625152, 30))
     # print(get_outdated_messages(433618741528625152))
