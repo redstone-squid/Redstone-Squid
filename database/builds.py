@@ -537,7 +537,7 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    async def get_original_message(self, bot: Bot) -> discord.Message | None:
+    async def get_original_message(self, bot: discord.Client) -> discord.Message | None:
         """Gets the original message of the build."""
         if self._original_message_obj:
             return self._original_message_obj
