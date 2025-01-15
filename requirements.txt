@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
+aiodns==3.2.0
+    # via discord-py
 aiohappyeyeballs==2.4.4
     # via aiohttp
 aiohttp==3.11.11
@@ -27,6 +29,8 @@ beautifulsoup4==4.12.3
     # via -r requirements.in
 braceexpand==0.1.7
     # via jishaku
+brotli==1.1.0
+    # via discord-py
 cachetools==5.5.0
     # via google-auth
 certifi==2024.12.14
@@ -34,6 +38,8 @@ certifi==2024.12.14
     #   httpcore
     #   httpx
     #   requests
+cffi==1.17.1
+    # via pycares
 charset-normalizer==3.4.1
     # via requests
 click==8.1.8
@@ -48,13 +54,11 @@ deprecated==1.2.15
     # via vecs
 deprecation==2.1.0
     # via postgrest
-discord==2.3.2
-    # via -r requirements.in
 discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus
     # via -r requirements.in
-discord-py==2.4.0
+discord-py[speed]==2.4.0
     # via
-    #   discord
+    #   -r requirements.in
     #   discord-ext-menus
     #   jishaku
 distro==1.9.0
@@ -131,6 +135,8 @@ oauthlib==3.2.2
     # via requests-oauthlib
 openai==1.58.1
     # via -r requirements.in
+orjson==3.10.14
+    # via discord-py
 packaging==24.2
     # via deprecation
 pgvector==0.3.6
@@ -152,6 +158,10 @@ pyasn1-modules==0.4.1
     # via
     #   google-auth
     #   oauth2client
+pycares==4.5.0
+    # via aiodns
+pycparser==2.22
+    # via cffi
 pydantic==2.10.4
     # via
     #   fastapi
