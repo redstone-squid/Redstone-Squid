@@ -8,7 +8,7 @@ from abc import abstractmethod, ABC
 import asyncio
 from asyncio import Task
 from types import MethodType
-from typing import Any, TypeVar, Union, TYPE_CHECKING, cast
+from typing import Any, TypeVar, Union, TYPE_CHECKING, cast, ClassVar
 
 import discord
 from postgrest.base_request_builder import APIResponse
@@ -43,7 +43,7 @@ class AbstractVoteSession(ABC):
     Subclasses must also set the kind attribute to a VoteKind.
     """
 
-    kind: VoteKind
+    kind: ClassVar[VoteKind]
 
     def __init__(
         self,
