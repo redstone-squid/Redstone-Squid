@@ -597,7 +597,7 @@ class Build:
             if message is None:
                 continue
             await message.edit(content=self.original_link, embed=em)
-            await msg.update_message_edited_time(message.id)
+            await msg.update_message_edited_time(message)
 
     async def get_display_messages(self) -> list[MessageRecord]:
         """Get all messages which showed this build."""

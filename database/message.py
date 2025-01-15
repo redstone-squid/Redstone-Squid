@@ -53,25 +53,31 @@ async def track_message(
     )
 
 
-async def update_message_edited_time(message_id: int) -> None:
-    """Update the edited time of a message."""
+async def update_message_edited_time(message: int | discord.Message) -> None:
+    """
+    Update the edited time of a message.
+
+    Args:
+        message: The message to update. Either the message id or the message object.
+    """
+    message_id = message.id if isinstance(message, discord.Message) else message
     await DatabaseManager().table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
 
 
-async def untrack_message(message_id: int) -> MessageRecord:
+async def untrack_message(message: int | discord.Message) -> MessageRecord:
     """Untrack message from the database. The message is not deleted on discord.
 
     Args:
-        message_id: The message id to untrack.
+        message: The message to untrack. Either the message id or the message object.
 
     Returns:
-        A MessageRecords that is untracked.
+        A MessageRecord that is untracked.
 
     Raises:
         ValueError: If the message is not found.
     """
-    db = DatabaseManager()
-    response: APIResponse[MessageRecord] = await db.table("messages").delete().eq("message_id", message_id).execute()
+    message_id = message.id if isinstance(message, discord.Message) else message
+    response: APIResponse[MessageRecord] = await DatabaseManager().table("messages").delete().eq("message_id", message_id).execute()
     if response.data:
         return response.data[0]
     else:
