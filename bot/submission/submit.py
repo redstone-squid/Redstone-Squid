@@ -1,8 +1,9 @@
 """A cog with commands to submit, view, confirm and deny submissions."""
-# from __future__ import annotations  # dpy cannot resolve FlagsConverter with forward references :(
+
+from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal, cast, TYPE_CHECKING, Any, final
+from typing import Literal, TypeVar, cast, TYPE_CHECKING, Any, final
 import asyncio
 import os
 
@@ -14,6 +15,7 @@ from discord.ext.commands import (
     hybrid_group,
     Cog,
     flag,
+    FlagConverter,
 )
 from openai import AsyncOpenAI
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
@@ -40,6 +42,19 @@ APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Unhardcode these emojis
 # TODO: Set up a webhook for the bot to handle google form submissions.
+
+_FlagConverter = TypeVar("_FlagConverter", bound=type[FlagConverter])
+
+
+def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
+    """
+    Fixes discord.py being unable to evaluate annotations if `from __future__ import annotations` is used AND the `FlagConverter` is a nested class.
+
+    This works because discord.py uses the globals() and locals() function to evaluate annotations at runtime.
+    See https://discord.com/channels/336642139381301249/1328967235523317862 for more information about this.
+    """
+    globals()[cls.__name__] = cls
+    return cls
 
 
 @final
@@ -323,7 +338,7 @@ class BuildCog(Cog, name="Build"):
         """Submit a build to the database."""
         await ctx.send_help("submit")
 
-    # fmt: off
+    @fix_converter_annotations
     class SubmitDoorFlags(commands.FlagConverter):
         """Parameters information for the /submit door command."""
 
@@ -367,12 +382,11 @@ class BuildCog(Cog, name="Build"):
 
             build.image_urls = [self.link_to_image] if self.link_to_image is not None else []
             build.video_urls = [self.link_to_youtube_video] if self.link_to_youtube_video is not None else []
-            build.world_download_urls = (
-                [self.link_to_world_download] if self.link_to_world_download is not None else []
-            )
+            build.world_download_urls = [self.link_to_world_download] if self.link_to_world_download is not None else []
             build.completion_time = self.date_of_creation
             return build
 
+        # fmt: off
         # Intentionally moved closer to the submit command
         door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
         record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
@@ -393,7 +407,7 @@ class BuildCog(Cog, name="Build"):
         link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
         link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
         link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
-    # fmt: on
+        # fmt: on
 
     @submit_group.command(name="door")
     async def submit_door(self, ctx: Context, *, flags: SubmitDoorFlags):
@@ -427,6 +441,7 @@ class BuildCog(Cog, name="Build"):
             await message.edit(embed=success_embed)
             await self.post_build_for_voting(build)
 
+    @fix_converter_annotations
     class SubmitFormFlags(commands.FlagConverter):
         """Parameters information for the /submit command."""
 
@@ -524,6 +539,7 @@ class BuildCog(Cog, name="Build"):
         """Edits a record in the database directly."""
         await ctx.send_help("edit")
 
+    @fix_converter_annotations
     class EditDoorFlags(commands.FlagConverter):
         """Parameters information for the `/edit door` command."""
 
