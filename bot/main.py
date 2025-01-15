@@ -19,6 +19,7 @@ from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Awaitable
+    from supabase import AsyncClient
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -26,9 +27,11 @@ if TYPE_CHECKING:
 
 
 class RedstoneSquid(Bot):
+    db: AsyncClient
+
     def __init__(
         self,
-        command_prefix: (Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]),
+        command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str],
     ):
         super().__init__(
             command_prefix=command_prefix,
@@ -40,7 +43,9 @@ class RedstoneSquid(Bot):
 
     @override
     async def setup_hook(self) -> None:
+        """Called when the bot is ready to start."""
         await DatabaseManager.setup()
+        self.db = DatabaseManager()
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
