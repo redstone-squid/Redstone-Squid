@@ -589,7 +589,7 @@ class Build:
             raise ValueError("Build id is None.")
 
         # Get all messages for a build
-        message_records = await msg.get_build_messages(self.id)
+        message_records = await self.get_display_messages()
         em = await self.generate_embed()
 
         for record in message_records:
@@ -598,6 +598,14 @@ class Build:
                 continue
             await message.edit(content=self.original_link, embed=em)
             await msg.update_message_edited_time(message.id)
+
+    async def get_display_messages(self) -> list[MessageRecord]:
+        """Get all messages which showed this build."""
+        response: APIResponse[MessageRecord] = (
+            # FIXME: This included the original message, we need to filter by author_id but this doesn't exist in the database
+            await DatabaseManager().table("messages").select("*").eq("build_id", self.id).execute()
+        )
+        return response.data
 
     async def get_original_message(self, bot: discord.Client) -> discord.Message | None:
         """Gets the original message of the build."""

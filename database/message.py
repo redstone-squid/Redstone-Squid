@@ -19,14 +19,6 @@ async def get_server_messages(server_id: int) -> list[MessageRecord]:
     return response.data
 
 
-async def get_build_messages(build_id: int) -> list[MessageRecord]:
-    """Get all messages for a build."""
-    response: APIResponse[MessageRecord] = (
-        await DatabaseManager().table("messages").select("*").eq("build_id", build_id).execute()
-    )
-    return response.data
-
-
 async def track_message(
     message: discord.Message,
     purpose: MessagePurpose,
