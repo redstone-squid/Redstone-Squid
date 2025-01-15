@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
+# TODO: Unhardcode these emojis
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 

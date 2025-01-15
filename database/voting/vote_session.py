@@ -22,10 +22,6 @@ if TYPE_CHECKING:
     pass
 
 
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-
-
 T = TypeVar("T", bound="AbstractVoteSession")
 
 
