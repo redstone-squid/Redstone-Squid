@@ -28,16 +28,22 @@ from bot.submission.parse import validate_restrictions, validate_door_types, par
 from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
+    DoorRecord,
+    EntranceRecord,
+    LinkRecord,
     MessageRecord,
     ServerInfo,
     TypeRecord,
     RestrictionRecord,
     Info,
+    UserRecord,
     VersionRecord,
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
     QuantifiedVersionRecord,
+    ExtenderRecord,
+    UtilityRecord,
 )
 from database import DatabaseManager, message as msg
 from database.server_settings import get_server_setting
@@ -55,6 +61,22 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 background_tasks: set[Task[Any]] = set()
+
+
+class JoinedBuildRecord(BuildRecord):
+    """Represents a build record with all the columns joined."""
+
+    versions: list[VersionRecord]
+    build_links: list[LinkRecord]
+    build_creators: list[dict[str, Any]]  # You want to use users instead. This is just a join table.
+    users: list[UserRecord]
+    types: list[TypeRecord]
+    restrictions: list[RestrictionRecord]
+    doors: DoorRecord | None
+    extenders: ExtenderRecord | None
+    utilities: UtilityRecord | None
+    entrances: EntranceRecord | None
+    messages: MessageRecord | None  # Not actually all the associated messages, just the original message
 
 
 class FrozenField(Generic[T]):
@@ -238,7 +260,7 @@ class Build:
         return build
 
     @staticmethod
-    def from_json(data: dict[str, Any]) -> Build:
+    def from_json(data: JoinedBuildRecord) -> Build:
         """
         Converts a JSON object to a Build object.
 
@@ -260,7 +282,7 @@ class Build:
 
         match data["category"]:
             case "Door":
-                assert data["doors"] is not None
+                assert "doors" in data and data["doors"] is not None
                 door_orientation_type = data["doors"]["orientation"]
                 door_width = data["doors"]["door_width"]
                 door_height = data["doors"]["door_height"]
@@ -270,20 +292,16 @@ class Build:
                 visible_closing_time = data["doors"]["visible_closing_time"]
                 visible_opening_time = data["doors"]["visible_opening_time"]
             case "Extender":
-                category_data = data["extenders"]
                 raise NotImplementedError
             case "Utility":
-                category_data = data["utilities"]
                 raise NotImplementedError
             case "Entrance":
-                category_data = data["entrances"]
                 raise NotImplementedError
             case _:
                 raise ValueError("Invalid category")
 
         # FIXME: This is hardcoded for now
-        if data.get("types"):
-            types = data["types"]
+        if types := data.get("types"):
             door_type = [type_["name"] for type_ in types]
         else:
             door_type = ["Regular"]
@@ -295,14 +313,14 @@ class Build:
 
         information = data["information"]
 
-        creators: list[dict[str, Any]] = data.get("users", [])
+        creators = data.get("users", [])
         creators_ign = [creator["ign"] for creator in creators]
 
         version_spec = data["version_spec"]
         version_records: list[VersionRecord] = data.get("versions", [])
         versions = [get_version_string(v) for v in version_records]
 
-        links: list[dict[str, Any]] = data.get("build_links", [])
+        links: list[LinkRecord] = data.get("build_links", [])
         image_urls = [link["url"] for link in links if link["media_type"] == "image"]
         video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
@@ -313,11 +331,15 @@ class Build:
         completion_time = data["completion_time"]
         edited_time = data["edited_time"]
 
-        message_record: MessageRecord = data["messages"] or {}  # type: ignore
-        original_server_id = message_record.get("server_id")
-        original_channel_id = message_record.get("channel_id")
-        original_message_id = data["original_message_id"]
-        original_message = message_record.get("content")
+        message_record: MessageRecord | None = data["messages"]
+        if message_record is None:
+            original_server_id = original_channel_id = original_message_id = None
+            original_message = None
+        else:
+            original_server_id = message_record["server_id"]
+            original_channel_id = message_record["channel_id"]
+            original_message_id = data["original_message_id"]
+            original_message = message_record["content"]
 
         ai_generated = data["ai_generated"]
         embedding = data["embedding"]
@@ -1192,6 +1214,8 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
+    response = await DatabaseManager().table('builds').select(all_build_columns).eq('id', 172).execute()
+    print(response.data)
     build = await Build.from_id(43)
     if build:
         print(repr(build))

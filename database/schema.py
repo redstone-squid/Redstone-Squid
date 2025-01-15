@@ -68,7 +68,7 @@ class DoorRecord(TypedDict):
     """A record of a door in the database."""
 
     build_id: int
-    orientation: str
+    orientation: DoorOrientationName
     door_width: int | None
     door_height: int | None
     door_depth: int | None
