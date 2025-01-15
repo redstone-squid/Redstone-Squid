@@ -1,5 +1,5 @@
 oauth2client
-discord
+discord.py[speed]
 gspread
 supabase
 python-dotenv
