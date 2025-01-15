@@ -11,13 +11,6 @@ from database import DatabaseManager
 
 
 # TODO: Find better names for these functions, the "message" is not really a discord message, but a record in the database.
-async def get_server_messages(server_id: int) -> list[MessageRecord]:
-    """Get all tracked bot messages in a server."""
-    response: APIResponse[MessageRecord] = (
-        await DatabaseManager().table("messages").select("*").eq("server_id", server_id).execute()
-    )
-    return response.data
-
 
 async def track_message(
     message: discord.Message,
