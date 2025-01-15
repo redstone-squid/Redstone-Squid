@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import discord
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod
+from postgrest.base_request_builder import APIResponse
 
 from database.schema import MessageRecord, MessagePurpose
 from database.utils import utcnow
@@ -112,5 +111,4 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
 
 if __name__ == "__main__":
     # print(get_outdated_message(433618741528625152, 30))
-    # print(get_outdated_messages(433618741528625152))
-    print(get_build_id_by_message(536004554743873556))
+    print(get_outdated_messages(433618741528625152))
