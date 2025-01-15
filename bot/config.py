@@ -2,7 +2,7 @@
 # git update-index --skip-worktree <file> can be used to ignore changes to this file
 
 # Does some QOL changes, like using a different command prefix and calling load_dotenv()
-DEV_MODE = True
+DEV_MODE = False
 
 OWNER = "papetoast"
 OWNER_ID = 353089661175988224
