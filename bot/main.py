@@ -19,7 +19,6 @@ from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Awaitable
-    from supabase import AsyncClient
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 
 
 class RedstoneSquid(Bot):
-    db: AsyncClient
+    db: DatabaseManager
 
     def __init__(
         self,
@@ -44,7 +43,6 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        await DatabaseManager.setup()
         self.db = DatabaseManager()
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")

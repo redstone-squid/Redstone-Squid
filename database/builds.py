@@ -481,8 +481,8 @@ class Build:
         build.normal_opening_time = parse_time_string(variables["opening_time"])
         build.normal_closing_time = parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-        build.version_spec = variables["version"] or DatabaseManager.get_newest_version(edition="Java")
-        build.versions = DatabaseManager.find_versions_from_spec(build.version_spec)
+        build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
+        build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
             build.information["user"] = variables["author_note"].replace("\\n", "\n")
@@ -937,10 +937,10 @@ class Build:
 
     async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = self.versions or DatabaseManager.get_newest_version(edition="Java")
+        db = DatabaseManager()
+        functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
 
         # TODO: raise an error if any versions are not found in the database
-        db = DatabaseManager()
         response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
             await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
@@ -973,7 +973,7 @@ class Build:
 
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
-        em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
+        em = bot_utils.info_embed(title=self.get_title(), description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -1077,14 +1077,14 @@ class Build:
 
         return title
 
-    def get_description(self) -> str | None:
+    async def get_description(self) -> str | None:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         desc = []
 
         if self.component_restrictions and self.component_restrictions[0] != "None":
             desc.append(", ".join(self.component_restrictions))
 
-        if DatabaseManager.get_newest_version(edition="Java") not in self.versions:
+        if await DatabaseManager().get_or_fetch_newest_version(edition="Java") not in self.versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -1195,7 +1195,6 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
-    await DatabaseManager.setup()
     build = await Build.from_id(43)
     if build:
         print(repr(build))

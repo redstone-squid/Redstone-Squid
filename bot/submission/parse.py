@@ -211,7 +211,6 @@ async def main():
     import dotenv
 
     dotenv.load_dotenv()
-    await DatabaseManager.setup()
 
 
 if __name__ == "__main__":

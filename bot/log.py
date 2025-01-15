@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from discord import User
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, CommandError
 
-from bot.main import RedstoneSquid
 from database.utils import utcnow
+
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 
 class LoggingCog(Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
     def __init__(self, bot: RedstoneSquid):
-        self.bot: RedstoneSquid = bot
+        self.bot = bot
 
         if not self.bot.owner_id:
             raise RuntimeError("Owner ID not set.")

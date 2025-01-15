@@ -5,100 +5,73 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 """
 
 import os
-from typing import Literal
+from typing import ClassVar, Literal
 from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
-from supabase._async.client import create_client, AsyncClient
+from supabase._async.client import AsyncClient
+from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
 from database.schema import RestrictionRecord, VersionRecord
 from database.utils import get_version_string
 
 
-class DatabaseManager:
+class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
-    _is_setup: bool = False
-    _async_client: AsyncClient | None = None
-    version_cache: dict[str | None, list[VersionRecord]] = {}
+    version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
 
-    def __new__(cls) -> AsyncClient:
-        if not cls._is_setup:
-            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        assert cls._async_client is not None
-        return cls._async_client
-
-    @classmethod
-    async def setup(cls) -> None:
-        """Connects to the Supabase database.
-
-        This method should be called before using the DatabaseManager instance. This method exists because it is hard to use async code in __init__ or __new__."""
-        if cls._is_setup:
-            return
-
-        # This is necessary only if you are not running from app.py.
+    def __init__(
+        self,
+        options: AsyncClientOptions | None = None,
+    ):
+        """Initializes the DatabaseManager."""
+        # This is necessary if the user is not running from app.py.
         if DEV_MODE:
             load_dotenv()
-
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_KEY")
-        if not url:
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+        if not supabase_url:
             raise RuntimeError("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
-        if not key:
-            raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
-        cls._async_client = await create_client(url, key)
-        cls._is_setup = True
-        cls.version_cache["Java"] = await cls.fetch_versions_list("Java")
-        cls.version_cache["Bedrock"] = await cls.fetch_versions_list("Bedrock")
+        if not supabase_key:
+            raise RuntimeError("Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable.")
 
-    @classmethod
-    async def fetch_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
+        super().__init__(supabase_url, supabase_key, options)
+
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @cache
+    async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
+        """Fetches all restrictions from the database."""
+        response: APIResponse[RestrictionRecord] = await self.table("restrictions").select("*").execute()
+        return response.data
+
+    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
-        await cls.setup()
-        query = cls.__new__(cls).table("versions").select("*")
+        if versions := self.version_cache.get(edition):
+            return versions
+
         versions_response: APIResponse[VersionRecord] = (
-            await query.eq("edition", edition)
+            await self.table("versions")
+            .select("*")
+            .eq("edition", edition)
             .order("major_version")
             .order("minor_version")
             .order("patch_number")
             .execute()
         )
+        self.version_cache[edition] = versions_response.data
         return versions_response.data
 
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @staticmethod
-    @cache
-    async def fetch_all_restrictions() -> list[RestrictionRecord]:
-        """Fetches all restrictions from the database."""
-        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
-        return response.data
-
-    @classmethod
-    def get_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
-        """Returns a list of all minecraft versions, sorted from oldest to newest"""
-        versions = cls.version_cache.get(edition)
-        if versions is None:
-            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        return versions
-
-    @classmethod
-    async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
+    async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
-        versions = await cls.fetch_versions_list(edition=edition)
+        versions = await self.get_or_fetch_versions_list(edition=edition)
         return get_version_string(versions[-1])
 
-    @classmethod
-    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
-        """Returns the newest version, formatted like '1.17.1'."""
-        versions = cls.get_versions_list(edition=edition)
-        return get_version_string(versions[-1])
-
-    @classmethod
-    def find_versions_from_spec(cls, version_spec: str) -> list[str]:
+    async def find_versions_from_spec(self, version_spec: str) -> list[str]:
         """Return all versions that match the version specification."""
 
         # See if the spec specifies no edition (default to Java), one edition, or both
@@ -119,7 +92,7 @@ class DatabaseManager:
             major, minor, patch = version_str.split(".")
             return int(major), int(minor), int(patch)
 
-        all_versions = cls.get_versions_list("Java")
+        all_versions = await self.get_or_fetch_versions_list("Java")
         # Convert each version in all_versions into a tuple for easy comparison
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
@@ -173,9 +146,8 @@ class DatabaseManager:
 
 
 async def main():
-    await DatabaseManager.setup()
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
-    print(DatabaseManager.find_versions_from_spec(spec_string))
+    print(DatabaseManager().find_versions_from_spec(spec_string))
     r = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": ["Seamless", "No Observers"]}).execute()
     print(r.data)
 

@@ -26,7 +26,6 @@ from database.voting.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
-from database import DatabaseManager
 from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
@@ -333,7 +332,6 @@ class BuildCog(Cog, name="Build"):
             build = Build()
             build.record_category = self.record_category
             build.version_spec = self.works_in
-            build.versions = DatabaseManager.find_versions_from_spec(self.works_in)
 
             if (build_size := self.build_size) is not None:
                 build_dimensions = parse_dimensions(build_size)
@@ -381,10 +379,7 @@ class BuildCog(Cog, name="Build"):
         pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str = flag(
-            default=DatabaseManager.get_newest_version(edition="Java"),
-            description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".'
-        )
+        works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         # TODO: merge all restrictions into one field and use build.set_restrictions
         wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
@@ -541,7 +536,6 @@ class BuildCog(Cog, name="Build"):
             # FIXME: need to distinguish between None and removing the value
             if (works_in := self.works_in) is not None:
                 build.version_spec = works_in
-                build.versions = DatabaseManager.find_versions_from_spec(works_in)
             if (build_size := self.build_size) is not None:
                 build_dimensions = parse_dimensions(build_size)
                 build.width, build.height, build.depth = build_dimensions

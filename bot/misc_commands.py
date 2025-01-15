@@ -13,7 +13,7 @@ from discord.ext.commands import Context, Cog, Greedy, Bot
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
 from bot.utils import check_is_staff
-from database import DatabaseManager, get_version_string
+from database import get_version_string
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -54,7 +54,7 @@ class Miscellaneous(Cog):
     @commands.hybrid_command(name="versions")
     async def versions(self, ctx: Context):
         """Shows a list of versions the bot recognizes."""
-        versions = await DatabaseManager.fetch_versions_list(edition="Java")
+        versions = await self.bot.db.get_or_fetch_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
@@ -81,8 +81,7 @@ class Miscellaneous(Cog):
     @tasks.loop(hours=24)
     async def call_supabase_to_prevent_deactivation(self):
         """Supabase deactivates a database in the free tier if it's not used for 7 days."""
-        db = DatabaseManager()
-        await db.table("submissions").select("submission_id").limit(1).execute()
+        await self.bot.db.table("submissions").select("submission_id").limit(1).execute()
 
     # ----------------- Owner only commands -----------------
     # These commands are only available to the bot owner.
