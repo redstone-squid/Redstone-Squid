@@ -19,7 +19,7 @@ from database.schema import VoteKind, MessageRecord
 from database.voting.vote import close_vote_session, track_vote_session, upsert_vote
 
 if TYPE_CHECKING:
-    pass
+    from bot.main import RedstoneSquid
 
 
 T = TypeVar("T", bound="AbstractVoteSession")
@@ -43,7 +43,7 @@ class AbstractVoteSession(ABC):
 
     def __init__(
         self,
-        bot: discord.Client,
+        bot: RedstoneSquid,
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         pass_threshold: int,
@@ -55,7 +55,7 @@ class AbstractVoteSession(ABC):
         If you use this constructor directly, you must call _async_init() afterwards, or else the vote session will not be tracked.
 
         Args:
-            bot: The discord client for fetching messages.
+            bot: The bot for fetching messages.
             messages: The messages (or their ids) belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             pass_threshold: The number of votes required to pass the vote.
@@ -148,7 +148,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def from_id(cls: type[T], bot: discord.Client, vote_session_id: int) -> Union[T, None]:
+    async def from_id(cls: type[T], bot: RedstoneSquid, vote_session_id: int) -> Union[T, None]:
         """
         Create a vote session from an id.
 

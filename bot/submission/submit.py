@@ -51,7 +51,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: discord.Client,
+        bot: RedstoneSquid,
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -63,7 +63,7 @@ class BuildVoteSession(AbstractVoteSession):
         Initialize the vote session.
 
         Args:
-            bot: The discord client.
+            bot: The discord bot.
             messages: The messages belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             build: The build which the vote session is for. If type is "update", this is the updated build.
@@ -79,7 +79,7 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: discord.Client,
+        bot: RedstoneSquid,
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -122,7 +122,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "BuildVoteSession | None":
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "BuildVoteSession | None":
         db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await db.table("vote_sessions")
@@ -139,7 +139,7 @@ class BuildVoteSession(AbstractVoteSession):
         return await cls._from_record(bot, vote_session_record)
 
     @classmethod
-    async def _from_record(cls, bot: discord.Client, record: dict[str, Any]) -> "BuildVoteSession":
+    async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> "BuildVoteSession":
         """Create a vote session from a database record."""
         if record["build_vote_sessions"] is None:
             raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
@@ -198,7 +198,7 @@ class BuildVoteSession(AbstractVoteSession):
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: discord.Client) -> list["BuildVoteSession"]:
+    async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: RedstoneSquid) -> list["BuildVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
         records: list[dict[str, Any]] = (

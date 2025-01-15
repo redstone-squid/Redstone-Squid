@@ -35,7 +35,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: discord.Client,
+        bot: RedstoneSquid,
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -60,7 +60,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: discord.Client,
+        bot: RedstoneSquid,
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -82,7 +82,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: discord.Client, vote_session_id: int) -> "DeleteLogVoteSession | None":
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "DeleteLogVoteSession | None":
         db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await db.table("vote_sessions")
@@ -103,7 +103,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         return await cls._from_record(bot, vote_session_record)
 
     @classmethod
-    async def _from_record(cls, bot: discord.Client, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
+    async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
         target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
         if target_message is None:
@@ -171,7 +171,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: type["DeleteLogVoteSession"], bot: discord.Client
+        cls: type["DeleteLogVoteSession"], bot: RedstoneSquid
     ) -> list["DeleteLogVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
