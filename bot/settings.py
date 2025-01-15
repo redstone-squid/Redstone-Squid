@@ -10,7 +10,6 @@ from discord.ext.commands import Context, Cog, hybrid_group, guild_only, Greedy
 from postgrest.types import ReturnMethod
 
 from bot.utils import check_is_staff
-from database import DatabaseManager
 from database.server_settings import (
     update_server_setting,
     get_server_setting,
@@ -38,13 +37,13 @@ class SettingsCog(Cog, name="Settings"):
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, add the guild to the database."""
-        await DatabaseManager().table("server_settings").upsert({"server_id": guild.id}).execute()
+        await self.bot.db.table("server_settings").upsert({"server_id": guild.id}).execute()
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
         """When the bot leaves a guild, marks the guild as deleted in the database."""
         await (
-            DatabaseManager()
+            self.bot.db
             .table("server_settings")
             .update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal)
             .execute()

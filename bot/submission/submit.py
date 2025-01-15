@@ -123,9 +123,8 @@ class BuildVoteSession(AbstractVoteSession):
     @classmethod
     @override
     async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "BuildVoteSession | None":
-        db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await db.table("vote_sessions")
+            await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), build_vote_sessions(*)")
             .eq("id", vote_session_id)
             .eq("kind", cls.kind)
@@ -200,9 +199,8 @@ class BuildVoteSession(AbstractVoteSession):
     @classmethod
     async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: RedstoneSquid) -> list["BuildVoteSession"]:
         """Get all open vote sessions from the database."""
-        db = DatabaseManager()
         records: list[dict[str, Any]] = (
-            await db.table("vote_sessions")
+            await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), build_vote_sessions(*)")
             .eq("status", "open")
             .eq("kind", cls.kind)
@@ -654,7 +652,7 @@ class BuildCog(Cog, name="Build"):
     async def list_patterns(self, ctx: Context):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
-            patterns: APIResponse[TypeRecord] = await DatabaseManager().table("types").select("*").execute()
+            patterns: APIResponse[TypeRecord] = await self.bot.db.table("types").select("*").execute()
             names = [pattern["name"] for pattern in patterns.data]
             await sent_message.edit(
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
@@ -749,7 +747,7 @@ class BuildCog(Cog, name="Build"):
         """Add an alias for a restriction."""
         async with RunningMessage(ctx) as sent_message:
             await (
-                DatabaseManager()
+                self.bot.db
                 .table("restriction_aliases")
                 .insert({"restriction_id": restriction_id, "alias": alias})
                 .execute()
@@ -764,18 +762,18 @@ class BuildCog(Cog, name="Build"):
         async with RunningMessage(ctx) as sent_message:
             if query:
                 response: APIResponse[RestrictionRecord] = (
-                    await DatabaseManager().table("restrictions").select("*").ilike("name", f"%{query}%").execute()
+                    await self.bot.db.table("restrictions").select("*").ilike("name", f"%{query}%").execute()
                 )
                 response_alias: APIResponse[RestrictionAliasRecord] = (
-                    await DatabaseManager()
+                    await self.bot.db
                     .table("restriction_aliases")
                     .select("*")
                     .ilike("alias", f"%{query}%")
                     .execute()
                 )
             else:
-                response = await DatabaseManager().table("restrictions").select("*").execute()
-                response_alias = await DatabaseManager().table("restriction_aliases").select("*").execute()
+                response = await self.bot.db.table("restrictions").select("*").execute()
+                response_alias = await self.bot.db.table("restriction_aliases").select("*").execute()
             restrictions = response.data
             aliases = response_alias.data
 

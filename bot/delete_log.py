@@ -15,7 +15,6 @@ from bot import utils
 from bot._types import GuildMessageable
 from database.voting.vote_session import AbstractVoteSession
 from bot.utils import check_is_staff
-from database import DatabaseManager
 from database.schema import VoteSessionRecord
 from database.server_settings import get_server_setting
 from database.voting.vote import track_vote_session, track_delete_log_vote_session, close_vote_session
@@ -83,9 +82,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @classmethod
     @override
     async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "DeleteLogVoteSession | None":
-        db = DatabaseManager()
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await db.table("vote_sessions")
+            await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
             .eq("id", vote_session_id)
             .eq("kind", cls.kind)
@@ -174,9 +172,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         cls: type["DeleteLogVoteSession"], bot: RedstoneSquid
     ) -> list["DeleteLogVoteSession"]:
         """Get all open vote sessions from the database."""
-        db = DatabaseManager()
         records: list[VoteSessionRecord] = (
-            await db.table("vote_sessions")
+            await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
             .eq("status", "open")
             .eq("kind", cls.kind)
