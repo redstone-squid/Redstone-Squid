@@ -1,5 +1,7 @@
 """This module contains the DeleteLogCog class, which is a cog for voting to delete a message."""
 
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Iterable, Mapping
 from textwrap import dedent
