@@ -369,7 +369,7 @@ class Build:
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
 
-        prompt =  resources.files("database").joinpath("prompt.txt").read_text(encoding="utf-8")
+        prompt = resources.files("database").joinpath("prompt.txt").read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
@@ -662,12 +662,9 @@ class Build:
 
         return differences
 
-    async def load(self) -> Build:
+    async def reload(self) -> None:
         """
-        Loads the build from the database. All previous data is overwritten.
-
-        Returns:
-            The Build object.
+        Overwrite the current build with the data from the database.
 
         Raises:
             ValueError: If the build was not found or build.id is not set.
@@ -679,7 +676,7 @@ class Build:
         response = await db.table("builds").select(all_build_columns).eq("id", self.id).maybe_single().execute()
         if not response:
             raise ValueError("Build not found in the database.")
-        return Build.from_json(response.data)
+        raise NotImplementedError  # TODO
 
     def update_local(self, **data: Any) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
