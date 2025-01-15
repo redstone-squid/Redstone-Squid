@@ -16,7 +16,7 @@ from postgrest.base_request_builder import APIResponse
 from bot import utils
 from database import DatabaseManager
 from database.schema import VoteKind, MessageRecord
-from database.vote import close_vote_session, track_vote_session, upsert_vote
+from database.voting.vote import close_vote_session, track_vote_session, upsert_vote
 
 if TYPE_CHECKING:
     pass

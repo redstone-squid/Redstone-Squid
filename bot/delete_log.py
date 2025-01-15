@@ -13,12 +13,12 @@ from typing_extensions import override
 
 from bot import utils
 from bot._types import GuildMessageable
-from bot.vote_session import AbstractVoteSession
+from database.voting.vote_session import AbstractVoteSession
 from bot.utils import check_is_staff
 from database import DatabaseManager
 from database.schema import VoteSessionRecord
 from database.server_settings import get_server_setting
-from database.vote import track_vote_session, track_delete_log_vote_session, close_vote_session
+from database.voting.vote import track_vote_session, track_delete_log_vote_session, close_vote_session
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
