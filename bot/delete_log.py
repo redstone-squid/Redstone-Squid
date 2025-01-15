@@ -100,18 +100,27 @@ class DeleteLogVoteSession(AbstractVoteSession):
         if target_message is None:
             return None
 
+        return await cls._from_record(bot, vote_session_record)
+
+    @classmethod
+    async def _from_record(cls, bot: discord.Client, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
+        """Create a DeleteLogVoteSession from a database record."""
+        target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
+        if target_message is None:
+            return None
+
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
             bot,
-            [record["message_id"] for record in vote_session_record["messages"]],
-            vote_session_record["author_id"],
+            [msg["message_id"] for msg in record["messages"]],
+            record["author_id"],
             target_message,
-            vote_session_record["pass_threshold"],
-            vote_session_record["fail_threshold"],
+            record["pass_threshold"],
+            record["fail_threshold"],
         )
-        self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
-        self._votes = {vote["user_id"]: vote["weight"] for vote in vote_session_record["votes"]}
+        self.id = record["id"]  # We can skip _async_init because we already have the id and everything has been tracked before
+        self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
         return self
 
     @override
@@ -174,26 +183,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             .execute()
         ).data
 
-        async def _get_session(record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
-            target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
-            if target_message is None:
-                return None
-
-            session = cls.__new__(cls)
-            session._allow_init = True
-            session.__init__(
-                bot,
-                [msg["message_id"] for msg in record["messages"]],
-                record["author_id"],
-                target_message,
-                record["pass_threshold"],
-                record["fail_threshold"],
-            )
-            session.id = record["id"]
-            session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-            return session
-
-        sessions = await asyncio.gather(*[_get_session(record) for record in records])
+        sessions = await asyncio.gather(*[cls._from_record(bot, record) for record in records])
         return [session for session in sessions if session is not None]
 
 

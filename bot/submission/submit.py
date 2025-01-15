@@ -135,27 +135,32 @@ class BuildVoteSession(AbstractVoteSession):
             return None
 
         vote_session_record = vote_session_response.data
+        return await cls._from_record(bot, vote_session_record)
 
-        build_id = vote_session_record["build_vote_sessions"]["build_id"]
+    @classmethod
+    async def _from_record(cls, bot: discord.Client, record: dict[str, Any]) -> "BuildVoteSession":
+        """Create a vote session from a database record."""
+        if record["build_vote_sessions"] is None:
+            raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
+        build_id: int = record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
-        if build is None:
-            raise ValueError(
-                f"The message record for this vote session is associated with a non-existent build id: {build_id}."
-            )
 
-        self = cls.__new__(cls)
-        self._allow_init = True
-        self.__init__(
-            bot,
-            [record["message_id"] for record in vote_session_record["messages"]],
-            vote_session_record["author_id"],
-            build,
-            "add",  # FIXME: Stop hardcoding this
-            vote_session_record["pass_threshold"],
-            vote_session_record["fail_threshold"],
+        assert build is not None
+        session = cls.__new__(cls)
+        session._allow_init = True
+        session.__init__(
+            bot=bot,
+            messages=[msg["message_id"] for msg in record["messages"]],
+            author_id=record["author_id"],
+            build=build,
+            type="add",
+            pass_threshold=record["pass_threshold"],
+            fail_threshold=record["fail_threshold"],
         )
-        self.id = vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
-        return self
+        session.id = record["id"]  # We can skip _async_init because we already have the id and everything has been tracked before
+        session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+
+        return session
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
@@ -195,7 +200,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: discord.Client) -> list["BuildVoteSession"]:
         """Get all open vote sessions from the database."""
         db = DatabaseManager()
-        records = (
+        records: list[dict[str, Any]] = (
             await db.table("vote_sessions")
             .select("*, messages(*), votes(*), build_vote_sessions(*)")
             .eq("status", "open")
@@ -203,30 +208,7 @@ class BuildVoteSession(AbstractVoteSession):
             .execute()
         ).data
 
-        async def _get_session(record: dict[str, Any]) -> "BuildVoteSession":
-            if record["build_vote_sessions"] is None:
-                raise ValueError(f"Found a build vote session with no associated build id. {record["id"]=}")
-            build_id: int = record["build_vote_sessions"]["build_id"]
-            build = await Build.from_id(build_id)
-
-            assert build is not None
-            session = cls.__new__(cls)
-            session._allow_init = True
-            session.__init__(
-                bot=bot,
-                messages=[msg["message_id"] for msg in record["messages"]],
-                author_id=record["author_id"],
-                build=build,
-                type="add",
-                pass_threshold=record["pass_threshold"],
-                fail_threshold=record["fail_threshold"],
-            )
-            session.id = record["id"]
-            session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-
-            return session
-
-        return await asyncio.gather(*[_get_session(record) for record in records])
+        return await asyncio.gather(*[cls._from_record(bot, record) for record in records])
 
 
 class BuildCog(Cog, name="Build"):
