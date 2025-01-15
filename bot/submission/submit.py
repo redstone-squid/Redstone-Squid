@@ -171,7 +171,8 @@ class BuildVoteSession(AbstractVoteSession):
             pass_threshold=record["pass_threshold"],
             fail_threshold=record["fail_threshold"],
         )
-        session.id = record["id"]  # We can skip _async_init because we already have the id and everything has been tracked before
+        # We can skip _async_init because we already have the id and everything has been tracked before
+        session.id = record["id"]
         session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
 
         return session
@@ -757,8 +758,7 @@ class BuildCog(Cog, name="Build"):
         """Add an alias for a restriction."""
         async with RunningMessage(ctx) as sent_message:
             await (
-                self.bot.db
-                .table("restriction_aliases")
+                self.bot.db.table("restriction_aliases")
                 .insert({"restriction_id": restriction_id, "alias": alias})
                 .execute()
             )
@@ -775,11 +775,7 @@ class BuildCog(Cog, name="Build"):
                     await self.bot.db.table("restrictions").select("*").ilike("name", f"%{query}%").execute()
                 )
                 response_alias: APIResponse[RestrictionAliasRecord] = (
-                    await self.bot.db
-                    .table("restriction_aliases")
-                    .select("*")
-                    .ilike("alias", f"%{query}%")
-                    .execute()
+                    await self.bot.db.table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
                 )
             else:
                 response = await self.bot.db.table("restrictions").select("*").execute()
