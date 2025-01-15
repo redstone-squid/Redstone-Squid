@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]
 
 
-class Listeners(Cog, command_attrs=dict(hidden=True)):
+class LoggingCog(Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
     def __init__(self, bot: RedstoneSquid):
@@ -116,7 +116,7 @@ class RedstoneSquid(Bot):
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
-        await self.add_cog(Listeners(self))
+        await self.add_cog(LoggingCog(self))
         await self.load_extension("bot.help")
         await self.load_extension("jishaku")
         await self.load_extension("bot.verify")
