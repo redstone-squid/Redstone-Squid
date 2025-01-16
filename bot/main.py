@@ -9,7 +9,7 @@ from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar
 
 import discord
 from discord import Message
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
@@ -53,6 +53,12 @@ class RedstoneSquid(Bot):
         await self.load_extension("bot.verify")
         await self.load_extension("bot.delete_log")
         await self.load_extension("bot.admin")
+        self.call_supabase_to_prevent_deactivation.start()
+
+    @tasks.loop(hours=24)
+    async def call_supabase_to_prevent_deactivation(self):
+        """Supabase deactivates a database in the free tier if it's not used for 7 days."""
+        await self.db.table("builds").select("id").limit(1).execute()
 
 
 async def main():

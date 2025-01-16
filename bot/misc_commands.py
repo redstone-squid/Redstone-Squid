@@ -58,11 +58,6 @@ class Miscellaneous(Cog):
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
-    @tasks.loop(hours=24)
-    async def call_supabase_to_prevent_deactivation(self):
-        """Supabase deactivates a database in the free tier if it's not used for 7 days."""
-        await self.bot.db.table("submissions").select("submission_id").limit(1).execute()
-
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))
