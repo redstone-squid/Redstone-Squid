@@ -47,7 +47,7 @@ class RedstoneSquid(Bot):
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
-        await self.add_cog(LoggingCog(self))
+        await self.load_extension("bot.log")
         await self.load_extension("bot.help")
         await self.load_extension("jishaku")
         await self.load_extension("bot.verify")
