@@ -15,7 +15,7 @@ from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
 from database.schema import RestrictionRecord, VersionRecord
-from database.utils import get_version_string
+from database.utils import get_version_string, parse_version_string
 
 
 class DatabaseManager(AsyncClient):
@@ -88,15 +88,10 @@ class DatabaseManager(AsyncClient):
 
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
-        def parse_version(version_str: str):
-            major, minor, patch = version_str.split(".")
-            return int(major), int(minor), int(patch)
-
         all_versions = await self.get_or_fetch_versions_list("Java")
-        # Convert each version in all_versions into a tuple for easy comparison
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
-        # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+"
+        # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
         parts = [part.strip() for part in version_spec.split(",")]
 
         valid_tuples: list[tuple[int, int, int]] = []
@@ -104,24 +99,28 @@ class DatabaseManager(AsyncClient):
         for part in parts:
             # Case 1: range like "1.14 - 1.16.1"
             if "-" in part:
-                start_str, end_str = [p.strip() for p in part.split("-")]
-                start_tuple = parse_version(start_str) if start_str.count(".") == 2 else parse_version(start_str + ".0")
-                end_tuple = parse_version(end_str) if end_str.count(".") == 2 else parse_version(end_str + ".0")
+                subparts = [p.strip() for p in part.split("-")]
+                if len(subparts) != 2:
+                    raise ValueError(f"Invalid version range format in {part}, expected exactly 2 parts, got {len(subparts)}.")
+                start_str, end_str = subparts
+                start_tuple = parse_version_string(start_str) if start_str.count(".") == 2 else parse_version_string(start_str + ".0")
+                # FIXME: for something like 1.14 - 1.16, 1.16 should mean the last patch of 1.16, not 1.16.0
+                end_tuple = parse_version_string(end_str) if end_str.count(".") == 2 else parse_version_string(end_str + ".0")
 
                 for v_tuple in all_version_tuples:
-                    if start_tuple <= v_tuple <= end_tuple:
+                    if start_tuple[1:] <= v_tuple <= end_tuple[1:]:
                         valid_tuples.append(v_tuple)
 
             # Case 2: trailing plus like "1.19+"
             elif part.endswith("+"):
                 base_str = part[:-1].strip()
-                # If user just wrote "1.19+", assume "1.19.0"
+                # Change "1.19+" to "1.19.0+"
                 if base_str.count(".") == 1:
                     base_str += ".0"
-                base_tuple = parse_version(base_str)
+                base_tuple = parse_version_string(base_str)
 
                 for v_tuple in all_version_tuples:
-                    if v_tuple >= base_tuple:
+                    if v_tuple >= base_tuple[1:]:
                         valid_tuples.append(v_tuple)
 
             # Case 3: exact version or prefix, e.g. "1.17" or "1.17.1"
