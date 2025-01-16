@@ -19,9 +19,13 @@ run: stop
     {{python}} app.py
 
 [unix]
-deploy: stop sync
+deploy: stop _pull sync
     #!{{shebang}}
     nohup {{python}} app.py "&"
+
+# Needed to order the tasks correctly
+_pull:
+    git pull
 
 [unix]
 stop:
