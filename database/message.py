@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import discord
-from postgrest.base_request_builder import APIResponse
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
 from database.schema import MessageRecord, MessagePurpose
 from database.utils import utcnow
@@ -95,11 +95,15 @@ async def get_outdated_messages(server_id: int) -> list[MessageRecord] | None:
     """
     db = DatabaseManager()
     # Messages that have been updated since the last submission message update.
-    response = await db.rpc("get_outdated_messages", {"server_id_input": server_id}).execute()
+    response: SingleAPIResponse[list[MessageRecord]] = await db.rpc("get_outdated_messages", {"server_id_input": server_id}).execute()
     server_outdated_messages = response.data
     return server_outdated_messages
 
 
-if __name__ == "__main__":
+async def main():
     # print(get_outdated_message(433618741528625152, 30))
-    print(get_outdated_messages(433618741528625152))
+    print(await get_outdated_messages(433618741528625153))
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
