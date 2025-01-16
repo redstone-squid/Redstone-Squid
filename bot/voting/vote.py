@@ -62,53 +62,6 @@ async def track_vote_session(
     return session_id
 
 
-async def track_build_vote_session(vote_session_id: int, build_id: int, changes: list[tuple[str, T, T]]) -> None:
-    """Track a build vote session in the database.
-
-    Args:
-        vote_session_id: The id of the vote session.
-        build_id: The id of the build to vote on.
-        changes: The proposed changes for the vote session.
-
-    Raises:
-        ValueError: If the proposed changes are empty.
-    """
-    db = DatabaseManager()
-    await (
-        db.table("build_vote_sessions")
-        .insert(
-            {
-                "vote_session_id": vote_session_id,
-                "build_id": build_id,
-                "changes": changes,
-            }
-        )
-        .execute()
-    )
-
-
-async def track_delete_log_vote_session(vote_session_id: int, target_message: discord.Message) -> None:
-    """Track a delete log vote session in the database.
-
-    Args:
-        vote_session_id: The id of the vote session.
-        target_message: The message to delete if the vote passes.
-    """
-    db = DatabaseManager()
-    await (
-        db.table("delete_log_vote_sessions")
-        .insert(
-            {
-                "vote_session_id": vote_session_id,
-                "target_message_id": target_message.id,
-                "target_channel_id": target_message.channel.id,
-                "target_server_id": target_message.guild.id,  # type: ignore
-            }
-        )
-        .execute()
-    )
-
-
 async def close_vote_session(vote_session_id: int) -> None:
     """Close a vote session in the database.
 

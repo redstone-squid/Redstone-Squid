@@ -20,7 +20,7 @@ from bot.submission.submit import APPROVE_EMOJIS, DENY_EMOJIS
 from database import DatabaseManager, message as msg
 from database.builds import Build
 from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
-from bot.voting.vote import close_vote_session, track_build_vote_session, track_vote_session, upsert_vote, track_delete_log_vote_session
+from bot.voting.vote import close_vote_session, track_vote_session, upsert_vote
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -325,6 +325,26 @@ class BuildVoteSession(AbstractVoteSession):
             self.fail_threshold,
             build_id=self.build.id,
         )
+        assert self.build.id is not None
+        if self.type == "add":
+            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
+        else:
+            original = await Build.from_id(self.build.id)
+            assert original is not None
+            changes = original.diff(self.build)
+
+        await (
+            DatabaseManager().table("build_vote_sessions")
+            .insert(
+                {
+                    "vote_session_id": self.id,
+                    "build_id": self.build.id,
+                    "changes": changes,
+                }
+            )
+            .execute()
+        )
+
         await self.update_messages()
 
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
@@ -333,15 +353,6 @@ class BuildVoteSession(AbstractVoteSession):
             await asyncio.gather(*reaction_tasks)
         except discord.Forbidden:
             pass  # Bot doesn't have permission to add reactions
-
-        assert self.build.id is not None
-        if self.type == "add":
-            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
-        else:
-            original = await Build.from_id(self.build.id)
-            assert original is not None
-            changes = original.diff(self.build)
-        await track_build_vote_session(self.id, self.build.id, changes)
 
     @classmethod
     @override
@@ -484,7 +495,18 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self.id = await track_vote_session(
             await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
-        await track_delete_log_vote_session(self.id, self.target_message)
+        await (
+            DatabaseManager().table("delete_log_vote_sessions")
+            .insert(
+                {
+                    "vote_session_id": self.id,
+                    "target_message_id": self.target_message.id,
+                    "target_channel_id": self.target_message.channel.id,
+                    "target_server_id": self.target_message.guild.id,  # type: ignore
+                }
+            )
+            .execute()
+        )
         await self.update_messages()
 
     @classmethod
