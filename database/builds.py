@@ -43,14 +43,12 @@ from database.schema import (
     DoorOrientationName,
     QuantifiedVersionRecord,
     ExtenderRecord,
-    UtilityRecord,
+    UtilityRecord, Status, Category,
 )
 from database import DatabaseManager, message as msg
 from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string, upload_to_catbox
-from database.enums import Status, Category
-
 
 logger = logging.getLogger(__name__)
 

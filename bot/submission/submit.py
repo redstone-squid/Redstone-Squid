@@ -28,10 +28,9 @@ from database.voting.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from database import message as msg
 from database.builds import get_all_builds, Build
-from database.enums import Status, Category
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
-from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord
+from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord, Status, Category
 from database.utils import upload_to_catbox
 from database.voting.vote import track_build_vote_session, track_vote_session, close_vote_session
 

@@ -10,8 +10,7 @@ from discord.ui import View
 
 from bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from database.builds import Build
-from database.enums import Status, Category
-from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES
+from database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES, Status, Category
 
 if TYPE_CHECKING:
     from discord.types.interactions import SelectMessageComponentInteractionData

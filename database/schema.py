@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from enum import IntEnum, StrEnum
 from typing import TypedDict, Literal, get_args, cast, TypeAlias
 
 from pydantic.types import Json
-from database.enums import Status, Category
 
 
 class UnknownRestrictions(TypedDict, total=False):
@@ -27,6 +27,23 @@ class ServerInfo(TypedDict, total=False):
     server_ip: str
     coordinates: str
     command_to_build: str
+
+
+class Status(IntEnum):
+    """The status of a submission."""
+
+    PENDING = 0
+    CONFIRMED = 1
+    DENIED = 2
+
+
+class Category(StrEnum):
+    """The categories of the builds."""
+
+    DOOR = "Door"
+    EXTENDER = "Extender"
+    UTILITY = "Utility"
+    ENTRANCE = "Entrance"
 
 
 class BuildRecord(TypedDict):
