@@ -35,6 +35,9 @@ class VoteCog(Cog):
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
         """Handles reactions to update vote counts anonymously."""
+        if payload.guild_id is None:
+            raise NotImplementedError("Cannot vote in DMs.")
+
         if (vote_session := self.open_vote_sessions.get(payload.message_id)) is None:
             return
     
@@ -52,9 +55,27 @@ class VoteCog(Cog):
         except (discord.Forbidden, discord.NotFound):
             pass  # Ignore if we can't remove the reaction
 
+        if user.bot:
+            return  # Ignore bot reactions
+
         # Update votes based on the reaction
         emoji_name = str(payload.emoji)
         user_id = payload.user_id
+
+        if isinstance(vote_session, DeleteLogVoteSession):
+            # Check if the user has a trusted role
+            trusted_role_ids = await get_server_setting(server_id=payload.guild_id, setting="Trusted")
+
+            guild = self.bot.get_guild(payload.guild_id)
+            assert guild is not None
+            member = guild.get_member(user.id)
+            assert member is not None
+            for role in member.roles:
+                if role.id in trusted_role_ids:
+                    break
+            else:
+                await channel.send("You do not have a trusted role.")
+                return  # User does not have a trusted role
 
         # The vote session will handle the closing of the vote session
         original_vote = vote_session[user_id]
@@ -65,56 +86,6 @@ class VoteCog(Cog):
             vote_session[user_id] = -weight if original_vote != -weight else 0
         else:
             return
-        await vote_session.update_messages()
-
-    @Cog.listener("on_raw_reaction_add")
-    async def update_delete_log_vote_sessions(self, payload: discord.RawReactionActionEvent):
-        """Handles reactions to update vote counts anonymously."""
-        user = self.bot.get_user(payload.user_id)
-        assert user is not None
-
-        if user.bot:
-            return  # Ignore bot reactions
-
-        if payload.guild_id is None:
-            return
-
-        # Check if the message is being tracked
-        message_id = payload.message_id
-        if message_id not in self.open_vote_sessions:
-            return
-        channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
-        message = await channel.fetch_message(message_id)
-
-        vote_session = self.open_vote_sessions[message_id]
-        # We should remove the reaction of all users except the bot, thus this should be placed before the trusted role check
-        try:
-            await message.remove_reaction(payload.emoji, user)
-        except discord.Forbidden:
-            pass
-
-        # Check if the user has a trusted role
-        trusted_role_ids = await get_server_setting(server_id=payload.guild_id, setting="Trusted")
-
-        guild = self.bot.get_guild(payload.guild_id)
-        assert guild is not None
-        member = guild.get_member(user.id)
-        assert member is not None
-        for role in member.roles:
-            if role.id in trusted_role_ids:
-                break
-        else:
-            await channel.send("You do not have a trusted role.")
-            return  # User does not have a trusted role
-
-        original_vote = vote_session[user.id]
-        if payload.emoji.name == APPROVE_EMOJIS[0]:
-            vote_session[user.id] = 1 if original_vote != 1 else None
-        elif payload.emoji.name == DENY_EMOJIS[0]:
-            vote_session[user.id] = -1 if original_vote != -1 else None
-        else:
-            return
-
         await vote_session.update_messages()
 
 
