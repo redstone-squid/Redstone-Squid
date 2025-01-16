@@ -3,185 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Mapping
-from textwrap import dedent
-from typing import TYPE_CHECKING, Any, final, cast, override
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord.ext.commands import command, Cog, Context
-from postgrest.base_request_builder import SingleAPIResponse
 
 from bot import utils
 from bot._types import GuildMessageable
-from database.voting.vote_session import AbstractVoteSession
+from bot.voting.vote_session import DeleteLogVoteSession
 from bot.utils import check_is_staff
-from database.schema import VoteSessionRecord
 from database.server_settings import get_server_setting
-from database.voting.vote import track_vote_session, track_delete_log_vote_session, close_vote_session
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 APPROVE_EMOJI = "✅"
 DENY_EMOJI = "❌"
-
-
-@final
-class DeleteLogVoteSession(AbstractVoteSession):
-    """A vote session for deleting a message from the log."""
-
-    kind = "delete_log"
-
-    def __init__(
-        self,
-        bot: RedstoneSquid,
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        target_message: discord.Message,
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ):
-        """
-        Initialize the delete log vote session.
-
-        Args:
-            bot: The discord client.
-            messages: The messages (or their ids) belonging to the vote session.
-            author_id: The discord id of the author of the vote session.
-            target_message: The message to delete if the vote passes.
-            pass_threshold: The number of votes required to pass the vote.
-            fail_threshold: The number of votes required to fail the vote.
-        """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
-        self.target_message = target_message
-
-    @classmethod
-    @override
-    async def create(
-        cls,
-        bot: RedstoneSquid,
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        target_message: discord.Message,
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "DeleteLogVoteSession":
-        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold)
-        assert isinstance(self, DeleteLogVoteSession)
-        return self
-
-    @override
-    async def _async_init(self) -> None:
-        """Track the vote session in the database."""
-        self.id = await track_vote_session(
-            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
-        )
-        await track_delete_log_vote_session(self.id, self.target_message)
-        await self.update_messages()
-
-    @classmethod
-    @override
-    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "DeleteLogVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
-
-        vote_session_record = vote_session_response.data
-        target_message = await utils.getch(bot, vote_session_record["delete_log_vote_sessions"])
-        if target_message is None:
-            return None
-
-        return await cls._from_record(bot, vote_session_record)
-
-    @classmethod
-    async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
-        """Create a DeleteLogVoteSession from a database record."""
-        target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
-        if target_message is None:
-            return None
-
-        self = cls.__new__(cls)
-        self._allow_init = True
-        self.__init__(
-            bot,
-            [msg["message_id"] for msg in record["messages"]],
-            record["author_id"],
-            target_message,
-            record["pass_threshold"],
-            record["fail_threshold"],
-        )
-        self.id = record["id"]  # We can skip _async_init because we already have the id and everything has been tracked before
-        self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-        return self
-
-    @override
-    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        """Send the initial message to the channel."""
-        embed = discord.Embed(
-            title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
-            ),
-        )
-        return await channel.send(embed=embed)
-
-    @override
-    async def update_messages(self) -> None:
-        """Updates the message with the current vote count."""
-        embed = discord.Embed(
-            title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
-            ),
-        )
-        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
-
-    @override
-    async def close(self) -> None:
-        if self.is_closed:
-            return
-
-        self.is_closed = True
-        if self.net_votes <= self.pass_threshold:
-            await asyncio.gather(*[message.channel.send("Vote failed") for message in await self.fetch_messages()])
-        else:
-            await self.target_message.delete()
-
-        if self.id is not None:
-            await close_vote_session(self.id)
-
-    @classmethod
-    async def get_open_vote_sessions(
-        cls: type["DeleteLogVoteSession"], bot: RedstoneSquid
-    ) -> list["DeleteLogVoteSession"]:
-        """Get all open vote sessions from the database."""
-        records: list[VoteSessionRecord] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
-
-        sessions = await asyncio.gather(*[cls._from_record(bot, record) for record in records])
-        return [session for session in sessions if session is not None]
 
 
 class DeleteLogCog(Cog, name="Vote"):

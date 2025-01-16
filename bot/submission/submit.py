@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal, TypeVar, cast, TYPE_CHECKING, Any, final, override
+from typing import Literal, TypeVar, cast, TYPE_CHECKING, final, override
 import asyncio
 import os
 
@@ -23,15 +23,14 @@ import vecs
 
 from bot import utils
 from bot.submission.parse import parse_dimensions
-from database.voting.vote_session import AbstractVoteSession
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
+from bot.voting.vote_session import BuildVoteSession
 from database import message as msg
 from database.builds import get_all_builds, Build
 from bot._types import GuildMessageable
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
 from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord, Status, Category
 from database.utils import upload_to_catbox
-from database.voting.vote import track_build_vote_session, track_vote_session, close_vote_session
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -53,174 +52,6 @@ def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
     """
     globals()[cls.__name__] = cls
     return cls
-
-
-@final
-class BuildVoteSession(AbstractVoteSession):
-    """A vote session for a confirming or denying a build."""
-
-    kind = "build"
-
-    def __init__(
-        self,
-        bot: RedstoneSquid,
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        build: Build,
-        type: Literal["add", "update"],
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ):
-        """
-        Initialize the vote session.
-
-        Args:
-            bot: The discord bot.
-            messages: The messages belonging to the vote session.
-            author_id: The discord id of the author of the vote session.
-            build: The build which the vote session is for. If type is "update", this is the updated build.
-            type: Whether to add or update the build.
-            pass_threshold: The number of votes required to pass the vote.
-            fail_threshold: The number of votes required to fail the vote.
-        """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
-        self.build = build
-        self.type = type
-
-    @classmethod
-    @override
-    async def create(
-        cls,
-        bot: RedstoneSquid,
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        build: Build,
-        type: Literal["add", "update"],
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
-        assert isinstance(self, BuildVoteSession)
-        return self
-
-    @override
-    async def _async_init(self) -> None:
-        """Track the vote session in the database."""
-        self.id = await track_vote_session(
-            await self.fetch_messages(),
-            self.author_id,
-            self.kind,
-            self.pass_threshold,
-            self.fail_threshold,
-            build_id=self.build.id,
-        )
-        await self.update_messages()
-
-        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
-        reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self._messages])
-        try:
-            await asyncio.gather(*reaction_tasks)
-        except discord.Forbidden:
-            pass  # Bot doesn't have permission to add reactions
-
-        assert self.build.id is not None
-        if self.type == "add":
-            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
-        else:
-            original = await Build.from_id(self.build.id)
-            assert original is not None
-            changes = original.diff(self.build)
-        await track_build_vote_session(self.id, self.build.id, changes)
-
-    @classmethod
-    @override
-    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "BuildVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
-
-        vote_session_record = vote_session_response.data
-        return await cls._from_record(bot, vote_session_record)
-
-    @classmethod
-    async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> "BuildVoteSession":
-        """Create a vote session from a database record."""
-        if record["build_vote_sessions"] is None:
-            raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
-        build_id: int = record["build_vote_sessions"]["build_id"]
-        build = await Build.from_id(build_id)
-
-        assert build is not None
-        session = cls.__new__(cls)
-        session._allow_init = True
-        session.__init__(
-            bot=bot,
-            messages=[msg["message_id"] for msg in record["messages"]],
-            author_id=record["author_id"],
-            build=build,
-            type="add",
-            pass_threshold=record["pass_threshold"],
-            fail_threshold=record["fail_threshold"],
-        )
-        # We can skip _async_init because we already have the id and everything has been tracked before
-        session.id = record["id"]
-        session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-
-        return session
-
-    @override
-    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        message = await channel.send(content=self.build.original_link, embed=await self.build.generate_embed())
-        await msg.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
-        self._messages.add(message)
-        return message
-
-    @override
-    async def update_messages(self):
-        embed = await self.build.generate_embed()
-        embed.add_field(name="", value="", inline=False)  # Add a blank field to separate the vote count
-        embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
-        embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
-        await asyncio.gather(
-            *[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()]
-        )
-
-    @override
-    async def close(self) -> None:
-        if self.is_closed:
-            return
-
-        self.is_closed = True
-        if self.net_votes < self.pass_threshold:
-            await self.build.deny()
-        else:
-            await self.build.confirm()
-        # TODO: decide whether to delete the messages or not
-
-        await self.update_messages()
-
-        if self.id is not None:
-            await close_vote_session(self.id)
-
-    @classmethod
-    async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: RedstoneSquid) -> list["BuildVoteSession"]:
-        """Get all open vote sessions from the database."""
-        records: list[dict[str, Any]] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
-
-        return await asyncio.gather(*[cls._from_record(bot, record) for record in records])
 
 
 class BuildCog(Cog, name="Build"):
