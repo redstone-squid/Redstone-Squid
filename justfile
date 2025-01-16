@@ -39,16 +39,16 @@ stop:
     if ($process) { Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue }
 
 init: && sync
-    if test ! -e .venv; then {{ system_python }} -m venv .venv; fi
-    {{ python }} -m pip install --upgrade pip pip-tools
+    if test ! -e .venv; then {{system_python}} -m venv .venv; fi
+    {{python}} -m pip install --upgrade pip pip-tools
 
 compile:
-    {{ python_dir }}/pip-compile --output-file=requirements.txt requirements.in
-    {{ python_dir }}/pip-compile --constraint=requirements.txt --output-file=test-requirements.txt test-requirements.in
+    {{python_dir}}/pip-compile --output-file=requirements.txt requirements.in
+    {{python_dir}}/pip-compile --constraint=requirements.txt --output-file=test-requirements.txt test-requirements.in
 
 sync:
-    {{ python_dir }}/pip-sync --python-executable {{ python }} requirements.txt test-requirements.txt
+    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt test-requirements.txt
 
 lint:
-    {{ python }} -m ruff check --fix --exit-zero
-    {{ python }} -m ruff format --target-version py312
+    {{python}} -m ruff check --fix --exit-zero
+    {{python}} -m ruff format --target-version py312
