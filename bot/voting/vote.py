@@ -115,19 +115,7 @@ class VoteCog(Cog):
         else:
             return
 
-        # Update the embed
         await vote_session.update_messages()
-
-        # Check if the threshold has been met
-        if vote_session.net_votes >= vote_session.pass_threshold:
-            if vote_session.target_message:
-                try:
-                    await vote_session.target_message.delete()
-                except discord.Forbidden:
-                    pass
-                except discord.NotFound:
-                    pass
-            del self.open_vote_sessions[message_id]
 
 
 async def setup(bot: RedstoneSquid):
