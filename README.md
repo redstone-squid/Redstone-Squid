@@ -30,9 +30,9 @@ source .venv/bin/activate
 
 ### Installing Packages
 
-In the root directory of the repository you can use the following command to install all of the required packages.
+In the root directory of the repository you can use the following command to install all the required packages.
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt test-requirements.txt
 ```
 
 ### Credential Files
