@@ -4,7 +4,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 shebang := if os() == 'windows' {
   'powershell.exe'
 } else {
-  '/usr/bin/env pwsh'
+  '/bin/sh'
 }
 
 python_dir := if os_family() == "windows" { "./.venv/Scripts" } else { "./.venv/bin" }
