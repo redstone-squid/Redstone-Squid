@@ -1,10 +1,9 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-from typing import Literal
+from typing import Literal, overload
 
 from postgrest.base_request_builder import SingleAPIResponse
 from postgrest.types import CountMethod
-from typing_extensions import overload
 
 from database import DatabaseManager
 from database.schema import (

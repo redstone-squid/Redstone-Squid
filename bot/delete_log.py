@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable, Mapping
 from textwrap import dedent
+from typing import TYPE_CHECKING, Any, final, cast, override
 
 import discord
 from discord.ext.commands import command, Cog, Context
-from typing import TYPE_CHECKING, Any, final, cast
-
 from postgrest.base_request_builder import SingleAPIResponse
-from typing_extensions import override
 
 from bot import utils
 from bot._types import GuildMessageable

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Literal, TypeVar, cast, TYPE_CHECKING, Any, final
+from typing import Literal, TypeVar, cast, TYPE_CHECKING, Any, final, override
 import asyncio
 import os
 
@@ -19,7 +19,6 @@ from discord.ext.commands import (
 )
 from openai import AsyncOpenAI
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from typing_extensions import override
 import vecs
 
 from bot import utils
