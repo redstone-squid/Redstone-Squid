@@ -15,8 +15,6 @@ import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
 from bot import utils
-from bot.delete_log import APPROVE_EMOJI, DENY_EMOJI
-from bot.submission.submit import APPROVE_EMOJIS, DENY_EMOJIS
 from database import DatabaseManager, message as msg
 from database.builds import Build
 from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
@@ -26,6 +24,10 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T", bound="AbstractVoteSession")
+
+APPROVE_EMOJIS = ["👍", "✅"]
+DENY_EMOJIS = ["👎", "❌"]
+# TODO: Unhardcode these emojis
 
 
 async def track_vote_session(
@@ -571,6 +573,12 @@ class DeleteLogVoteSession(AbstractVoteSession):
             .execute()
         )
         await self.update_messages()
+        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
+        reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
+        try:
+            await asyncio.gather(*reaction_tasks)
+        except discord.Forbidden:
+            pass  # Bot doesn't have permission to add reactions
 
     @classmethod
     @override
@@ -621,7 +629,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             title="Vote to Delete Log",
             description=(
                 dedent(f"""
-                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
+                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
                 **Log Content:**\n{self.target_message.content}\n\n
                 **Upvotes:** {self.upvotes}
                 **Downvotes:** {self.downvotes}
@@ -637,7 +645,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             title="Vote to Delete Log",
             description=(
                 dedent(f"""
-                React with {APPROVE_EMOJI} to upvote or {DENY_EMOJI} to downvote.\n\n
+                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
                 **Log Content:**\n{self.target_message.content}\n\n
                 **Upvotes:** {self.upvotes}
                 **Downvotes:** {self.downvotes}

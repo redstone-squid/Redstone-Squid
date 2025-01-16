@@ -35,9 +35,6 @@ from database.utils import upload_to_catbox
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-# TODO: Unhardcode these emojis
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 _FlagConverter = TypeVar("_FlagConverter", bound=type[FlagConverter])
@@ -498,47 +495,6 @@ class BuildCog(Cog, name="Build"):
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
 
-    @Cog.listener(name="on_raw_reaction_add")
-    async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
-        """Handles reactions to update vote counts anonymously."""
-        if (vote_session := self.open_vote_sessions.get(payload.message_id)) is None:
-            return
-
-        if vote_session.is_closed:
-            for message_id in vote_session.message_ids:
-                self.open_vote_sessions.pop(message_id, None)
-
-        # Remove the user's reaction to keep votes anonymous
-        channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
-        message = await channel.fetch_message(payload.message_id)
-        user = self.bot.get_user(payload.user_id)
-        assert user is not None
-        try:
-            await message.remove_reaction(payload.emoji, user)
-        except (discord.Forbidden, discord.NotFound):
-            pass  # Ignore if we can't remove the reaction
-
-        # Update votes based on the reaction
-        emoji_name = str(payload.emoji)
-        user_id = payload.user_id
-
-        # The vote session will handle the closing of the vote session
-        original_vote = vote_session[user_id]
-        weight = await self.get_voting_weight(payload.guild_id, user_id)
-        if emoji_name in APPROVE_EMOJIS:
-            vote_session[user_id] = weight if original_vote != weight else 0
-        elif emoji_name in DENY_EMOJIS:
-            vote_session[user_id] = -weight if original_vote != -weight else 0
-        else:
-            return
-        await vote_session.update_messages()
-
-    async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
-        """Get the voting weight of a user."""
-        if await is_staff(self.bot, server_id, user_id):
-            return 3
-        return 1
-
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
         """Infer a build from a message."""
@@ -620,10 +576,4 @@ class BuildCog(Cog, name="Build"):
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    cog = BuildCog(bot)
-    open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(bot)
-    for session in open_vote_sessions:
-        for message_id in session.message_ids:
-            cog.open_vote_sessions[message_id] = session
-
-    await bot.add_cog(cog)
+    await bot.add_cog(BuildCog(bot))
