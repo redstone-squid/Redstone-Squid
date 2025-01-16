@@ -113,7 +113,8 @@ class SettingsCog(Cog, name="Settings"):
     @settings_hybrid_group.command(name="set")
     @app_commands.describe(
         setting=", ".join(SETTINGS),
-        channel="The channel that you want to set to send this record type to.",
+        channel="The channel to send this type of message to",
+        roles="The roles which will have this permission",
     )
     @app_commands.rename(setting="type")
     @check_is_staff()
