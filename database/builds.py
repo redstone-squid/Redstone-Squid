@@ -863,10 +863,7 @@ class Build:
             self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
-        response = cast(
-            APIResponse[RestrictionRecord],
-            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute(),
-        )
+        response: SingleAPIResponse[list[RestrictionRecord]] = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
         restriction_ids = [restriction["id"] for restriction in response.data]
         build_restrictions_data = list(
             {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
