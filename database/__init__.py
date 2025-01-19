@@ -3,6 +3,7 @@ Handles database interactions for the bot.
 
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
+from __future__ import annotations
 
 import os
 from typing import ClassVar, Literal
@@ -22,6 +23,12 @@ class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
+    _instance: ClassVar[DatabaseManager] | None = None
+
+    def __new__(cls, *args, **kwargs) -> DatabaseManager:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls, *args, **kwargs)
+        return cls._instance
 
     def __init__(
         self,
