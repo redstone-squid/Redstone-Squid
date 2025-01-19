@@ -268,8 +268,9 @@ async def get_website_preview(url: str) -> Preview:
 
                 # If it's a video, extract first frame
                 if content_type.startswith("video/"):
-                    preview["image"] = await extract_first_frame(url)
-                    preview["url"] = url
+                    # FIXME: extract_first_frame is not working properly
+                    # preview["image"] = await extract_first_frame(url)
+                    # preview["url"] = url
                     return preview
 
                 page_text = await response.text()
