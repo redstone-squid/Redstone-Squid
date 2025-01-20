@@ -65,9 +65,6 @@ async def main():
     """Main entry point for the bot."""
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
 
-    if sys.platform == 'win32':  # https://github.com/aio-libs/aiodns/issues/86
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
     async with RedstoneSquid(command_prefix=commands.when_mentioned_or(prefix)) as bot:
         discord.utils.setup_logging()
         load_dotenv()
@@ -78,4 +75,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == 'win32':  # https://github.com/aio-libs/aiodns/issues/86
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
