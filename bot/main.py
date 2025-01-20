@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import sys
 from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar
@@ -84,12 +86,37 @@ class RedstoneSquid(Bot):
         return None
 
 
+def setup_logging():
+    """Set up logging for the bot process."""
+    # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
+    dt_fmt = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+
+    logging.root.setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logging.root.addHandler(stream_handler)
+
+    logger = logging.getLogger('discord')
+    logger.setLevel(logging.INFO)
+
+    file_handler = RotatingFileHandler(
+        filename='discord.log',
+        encoding='utf-8',
+        maxBytes=32 * 1024 * 1024,  # 32 MiB
+        backupCount=5,  # Rotate through 5 files
+    )
+
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+
 async def main():
     """Main entry point for the bot."""
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
 
+    setup_logging()
     async with RedstoneSquid(command_prefix=commands.when_mentioned_or(prefix)) as bot:
-        discord.utils.setup_logging()
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:
