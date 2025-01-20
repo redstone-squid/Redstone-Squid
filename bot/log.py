@@ -57,10 +57,16 @@ class LoggingCog(Cog, command_attrs=dict(hidden=True)):
     @Cog.listener("on_command")
     async def log_command_usage(self, ctx: Context[RedstoneSquid]):
         """Logs command usage to stdout and to the owner of the bot via DM."""
+        assert ctx.command is not None
+        command = f"{ctx.command.qualified_name}"
+        if ctx.args:
+            command += f" {" ".join(ctx.args)}"
+        if ctx.kwargs:
+            command += f" {" ".join(f'{k}:{v}' for k, v in ctx.kwargs.items())}"
         if ctx.guild is not None:
-            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in server: {ctx.guild.name}.'
+            log_message = f'{str(ctx.author)} ran: "{command}" in server: {ctx.guild.name}.'
         else:
-            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in a private message.'
+            log_message = f'{str(ctx.author)} ran: "{command}" in a private message.'
 
         owner_dmed_bot = (ctx.guild is None) and await ctx.bot.is_owner(ctx.message.author)
         await self.log(log_message, dm_owner=(not owner_dmed_bot))
