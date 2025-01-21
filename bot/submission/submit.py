@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Literal, TypeVar, cast, TYPE_CHECKING, final, override
+from typing import Literal, TypeVar, cast, TYPE_CHECKING
 import asyncio
 import os
 
@@ -18,7 +17,7 @@ from discord.ext.commands import (
     FlagConverter,
 )
 from openai import AsyncOpenAI
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
+from postgrest.base_request_builder import APIResponse
 import vecs
 
 from bot import utils
@@ -27,8 +26,7 @@ from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from bot.voting.vote_session import BuildVoteSession
 from database import message as msg
 from database.builds import get_all_builds, Build
-from bot._types import GuildMessageable
-from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff, is_staff
+from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
 from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord, Status, Category
 from database.utils import upload_to_catbox
 

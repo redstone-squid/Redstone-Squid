@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import discord
 import discord.ext.commands as commands
-from discord import Member
-from discord.ext import tasks
-from discord.ext.commands import Context, Cog, Greedy, Bot
+from discord.ext.commands import Context, Cog
 
 import bot.utils as utils
 from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
-from bot.utils import check_is_staff
 from database import get_version_string
 
 if TYPE_CHECKING:

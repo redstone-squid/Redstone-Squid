@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext.commands import command, Cog, Context
 
 from bot import utils
-from bot._types import GuildMessageable
 from bot.voting.vote_session import DeleteLogVoteSession
 from bot.utils import check_is_staff
-from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid

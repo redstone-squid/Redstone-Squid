@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 import discord
-from discord.ext import commands
 from discord.ext.commands import Cog
 
 from bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession

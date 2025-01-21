@@ -13,7 +13,6 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
-from bot.log import LoggingCog
 from database import DatabaseManager
 from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
