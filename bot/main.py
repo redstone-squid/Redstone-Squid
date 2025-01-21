@@ -53,6 +53,7 @@ class RedstoneSquid(Bot):
         await self.load_extension("jishaku")
         await self.load_extension("bot.verify")
         await self.load_extension("bot.admin")
+        await self.load_extension("bot.search")
         self.call_supabase_to_prevent_deactivation.start()
 
     @tasks.loop(hours=24)
