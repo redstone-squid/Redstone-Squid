@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+import logging
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 from discord.ext.commands import Cog
+from postgrest.base_request_builder import SingleAPIResponse
 
 from bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 from bot.utils import is_staff
@@ -17,12 +19,14 @@ APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
 # TODO: Unhardcode these emojis
 
+logger = logging.getLogger(__name__)
+
 
 class VoteCog(Cog):
 
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot
-        self.open_vote_sessions: dict[int, AbstractVoteSession] = {}
+        self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
 
     async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
         """Get the voting weight of a user."""
@@ -30,18 +34,45 @@ class VoteCog(Cog):
             return 3
         return 1
 
+    async def get_vote_session(self, message_id: int) -> AbstractVoteSession | None:
+        """Gets a vote session from the database."""
+
+        response: SingleAPIResponse[dict[str, Any]] | None = (
+            await self.bot.db.table("messages")
+            .select("vote_session_id, vote_sessions(kind)")
+            .eq("message_id", message_id)
+            .eq("purpose", "vote")
+            .maybe_single()
+            .execute()
+        )
+        if response is None:
+            return None
+
+        vote_session_id: int = response.data["vote_session_id"]
+        kind: str = response.data["vote_sessions"]["kind"]
+
+        if kind == "build":
+            return await BuildVoteSession.from_id(self.bot, vote_session_id)
+        elif kind == "delete_log":
+            return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
+        else:
+            logger.error(f"Unknown vote session kind: {kind}")
+            raise NotImplementedError(f"Unknown vote session kind: {kind}")
+
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
         """Handles reactions to update vote counts anonymously."""
         if payload.guild_id is None:
             raise NotImplementedError("Cannot vote in DMs.")
 
-        if (vote_session := self.open_vote_sessions.get(payload.message_id)) is None:
-            return
+        if (vote_session := self._open_vote_sessions.get(payload.message_id)) is None:
+            vote_session = await self.get_vote_session(payload.message_id)
+            if vote_session is None:
+                return
     
         if vote_session.is_closed:
             for message_id in vote_session.message_ids:
-                self.open_vote_sessions.pop(message_id, None)
+                self._open_vote_sessions.pop(message_id, None)
 
         # Remove the user's reaction to keep votes anonymous
         channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
@@ -96,6 +127,6 @@ async def setup(bot: RedstoneSquid):
     )
     for session in open_vote_sessions:
         for message_id in session.message_ids:
-            cog.open_vote_sessions[message_id] = session
+            cog._open_vote_sessions[message_id] = session  # pyright: ignore [reportPrivateUsage]
 
     await bot.add_cog(cog)
