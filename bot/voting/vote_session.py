@@ -14,7 +14,6 @@ from typing import Any, TypeVar, Union, TYPE_CHECKING, cast, ClassVar, final, It
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
-from bot import utils
 from database import DatabaseManager
 from database.builds import Build
 from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
@@ -264,7 +263,7 @@ class AbstractVoteSession(ABC):
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
             *(
-                utils.getch(self.bot, record)
+                self.bot.db.getch(record)
                 for record in messages_record.data
                 if record["message_id"] not in cached_ids
             )
@@ -595,7 +594,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return None
 
         vote_session_record = vote_session_response.data
-        target_message = await utils.getch(bot, vote_session_record["delete_log_vote_sessions"])
+        target_message = await bot.db.getch(vote_session_record["delete_log_vote_sessions"])
         if target_message is None:
             return None
 
@@ -604,7 +603,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @classmethod
     async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
-        target_message = await utils.getch(bot, record["delete_log_vote_sessions"])
+        target_message = await bot.db.getch(record["delete_log_vote_sessions"])
         if target_message is None:
             return None
 

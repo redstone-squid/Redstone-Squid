@@ -42,7 +42,7 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        self.db = DatabaseManager()
+        self.db = DatabaseManager(self)
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
@@ -58,6 +58,30 @@ class RedstoneSquid(Bot):
     async def call_supabase_to_prevent_deactivation(self):
         """Supabase deactivates a database in the free tier if it's not used for 7 days."""
         await self.db.table("builds").select("id").limit(1).execute()
+
+    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
+        """
+        Fetches a message from the cache or the API.
+
+        Raises:
+            ValueError: The channel is not a MessageableChannel and thus no message can exist in it.
+            discord.HTTPException: Fetching the channel or message failed.
+            discord.Forbidden: The bot does not have permission to fetch the channel or message.
+            discord.NotFound: The channel or message was not found.
+        """
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            channel = await self.fetch_channel(channel_id)
+        if not isinstance(channel, discord.abc.MessageableChannel):
+            raise ValueError("Channel is not a messageable channel.")
+        try:
+            return await channel.fetch_message(message_id)
+        except discord.NotFound:
+            pass
+            # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+        except discord.Forbidden:
+            pass
+        return None
 
 
 async def main():

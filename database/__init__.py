@@ -5,22 +5,25 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 import os
-from typing import ClassVar, Literal, TYPE_CHECKING
+from typing import Any, ClassVar, Literal, TYPE_CHECKING, overload
 from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
+from pydantic import TypeAdapter, ValidationError
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
 from database.message import MessageManager
-from database.schema import RestrictionRecord, VersionRecord
+from database.schema import DeleteLogVoteSessionRecord, MessageRecord, RestrictionRecord, VersionRecord
 from database.server_settings import ServerSettingManager
 from database.utils import get_version_string, parse_version_string
 
 if TYPE_CHECKING:
+    import discord
     from bot.main import RedstoneSquid
 
 
@@ -32,7 +35,7 @@ class DatabaseManager(AsyncClient):
 
     def __new__(cls, *args, **kwargs) -> DatabaseManager:
         if cls._instance is None:
-            cls._instance = super().__new__(cls, *args, **kwargs)
+            cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(
@@ -158,6 +161,30 @@ class DatabaseManager(AsyncClient):
                     pass
 
         return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
+
+    @overload
+    async def getch(self, record: MessageRecord | DeleteLogVoteSessionRecord) -> discord.Message | None: ...  # pyright: ignore
+
+    async def getch(self, record: Mapping[str, Any]) -> Any:
+        """Fetch discord objects from database records."""
+        if self.bot is None:
+            raise RuntimeError("Bot instance not set.")
+
+        try:
+            message_adapter = TypeAdapter(MessageRecord)
+            message_adapter.validate_python(record)
+            return await self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+        except ValidationError:
+            pass
+
+        try:
+            message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
+            message_adapter.validate_python(record)
+            return await self.bot.get_or_fetch_message(record["target_channel_id"], record["target_message_id"])
+        except ValidationError:
+            pass
+
+        raise ValueError("Invalid object to fetch.")
 
 
 async def main():

@@ -593,7 +593,7 @@ class Build:
         em = await self.generate_embed()
 
         for record in message_records:
-            message = await bot_utils.getch(bot, record)
+            message = await bot.db.getch(record)
             if message is None:
                 continue
             await message.edit(content=self.original_link, embed=em)
@@ -614,7 +614,7 @@ class Build:
 
         if self.original_channel_id:
             assert self.original_message_id is not None
-            return await bot_utils.getch_message(bot, self.original_channel_id, self.original_message_id)
+            return await bot.get_or_fetch_message(self.original_channel_id, self.original_message_id)
         return None
 
     async def generate_embedding(self) -> list[float] | None:
