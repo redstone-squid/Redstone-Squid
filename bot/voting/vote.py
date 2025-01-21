@@ -4,12 +4,13 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import discord
-from discord.ext.commands import Cog
+from discord.ext.commands import Cog, Context, hybrid_command
 from postgrest.base_request_builder import SingleAPIResponse
 
 from bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 from bot.utils import is_staff
 from bot._types import GuildMessageable
+from bot import utils
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -115,6 +116,20 @@ class VoteCog(Cog):
         else:
             return
         await vote_session.update_messages()
+
+    @hybrid_command(name="start_vote")
+    async def start_vote(self, ctx: Context, target_message: discord.Message):
+        """Starts a vote to delete a specified message by providing its URL."""
+        # Check if guild_id matches the current guild
+        if ctx.guild != target_message.guild:
+            await ctx.send("The message is not from this guild.")
+            return
+
+        async with utils.RunningMessage(ctx) as message:
+            vote_session = await DeleteLogVoteSession.create(
+                self.bot, [message], author_id=ctx.author.id, target_message=target_message
+            )
+            self._open_vote_sessions[message.id] = vote_session
 
 
 async def setup(bot: RedstoneSquid):
