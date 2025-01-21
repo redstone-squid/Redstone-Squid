@@ -413,7 +413,7 @@ class BuildCog(Cog, name="Build"):
         await build.save()
         await self.post_build_for_voting(build, type="add")
 
-    @build_hybrid_group.command("recalc")
+    @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()
     @commands.check(is_owner_server)
     async def recalc(self, ctx: Context, message: discord.Message):
