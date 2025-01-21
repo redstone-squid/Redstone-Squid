@@ -15,6 +15,7 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
+from bot._types import MessageableChannel
 from database import DatabaseManager
 from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
@@ -74,7 +75,7 @@ class RedstoneSquid(Bot):
         channel = self.get_channel(channel_id)
         if channel is None:
             channel = await self.fetch_channel(channel_id)
-        if not isinstance(channel, discord.abc.MessageableChannel):
+        if not isinstance(channel, MessageableChannel):
             raise ValueError("Channel is not a messageable channel.")
         try:
             return await channel.fetch_message(message_id)
