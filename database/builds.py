@@ -1184,7 +1184,7 @@ async def get_all_builds(submission_status: Status | None = None) -> list[Build]
     db = DatabaseManager()
     query = db.table("builds").select(all_build_columns)
 
-    if submission_status:
+    if submission_status is not None:
         query = query.eq("submission_status", submission_status.value)
 
     response = await query.execute()
