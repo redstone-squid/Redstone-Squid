@@ -28,8 +28,6 @@ if TYPE_CHECKING:
 
 
 class RedstoneSquid(Bot):
-    db: DatabaseManager
-
     def __init__(
         self,
         command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str],
