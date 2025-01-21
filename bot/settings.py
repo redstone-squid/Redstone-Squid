@@ -10,12 +10,6 @@ from discord.ext.commands import Context, Cog, hybrid_group, guild_only, Greedy
 from postgrest.types import ReturnMethod
 
 from bot.utils import check_is_staff
-from database import DatabaseManager
-from database.server_settings import (
-    update_server_setting,
-    get_server_setting,
-    get_server_settings,
-)
 import bot.utils as utils
 from database.schema import Setting, SETTINGS
 from bot._types import GuildMessageable
@@ -38,14 +32,13 @@ class SettingsCog(Cog, name="Settings"):
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, add the guild to the database."""
-        await DatabaseManager().table("server_settings").upsert({"server_id": guild.id}).execute()
+        await self.bot.db.table("server_settings").upsert({"server_id": guild.id}).execute()
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
         """When the bot leaves a guild, marks the guild as deleted in the database."""
         await (
-            DatabaseManager()
-            .table("server_settings")
+            self.bot.db.table("server_settings")
             .update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal)
             .execute()
         )
@@ -56,7 +49,7 @@ class SettingsCog(Cog, name="Settings"):
         """Show all settings for this server."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
-            settings = await get_server_settings(ctx.guild.id)
+            settings = await self.bot.db.server_setting.get_all(ctx.guild.id)
             desc = ""
             for setting, value in settings.items():
                 match setting:
@@ -92,7 +85,7 @@ class SettingsCog(Cog, name="Settings"):
             match setting:
                 case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
                     title = f"{setting} Channel Info"
-                    value = await get_server_setting(ctx.guild.id, setting)
+                    value = await self.bot.db.server_setting.get(ctx.guild.id, setting)
                     if value is None:
                         description = "_Not set_"
                     else:
@@ -102,19 +95,20 @@ class SettingsCog(Cog, name="Settings"):
                         )
                 case "Staff" | "Trusted":
                     title = f"{setting} Roles Info"
-                    value = await get_server_setting(ctx.guild.id, setting)
+                    value = await self.bot.db.server_setting.get(ctx.guild.id, setting)
                     roles = [role for role in ctx.guild.roles if role.id in value]
                     description = ", ".join(role.name for role in roles) or "_Not set_"
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     title = setting
-                    description = str(get_server_setting(ctx.guild.id, setting))
+                    description = str(self.bot.db.server_setting.get(ctx.guild.id, setting))
 
             await sent_message.edit(embed=utils.info_embed(title=title, description=description))
 
     @settings_hybrid_group.command(name="set")
     @app_commands.describe(
         setting=", ".join(SETTINGS),
-        channel="The channel that you want to set to send this record type to.",
+        channel="The channel to send this type of message to",
+        roles="The roles which will have this permission",
     )
     @app_commands.rename(setting="type")
     @check_is_staff()
@@ -148,7 +142,7 @@ class SettingsCog(Cog, name="Settings"):
                         return
 
                     # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
-                    await update_server_setting(ctx.guild.id, setting, channel.id)
+                    await self.bot.db.server_setting.set(ctx.guild.id, setting, channel.id)
                     await sent_message.edit(
                         embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
                     )
@@ -164,7 +158,7 @@ class SettingsCog(Cog, name="Settings"):
                         await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
                         return
 
-                    await update_server_setting(ctx.guild.id, setting, role_ids)
+                    await self.bot.db.server_setting.set(ctx.guild.id, setting, role_ids)
                     await sent_message.edit(
                         embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
                     )
@@ -180,7 +174,7 @@ class SettingsCog(Cog, name="Settings"):
         assert ctx.guild is not None
 
         async with utils.RunningMessage(ctx) as sent_message:
-            await update_server_setting(ctx.guild.id, setting, None)
+            await self.bot.db.server_setting.set(ctx.guild.id, setting, None)
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 

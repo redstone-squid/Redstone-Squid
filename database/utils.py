@@ -2,6 +2,7 @@
 
 import os
 import io
+import re
 from datetime import datetime, timezone
 
 import aiohttp
@@ -50,11 +51,6 @@ def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:
         return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
-def get_version_tuple(version: VersionRecord) -> tuple[str, int, int, int]:
-    """Returns a version tuple."""
-    return version["edition"], version["major_version"], version["minor_version"], version["patch_number"]
-
-
 def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
     """Parses a version string into its components.
 
@@ -62,15 +58,10 @@ def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
     ["Java" | "Bedrock"] major_version.minor_version.patch_number
     """
 
-    try:
-        edition_and_major, minor, patch = version_string.split(".")
-    except ValueError:
+    pattern = r"^\s*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\s*$"
+    match = re.match(pattern, version_string)
+    if not match:
         raise ValueError("Invalid version string format.")
 
-    if " " in edition_and_major:
-        edition, major = edition_and_major.split(" ")
-    else:
-        edition = "Java"
-        major = edition_and_major
-
-    return edition, int(major), int(minor), int(patch)
+    edition, major, minor, patch = match.groups()
+    return edition or "Java", int(major), int(minor), int(patch)

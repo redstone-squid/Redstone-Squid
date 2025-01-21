@@ -4,92 +4,101 @@ Handles database interactions for the bot.
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
 
+from __future__ import annotations
+
+from collections.abc import Mapping
 import os
-from typing import Literal
+from typing import Any, ClassVar, Literal, TYPE_CHECKING, overload
+from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
-from supabase._async.client import create_client, AsyncClient
+from pydantic import TypeAdapter, ValidationError
+from supabase._async.client import AsyncClient
+from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
-from database.schema import VersionRecord
-from database.utils import get_version_string
+from database.message import MessageManager
+from database.schema import DeleteLogVoteSessionRecord, MessageRecord, RestrictionRecord, VersionRecord
+from database.server_settings import ServerSettingManager
+from database.utils import get_version_string, parse_version_string
+
+if TYPE_CHECKING:
+    import discord
+    from bot.main import RedstoneSquid
 
 
-class DatabaseManager:
+class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
-    _is_setup: bool = False
-    _async_client: AsyncClient | None = None
-    version_cache: dict[str | None, list[VersionRecord]] = {}
+    version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
+    _instance: ClassVar[DatabaseManager] | None = None
+    bot: RedstoneSquid | None = None
 
-    def __new__(cls) -> AsyncClient:
-        if not cls._is_setup:
-            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        assert cls._async_client is not None
-        return cls._async_client
+    def __new__(cls, *args, **kwargs) -> DatabaseManager:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
-    @classmethod
-    async def setup(cls) -> None:
-        """Connects to the Supabase database.
-
-        This method should be called before using the DatabaseManager instance. This method exists because it is hard to use async code in __init__ or __new__."""
-        if cls._is_setup:
+    def __init__(
+        self,
+        bot: RedstoneSquid | None = None,
+        options: AsyncClientOptions | None = None,
+    ):
+        """Initializes the DatabaseManager."""
+        # Singleton object should only be initialized once
+        if self._initialized:
             return
+        self._initialized = True
 
-        # This is necessary only if you are not running from app.py.
+        # This is necessary if the user is not running from app.py.
         if DEV_MODE:
             load_dotenv()
-
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_KEY")
-        if not url:
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+        if not supabase_url:
             raise RuntimeError("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
-        if not key:
-            raise RuntimeError("Specify SUPABASE_KEY either with an auth.ini or a SUPABASE_KEY environment variable.")
-        cls._async_client = await create_client(url, key)
-        cls._is_setup = True
-        cls.version_cache["Java"] = await cls.fetch_versions_list("Java")
-        cls.version_cache["Bedrock"] = await cls.fetch_versions_list("Bedrock")
+        if not supabase_key:
+            raise RuntimeError("Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable.")
 
-    @classmethod
-    async def fetch_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
+        super().__init__(supabase_url, supabase_key, options)
+        self.bot = bot
+        self.server_setting = ServerSettingManager(self)
+        self.message = MessageManager(self)
+
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @cache
+    async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
+        """Fetches all restrictions from the database."""
+        response: APIResponse[RestrictionRecord] = await self.table("restrictions").select("*").execute()
+        return response.data
+
+    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
-        await cls.setup()
-        query = cls.__new__(cls).table("versions").select("*")
+        if versions := self.version_cache.get(edition):
+            return versions
+
         versions_response: APIResponse[VersionRecord] = (
-            await query.eq("edition", edition)
+            await self.table("versions")
+            .select("*")
+            .eq("edition", edition)
             .order("major_version")
             .order("minor_version")
             .order("patch_number")
             .execute()
         )
+        self.version_cache[edition] = versions_response.data
         return versions_response.data
 
-    @classmethod
-    def get_versions_list(cls, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
-        """Returns a list of all minecraft versions, sorted from oldest to newest"""
-        versions = cls.version_cache.get(edition)
-        if versions is None:
-            raise RuntimeError("DatabaseManager not set up yet. Call await DatabaseManager.setup() first.")
-        return versions
-
-    @classmethod
-    async def fetch_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
+    async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
-        versions = await cls.fetch_versions_list(edition=edition)
+        versions = await self.get_or_fetch_versions_list(edition=edition)
         return get_version_string(versions[-1])
 
-    @classmethod
-    def get_newest_version(cls, *, edition: Literal["Java", "Bedrock"]) -> str:
-        """Returns the newest version, formatted like '1.17.1'."""
-        versions = cls.get_versions_list(edition=edition)
-        return get_version_string(versions[-1])
-
-    @classmethod
-    def find_versions_from_spec(cls, version_spec: str) -> list[str]:
+    async def find_versions_from_spec(self, version_spec: str) -> list[str]:
         """Return all versions that match the version specification."""
 
         # See if the spec specifies no edition (default to Java), one edition, or both
@@ -106,15 +115,10 @@ class DatabaseManager:
 
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
-        def parse_version(version_str: str):
-            major, minor, patch = version_str.split(".")
-            return int(major), int(minor), int(patch)
-
-        all_versions = cls.get_versions_list("Java")
-        # Convert each version in all_versions into a tuple for easy comparison
+        all_versions = await self.get_or_fetch_versions_list("Java")
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
-        # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+"
+        # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
         parts = [part.strip() for part in version_spec.split(",")]
 
         valid_tuples: list[tuple[int, int, int]] = []
@@ -122,24 +126,36 @@ class DatabaseManager:
         for part in parts:
             # Case 1: range like "1.14 - 1.16.1"
             if "-" in part:
-                start_str, end_str = [p.strip() for p in part.split("-")]
-                start_tuple = parse_version(start_str) if start_str.count(".") == 2 else parse_version(start_str + ".0")
-                end_tuple = parse_version(end_str) if end_str.count(".") == 2 else parse_version(end_str + ".0")
+                subparts = [p.strip() for p in part.split("-")]
+                if len(subparts) != 2:
+                    raise ValueError(
+                        f"Invalid version range format in {part}, expected exactly 2 parts, got {len(subparts)}."
+                    )
+                start_str, end_str = subparts
+                start_tuple = (
+                    parse_version_string(start_str)
+                    if start_str.count(".") == 2
+                    else parse_version_string(start_str + ".0")
+                )
+                # FIXME: for something like 1.14 - 1.16, 1.16 should mean the last patch of 1.16, not 1.16.0
+                end_tuple = (
+                    parse_version_string(end_str) if end_str.count(".") == 2 else parse_version_string(end_str + ".0")
+                )
 
                 for v_tuple in all_version_tuples:
-                    if start_tuple <= v_tuple <= end_tuple:
+                    if start_tuple[1:] <= v_tuple <= end_tuple[1:]:
                         valid_tuples.append(v_tuple)
 
             # Case 2: trailing plus like "1.19+"
             elif part.endswith("+"):
                 base_str = part[:-1].strip()
-                # If user just wrote "1.19+", assume "1.19.0"
+                # Change "1.19+" to "1.19.0+"
                 if base_str.count(".") == 1:
                     base_str += ".0"
-                base_tuple = parse_version(base_str)
+                base_tuple = parse_version_string(base_str)
 
                 for v_tuple in all_version_tuples:
-                    if v_tuple >= base_tuple:
+                    if v_tuple >= base_tuple[1:]:
                         valid_tuples.append(v_tuple)
 
             # Case 3: exact version or prefix, e.g. "1.17" or "1.17.1"
@@ -162,11 +178,34 @@ class DatabaseManager:
 
         return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
 
+    @overload
+    async def getch(self, record: MessageRecord | DeleteLogVoteSessionRecord) -> discord.Message | None: ...  # pyright: ignore
+
+    async def getch(self, record: Mapping[str, Any]) -> Any:
+        """Fetch discord objects from database records."""
+        if self.bot is None:
+            raise RuntimeError("Bot instance not set.")
+
+        try:
+            message_adapter = TypeAdapter(MessageRecord)
+            message_adapter.validate_python(record)
+            return await self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+        except ValidationError:
+            pass
+
+        try:
+            message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
+            message_adapter.validate_python(record)
+            return await self.bot.get_or_fetch_message(record["target_channel_id"], record["target_message_id"])
+        except ValidationError:
+            pass
+
+        raise ValueError("Invalid object to fetch.")
+
 
 async def main():
-    await DatabaseManager.setup()
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
-    print(DatabaseManager.find_versions_from_spec(spec_string))
+    print(DatabaseManager().find_versions_from_spec(spec_string))
     r = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": ["Seamless", "No Observers"]}).execute()
     print(r.data)
 

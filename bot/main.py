@@ -4,102 +4,33 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import sys
 from typing import override, TYPE_CHECKING, Callable, ParamSpec, TypeVar
 
 import discord
-from discord import User, Message
-from discord.ext import commands
-from discord.ext.commands import Cog, Bot, Context, CommandError
+from discord import Message
+from discord.ext import commands, tasks
+from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
+from bot._types import MessageableChannel
 from database import DatabaseManager
-from database.utils import utcnow
 from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Awaitable
+
     T = TypeVar("T")
     P = ParamSpec("P")
     MaybeAwaitableFunc = Callable[P, T | Awaitable[T]]
 
 
-class Listeners(Cog, command_attrs=dict(hidden=True)):
-    """Global listeners for the bot."""
-
-    def __init__(self, bot: RedstoneSquid):
-        self.bot: RedstoneSquid = bot
-
-        if not self.bot.owner_id:
-            raise RuntimeError("Owner ID not set.")
-        self.owner: User | None = self.bot.get_user(self.bot.owner_id)
-
-    async def log(self, msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
-        """
-        Logs a timestamped message to stdout and to the owner of the bot via DM.
-
-        Args:
-            msg: the message to log
-            first_log: if True, adds a line of dashes before the message
-            dm_owner: whether to send the message to the owner of the bot via DM
-
-        Returns:
-            None
-        """
-        timestamp_msg = utcnow() + msg
-        if first_log:
-            timestamp_msg = f"{"-" * 90}\n{timestamp_msg}"
-        if dm_owner and self.owner:
-            await self.owner.send(timestamp_msg)
-        print(timestamp_msg)
-
-    # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
-    # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
-    # This library implements reconnection logic and thus will end up calling this event whenever a RESUME request fails.
-    @Cog.listener("on_ready")
-    async def log_on_ready(self):
-        """Logs when the bot is ready."""
-        assert self.bot.user is not None
-        await self.log(
-            f"Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.",
-            first_log=True,
-        )
-
-    @Cog.listener("on_command")
-    async def log_command_usage(self, ctx: Context[RedstoneSquid]):
-        """Logs command usage to stdout and to the owner of the bot via DM."""
-        if ctx.guild is not None:
-            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in server: {ctx.guild.name}.'
-        else:
-            log_message = f'{str(ctx.author)} ran: "{ctx.message.content}" in a private message.'
-
-        owner_dmed_bot = (ctx.guild is None) and await ctx.bot.is_owner(ctx.message.author)
-        await self.log(log_message, dm_owner=(not owner_dmed_bot))
-
-    @Cog.listener("on_command_error")
-    async def log_command_error(self, ctx: Context[RedstoneSquid], exception: CommandError):
-        """Global error handler for the bot."""
-        command = ctx.command
-        if command and command.has_error_handler():
-            return
-
-        cog = ctx.cog
-        if cog and cog.has_error_handler():
-            return
-
-        if isinstance(exception, commands.CommandNotFound):
-            return
-
-        await ctx.send(f"An error occurred: {exception}")
-
-        logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
-
-
 class RedstoneSquid(Bot):
     def __init__(
         self,
-        command_prefix: (Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str]),
+        command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str],
     ):
         super().__init__(
             command_prefix=command_prefix,
@@ -111,26 +42,81 @@ class RedstoneSquid(Bot):
 
     @override
     async def setup_hook(self) -> None:
-        await DatabaseManager.setup()
+        """Called when the bot is ready to start."""
+        self.db = DatabaseManager(self)
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
-        await self.add_cog(Listeners(self))
+        await self.load_extension("bot.log")
         await self.load_extension("bot.help")
+        await self.load_extension("bot.voting.vote")
         await self.load_extension("jishaku")
         await self.load_extension("bot.verify")
-        await self.load_extension("bot.delete_log")
+        await self.load_extension("bot.admin")
+        await self.load_extension("bot.search")
+        self.call_supabase_to_prevent_deactivation.start()
+
+    @tasks.loop(hours=24)
+    async def call_supabase_to_prevent_deactivation(self):
+        """Supabase deactivates a database in the free tier if it's not used for 7 days."""
+        await self.db.table("builds").select("id").limit(1).execute()
+
+    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
+        """
+        Fetches a message from the cache or the API.
+
+        Raises:
+            ValueError: The channel is not a MessageableChannel and thus no message can exist in it.
+            discord.HTTPException: Fetching the channel or message failed.
+            discord.Forbidden: The bot does not have permission to fetch the channel or message.
+            discord.NotFound: The channel or message was not found.
+        """
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            channel = await self.fetch_channel(channel_id)
+        if not isinstance(channel, MessageableChannel):
+            raise ValueError("Channel is not a messageable channel.")
+        try:
+            return await channel.fetch_message(message_id)
+        except discord.NotFound:
+            pass
+            # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+        except discord.Forbidden:
+            pass
+        return None
+
+
+def setup_logging():
+    """Set up logging for the bot process."""
+    # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
+    dt_fmt = "%Y-%m-%d %H:%M:%S"
+    formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
+
+    logging.root.setLevel(logging.INFO)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logging.root.addHandler(stream_handler)
+
+    logger = logging.getLogger("discord")
+    logger.setLevel(logging.INFO)
+
+    file_handler = RotatingFileHandler(
+        filename="discord.log",
+        encoding="utf-8",
+        maxBytes=32 * 1024 * 1024,  # 32 MiB
+        backupCount=5,  # Rotate through 5 files
+    )
+
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 
 async def main():
     """Main entry point for the bot."""
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
 
-    if sys.platform == 'win32':  # https://github.com/aio-libs/aiodns/issues/86
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
+    setup_logging()
     async with RedstoneSquid(command_prefix=commands.when_mentioned_or(prefix)) as bot:
-        discord.utils.setup_logging()
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:
@@ -139,4 +125,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":  # https://github.com/aio-libs/aiodns/issues/86
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

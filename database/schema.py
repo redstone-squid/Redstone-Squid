@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TypedDict, Literal, Any, get_args, cast, TypeAlias
+from enum import IntEnum, StrEnum
+from typing import TypedDict, Literal, get_args, cast, TypeAlias
 
 from pydantic.types import Json
-from database.enums import Status, Category
 
 
 class UnknownRestrictions(TypedDict, total=False):
@@ -27,6 +27,23 @@ class ServerInfo(TypedDict, total=False):
     server_ip: str
     coordinates: str
     command_to_build: str
+
+
+class Status(IntEnum):
+    """The status of a submission."""
+
+    PENDING = 0
+    CONFIRMED = 1
+    DENIED = 2
+
+
+class Category(StrEnum):
+    """The categories of the builds."""
+
+    DOOR = "Door"
+    EXTENDER = "Extender"
+    UTILITY = "Utility"
+    ENTRANCE = "Entrance"
 
 
 class BuildRecord(TypedDict):
@@ -68,7 +85,7 @@ class DoorRecord(TypedDict):
     """A record of a door in the database."""
 
     build_id: int
-    orientation: str
+    orientation: DoorOrientationName
     door_width: int | None
     door_height: int | None
     door_depth: int | None
@@ -125,6 +142,24 @@ SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
 
+class LinkRecord(TypedDict):
+    """A record of a link in the database."""
+
+    build_id: int
+    url: str
+    media_type: Literal["image", "video", "world-download"]
+
+
+class UserRecord(TypedDict):
+    """A record of a user in the database."""
+
+    id: int
+    discord_id: int | None
+    minecraft_uuid: str | None
+    ign: str
+    created_at: str
+
+
 class TypeRecord(TypedDict):
     """A record of a type in the database."""
 
@@ -140,6 +175,7 @@ class RestrictionRecord(TypedDict):
     build_category: BuildType
     name: str
     type: Restriction
+
 
 class RestrictionAliasRecord(TypedDict):
     """An alias for a restriction on a build."""

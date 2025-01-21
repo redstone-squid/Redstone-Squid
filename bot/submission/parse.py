@@ -63,7 +63,9 @@ async def get_valid_restrictions(type: Literal["component", "wiring-placement", 
         A list of valid restrictions for the given type.
     """
     db = DatabaseManager()
-    valid_restrictions_response: APIResponse[RestrictionRecord] = await db.table("restrictions").select("name").eq("type", type).execute()
+    valid_restrictions_response: APIResponse[RestrictionRecord] = (
+        await db.table("restrictions").select("name").eq("type", type).execute()
+    )
     return [restriction["name"] for restriction in valid_restrictions_response.data]
 
 
@@ -74,7 +76,9 @@ async def get_valid_door_types() -> list[str]:
         A list of valid door types.
     """
     db = DatabaseManager()
-    valid_door_types_response: APIResponse[TypeRecord] = await db.table("types").select("name").eq("build_category", "Door").execute()
+    valid_door_types_response: APIResponse[TypeRecord] = (
+        await db.table("types").select("name").eq("build_category", "Door").execute()
+    )
     return [door_type["name"] for door_type in valid_door_types_response.data]
 
 
@@ -207,7 +211,6 @@ async def main():
     import dotenv
 
     dotenv.load_dotenv()
-    await DatabaseManager.setup()
 
 
 if __name__ == "__main__":

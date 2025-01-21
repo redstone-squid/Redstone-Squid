@@ -9,10 +9,11 @@ import os
 import asyncio
 import logging
 from asyncio import Task
+from importlib import resources
+from functools import cached_property
 from dataclasses import dataclass, field, fields
-from functools import cache
 from collections.abc import Sequence, Mapping
-from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
+from typing import TYPE_CHECKING, Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
 
 import discord
 from discord.ext.commands import Bot
@@ -28,23 +29,30 @@ from bot import utils as bot_utils
 from database.schema import (
     BuildRecord,
     DoorRecord,
+    EntranceRecord,
+    LinkRecord,
     MessageRecord,
     ServerInfo,
     TypeRecord,
     RestrictionRecord,
     Info,
+    UserRecord,
     VersionRecord,
     UnknownRestrictions,
     RecordCategory,
     DoorOrientationName,
     QuantifiedVersionRecord,
+    ExtenderRecord,
+    UtilityRecord,
+    Status,
+    Category,
 )
 from database import DatabaseManager
-from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string, upload_to_catbox
-from database.enums import Status, Category
 
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +63,22 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 """All columns that needs to be joined in the build table to get all the information about a build."""
 
 background_tasks: set[Task[Any]] = set()
+
+
+class JoinedBuildRecord(BuildRecord):
+    """Represents a build record with all the columns joined."""
+
+    versions: list[VersionRecord]
+    build_links: list[LinkRecord]
+    build_creators: list[dict[str, Any]]  # You want to use users instead. This is just a join table.
+    users: list[UserRecord]
+    types: list[TypeRecord]
+    restrictions: list[RestrictionRecord]
+    doors: DoorRecord | None
+    extenders: ExtenderRecord | None
+    utilities: UtilityRecord | None
+    entrances: EntranceRecord | None
+    messages: MessageRecord | None  # Not actually all the associated messages, just the original message
 
 
 class FrozenField(Generic[T]):
@@ -205,6 +229,29 @@ class Build:
         return Build.from_json(response.data)
 
     @staticmethod
+    async def from_message_id(message_id: int) -> Build | None:
+        """
+        Get the build by a message id.
+
+        Args:
+            message_id: The message id to get the build from.
+
+        Returns:
+            The Build object with the specified message id, or None if the build was not found.
+        """
+        db = DatabaseManager()
+        response: SingleAPIResponse[MessageRecord] | None = (
+            await db.table("messages")
+            .select("build_id", count=CountMethod.exact)
+            .eq("message_id", message_id)
+            .maybe_single()
+            .execute()
+        )
+        if response and response.data["build_id"]:
+            return await Build.from_id(response.data["build_id"])
+        return None
+
+    @staticmethod
     def from_dict(submission: dict) -> Build:
         """Creates a new Build object from a dictionary. No validation is done on the data."""
         build = Build()
@@ -215,7 +262,7 @@ class Build:
         return build
 
     @staticmethod
-    def from_json(data: dict[str, Any]) -> Build:
+    def from_json(data: JoinedBuildRecord) -> Build:
         """
         Converts a JSON object to a Build object.
 
@@ -237,7 +284,7 @@ class Build:
 
         match data["category"]:
             case "Door":
-                assert data["doors"] is not None
+                assert "doors" in data and data["doors"] is not None
                 door_orientation_type = data["doors"]["orientation"]
                 door_width = data["doors"]["door_width"]
                 door_height = data["doors"]["door_height"]
@@ -247,20 +294,16 @@ class Build:
                 visible_closing_time = data["doors"]["visible_closing_time"]
                 visible_opening_time = data["doors"]["visible_opening_time"]
             case "Extender":
-                category_data = data["extenders"]
                 raise NotImplementedError
             case "Utility":
-                category_data = data["utilities"]
                 raise NotImplementedError
             case "Entrance":
-                category_data = data["entrances"]
                 raise NotImplementedError
             case _:
                 raise ValueError("Invalid category")
 
         # FIXME: This is hardcoded for now
-        if data.get("types"):
-            types = data["types"]
+        if types := data.get("types"):
             door_type = [type_["name"] for type_ in types]
         else:
             door_type = ["Regular"]
@@ -272,14 +315,14 @@ class Build:
 
         information = data["information"]
 
-        creators: list[dict[str, Any]] = data.get("users", [])
+        creators = data.get("users", [])
         creators_ign = [creator["ign"] for creator in creators]
 
         version_spec = data["version_spec"]
         version_records: list[VersionRecord] = data.get("versions", [])
         versions = [get_version_string(v) for v in version_records]
 
-        links: list[dict[str, Any]] = data.get("build_links", [])
+        links: list[LinkRecord] = data.get("build_links", [])
         image_urls = [link["url"] for link in links if link["media_type"] == "image"]
         video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
@@ -290,11 +333,15 @@ class Build:
         completion_time = data["completion_time"]
         edited_time = data["edited_time"]
 
-        message_record: MessageRecord = data["messages"] or {}  # type: ignore
-        original_server_id = message_record.get("server_id")
-        original_channel_id = message_record.get("channel_id")
-        original_message_id = data["original_message_id"]
-        original_message = message_record.get("content")
+        message_record: MessageRecord | None = data["messages"]
+        if message_record is None:
+            original_server_id = original_channel_id = original_message_id = None
+            original_message = None
+        else:
+            original_server_id = message_record["server_id"]
+            original_channel_id = message_record["channel_id"]
+            original_message_id = data["original_message_id"]
+            original_message = message_record["content"]
 
         ai_generated = data["ai_generated"]
         embedding = data["embedding"]
@@ -345,9 +392,8 @@ class Build:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(f"{current_dir}/prompt.txt", "r", encoding="utf-8") as f:
-            prompt = f.read()
+
+        prompt = resources.files("database").joinpath("prompt.txt").read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
@@ -459,8 +505,8 @@ class Build:
         build.normal_opening_time = parse_time_string(variables["opening_time"])
         build.normal_closing_time = parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-        build.version_spec = variables["version"] or DatabaseManager.get_newest_version(edition="Java")
-        build.versions = DatabaseManager.find_versions_from_spec(build.version_spec)
+        build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
+        build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
             build.information["user"] = variables["author_note"].replace("\\n", "\n")
@@ -471,7 +517,7 @@ class Build:
         for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
             yield attr
 
-    @property
+    @cached_property
     def original_link(self) -> str | None:
         """The link to the original message of the build."""
         if self.original_message_id and self.original_channel_id:
@@ -497,14 +543,6 @@ class Build:
     @door_dimensions.setter
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
-
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @staticmethod
-    @cache
-    async def fetch_all_restrictions() -> list[RestrictionRecord]:
-        """Fetches all restrictions from the database."""
-        response: APIResponse[RestrictionRecord] = await DatabaseManager().table("restrictions").select("*").execute()
-        return response.data
 
     def get_restrictions(
         self,
@@ -537,7 +575,7 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            for restriction in await self.fetch_all_restrictions():
+            for restriction in await DatabaseManager.fetch_all_restrictions():
                 for door_restriction in restrictions:
                     if door_restriction.lower() == restriction["name"].lower():
                         if restriction["type"] == "wiring-placement":
@@ -547,14 +585,38 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    async def get_original_message(self, bot: Bot) -> discord.Message | None:
+    async def update_messages(self, bot: RedstoneSquid) -> None:
+        """Updates all messages which for this build."""
+        if self.id is None:
+            raise ValueError("Build id is None.")
+
+        # Get all messages for a build
+        message_records = await self.get_display_messages()
+        em = await self.generate_embed()
+
+        for record in message_records:
+            message = await bot.db.getch(record)
+            if message is None:
+                continue
+            await message.edit(content=self.original_link, embed=em)
+            await bot.db.message.update_message_edited_time(message)
+
+    async def get_display_messages(self) -> list[MessageRecord]:
+        """Get all messages which showed this build."""
+        response: APIResponse[MessageRecord] = (
+            # FIXME: This included the original message, we need to filter by author_id but this doesn't exist in the database
+            await DatabaseManager().table("messages").select("*").eq("build_id", self.id).execute()
+        )
+        return response.data
+
+    async def get_original_message(self, bot: RedstoneSquid) -> discord.Message | None:
         """Gets the original message of the build."""
         if self._original_message_obj:
             return self._original_message_obj
 
         if self.original_channel_id:
             assert self.original_message_id is not None
-            return await bot_utils.getch_message(bot, self.original_channel_id, self.original_message_id)
+            return await bot.get_or_fetch_message(self.original_channel_id, self.original_message_id)
         return None
 
     async def generate_embedding(self) -> list[float] | None:
@@ -600,7 +662,7 @@ class Build:
 
         channels: list[GuildMessageable] = []
         for guild in bot.guilds:
-            channel_id = await get_server_setting(guild.id, target)
+            channel_id = await DatabaseManager().server_setting.get(guild.id, target)
             if channel_id:
                 channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
 
@@ -632,12 +694,9 @@ class Build:
 
         return differences
 
-    async def load(self) -> Build:
+    async def reload(self) -> None:
         """
-        Loads the build from the database. All previous data is overwritten.
-
-        Returns:
-            The Build object.
+        Overwrite the current build with the data from the database.
 
         Raises:
             ValueError: If the build was not found or build.id is not set.
@@ -649,7 +708,7 @@ class Build:
         response = await db.table("builds").select(all_build_columns).eq("id", self.id).maybe_single().execute()
         if not response:
             raise ValueError("Build not found in the database.")
-        return Build.from_json(response.data)
+        raise NotImplementedError  # TODO
 
     def update_local(self, **data: Any) -> None:
         """Updates the build locally with the given data. No validation is done on the data."""
@@ -755,9 +814,13 @@ class Build:
             build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
-                self.information["unknown_restrictions"] = self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                self.information["unknown_restrictions"] = (
+                    self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                )
             if unknown_types.result():
-                self.information["unknown_patterns"] = self.information.get("unknown_patterns", []) + unknown_types.result()
+                self.information["unknown_patterns"] = (
+                    self.information.get("unknown_patterns", []) + unknown_types.result()
+                )
 
             await message_insert_task
             await (
@@ -801,13 +864,10 @@ class Build:
         """Updates the build_restrictions table with the given data"""
         db = DatabaseManager()
         build_restrictions: list[str] = (
-            self.wiring_placement_restrictions
-            + self.component_restrictions
-            + self.miscellaneous_restrictions
+            self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
-        response = cast(
-            APIResponse[RestrictionRecord],
+        response: SingleAPIResponse[list[RestrictionRecord]] = (
             await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
         )
         restriction_ids = [restriction["id"] for restriction in response.data]
@@ -857,11 +917,7 @@ class Build:
         else:
             door_type = ["Regular"]
         response: APIResponse[TypeRecord] = (
-            await db.table("types")
-            .select("*")
-            .eq("build_category", self.category)
-            .in_("name", door_type)
-            .execute()
+            await db.table("types").select("*").eq("build_category", self.category).in_("name", door_type).execute()
         )
         type_ids = [type_["id"] for type_ in response.data]
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
@@ -886,8 +942,7 @@ class Build:
             )
         if self.world_download_urls:
             build_links_data.extend(
-                {"build_id": self.id, "url": link, "media_type": "world_download"}
-                for link in self.world_download_urls
+                {"build_id": self.id, "url": link, "media_type": "world_download"} for link in self.world_download_urls
             )
         if build_links_data:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()
@@ -910,10 +965,10 @@ class Build:
 
     async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data."""
-        functional_versions = self.versions or DatabaseManager.get_newest_version(edition="Java")
+        db = DatabaseManager()
+        functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
 
         # TODO: raise an error if any versions are not found in the database
-        db = DatabaseManager()
         response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
             await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
         )
@@ -946,7 +1001,7 @@ class Build:
 
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
-        em = bot_utils.info_embed(title=self.get_title(), description=self.get_description())
+        em = bot_utils.info_embed(title=self.get_title(), description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -1050,14 +1105,14 @@ class Build:
 
         return title
 
-    def get_description(self) -> str | None:
+    async def get_description(self) -> str | None:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         desc = []
 
         if self.component_restrictions and self.component_restrictions[0] != "None":
             desc.append(", ".join(self.component_restrictions))
 
-        if DatabaseManager.get_newest_version(edition="Java") not in self.versions:
+        if await DatabaseManager().get_or_fetch_newest_version(edition="Java") not in self.versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in self.miscellaneous_restrictions:
@@ -1075,41 +1130,6 @@ class Build:
 
         return "\n".join(desc) if desc else None
 
-    def get_version_spec(self) -> str:
-        """Returns a string representation of the versions the build is functional in.
-
-        The versions are formatted as a range if they are consecutive. For example, "1.16 - 1.17, 1.19.2, 1.20+".
-        """
-        if not self.versions:
-            return ""
-
-        versions: list[str] = []
-
-        linking = False
-        """Whether the current version is part of a range. This is used to render consecutive versions as a range (e.g. 1.16.2 - 1.18)."""
-        start_version: str | None = None
-        end_version: str | None = None
-
-        for version in DatabaseManager.get_versions_list(edition="Java"):
-            version_str = get_version_string(version)
-            if version_str in self.versions:
-                if not linking:
-                    linking = True
-                    start_version = version_str
-                end_version = version_str
-
-            elif linking:  # Current looped version is not functional, but the previous one was
-                assert start_version is not None
-                assert end_version is not None
-                versions.append(start_version if start_version == end_version else f"{start_version} - {end_version}")
-                linking = False
-
-        if linking:  # If the last version is functional
-            assert start_version is not None
-            versions.append(f"{start_version}+")
-
-        return ", ".join(versions)
-
     def get_metadata_fields(self) -> dict[str, str]:
         """Returns a dictionary of metadata fields for the build.
 
@@ -1119,14 +1139,14 @@ class Build:
         if self.width and self.height and self.depth:
             fields["Volume"] = str(self.width * self.height * self.depth)
 
+        # The times are stored as game ticks, so they need to be divided by 20 to get seconds
         if self.normal_opening_time:
             fields["Opening Time"] = f"{self.normal_opening_time / 20}s"
         if self.normal_closing_time:
             fields["Closing Time"] = f"{self.normal_closing_time / 20}s"
-
-        if self.visible_opening_time and self.visible_closing_time:
-            # The times are stored as game ticks, so they need to be divided by 20 to get seconds
+        if self.visible_opening_time:
             fields["Visible Opening Time"] = f"{self.visible_opening_time / 20}s"
+        if self.visible_closing_time:
             fields["Visible Closing Time"] = f"{self.visible_closing_time / 20}s"
 
         if self.creators_ign:
@@ -1135,7 +1155,7 @@ class Build:
         if self.completion_time:
             fields["Date Of Completion"] = str(self.completion_time)
 
-        fields["Versions"] = self.get_version_spec()
+        fields["Versions"] = self.version_spec or "Unknown"
 
         if ip := self.server_info.get("server_ip"):
             fields["Server"] = ip
@@ -1164,7 +1184,7 @@ async def get_all_builds(submission_status: Status | None = None) -> list[Build]
     db = DatabaseManager()
     query = db.table("builds").select(all_build_columns)
 
-    if submission_status:
+    if submission_status is not None:
         query = query.eq("submission_status", submission_status.value)
 
     response = await query.execute()
@@ -1203,7 +1223,8 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
-    await DatabaseManager.setup()
+    response = await DatabaseManager().table("builds").select(all_build_columns).eq("id", 172).execute()
+    print(response.data)
     build = await Build.from_id(43)
     if build:
         print(repr(build))
