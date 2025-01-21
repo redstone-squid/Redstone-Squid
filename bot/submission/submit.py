@@ -422,19 +422,6 @@ class BuildCog(Cog, name="Build"):
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
 
-    @commands.hybrid_command("add_alias")
-    @check_is_staff()
-    @commands.check(is_owner_server)
-    async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
-        """Add an alias for a restriction."""
-        async with RunningMessage(ctx) as sent_message:
-            await (
-                self.bot.db.table("restriction_aliases")
-                .insert({"restriction_id": restriction_id, "alias": alias})
-                .execute()
-            )
-            await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
-
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(BuildCog(bot))

@@ -65,6 +65,19 @@ class Admin(commands.Cog):
             success_embed = utils.info_embed("Success", "Submission has been denied.")
             await sent_message.edit(embed=success_embed)
 
+    @commands.hybrid_command("add_alias")
+    @check_is_staff()
+    @commands.check(is_owner_server)
+    async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
+        """Add an alias for a restriction."""
+        async with utils.RunningMessage(ctx) as sent_message:
+            await (
+                self.bot.db.table("restriction_aliases")
+                .insert({"restriction_id": restriction_id, "alias": alias})
+                .execute()
+            )
+            await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+
     @commands.hybrid_command(name="archive")
     @check_is_staff()
     async def archive_message(self, ctx: Context[Bot], message: discord.Message, delete_original: bool = False):
