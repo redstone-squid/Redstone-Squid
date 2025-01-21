@@ -43,7 +43,9 @@ from database.schema import (
     DoorOrientationName,
     QuantifiedVersionRecord,
     ExtenderRecord,
-    UtilityRecord, Status, Category,
+    UtilityRecord,
+    Status,
+    Category,
 )
 from database import DatabaseManager
 from database.user import add_user
@@ -865,7 +867,9 @@ class Build:
             self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
-        response: SingleAPIResponse[list[RestrictionRecord]] = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
+        response: SingleAPIResponse[list[RestrictionRecord]] = (
+            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
+        )
         restriction_ids = [restriction["id"] for restriction in response.data]
         build_restrictions_data = list(
             {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
@@ -1219,7 +1223,7 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
-    response = await DatabaseManager().table('builds').select(all_build_columns).eq('id', 172).execute()
+    response = await DatabaseManager().table("builds").select(all_build_columns).eq("id", 172).execute()
     print(response.data)
     build = await Build.from_id(43)
     if build:

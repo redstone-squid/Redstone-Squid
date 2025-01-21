@@ -14,6 +14,7 @@ from bot.utils import check_is_staff
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
+
 class DeleteLogCog(Cog, name="Vote"):
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot

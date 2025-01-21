@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import inspect
 from abc import abstractmethod, ABC
 import asyncio
 from asyncio import Task
 from textwrap import dedent
 from types import MethodType
-from typing import Any, TypeVar, Union, TYPE_CHECKING, cast, ClassVar, final, Iterable, Literal, override, Mapping
+from typing import Any, TypeVar, Union, TYPE_CHECKING, cast, ClassVar, final, Literal, override
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
@@ -66,7 +66,9 @@ async def track_vote_session(
         .execute()
     )
     session_id = response.data[0]["id"]
-    coros = [db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages]
+    coros = [
+        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
+    ]
     await asyncio.gather(*coros)
     return session_id
 
@@ -262,11 +264,7 @@ class AbstractVoteSession(ABC):
         )
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
-            *(
-                self.bot.db.getch(record)
-                for record in messages_record.data
-                if record["message_id"] not in cached_ids
-            )
+            *(self.bot.db.getch(record) for record in messages_record.data if record["message_id"] not in cached_ids)
         )
         new_messages = (message for message in new_messages if message is not None)
         self._messages.update(new_messages)
@@ -398,7 +396,8 @@ class BuildVoteSession(AbstractVoteSession):
             changes = original.diff(self.build)
 
         await (
-            DatabaseManager().table("build_vote_sessions")
+            DatabaseManager()
+            .table("build_vote_sessions")
             .insert(
                 {
                     "vote_session_id": self.id,
@@ -464,7 +463,9 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         message = await channel.send(content=self.build.original_link, embed=await self.build.generate_embed())
-        await self.bot.db.message.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
+        await self.bot.db.message.track_message(
+            message, purpose="vote", build_id=self.build.id, vote_session_id=self.id
+        )
         self._messages.add(message)
         return message
 
@@ -560,7 +561,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
         await (
-            DatabaseManager().table("delete_log_vote_sessions")
+            DatabaseManager()
+            .table("delete_log_vote_sessions")
             .insert(
                 {
                     "vote_session_id": self.id,
@@ -617,7 +619,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
             record["pass_threshold"],
             record["fail_threshold"],
         )
-        self.id = record["id"]  # We can skip _async_init because we already have the id and everything has been tracked before
+        self.id = record[
+            "id"
+        ]  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
         return self
 

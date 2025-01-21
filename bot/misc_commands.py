@@ -55,6 +55,7 @@ class Miscellaneous(Cog):
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
+
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))

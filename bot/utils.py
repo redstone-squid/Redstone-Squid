@@ -6,8 +6,7 @@ import logging
 import io
 from traceback import format_tb
 from types import TracebackType
-from typing import TypedDict, overload, TYPE_CHECKING, Any, cast
-from collections.abc import Mapping
+from typing import TypedDict, TYPE_CHECKING, Any
 import mimetypes
 import asyncio
 import aiohttp
@@ -17,19 +16,13 @@ import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
-from pydantic import TypeAdapter, ValidationError
 
 from bot import config
-from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
-from database.schema import (
-    MessageRecord,
-    DeleteLogVoteSessionRecord,
-)
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    pass
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A

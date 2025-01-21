@@ -3,6 +3,7 @@ Handles database interactions for the bot.
 
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -127,11 +128,19 @@ class DatabaseManager(AsyncClient):
             if "-" in part:
                 subparts = [p.strip() for p in part.split("-")]
                 if len(subparts) != 2:
-                    raise ValueError(f"Invalid version range format in {part}, expected exactly 2 parts, got {len(subparts)}.")
+                    raise ValueError(
+                        f"Invalid version range format in {part}, expected exactly 2 parts, got {len(subparts)}."
+                    )
                 start_str, end_str = subparts
-                start_tuple = parse_version_string(start_str) if start_str.count(".") == 2 else parse_version_string(start_str + ".0")
+                start_tuple = (
+                    parse_version_string(start_str)
+                    if start_str.count(".") == 2
+                    else parse_version_string(start_str + ".0")
+                )
                 # FIXME: for something like 1.14 - 1.16, 1.16 should mean the last patch of 1.16, not 1.16.0
-                end_tuple = parse_version_string(end_str) if end_str.count(".") == 2 else parse_version_string(end_str + ".0")
+                end_tuple = (
+                    parse_version_string(end_str) if end_str.count(".") == 2 else parse_version_string(end_str + ".0")
+                )
 
                 for v_tuple in all_version_tuples:
                     if start_tuple[1:] <= v_tuple <= end_tuple[1:]:

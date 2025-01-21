@@ -53,8 +53,7 @@ class ServerSettingManager:
         """
         col_name = _SETTING_TO_DB_KEY[setting]
         response: SingleAPIResponse[ServerSettingRecord] | None = (
-            await self.client
-            .table("server_settings")
+            await self.client.table("server_settings")
             .select(col_name, count=CountMethod.exact)
             .eq("server_id", server_id)
             .maybe_single()
@@ -86,9 +85,7 @@ class ServerSettingManager:
         self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None
     ) -> None: ...
     @overload
-    async def set(
-        self, server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None
-    ) -> None: ...
+    async def set(self, server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None) -> None: ...
     @overload
     async def set(self, server_id: int, setting: Setting, value: int | list[int] | None) -> None: ...
 

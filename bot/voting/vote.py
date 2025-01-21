@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class VoteCog(Cog):
-
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
@@ -69,7 +68,7 @@ class VoteCog(Cog):
             vote_session = await self.get_vote_session(payload.message_id)
             if vote_session is None:
                 return
-    
+
         if vote_session.is_closed:
             for message_id in vote_session.message_ids:
                 self._open_vote_sessions.pop(message_id, None)
@@ -121,10 +120,9 @@ class VoteCog(Cog):
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     cog = VoteCog(bot)
-    open_vote_sessions = (
-        await BuildVoteSession.get_open_vote_sessions(bot)
-        + await DeleteLogVoteSession.get_open_vote_sessions(bot)
-    )
+    open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
+        bot
+    ) + await DeleteLogVoteSession.get_open_vote_sessions(bot)
     for session in open_vote_sessions:
         for message_id in session.message_ids:
             cog._open_vote_sessions[message_id] = session  # pyright: ignore [reportPrivateUsage]

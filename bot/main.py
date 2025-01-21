@@ -91,20 +91,20 @@ class RedstoneSquid(Bot):
 def setup_logging():
     """Set up logging for the bot process."""
     # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
-    dt_fmt = '%Y-%m-%d %H:%M:%S'
-    formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+    dt_fmt = "%Y-%m-%d %H:%M:%S"
+    formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
 
     logging.root.setLevel(logging.INFO)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logging.root.addHandler(stream_handler)
 
-    logger = logging.getLogger('discord')
+    logger = logging.getLogger("discord")
     logger.setLevel(logging.INFO)
 
     file_handler = RotatingFileHandler(
-        filename='discord.log',
-        encoding='utf-8',
+        filename="discord.log",
+        encoding="utf-8",
         maxBytes=32 * 1024 * 1024,  # 32 MiB
         backupCount=5,  # Rotate through 5 files
     )
@@ -127,6 +127,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.platform == 'win32':  # https://github.com/aio-libs/aiodns/issues/86
+    if sys.platform == "win32":  # https://github.com/aio-libs/aiodns/issues/86
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

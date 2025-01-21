@@ -89,6 +89,7 @@ class LoggingCog(Cog, command_attrs=dict(hidden=True)):
 
         logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
 
+
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(LoggingCog(bot))

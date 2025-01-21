@@ -41,8 +41,7 @@ class MessageManager:
             raise ValueError("vote_session_id cannot be None for this purpose.")
 
         await (
-            self.client
-            .table("messages")
+            self.client.table("messages")
             .insert(
                 {
                     "server_id": message.guild.id,
@@ -80,7 +79,9 @@ class MessageManager:
             ValueError: If the message is not found.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
-        response: APIResponse[MessageRecord] = await self.client.table("messages").delete().eq("message_id", message_id).execute()
+        response: APIResponse[MessageRecord] = (
+            await self.client.table("messages").delete().eq("message_id", message_id).execute()
+        )
         if response.data:
             return response.data[0]
         else:
@@ -96,7 +97,9 @@ class MessageManager:
             A list of messages.
         """
         # Messages that have been updated since the last submission message update.
-        response: SingleAPIResponse[list[MessageRecord]] = await self.client.rpc("get_outdated_messages", {"server_id_input": server_id}).execute()
+        response: SingleAPIResponse[list[MessageRecord]] = await self.client.rpc(
+            "get_outdated_messages", {"server_id_input": server_id}
+        ).execute()
         server_outdated_messages = response.data
         return server_outdated_messages
 
@@ -107,6 +110,8 @@ async def main():
     # print(get_outdated_message(433618741528625152, 30))
     print(await DatabaseManager().message.get_outdated_messages(433618741528625153))
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())
