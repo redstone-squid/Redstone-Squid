@@ -150,7 +150,7 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
         await interaction.response.defer()  # type: ignore
 
 
-class BuildSubmissionForm(View):
+class BuildSubmissionForm(discord.ui.View):
     def __init__(self, build: Build, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
         # Assumptions
@@ -181,7 +181,7 @@ class BuildSubmissionForm(View):
         self.stop()
 
 
-class ConfirmationView(View):
+class ConfirmationView(discord.ui.View):
     """A simple Yes/No style pair of buttons for confirming an action."""
 
     def __init__(self, timeout: int = 60):
