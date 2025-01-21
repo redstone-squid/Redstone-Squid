@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Bot, Greedy
 
-from bot.utils import check_is_staff, RunningMessage
+from bot import utils
+from bot.utils import check_is_staff, is_owner_server
+from database.builds import Build
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -19,6 +22,48 @@ class Admin(commands.Cog):
 
     def __init__(self, bot: RedstoneSquid):
         self.bot = bot
+
+    @commands.hybrid_command(name="confirm")
+    @app_commands.describe(build_id="The ID of the build you want to confirm.")
+    @check_is_staff()
+    @commands.check(is_owner_server)
+    async def confirm_build(self, ctx: Context, build_id: int):
+        """Marks a submission as confirmed.
+
+        This posts the submission to all the servers which configured the bot."""
+        async with utils.RunningMessage(ctx) as sent_message:
+            build = await Build.from_id(build_id)
+
+            if build is None:
+                error_embed = utils.error_embed("Error", "No pending build with that ID.")
+                await sent_message.edit(embed=error_embed)
+                return
+
+            await build.confirm()
+            self.bot.dispatch("build_confirmed", build)
+
+            success_embed = utils.info_embed("Success", "Submission has been confirmed.")
+            await sent_message.edit(embed=success_embed)
+
+    @commands.hybrid_command(name="deny")
+    @app_commands.describe(build_id="The ID of the build you want to deny.")
+    @check_is_staff()
+    @commands.check(is_owner_server)
+    async def deny_build(self, ctx: Context, build_id: int):
+        """Marks a submission as denied."""
+        async with utils.RunningMessage(ctx) as sent_message:
+            build = await Build.from_id(build_id)
+
+            if build is None:
+                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
+                await sent_message.edit(embed=error_embed)
+                return
+
+            await build.deny()
+            await build.update_messages(self.bot)
+
+            success_embed = utils.info_embed("Success", "Submission has been denied.")
+            await sent_message.edit(embed=success_embed)
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
@@ -92,7 +137,7 @@ class Admin(commands.Cog):
     @commands.is_owner()
     async def error(self, ctx: Context):
         """Raises an error for testing purposes."""
-        async with RunningMessage(ctx, delete_on_exit=True):
+        async with utils.RunningMessage(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")
 
 

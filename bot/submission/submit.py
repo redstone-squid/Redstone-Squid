@@ -56,52 +56,6 @@ class BuildCog(Cog, name="Build"):
         self.open_vote_sessions: dict[int, BuildVoteSession] = {}
         """A cache of open vote sessions. The key is the message id of the vote message."""
 
-    @hybrid_group(name="build", invoke_without_command=True)
-    async def build_hybrid_group(self, ctx: Context):
-        """Submit, view, confirm and deny submissions."""
-        await ctx.send_help("build")
-
-    @build_hybrid_group.command(name="confirm")
-    @app_commands.describe(build_id="The ID of the build you want to confirm.")
-    @check_is_staff()
-    @commands.check(is_owner_server)
-    async def confirm_build(self, ctx: Context, build_id: int):
-        """Marks a submission as confirmed.
-
-        This posts the submission to all the servers which configured the bot."""
-        async with utils.RunningMessage(ctx) as sent_message:
-            build = await Build.from_id(build_id)
-
-            if build is None:
-                error_embed = utils.error_embed("Error", "No pending build with that ID.")
-                await sent_message.edit(embed=error_embed)
-                return
-
-            await build.confirm()
-            await self.post_confirmed_build(build)
-
-            success_embed = utils.info_embed("Success", "Submission has been confirmed.")
-            await sent_message.edit(embed=success_embed)
-
-    @build_hybrid_group.command(name="deny")
-    @app_commands.describe(build_id="The ID of the build you want to deny.")
-    @check_is_staff()
-    @commands.check(is_owner_server)
-    async def deny_build(self, ctx: Context, build_id: int):
-        """Marks a submission as denied."""
-        async with utils.RunningMessage(ctx) as sent_message:
-            build = await Build.from_id(build_id)
-
-            if build is None:
-                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                await sent_message.edit(embed=error_embed)
-                return
-
-            await build.deny()
-
-            success_embed = utils.info_embed("Success", "Submission has been denied.")
-            await sent_message.edit(embed=success_embed)
-
     @commands.hybrid_group(name="submit")
     async def submit_group(self, ctx: Context):
         """Submit a build to the database."""
@@ -260,13 +214,13 @@ class BuildCog(Cog, name="Build"):
             )
             await self.post_build_for_voting(build)
 
+    @commands.Cog.listener("on_build_confirmed")
     async def post_confirmed_build(self, build: Build) -> None:
         """Post a confirmed build to the appropriate discord channels.
 
         Args:
             build (Build): The build to post.
         """
-        # TODO: There are no checks to see if the submission has already been posted
         assert build.id is not None
         if build.submission_status != Status.CONFIRMED:
             raise ValueError("The build must be confirmed to post it.")
