@@ -1,4 +1,5 @@
 """Everything related to querying the database for information."""
+
 from __future__ import annotations
 
 import os
@@ -118,6 +119,7 @@ class SearchCog(Cog):
                 return await sent_message.edit(embed=error_embed)
 
             await sent_message.edit(content=submission.original_link, embed=await submission.generate_embed())
+
 
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""

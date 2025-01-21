@@ -4,29 +4,24 @@ from __future__ import annotations
 
 from typing import Literal, TypeVar, cast, TYPE_CHECKING
 import asyncio
-import os
 
 import discord
-from discord import InteractionResponse, Message, app_commands
+from discord import InteractionResponse, Message
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
-    hybrid_group,
     Cog,
     flag,
     FlagConverter,
 )
-from openai import AsyncOpenAI
-from postgrest.base_request_builder import APIResponse
-import vecs
 
 from bot import utils
 from bot.submission.parse import parse_dimensions
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from bot.voting.vote_session import BuildVoteSession
-from database.builds import get_all_builds, Build
-from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
-from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord, Status, Category
+from database.builds import Build
+from bot.utils import RunningMessage, is_owner_server, check_is_trusted_or_staff
+from database.schema import Status, Category
 from database.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -421,6 +416,7 @@ class BuildCog(Cog, name="Build"):
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
+
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
