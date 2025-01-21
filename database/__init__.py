@@ -32,10 +32,12 @@ class DatabaseManager(AsyncClient):
 
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
     _instance: ClassVar[DatabaseManager] | None = None
+    bot: RedstoneSquid | None = None
 
     def __new__(cls, *args, **kwargs) -> DatabaseManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
     def __init__(
@@ -44,6 +46,11 @@ class DatabaseManager(AsyncClient):
         options: AsyncClientOptions | None = None,
     ):
         """Initializes the DatabaseManager."""
+        # Singleton object should only be initialized once
+        if self._initialized:
+            return
+        self._initialized = True
+
         # This is necessary if the user is not running from app.py.
         if DEV_MODE:
             load_dotenv()
