@@ -6,7 +6,7 @@ from typing import Literal, TypeVar, cast, TYPE_CHECKING
 import asyncio
 
 import discord
-from discord import InteractionResponse, Message
+from discord import InteractionResponse, Message, app_commands
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -159,22 +159,22 @@ class BuildCog(Cog, name="Build"):
             await message.edit(embed=success_embed)
             await self.post_build_for_voting(build)
 
-    @fix_converter_annotations
-    class SubmitFormFlags(commands.FlagConverter):
-        """Parameters information for the /submit command."""
-
-        first_attachment: discord.Attachment = flag(default=None)
-        second_attachment: discord.Attachment = flag(default=None)
-        third_attachment: discord.Attachment = flag(default=None)
-        fourth_attachment: discord.Attachment = flag(default=None)
-
-    @commands.command(name="submit_form")
-    async def submit_form(self, ctx: Context, *, flags: SubmitFormFlags):
+    @app_commands.command(name="submit_form")
+    async def submit_form(
+        self,
+        interaction: discord.Interaction,
+        *,
+        first_attachment: discord.Attachment | None = None,
+        second_attachment: discord.Attachment | None = None,
+        third_attachment: discord.Attachment | None = None,
+        fourth_attachment: discord.Attachment | None = None
+    ):
         """Submits a build to the database."""
-        await ctx.defer()
+        await interaction.response.defer()
 
         build = Build(ai_generated=False)
-        for _name, attachment in flags:
+        attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
+        for attachment in attachments:
             if attachment is None:
                 continue
 
@@ -190,7 +190,7 @@ class BuildCog(Cog, name="Build"):
                 build.video_urls.append(url)
 
         view = BuildSubmissionForm(build)
-        followup: discord.Webhook = ctx.interaction.followup  # type: ignore
+        followup = interaction.followup
 
         await followup.send("Use the select menus then click the button", view=view)
         await view.wait()
