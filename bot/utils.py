@@ -22,11 +22,11 @@ from pydantic import TypeAdapter, ValidationError
 from bot import config
 from bot._types import GuildMessageable
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
+from database import DatabaseManager
 from database.schema import (
     MessageRecord,
     DeleteLogVoteSessionRecord,
 )
-from database.server_settings import get_server_setting
 
 if TYPE_CHECKING:
     pass
@@ -128,7 +128,7 @@ def check_is_staff():
             raise NoPrivateMessage()
 
         server_id = ctx.guild.id
-        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
+        staff_role_ids = await DatabaseManager().server_setting.get(server_id=server_id, setting="Staff")
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         if any(ctx.author.get_role(item) is not None for item in staff_role_ids):  # type: ignore
@@ -143,7 +143,7 @@ async def is_staff(bot: discord.Client, server_id: int | None, user_id: int) -> 
     if server_id is None:
         return False  # TODO: global staff role
 
-    staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
+    staff_role_ids = await DatabaseManager().server_setting.get(server_id=server_id, setting="Staff")
     server = bot.get_guild(server_id)
     if server is None:
         return False
@@ -162,10 +162,10 @@ def check_is_trusted_or_staff():
     async def predicate(ctx: Context) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
-
+        db = DatabaseManager()
         server_id = ctx.guild.id
-        staff_role_ids = await get_server_setting(server_id=server_id, setting="Staff")
-        trusted_role_ids = await get_server_setting(server_id=server_id, setting="Trusted")
+        staff_role_ids = await db.server_setting.get(server_id=server_id, setting="Staff")
+        trusted_role_ids = await db.server_setting.get(server_id=server_id, setting="Trusted")
         allowed_role_ids = staff_role_ids + trusted_role_ids
 
         # ctx.guild is None doesn't narrow ctx.author to Member

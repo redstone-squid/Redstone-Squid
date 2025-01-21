@@ -46,7 +46,6 @@ from database.schema import (
     UtilityRecord, Status, Category,
 )
 from database import DatabaseManager, message as msg
-from database.server_settings import get_server_setting
 from database.user import add_user
 from database.utils import utcnow, get_version_string, upload_to_catbox
 
@@ -658,7 +657,7 @@ class Build:
 
         channels: list[GuildMessageable] = []
         for guild in bot.guilds:
-            channel_id = await get_server_setting(guild.id, target)
+            channel_id = await DatabaseManager().server_setting.get(guild.id, target)
             if channel_id:
                 channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
 

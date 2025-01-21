@@ -6,7 +6,7 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 from __future__ import annotations
 
 import os
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, TYPE_CHECKING
 from functools import cache
 
 from dotenv import load_dotenv
@@ -16,7 +16,11 @@ from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
 from database.schema import RestrictionRecord, VersionRecord
+from database.server_settings import ServerSettingManager
 from database.utils import get_version_string, parse_version_string
+
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 
 class DatabaseManager(AsyncClient):
@@ -32,6 +36,7 @@ class DatabaseManager(AsyncClient):
 
     def __init__(
         self,
+        bot: RedstoneSquid | None = None,
         options: AsyncClientOptions | None = None,
     ):
         """Initializes the DatabaseManager."""
@@ -46,6 +51,8 @@ class DatabaseManager(AsyncClient):
             raise RuntimeError("Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable.")
 
         super().__init__(supabase_url, supabase_key, options)
+        self.bot = bot
+        self.server_setting = ServerSettingManager(self)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @cache
