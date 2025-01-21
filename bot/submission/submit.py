@@ -24,7 +24,6 @@ from bot import utils
 from bot.submission.parse import parse_dimensions
 from bot.submission.ui import BuildSubmissionForm, ConfirmationView
 from bot.voting.vote_session import BuildVoteSession
-from database import message as msg
 from database.builds import get_all_builds, Build
 from bot.utils import RunningMessage, is_owner_server, check_is_staff, check_is_trusted_or_staff
 from database.schema import TypeRecord, RestrictionRecord, RestrictionAliasRecord, Status, Category
@@ -330,7 +329,7 @@ class BuildCog(Cog, name="Build"):
         em = await build.generate_embed()
         for channel in await build.get_channels_to_post_to(self.bot):
             message = await channel.send(content=build.original_link, embed=em)
-            await msg.track_message(message, purpose="view_confirmed_build", build_id=build.id)
+            await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
     async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
         """

@@ -15,7 +15,7 @@ import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
 from bot import utils
-from database import DatabaseManager, message as msg
+from database import DatabaseManager
 from database.builds import Build
 from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
 
@@ -67,7 +67,7 @@ async def track_vote_session(
         .execute()
     )
     session_id = response.data[0]["id"]
-    coros = [msg.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages]
+    coros = [db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages]
     await asyncio.gather(*coros)
     return session_id
 
@@ -465,7 +465,7 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         message = await channel.send(content=self.build.original_link, embed=await self.build.generate_embed())
-        await msg.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
+        await self.bot.db.message.track_message(message, purpose="vote", build_id=self.build.id, vote_session_id=self.id)
         self._messages.add(message)
         return message
 

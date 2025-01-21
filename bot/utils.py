@@ -29,7 +29,7 @@ from database.schema import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from bot.main import RedstoneSquid
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -177,10 +177,10 @@ def check_is_trusted_or_staff():
 
 
 @overload
-async def getch(bot: discord.Client, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message | None: ...  # pyright: ignore
+async def getch(bot: RedstoneSquid, record: MessageRecord | DeleteLogVoteSessionRecord) -> Message | None: ...  # pyright: ignore
 
 
-async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
+async def getch(bot: RedstoneSquid, record: Mapping[str, Any]) -> Any:
     """Fetch discord objects from database records."""
 
     try:
@@ -200,7 +200,7 @@ async def getch(bot: discord.Client, record: Mapping[str, Any]) -> Any:
     raise ValueError("Invalid object to fetch.")
 
 
-async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -> Message | None:
+async def getch_message(bot: RedstoneSquid, channel_id: int, message_id: int) -> Message | None:
     """Fetch a message from a channel."""
 
     channel = bot.get_channel(channel_id)
@@ -212,7 +212,7 @@ async def getch_message(bot: discord.Client, channel_id: int, message_id: int) -
         return await channel.fetch_message(message_id)
     except discord.NotFound:
         pass
-        # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+        # await bot.db.message.untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
     except discord.Forbidden:
         pass
     return None

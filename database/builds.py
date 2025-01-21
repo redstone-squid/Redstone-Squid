@@ -13,7 +13,7 @@ from importlib import resources
 from functools import cached_property
 from dataclasses import dataclass, field, fields
 from collections.abc import Sequence, Mapping
-from typing import Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
+from typing import TYPE_CHECKING, Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
 
 import discord
 from discord.ext.commands import Bot
@@ -45,9 +45,12 @@ from database.schema import (
     ExtenderRecord,
     UtilityRecord, Status, Category,
 )
-from database import DatabaseManager, message as msg
+from database import DatabaseManager
 from database.user import add_user
 from database.utils import utcnow, get_version_string, upload_to_catbox
+
+if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
 
 logger = logging.getLogger(__name__)
 
@@ -580,7 +583,7 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    async def update_messages(self, bot: discord.Client) -> None:
+    async def update_messages(self, bot: RedstoneSquid) -> None:
         """Updates all messages which for this build."""
         if self.id is None:
             raise ValueError("Build id is None.")
@@ -594,7 +597,7 @@ class Build:
             if message is None:
                 continue
             await message.edit(content=self.original_link, embed=em)
-            await msg.update_message_edited_time(message)
+            await bot.db.message.update_message_edited_time(message)
 
     async def get_display_messages(self) -> list[MessageRecord]:
         """Get all messages which showed this build."""
@@ -604,7 +607,7 @@ class Build:
         )
         return response.data
 
-    async def get_original_message(self, bot: discord.Client) -> discord.Message | None:
+    async def get_original_message(self, bot: RedstoneSquid) -> discord.Message | None:
         """Gets the original message of the build."""
         if self._original_message_obj:
             return self._original_message_obj

@@ -15,6 +15,7 @@ from postgrest.base_request_builder import APIResponse
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 from bot.config import DEV_MODE
+from database.message import MessageManager
 from database.schema import RestrictionRecord, VersionRecord
 from database.server_settings import ServerSettingManager
 from database.utils import get_version_string, parse_version_string
@@ -53,6 +54,7 @@ class DatabaseManager(AsyncClient):
         super().__init__(supabase_url, supabase_key, options)
         self.bot = bot
         self.server_setting = ServerSettingManager(self)
+        self.message = MessageManager(self)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @cache
