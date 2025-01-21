@@ -52,7 +52,6 @@ class RedstoneSquid(Bot):
         await self.load_extension("bot.voting.vote")
         await self.load_extension("jishaku")
         await self.load_extension("bot.verify")
-        await self.load_extension("bot.delete_log")
         await self.load_extension("bot.admin")
         self.call_supabase_to_prevent_deactivation.start()
 
