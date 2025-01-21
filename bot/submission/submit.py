@@ -422,7 +422,7 @@ class BuildCog(Cog, name="Build"):
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
 
-    @commands.command("add_alias")
+    @commands.hybrid_command("add_alias")
     @check_is_staff()
     @commands.check(is_owner_server)
     async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
