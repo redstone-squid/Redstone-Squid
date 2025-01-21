@@ -297,7 +297,7 @@ class AbstractVoteSession(ABC):
         For direct async access, use set_vote() instead.
         """
         if self.is_closed:
-            raise ValueError("Cannot vote on a closed vote session.")
+            return
 
         if weight is None:
             self._votes.pop(user_id, None)
@@ -316,7 +316,7 @@ class AbstractVoteSession(ABC):
     async def set_vote(self, user_id: int, weight: int | None) -> None:
         """Set a vote for a user with proper database tracking."""
         if self.is_closed:
-            raise ValueError("Cannot vote on a closed vote session.")
+            return
 
         if weight is None:
             self._votes.pop(user_id, None)
