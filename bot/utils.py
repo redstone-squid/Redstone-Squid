@@ -10,15 +10,13 @@ from types import FrameType, TracebackType
 from typing import TypedDict, TYPE_CHECKING, Any
 import mimetypes
 import asyncio
-from typing_extensions import TypeVar
 import aiohttp
 
 import discord
 import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context, CommandError, FlagConverter, NoPrivateMessage, MissingAnyRole, check, \
-    CheckFailure
+from discord.ext.commands import Context, FlagConverter, NoPrivateMessage, MissingAnyRole, check, CheckFailure
 
 from bot import config
 from bot.config import OWNER_ID, PRINT_TRACEBACKS

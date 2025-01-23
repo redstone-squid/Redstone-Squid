@@ -294,7 +294,12 @@ class BuildField(discord.ui.TextInput):
 
 
 class EditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
-    def __init__(self, build: Build, *, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None):
+    def __init__(
+        self,
+        build: Build,
+        *,
+        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+    ):
         super().__init__(parent=parent, timeout=None)
         self.build = build
         self.items: list[BuildField] = [
@@ -355,7 +360,9 @@ class EditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
-        await interaction.followup.send(f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(), ephemeral=ephemeral)
+        await interaction.followup.send(
+            f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(), ephemeral=ephemeral
+        )
 
     @override
     async def update(self, interaction: discord.Interaction[ClientT]):
@@ -397,7 +404,12 @@ class EditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
 
 
 class BuildInfoView[ClientT: discord.Client](BaseNavigableView[ClientT]):
-    def __init__(self, build: Build, *, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None):
+    def __init__(
+        self,
+        build: Build,
+        *,
+        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+    ):
         super().__init__(parent=parent, timeout=None)
         self.build = build
         if build.id is None:

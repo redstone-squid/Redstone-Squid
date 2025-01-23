@@ -140,7 +140,9 @@ def parse_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
 
 
 @overload
-def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int | None, int | None, int | None]: ...
+def parse_dimensions(
+    dim_str: str, *, min_dim: int, max_dim: Literal[3]
+) -> tuple[int | None, int | None, int | None]: ...
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
@@ -182,7 +184,9 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
             try:
                 dimensions.append(int(dim))
             except ValueError:
-                raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'")
+                raise ValueError(
+                    f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
+                )
 
     # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))

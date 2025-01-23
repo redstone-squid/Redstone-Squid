@@ -34,7 +34,9 @@ HOME: Final[str] = "\N{HOUSE BUILDING}"
 NON_MARKDOWN_INFORMATION_SOURCE: Final[str] = "\N{INFORMATION SOURCE}"
 
 
-async def resolve_parent[ClientT: discord.Client](parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> BaseNavigableView[ClientT]:
+async def resolve_parent[ClientT: discord.Client](
+    parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT],
+) -> BaseNavigableView[ClientT]:
     """Resolves the parent view."""
     if callable(parent):
         return await maybe_coroutine(parent)
@@ -51,7 +53,12 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, /, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None, timeout: float | None = 180) -> None:
+    def __init__(
+        self,
+        /,
+        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+        timeout: float | None = 180,
+    ) -> None:
         """
         Initializes the navigable view.
 
