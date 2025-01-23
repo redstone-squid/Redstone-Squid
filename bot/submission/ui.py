@@ -409,7 +409,8 @@ class BuildInfoView[ClientT: discord.Client](BaseNavigableView[ClientT]):
 
     @override
     async def send(self, interaction: discord.Interaction[ClientT]) -> None:
-        await interaction.response.defer()
+        if not interaction.response.is_done():
+            await interaction.response.defer()
         await interaction.followup.send(embed=await self.get_embed(), view=self)
 
     @override
