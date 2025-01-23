@@ -167,7 +167,7 @@ class BuildCog(Cog, name="Build"):
         first_attachment: discord.Attachment | None = None,
         second_attachment: discord.Attachment | None = None,
         third_attachment: discord.Attachment | None = None,
-        fourth_attachment: discord.Attachment | None = None
+        fourth_attachment: discord.Attachment | None = None,
     ):
         """Submits a build to the database."""
         await interaction.response.defer()
@@ -416,6 +416,13 @@ class BuildCog(Cog, name="Build"):
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
+
+    @commands.hybrid_command("test")
+    async def test(self, ctx: Context):
+        """Test command."""
+        from bot.submission.ui import PersistentView
+
+        await ctx.send("Test command.", view=PersistentView())
 
 
 async def setup(bot: "RedstoneSquid"):
