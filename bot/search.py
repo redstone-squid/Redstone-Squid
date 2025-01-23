@@ -11,6 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from openai import AsyncOpenAI
 import vecs
 
+from bot.submission.ui import DynamicBuildEditButton, BuildInfoView
 from bot.utils import RunningMessage, check_is_staff, is_owner_server
 from bot import utils
 from database.builds import Build, get_all_builds
@@ -111,16 +112,28 @@ class SearchCog(Cog):
     @app_commands.describe(build_id="The ID of the build you want to see.")
     async def view_build(self, ctx: Context, build_id: int):
         """Displays a submission."""
-        async with utils.RunningMessage(ctx) as sent_message:
-            submission = await Build.from_id(build_id)
-
-            if submission is None:
+        if ctx.interaction:
+            interaction = ctx.interaction
+            await interaction.response.defer()
+            build = await Build.from_id(build_id)
+            if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                return await interaction.followup.send(embed=error_embed, ephemeral=True)
 
-            await sent_message.edit(content=submission.original_link, embed=await submission.generate_embed())
+            view = BuildInfoView(build)
+            await view.send(interaction)
+        else:
+            async with utils.RunningMessage(ctx) as sent_message:
+                build = await Build.from_id(build_id)
+
+                if build is None:
+                    error_embed = utils.error_embed("Error", "No build with that ID.")
+                    return await sent_message.edit(embed=error_embed)
+
+                await sent_message.edit(content=build.original_link, embed=await build.generate_embed())
 
 
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))
