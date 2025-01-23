@@ -352,9 +352,10 @@ class EditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
 
     @override
     async def send(self, interaction: discord.Interaction[ClientT], ephemeral: bool = False) -> None:
-        await interaction.response.defer(ephemeral=ephemeral)
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
-        await interaction.followup.send("Page 1", view=self, embeds=await self.get_embeds())
+        await interaction.followup.send(f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(), ephemeral=ephemeral)
 
     @override
     async def update(self, interaction: discord.Interaction[ClientT]):
