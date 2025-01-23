@@ -136,15 +136,17 @@ def parse_time_string(time_string: str | None) -> int | None:
 
 
 @overload
-def parse_dimensions(dim_str: str) -> tuple[int, int, int | None]: ...
+def parse_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]: ...
 
 
 @overload
-def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int, int | None, int | None]: ...
+def parse_dimensions(dim_str: str, *, min_dim: int, max_dim: Literal[3]) -> tuple[int | None, int | None, int | None]: ...
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
-    """Parses a string representing dimensions. For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators.
+    """Parses a string representing dimensions.
+
+    For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators. '?' is allowed as a placeholder for a dimension.
 
     Args:
         dim_str: The string to parse
@@ -152,7 +154,10 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
         max_dim: The maximum number of dimensions
 
     Returns:
-        A list of the dimensions, the length of the list will be padded with None to match `max_dim`.
+        A list of the dimensions, the length of the list will match `max_dim`. If there are fewer dimensions than `max_dim`, the rest will be `None`.
+
+    Raises:
+        ValueError: If the number of dimensions is not between `min_dim` and `max_dim`, or the string is not parsable.
     """
     if min_dim > max_dim:
         raise ValueError(f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}.")
@@ -168,10 +173,16 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
             f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs_cross)} in {dim_str=} splitting by 'x', and {len(inputs_star)} splitting by '*'."
         )
 
-    try:
-        dimensions = list(map(int, inputs))
-    except ValueError:
-        raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}")
+    dimensions: list[int | None] = []
+    for dim in inputs:
+        dim = dim.strip()
+        if dim == "?":
+            dimensions.append(None)
+        else:
+            try:
+                dimensions.append(int(dim))
+            except ValueError:
+                raise ValueError(f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'")
 
     # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
