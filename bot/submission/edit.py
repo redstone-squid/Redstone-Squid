@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
+from postgrest.base_request_builder import SingleAPIResponse
 
 from bot.submission.parse import parse_dimensions
 from bot import utils
-from bot.submission.ui import ConfirmationView, DynamicBuildEditButton
+from bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
 from bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, is_owner_server
 from database.builds import Build
 
@@ -22,6 +25,12 @@ class BuildEditCog(Cog):
 
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
+        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
+        self.edit_ctx_menu = app_commands.ContextMenu(
+            name="Edit Build",
+            callback=self.edit_context_menu,
+        )
+        self.bot.tree.add_command(self.edit_ctx_menu)
 
     @commands.hybrid_group(name="edit")
     @check_is_trusted_or_staff()
@@ -148,6 +157,25 @@ class BuildEditCog(Cog):
                 await build.save()
                 await build.update_messages(self.bot)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+
+    async def edit_context_menu(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        """A context menu command to edit a build."""
+        await interaction.response.defer(ephemeral=True)
+        if message.author.id != self.bot.user.id:  # type: ignore
+            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+
+        response: SingleAPIResponse[dict[str, int | None]] | None = await self.bot.db.table("messages").select("build_id").eq("message_id", message.id).maybe_single().execute()
+        if response is None:
+            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+        else:
+            build_id = response.data["build_id"]
+
+        if build_id is None:
+            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+
+        build = await Build.from_id(build_id)
+        assert build is not None
+        await EditView(build).send(interaction, ephemeral=True)
 
 
 async def setup(bot: RedstoneSquid) -> None:
