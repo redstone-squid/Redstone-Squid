@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import io
+import inspect
 from traceback import format_tb
-from types import TracebackType
+from types import FrameType, TracebackType
 from typing import TypedDict, TYPE_CHECKING, Any
 import mimetypes
 import asyncio
@@ -312,7 +313,8 @@ def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
     This works because discord.py uses the globals() and locals() function to evaluate annotations at runtime.
     See https://discord.com/channels/336642139381301249/1328967235523317862 for more information about this.
     """
-    globals()[cls.__name__] = cls
+    previous_frame: FrameType = inspect.currentframe().f_back  # type: ignore
+    previous_frame.f_globals[cls.__name__] = cls
     return cls
 
 
