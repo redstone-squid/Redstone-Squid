@@ -670,9 +670,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(
-        cls: type[DeleteLogVoteSession], bot: RedstoneSquid
-    ) -> list[DeleteLogVoteSession]:
+    async def get_open_vote_sessions(cls: type[DeleteLogVoteSession], bot: RedstoneSquid) -> list[DeleteLogVoteSession]:
         """Get all open vote sessions from the database."""
         records: list[VoteSessionRecord] = (
             await bot.db.table("vote_sessions")

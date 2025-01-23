@@ -71,6 +71,7 @@ def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
 
 SENTINEL = object()
 
+
 def callable_cached[T](func: Callable[..., T]) -> Callable[..., T]:
     """
     beartype's fast memoization decorator.
@@ -179,7 +180,7 @@ def callable_cached[T](func: Callable[..., T]) -> Callable[..., T]:
         If this callable accepts a variadic positional parameter (e.g.,
         ``*args``).
     """
-    assert callable(func), f'{repr(func)} not callable.'
+    assert callable(func), f"{repr(func)} not callable."
 
     args_flat_to_return_value: dict[tuple, object] = {}
     args_flat_to_return_value_get = args_flat_to_return_value.get

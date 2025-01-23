@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Context, Bot, Greedy
+from discord.ext.commands import Context, Greedy
 
 from bot import utils
 from bot.utils import check_is_staff, check_is_owner_server
