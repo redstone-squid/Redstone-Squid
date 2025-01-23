@@ -62,6 +62,10 @@ class VoteCog(Cog):
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
         """Handles reactions to update vote counts anonymously."""
+        # This must be before the removal of the reaction to prevent the bot from removing its own reaction
+        if payload.user_id == self.bot.user.id:  # type: ignore
+            return
+
         if payload.guild_id is None:
             raise NotImplementedError("Cannot vote in DMs.")
 
