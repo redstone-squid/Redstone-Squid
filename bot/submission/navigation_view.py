@@ -113,6 +113,16 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
                 return parent
             parent = await resolve_parent(parent.parent)
 
+    async def press_back(self, interaction: discord.Interaction[ClientT]) -> None:
+        """Press the back button."""
+        back_button = next(button for button in self.children if isinstance(button, BackButton))
+        await back_button.callback(interaction)
+
+    async def press_home(self, interaction: discord.Interaction[ClientT]) -> None:
+        """Press the home button."""
+        home_button = next(button for button in self.children if isinstance(button, HomeButton))
+        await home_button.callback(interaction)
+
     @override
     def add_item(self, item: Item[Any]) -> Self:
         if item.row == 4:
