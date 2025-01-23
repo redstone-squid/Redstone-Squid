@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Awaitable
 import functools
 from typing import (
     TYPE_CHECKING,
@@ -11,20 +12,33 @@ from typing import (
     Self,
     Final,
     Callable,
+    cast,
     override,
     Concatenate,
 )
 
 import discord
 from discord.ui import Item
+from discord.utils import maybe_coroutine
 
 if TYPE_CHECKING:
     type BaseViewInit[**P, T] = Callable[Concatenate["BaseNavigableView[Any]", P], T]
+
+type MaybeAwaitable[T] = T | Awaitable[T]
+type MaybeAwaitableFunc[**P, T] = Callable[P, MaybeAwaitable[T]]
+type MaybeAwaitableBaseNavigableViewFunc[ClientT: discord.Client] = MaybeAwaitableFunc[[], BaseNavigableView[ClientT]]
 
 
 QUESTION_MARK: Final[str] = "\N{BLACK QUESTION MARK ORNAMENT}"
 HOME: Final[str] = "\N{HOUSE BUILDING}"
 NON_MARKDOWN_INFORMATION_SOURCE: Final[str] = "\N{INFORMATION SOURCE}"
+
+
+async def resolve_parent[ClientT: discord.Client](parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> BaseNavigableView[ClientT]:
+    """Resolves the parent view."""
+    if callable(parent):
+        return await maybe_coroutine(parent)
+    return parent
 
 
 class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
@@ -37,7 +51,7 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, /, parent: BaseNavigableView[ClientT] | None = None, timeout: float | None = 180) -> None:
+    def __init__(self, /, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None, timeout: float | None = 180) -> None:
         """
         Initializes the navigable view.
 
@@ -77,25 +91,27 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
                 child = BackButton[BaseNavigableView[ClientT], ClientT](self.parent)
                 super().add_item(child)
 
-            home = self.find_home()
-            if home and home is not self.parent and HomeButton not in children_cls:
-                child = HomeButton[BaseNavigableView[ClientT], ClientT](home)
+            if HomeButton not in children_cls:
+                # self.find_home will never return None if the parent is not None.
+                find_home = cast(Callable[[], Awaitable[BaseNavigableView[ClientT]]], self.find_home)
+                child = HomeButton[BaseNavigableView[ClientT], ClientT](find_home)
                 super().add_item(child)
 
         if StopButton not in children_cls:
             child = StopButton[Self, ClientT](self)
             super().add_item(child)
 
-    def find_home(self) -> BaseNavigableView[ClientT] | None:
+    async def find_home(self) -> BaseNavigableView[ClientT] | None:
         """Finds the home parent from a view."""
-        parent = self.parent
-        if not parent:
+        if self.parent is None:
             return None
+
+        parent = await resolve_parent(self.parent)
 
         while True:
             if parent.parent is None:
                 return parent
-            parent = parent.parent
+            parent = await resolve_parent(parent.parent)
 
     @override
     def add_item(self, item: Item[Any]) -> Self:
@@ -119,20 +135,21 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseViewT) -> None:
+    def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         self.parent = parent
         super().__init__(style=discord.ButtonStyle.danger, label="Stop", row=4)
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Disables all the items in the view."""
-        for child in self.parent.children:
+        parent = await resolve_parent(self.parent)
+        for child in parent.children:
             # discord.ui.Item contains no attribute "disabled", but some of its children do.
             # Only discord.ui.Button and discord.ui.Select needs to be disabled, but this is faster than checking.
             child.disabled = True  # type: ignore
 
-        self.parent.stop()
-        await self.parent.update(interaction)
+        parent.stop()
+        await parent.update(interaction)
 
 
 class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
@@ -140,14 +157,15 @@ class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseViewT) -> None:
-        self.parent: BaseViewT = parent
+    def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
+        self.parent = parent
         super().__init__(label="Go Home", emoji=HOME, row=4)
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Edits the message with the root view."""
-        await self.parent.update(interaction)
+        parent = await resolve_parent(self.parent)
+        await parent.update(interaction)
 
 
 class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
@@ -155,11 +173,12 @@ class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseNavigableView[ClientT]) -> None:
+    def __init__(self, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         super().__init__(label="Go Back", row=4)
         self.parent = parent
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Edits the message with the parent view."""
-        await self.parent.update(interaction)
+        parent = await resolve_parent(self.parent)
+        await parent.update(interaction)
