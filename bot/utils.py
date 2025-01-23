@@ -17,7 +17,8 @@ import discord
 import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context, CommandError, FlagConverter, NoPrivateMessage, MissingAnyRole, check
+from discord.ext.commands import Context, CommandError, FlagConverter, NoPrivateMessage, MissingAnyRole, check, \
+    CheckFailure
 
 from bot import config
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
@@ -105,13 +106,11 @@ class RunningMessage:
         return False
 
 
-def is_owner_server(ctx: Context[Any]):
+def check_is_owner_server(ctx: Context[Any]):
     """Check if the command is executed on the owner's server."""
 
     if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
-        # TODO: Make a custom error for this.
-        # https://discordpy.readthedocs.io/en/stable/ext/commands/api.html?highlight=is_owner#discord.discord.ext.commands.on_command_error
-        raise CommandError("This command can only be executed on certain servers.")
+        raise CheckFailure("This command can only be executed on certain servers.")
     return True
 
 

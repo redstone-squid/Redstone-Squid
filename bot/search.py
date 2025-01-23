@@ -12,7 +12,7 @@ from openai import AsyncOpenAI
 import vecs
 
 from bot.submission.ui import DynamicBuildEditButton, BuildInfoView
-from bot.utils import RunningMessage, check_is_staff, is_owner_server
+from bot.utils import RunningMessage, check_is_staff, check_is_owner_server
 from bot import utils
 from database.builds import Build, get_all_builds
 from database.schema import Status
@@ -50,7 +50,7 @@ class SearchCog(Cog):
 
     @commands.command("search_restrictions")
     @check_is_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def search_restrictions(self, ctx: Context, query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:

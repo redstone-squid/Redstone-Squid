@@ -13,7 +13,7 @@ from postgrest.base_request_builder import SingleAPIResponse
 from bot.submission.parse import parse_dimensions
 from bot import utils
 from bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
-from bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, is_owner_server
+from bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, check_is_owner_server
 from database.builds import Build
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ class BuildEditCog(Cog):
 
     @commands.hybrid_group(name="edit")
     @check_is_trusted_or_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def edit_group(self, ctx: Context):
         """Edits a record in the database directly."""
         await ctx.send_help("edit")

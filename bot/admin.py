@@ -10,7 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, Bot, Greedy
 
 from bot import utils
-from bot.utils import check_is_staff, is_owner_server
+from bot.utils import check_is_staff, check_is_owner_server
 from database.builds import Build
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
     @check_is_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def confirm_build(self, ctx: Context, build_id: int):
         """Marks a submission as confirmed.
 
@@ -48,7 +48,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command(name="deny")
     @app_commands.describe(build_id="The ID of the build you want to deny.")
     @check_is_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def deny_build(self, ctx: Context, build_id: int):
         """Marks a submission as denied."""
         async with utils.RunningMessage(ctx) as sent_message:
@@ -67,7 +67,7 @@ class Admin(commands.Cog):
 
     @commands.hybrid_command("add_alias")
     @check_is_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
         """Add an alias for a restriction."""
         async with utils.RunningMessage(ctx) as sent_message:

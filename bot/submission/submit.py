@@ -19,7 +19,7 @@ from bot.submission.parse import parse_dimensions
 from bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
 from bot.voting.vote_session import BuildVoteSession
 from database.builds import Build
-from bot.utils import RunningMessage, fix_converter_annotations, is_owner_server, check_is_trusted_or_staff
+from bot.utils import RunningMessage, fix_converter_annotations, check_is_owner_server, check_is_trusted_or_staff
 from database.schema import Status, Category
 from database.utils import upload_to_catbox
 
@@ -270,7 +270,7 @@ class BuildSubmitCog(Cog, name="Build"):
 
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()
-    @commands.check(is_owner_server)
+    @commands.check(check_is_owner_server)
     async def recalc(self, ctx: Context, message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
