@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildCog(Cog, name="Build"):
+class BuildSubmitCog(Cog, name="Build"):
     """A cog with commands to submit builds."""
 
     def __init__(self, bot: "RedstoneSquid"):
@@ -280,4 +280,4 @@ class BuildCog(Cog, name="Build"):
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(BuildCog(bot))
+    await bot.add_cog(BuildSubmitCog(bot))
