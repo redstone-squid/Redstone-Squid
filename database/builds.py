@@ -13,7 +13,7 @@ from importlib import resources
 from functools import cached_property
 from dataclasses import dataclass, field, fields
 from collections.abc import Sequence, Mapping
-from typing import TYPE_CHECKING, Callable, Final, Generic, Literal, Any, cast, TypeVar, ParamSpec
+from typing import TYPE_CHECKING, Callable, Final, Literal, Any, cast
 
 import discord
 from discord.ext.commands import Bot
@@ -56,8 +56,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-P = ParamSpec("P")
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
@@ -81,7 +79,7 @@ class JoinedBuildRecord(BuildRecord):
     messages: MessageRecord | None  # Not actually all the associated messages, just the original message
 
 
-class FrozenField(Generic[T]):
+class FrozenField[T]:
     """A descriptor that makes an attribute immutable after it has been set."""
 
     __slots__ = ("private_name",)
@@ -102,7 +100,7 @@ class FrozenField(Generic[T]):
 
 
 # https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
-def signature_from(_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
+def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Copies the signature of a function to another function."""
 
     def _decorator(func: Callable[P, T]) -> Callable[P, T]:
@@ -118,7 +116,7 @@ def frozen_field(**kwargs: Any):
     return field(**kwargs, metadata=metadata)
 
 
-def freeze_fields(cls: type[T]) -> type[T]:
+def freeze_fields[T](cls: type[T]) -> type[T]:
     """
     A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
 
@@ -675,7 +673,7 @@ class Build:
 
         return channels
 
-    def diff(self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+    def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
         Returns the differences between this build and another
 

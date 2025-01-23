@@ -302,10 +302,7 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
     return io.BytesIO(out)
 
 
-_FlagConverter = TypeVar("_FlagConverter", bound=type[FlagConverter])
-
-
-def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
+def fix_converter_annotations[_FlagConverter: type[FlagConverter]](cls: _FlagConverter) -> _FlagConverter:
     """
     Fixes discord.py being unable to evaluate annotations if `from __future__ import annotations` is used AND the `FlagConverter` is a nested class.
 

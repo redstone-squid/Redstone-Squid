@@ -9,7 +9,7 @@ import asyncio
 from asyncio import Task
 from textwrap import dedent
 from types import MethodType
-from typing import Any, TypeVar, Union, TYPE_CHECKING, cast, ClassVar, final, Literal, override
+from typing import Any, Self, TYPE_CHECKING, cast, ClassVar, final, Literal, override
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
@@ -21,8 +21,6 @@ from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
-
-T = TypeVar("T", bound="AbstractVoteSession")
 
 APPROVE_EMOJIS = ["👍", "✅"]
 DENY_EMOJIS = ["👎", "❌"]
@@ -163,11 +161,11 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def create(cls: type[T], *args: Any, **kwargs: Any) -> T:
+    async def create(cls: type[Self], *args: Any, **kwargs: Any) -> Self:
         """
         Create and initialize a vote session. It should have the same signature as __init__.
         """
-        self: T = cls.__new__(cls)
+        self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(*args, **kwargs)
         await self._async_init()
@@ -218,7 +216,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def from_id(cls: type[T], bot: RedstoneSquid, vote_session_id: int) -> Union[T, None]:
+    async def from_id(cls: type[Self], bot: RedstoneSquid, vote_session_id: int) -> Self | None:
         """
         Create a vote session from an id.
 
