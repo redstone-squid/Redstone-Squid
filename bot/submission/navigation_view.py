@@ -159,7 +159,6 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
             child.disabled = True  # type: ignore
 
         parent.stop()
-        await parent.update(interaction)
 
 
 class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
