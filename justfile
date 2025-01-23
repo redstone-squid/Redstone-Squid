@@ -46,8 +46,14 @@ compile:
     {{python_dir}}/pip-compile --output-file=requirements.txt requirements.in
     {{python_dir}}/pip-compile --constraint=requirements.txt --output-file=test-requirements.txt test-requirements.in
 
+[unix]
 sync:
     {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt test-requirements.txt
+
+[windows]
+sync:
+    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt test-requirements.txt
+    {{python_dir}}/pip uninstall -y aiodns
 
 lint:
     {{python}} -m ruff check --fix --exit-zero

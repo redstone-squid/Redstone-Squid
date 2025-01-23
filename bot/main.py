@@ -126,6 +126,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":  # https://github.com/aio-libs/aiodns/issues/86
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
