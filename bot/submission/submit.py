@@ -1,8 +1,8 @@
-"""A cog with commands to submit, view, confirm and deny submissions."""
+"""A cog with commands to submit builds."""
 
 from __future__ import annotations
 
-from typing import Literal, TypeVar, cast, TYPE_CHECKING
+from typing import Literal, cast, TYPE_CHECKING
 import asyncio
 
 import discord
@@ -12,15 +12,14 @@ from discord.ext.commands import (
     Context,
     Cog,
     flag,
-    FlagConverter,
 )
 
 from bot import utils
 from bot.submission.parse import parse_dimensions
-from bot.submission.ui import BuildSubmissionForm, ConfirmationView
+from bot.submission.ui import BuildSubmissionForm
 from bot.voting.vote_session import BuildVoteSession
 from database.builds import Build
-from bot.utils import RunningMessage, is_owner_server, check_is_trusted_or_staff
+from bot.utils import RunningMessage, fix_converter_annotations, is_owner_server, check_is_trusted_or_staff
 from database.schema import Status, Category
 from database.utils import upload_to_catbox
 
@@ -29,22 +28,9 @@ if TYPE_CHECKING:
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
-_FlagConverter = TypeVar("_FlagConverter", bound=type[FlagConverter])
-
-
-def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
-    """
-    Fixes discord.py being unable to evaluate annotations if `from __future__ import annotations` is used AND the `FlagConverter` is a nested class.
-
-    This works because discord.py uses the globals() and locals() function to evaluate annotations at runtime.
-    See https://discord.com/channels/336642139381301249/1328967235523317862 for more information about this.
-    """
-    globals()[cls.__name__] = cls
-    return cls
-
 
 class BuildCog(Cog, name="Build"):
-    """A cog with commands to submit, view, confirm and deny submissions."""
+    """A cog with commands to submit builds."""
 
     def __init__(self, bot: "RedstoneSquid"):
         self.bot = bot
@@ -249,132 +235,6 @@ class BuildCog(Cog, name="Build"):
         session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
         for message in messages:
             self.open_vote_sessions[message.id] = session
-
-    @commands.hybrid_group(name="edit")
-    @check_is_trusted_or_staff()
-    @commands.check(is_owner_server)
-    async def edit_group(self, ctx: Context):
-        """Edits a record in the database directly."""
-        await ctx.send_help("edit")
-
-    @fix_converter_annotations
-    class EditDoorFlags(commands.FlagConverter):
-        """Parameters information for the `/edit door` command."""
-
-        async def to_build(self) -> Build | None:
-            """Convert the flags to a build object, returns None if the build_id is invalid."""
-            build = await Build.from_id(self.build_id)
-            if build is None:
-                return None
-
-            # FIXME: need to distinguish between None and removing the value
-            if (works_in := self.works_in) is not None:
-                build.version_spec = works_in
-            if (build_size := self.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
-            if (door_size := self.door_size) is not None:
-                door_dimensions = parse_dimensions(door_size)
-                build.door_width, build.door_height, build.door_depth = door_dimensions
-            if (pattern := self.pattern) is not None:
-                build.door_type = pattern.split(", ")
-            if (door_type := self.door_type) is not None:
-                build.door_orientation_type = door_type
-            if (wp_res := self.wiring_placement_restrictions) is not None:
-                build.wiring_placement_restrictions = wp_res.split(", ")
-            if (co_res := self.component_restrictions) is not None:
-                build.component_restrictions = co_res.split(", ")
-            misc_restrictions = [self.locationality, self.directionality]
-            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
-            if self.normal_closing_time is not None:
-                build.normal_closing_time = self.normal_closing_time
-            if self.normal_opening_time is not None:
-                build.normal_opening_time = self.normal_opening_time
-            if self.information_about_build is not None:
-                build.information["user"] = self.information_about_build
-            if (ign := self.in_game_name_of_creator) is not None:
-                build.creators_ign = ign.split(", ")
-            if self.link_to_image is not None:
-                build.image_urls = [self.link_to_image]
-            if self.link_to_youtube_video is not None:
-                build.video_urls = [self.link_to_youtube_video]
-            if self.link_to_world_download is not None:
-                build.world_download_urls = [self.link_to_world_download]
-            if self.server_ip is not None:
-                build.server_info["server_ip"] = self.server_ip
-            if self.coordinates is not None:
-                build.server_info["coordinates"] = self.coordinates
-            if self.command_to_get_to_build is not None:
-                build.server_info["command_to_build"] = self.command_to_get_to_build
-            if self.date_of_creation is not None:
-                build.completion_time = self.date_of_creation
-            return build
-
-        # fmt: off
-        build_id: int = flag(description='The ID of the submission.')
-        door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
-        pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
-        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | None = flag(default=None, description='Door, Skydoor, or Trapdoor.')
-        build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
-        works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
-        wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
-        information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
-        normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
-        date_of_creation: str | None = flag(default=None, description='The date the build was created.')
-        in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
-        link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
-        link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
-        link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
-        server_ip: str | None = flag(default=None, description='The IP of the server where the build is located.')
-        coordinates: str | None = flag(default=None, description='The coordinates of the build in the server.')
-        command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
-        # fmt: on
-
-    @edit_group.command(name="door")
-    async def edit_door(self, ctx: Context, *, flags: EditDoorFlags):
-        """Edits a door record in the database directly."""
-        await ctx.defer()
-        async with RunningMessage(ctx) as sent_message:
-            build = await flags.to_build()
-            if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
-
-            preview_embed = await build.generate_embed()
-
-            # Show a preview of the changes and ask for confirmation
-            await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-            if ctx.interaction:
-                view = ConfirmationView()
-                preview = await ctx.interaction.followup.send(
-                    "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                    embed=preview_embed,
-                    view=view,
-                    ephemeral=True,
-                    wait=True,
-                )
-                await view.wait()
-                await preview.delete()
-                if view.value is None:
-                    await sent_message.edit(
-                        embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
-                    )
-                elif view.value:
-                    await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                    await build.save()
-                    await build.update_messages(self.bot)
-                    await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
-                else:
-                    await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
-            else:  # Not an interaction, so we can't use buttons for confirmation
-                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                await build.save()
-                await build.update_messages(self.bot)
-                await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
