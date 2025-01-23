@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 from collections.abc import Mapping, Sequence
-from typing import Any, override, TYPE_CHECKING
+from typing import Any, override
 
 import discord
 from discord import app_commands, InteractionResponse
@@ -12,23 +12,20 @@ import git
 
 from bot import utils
 
-if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
-
 MORE_INFORMATION = "Use `/help <command>` to get more information."
 
 
-class HelpCog(Cog):
+class HelpCog[BotT: commands.Bot](Cog):
     """Show help for a command or a group of commands."""
 
-    def __init__(self, bot: RedstoneSquid):
+    def __init__(self, bot: BotT):
         self.bot = bot
         self.bot.help_command = Help()
 
     # /help [command]
     @app_commands.command()
     @app_commands.describe(command="The command to get help for.")
-    async def help(self, interaction: discord.Interaction[RedstoneSquid], command: str | None):
+    async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show help for a command or a group of commands."""
         # noinspection PyTypeChecker
         response: InteractionResponse = interaction.response
@@ -41,10 +38,10 @@ class HelpCog(Cog):
 
     @help.autocomplete("command")
     async def command_autocomplete(
-        self, interaction: discord.Interaction, needle: str
+        self, interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
         assert self.bot.help_command
-        ctx = await self.bot.get_context(interaction, cls=Context[RedstoneSquid])
+        ctx = await self.bot.get_context(interaction)
         help_command = self.bot.help_command.copy()
         help_command.context = ctx
         if not needle:
@@ -167,6 +164,6 @@ class Help(commands.MinimalHelpCommand):
         await self.get_destination().send(embed=embed)
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

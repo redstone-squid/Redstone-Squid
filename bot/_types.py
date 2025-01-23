@@ -1,7 +1,5 @@
 """This module contains type hints that are used throughout the bot."""
 
-from __future__ import annotations
-
 from discord import TextChannel, VoiceChannel, StageChannel, Thread, DMChannel, PartialMessageable, GroupChannel
 
 GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread

@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import logging
-from typing import TYPE_CHECKING
 
 from discord import User
 from discord.ext import commands
@@ -9,14 +6,11 @@ from discord.ext.commands import Cog, Context, CommandError
 
 from database.utils import utcnow
 
-if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
 
-
-class LoggingCog(Cog, command_attrs=dict(hidden=True)):
+class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
-    def __init__(self, bot: RedstoneSquid):
+    def __init__(self, bot: BotT):
         self.bot = bot
 
         if not self.bot.owner_id:
@@ -55,7 +49,7 @@ class LoggingCog(Cog, command_attrs=dict(hidden=True)):
         )
 
     @Cog.listener("on_command")
-    async def log_command_usage(self, ctx: Context[RedstoneSquid]):
+    async def log_command_usage(self, ctx: Context[BotT]):
         """Logs command usage to stdout and to the owner of the bot via DM."""
         assert ctx.command is not None
         command = f"{ctx.command.qualified_name}"
@@ -73,7 +67,7 @@ class LoggingCog(Cog, command_attrs=dict(hidden=True)):
         await self.log(log_message, dm_owner=(not owner_dmed_bot))
 
     @Cog.listener("on_command_error")
-    async def log_command_error(self, ctx: Context[RedstoneSquid], exception: CommandError):
+    async def log_command_error(self, ctx: Context[BotT], exception: CommandError):
         """Global error handler for the bot."""
         command = ctx.command
         if command and command.has_error_handler():
@@ -91,6 +85,6 @@ class LoggingCog(Cog, command_attrs=dict(hidden=True)):
         logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: commands.Bot):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(LoggingCog(bot))

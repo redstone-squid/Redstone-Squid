@@ -16,12 +16,12 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 
-class Miscellaneous(Cog):
-    def __init__(self, bot: RedstoneSquid):
+class Miscellaneous[BotT: RedstoneSquid](Cog):
+    def __init__(self, bot: BotT):
         self.bot: RedstoneSquid = bot
 
     @commands.hybrid_command()
-    async def invite_link(self, ctx: Context):
+    async def invite_link(self, ctx: Context[BotT]):
         """Invite me to your other servers!"""
         await ctx.send(
             f"https://discordapp.com/oauth2/authorize?client_id={str(ctx.bot.user.id)}&scope=bot&permissions=8"
@@ -29,12 +29,12 @@ class Miscellaneous(Cog):
 
     # Docstring can't be an f-string, so we use the help parameter instead.
     @commands.hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
-    async def source_code(self, ctx: Context):
+    async def source_code(self, ctx: Context[BotT]):
         """Send a link to the source code."""
         await ctx.send(f"Source code can be found at: {SOURCE_CODE_URL}.")
 
     @commands.hybrid_command()
-    async def google_forms(self, ctx: Context):
+    async def google_forms(self, ctx: Context[BotT]):
         """Links you to our record submission form. You want to use /submit instead."""
         em = discord.Embed(
             title="Submission form.",
@@ -44,12 +44,12 @@ class Miscellaneous(Cog):
         await ctx.send(embed=em)
 
     @commands.hybrid_command()
-    async def docs(self, ctx: Context):
+    async def docs(self, ctx: Context[BotT]):
         """Links you to our regulations."""
         await ctx.send("https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit")
 
     @commands.hybrid_command(name="versions")
-    async def versions(self, ctx: Context):
+    async def versions(self, ctx: Context[BotT]):
         """Shows a list of versions the bot recognizes."""
         versions = await self.bot.db.get_or_fetch_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination

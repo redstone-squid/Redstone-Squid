@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 
-class BuildEditCog(Cog):
+class BuildEditCog[BotT: RedstoneSquid](Cog):
     """A cog with commands for editing builds."""
 
-    def __init__(self, bot: "RedstoneSquid"):
+    def __init__(self, bot: BotT):
         self.bot = bot
         # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
         self.edit_ctx_menu = app_commands.ContextMenu(
@@ -35,7 +35,7 @@ class BuildEditCog(Cog):
     @commands.hybrid_group(name="edit")
     @check_is_trusted_or_staff()
     @commands.check(check_is_owner_server)
-    async def edit_group(self, ctx: Context):
+    async def edit_group(self, ctx: Context[BotT]):
         """Edits a record in the database directly."""
         await ctx.send_help("edit")
 
@@ -117,7 +117,7 @@ class BuildEditCog(Cog):
         # fmt: on
 
     @edit_group.command(name="door")
-    async def edit_door(self, ctx: Context, *, flags: EditDoorFlags):
+    async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):
         """Edits a door record in the database directly."""
         await ctx.defer()
         async with RunningMessage(ctx) as sent_message:
@@ -158,7 +158,7 @@ class BuildEditCog(Cog):
                 await build.update_messages(self.bot)
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
-    async def edit_context_menu(self, interaction: discord.Interaction, message: discord.Message) -> None:
+    async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
         if message.author.id != self.bot.user.id:  # type: ignore

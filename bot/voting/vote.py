@@ -23,8 +23,8 @@ DENY_EMOJIS = ["👎", "❌"]
 logger = logging.getLogger(__name__)
 
 
-class VoteCog(Cog):
-    def __init__(self, bot: RedstoneSquid):
+class VoteCog[BotT: RedstoneSquid](Cog):
+    def __init__(self, bot: BotT):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
 
@@ -122,7 +122,7 @@ class VoteCog(Cog):
         await vote_session.update_messages()
 
     @hybrid_command(name="start_vote")
-    async def start_vote(self, ctx: Context, target_message: discord.Message):
+    async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
         """Starts a vote to delete a specified message by providing its URL."""
         # Check if guild_id matches the current guild
         if ctx.guild != target_message.guild:

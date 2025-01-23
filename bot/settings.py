@@ -18,14 +18,14 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 
-class SettingsCog(Cog, name="Settings"):
-    def __init__(self, bot: RedstoneSquid):
+class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
+    def __init__(self, bot: BotT):
         self.bot = bot
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @check_is_staff()
     @guild_only()
-    async def settings_hybrid_group(self, ctx: Context):
+    async def settings_hybrid_group(self, ctx: Context[BotT]):
         """Allows you to configure the bot for your server."""
         await ctx.send_help("settings")
 
@@ -45,7 +45,7 @@ class SettingsCog(Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="list")
     @check_is_staff()
-    async def show_server_settings(self, ctx: Context):
+    async def show_server_settings(self, ctx: Context[BotT]):
         """Show all settings for this server."""
         assert ctx.guild is not None
         async with utils.RunningMessage(ctx) as sent_message:
@@ -75,7 +75,7 @@ class SettingsCog(Cog, name="Settings"):
     @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
     @check_is_staff()
-    async def search_setting(self, ctx: Context[RedstoneSquid], setting: Setting):
+    async def search_setting(self, ctx: Context[BotT], setting: Setting):
         """Show the server's current setting."""
         assert ctx.guild is not None
 
@@ -114,7 +114,7 @@ class SettingsCog(Cog, name="Settings"):
     @check_is_staff()
     async def change_setting(
         self,
-        ctx: Context,
+        ctx: Context[BotT],
         setting: Setting,
         channel: GuildMessageable | None = None,
         roles: Annotated[list[discord.Role] | None, Greedy[discord.Role]] = None,
@@ -169,7 +169,7 @@ class SettingsCog(Cog, name="Settings"):
     @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
     @check_is_staff()
-    async def clear_setting(self, ctx: Context, setting: Setting):
+    async def clear_setting(self, ctx: Context[BotT], setting: Setting):
         """Set this setting to None."""
         assert ctx.guild is not None
 

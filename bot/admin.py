@@ -17,17 +17,17 @@ if TYPE_CHECKING:
     from bot.main import RedstoneSquid
 
 
-class Admin(commands.Cog):
+class Admin[BotT: RedstoneSquid](commands.Cog):
     """Cog for admin commands."""
 
-    def __init__(self, bot: RedstoneSquid):
+    def __init__(self, bot: BotT):
         self.bot = bot
 
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
     @check_is_staff()
     @commands.check(check_is_owner_server)
-    async def confirm_build(self, ctx: Context, build_id: int):
+    async def confirm_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as confirmed.
 
         This posts the submission to all the servers which configured the bot."""
@@ -49,7 +49,7 @@ class Admin(commands.Cog):
     @app_commands.describe(build_id="The ID of the build you want to deny.")
     @check_is_staff()
     @commands.check(check_is_owner_server)
-    async def deny_build(self, ctx: Context, build_id: int):
+    async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as denied."""
         async with utils.RunningMessage(ctx) as sent_message:
             build = await Build.from_id(build_id)
@@ -68,7 +68,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command("add_alias")
     @check_is_staff()
     @commands.check(check_is_owner_server)
-    async def add_restriction_alias(self, ctx: Context, restriction_id: int, alias: str):
+    async def add_restriction_alias(self, ctx: Context[BotT], restriction_id: int, alias: str):
         """Add an alias for a restriction."""
         async with utils.RunningMessage(ctx) as sent_message:
             await (
@@ -80,7 +80,7 @@ class Admin(commands.Cog):
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
-    async def archive_message(self, ctx: Context[Bot], message: discord.Message, delete_original: bool = False):
+    async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = False):
         """Makes a copy of the message in the current channel."""
         if isinstance(message.author, discord.User):
             user = message.author
@@ -101,7 +101,7 @@ class Admin(commands.Cog):
     @commands.command(name="s", hidden=True)
     @commands.guild_only()
     @commands.is_owner()
-    async def sync(self, ctx: Context[Bot], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
+    async def sync(self, ctx: Context[BotT], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
         """Syncs the slash commands with the discord API."""
         if not guilds:
             if spec == "~":
@@ -132,7 +132,7 @@ class Admin(commands.Cog):
 
     @commands.command(name="gdb", hidden=True)
     @commands.is_owner()
-    async def get_sheets_link(self, ctx: Context):
+    async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
         await ctx.send(
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221"
@@ -140,7 +140,7 @@ class Admin(commands.Cog):
 
     @commands.command(name="db", hidden=True)
     @commands.is_owner()
-    async def get_database_link(self, ctx: Context):
+    async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
         await ctx.send(
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc"
@@ -148,7 +148,7 @@ class Admin(commands.Cog):
 
     @commands.command(name="error", aliases=["e"], hidden=True)
     @commands.is_owner()
-    async def error(self, ctx: Context):
+    async def error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
         async with utils.RunningMessage(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")

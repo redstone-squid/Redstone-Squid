@@ -417,7 +417,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "BuildVoteSession | None":
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> BuildVoteSession | None:
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), build_vote_sessions(*)")
@@ -433,7 +433,7 @@ class BuildVoteSession(AbstractVoteSession):
         return await cls._from_record(bot, vote_session_record)
 
     @classmethod
-    async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> "BuildVoteSession":
+    async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> BuildVoteSession:
         """Create a vote session from a database record."""
         if record["build_vote_sessions"] is None:
             raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
@@ -495,7 +495,7 @@ class BuildVoteSession(AbstractVoteSession):
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(cls: type["BuildVoteSession"], bot: RedstoneSquid) -> list["BuildVoteSession"]:
+    async def get_open_vote_sessions(cls: type[BuildVoteSession], bot: RedstoneSquid) -> list[BuildVoteSession]:
         """Get all open vote sessions from the database."""
         records: list[dict[str, Any]] = (
             await bot.db.table("vote_sessions")
@@ -581,7 +581,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> "DeleteLogVoteSession | None":
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> DeleteLogVoteSession | None:
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await bot.db.table("vote_sessions")
             .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
@@ -601,7 +601,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         return await cls._from_record(bot, vote_session_record)
 
     @classmethod
-    async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> "DeleteLogVoteSession | None":
+    async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> DeleteLogVoteSession | None:
         """Create a DeleteLogVoteSession from a database record."""
         target_message = await bot.db.getch(record["delete_log_vote_sessions"])
         if target_message is None:
@@ -671,8 +671,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: type["DeleteLogVoteSession"], bot: RedstoneSquid
-    ) -> list["DeleteLogVoteSession"]:
+        cls: type[DeleteLogVoteSession], bot: RedstoneSquid
+    ) -> list[DeleteLogVoteSession]:
         """Get all open vote sessions from the database."""
         records: list[VoteSessionRecord] = (
             await bot.db.table("vote_sessions")

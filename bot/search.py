@@ -23,12 +23,12 @@ if TYPE_CHECKING:
     from database.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 
-class SearchCog(Cog):
-    def __init__(self, bot: RedstoneSquid):
+class SearchCog[BotT: RedstoneSquid](Cog):
+    def __init__(self, bot: BotT):
         self.bot = bot
 
     @commands.hybrid_command("search")
-    async def search_builds(self, ctx: Context, query: str):
+    async def search_builds(self, ctx: Context[BotT], query: str):
         """
         Searches for a build with natural language.
 
@@ -51,7 +51,7 @@ class SearchCog(Cog):
     @commands.command("search_restrictions")
     @check_is_staff()
     @commands.check(check_is_owner_server)
-    async def search_restrictions(self, ctx: Context, query: str | None):
+    async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
             if query:
@@ -73,7 +73,7 @@ class SearchCog(Cog):
             await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
     @commands.hybrid_command()
-    async def list_patterns(self, ctx: Context):
+    async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
             patterns: APIResponse[TypeRecord] = await self.bot.db.table("types").select("*").execute()
@@ -83,12 +83,12 @@ class SearchCog(Cog):
             )
 
     @hybrid_group(name="build", invoke_without_command=True)
-    async def build_hybrid_group(self, ctx: Context):
+    async def build_hybrid_group(self, ctx: Context[BotT]):
         """Submit, view, confirm and deny submissions."""
         await ctx.send_help("build")
 
     @build_hybrid_group.command(name="pending")
-    async def get_pending_submissions(self, ctx: Context):
+    async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with utils.RunningMessage(ctx) as sent_message:
             pending_submissions = await get_all_builds(Status.PENDING)
@@ -110,7 +110,7 @@ class SearchCog(Cog):
 
     @build_hybrid_group.command(name="view")
     @app_commands.describe(build_id="The ID of the build you want to see.")
-    async def view_build(self, ctx: Context, build_id: int):
+    async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
         if ctx.interaction:
             interaction = ctx.interaction

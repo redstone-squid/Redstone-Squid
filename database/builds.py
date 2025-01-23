@@ -13,7 +13,7 @@ from importlib import resources
 from functools import cached_property
 from dataclasses import dataclass, field, fields
 from collections.abc import Sequence, Mapping
-from typing import TYPE_CHECKING, Callable, Final, Literal, Any, cast
+from typing import TYPE_CHECKING, Callable, Final, Literal, Any, Self, cast, overload
 
 import discord
 from discord.ext.commands import Bot
@@ -82,21 +82,29 @@ class JoinedBuildRecord(BuildRecord):
 class FrozenField[T]:
     """A descriptor that makes an attribute immutable after it has been set."""
 
-    __slots__ = ("private_name",)
+    __slots__ = ("_private_name",)
 
     def __init__(self, name: str) -> None:
-        self.private_name = "_" + name
+        self._private_name = "__frozen_" + name
 
-    def __get__(self, instance: object | None, owner: type[object] | None = None) -> T:
-        value = getattr(instance, self.private_name)
+    @overload
+    def __get__(self, instance: None, owner: type[object]) -> Self:   ...
+
+    @overload
+    def __get__(self, instance: object, owner: type[object]) -> T:   ...
+
+    def __get__(self, instance: object | None, owner: type[object] | None = None) -> T | Self:
+        if instance is None:
+            return self
+        value = getattr(instance, self._private_name)
         return value
 
     def __set__(self, instance: object, value: T) -> None:
-        if hasattr(instance, self.private_name):
-            msg = f"Attribute `{self.private_name[1:]}` is immutable!"
+        if hasattr(instance, self._private_name):
+            msg = f"Attribute `{self._private_name[1:]}` is immutable!"
             raise TypeError(msg) from None
 
-        setattr(instance, self.private_name, value)
+        setattr(instance, self._private_name, value)
 
 
 # https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
@@ -346,9 +354,9 @@ class Build:
 
         return Build(
             id=id,
-            submission_status=submission_status,
+            submission_status=Status(submission_status),
             record_category=record_category,
-            category=category,
+            category=Category(category),
             versions=versions,
             version_spec=version_spec,
             width=width,
@@ -639,7 +647,7 @@ class Build:
             logger.error(f"Failed to generate embedding for build {self.id}: {e}")
             return None
 
-    async def get_channels_to_post_to(self: Build, bot: Bot) -> list[GuildMessageable]:
+    async def get_channels_to_post_to(self, bot: Bot) -> list[GuildMessageable]:
         """
         Gets the channels in which this build should be posted to.
 

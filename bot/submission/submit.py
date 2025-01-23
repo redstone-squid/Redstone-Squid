@@ -29,16 +29,16 @@ if TYPE_CHECKING:
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildSubmitCog(Cog, name="Build"):
+class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
-    def __init__(self, bot: "RedstoneSquid"):
+    def __init__(self, bot: BotT):
         self.bot = bot
         self.open_vote_sessions: dict[int, BuildVoteSession] = {}
         """A cache of open vote sessions. The key is the message id of the vote message."""
 
     @commands.hybrid_group(name="submit")
-    async def submit_group(self, ctx: Context):
+    async def submit_group(self, ctx: Context[BotT]):
         """Submit a build to the database."""
         await ctx.send_help("submit")
 
@@ -114,7 +114,7 @@ class BuildSubmitCog(Cog, name="Build"):
         # fmt: on
 
     @submit_group.command(name="door")
-    async def submit_door(self, ctx: Context, *, flags: SubmitDoorFlags):
+    async def submit_door(self, ctx: Context[BotT], *, flags: SubmitDoorFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
         interaction = cast(discord.Interaction, ctx.interaction)
@@ -148,7 +148,7 @@ class BuildSubmitCog(Cog, name="Build"):
     @app_commands.command(name="submit_form")
     async def submit_form(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction[BotT],
         *,
         first_attachment: discord.Attachment | None = None,
         second_attachment: discord.Attachment | None = None,
@@ -271,14 +271,14 @@ class BuildSubmitCog(Cog, name="Build"):
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()
     @commands.check(check_is_owner_server)
-    async def recalc(self, ctx: Context, message: discord.Message):
+    async def recalc(self, ctx: Context[BotT], message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
 
 
-async def setup(bot: "RedstoneSquid"):
+async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildSubmitCog(bot))

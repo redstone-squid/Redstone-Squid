@@ -13,10 +13,10 @@ from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
-
 from pydantic import TypeAdapter, ValidationError
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
+
 from bot.config import DEV_MODE
 from database.message import MessageManager
 from database.schema import DeleteLogVoteSessionRecord, MessageRecord, RestrictionRecord, VersionRecord
@@ -32,7 +32,7 @@ class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
-    _instance: ClassVar[DatabaseManager] | None = None
+    _instance: ClassVar[DatabaseManager | None] = None
     bot: RedstoneSquid | None = None
 
     def __new__(cls, *args, **kwargs) -> DatabaseManager:

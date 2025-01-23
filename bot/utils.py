@@ -1,13 +1,11 @@
 """Utility functions for the bot."""
 
-from __future__ import annotations
-
 import logging
 import io
 import inspect
 from traceback import format_tb
 from types import FrameType, TracebackType
-from typing import TypedDict, TYPE_CHECKING, Any
+from typing import TypedDict, Any
 import mimetypes
 import asyncio
 import aiohttp
@@ -21,9 +19,6 @@ from discord.ext.commands import Context, FlagConverter, NoPrivateMessage, Missi
 from bot import config
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
 from database import DatabaseManager
-
-if TYPE_CHECKING:
-    pass
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A

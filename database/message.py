@@ -1,7 +1,5 @@
 """Some functions related to the message table, which stores message ids."""
 
-from __future__ import annotations
-
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from supabase import AsyncClient
