@@ -585,6 +585,13 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
+    async def get_persisted_copy(self) -> Build:
+        """Get a persisted copy of the build."""
+        if self.id is None:
+            raise ValueError("Build id is None, there is no persisted copy.")
+
+        return await Build.from_id(self.id)  # type: ignore
+
     async def update_messages(self, bot: RedstoneSquid) -> None:
         """Updates all messages which for this build."""
         if self.id is None:

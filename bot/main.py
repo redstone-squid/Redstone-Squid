@@ -47,6 +47,7 @@ class RedstoneSquid(Bot):
         await self.load_extension("bot.misc_commands")
         await self.load_extension("bot.settings")
         await self.load_extension("bot.submission.submit")
+        await self.load_extension("bot.submission.edit")
         await self.load_extension("bot.log")
         await self.load_extension("bot.help")
         await self.load_extension("bot.voting.vote")

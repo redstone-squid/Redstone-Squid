@@ -4,18 +4,20 @@ from __future__ import annotations
 
 import logging
 import io
+import inspect
 from traceback import format_tb
-from types import TracebackType
+from types import FrameType, TracebackType
 from typing import TypedDict, TYPE_CHECKING, Any
 import mimetypes
 import asyncio
+from typing_extensions import TypeVar
 import aiohttp
 
 import discord
 import bs4
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context, CommandError, NoPrivateMessage, MissingAnyRole, check
+from discord.ext.commands import Context, CommandError, FlagConverter, NoPrivateMessage, MissingAnyRole, check
 
 from bot import config
 from bot.config import OWNER_ID, PRINT_TRACEBACKS
@@ -299,6 +301,21 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
         raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
 
     return io.BytesIO(out)
+
+
+_FlagConverter = TypeVar("_FlagConverter", bound=type[FlagConverter])
+
+
+def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
+    """
+    Fixes discord.py being unable to evaluate annotations if `from __future__ import annotations` is used AND the `FlagConverter` is a nested class.
+
+    This works because discord.py uses the globals() and locals() function to evaluate annotations at runtime.
+    See https://discord.com/channels/336642139381301249/1328967235523317862 for more information about this.
+    """
+    previous_frame: FrameType = inspect.currentframe().f_back  # type: ignore
+    previous_frame.f_globals[cls.__name__] = cls
+    return cls
 
 
 async def main():

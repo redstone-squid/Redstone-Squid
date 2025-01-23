@@ -13,3 +13,4 @@ beautifulsoup4
 vecs
 GitPython
 git+https://github.com/Rapptz/discord-ext-menus
+beartype
