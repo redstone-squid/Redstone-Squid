@@ -9,7 +9,7 @@ from discord.ext.commands import Cog, Context, flag
 
 from bot.submission.parse import parse_dimensions
 from bot import utils
-from bot.submission.ui import ConfirmationView
+from bot.submission.ui import ConfirmationView, DynamicBuildEditButton
 from bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, is_owner_server
 from database.builds import Build
 
@@ -152,4 +152,5 @@ class BuildEditCog(Cog):
 
 async def setup(bot: RedstoneSquid) -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

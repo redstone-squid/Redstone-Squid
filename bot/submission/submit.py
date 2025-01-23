@@ -16,7 +16,7 @@ from discord.ext.commands import (
 
 from bot import utils
 from bot.submission.parse import parse_dimensions
-from bot.submission.ui import BuildSubmissionForm
+from bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
 from bot.voting.vote_session import BuildVoteSession
 from database.builds import Build
 from bot.utils import RunningMessage, fix_converter_annotations, is_owner_server, check_is_trusted_or_staff
@@ -280,4 +280,5 @@ class BuildSubmitCog(Cog, name="Build"):
 
 async def setup(bot: "RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildSubmitCog(bot))
