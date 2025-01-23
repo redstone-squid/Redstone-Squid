@@ -221,9 +221,8 @@ async def get_website_preview(url: str) -> Preview:
 
                 # If it's a video, extract first frame
                 if content_type.startswith("video/"):
-                    # FIXME: extract_first_frame is not working properly
-                    # preview["image"] = await extract_first_frame(url)
-                    # preview["url"] = url
+                    preview["image"] = await extract_first_frame(url)
+                    preview["url"] = url
                     return preview
 
                 page_text = await response.text()
@@ -294,6 +293,7 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
     # fmt: on
 
     # Run ffmpeg asynchronously
+    # Note that you cannot use WindowsSelectorEventLoopPolicy with asyncio.run() on Windows
     process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await process.communicate()
 
@@ -319,8 +319,8 @@ def fix_converter_annotations(cls: _FlagConverter) -> _FlagConverter:
 
 
 async def main():
-    image_url = "https://imgur.com/WwsKLH5"
-    video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    # image_url = "https://imgur.com/WwsKLH5"
+    # video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     video_url2 = "https://files.catbox.moe/uadbru.mp4"
     preview = await get_website_preview(video_url2)
     print(preview)
