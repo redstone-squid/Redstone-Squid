@@ -145,19 +145,20 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseViewT) -> None:
+    def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         self.parent = parent
         super().__init__(style=discord.ButtonStyle.danger, label="Stop", row=4)
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Disables all the items in the view."""
-        for child in self.parent.children:
+        parent = await resolve_parent(self.parent)
+        for child in parent.children:
             # discord.ui.Item contains no attribute "disabled", but some of its children do.
             # Only discord.ui.Button and discord.ui.Select needs to be disabled, but this is faster than checking.
             child.disabled = True  # type: ignore
 
-        self.parent.stop()
+        parent.stop()
 
 
 class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
@@ -165,14 +166,15 @@ class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseViewT) -> None:
+    def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         self.parent = parent
         super().__init__(label="Go Home", emoji=HOME, row=4)
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Edits the message with the root view."""
-        await self.parent.update(interaction)
+        parent = await resolve_parent(self.parent)
+        await parent.update(interaction)
 
 
 class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
@@ -180,12 +182,12 @@ class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     __slots__: tuple[str, ...] = ("parent",)
 
-    def __init__(self, parent: BaseNavigableView[ClientT]) -> None:
+    def __init__(self, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         super().__init__(label="Go Back", row=4)
         self.parent = parent
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Edits the message with the parent view."""
-        await self.parent.update(interaction)
-
+        parent = await resolve_parent(self.parent)
+        await parent.update(interaction)
