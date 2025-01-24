@@ -893,7 +893,7 @@ class Build(DiscordBuildMixin):
         db = DatabaseManager()
         creator_ids: list[int] = []
         for creator_ign in self.creators_ign:
-            response = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
+            response: SingleAPIResponse[UserRecord] | None = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
             if response:
                 creator_ids.append(response.data["id"])
             else:
