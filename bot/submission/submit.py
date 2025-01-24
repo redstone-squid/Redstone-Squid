@@ -34,8 +34,6 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
 
     def __init__(self, bot: BotT):
         self.bot = bot
-        self.open_vote_sessions: dict[int, BuildVoteSession] = {}
-        """A cache of open vote sessions. The key is the message id of the vote message."""
 
     @commands.hybrid_group(name="submit")
     async def submit_group(self, ctx: Context[BotT]):
@@ -233,9 +231,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         messages = await asyncio.gather(*tasks)
 
         assert build.submitter_id is not None
-        session = await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
-        for message in messages:
-            self.open_vote_sessions[message.id] = session
+        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
