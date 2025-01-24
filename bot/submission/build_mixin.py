@@ -59,13 +59,10 @@ class DiscordBuildMixin:
             case _:
                 raise ValueError("Invalid status or record category")
 
-        channels: list[GuildMessageable] = []
-        for guild in bot.guilds:
-            channel_id = await DatabaseManager().server_setting.get(guild.id, target)
-            if channel_id:
-                channels.append(cast(GuildMessageable, bot.get_channel(channel_id)))
-
-        return channels
+        guild_channels = await bot.db.server_setting.get((guild.id for guild in bot.guilds), target)
+        maybe_channels = [bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None]
+        channels = [channel for channel in maybe_channels if channel is not None]
+        return cast(list[GuildMessageable], channels)
 
     async def get_original_message(self: Build, bot: RedstoneSquid) -> discord.Message | None:  # type: ignore
         """Gets the original message of the build."""
@@ -83,8 +80,12 @@ class DiscordBuildMixin:
             raise ValueError("Build id is None.")
 
         # Get all messages for a build
-        message_records = await self.get_display_messages()
-        em = await self.generate_embed()
+        async with asyncio.TaskGroup() as tg:
+            msg_task = tg.create_task(self.get_display_messages())
+            em_task = tg.create_task(self.generate_embed())
+
+        message_records = await msg_task
+        em = await em_task
 
         for record in message_records:
             message = await bot.get_or_fetch_message(record["channel_id"], record["message_id"])

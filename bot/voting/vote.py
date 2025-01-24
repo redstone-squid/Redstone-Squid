@@ -83,10 +83,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         message = await channel.fetch_message(payload.message_id)
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        try:
-            await message.remove_reaction(payload.emoji, user)
-        except (discord.Forbidden, discord.NotFound):
-            pass  # Ignore if we can't remove the reaction
+        remove_reaction_task = message.remove_reaction(payload.emoji, user)  # await later as this is not critical
 
         if user.bot:
             return  # Ignore bot reactions
@@ -120,6 +117,11 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         else:
             return
         await vote_session.update_messages()
+
+        try:
+            await remove_reaction_task
+        except (discord.Forbidden, discord.NotFound):
+            pass  # Ignore if we can't remove the reaction
 
     @hybrid_command(name="start_vote")
     async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):

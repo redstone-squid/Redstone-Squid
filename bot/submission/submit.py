@@ -15,6 +15,7 @@ from discord.ext.commands import (
 )
 
 from bot import utils
+from bot._types import GuildMessageable
 from bot.submission.parse import parse_dimensions
 from bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
 from bot.voting.vote_session import BuildVoteSession
@@ -127,20 +128,23 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 build.category = Category.DOOR
                 build.submission_status = Status.PENDING
 
-                await build.save()
-                # Shows the submission to the user
-                await followup.send(
-                    "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await build.generate_embed(),
-                    ephemeral=True,
+                await asyncio.gather(
+                    build.save(),
+                    followup.send(
+                        "Here is a preview of the submission. Use /edit if you have made a mistake",
+                        embed=await build.generate_embed(),
+                        ephemeral=True,
+                    )
                 )
 
                 success_embed = utils.info_embed(
                     "Success",
                     f"Build submitted successfully!\nThe build ID is: {build.id}",
                 )
-                await message.edit(embed=success_embed)
-                await self.post_build_for_voting(build)
+                await asyncio.gather(
+                    message.edit(embed=success_embed),
+                    self.post_build_for_voting(build),
+                )
         else:
             raise NotImplementedError("This command is only available as a slash command for now.")
 
@@ -159,11 +163,10 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
 
         build = Build(ai_generated=False)
         attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
-        for attachment in attachments:
-            if attachment is None:
-                continue
 
-            assert isinstance(attachment, discord.Attachment)
+        async def _handle_attachment(attachment: discord.Attachment | None):
+            if attachment is None:
+                return
             assert attachment.content_type is not None
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
                 raise ValueError(f"Unsupported content type: {attachment.content_type}")
@@ -173,6 +176,8 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 build.image_urls.append(url)
             elif attachment.content_type.startswith("video"):
                 build.video_urls.append(url)
+
+        await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
 
         view = BuildSubmissionForm(build)
         followup = interaction.followup
@@ -187,12 +192,14 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             return
         else:
             await build.save()
-            await followup.send(
-                "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await build.generate_embed(),
-                ephemeral=True,
+            await asyncio.gather(
+                followup.send(
+                    "Here is a preview of the submission. Use /edit if you have made a mistake",
+                    embed=await build.generate_embed(),
+                    ephemeral=True,
+                ),
+                self.post_build_for_voting(build)
             )
-            await self.post_build_for_voting(build)
 
     @commands.Cog.listener("on_build_confirmed")
     async def post_confirmed_build(self, build: Build) -> None:
@@ -206,9 +213,12 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             raise ValueError("The build must be confirmed to post it.")
 
         em = await build.generate_embed()
-        for channel in await build.get_channels_to_post_to(self.bot):
+
+        async def _send_msg(channel: GuildMessageable):
             message = await channel.send(content=build.original_link, embed=em)
             await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
+
+        await asyncio.gather(*(_send_msg(channel) for channel in await build.get_channels_to_post_to(self.bot)))
 
     async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
         """
@@ -225,10 +235,10 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             raise ValueError("The build must be pending to post it.")
 
         em = await build.generate_embed()
-        tasks: list[asyncio.Task[discord.Message]] = []
-        for vote_channel in await build.get_channels_to_post_to(self.bot):
-            tasks.append(asyncio.create_task(vote_channel.send(content=build.original_link, embed=em)))
-        messages = await asyncio.gather(*tasks)
+        messages = await asyncio.gather(*(
+            vote_channel.send(content=build.original_link, embed=em)
+            for vote_channel in await build.get_channels_to_post_to(self.bot)
+        ))
 
         assert build.submitter_id is not None
         await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
