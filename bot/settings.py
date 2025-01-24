@@ -129,41 +129,41 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             return
 
         async with utils.RunningMessage(ctx) as sent_message:
-            match setting:
-                case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
-                    if channel is None:
-                        await sent_message.edit(
-                            embed=utils.error_embed("Error", "You must provide a channel for this setting.")
-                        )
-                        return
-
-                    if ctx.guild.get_channel(channel.id) is None:
-                        await sent_message.edit(embed=utils.error_embed("Error", "Could not find that channel."))
-                        return
-
-                    # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
-                    await self.bot.db.server_setting.set(ctx.guild.id, setting, channel.id)
+            if setting in {"Smallest", "Fastest", "First", "Builds", "Vote"}:
+                if channel is None:
                     await sent_message.edit(
-                        embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
+                        embed=utils.error_embed("Error", "You must provide a channel for this setting.")
                     )
-                case "Staff" | "Trusted":
-                    if roles is None:
-                        await sent_message.edit(
-                            embed=utils.error_embed("Error", "You must provide a list of roles for this setting.")
-                        )
-                        return
+                    return
 
-                    role_ids = [role.id for role in roles]
-                    if any(role.guild != ctx.guild for role in roles):
-                        await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
-                        return
+                if ctx.guild.get_channel(channel.id) is None:
+                    await sent_message.edit(embed=utils.error_embed("Error", "Could not find that channel."))
+                    return
 
-                    await self.bot.db.server_setting.set(ctx.guild.id, setting, role_ids)
+                # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
+                await self.bot.db.server_setting.set(ctx.guild.id, setting, channel.id)
+                await sent_message.edit(
+                    embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
+                )
+            elif setting in {"Staff", "Trusted"}:
+                if roles is None:
                     await sent_message.edit(
-                        embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
+                        embed=utils.error_embed("Error", "You must provide a list of roles for this setting.")
                     )
-                case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
-                    await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
+                    return
+
+                role_ids = [role.id for role in roles]
+                if any(role.guild != ctx.guild for role in roles):
+                    await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
+                    return
+
+                await self.bot.db.server_setting.set(ctx.guild.id, setting, role_ids)
+                await sent_message.edit(
+                    embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
+                )
+            else:  # Should not happen, but may happen if the schema is updated and this code is not
+                await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
+                assert False
 
     @settings_hybrid_group.command(name="clear")
     @app_commands.describe(setting=", ".join(SETTINGS))
