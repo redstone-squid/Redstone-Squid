@@ -178,30 +178,6 @@ class DatabaseManager(AsyncClient):
 
         return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
 
-    @overload
-    async def getch(self, record: MessageRecord | DeleteLogVoteSessionRecord) -> discord.Message | None: ...  # pyright: ignore
-
-    async def getch(self, record: Mapping[str, Any]) -> Any:
-        """Fetch discord objects from database records."""
-        if self.bot is None:
-            raise RuntimeError("Bot instance not set.")
-
-        try:
-            message_adapter = TypeAdapter(MessageRecord)
-            message_adapter.validate_python(record)
-            return await self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
-        except ValidationError:
-            pass
-
-        try:
-            message_adapter = TypeAdapter(DeleteLogVoteSessionRecord)
-            message_adapter.validate_python(record)
-            return await self.bot.get_or_fetch_message(record["target_channel_id"], record["target_message_id"])
-        except ValidationError:
-            pass
-
-        raise ValueError("Invalid object to fetch.")
-
 
 async def main():
     spec_string = "1.14 - 1.16.1, 1.17, 1.19+"

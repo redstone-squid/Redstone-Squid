@@ -33,7 +33,7 @@ class DiscordBuildMixin:
     _original_message_obj: discord.Message | None = field(default=None, init=False, repr=False)
     """Cache for the original message of the build."""
 
-    async def get_channels_to_post_to(self: Build, bot: commands.Bot) -> list[GuildMessageable]:  # type: ignore
+    async def get_channels_to_post_to(self: Build, bot: RedstoneSquid) -> list[GuildMessageable]:  # type: ignore
         """
         Gets the channels in which this build should be posted to.
 
@@ -87,7 +87,7 @@ class DiscordBuildMixin:
         em = await self.generate_embed()
 
         for record in message_records:
-            message = await bot.db.getch(record)
+            message = await bot.get_or_fetch_message(record["channel_id"], record["message_id"])
             if message is None:
                 continue
             await message.edit(content=self.original_link, embed=em)
