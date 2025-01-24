@@ -24,7 +24,7 @@ class Miscellaneous[BotT: RedstoneSquid](Cog):
     async def invite_link(self, ctx: Context[BotT]):
         """Invite me to your other servers!"""
         await ctx.send(
-            f"https://discordapp.com/oauth2/authorize?client_id={str(ctx.bot.user.id)}&scope=bot&permissions=8"
+            f"https://discordapp.com/oauth2/authorize?client_id={ctx.bot.user.id}&scope=bot&permissions=8"  # type: ignore
         )
 
     # Docstring can't be an f-string, so we use the help parameter instead.
