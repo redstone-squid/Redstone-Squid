@@ -85,7 +85,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             match setting:
                 case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
                     title = f"{setting} Channel Info"
-                    value = await self.bot.db.server_setting.get(ctx.guild.id, setting)
+                    value = await self.bot.db.server_setting.get_single(ctx.guild.id, setting)
                     if value is None:
                         description = "_Not set_"
                     else:
@@ -95,12 +95,12 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
                         )
                 case "Staff" | "Trusted":
                     title = f"{setting} Roles Info"
-                    value = await self.bot.db.server_setting.get(ctx.guild.id, setting)
+                    value = await self.bot.db.server_setting.get_single(ctx.guild.id, setting)
                     roles = [role for role in ctx.guild.roles if role.id in value]
                     description = ", ".join(role.name for role in roles) or "_Not set_"
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     title = setting
-                    description = str(self.bot.db.server_setting.get(ctx.guild.id, setting))
+                    description = str(self.bot.db.server_setting.get_single(ctx.guild.id, setting))
 
             await sent_message.edit(embed=utils.info_embed(title=title, description=description))
 

@@ -97,7 +97,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 
         if isinstance(vote_session, DeleteLogVoteSession):
             # Check if the user has a trusted role
-            trusted_role_ids = await self.bot.db.server_setting.get(server_id=payload.guild_id, setting="Trusted")
+            trusted_role_ids = await self.bot.db.server_setting.get_single(server_id=payload.guild_id, setting="Trusted")
 
             guild = self.bot.get_guild(payload.guild_id)
             assert guild is not None

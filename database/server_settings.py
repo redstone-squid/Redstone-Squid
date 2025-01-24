@@ -1,8 +1,8 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-from typing import Literal, overload
+from typing import Iterable, Iterator, Literal, Sequence, overload
 
-from postgrest.base_request_builder import SingleAPIResponse
+from postgrest.base_request_builder import SingleAPIResponse, APIResponse
 from postgrest.types import CountMethod
 from supabase import AsyncClient
 
@@ -36,16 +36,33 @@ class ServerSettingManager:
         self.client = client
 
     @overload
-    async def get(
+    async def get(self, server_ids: Iterable[int], setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]) -> dict[int, int | None]: ...
+    @overload
+    async def get(self, server_ids: Iterable[int], setting: Literal["Staff", "Trusted"]) -> dict[int, list[int]]: ...
+
+    # pyright cannot infer that the overloads are actually compatible with the definition below even though we used proper TypedDicts
+    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:  # type: ignore
+        """Gets the settings for a list of servers."""
+        col_name = _SETTING_TO_DB_KEY[setting]
+        response: APIResponse[ServerSettingRecord] = (
+            await self.client.table("server_settings")
+            .select("server_id", col_name)
+            .in_("server_id", server_ids)
+            .execute()
+        )
+        return {record["server_id"]: record[col_name] for record in response.data}
+
+    @overload
+    async def get_single(
         self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
     ) -> int | None: ...
     @overload
-    async def get(self, server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int]: ...
+    async def get_single(self, server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int]: ...
     @overload
-    async def get(self, server_id: int, setting: Setting) -> int | list[int] | None: ...
+    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None: ...
 
     # noinspection PyTypedDict
-    async def get(self, server_id: int, setting: Setting) -> int | list[int] | None:
+    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
         """
         Gets a channel id or role list id for a server depending on the type of setting.
 
