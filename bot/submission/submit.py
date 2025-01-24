@@ -117,33 +117,34 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
     async def submit_door(self, ctx: Context[BotT], *, flags: SubmitDoorFlags):
         """Submits a record to the database directly."""
         # TODO: Discord only allows 25 options. Split this into multiple commands.
-        interaction = cast(discord.Interaction, ctx.interaction)
-        response: InteractionResponse = interaction.response  # type: ignore
-        await response.defer()
+        if ctx.interaction:
+            interaction = ctx.interaction
+            await interaction.response.defer()
+            followup = interaction.followup
 
-        followup: discord.Webhook = interaction.followup  # type: ignore
+            async with RunningMessage(followup) as message:
+                build = flags.to_build()
+                build.submitter_id = ctx.author.id
+                build.ai_generated = False
+                build.category = Category.DOOR
+                build.submission_status = Status.PENDING
 
-        async with RunningMessage(followup) as message:
-            build = flags.to_build()
-            build.submitter_id = ctx.author.id
-            build.ai_generated = False
-            build.category = Category.DOOR
-            build.submission_status = Status.PENDING
+                await build.save()
+                # Shows the submission to the user
+                await followup.send(
+                    "Here is a preview of the submission. Use /edit if you have made a mistake",
+                    embed=await build.generate_embed(),
+                    ephemeral=True,
+                )
 
-            await build.save()
-            # Shows the submission to the user
-            await followup.send(
-                "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await build.generate_embed(),
-                ephemeral=True,
-            )
-
-            success_embed = utils.info_embed(
-                "Success",
-                f"Build submitted successfully!\nThe build ID is: {build.id}",
-            )
-            await message.edit(embed=success_embed)
-            await self.post_build_for_voting(build)
+                success_embed = utils.info_embed(
+                    "Success",
+                    f"Build submitted successfully!\nThe build ID is: {build.id}",
+                )
+                await message.edit(embed=success_embed)
+                await self.post_build_for_voting(build)
+        else:
+            raise NotImplementedError("This command is only available as a slash command for now.")
 
     @app_commands.command(name="submit_form")
     async def submit_form(
