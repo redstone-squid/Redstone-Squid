@@ -9,6 +9,7 @@ import asyncio
 from importlib.util import find_spec
 import multiprocessing
 
+from bot.config import DEV_MODE
 from bot.main import main
 from api import main as api_main
 
@@ -24,4 +25,4 @@ if __name__ == "__main__":
         )
         # https://stackoverflow.com/questions/44633458/why-am-i-getting-notimplementederror-with-async-and-await-on-windows
 
-    asyncio.run(main())
+    asyncio.run(main(), debug=DEV_MODE)
