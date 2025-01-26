@@ -20,6 +20,7 @@ from squid.db.schema import Status, Category
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
+    from bot.submission.build_handler import BuildHandler
 
 
 class BuildSubmissionForm(discord.ui.View):
@@ -149,8 +150,11 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
             content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction)
         )
 
+    def get_handler(self, interaction: discord.Interaction[BotT]) -> BuildHandler[BotT]:
+        return interaction.client.for_build(self.build)
+
     async def get_embeds(self, interaction: discord.Interaction[BotT]) -> list[discord.Embed]:
-        return [self.summary_embed(), await interaction.client.for_build(self.build).generate_embed()]
+        return [self.summary_embed(), await self.get_handler(interaction).generate_embed()]
 
     def summary_embed(self) -> discord.Embed:
         summaries = [item.summary for item in self.items]
@@ -178,7 +182,9 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await self.press_home(interaction)
         await self.build.save()
-        await interaction.followup.send(content="Submitted", embed=await interaction.client.for_build(self.build).generate_embed(), ephemeral=True)
+        await interaction.followup.send(
+            content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True
+        )
 
 
 class BuildInfoView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
