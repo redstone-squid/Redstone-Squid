@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override
@@ -168,9 +169,8 @@ class EditModal(discord.ui.Modal):
 
     @override
     async def on_submit(self, interaction: discord.Interaction):
-        for item in self.children:
-            if isinstance(item, BuildField):
-                await item.callback(interaction)
+        # Update the build object with the new values
+        await asyncio.gather(*(item.on_modal_submit() for item in self.children if isinstance(item, BuildField)))
         await self.parent.update(interaction)
 
 
@@ -213,8 +213,7 @@ class BuildField[T](discord.ui.TextInput):
             placeholder=placeholder,
         )
 
-    @override
-    async def callback(self, interaction: Interaction[Any]) -> None:
+    async def on_modal_submit(self) -> None:
         self.default = self.value
         try:
             if self.attr_type is str:
