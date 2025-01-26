@@ -19,6 +19,24 @@ target-version = "py312"
 [tool.ruff.format]
 docstring-code-format = true
 
+[tool.bumpversion]
+current_version = "1.5.7"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = true
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+files.glob = "**/config.py,pyproject.toml"
+
 [tool.basedpyright]
 pythonVersion = "3.12"
 pythonPlatform = "All"
