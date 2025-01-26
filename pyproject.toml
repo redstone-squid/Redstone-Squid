@@ -1,14 +1,46 @@
+[project]
+name = "redstone-squid"
+version = "1.5.7"
+requires-python = ">=3.12"
+readme = "README.md"
+dependencies = [
+    "oauth2client",
+    "discord-py[speed]>=2",
+    "gspread",
+    "supabase",
+    "python-dotenv",
+    "jishaku",
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "async-lru",
+    "markdown",
+    "beautifulsoup4",
+    "vecs",
+    "gitpython",
+    "beartype",
+    "discord-ext-menus",
+]
+
+[dependency-groups]
+# Note: changes to this group has to be synced with requirements/dev.in
+dev = [
+    "pip-tools",
+    "ruff",
+    "basedpyright",
+    "pre-commit",
+    "bump-my-version",
+]
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[project]
-requires-python = ">=3.12"
-dynamic = ["dependencies", "optional-dependencies"]
+[tool.uv]
+package = false
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.in"] }
-optional-dependencies.test = { file = ["test-requirements.txt"] }
+[tool.uv.sources]
+discord-ext-menus = { git = "https://github.com/Rapptz/discord-ext-menus" }
 
 [tool.ruff]
 line-length = 120
@@ -16,6 +48,24 @@ target-version = "py312"
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.bumpversion]
+current_version = "1.5.7"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = true
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+files.glob = "**/config.py,pyproject.toml"
 
 [tool.basedpyright]
 pythonVersion = "3.12"

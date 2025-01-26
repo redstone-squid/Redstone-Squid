@@ -44,15 +44,15 @@ init: && sync
 
 compile:
     {{python_dir}}/pip-compile --output-file=requirements.txt requirements.in
-    {{python_dir}}/pip-compile --constraint=requirements.txt --output-file=test-requirements.txt test-requirements.in
+    {{python_dir}}/pip-compile --constraint=requirements.txt --output-file=dev-requirements.txt dev-requirements.in
 
 [unix]
 sync:
-    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt test-requirements.txt
+    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt dev-requirements.txt
 
 [windows]
 sync:
-    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt test-requirements.txt
+    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt dev-requirements.txt
     {{python_dir}}/pip uninstall -y aiodns
 
 lint:
