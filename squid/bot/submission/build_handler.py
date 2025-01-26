@@ -14,6 +14,9 @@ from discord.utils import escape_markdown
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
+from squid.bot.submission.parse import get_formatter_and_parser_for_type
+from squid.bot.submission.ui.components import BuildField
+from squid.bot.submission.ui.views import BuildEditView, BuildInfoView
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -128,6 +131,59 @@ class BuildHandler[BotT: RedstoneSquid]:
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
 
+    @staticmethod
+    def get_attr_type(attribute: str) -> type:
+        if attribute in Build.__annotations__:
+            attr_type = typing.get_type_hints(Build)[attribute]
+        else:
+            try:
+                cls_attr = getattr(Build, attribute)
+                if isinstance(cls_attr, property):
+                    attr_type = typing.get_type_hints(cls_attr.fget)["return"]
+                else:
+                    raise NotImplementedError("Not sure how to automatically get the type of this attribute.")
+            except AttributeError:
+                raise ValueError(f"Attribute {attribute} is not in the Build class.")
+        return attr_type
+
+    def get_text_input[T](self, attribute: str, attr_type: type[T] | None = None, **kwargs) -> BuildField[T]:
+        """
+        Gets the bound input for the attribute.
+
+        Args:
+            attribute: The attribute to get the input for.
+            attr_type: The type of the attribute. If not provided, it will be inferred from the attribute.
+            **kwargs: Additional keyword arguments to pass to the BuildField constructor.
+        """
+        if attr_type is None:
+            attr_type = self.get_attr_type(attribute)
+        attr_type = cast(type[T], attr_type)
+        formatter, parser = get_formatter_and_parser_for_type(attr_type)
+        return BuildField(self.build, attribute, attr_type, formatter, parser, **kwargs)
+    def get_edit_view(
+        self, parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None
+    ) -> BuildEditView[BotT]:
+        items: list[BuildField] = [
+            self.get_text_input("dimensions", placeholder="Width x Height x Depth", required=True),
+            self.get_text_input("door_dimensions", placeholder="2x2", required=True),
+            self.get_text_input("version_spec", placeholder="1.16 - 1.17.3"),
+            self.get_text_input("door_type", placeholder="Full lamp, Funnel"),
+            self.get_text_input("door_orientation_type", placeholder="Door, Trapdoor, Skydoor"),
+            self.get_text_input("wiring_placement_restrictions", placeholder="Seamless, Full Flush"),
+            self.get_text_input("component_restrictions", placeholder="Observerless"),
+            self.get_text_input("miscellaneous_restrictions", placeholder="Directional, Locational"),
+            self.get_text_input("normal_closing_time", placeholder="in gameticks"),
+            self.get_text_input("normal_opening_time", placeholder="in gameticks"),
+            self.get_text_input("creators_ign", placeholder="Me, My Dog"),
+            self.get_text_input("image_urls", placeholder="any urls, comma separated"),
+            self.get_text_input("video_urls", placeholder="any urls, comma separated"),
+            self.get_text_input("world_download_urls", placeholder="any urls, comma separated"),
+            self.get_text_input("server_info", placeholder="TODO: Explain this format"),
+            self.get_text_input("completion_time", placeholder="Any time format works"),
+            self.get_text_input("ai_generated", placeholder="True/False"),
+        ]
+        return BuildEditView(self.build, items, parent=parent)
+
     async def generate_embed(self) -> discord.Embed:  # type: ignore
         """Generates an embed for the build."""
         build = self.build
@@ -241,3 +297,15 @@ class BuildHandler[BotT: RedstoneSquid]:
             fields["Videos"] = ", ".join(build.video_urls)
 
         return fields
+
+
+async def main():
+    from squid.db.builds import Build
+
+    build = await Build.from_id(1)
+    assert build is not None
+    BuildHandler(bot=None, build=build).get_text_input("dimensions")  # type: ignore
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import json
 import asyncio
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override
+from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override, Callable
 
 import discord
 from beartype.door import is_bearable, is_subhint
-from discord import Interaction
+from discord import Interaction, TextStyle
 from discord.ui import Item
 
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
@@ -175,62 +176,88 @@ class EditModal(discord.ui.Modal):
 
 
 class BuildField[T](discord.ui.TextInput):
+    """A text input field for editing a build attribute, that is tied to a Build object."""
+
     def __init__(
         self,
         build: Build,
         attribute: str,
         attr_type: type[T],
+        formatter: Callable[[T], str],
+        parser: Callable[[str], T],
         *,
         label: str | None = None,
+        style: TextStyle = TextStyle.short,
+        custom_id: str | None = None,
         placeholder: str | None = None,
-        required: bool = False,
-        default: str | None = None,
+        required: bool | None = None,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        row: int | None = None,
     ):
+        """Initializes a BuildField.
+
+        Args:
+            build: The build object to edit.
+            attribute: The attribute of the build object to edit.
+            attr_type: The type of the attribute.
+            formatter: A function to format the attribute value as a string.
+            parser: A function to parse the string value into the attribute type. If None, the attribute type can only be str.
+            label: The label of the field. Defaults to the attribute name prettified.
+            style: The style of the field.
+            custom_id: The custom ID of the field.
+            placeholder: The placeholder of the field.
+            required: Whether the field is required. If None, it is inferred from the attribute type hint.
+            min_length: The minimum length of the field.
+            max_length: The maximum length of the field.
+            row: The row of the field.
+        """
         try:
-            value = getattr(build, attribute)
+            value: T = getattr(build, attribute)
         except AttributeError:
-            value = ""
+            raise ValueError(f"Invalid attribute {attribute}")
         if not is_bearable(value, attr_type):
             logging.error(f"Invalid hint for {attribute}: {attr_type}")
 
+        if required is None:
+            required = is_bearable(None, attr_type)
+
         if value is None:
-            value = ""
-        elif attr_type is str:
-            pass
-        elif attr_type is int:
-            value = str(value)
-        elif is_subhint(attr_type, list):
-            value = ", ".join(value)
-        elif is_subhint(attr_type, Sequence[int | None]):
-            value = f"{value[0] or '?'}x{value[1] or '?'}x{value[2] or '?'}"
+            string_value = ""
+        else:
+            string_value = formatter(value)
+
+        self.actual_value = value
+        self.original_string_value = string_value
+        self.current_string_value = string_value
+        self.modified = False
         self.build = build
         self.attribute = attribute
         self.attr_type = attr_type
+        self.parser = parser
+        self.formatter = formatter
         super().__init__(
             label=label or attribute.replace("_", " ").title(),
-            default=default or str(value),
-            required=required,
+            style=style,
+            custom_id=os.urandom(16).hex() if custom_id is None else custom_id,
             placeholder=placeholder,
+            default=string_value,
+            required=required,
+            min_length=min_length,
+            max_length=max_length,
+            row=row,
         )
 
     async def on_modal_submit(self) -> None:
+        # If the value hasn't changed, don't bother trying to set it
+        if self.value == self.current_string_value:
+            return
+
+        self.modified = True
         self.default = self.value
+        self.current_string_value = self.value
         try:
-            if self.attr_type is str:
-                value = self.value
-            elif self.attr_type is int:
-                value = int(self.value)
-            elif self.attr_type is bool:
-                value = self.value.lower() in ("true", "yes", "1")
-            elif self.attr_type == tuple[int | None, int | None, int | None]:
-                value = parse_dimensions(self.value)
-            elif self.attr_type == list[str]:
-                value = [item.strip() for item in self.value.split(", ")]
-                value = [item for item in value if item]
-            elif self.attr_type == dict[str, Any]:
-                value = json.loads(self.value)
-            else:
-                raise NotImplementedError(f"Unsupported type {self.attr_type}")
+            value = self.parser(self.value)
         except Exception:
             return
 
@@ -274,7 +301,7 @@ class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
             build = await self.build.get_persisted_copy()
             return ui.views.BuildInfoView(build)
 
-        await ui.views.BuildEditView(self.build, parent=_parent).update(interaction)
+        await interaction.client.for_build(self.build).get_edit_view(parent=_parent).update(interaction)
 
 
 class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
@@ -284,4 +311,4 @@ class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.
 
     @override
     async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
-        await ui.views.BuildEditView(self.build).send(interaction, ephemeral=True)
+        await interaction.client.for_build(self.build).get_edit_view().send(interaction, ephemeral=True)

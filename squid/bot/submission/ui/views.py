@@ -76,44 +76,13 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
     def __init__(
         self,
         build: Build,
+        items: Sequence[BuildField],
         *,
         parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None,
     ):
         super().__init__(parent=parent, timeout=None)
         self.build = build
-        self.items: list[BuildField] = [
-            BuildField(
-                build,
-                "dimensions",
-                tuple[int | None, int | None, int | None],
-                placeholder="Width x Height x Depth",
-                default=f"{build.width}x{build.height}x{build.depth}",
-                required=True,
-            ),
-            BuildField(
-                build,
-                "door_dimensions",
-                tuple[int | None, int | None, int | None],
-                placeholder="2x2",
-                default=f"{build.door_width}x{build.door_height}x{build.door_depth}",
-                required=True,
-            ),
-            BuildField(build, "version_spec", str, label="Versions", placeholder="1.16 - 1.17.3"),
-            BuildField(build, "door_type", list[str], label="Pattern Type", placeholder="full lamp, funnel"),
-            BuildField(build, "door_orientation_type", str, label="Orientation"),
-            BuildField(build, "wiring_placement_restrictions", list[str], placeholder="Seamless, Full Flush"),
-            BuildField(build, "component_restrictions", list[str]),
-            BuildField(build, "miscellaneous_restrictions", list[str]),
-            BuildField(build, "normal_closing_time", int),
-            BuildField(build, "normal_opening_time", int),
-            BuildField(build, "creators_ign", str),
-            BuildField(build, "image_urls", list[str]),
-            BuildField(build, "video_urls", list[str]),
-            BuildField(build, "world_download_urls", list[str]),
-            BuildField(build, "server_info", dict[str, Any]),
-            BuildField(build, "completion_time", str),
-            BuildField(build, "ai_generated", bool),
-        ]
+        self.items = items
         self.page = 1
         self._max_pages = len(self.items) // 5 + 1
 
