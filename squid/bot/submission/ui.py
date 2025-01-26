@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override
 import discord
 from beartype.door import is_bearable, is_subhint
 from discord import Interaction
-from discord._types import ClientT
 from discord.ui import Item
 
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
@@ -19,6 +18,7 @@ from squid.db.builds import Build
 from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Category, Status
 
 if TYPE_CHECKING:
+    from bot.main import RedstoneSquid
     # importing this causes a circular import at runtime
     from discord.types.interactions import SelectMessageComponentInteractionData
 
@@ -222,12 +222,12 @@ class EditModal(discord.ui.Modal):
         await self.parent.update(interaction)
 
 
-class BuildField(discord.ui.TextInput):
+class BuildField[T](discord.ui.TextInput):
     def __init__(
         self,
         build: Build,
         attribute: str,
-        attr_type: type[Any],
+        attr_type: type[T],
         *,
         label: str | None = None,
         placeholder: str | None = None,
@@ -262,7 +262,7 @@ class BuildField(discord.ui.TextInput):
         )
 
     @override
-    async def callback(self, interaction: Interaction[ClientT]) -> None:
+    async def callback(self, interaction: Interaction[Any]) -> None:
         self.default = self.value
         try:
             if self.attr_type is str:
@@ -294,12 +294,12 @@ class BuildField(discord.ui.TextInput):
         return f"{self.label}: {self.value}"
 
 
-class BuildEditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
+class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
     def __init__(
         self,
         build: Build,
         *,
-        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+        parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None,
     ):
         super().__init__(parent=parent, timeout=None)
         self.build = build
@@ -357,7 +357,7 @@ class BuildEditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
         self.next_page.disabled = self.page == self._max_pages
 
     @override
-    async def send(self, interaction: discord.Interaction[ClientT], ephemeral: bool = False) -> None:
+    async def send(self, interaction: discord.Interaction[BotT], ephemeral: bool = False) -> None:
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
@@ -366,7 +366,7 @@ class BuildEditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
         )
 
     @override
-    async def update(self, interaction: discord.Interaction[ClientT]):
+    async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()
         await interaction.response.edit_message(
             content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds()
@@ -386,30 +386,30 @@ class BuildEditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
         await interaction.response.send_modal(self.get_modal())
 
     @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
-    async def previous_page(self, interaction: discord.Interaction[ClientT], button: discord.ui.Button):
+    async def previous_page(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         self.page -= 1
         self._handle_button_states()
         await self.update(interaction)
 
     @discord.ui.button(label="Next Page", style=discord.ButtonStyle.primary)
-    async def next_page(self, interaction: discord.Interaction[ClientT], button: discord.ui.Button):
+    async def next_page(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         self.page += 1
         self._handle_button_states()
         await self.update(interaction)
 
     @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
-    async def submit(self, interaction: discord.Interaction[ClientT], button: discord.ui.Button):
+    async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await self.press_home(interaction)
         await self.build.save()
         await interaction.followup.send(content="Submitted", embed=await self.build.generate_embed(), ephemeral=True)
 
 
-class BuildInfoView[ClientT: discord.Client](BaseNavigableView[ClientT]):
+class BuildInfoView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
     def __init__(
         self,
         build: Build,
         *,
-        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+        parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None,
     ):
         super().__init__(parent=parent, timeout=None)
         self.build = build
@@ -422,17 +422,19 @@ class BuildInfoView[ClientT: discord.Client](BaseNavigableView[ClientT]):
         return await self.build.generate_embed()
 
     @override
-    async def send(self, interaction: discord.Interaction[ClientT]) -> None:
+    async def send(self, interaction: discord.Interaction[BotT]) -> None:
         if not interaction.response.is_done():
             await interaction.response.defer()
         await interaction.followup.send(embed=await self.get_embed(), view=self)
 
     @override
-    async def update(self, interaction: discord.Interaction[ClientT]) -> None:
+    async def update(self, interaction: discord.Interaction[BotT]) -> None:
         await interaction.response.edit_message(content=None, embed=await self.get_embed(), view=self)
 
 
-class DynamicBuildEditButton(discord.ui.DynamicItem[discord.ui.Button], template=r"edit:build:(\d+)"):
+class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
+    discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"
+):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(
@@ -445,16 +447,16 @@ class DynamicBuildEditButton(discord.ui.DynamicItem[discord.ui.Button], template
 
     @classmethod
     @override
-    async def from_custom_id(
-        cls: type[Self], interaction: Interaction[ClientT], item: Item[Any], match: re.Match[str], /
+    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]
+        cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: re.Match[str], /
     ) -> Self:
         build = await Build.from_id(int(match.group(1)))
         assert build is not None
         return cls(build)
 
     @override
-    async def callback(self, interaction: Interaction[ClientT]) -> Any:
-        async def _parent() -> BuildInfoView[ClientT]:
+    async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]
+        async def _parent() -> BuildInfoView[BotT]:
             # await self.build.reload()  # TODO: reload() is not implemented
             build = await self.build.get_persisted_copy()
             return BuildInfoView(build)
@@ -462,11 +464,11 @@ class DynamicBuildEditButton(discord.ui.DynamicItem[discord.ui.Button], template
         await BuildEditView(self.build, parent=_parent).update(interaction)
 
 
-class EphemeralBuildEditButton(discord.ui.Button):
+class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)
 
     @override
-    async def callback(self, interaction: Interaction[ClientT]) -> None:
+    async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         await BuildEditView(self.build).send(interaction, ephemeral=True)
