@@ -106,7 +106,7 @@ class BuildHandler[BotT: RedstoneSquid]:
     async def generate_embed(self) -> discord.Embed:  # type: ignore
         """Generates an embed for the build."""
         build = self.build
-        em = bot_utils.info_embed(title=self.get_title(), description=await self.get_description())
+        em = bot_utils.info_embed(title=self.build.get_title(), description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -148,68 +148,6 @@ class BuildHandler[BotT: RedstoneSquid]:
 
         em.set_footer(text=f"Submission ID: {build.id} • Last Update {utcnow()}")
         return em
-
-    def get_title(self) -> str:  # type: ignore
-        """Generates the official Redstone Squid defined title for the build."""
-        build = self.build
-        title = ""
-
-        if build.category != "Door":
-            raise NotImplementedError("Only doors are supported for now.")
-
-        if build.submission_status == Status.PENDING:
-            title += "Pending: "
-        elif build.submission_status == Status.DENIED:
-            title += "Denied: "
-        if build.ai_generated:
-            title += "\N{ROBOT FACE}"
-        if build.record_category:
-            title += f"{build.record_category} "
-
-        # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
-        for restriction in build.information.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
-            if re.match(r"\d+\.\d+\s*s", restriction):
-                title += f"{restriction} "
-            elif re.match(r"\d+\s*[Bb]locks", restriction):
-                title += f"{restriction} "
-
-        # FIXME: This is included in the title for now to match people's expectations
-        for restriction in build.component_restrictions:
-            title += f"{restriction} "
-        for restriction in build.information.get("unknown_restrictions", {}).get("component_restrictions", []):
-            title += f"*{restriction}* "
-
-        # Door dimensions
-        if build.door_width and build.door_height and build.door_depth and build.door_depth > 1:
-            title += f"{build.door_width}x{build.door_height}x{build.door_depth} "
-        elif build.door_width and build.door_height:
-            title += f"{build.door_width}x{build.door_height} "
-        elif build.door_width:
-            title += f"{build.door_width} Wide "
-        elif build.door_height:
-            title += f"{build.door_height} High "
-
-        # Wiring Placement Restrictions
-        for restriction in build.wiring_placement_restrictions:
-            title += f"{restriction} "
-
-        for restriction in build.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
-            title += f"*{restriction}* "
-
-        # Pattern
-        for pattern in build.door_type:
-            if pattern != "Regular":
-                title += f"{pattern} "
-
-        for pattern in build.information.get("unknown_patterns", []):
-            title += f"*{pattern}* "
-
-        # Door type
-        if build.door_orientation_type is None:
-            raise ValueError("Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing.")
-        title += build.door_orientation_type
-
-        return title
 
     async def get_description(self) -> str | None:  # type: ignore
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""

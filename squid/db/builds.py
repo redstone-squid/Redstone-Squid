@@ -578,6 +578,67 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
+    def get_title(self) -> str:  # type: ignore
+        """Generates the official Redstone Squid defined title for the build."""
+        title = ""
+
+        if self.category != "Door":
+            raise NotImplementedError("Only doors are supported for now.")
+
+        if self.submission_status == Status.PENDING:
+            title += "Pending: "
+        elif self.submission_status == Status.DENIED:
+            title += "Denied: "
+        if self.ai_generated:
+            title += "\N{ROBOT FACE}"
+        if self.record_category:
+            title += f"{self.record_category} "
+
+        # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
+        for restriction in self.information.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
+            if re.match(r"\d+\.\d+\s*s", restriction):
+                title += f"{restriction} "
+            elif re.match(r"\d+\s*[Bb]locks", restriction):
+                title += f"{restriction} "
+
+        # FIXME: This is included in the title for now to match people's expectations
+        for restriction in self.component_restrictions:
+            title += f"{restriction} "
+        for restriction in self.information.get("unknown_restrictions", {}).get("component_restrictions", []):
+            title += f"*{restriction}* "
+
+        # Door dimensions
+        if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
+            title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
+        elif self.door_width and self.door_height:
+            title += f"{self.door_width}x{self.door_height} "
+        elif self.door_width:
+            title += f"{self.door_width} Wide "
+        elif self.door_height:
+            title += f"{self.door_height} High "
+
+        # Wiring Placement Restrictions
+        for restriction in self.wiring_placement_restrictions:
+            title += f"{restriction} "
+
+        for restriction in self.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
+            title += f"*{restriction}* "
+
+        # Pattern
+        for pattern in self.door_type:
+            if pattern != "Regular":
+                title += f"{pattern} "
+
+        for pattern in self.information.get("unknown_patterns", []):
+            title += f"*{pattern}* "
+
+        # Door type
+        if self.door_orientation_type is None:
+            raise ValueError("Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing.")
+        title += self.door_orientation_type
+
+        return title
+
     async def get_persisted_copy(self) -> Build:
         """Get a persisted copy of the build."""
         if self.id is None:
