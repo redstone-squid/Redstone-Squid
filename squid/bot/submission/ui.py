@@ -207,7 +207,7 @@ class ConfirmationView(discord.ui.View):
 
 
 class EditModal(discord.ui.Modal):
-    def __init__(self, parent: EditView, title: str, timeout: float | None = 60, custom_id: str | None = None):
+    def __init__(self, parent: BuildEditView, title: str, timeout: float | None = 60, custom_id: str | None = None):
         self.parent = parent
         if custom_id:
             super().__init__(title=title, timeout=timeout, custom_id=custom_id)
@@ -294,7 +294,7 @@ class BuildField(discord.ui.TextInput):
         return f"{self.label}: {self.value}"
 
 
-class EditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
+class BuildEditView[ClientT: discord.Client](BaseNavigableView[ClientT]):
     def __init__(
         self,
         build: Build,
@@ -459,7 +459,7 @@ class DynamicBuildEditButton(discord.ui.DynamicItem[discord.ui.Button], template
             build = await self.build.get_persisted_copy()
             return BuildInfoView(build)
 
-        await EditView(self.build, parent=_parent).update(interaction)
+        await BuildEditView(self.build, parent=_parent).update(interaction)
 
 
 class EphemeralBuildEditButton(discord.ui.Button):
@@ -469,4 +469,4 @@ class EphemeralBuildEditButton(discord.ui.Button):
 
     @override
     async def callback(self, interaction: Interaction[ClientT]) -> None:
-        await EditView(self.build).send(interaction, ephemeral=True)
+        await BuildEditView(self.build).send(interaction, ephemeral=True)

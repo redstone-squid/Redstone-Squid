@@ -12,8 +12,8 @@ from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot import utils
 from squid.bot.submission.parse import parse_dimensions
-from squid.bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
-from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
+from squid.bot.submission.ui import ConfirmationView, DynamicBuildEditButton, BuildEditView
+from squid.bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, check_is_owner_server
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
@@ -177,7 +177,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
         build = await Build.from_id(build_id)
         assert build is not None
-        await EditView(build).send(interaction, ephemeral=True)
+        await BuildEditView(build).send(interaction, ephemeral=True)
 
 
 async def setup(bot: RedstoneSquid) -> None:
