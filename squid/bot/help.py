@@ -10,7 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group, Context
 import git
 
-from bot import utils
+from squid.bot import utils
 
 MORE_INFORMATION = "Use `/help <command>` to get more information."
 

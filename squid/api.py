@@ -8,9 +8,9 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
-from database import DatabaseManager
-from database.user import get_minecraft_username
-from database.utils import utcnow
+from squid.database import DatabaseManager
+from squid.database.user import get_minecraft_username
+from squid.database.utils import utcnow
 
 app = FastAPI()
 

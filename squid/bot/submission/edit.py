@@ -10,14 +10,14 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
 from postgrest.base_request_builder import SingleAPIResponse
 
-from bot.submission.parse import parse_dimensions
-from bot import utils
-from bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
-from bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, check_is_owner_server
-from database.builds import Build
+from squid.bot.submission.parse import parse_dimensions
+from squid.bot import utils
+from squid.bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
+from squid.bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, check_is_owner_server
+from squid.database.builds import Build
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 class BuildEditCog[BotT: RedstoneSquid](Cog):

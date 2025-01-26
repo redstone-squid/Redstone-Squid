@@ -11,16 +11,16 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from openai import AsyncOpenAI
 import vecs
 
-from bot.submission.ui import DynamicBuildEditButton, BuildInfoView
-from bot.utils import RunningMessage, check_is_staff, check_is_owner_server
-from bot import utils
-from database.builds import Build, get_all_builds
-from database.schema import Status
+from squid.bot.submission.ui import DynamicBuildEditButton, BuildInfoView
+from squid.bot.utils import RunningMessage, check_is_staff, check_is_owner_server
+from squid.bot import utils
+from squid.database.builds import Build, get_all_builds
+from squid.database.schema import Status
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
     from postgrest.base_request_builder import APIResponse
-    from database.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
+    from squid.database.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 
 class SearchCog[BotT: RedstoneSquid](Cog):

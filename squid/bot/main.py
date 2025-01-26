@@ -15,9 +15,9 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
-from bot._types import MessageableChannel
-from database import DatabaseManager
-from bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
+from squid.bot._types import MessageableChannel
+from squid.database import DatabaseManager
+from squid.bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
@@ -39,18 +39,18 @@ class RedstoneSquid(Bot):
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
         self.db = DatabaseManager(self)
-        await self.load_extension("bot.misc_commands")
-        await self.load_extension("bot.settings")
-        await self.load_extension("bot.submission.submit")
-        await self.load_extension("bot.submission.edit")
-        await self.load_extension("bot.log")
-        await self.load_extension("bot.help")
-        await self.load_extension("bot.voting.vote")
+        await self.load_extension("squid.bot.misc_commands")
+        await self.load_extension("squid.bot.settings")
+        await self.load_extension("squid.bot.submission.submit")
+        await self.load_extension("squid.bot.submission.edit")
+        await self.load_extension("squid.bot.log")
+        await self.load_extension("squid.bot.help")
+        await self.load_extension("squid.bot.voting.vote")
         await self.load_extension("jishaku")
-        await self.load_extension("bot.verify")
-        await self.load_extension("bot.admin")
-        await self.load_extension("bot.submission.search")
-        await self.load_extension("bot.give_redstoner")
+        await self.load_extension("squid.bot.verify")
+        await self.load_extension("squid.bot.admin")
+        await self.load_extension("squid.bot.submission.search")
+        await self.load_extension("squid.bot.give_redstoner")
         self.call_supabase_to_prevent_deactivation.start()
 
     @tasks.loop(hours=24)

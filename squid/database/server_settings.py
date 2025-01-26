@@ -1,12 +1,12 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-from typing import Iterable, Iterator, Literal, Sequence, overload
+from typing import Iterable, Literal, overload
 
 from postgrest.base_request_builder import SingleAPIResponse, APIResponse
 from postgrest.types import CountMethod
 from supabase import AsyncClient
 
-from database.schema import (
+from squid.database.schema import (
     ServerSettingRecord,
     DbSettingKey,
     Setting,

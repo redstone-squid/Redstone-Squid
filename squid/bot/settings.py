@@ -9,13 +9,13 @@ from discord import app_commands
 from discord.ext.commands import Context, Cog, hybrid_group, guild_only, Greedy
 from postgrest.types import ReturnMethod
 
-from bot.utils import check_is_staff
-import bot.utils as utils
-from database.schema import Setting, SETTINGS
-from bot._types import GuildMessageable
+from squid.bot.utils import check_is_staff
+import squid.bot.utils as utils
+from squid.database.schema import Setting, SETTINGS
+from squid.bot._types import GuildMessageable
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):

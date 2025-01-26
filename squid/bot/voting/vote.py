@@ -7,13 +7,13 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 from postgrest.base_request_builder import SingleAPIResponse
 
-from bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from bot.utils import is_staff
-from bot._types import GuildMessageable
-from bot import utils
+from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
+from squid.bot.utils import is_staff
+from squid.bot._types import GuildMessageable
+from squid.bot import utils
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]

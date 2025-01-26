@@ -8,12 +8,12 @@ import discord
 import discord.ext.commands as commands
 from discord.ext.commands import Context, Cog
 
-import bot.utils as utils
-from bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
-from database import get_version_string
+import squid.bot.utils as utils
+from squid.bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
+from squid.database import get_version_string
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 class Miscellaneous[BotT: RedstoneSquid](Cog):

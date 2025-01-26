@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING
 import asyncio
 
 import discord
-from discord import InteractionResponse, Message, app_commands
+from discord import Message, app_commands
 from discord.ext import commands
 from discord.ext.commands import (
     Context,
@@ -14,18 +14,18 @@ from discord.ext.commands import (
     flag,
 )
 
-from bot import utils
-from bot._types import GuildMessageable
-from bot.submission.parse import parse_dimensions
-from bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
-from bot.voting.vote_session import BuildVoteSession
-from database.builds import Build
-from bot.utils import RunningMessage, fix_converter_annotations, check_is_owner_server, check_is_trusted_or_staff
-from database.schema import Status, Category
-from database.utils import upload_to_catbox
+from squid.bot import utils
+from squid.bot._types import GuildMessageable
+from squid.bot.submission.parse import parse_dimensions
+from squid.bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
+from squid.bot.voting.vote_session import BuildVoteSession
+from squid.database.builds import Build
+from squid.bot.utils import RunningMessage, fix_converter_annotations, check_is_owner_server, check_is_trusted_or_staff
+from squid.database.schema import Status, Category
+from squid.database.utils import upload_to_catbox
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 

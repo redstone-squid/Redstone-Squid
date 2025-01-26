@@ -8,19 +8,18 @@ from dataclasses import dataclass, field
 import mimetypes
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from discord.ext import commands
 from discord.utils import escape_markdown
 
-from bot._types import GuildMessageable
-import bot.utils as bot_utils
-from database import DatabaseManager
-from database.schema import Status
-from database.utils import upload_to_catbox, utcnow
+from squid.bot._types import GuildMessageable
+import squid.bot.utils as bot_utils
+from squid.database import DatabaseManager
+from squid.database.schema import Status
+from squid.database.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
     import discord
-    from database.builds import Build
-    from bot.main import RedstoneSquid
+    from squid.database.builds import Build
+    from squid.bot.main import RedstoneSquid
 
 
 background_tasks: set[asyncio.Task[Any]] = set()

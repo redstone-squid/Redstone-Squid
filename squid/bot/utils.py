@@ -16,9 +16,9 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context, FlagConverter, NoPrivateMessage, MissingAnyRole, check, CheckFailure
 
-from bot import config
-from bot.config import OWNER_ID, PRINT_TRACEBACKS
-from database import DatabaseManager
+from squid.bot import config
+from squid.bot.config import OWNER_ID, PRINT_TRACEBACKS
+from squid.database import DatabaseManager
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A

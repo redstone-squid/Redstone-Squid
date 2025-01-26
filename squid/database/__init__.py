@@ -6,26 +6,23 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import os
-from typing import Any, ClassVar, Literal, TYPE_CHECKING, overload
+from typing import ClassVar, Literal, TYPE_CHECKING
 from functools import cache
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
-from pydantic import TypeAdapter, ValidationError
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
-from bot.config import DEV_MODE
-from database.message import MessageManager
-from database.schema import DeleteLogVoteSessionRecord, MessageRecord, RestrictionRecord, VersionRecord
-from database.server_settings import ServerSettingManager
-from database.utils import get_version_string, parse_version_string
+from squid.bot.config import DEV_MODE
+from squid.database.message import MessageManager
+from squid.database.schema import RestrictionRecord, VersionRecord
+from squid.database.server_settings import ServerSettingManager
+from squid.database.utils import get_version_string, parse_version_string
 
 if TYPE_CHECKING:
-    import discord
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 class DatabaseManager(AsyncClient):

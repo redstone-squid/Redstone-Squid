@@ -14,12 +14,12 @@ from typing import Any, Self, TYPE_CHECKING, cast, ClassVar, final, Literal, ove
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
-from database import DatabaseManager
-from database.builds import Build
-from database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
+from squid.database import DatabaseManager
+from squid.database.builds import Build
+from squid.database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]

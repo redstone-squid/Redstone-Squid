@@ -9,7 +9,7 @@ from functools import wraps
 
 import aiohttp
 
-from database.schema import VersionRecord
+from squid.database.schema import VersionRecord
 
 
 def utcnow() -> str:

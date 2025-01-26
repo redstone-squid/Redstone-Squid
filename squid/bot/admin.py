@@ -9,12 +9,12 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
-from bot import utils
-from bot.utils import check_is_staff, check_is_owner_server
-from database.builds import Build
+from squid.bot import utils
+from squid.bot.utils import check_is_staff, check_is_owner_server
+from squid.database.builds import Build
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
+    from squid.bot.main import RedstoneSquid
 
 
 class Admin[BotT: RedstoneSquid](commands.Cog):

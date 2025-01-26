@@ -10,11 +10,11 @@ import discord
 from discord.ext.commands import Cog
 
 if TYPE_CHECKING:
-    import bot.main
+    import squid.bot.main
 
 
 class GiveRedstoner(Cog):
-    def __init__(self, bot: bot.main.RedstoneSquid):
+    def __init__(self, bot: squid.bot.main.RedstoneSquid):
         self.bot = bot
         self.pattern = re.compile(r"https://discord\.com/channels/\d+/\d+/\d+")
 
@@ -45,5 +45,5 @@ class GiveRedstoner(Cog):
         )
 
 
-async def setup(bot: bot.main.RedstoneSquid):
+async def setup(bot: squid.bot.main.RedstoneSquid):
     await bot.add_cog(GiveRedstoner(bot))
