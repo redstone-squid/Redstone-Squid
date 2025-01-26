@@ -154,8 +154,9 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
         return interaction.client.for_build(self.build)
 
     async def get_embeds(self, interaction: discord.Interaction[BotT]) -> list[discord.Embed]:
-        return [self.summary_embed(), await self.get_handler(interaction).generate_embed()]
+        return [self.summary_embed, await self.get_handler(interaction).generate_embed()]
 
+    @property
     def summary_embed(self) -> discord.Embed:
         summaries = [item.summary for item in self.items]
         for i in range(5 * (self.page - 1), min(len(self.items), 5 * self.page)):
