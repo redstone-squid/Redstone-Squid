@@ -144,7 +144,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 )
                 await asyncio.gather(
                     message.edit(embed=success_embed),
-                    self.post_build_for_voting(build),
+                    build_handler.post_for_voting(),
                 )
         else:
             raise NotImplementedError("This command is only available as a slash command for now.")
@@ -199,7 +199,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                     embed=await self.bot.for_build(build).generate_embed(),
                     ephemeral=True,
                 ),
-                self.post_build_for_voting(build),
+                self.bot.for_build(build).post_for_voting(),
             )
 
     @commands.Cog.listener("on_build_confirmed")
@@ -221,32 +221,6 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
         await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
-
-    async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
-        """
-        Post a build for voting.
-
-        Args:
-            build (Build): The build to post.
-            type (Literal["add", "update"]): Whether to add or update the build.
-        """
-        if type == "update":
-            raise NotImplementedError("Updating builds is not yet implemented.")
-
-        if build.submission_status != Status.PENDING:
-            raise ValueError("The build must be pending to post it.")
-
-        build_handler = self.bot.for_build(build)
-        em = await build_handler.generate_embed()
-        messages = await asyncio.gather(
-            *(
-                vote_channel.send(content=build.original_link, embed=em)
-                for vote_channel in await build_handler.get_channels_to_post_to()
-            )
-        )
-
-        assert build.submitter_id is not None
-        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
@@ -278,7 +252,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         build.submitter_id = message.author.id
         # Order is important here.
         await build.save()
-        await self.post_build_for_voting(build, type="add")
+        await self.bot.for_build(build).post_for_voting(type="add")
 
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()

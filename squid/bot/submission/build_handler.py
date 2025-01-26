@@ -73,6 +73,31 @@ class BuildHandler[BotT: RedstoneSquid]:
         channels = [channel for channel in maybe_channels if channel is not None]
         return cast(list[GuildMessageable], channels)
 
+    async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:
+        """
+        Post a build for voting.
+
+        Args:
+            type (Literal["add", "update"]): Whether to add or update the build.
+        """
+        build = self.build
+        if type == "update":
+            raise NotImplementedError("Updating builds is not yet implemented.")
+
+        if build.submission_status != Status.PENDING:
+            raise ValueError("The build must be pending to post it.")
+
+        em = await self.generate_embed()
+        messages = await asyncio.gather(
+            *(
+                vote_channel.send(content=build.original_link, embed=em)
+                for vote_channel in await self.get_channels_to_post_to()
+            )
+        )
+
+        assert build.submitter_id is not None
+        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
+
     async def get_original_message(self, bot: BotT) -> discord.Message | None:  # type: ignore
         """Gets the original message of the build."""
         if self._build_original_message_obj:
