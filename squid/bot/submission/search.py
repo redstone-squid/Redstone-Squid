@@ -12,7 +12,8 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from openai import AsyncOpenAI
 
 from squid.bot import utils
-from squid.bot.submission.ui import BuildInfoView, DynamicBuildEditButton
+from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
 from squid.db.builds import Build, get_all_builds
 from squid.db.schema import Status

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_command
 
-from squid.bot.submission.ui import ConfirmationView
+from squid.bot.submission.ui.views import ConfirmationView
 from squid.db.user import link_minecraft_account, unlink_minecraft_account
 
 if TYPE_CHECKING:

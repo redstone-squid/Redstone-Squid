@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import discord
 from discord import Message, app_commands
@@ -17,7 +17,8 @@ from discord.ext.commands import (
 from squid.bot import utils
 from squid.bot._types import GuildMessageable
 from squid.bot.submission.parse import parse_dimensions
-from squid.bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
+from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db.builds import Build
