@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 from squid.bot._types import MessageableChannel
 from squid.db import DatabaseManager
-from squid.bot.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
+from squid.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 

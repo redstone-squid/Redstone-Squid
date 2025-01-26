@@ -9,7 +9,7 @@ import asyncio
 from importlib.util import find_spec
 import multiprocessing
 
-from squid.bot.config import DEV_MODE
+from squid.config import DEV_MODE
 from squid.bot.main import main
 from squid.api import main as api_main
 

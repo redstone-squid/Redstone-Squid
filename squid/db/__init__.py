@@ -15,7 +15,7 @@ from postgrest.base_request_builder import APIResponse
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
-from squid.bot.config import DEV_MODE
+from squid.config import DEV_MODE
 from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
 from squid.db.server_settings import ServerSettingManager
