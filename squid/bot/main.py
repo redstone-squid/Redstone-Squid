@@ -7,7 +7,7 @@ import logging
 import os
 from collections.abc import Awaitable, Iterable
 from logging.handlers import RotatingFileHandler
-from typing import Callable, override
+from typing import Self, Callable, override
 
 import discord
 from discord import Message
@@ -16,8 +16,10 @@ from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
 from squid.bot._types import MessageableChannel
+from squid.bot.submission.build_handler import BuildHandler
 from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, PREFIX
 from squid.db import DatabaseManager
+from squid.db.builds import Build
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
@@ -81,6 +83,10 @@ class RedstoneSquid(Bot):
         except discord.Forbidden:
             pass
         return None
+
+    def for_build(self, build: Build) -> BuildHandler[Self]:
+        """A helper function to create a BuildHandler with the bot instance."""
+        return BuildHandler(self, build)
 
 
 def setup_logging():

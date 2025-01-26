@@ -47,7 +47,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
         build_id = int(result[0])
         build = await Build.from_id(build_id)
         assert build is not None
-        await ctx.send(content=build.original_link, embed=await build.generate_embed())
+        await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
 
     @commands.command("search_restrictions")
     @check_is_staff()
@@ -131,7 +131,9 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                     error_embed = utils.error_embed("Error", "No build with that ID.")
                     return await sent_message.edit(embed=error_embed)
 
-                await sent_message.edit(content=build.original_link, embed=await build.generate_embed())
+                await sent_message.edit(
+                    content=build.original_link, embed=await self.bot.for_build(build).generate_embed()
+                )
 
 
 async def setup(bot: RedstoneSquid):

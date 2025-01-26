@@ -126,7 +126,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            preview_embed = await build.generate_embed()
+            preview_embed = await self.bot.for_build(build).generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
@@ -148,14 +148,14 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 elif view.value:
                     await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                     await build.save()
-                    await build.update_messages(self.bot)
+                    await self.bot.for_build(build).update_messages()
                     await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
                 else:
                     await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
             else:  # Not an interaction, so we can't use buttons for confirmation
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await build.save()
-                await build.update_messages(self.bot)
+                await self.bot.for_build(build).update_messages()
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:

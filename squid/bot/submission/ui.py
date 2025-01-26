@@ -362,18 +362,18 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
             await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
         await interaction.followup.send(
-            f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(), ephemeral=ephemeral
+            f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction), ephemeral=ephemeral
         )
 
     @override
     async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()
         await interaction.response.edit_message(
-            content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds()
+            content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction)
         )
 
-    async def get_embeds(self) -> list[discord.Embed]:
-        return [self.summary_embed(), await self.build.generate_embed()]
+    async def get_embeds(self, interaction: discord.Interaction[BotT]) -> list[discord.Embed]:
+        return [self.summary_embed(), await interaction.client.for_build(self.build).generate_embed()]
 
     def summary_embed(self) -> discord.Embed:
         summaries = [item.summary for item in self.items]
@@ -401,7 +401,7 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await self.press_home(interaction)
         await self.build.save()
-        await interaction.followup.send(content="Submitted", embed=await self.build.generate_embed(), ephemeral=True)
+        await interaction.followup.send(content="Submitted", embed=await interaction.client.for_build(self.build).generate_embed(), ephemeral=True)
 
 
 class BuildInfoView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
@@ -418,18 +418,18 @@ class BuildInfoView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
         else:
             self.add_item(DynamicBuildEditButton(build))
 
-    async def get_embed(self) -> discord.Embed:
-        return await self.build.generate_embed()
+    async def get_embed(self, interaction: discord.Interaction[BotT]) -> discord.Embed:
+        return await interaction.client.for_build(self.build).generate_embed()
 
     @override
     async def send(self, interaction: discord.Interaction[BotT]) -> None:
         if not interaction.response.is_done():
             await interaction.response.defer()
-        await interaction.followup.send(embed=await self.get_embed(), view=self)
+        await interaction.followup.send(embed=await self.get_embed(interaction), view=self)
 
     @override
     async def update(self, interaction: discord.Interaction[BotT]) -> None:
-        await interaction.response.edit_message(content=None, embed=await self.get_embed(), view=self)
+        await interaction.response.edit_message(content=None, embed=await self.get_embed(interaction), view=self)
 
 
 class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](

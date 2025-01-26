@@ -128,11 +128,12 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 build.category = Category.DOOR
                 build.submission_status = Status.PENDING
 
+                build_handler = self.bot.for_build(build)
                 await asyncio.gather(
                     build.save(),
                     followup.send(
                         "Here is a preview of the submission. Use /edit if you have made a mistake",
-                        embed=await build.generate_embed(),
+                        embed=await build_handler.generate_embed(),
                         ephemeral=True,
                     ),
                 )
@@ -195,7 +196,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             await asyncio.gather(
                 followup.send(
                     "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await build.generate_embed(),
+                    embed=await self.bot.for_build(build).generate_embed(),
                     ephemeral=True,
                 ),
                 self.post_build_for_voting(build),
@@ -212,13 +213,14 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         if build.submission_status != Status.CONFIRMED:
             raise ValueError("The build must be confirmed to post it.")
 
-        em = await build.generate_embed()
+        build_handler = self.bot.for_build(build)
+        em = await build_handler.generate_embed()
 
         async def _send_msg(channel: GuildMessageable):
             message = await channel.send(content=build.original_link, embed=em)
             await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
-        await asyncio.gather(*(_send_msg(channel) for channel in await build.get_channels_to_post_to(self.bot)))
+        await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
 
     async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
         """
@@ -234,11 +236,12 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         if build.submission_status != Status.PENDING:
             raise ValueError("The build must be pending to post it.")
 
-        em = await build.generate_embed()
+        build_handler = self.bot.for_build(build)
+        em = await build_handler.generate_embed()
         messages = await asyncio.gather(
             *(
                 vote_channel.send(content=build.original_link, embed=em)
-                for vote_channel in await build.get_channels_to_post_to(self.bot)
+                for vote_channel in await build_handler.get_channels_to_post_to()
             )
         )
 

@@ -18,7 +18,6 @@ from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
-from squid.bot.submission.build_mixin import DiscordBuildMixin
 from squid.bot.submission.parse import parse_time_string, validate_door_types, validate_restrictions
 from squid.db import DatabaseManager
 from squid.db.schema import (
@@ -44,6 +43,7 @@ from squid.db.schema import (
 )
 from squid.db.user import add_user
 from squid.db.utils import get_version_string, utcnow
+
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 
 @freeze_fields
 @dataclass
-class Build(DiscordBuildMixin):
+class Build:
     """A submission to the database.
 
     This is a very large class, the methods are ordered as follows:
