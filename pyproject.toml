@@ -3,6 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
+name = "redstone-squid"
+version = "1.5.7"
 requires-python = ">=3.12"
 dynamic = ["dependencies", "optional-dependencies"]
 
