@@ -30,9 +30,9 @@ source .venv/bin/activate
 
 ### Installing Packages
 
-In the root directory of the repository you can use the following command to install all the required packages.
+In the root directory of the repository you can use the following command to install all the required packages. You can remove `requirements/dev.txt` if you just want to run the bot and not help develop it.
 ```bash
-pip install -r requirements.txt test-requirements.txt
+pip install -r requirements/base.txt requirements/dev.txt
 ```
 
 ### Credential Files

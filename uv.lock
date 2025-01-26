@@ -1433,7 +1433,7 @@ requires-dist = [
     { name = "beartype" },
     { name = "beautifulsoup4" },
     { name = "discord-ext-menus", git = "https://github.com/Rapptz/discord-ext-menus" },
-    { name = "discord-py", extras = ["speed"] },
+    { name = "discord-py", extras = ["speed"], specifier = ">=2" },
     { name = "fastapi" },
     { name = "gitpython" },
     { name = "gspread" },

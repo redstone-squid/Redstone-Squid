@@ -1,6 +1,0 @@
-# https://github.com/jazzband/pip-tools#workflow-for-layered-requirements
-pip-tools
-ruff
-basedpyright
-pre-commit
-bump-my-version

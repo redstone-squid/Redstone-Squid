@@ -1,16 +1,46 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "redstone-squid"
 version = "1.5.7"
 requires-python = ">=3.12"
-dynamic = ["dependencies", "optional-dependencies"]
+readme = "README.md"
+dependencies = [
+    "oauth2client",
+    "discord-py[speed]>=2",
+    "gspread",
+    "supabase",
+    "python-dotenv",
+    "jishaku",
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "async-lru",
+    "markdown",
+    "beautifulsoup4",
+    "vecs",
+    "gitpython",
+    "beartype",
+    "discord-ext-menus",
+]
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.in"] }
-optional-dependencies.test = { file = ["test-requirements.txt"] }
+[dependency-groups]
+# Note: changes to this group has to be synced with requirements/dev.in
+dev = [
+    "pip-tools",
+    "ruff",
+    "basedpyright",
+    "pre-commit",
+    "bump-my-version",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+discord-ext-menus = { git = "https://github.com/Rapptz/discord-ext-menus" }
 
 [tool.ruff]
 line-length = 120
