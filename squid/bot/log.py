@@ -2,7 +2,7 @@ import logging
 
 from discord import User
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, CommandError
+from discord.ext.commands import Cog, CommandError, Context
 
 from squid.db.utils import utcnow
 

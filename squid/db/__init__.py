@@ -7,19 +7,19 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 from __future__ import annotations
 
 import os
-from typing import ClassVar, Literal, TYPE_CHECKING
 from functools import cache
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
-from supabase._async.client import AsyncClient
-from supabase.lib.client_options import AsyncClientOptions
 
 from squid.config import DEV_MODE
 from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
 from squid.db.server_settings import ServerSettingManager
 from squid.db.utils import get_version_string, parse_version_string
+from supabase._async.client import AsyncClient
+from supabase.lib.client_options import AsyncClientOptions
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid
@@ -185,6 +185,7 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
+
     import dotenv
 
     dotenv.load_dotenv()

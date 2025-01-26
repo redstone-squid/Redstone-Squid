@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from textwrap import dedent
 from collections.abc import Mapping, Sequence
+from textwrap import dedent
 from typing import Any, override
 
 import discord
-from discord import app_commands, InteractionResponse
-from discord.ext import commands
-from discord.ext.commands import Cog, Command, Group, Context
 import git
+from discord import InteractionResponse, app_commands
+from discord.ext import commands
+from discord.ext.commands import Cog, Command, Context, Group
 
 from squid.bot import utils
 

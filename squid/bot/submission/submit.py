@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal, TYPE_CHECKING
 import asyncio
+from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord import Message, app_commands
 from discord.ext import commands
 from discord.ext.commands import (
-    Context,
     Cog,
+    Context,
     flag,
 )
 
@@ -18,10 +18,10 @@ from squid.bot import utils
 from squid.bot._types import GuildMessageable
 from squid.bot.submission.parse import parse_dimensions
 from squid.bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
+from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db.builds import Build
-from squid.bot.utils import RunningMessage, fix_converter_annotations, check_is_owner_server, check_is_trusted_or_staff
-from squid.db.schema import Status, Category
+from squid.db.schema import Category, Status
 from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -134,7 +134,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                         "Here is a preview of the submission. Use /edit if you have made a mistake",
                         embed=await build.generate_embed(),
                         ephemeral=True,
-                    )
+                    ),
                 )
 
                 success_embed = utils.info_embed(
@@ -198,7 +198,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                     embed=await build.generate_embed(),
                     ephemeral=True,
                 ),
-                self.post_build_for_voting(build)
+                self.post_build_for_voting(build),
             )
 
     @commands.Cog.listener("on_build_confirmed")
@@ -235,10 +235,12 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             raise ValueError("The build must be pending to post it.")
 
         em = await build.generate_embed()
-        messages = await asyncio.gather(*(
-            vote_channel.send(content=build.original_link, embed=em)
-            for vote_channel in await build.get_channels_to_post_to(self.bot)
-        ))
+        messages = await asyncio.gather(
+            *(
+                vote_channel.send(content=build.original_link, embed=em)
+                for vote_channel in await build.get_channels_to_post_to(self.bot)
+            )
+        )
 
         assert build.submitter_id is not None
         await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)

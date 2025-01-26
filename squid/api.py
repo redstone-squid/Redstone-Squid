@@ -5,7 +5,7 @@ import random
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager

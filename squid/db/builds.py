@@ -2,49 +2,48 @@
 
 from __future__ import annotations
 
-import re
-import os
 import asyncio
 import logging
-from importlib import resources
-from functools import cached_property
+import os
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from collections.abc import Sequence, Mapping
-from typing import Callable, Final, Literal, Any, Self, overload
+from functools import cached_property
+from importlib import resources
+from typing import Any, Callable, Final, Literal, Self, overload
 
 import discord
+import vecs
 from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
-import vecs
 
-from squid.bot.submission.parse import validate_restrictions, validate_door_types, parse_time_string
+from squid.bot.submission.build_mixin import DiscordBuildMixin
+from squid.bot.submission.parse import parse_time_string, validate_door_types, validate_restrictions
+from squid.db import DatabaseManager
 from squid.db.schema import (
     BuildRecord,
+    Category,
+    DoorOrientationName,
     DoorRecord,
     EntranceRecord,
+    ExtenderRecord,
+    Info,
     LinkRecord,
     MessageRecord,
-    ServerInfo,
-    TypeRecord,
-    RestrictionRecord,
-    Info,
-    UserRecord,
-    VersionRecord,
-    UnknownRestrictions,
-    RecordCategory,
-    DoorOrientationName,
     QuantifiedVersionRecord,
-    ExtenderRecord,
-    UtilityRecord,
+    RecordCategory,
+    RestrictionRecord,
+    ServerInfo,
     Status,
-    Category,
+    TypeRecord,
+    UnknownRestrictions,
+    UserRecord,
+    UtilityRecord,
+    VersionRecord,
 )
-from squid.db import DatabaseManager
 from squid.db.user import add_user
-from squid.bot.submission.build_mixin import DiscordBuildMixin
-from squid.db.utils import utcnow, get_version_string
-
+from squid.db.utils import get_version_string, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -893,7 +892,9 @@ class Build(DiscordBuildMixin):
         db = DatabaseManager()
         creator_ids: list[int] = []
         for creator_ign in self.creators_ign:
-            response: SingleAPIResponse[UserRecord] | None = await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
+            response: SingleAPIResponse[UserRecord] | None = (
+                await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
+            )
             if response:
                 creator_ids.append(response.data["id"])
             else:

@@ -2,10 +2,10 @@
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from supabase import AsyncClient
 
-from squid.db.schema import MessageRecord, MessagePurpose
+from squid.db.schema import MessagePurpose, MessageRecord
 from squid.db.utils import utcnow
+from supabase import AsyncClient
 
 
 class MessageManager:

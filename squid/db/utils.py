@@ -1,10 +1,10 @@
 """Utility functions for the database module."""
 
-import os
 import io
+import os
 import re
-from datetime import datetime, timezone
 from collections.abc import Callable
+from datetime import datetime, timezone
 from functools import wraps
 
 import aiohttp

@@ -1,25 +1,27 @@
 """This module contains a mixin for the Build class that adds Discord-related functionality."""
+
 from __future__ import annotations
 
-import io
-import re
 import asyncio
-from dataclasses import dataclass, field
+import io
 import mimetypes
+import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from discord.utils import escape_markdown
 
-from squid.bot._types import GuildMessageable
 import squid.bot.utils as bot_utils
+from squid.bot._types import GuildMessageable
 from squid.db import DatabaseManager
 from squid.db.schema import Status
 from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
     import discord
-    from squid.db.builds import Build
+
     from squid.bot.main import RedstoneSquid
+    from squid.db.builds import Build
 
 
 background_tasks: set[asyncio.Task[Any]] = set()
@@ -59,7 +61,9 @@ class DiscordBuildMixin:
                 raise ValueError("Invalid status or record category")
 
         guild_channels = await bot.db.server_setting.get((guild.id for guild in bot.guilds), target)
-        maybe_channels = [bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None]
+        maybe_channels = [
+            bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None
+        ]
         channels = [channel for channel in maybe_channels if channel is not None]
         return cast(list[GuildMessageable], channels)
 

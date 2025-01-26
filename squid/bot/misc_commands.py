@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 import discord
 import discord.ext.commands as commands
-from discord.ext.commands import Context, Cog
+from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
-from squid.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
+from squid.config import BOT_NAME, FORM_LINK, SOURCE_CODE_URL
 from squid.db import get_version_string
 
 if TYPE_CHECKING:

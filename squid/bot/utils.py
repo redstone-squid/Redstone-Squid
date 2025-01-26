@@ -1,20 +1,20 @@
 """Utility functions for the bot."""
 
-import logging
-import io
+import asyncio
 import inspect
+import io
+import logging
+import mimetypes
 from traceback import format_tb
 from types import FrameType, TracebackType
-from typing import TypedDict, Any
-import mimetypes
-import asyncio
-import aiohttp
+from typing import Any, TypedDict
 
-import discord
+import aiohttp
 import bs4
+import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
-from discord.ext.commands import Context, FlagConverter, NoPrivateMessage, MissingAnyRole, check, CheckFailure
+from discord.ext.commands import CheckFailure, Context, FlagConverter, MissingAnyRole, NoPrivateMessage, check
 
 from squid import config
 from squid.config import OWNER_ID, PRINT_TRACEBACKS

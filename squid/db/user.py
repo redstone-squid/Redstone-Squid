@@ -4,8 +4,8 @@ from uuid import UUID
 
 import requests
 
-from squid.db.utils import utcnow
 from squid.db import DatabaseManager
+from squid.db.utils import utcnow
 
 
 async def add_user(user_id: int | None = None, ign: str | None = None) -> int:

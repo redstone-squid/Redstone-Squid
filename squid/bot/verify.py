@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from discord import app_commands
-from discord.ext.commands import Cog, hybrid_command, Context
+from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui import ConfirmationView
 from squid.db.user import link_minecraft_account, unlink_minecraft_account

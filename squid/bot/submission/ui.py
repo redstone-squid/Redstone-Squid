@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-import json
-from typing import Sequence, override, cast, TYPE_CHECKING, Self, Any
+from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override
 
 import discord
 from beartype.door import is_bearable, is_subhint
@@ -16,8 +16,7 @@ from discord.ui import Item
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.db.builds import Build
-from squid.db.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES, Status, Category
-
+from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Category, Status
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime

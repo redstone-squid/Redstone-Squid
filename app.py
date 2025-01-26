@@ -4,15 +4,14 @@ Entry point of the bot and the API.
 https://github.com/redstone-squid/Redstone-Squid"
 """
 
-import sys
 import asyncio
-from importlib.util import find_spec
 import multiprocessing
+import sys
+from importlib.util import find_spec
 
-from squid.config import DEV_MODE
-from squid.bot.main import main
 from squid.api import main as api_main
-
+from squid.bot.main import main
+from squid.config import DEV_MODE
 
 if __name__ == "__main__":
     # Check bot/config.py for configuration, .env.example for environment variables

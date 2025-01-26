@@ -2,16 +2,16 @@
 
 from typing import Iterable, Literal, overload
 
-from postgrest.base_request_builder import SingleAPIResponse, APIResponse
+from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
-from supabase import AsyncClient
 
 from squid.db.schema import (
-    ServerSettingRecord,
-    DbSettingKey,
-    Setting,
     SETTINGS,
+    DbSettingKey,
+    ServerSettingRecord,
+    Setting,
 )
+from supabase import AsyncClient
 
 # Mapping of settings to the column names in the database.
 # This file should be the only place that is aware of the database column names.
@@ -36,7 +36,9 @@ class ServerSettingManager:
         self.client = client
 
     @overload
-    async def get(self, server_ids: Iterable[int], setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]) -> dict[int, int | None]: ...
+    async def get(
+        self, server_ids: Iterable[int], setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+    ) -> dict[int, int | None]: ...
     @overload
     async def get(self, server_ids: Iterable[int], setting: Literal["Staff", "Trusted"]) -> dict[int, list[int]]: ...
 

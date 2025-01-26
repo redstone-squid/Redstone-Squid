@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-import inspect
-from abc import abstractmethod, ABC
 import asyncio
+import inspect
+from abc import ABC, abstractmethod
 from asyncio import Task
+from collections.abc import Iterable, Mapping
 from textwrap import dedent
 from types import MethodType
-from typing import Any, Self, TYPE_CHECKING, cast, ClassVar, final, Literal, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
+from squid.db.schema import MessageRecord, Status, VoteKind, VoteSessionRecord
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid
@@ -262,7 +262,11 @@ class AbstractVoteSession(ABC):
         )
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(record["channel_id"], record["message_id"]) for record in messages_record.data if record["message_id"] not in cached_ids)
+            *(
+                self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+                for record in messages_record.data
+                if record["message_id"] not in cached_ids
+            )
         )
         new_messages = (message for message in new_messages if message is not None)
         self._messages.update(new_messages)
@@ -607,7 +611,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def _from_record(cls, bot: RedstoneSquid, record: Mapping[str, Any]) -> DeleteLogVoteSession | None:
         """Create a DeleteLogVoteSession from a database record."""
         session_data = record["delete_log_vote_sessions"]
-        target_message = await bot.get_or_fetch_message(session_data["target_channel_id"], session_data["target_message_id"])
+        target_message = await bot.get_or_fetch_message(
+            session_data["target_channel_id"], session_data["target_message_id"]
+        )
         if target_message is None:
             return None
 

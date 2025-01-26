@@ -10,7 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
 from squid.bot import utils
-from squid.bot.utils import check_is_staff, check_is_owner_server
+from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db.builds import Build
 
 if TYPE_CHECKING:

@@ -7,10 +7,10 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 from postgrest.base_request_builder import SingleAPIResponse
 
-from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.bot.utils import is_staff
-from squid.bot._types import GuildMessageable
 from squid.bot import utils
+from squid.bot._types import GuildMessageable
+from squid.bot.utils import is_staff
+from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid
@@ -94,7 +94,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 
         if isinstance(vote_session, DeleteLogVoteSession):
             # Check if the user has a trusted role
-            trusted_role_ids = await self.bot.db.server_setting.get_single(server_id=payload.guild_id, setting="Trusted")
+            trusted_role_ids = await self.bot.db.server_setting.get_single(
+                server_id=payload.guild_id, setting="Trusted"
+            )
 
             guild = self.bot.get_guild(payload.guild_id)
             assert guild is not None

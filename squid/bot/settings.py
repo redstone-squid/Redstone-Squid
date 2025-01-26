@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from typing import cast, TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Context, Cog, hybrid_group, guild_only, Greedy
+from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 from postgrest.types import ReturnMethod
 
-from squid.bot.utils import check_is_staff
 import squid.bot.utils as utils
-from squid.db.schema import Setting, SETTINGS
 from squid.bot._types import GuildMessageable
+from squid.bot.utils import check_is_staff
+from squid.db.schema import SETTINGS, Setting
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

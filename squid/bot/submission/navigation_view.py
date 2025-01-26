@@ -4,17 +4,17 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Awaitable
 import functools
+from collections.abc import Awaitable
 from typing import (
     TYPE_CHECKING,
     Any,
-    Self,
-    Final,
     Callable,
+    Concatenate,
+    Final,
+    Self,
     cast,
     override,
-    Concatenate,
 )
 
 import discord

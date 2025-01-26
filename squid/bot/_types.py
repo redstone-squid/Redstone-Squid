@@ -1,6 +1,6 @@
 """This module contains type hints that are used throughout the bot."""
 
-from discord import TextChannel, VoiceChannel, StageChannel, Thread, DMChannel, PartialMessageable, GroupChannel
+from discord import DMChannel, GroupChannel, PartialMessageable, StageChannel, TextChannel, Thread, VoiceChannel
 
 GuildMessageable = TextChannel | VoiceChannel | StageChannel | Thread
 """These are the types of channels in a guild that a message can be sent to."""

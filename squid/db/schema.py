@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import IntEnum, StrEnum
-from typing import TypedDict, Literal, get_args, cast, TypeAlias
+from typing import Literal, TypeAlias, TypedDict, cast, get_args
 
 from pydantic.types import Json
 

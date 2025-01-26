@@ -5,21 +5,22 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+import vecs
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 from openai import AsyncOpenAI
-import vecs
 
-from squid.bot.submission.ui import DynamicBuildEditButton, BuildInfoView
-from squid.bot.utils import RunningMessage, check_is_staff, check_is_owner_server
 from squid.bot import utils
+from squid.bot.submission.ui import BuildInfoView, DynamicBuildEditButton
+from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
 from squid.db.builds import Build, get_all_builds
 from squid.db.schema import Status
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
     from postgrest.base_request_builder import APIResponse
+
+    from squid.bot.main import RedstoneSquid
     from squid.db.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable, Awaitable
-from logging.handlers import RotatingFileHandler
 import os
-from typing import override, Callable
+from collections.abc import Awaitable, Iterable
+from logging.handlers import RotatingFileHandler
+from typing import Callable, override
 
 import discord
 from discord import Message
@@ -16,8 +16,8 @@ from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
 from squid.bot._types import MessageableChannel
+from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, PREFIX
 from squid.db import DatabaseManager
-from squid.config import OWNER_ID, BOT_NAME, BOT_VERSION, PREFIX, DEV_MODE, DEV_PREFIX
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
