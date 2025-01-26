@@ -4,8 +4,8 @@ import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from supabase import AsyncClient
 
-from squid.database.schema import MessageRecord, MessagePurpose
-from squid.database.utils import utcnow
+from squid.db.schema import MessageRecord, MessagePurpose
+from squid.db.utils import utcnow
 
 
 class MessageManager:
@@ -103,7 +103,7 @@ class MessageManager:
 
 
 async def main():
-    from squid.database import DatabaseManager
+    from squid.db import DatabaseManager
 
     # print(get_outdated_message(433618741528625152, 30))
     print(await DatabaseManager().message.get_outdated_messages(433618741528625153))

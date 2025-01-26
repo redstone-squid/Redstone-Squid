@@ -10,7 +10,7 @@ from discord.ext.commands import Context, Cog
 
 import squid.bot.utils as utils
 from squid.bot.config import SOURCE_CODE_URL, BOT_NAME, FORM_LINK
-from squid.database import get_version_string
+from squid.db import get_version_string
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

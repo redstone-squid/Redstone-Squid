@@ -6,7 +6,7 @@ from postgrest.base_request_builder import SingleAPIResponse, APIResponse
 from postgrest.types import CountMethod
 from supabase import AsyncClient
 
-from squid.database.schema import (
+from squid.db.schema import (
     ServerSettingRecord,
     DbSettingKey,
     Setting,

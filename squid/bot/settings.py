@@ -11,7 +11,7 @@ from postgrest.types import ReturnMethod
 
 from squid.bot.utils import check_is_staff
 import squid.bot.utils as utils
-from squid.database.schema import Setting, SETTINGS
+from squid.db.schema import Setting, SETTINGS
 from squid.bot._types import GuildMessageable
 
 if TYPE_CHECKING:

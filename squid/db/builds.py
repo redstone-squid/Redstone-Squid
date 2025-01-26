@@ -19,7 +19,7 @@ from postgrest.types import CountMethod
 import vecs
 
 from squid.bot.submission.parse import validate_restrictions, validate_door_types, parse_time_string
-from squid.database.schema import (
+from squid.db.schema import (
     BuildRecord,
     DoorRecord,
     EntranceRecord,
@@ -40,10 +40,10 @@ from squid.database.schema import (
     Status,
     Category,
 )
-from squid.database import DatabaseManager
-from squid.database.user import add_user
+from squid.db import DatabaseManager
+from squid.db.user import add_user
 from squid.bot.submission.build_mixin import DiscordBuildMixin
-from squid.database.utils import utcnow, get_version_string
+from squid.db.utils import utcnow, get_version_string
 
 
 logger = logging.getLogger(__name__)

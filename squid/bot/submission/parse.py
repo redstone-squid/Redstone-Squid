@@ -8,8 +8,8 @@ from xml.etree.ElementTree import Element
 from markdown import Markdown
 from postgrest.base_request_builder import APIResponse
 
-from squid.database import DatabaseManager
-from squid.database.schema import RestrictionRecord, TypeRecord
+from squid.db import DatabaseManager
+from squid.db.schema import RestrictionRecord, TypeRecord
 
 logger = logging.getLogger(__name__)
 

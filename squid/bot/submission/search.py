@@ -14,13 +14,13 @@ import vecs
 from squid.bot.submission.ui import DynamicBuildEditButton, BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_staff, check_is_owner_server
 from squid.bot import utils
-from squid.database.builds import Build, get_all_builds
-from squid.database.schema import Status
+from squid.db.builds import Build, get_all_builds
+from squid.db.schema import Status
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid
     from postgrest.base_request_builder import APIResponse
-    from squid.database.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
+    from squid.db.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 
 class SearchCog[BotT: RedstoneSquid](Cog):

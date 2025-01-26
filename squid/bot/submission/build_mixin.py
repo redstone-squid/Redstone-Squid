@@ -12,13 +12,13 @@ from discord.utils import escape_markdown
 
 from squid.bot._types import GuildMessageable
 import squid.bot.utils as bot_utils
-from squid.database import DatabaseManager
-from squid.database.schema import Status
-from squid.database.utils import upload_to_catbox, utcnow
+from squid.db import DatabaseManager
+from squid.db.schema import Status
+from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
     import discord
-    from squid.database.builds import Build
+    from squid.db.builds import Build
     from squid.bot.main import RedstoneSquid
 
 

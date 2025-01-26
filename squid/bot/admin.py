@@ -11,7 +11,7 @@ from discord.ext.commands import Context, Greedy
 
 from squid.bot import utils
 from squid.bot.utils import check_is_staff, check_is_owner_server
-from squid.database.builds import Build
+from squid.db.builds import Build
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

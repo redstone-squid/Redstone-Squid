@@ -19,10 +19,10 @@ from squid.bot._types import GuildMessageable
 from squid.bot.submission.parse import parse_dimensions
 from squid.bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
 from squid.bot.voting.vote_session import BuildVoteSession
-from squid.database.builds import Build
+from squid.db.builds import Build
 from squid.bot.utils import RunningMessage, fix_converter_annotations, check_is_owner_server, check_is_trusted_or_staff
-from squid.database.schema import Status, Category
-from squid.database.utils import upload_to_catbox
+from squid.db.schema import Status, Category
+from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

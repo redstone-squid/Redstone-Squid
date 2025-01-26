@@ -18,7 +18,7 @@ from discord.ext.commands import Context, FlagConverter, NoPrivateMessage, Missi
 
 from squid.bot import config
 from squid.bot.config import OWNER_ID, PRINT_TRACEBACKS
-from squid.database import DatabaseManager
+from squid.db import DatabaseManager
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A

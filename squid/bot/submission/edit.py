@@ -14,7 +14,7 @@ from squid.bot.submission.parse import parse_dimensions
 from squid.bot import utils
 from squid.bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
 from squid.bot.utils import RunningMessage, check_is_trusted_or_staff, fix_converter_annotations, check_is_owner_server
-from squid.database.builds import Build
+from squid.db.builds import Build
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

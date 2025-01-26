@@ -16,10 +16,10 @@ from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
 from squid.bot.config import DEV_MODE
-from squid.database.message import MessageManager
-from squid.database.schema import RestrictionRecord, VersionRecord
-from squid.database.server_settings import ServerSettingManager
-from squid.database.utils import get_version_string, parse_version_string
+from squid.db.message import MessageManager
+from squid.db.schema import RestrictionRecord, VersionRecord
+from squid.db.server_settings import ServerSettingManager
+from squid.db.utils import get_version_string, parse_version_string
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

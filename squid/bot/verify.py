@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext.commands import Cog, hybrid_command, Context
 
 from squid.bot.submission.ui import ConfirmationView
-from squid.database.user import link_minecraft_account, unlink_minecraft_account
+from squid.db.user import link_minecraft_account, unlink_minecraft_account
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid

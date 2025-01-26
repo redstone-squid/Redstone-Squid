@@ -15,8 +15,8 @@ from discord.ui import Item
 
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.database.builds import Build
-from squid.database.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES, Status, Category
+from squid.db.builds import Build
+from squid.db.schema import RECORD_CATEGORIES, DOOR_ORIENTATION_NAMES, Status, Category
 
 
 if TYPE_CHECKING:

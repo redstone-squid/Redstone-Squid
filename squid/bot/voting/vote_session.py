@@ -14,9 +14,9 @@ from typing import Any, Self, TYPE_CHECKING, cast, ClassVar, final, Literal, ove
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 
-from squid.database import DatabaseManager
-from squid.database.builds import Build
-from squid.database.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
+from squid.db import DatabaseManager
+from squid.db.builds import Build
+from squid.db.schema import VoteKind, MessageRecord, Status, VoteSessionRecord
 
 if TYPE_CHECKING:
     from squid.bot.main import RedstoneSquid
