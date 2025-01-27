@@ -160,8 +160,8 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
         await interaction.response.defer()  # type: ignore
 
 
-class EditModal(discord.ui.Modal):
-    def __init__(self, parent: ui.views.BuildEditView, title: str, timeout: float | None = 60, custom_id: str | None = None):
+class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
+    def __init__(self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None):
         self.parent = parent
         if custom_id:
             super().__init__(title=title, timeout=timeout, custom_id=custom_id)
@@ -169,7 +169,7 @@ class EditModal(discord.ui.Modal):
             super().__init__(title=title, timeout=timeout)
 
     @override
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         # Update the build object with the new values
         await asyncio.gather(*(item.on_modal_submit() for item in self.children if isinstance(item, BuildField)))
         await self.parent.update(interaction)
