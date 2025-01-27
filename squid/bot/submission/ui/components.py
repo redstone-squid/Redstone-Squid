@@ -274,7 +274,7 @@ class BuildField[T](discord.ui.TextInput):
         return f"{self.label}: {self.value}"
 
 
-def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs) -> BuildField[T]:
+def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs: Any) -> BuildField[T]:
     """
     Gets the bound input for the attribute.
 
