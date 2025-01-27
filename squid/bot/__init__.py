@@ -25,6 +25,8 @@ type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
 
 class RedstoneSquid(Bot):
+    db: DatabaseManager
+
     def __init__(
         self,
         command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str],
@@ -40,7 +42,7 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        self.db = DatabaseManager(self)
+        self.db = DatabaseManager()
         await self.load_extension("squid.bot.misc_commands")
         await self.load_extension("squid.bot.settings")
         await self.load_extension("squid.bot.submission.submit")
