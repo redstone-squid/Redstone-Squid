@@ -15,7 +15,7 @@ from discord import Interaction, TextStyle
 from discord.ui import Item
 
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
-from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
+from squid.bot.submission.parse import get_formatter_and_parser_for_type, parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission import ui
 from squid.db.builds import Build
 from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Category, Status
@@ -270,6 +270,23 @@ class BuildField[T](discord.ui.TextInput):
     @property
     def summary(self) -> str:
         return f"{self.label}: {self.value}"
+
+
+def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs) -> BuildField[T]:
+    """
+    Gets the bound input for the attribute.
+
+    Args:
+        build: The build object to get the input for.
+        attribute: The attribute to get the input for.
+        attr_type: The type of the attribute. If not provided, it will be inferred from the attribute.
+        **kwargs: Additional keyword arguments to pass to the BuildField constructor.
+    """
+    if attr_type is None:
+        attr_type = build.get_attr_type(attribute)
+    attr_type = cast(type[T], attr_type)
+    formatter, parser = get_formatter_and_parser_for_type(attr_type)
+    return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
 class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
