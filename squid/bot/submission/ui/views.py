@@ -1,4 +1,5 @@
 """Models and views for discord interactions."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +11,7 @@ import discord
 from squid.bot import RedstoneSquid
 from squid.bot.submission import ui
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
-from squid.bot.submission.parse import parse_hallway_dimensions, parse_dimensions
+from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
     BuildField,
     DirectonalityLocationalitySelect,
@@ -117,7 +118,6 @@ class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
         # Update the build object with the new values
         await asyncio.gather(*(item.on_modal_submit() for item in self.children if isinstance(item, BuildField)))
         await self.parent.update(interaction)
-
 
 
 class BuildSubmissionForm(discord.ui.View):

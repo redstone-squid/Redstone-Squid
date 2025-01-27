@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from functools import cache
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
@@ -21,16 +21,12 @@ from squid.db.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
-if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
-
 
 class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
     _instance: ClassVar[DatabaseManager | None] = None
-    bot: RedstoneSquid | None = None
 
     def __new__(cls, *args, **kwargs) -> DatabaseManager:
         if cls._instance is None:
@@ -40,7 +36,6 @@ class DatabaseManager(AsyncClient):
 
     def __init__(
         self,
-        bot: RedstoneSquid | None = None,
         options: AsyncClientOptions | None = None,
     ):
         """Initializes the DatabaseManager."""
@@ -60,7 +55,6 @@ class DatabaseManager(AsyncClient):
             raise RuntimeError("Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable.")
 
         super().__init__(supabase_url, supabase_key, options)
-        self.bot = bot
         self.server_setting = ServerSettingManager(self)
         self.message = MessageManager(self)
 

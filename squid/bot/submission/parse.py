@@ -1,4 +1,5 @@
-"""Functions for parsing and validating user input."""
+"""Functions for parsing user input."""
+
 import asyncio
 import json
 import logging
@@ -11,10 +12,6 @@ from xml.etree.ElementTree import Element
 
 from beartype.door import is_bearable, is_subhint
 from markdown import Markdown
-from postgrest.base_request_builder import APIResponse
-
-from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, TypeRecord
 
 logger = logging.getLogger(__name__)
 
@@ -56,88 +53,6 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
     """
     pattern = re.compile(re.escape(old), re.IGNORECASE)
     return pattern.sub(new, string)
-
-
-async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
-    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
-
-    Args:
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        A list of valid restrictions for the given type.
-    """
-    db = DatabaseManager()
-    valid_restrictions_response: APIResponse[RestrictionRecord] = (
-        await db.table("restrictions").select("name").eq("type", type).execute()
-    )
-    return [restriction["name"] for restriction in valid_restrictions_response.data]
-
-
-async def get_valid_door_types() -> list[str]:
-    """Gets a list of valid door types. The door types are returned in the original case.
-
-    Returns:
-        A list of valid door types.
-    """
-    db = DatabaseManager()
-    valid_door_types_response: APIResponse[TypeRecord] = (
-        await db.table("types").select("name").eq("build_category", "Door").execute()
-    )
-    return [door_type["name"] for door_type in valid_door_types_response.data]
-
-
-async def validate_restrictions(
-    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
-) -> tuple[list[str], list[str]]:
-    """Validates a list of restrictions for a given type.
-
-    Args:
-        restrictions: The list of restrictions to validate
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        (valid_restrictions, invalid_restrictions)
-    """
-    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
-
-    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
-    invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
-    return valid_restrictions, invalid_restrictions
-
-
-async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
-    """Validates a list of door types.
-
-    Args:
-        door_types: The list of door types to validate
-
-    Returns:
-        (valid_door_types, invalid_door_types)
-    """
-    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
-
-    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
-    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
-    return valid_door_types, invalid_door_types
-
-
-def parse_time_string(time_string: str | None) -> int | None:
-    """Parses a time string into an integer.
-
-    Args:
-        time_string: The time string to parse.
-
-    Returns:
-        The time in ticks.
-    """
-    if time_string is None:
-        return None
-    time_string = time_string.replace("s", "").replace("~", "").strip()
-    try:
-        return int(float(time_string) * 20)
-    except ValueError:
-        return None
 
 
 @overload

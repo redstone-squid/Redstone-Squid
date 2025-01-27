@@ -1,4 +1,5 @@
 """Logging for the bot."""
+
 import logging
 
 from discord import User

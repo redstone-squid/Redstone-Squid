@@ -1,4 +1,5 @@
 """Handles the display of a build object."""
+
 from __future__ import annotations
 
 import asyncio

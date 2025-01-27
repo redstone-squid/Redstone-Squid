@@ -19,7 +19,6 @@ from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
-from squid.bot.submission.parse import parse_time_string, validate_door_types, validate_restrictions
 from squid.db import DatabaseManager
 from squid.db.schema import (
     BuildRecord,
@@ -378,6 +377,24 @@ class Build:
         )
 
     @staticmethod
+    def parse_time_string(time_string: str | None) -> int | None:
+        """Parses a time string into an integer.
+
+        Args:
+            time_string: The time string to parse.
+
+        Returns:
+            The time in ticks.
+        """
+        if time_string is None:
+            return None
+        time_string = time_string.replace("s", "").replace("~", "").strip()
+        try:
+            return int(float(time_string) * 20)
+        except ValueError:
+            return None
+
+    @staticmethod
     async def ai_generate_from_message(message: discord.Message) -> Build | None:
         """Parses a build from a message using AI."""
         client = AsyncOpenAI(
@@ -494,8 +511,8 @@ class Build:
         build.width = int(variables["build_width"]) if variables["build_width"] else None
         build.height = int(variables["build_height"]) if variables["build_height"] else None
         build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
-        build.normal_opening_time = parse_time_string(variables["opening_time"])
-        build.normal_closing_time = parse_time_string(variables["closing_time"])
+        build.normal_opening_time = Build.parse_time_string(variables["opening_time"])
+        build.normal_closing_time = Build.parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
         build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
         build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
@@ -1016,6 +1033,70 @@ class Build:
             )
             .execute()
         )
+
+
+async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
+    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
+
+    Args:
+        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+    Returns:
+        A list of valid restrictions for the given type.
+    """
+    db = DatabaseManager()
+    valid_restrictions_response: APIResponse[RestrictionRecord] = (
+        await db.table("restrictions").select("name").eq("type", type).execute()
+    )
+    return [restriction["name"] for restriction in valid_restrictions_response.data]
+
+
+async def get_valid_door_types() -> list[str]:
+    """Gets a list of valid door types. The door types are returned in the original case.
+
+    Returns:
+        A list of valid door types.
+    """
+    db = DatabaseManager()
+    valid_door_types_response: APIResponse[TypeRecord] = (
+        await db.table("types").select("name").eq("build_category", "Door").execute()
+    )
+    return [door_type["name"] for door_type in valid_door_types_response.data]
+
+
+async def validate_restrictions(
+    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
+) -> tuple[list[str], list[str]]:
+    """Validates a list of restrictions for a given type.
+
+    Args:
+        restrictions: The list of restrictions to validate
+        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+    Returns:
+        (valid_restrictions, invalid_restrictions)
+    """
+    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
+
+    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
+    invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
+    return valid_restrictions, invalid_restrictions
+
+
+async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
+    """Validates a list of door types.
+
+    Args:
+        door_types: The list of door types to validate
+
+    Returns:
+        (valid_door_types, invalid_door_types)
+    """
+    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
+
+    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
+    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
+    return valid_door_types, invalid_door_types
 
 
 async def get_all_builds(submission_status: Status | None = None) -> list[Build]:
