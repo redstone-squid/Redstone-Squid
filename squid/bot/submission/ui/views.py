@@ -1,3 +1,4 @@
+"""Models and views for discord interactions."""
 from __future__ import annotations
 
 import asyncio

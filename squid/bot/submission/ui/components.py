@@ -1,4 +1,4 @@
-"""Models, view and buttons for the submission process."""
+"""Selects and buttons for discord interactions."""
 
 from __future__ import annotations
 
