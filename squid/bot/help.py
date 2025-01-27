@@ -1,3 +1,4 @@
+"""Defines how the help command works in the bot."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

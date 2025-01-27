@@ -1,3 +1,4 @@
+"""Handles the display of a build object."""
 from __future__ import annotations
 
 import asyncio
@@ -37,12 +38,7 @@ class BuildHandler[BotT: RedstoneSquid]:
         return f"<BuildHandler(bot={self.bot}, build={self.build})>"
 
     async def get_channels_to_post_to(self) -> list[GuildMessageable]:  # type: ignore
-        """
-        Gets the channels in which this build should be posted to.
-
-        Args:
-            bot: A bot instance to get the channels from.
-        """
+        """Gets the channels in which this build should be posted to."""
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
@@ -94,14 +90,14 @@ class BuildHandler[BotT: RedstoneSquid]:
         assert build.submitter_id is not None
         await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
 
-    async def get_original_message(self, bot: BotT) -> discord.Message | None:  # type: ignore
+    async def get_original_message(self) -> discord.Message | None:  # type: ignore
         """Gets the original message of the build."""
         if self._build_original_message_obj:
             return self._build_original_message_obj
 
         if self.build.original_channel_id:
             assert self.build.original_message_id is not None
-            return await bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
+            return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
         return None
 
     async def update_messages(self) -> None:  # type: ignore

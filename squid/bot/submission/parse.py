@@ -1,3 +1,4 @@
+"""Functions for parsing and validating user input."""
 import asyncio
 import json
 import logging
@@ -197,6 +198,7 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
 
 
 def format_dimensions(dims: tuple[int | None, ...]) -> str:
+    """Formats a tuple of dimensions into a string."""
     return " x ".join(str(i) if i is not None else "?" for i in dims)
 
 
@@ -266,6 +268,7 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
 
 
 def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
+    """Generate a formatter and parser for a list type."""
     inner_type = cast(type[T], outer_type.__args__[0])  # type: ignore
     inner_fmt, inner_parser = get_formatter_and_parser_for_type(inner_type)
 
@@ -279,6 +282,7 @@ def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
 
 
 def handle_optional[T](outer_type: type[T | type[None]]) -> DispatchTuple[T | None]:
+    """Generate a formatter and parser for an Optional type."""
     args = typing.get_args(outer_type)
     if len(args) != 2 or type(None) not in args:
         raise ValueError(f"Invalid Optional type: {outer_type}")

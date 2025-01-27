@@ -154,7 +154,6 @@ class Build:
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
-    - generate_embed() and the methods it calls
     """
 
     id: int | None = None
@@ -578,7 +577,7 @@ class Build:
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
 
-    def get_title(self) -> str:  # type: ignore
+    def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""
         title = ""
 
