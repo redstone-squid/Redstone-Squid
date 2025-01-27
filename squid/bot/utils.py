@@ -3,9 +3,9 @@
 import asyncio
 import inspect
 import io
-import sys
 import logging
 import mimetypes
+import sys
 from traceback import format_tb
 from types import FrameType, TracebackType
 from typing import Any, TypedDict, override
@@ -31,8 +31,10 @@ logger = logging.getLogger(__name__)
 
 _registry = {}
 
+
 class Sentinel:
     """Unique sentinel values."""
+
     _name: str
     _repr: str
     _bool_value: bool
@@ -42,12 +44,12 @@ class Sentinel:
         repr = repr if repr else f'<{name.split(".")[-1]}>'
         if module_name is None:
             try:
-                module_name = sys._getframe(1).f_globals.get('__name__', '__main__')  # type: ignore
+                module_name = sys._getframe(1).f_globals.get("__name__", "__main__")  # type: ignore
             except (AttributeError, ValueError):
                 module_name = __name__
             assert module_name is not None
 
-        registry_key = f'{module_name}-{name}'
+        registry_key = f"{module_name}-{name}"
 
         sentinel = _registry.get(registry_key, None)
         if sentinel is not None:
@@ -88,8 +90,8 @@ class Sentinel:
         )
 
 
-MISSING: Any = Sentinel('MISSING', repr="...")
-DEFAULT: Any = Sentinel('DEFAULT')
+MISSING: Any = Sentinel("MISSING", repr="...")
+DEFAULT: Any = Sentinel("DEFAULT")
 
 
 def error_embed(title: str, description: str | None):

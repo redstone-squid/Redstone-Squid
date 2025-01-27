@@ -18,7 +18,7 @@ from squid.bot.submission.ui.components import (
 )
 from squid.bot.utils import DEFAULT
 from squid.db.builds import Build
-from squid.db.schema import Status, Category
+from squid.db.schema import Category, Status
 
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
@@ -131,7 +131,10 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
             await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
         await interaction.followup.send(
-            f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction), ephemeral=ephemeral
+            f"Page {self.page}/{self._max_pages}",
+            view=self,
+            embeds=await self.get_embeds(interaction),
+            ephemeral=ephemeral,
         )
 
     @override

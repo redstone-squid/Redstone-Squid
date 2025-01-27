@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
-import os
-import json
 import asyncio
 import logging
+import os
 import re
-from typing import TYPE_CHECKING, Any, Self, Sequence, cast, override, Callable
+from typing import TYPE_CHECKING, Any, Callable, Self, cast, override
 
 import discord
-from beartype.door import is_bearable, is_subhint
+from beartype.door import is_bearable
 from discord import Interaction, TextStyle
 from discord.ui import Item
 
-from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
-from squid.bot.submission.parse import get_formatter_and_parser_for_type, parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission import ui
+from squid.bot.submission.parse import get_formatter_and_parser_for_type, parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.views import BuildEditView
 from squid.db.builds import Build
-from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Category, Status
+from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
     # importing this causes a circular import at runtime
     from discord.types.interactions import SelectMessageComponentInteractionData
+
+    from squid.bot.main import RedstoneSquid
 
 
 class SubmissionModal(discord.ui.Modal):
@@ -162,7 +161,9 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
 
 
 class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
-    def __init__(self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None):
+    def __init__(
+        self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
+    ):
         self.parent = parent
         if custom_id:
             super().__init__(title=title, timeout=timeout, custom_id=custom_id)

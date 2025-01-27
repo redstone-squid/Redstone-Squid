@@ -3,20 +3,13 @@ from __future__ import annotations
 import asyncio
 import io
 import mimetypes
-import typing
-import re
-from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, override
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
-from discord.ext import commands
 from discord.utils import escape_markdown
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
-from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
-from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.submission.ui.views import BuildEditView, BuildInfoView
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build

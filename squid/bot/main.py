@@ -7,7 +7,7 @@ import logging
 import os
 from collections.abc import Awaitable, Iterable
 from logging.handlers import RotatingFileHandler
-from typing import Self, Callable, override
+from typing import Callable, Self, override
 
 import discord
 from discord import Message

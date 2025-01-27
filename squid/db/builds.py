@@ -45,7 +45,6 @@ from squid.db.schema import (
 from squid.db.user import add_user
 from squid.db.utils import get_version_string, utcnow
 
-
 logger = logging.getLogger(__name__)
 
 
