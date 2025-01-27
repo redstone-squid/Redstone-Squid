@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import re
+import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from functools import cached_property
@@ -723,6 +724,22 @@ class Build:
         for attr in self:
             build[attr] = getattr(self, attr)
         return build
+
+    @staticmethod
+    def get_attr_type(attribute: str) -> type:
+        """Gets the type of an attribute in the Build class."""
+        if attribute in Build.__annotations__:
+            attr_type = typing.get_type_hints(Build)[attribute]
+        else:
+            try:
+                cls_attr = getattr(Build, attribute)
+                if isinstance(cls_attr, property):
+                    attr_type = typing.get_type_hints(cls_attr.fget)["return"]
+                else:
+                    raise NotImplementedError("Not sure how to automatically get the type of this attribute.")
+            except AttributeError:
+                raise ValueError(f"Attribute {attribute} is not in the Build class.")
+        return attr_type
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.

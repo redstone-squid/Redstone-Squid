@@ -131,21 +131,6 @@ class BuildHandler[BotT: RedstoneSquid]:
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
 
-    @staticmethod
-    def get_attr_type(attribute: str) -> type:
-        if attribute in Build.__annotations__:
-            attr_type = typing.get_type_hints(Build)[attribute]
-        else:
-            try:
-                cls_attr = getattr(Build, attribute)
-                if isinstance(cls_attr, property):
-                    attr_type = typing.get_type_hints(cls_attr.fget)["return"]
-                else:
-                    raise NotImplementedError("Not sure how to automatically get the type of this attribute.")
-            except AttributeError:
-                raise ValueError(f"Attribute {attribute} is not in the Build class.")
-        return attr_type
-
     def get_text_input[T](self, attribute: str, attr_type: type[T] | None = None, **kwargs) -> BuildField[T]:
         """
         Gets the bound input for the attribute.
@@ -156,10 +141,11 @@ class BuildHandler[BotT: RedstoneSquid]:
             **kwargs: Additional keyword arguments to pass to the BuildField constructor.
         """
         if attr_type is None:
-            attr_type = self.get_attr_type(attribute)
+            attr_type = self.build.get_attr_type(attribute)
         attr_type = cast(type[T], attr_type)
         formatter, parser = get_formatter_and_parser_for_type(attr_type)
         return BuildField(self.build, attribute, attr_type, formatter, parser, **kwargs)
+
     def get_edit_view(
         self, parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None
     ) -> BuildEditView[BotT]:
