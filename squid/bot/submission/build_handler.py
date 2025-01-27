@@ -131,30 +131,6 @@ class BuildHandler[BotT: RedstoneSquid]:
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
 
-    def get_edit_view(
-        self, parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None
-    ) -> BuildEditView[BotT]:
-        items: list[BuildField] = [
-            get_text_input(self.build, "dimensions", placeholder="Width x Height x Depth", required=True),
-            get_text_input(self.build, "door_dimensions", placeholder="2x2", required=True),
-            get_text_input(self.build, "version_spec", placeholder="1.16 - 1.17.3"),
-            get_text_input(self.build, "door_type", placeholder="Full lamp, Funnel"),
-            get_text_input(self.build, "door_orientation_type", placeholder="Door, Trapdoor, Skydoor"),
-            get_text_input(self.build, "wiring_placement_restrictions", placeholder="Seamless, Full Flush"),
-            get_text_input(self.build, "component_restrictions", placeholder="Observerless"),
-            get_text_input(self.build, "miscellaneous_restrictions", placeholder="Directional, Locational"),
-            get_text_input(self.build, "normal_closing_time", placeholder="in gameticks"),
-            get_text_input(self.build, "normal_opening_time", placeholder="in gameticks"),
-            get_text_input(self.build, "creators_ign", placeholder="Me, My Dog"),
-            get_text_input(self.build, "image_urls", placeholder="any urls, comma separated"),
-            get_text_input(self.build, "video_urls", placeholder="any urls, comma separated"),
-            get_text_input(self.build, "world_download_urls", placeholder="any urls, comma separated"),
-            get_text_input(self.build, "server_info", placeholder="TODO: Explain this format"),
-            get_text_input(self.build, "completion_time", placeholder="Any time format works"),
-            get_text_input(self.build, "ai_generated", placeholder="True/False"),
-        ]
-        return BuildEditView(self.build, items, parent=parent)
-
     async def generate_embed(self) -> discord.Embed:  # type: ignore
         """Generates an embed for the build."""
         build = self.build

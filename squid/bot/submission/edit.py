@@ -178,7 +178,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
         build = await Build.from_id(build_id)
         assert build is not None
-        await self.bot.for_build(build).get_edit_view().send(interaction, ephemeral=True)
+        await BuildEditView(build).send(interaction, ephemeral=True)
 
 
 async def setup(bot: RedstoneSquid) -> None:

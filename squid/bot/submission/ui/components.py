@@ -17,6 +17,7 @@ from discord.ui import Item
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import get_formatter_and_parser_for_type, parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission import ui
+from squid.bot.submission.ui.views import BuildEditView
 from squid.db.builds import Build
 from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Category, Status
 
@@ -318,7 +319,7 @@ class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
             build = await self.build.get_persisted_copy()
             return ui.views.BuildInfoView(build)
 
-        await interaction.client.for_build(self.build).get_edit_view(parent=_parent).update(interaction)
+        await BuildEditView(self.build, parent=_parent).update(interaction)
 
 
 class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
@@ -328,4 +329,4 @@ class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.
 
     @override
     async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
-        await interaction.client.for_build(self.build).get_edit_view().send(interaction, ephemeral=True)
+        await BuildEditView(self.build).send(interaction, ephemeral=True)
