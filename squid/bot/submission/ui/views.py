@@ -26,8 +26,8 @@ from squid.db.builds import Build
 from squid.db.schema import Category, Status
 
 if TYPE_CHECKING:
-    from bot.main import RedstoneSquid
-    from bot.submission.build_handler import BuildHandler
+    from squid.bot import RedstoneSquid
+    from squid.bot.submission.build_handler import BuildHandler
 
 
 class SubmissionModal(discord.ui.Modal):

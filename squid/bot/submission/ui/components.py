@@ -14,7 +14,6 @@ from discord.ui import Item
 
 from squid.bot.submission import ui
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.bot.submission.ui.views import BuildEditView
 from squid.db.builds import Build
 from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES
 
@@ -23,6 +22,7 @@ if TYPE_CHECKING:
     from discord.types.interactions import SelectMessageComponentInteractionData
 
     from squid.bot import RedstoneSquid
+    from squid.bot.submission.ui.views import BuildEditView
 
 
 class RecordCategorySelect(discord.ui.Select):
