@@ -10,11 +10,11 @@ import discord
 from discord.ext.commands import Cog
 
 if TYPE_CHECKING:
-    import squid.bot.main
+    import squid.bot
 
 
 class GiveRedstoner(Cog):
-    def __init__(self, bot: squid.bot.main.RedstoneSquid):
+    def __init__(self, bot: squid.bot.RedstoneSquid):
         self.bot = bot
         self.pattern = re.compile(r"https://discord\.com/channels/\d+/\d+/\d+")
 

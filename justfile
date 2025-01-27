@@ -56,5 +56,5 @@ sync:
     {{python_dir}}/pip uninstall -y aiodns
 
 lint:
-    {{python}} -m ruff check --select I --fix --exit-zero
+    {{python}} -m ruff check --extend-select I --fix --exit-zero
     {{python}} -m ruff format --target-version py312

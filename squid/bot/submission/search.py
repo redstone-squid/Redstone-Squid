@@ -12,7 +12,8 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from openai import AsyncOpenAI
 
 from squid.bot import utils
-from squid.bot.submission.ui import BuildInfoView, DynamicBuildEditButton
+from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
 from squid.db.builds import Build, get_all_builds
 from squid.db.schema import Status
@@ -20,7 +21,7 @@ from squid.db.schema import Status
 if TYPE_CHECKING:
     from postgrest.base_request_builder import APIResponse
 
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
     from squid.db.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 
@@ -47,7 +48,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
         build_id = int(result[0])
         build = await Build.from_id(build_id)
         assert build is not None
-        await ctx.send(content=build.original_link, embed=await build.generate_embed())
+        await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
 
     @commands.command("search_restrictions")
     @check_is_staff()
@@ -131,7 +132,9 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                     error_embed = utils.error_embed("Error", "No build with that ID.")
                     return await sent_message.edit(embed=error_embed)
 
-                await sent_message.edit(content=build.original_link, embed=await build.generate_embed())
+                await sent_message.edit(
+                    content=build.original_link, embed=await self.bot.for_build(build).generate_embed()
+                )
 
 
 async def setup(bot: RedstoneSquid):

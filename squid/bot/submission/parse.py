@@ -1,15 +1,17 @@
+"""Functions for parsing user input."""
+
 import asyncio
+import json
 import logging
 import re
+import typing
+from collections.abc import Callable
 from io import StringIO
-from typing import Literal, overload
+from typing import Any, Iterator, Literal, MutableMapping, Protocol, cast, overload
 from xml.etree.ElementTree import Element
 
+from beartype.door import is_bearable, is_subhint
 from markdown import Markdown
-from postgrest.base_request_builder import APIResponse
-
-from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, TypeRecord
 
 logger = logging.getLogger(__name__)
 
@@ -51,88 +53,6 @@ def replace_insensitive(string: str, old: str, new: str) -> str:
     """
     pattern = re.compile(re.escape(old), re.IGNORECASE)
     return pattern.sub(new, string)
-
-
-async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
-    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
-
-    Args:
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        A list of valid restrictions for the given type.
-    """
-    db = DatabaseManager()
-    valid_restrictions_response: APIResponse[RestrictionRecord] = (
-        await db.table("restrictions").select("name").eq("type", type).execute()
-    )
-    return [restriction["name"] for restriction in valid_restrictions_response.data]
-
-
-async def get_valid_door_types() -> list[str]:
-    """Gets a list of valid door types. The door types are returned in the original case.
-
-    Returns:
-        A list of valid door types.
-    """
-    db = DatabaseManager()
-    valid_door_types_response: APIResponse[TypeRecord] = (
-        await db.table("types").select("name").eq("build_category", "Door").execute()
-    )
-    return [door_type["name"] for door_type in valid_door_types_response.data]
-
-
-async def validate_restrictions(
-    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
-) -> tuple[list[str], list[str]]:
-    """Validates a list of restrictions for a given type.
-
-    Args:
-        restrictions: The list of restrictions to validate
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        (valid_restrictions, invalid_restrictions)
-    """
-    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
-
-    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
-    invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
-    return valid_restrictions, invalid_restrictions
-
-
-async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
-    """Validates a list of door types.
-
-    Args:
-        door_types: The list of door types to validate
-
-    Returns:
-        (valid_door_types, invalid_door_types)
-    """
-    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
-
-    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
-    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
-    return valid_door_types, invalid_door_types
-
-
-def parse_time_string(time_string: str | None) -> int | None:
-    """Parses a time string into an integer.
-
-    Args:
-        time_string: The time string to parse.
-
-    Returns:
-        The time in ticks.
-    """
-    if time_string is None:
-        return None
-    time_string = time_string.replace("s", "").replace("~", "").strip()
-    try:
-        return int(float(time_string) * 20)
-    except ValueError:
-        return None
 
 
 @overload
@@ -192,6 +112,11 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
 
 
+def format_dimensions(dims: tuple[int | None, ...]) -> str:
+    """Formats a tuple of dimensions into a string."""
+    return " x ".join(str(i) if i is not None else "?" for i in dims)
+
+
 def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
     """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
 
@@ -222,6 +147,90 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
         raise ValueError(
             "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
         )
+
+
+# Everything is extremely cursed below this line, only read if you dare
+type DispatchTuple[T] = tuple[Callable[[T], str], Callable[[str], T]]
+
+
+def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]:
+    """Get the formatter and parser for a single type.
+
+    Args:
+        attr_type: The type to get the formatter and parser for.
+    """
+    # We abused types so hard here that pyright needs a little help
+    formatter: Callable[[T], str] | None = None
+    parser: Callable[[str], T] | None = None
+
+    if dispatch := dispatcher.get(attr_type):
+        formatter, parser = dispatch
+    else:
+        for dispatch_hint, dispatch in dispatcher.items():
+            if is_subhint(attr_type, dispatch_hint):
+                formatter, parser = dispatch
+                break
+        else:
+            if is_subhint(attr_type, list):
+                formatter, parser = handle_list(attr_type)  # type: ignore
+            elif is_bearable(None, attr_type):
+                formatter, parser = handle_optional(attr_type)  # type: ignore
+    if formatter is None or parser is None:
+        raise RuntimeError(f"No dispatch found for {attr_type}")
+
+    dispatcher[attr_type] = formatter, parser
+    return formatter, parser
+
+
+def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
+    """Generate a formatter and parser for a list type."""
+    inner_type = cast(type[T], outer_type.__args__[0])  # type: ignore
+    inner_fmt, inner_parser = get_formatter_and_parser_for_type(inner_type)
+
+    def _format(lst: list[T]) -> str:
+        return ", ".join(inner_fmt(i) for i in lst)
+
+    def _parse(lst_str: str) -> list[T]:
+        return [inner_parser(i) for i in lst_str.split(",")]
+
+    return _format, _parse
+
+
+def handle_optional[T](outer_type: type[T | type[None]]) -> DispatchTuple[T | None]:
+    """Generate a formatter and parser for an Optional type."""
+    args = typing.get_args(outer_type)
+    if len(args) != 2 or type(None) not in args:
+        raise ValueError(f"Invalid Optional type: {outer_type}")
+    inner_type: type[T] = args[0] if args[0] is not type(None) else args[1]
+    inner_fmt, inner_parser = get_formatter_and_parser_for_type(inner_type)
+
+    def _format(x: T | None) -> str:
+        if x is None:
+            return ""
+        return inner_fmt(x)
+
+    def _parse(x: str) -> T | None:
+        if not x:
+            return None
+        return inner_parser(x)
+
+    return _format, _parse
+
+
+# It is impossible to type this object with anything saner than a Protocol
+class DispatchMapping(Protocol):
+    def __getitem__[T](self, key: type[T]) -> DispatchTuple[T]: ...
+    def __setitem__[T](self, key: type[T], value: DispatchTuple[T]) -> None: ...
+    def get[T](self, key: type[T]) -> DispatchTuple[T] | None: ...
+    def items(self) -> Iterator[tuple[type, DispatchTuple[Any]]]: ...
+
+
+dispatcher: DispatchMapping = {  # type: ignore
+    str: (str, str),
+    int: (str, int),
+    tuple[int | None, ...]: (format_dimensions, parse_dimensions),
+    MutableMapping: (json.dumps, json.loads),
+}
 
 
 async def main():

@@ -12,12 +12,13 @@ from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot import utils
 from squid.bot.submission.parse import parse_dimensions
-from squid.bot.submission.ui import ConfirmationView, DynamicBuildEditButton, EditView
+from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class BuildEditCog[BotT: RedstoneSquid](Cog):
@@ -126,7 +127,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            preview_embed = await build.generate_embed()
+            preview_embed = await self.bot.for_build(build).generate_embed()
 
             # Show a preview of the changes and ask for confirmation
             await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
@@ -148,14 +149,14 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 elif view.value:
                     await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                     await build.save()
-                    await build.update_messages(self.bot)
+                    await self.bot.for_build(build).update_messages()
                     await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
                 else:
                     await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
             else:  # Not an interaction, so we can't use buttons for confirmation
                 await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
                 await build.save()
-                await build.update_messages(self.bot)
+                await self.bot.for_build(build).update_messages()
                 await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
@@ -177,7 +178,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
         build = await Build.from_id(build_id)
         assert build is not None
-        await EditView(build).send(interaction, ephemeral=True)
+        await BuildEditView(build).send(interaction, ephemeral=True)
 
 
 async def setup(bot: RedstoneSquid) -> None:

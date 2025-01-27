@@ -17,15 +17,15 @@ from discord.ext.commands import (
 from squid.bot import utils
 from squid.bot._types import GuildMessageable
 from squid.bot.submission.parse import parse_dimensions
-from squid.bot.submission.ui import BuildSubmissionForm, DynamicBuildEditButton
+from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
-from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db.builds import Build
 from squid.db.schema import Category, Status
 from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
@@ -128,11 +128,12 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 build.category = Category.DOOR
                 build.submission_status = Status.PENDING
 
+                build_handler = self.bot.for_build(build)
                 await asyncio.gather(
                     build.save(),
                     followup.send(
                         "Here is a preview of the submission. Use /edit if you have made a mistake",
-                        embed=await build.generate_embed(),
+                        embed=await build_handler.generate_embed(),
                         ephemeral=True,
                     ),
                 )
@@ -143,7 +144,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
                 )
                 await asyncio.gather(
                     message.edit(embed=success_embed),
-                    self.post_build_for_voting(build),
+                    build_handler.post_for_voting(),
                 )
         else:
             raise NotImplementedError("This command is only available as a slash command for now.")
@@ -195,10 +196,10 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             await asyncio.gather(
                 followup.send(
                     "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await build.generate_embed(),
+                    embed=await self.bot.for_build(build).generate_embed(),
                     ephemeral=True,
                 ),
-                self.post_build_for_voting(build),
+                self.bot.for_build(build).post_for_voting(),
             )
 
     @commands.Cog.listener("on_build_confirmed")
@@ -212,38 +213,14 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         if build.submission_status != Status.CONFIRMED:
             raise ValueError("The build must be confirmed to post it.")
 
-        em = await build.generate_embed()
+        build_handler = self.bot.for_build(build)
+        em = await build_handler.generate_embed()
 
         async def _send_msg(channel: GuildMessageable):
             message = await channel.send(content=build.original_link, embed=em)
             await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
 
-        await asyncio.gather(*(_send_msg(channel) for channel in await build.get_channels_to_post_to(self.bot)))
-
-    async def post_build_for_voting(self, build: Build, type: Literal["add", "update"] = "add") -> None:
-        """
-        Post a build for voting.
-
-        Args:
-            build (Build): The build to post.
-            type (Literal["add", "update"]): Whether to add or update the build.
-        """
-        if type == "update":
-            raise NotImplementedError("Updating builds is not yet implemented.")
-
-        if build.submission_status != Status.PENDING:
-            raise ValueError("The build must be pending to post it.")
-
-        em = await build.generate_embed()
-        messages = await asyncio.gather(
-            *(
-                vote_channel.send(content=build.original_link, embed=em)
-                for vote_channel in await build.get_channels_to_post_to(self.bot)
-            )
-        )
-
-        assert build.submitter_id is not None
-        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
+        await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
@@ -275,7 +252,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         build.submitter_id = message.author.id
         # Order is important here.
         await build.save()
-        await self.post_build_for_voting(build, type="add")
+        await self.bot.for_build(build).post_for_voting(type="add")
 
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()

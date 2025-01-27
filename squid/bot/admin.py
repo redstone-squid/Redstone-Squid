@@ -14,7 +14,7 @@ from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class Admin[BotT: RedstoneSquid](commands.Cog):
@@ -60,7 +60,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
                 return
 
             await build.deny()
-            await build.update_messages(self.bot)
+            await self.bot.for_build(build).update_messages()
 
             success_embed = utils.info_embed("Success", "Submission has been denied.")
             await sent_message.edit(embed=success_embed)

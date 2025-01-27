@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import re
+import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from functools import cached_property
@@ -18,8 +19,6 @@ from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
 
-from squid.bot.submission.build_mixin import DiscordBuildMixin
-from squid.bot.submission.parse import parse_time_string, validate_door_types, validate_restrictions
 from squid.db import DatabaseManager
 from squid.db.schema import (
     BuildRecord,
@@ -145,7 +144,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 
 @freeze_fields
 @dataclass
-class Build(DiscordBuildMixin):
+class Build:
     """A submission to the database.
 
     This is a very large class, the methods are ordered as follows:
@@ -154,7 +153,6 @@ class Build(DiscordBuildMixin):
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
-    - generate_embed() and the methods it calls
     """
 
     id: int | None = None
@@ -379,6 +377,24 @@ class Build(DiscordBuildMixin):
         )
 
     @staticmethod
+    def parse_time_string(time_string: str | None) -> int | None:
+        """Parses a time string into an integer.
+
+        Args:
+            time_string: The time string to parse.
+
+        Returns:
+            The time in ticks.
+        """
+        if time_string is None:
+            return None
+        time_string = time_string.replace("s", "").replace("~", "").strip()
+        try:
+            return int(float(time_string) * 20)
+        except ValueError:
+            return None
+
+    @staticmethod
     async def ai_generate_from_message(message: discord.Message) -> Build | None:
         """Parses a build from a message using AI."""
         client = AsyncOpenAI(
@@ -495,8 +511,8 @@ class Build(DiscordBuildMixin):
         build.width = int(variables["build_width"]) if variables["build_width"] else None
         build.height = int(variables["build_height"]) if variables["build_height"] else None
         build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
-        build.normal_opening_time = parse_time_string(variables["opening_time"])
-        build.normal_closing_time = parse_time_string(variables["closing_time"])
+        build.normal_opening_time = Build.parse_time_string(variables["opening_time"])
+        build.normal_closing_time = Build.parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
         build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
         build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
@@ -577,6 +593,67 @@ class Build(DiscordBuildMixin):
                             self.component_restrictions.append(restriction["name"])
                         elif restriction["type"] == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction["name"])
+
+    def get_title(self) -> str:
+        """Generates the official Redstone Squid defined title for the build."""
+        title = ""
+
+        if self.category != "Door":
+            raise NotImplementedError("Only doors are supported for now.")
+
+        if self.submission_status == Status.PENDING:
+            title += "Pending: "
+        elif self.submission_status == Status.DENIED:
+            title += "Denied: "
+        if self.ai_generated:
+            title += "\N{ROBOT FACE}"
+        if self.record_category:
+            title += f"{self.record_category} "
+
+        # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
+        for restriction in self.information.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
+            if re.match(r"\d+\.\d+\s*s", restriction):
+                title += f"{restriction} "
+            elif re.match(r"\d+\s*[Bb]locks", restriction):
+                title += f"{restriction} "
+
+        # FIXME: This is included in the title for now to match people's expectations
+        for restriction in self.component_restrictions:
+            title += f"{restriction} "
+        for restriction in self.information.get("unknown_restrictions", {}).get("component_restrictions", []):
+            title += f"*{restriction}* "
+
+        # Door dimensions
+        if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
+            title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
+        elif self.door_width and self.door_height:
+            title += f"{self.door_width}x{self.door_height} "
+        elif self.door_width:
+            title += f"{self.door_width} Wide "
+        elif self.door_height:
+            title += f"{self.door_height} High "
+
+        # Wiring Placement Restrictions
+        for restriction in self.wiring_placement_restrictions:
+            title += f"{restriction} "
+
+        for restriction in self.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
+            title += f"*{restriction}* "
+
+        # Pattern
+        for pattern in self.door_type:
+            if pattern != "Regular":
+                title += f"{pattern} "
+
+        for pattern in self.information.get("unknown_patterns", []):
+            title += f"*{pattern}* "
+
+        # Door type
+        if self.door_orientation_type is None:
+            raise ValueError("Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing.")
+        title += self.door_orientation_type
+
+        return title
 
     async def get_persisted_copy(self) -> Build:
         """Get a persisted copy of the build."""
@@ -662,6 +739,22 @@ class Build(DiscordBuildMixin):
         for attr in self:
             build[attr] = getattr(self, attr)
         return build
+
+    @staticmethod
+    def get_attr_type(attribute: str) -> type:
+        """Gets the type of an attribute in the Build class."""
+        if attribute in Build.__annotations__:
+            attr_type = typing.get_type_hints(Build)[attribute]
+        else:
+            try:
+                cls_attr = getattr(Build, attribute)
+                if isinstance(cls_attr, property):
+                    attr_type = typing.get_type_hints(cls_attr.fget)["return"]
+                else:
+                    raise NotImplementedError("Not sure how to automatically get the type of this attribute.")
+            except AttributeError:
+                raise ValueError(f"Attribute {attribute} is not in the Build class.")
+        return attr_type
 
     async def confirm(self) -> None:
         """Marks the build as confirmed.
@@ -940,6 +1033,70 @@ class Build(DiscordBuildMixin):
             )
             .execute()
         )
+
+
+async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
+    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
+
+    Args:
+        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+    Returns:
+        A list of valid restrictions for the given type.
+    """
+    db = DatabaseManager()
+    valid_restrictions_response: APIResponse[RestrictionRecord] = (
+        await db.table("restrictions").select("name").eq("type", type).execute()
+    )
+    return [restriction["name"] for restriction in valid_restrictions_response.data]
+
+
+async def get_valid_door_types() -> list[str]:
+    """Gets a list of valid door types. The door types are returned in the original case.
+
+    Returns:
+        A list of valid door types.
+    """
+    db = DatabaseManager()
+    valid_door_types_response: APIResponse[TypeRecord] = (
+        await db.table("types").select("name").eq("build_category", "Door").execute()
+    )
+    return [door_type["name"] for door_type in valid_door_types_response.data]
+
+
+async def validate_restrictions(
+    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
+) -> tuple[list[str], list[str]]:
+    """Validates a list of restrictions for a given type.
+
+    Args:
+        restrictions: The list of restrictions to validate
+        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+    Returns:
+        (valid_restrictions, invalid_restrictions)
+    """
+    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
+
+    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
+    invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
+    return valid_restrictions, invalid_restrictions
+
+
+async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
+    """Validates a list of door types.
+
+    Args:
+        door_types: The list of door types to validate
+
+    Returns:
+        (valid_door_types, invalid_door_types)
+    """
+    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
+
+    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
+    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
+    return valid_door_types, invalid_door_types
 
 
 async def get_all_builds(submission_status: Status | None = None) -> list[Build]:

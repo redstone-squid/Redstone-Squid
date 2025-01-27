@@ -19,7 +19,7 @@ from squid.db.builds import Build
 from squid.db.schema import MessageRecord, Status, VoteKind, VoteSessionRecord
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]
@@ -464,7 +464,9 @@ class BuildVoteSession(AbstractVoteSession):
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        message = await channel.send(content=self.build.original_link, embed=await self.build.generate_embed())
+        message = await channel.send(
+            content=self.build.original_link, embed=await self.bot.for_build(self.build).generate_embed()
+        )
         await self.bot.db.message.track_message(
             message, purpose="vote", build_id=self.build.id, vote_session_id=self.id
         )
@@ -473,7 +475,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @override
     async def update_messages(self):
-        embed = await self.build.generate_embed()
+        embed = await self.bot.for_build(self.build).generate_embed()
         embed.add_field(name="", value="", inline=False)  # Add a blank field to separate the vote count
         embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
         embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
