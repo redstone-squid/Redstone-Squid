@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import asyncio
+import re
 from typing import TYPE_CHECKING, Sequence, override
 
 import discord
 
+from squid.bot.main import RedstoneSquid
+from squid.bot.submission import ui
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
+from squid.bot.submission.parse import parse_hallway_dimensions, parse_dimensions
 from squid.bot.submission.ui.components import (
     BuildField,
     DirectonalityLocationalitySelect,
     DoorTypeSelect,
     DynamicBuildEditButton,
-    EditModal,
     EphemeralBuildEditButton,
     RecordCategorySelect,
-    SubmissionModal,
     get_text_input,
 )
 from squid.bot.utils import DEFAULT
@@ -23,6 +26,97 @@ from squid.db.schema import Category, Status
 if TYPE_CHECKING:
     from bot.main import RedstoneSquid
     from bot.submission.build_handler import BuildHandler
+
+
+class SubmissionModal(discord.ui.Modal):
+    def __init__(self, build: Build):
+        super().__init__(title="Submit Your Build")
+        self.build = build
+
+        # Door size
+        self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g. 2x2 (piston door)")
+
+        # Pattern
+        self.pattern = discord.ui.TextInput(label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False)
+
+        # Dimensions
+        self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=True)
+
+        # Versions
+        self.versions = discord.ui.TextInput(label="Versions", placeholder="e.g., 1.16.1, 1.17.3", required=False)
+
+        # Restrictions
+        self.restrictions = discord.ui.TextInput(
+            label="Restrictions",
+            placeholder="e.g., Seamless, Full Flush",
+            required=False,
+        )
+
+        # Additional Information
+        self.additional_info = discord.ui.TextInput(
+            label="Additional Information",
+            style=discord.TextStyle.paragraph,
+            required=False,
+        )
+
+        self.add_item(self.door_size)
+        self.add_item(self.pattern)
+        self.add_item(self.dimensions)
+        self.add_item(self.restrictions)
+        self.add_item(self.additional_info)
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()  # type: ignore
+
+        self.build.door_dimensions = parse_hallway_dimensions(self.door_size.value)
+        self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
+        self.build.dimensions = parse_dimensions(self.dimensions.value)
+        await self.build.set_restrictions(self.restrictions.value.split(", "))
+
+        # Extract IGN
+        ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
+        if ign_match:
+            igns = ign_match.groups()
+            self.build.creators_ign = [ign.strip() for ign in igns]
+
+        # Extract video link
+        video_match = re.search(
+            r"\bvideo:\s*(https?://[^\s,]+)(?:,|$)",
+            self.additional_info.value,
+            re.IGNORECASE,
+        )
+        if video_match:
+            video_links = video_match.groups()
+            self.build.video_urls = [video_link.strip() for video_link in video_links]
+
+        # Extract download link
+        download_match = re.search(
+            r"\bdownload:\s*(https?://[^\s,]+)(?:,|$)",
+            self.additional_info.value,
+            re.IGNORECASE,
+        )
+        if download_match:
+            download_links = download_match.groups()
+            self.build.world_download_urls = [download_link.strip() for download_link in download_links]
+
+
+class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
+    def __init__(
+        self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
+    ):
+        self.parent = parent
+        if custom_id:
+            super().__init__(title=title, timeout=timeout, custom_id=custom_id)
+        else:
+            super().__init__(title=title, timeout=timeout)
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+        # Update the build object with the new values
+        await asyncio.gather(*(item.on_modal_submit() for item in self.children if isinstance(item, BuildField)))
+        await self.parent.update(interaction)
+
 
 
 class BuildSubmissionForm(discord.ui.View):
