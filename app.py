@@ -10,7 +10,7 @@ import sys
 from importlib.util import find_spec
 
 from squid.api import main as api_main
-from squid.bot.main import main
+from squid.bot import main as bot_main
 from squid.config import DEV_MODE
 
 if __name__ == "__main__":
@@ -24,4 +24,4 @@ if __name__ == "__main__":
         )
         # https://stackoverflow.com/questions/44633458/why-am-i-getting-notimplementederror-with-async-and-await-on-windows
 
-    asyncio.run(main(), debug=DEV_MODE)
+    asyncio.run(bot_main(), debug=DEV_MODE)

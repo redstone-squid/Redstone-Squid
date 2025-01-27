@@ -13,7 +13,7 @@ from squid.bot.utils import is_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]

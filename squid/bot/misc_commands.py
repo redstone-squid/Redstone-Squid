@@ -13,7 +13,7 @@ from squid.config import BOT_NAME, FORM_LINK, SOURCE_CODE_URL
 from squid.db import get_version_string
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class Miscellaneous[BotT: RedstoneSquid](Cog):

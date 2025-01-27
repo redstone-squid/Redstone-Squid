@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Sequence, override
 
 import discord
 
-from squid.bot.main import RedstoneSquid
+from squid.bot import RedstoneSquid
 from squid.bot.submission import ui
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_hallway_dimensions, parse_dimensions

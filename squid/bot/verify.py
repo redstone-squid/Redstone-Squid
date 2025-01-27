@@ -11,7 +11,7 @@ from squid.bot.submission.ui.views import ConfirmationView
 from squid.db.user import link_minecraft_account, unlink_minecraft_account
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class VerifyCog[BotT: RedstoneSquid](Cog, name="verify"):

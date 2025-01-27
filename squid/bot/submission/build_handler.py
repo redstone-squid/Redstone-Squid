@@ -18,7 +18,7 @@ from squid.db.schema import Status
 from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 background_tasks: set[asyncio.Task[Any]] = set()

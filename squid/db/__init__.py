@@ -22,7 +22,7 @@ from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class DatabaseManager(AsyncClient):

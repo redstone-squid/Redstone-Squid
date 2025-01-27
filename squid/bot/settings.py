@@ -15,7 +15,7 @@ from squid.bot.utils import check_is_staff
 from squid.db.schema import SETTINGS, Setting
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):

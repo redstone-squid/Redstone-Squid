@@ -21,7 +21,7 @@ from squid.db.schema import Status
 if TYPE_CHECKING:
     from postgrest.base_request_builder import APIResponse
 
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
     from squid.db.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
 
 

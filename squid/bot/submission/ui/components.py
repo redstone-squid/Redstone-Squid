@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     # importing this causes a circular import at runtime
     from discord.types.interactions import SelectMessageComponentInteractionData
 
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class RecordCategorySelect(discord.ui.Select):

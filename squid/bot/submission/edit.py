@@ -18,7 +18,7 @@ from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trus
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class BuildEditCog[BotT: RedstoneSquid](Cog):

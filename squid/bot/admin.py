@@ -14,7 +14,7 @@ from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 class Admin[BotT: RedstoneSquid](commands.Cog):

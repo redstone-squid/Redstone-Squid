@@ -25,7 +25,7 @@ from squid.db.schema import Category, Status
 from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 

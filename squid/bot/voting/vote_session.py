@@ -19,7 +19,7 @@ from squid.db.builds import Build
 from squid.db.schema import MessageRecord, Status, VoteKind, VoteSessionRecord
 
 if TYPE_CHECKING:
-    from squid.bot.main import RedstoneSquid
+    from squid.bot import RedstoneSquid
 
 
 APPROVE_EMOJIS = ["👍", "✅"]
