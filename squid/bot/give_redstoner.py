@@ -42,7 +42,7 @@ class GiveRedstoner(Cog):
             f"Gave {member.mention} the redstoner role.", allowed_mentions=discord.AllowedMentions.none()
         )
         await self.bot.get_channel(433643026204852224).send(
-            f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 5 upvotes in {orig_message_link}.",
+            f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 10 upvotes in {orig_message_link}.",
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
         )
 
