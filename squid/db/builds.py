@@ -402,7 +402,7 @@ class Build:
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
 
-        prompt = resources.files("database").joinpath("prompt.txt").read_text(encoding="utf-8")
+        prompt = resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
             model="deepseek/deepseek-chat",
             messages=[
