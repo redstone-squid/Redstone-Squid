@@ -77,7 +77,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             build.normal_opening_time = self.normal_opening_time
 
             if self.information_about_build is not None:
-                build.information["user"] = self.information_about_build
+                build.extra_info["user"] = self.information_about_build
             if (ign := self.in_game_name_of_creator) is not None:
                 build.creators_ign = ign.split(", ")
             else:

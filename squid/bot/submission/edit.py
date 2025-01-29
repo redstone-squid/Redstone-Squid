@@ -74,7 +74,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             if self.normal_opening_time is not None:
                 build.normal_opening_time = self.normal_opening_time
             if self.information_about_build is not None:
-                build.information["user"] = self.information_about_build
+                build.extra_info["user"] = self.information_about_build
             if (ign := self.in_game_name_of_creator) is not None:
                 build.creators_ign = ign.split(", ")
             if self.link_to_image is not None:
@@ -83,12 +83,16 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 build.video_urls = [self.link_to_youtube_video]
             if self.link_to_world_download is not None:
                 build.world_download_urls = [self.link_to_world_download]
+
+            server_info = build.extra_info.get("server_info", {})
             if self.server_ip is not None:
-                build.server_info["server_ip"] = self.server_ip
+                server_info |= {"server_ip": self.server_ip}
             if self.coordinates is not None:
-                build.server_info["coordinates"] = self.coordinates
+                server_info |= {"coordinates": self.coordinates}
             if self.command_to_get_to_build is not None:
-                build.server_info["command_to_build"] = self.command_to_get_to_build
+                server_info |= {"command_to_build": self.command_to_get_to_build}
+            build.extra_info["server_info"] = server_info
+
             if self.date_of_creation is not None:
                 build.completion_time = self.date_of_creation
             return build

@@ -194,7 +194,7 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
                 get_text_input(build, "image_urls", placeholder="any urls, comma separated"),
                 get_text_input(build, "video_urls", placeholder="any urls, comma separated"),
                 get_text_input(build, "world_download_urls", placeholder="any urls, comma separated"),
-                get_text_input(build, "server_info", placeholder="TODO: Explain this format"),
+                get_text_input(build, "extra_info", placeholder="TODO: Explain this format"),
                 get_text_input(build, "completion_time", placeholder="Any time format works"),
                 get_text_input(build, "ai_generated", placeholder="True/False"),
             ]
