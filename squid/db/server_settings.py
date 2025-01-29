@@ -21,6 +21,8 @@ _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "First": "first_channel_id",
     "Builds": "builds_channel_id",
     "Vote": "voting_channel_id",
+    "JavaChangelog": "java_changelog_channel_id",
+    "BedrockChangelog": "bedrock_changelog_channel_id",
     "Staff": "staff_roles_ids",
     "Trusted": "trusted_roles_ids",
 }
@@ -37,7 +39,9 @@ class ServerSettingManager:
 
     @overload
     async def get(
-        self, server_ids: Iterable[int], setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+        self,
+        server_ids: Iterable[int],
+        setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote", "JavaChangelog", "BedrockChangelog"],
     ) -> dict[int, int | None]: ...
     @overload
     async def get(self, server_ids: Iterable[int], setting: Literal["Staff", "Trusted"]) -> dict[int, list[int]]: ...
@@ -56,7 +60,9 @@ class ServerSettingManager:
 
     @overload
     async def get_single(
-        self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+        self,
+        server_id: int,
+        setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote", "JavaChangelog", "BedrockChangelog"],
     ) -> int | None: ...
     @overload
     async def get_single(self, server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int]: ...
@@ -101,7 +107,10 @@ class ServerSettingManager:
 
     @overload
     async def set(
-        self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None
+        self,
+        server_id: int,
+        setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote", "JavaChangelog", "BedrockChangelog"],
+        value: int | None,
     ) -> None: ...
     @overload
     async def set(self, server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None) -> None: ...

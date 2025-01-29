@@ -122,6 +122,8 @@ class ServerSettingRecord(TypedDict):
     first_channel_id: int | None
     builds_channel_id: int | None
     voting_channel_id: int | None
+    java_changelog_channel_id: int | None
+    bedrock_changelog_channel_id: int | None
     staff_roles_ids: list[int] | None
     trusted_roles_ids: list[int] | None
 
@@ -133,11 +135,15 @@ DbSettingKey = Literal[
     "first_channel_id",
     "builds_channel_id",
     "voting_channel_id",
+    "java_changelog_channel_id",
+    "bedrock_changelog_channel_id",
     "staff_roles_ids",
     "trusted_roles_ids",
 ]
 
-Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+Setting: TypeAlias = Literal[
+    "Smallest", "Fastest", "First", "Builds", "JavaChangelog", "BedrockChangelog", "Vote", "Staff", "Trusted"
+]
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 

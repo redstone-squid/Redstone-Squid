@@ -53,7 +53,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             desc = ""
             for setting, value in settings.items():
                 match setting:
-                    case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
+                    case "Smallest" | "Fastest" | "First" | "Builds" | "Vote" | "JavaChangelog" | "BedrockChangelog":
                         value = cast(int | None, value)
                         if value is None:
                             desc += f"{setting} channel: _Not set_\n"
@@ -83,7 +83,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
         description: str
         async with utils.RunningMessage(ctx) as sent_message:
             match setting:
-                case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
+                case "Smallest" | "Fastest" | "First" | "Builds" | "Vote" | "JavaChangelog" | "BedrockChangelog":
                     title = f"{setting} Channel Info"
                     value = await self.bot.db.server_setting.get_single(ctx.guild.id, setting)
                     if value is None:
@@ -129,7 +129,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             return
 
         async with utils.RunningMessage(ctx) as sent_message:
-            if setting in {"Smallest", "Fastest", "First", "Builds", "Vote"}:
+            if setting in {"Smallest", "Fastest", "First", "Builds", "Vote", "JavaChangelog", "BedrockChangelog"}:
                 if channel is None:
                     await sent_message.edit(
                         embed=utils.error_embed("Error", "You must provide a channel for this setting.")
