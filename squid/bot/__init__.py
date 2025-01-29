@@ -55,6 +55,7 @@ class RedstoneSquid(Bot):
         await self.load_extension("squid.bot.admin")
         await self.load_extension("squid.bot.submission.search")
         await self.load_extension("squid.bot.give_redstoner")
+        await self.load_extension("squid.bot.version_tracker")
         self.call_supabase_to_prevent_deactivation.start()
 
     @tasks.loop(hours=24)

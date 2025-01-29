@@ -10,8 +10,7 @@ from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
 from squid.config import BOT_NAME, FORM_LINK, SOURCE_CODE_URL
-from squid.db import get_version_string, DatabaseManager
-from squid.db.utils import parse_version_string
+from squid.db import get_version_string
 
 if TYPE_CHECKING:
     from squid.bot import RedstoneSquid
@@ -55,22 +54,6 @@ class Miscellaneous[BotT: RedstoneSquid](Cog):
         versions = await self.bot.db.get_or_fetch_versions_list(edition="Java")
         versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
-
-    @commands.hybrid_command()
-    async def add_version(self, ctx: commands.Context, edition: str, version_string: str):
-        db = DatabaseManager()
-
-        edition, major_version, minor_version, patch = parse_version_string(edition + version_string)
-
-        version_record = {
-            "edition": edition,
-            "major_version": major_version,
-            "minor_version": minor_version,
-            "patch_number": patch,
-        }
-
-        response = await db.table("versions").insert(version_record).execute()
-        await ctx.send(f"Version added successfully: {response.data}")
 
 
 async def setup(bot: RedstoneSquid):
