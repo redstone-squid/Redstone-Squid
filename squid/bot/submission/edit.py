@@ -54,11 +54,9 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             if (works_in := self.works_in) is not None:
                 build.version_spec = works_in
             if (build_size := self.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
+                build.dimensions = parse_dimensions(build_size)
             if (door_size := self.door_size) is not None:
-                door_dimensions = parse_dimensions(door_size)
-                build.door_width, build.door_height, build.door_depth = door_dimensions
+                build.door_dimensions = parse_dimensions(door_size)
             if (pattern := self.pattern) is not None:
                 build.door_type = pattern.split(", ")
             if (door_type := self.door_type) is not None:
@@ -67,7 +65,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 build.wiring_placement_restrictions = wp_res.split(", ")
             if (co_res := self.component_restrictions) is not None:
                 build.component_restrictions = co_res.split(", ")
-            misc_restrictions = [self.locationality, self.directionality]
+            misc_restrictions = [self.locationality, self.directionality]  # FIXME: This is always overriding
             build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
             if self.normal_closing_time is not None:
                 build.normal_closing_time = self.normal_closing_time
