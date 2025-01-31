@@ -99,7 +99,6 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
             await message.delete()
 
     @commands.command(name="s", hidden=True)
-    @commands.guild_only()
     @commands.is_owner()
     async def sync(self, ctx: Context[BotT], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
         """Syncs the slash commands with the discord API."""
