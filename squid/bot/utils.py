@@ -1,6 +1,7 @@
 """Utility functions for the bot."""
 
 import asyncio
+from enum import Enum
 import inspect
 import io
 import logging
@@ -89,10 +90,14 @@ class Sentinel:
             ),
         )
 
+class MissingType(Enum):
+    MISSING = Sentinel("MISSING", repr="...")
 
-MISSING: Any = Sentinel("MISSING", repr="...")
-DEFAULT: Any = Sentinel("DEFAULT")
+class DefaultType(Enum):
+    DEFAULT = Sentinel("DEFAULT")
 
+MISSING = MissingType.MISSING
+DEFAULT = DefaultType.DEFAULT
 
 def error_embed(title: str, description: str | None):
     if description is None:
