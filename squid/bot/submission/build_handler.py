@@ -188,7 +188,7 @@ class BuildHandler[BotT: RedstoneSquid]:
         elif "Directional with fixes" in build.miscellaneous_restrictions:
             desc.append("**Directional** with known fixes for each direction.")
 
-        if build.information and (user_message := build.information.get("user")):
+        if build.extra_info and (user_message := build.extra_info.get("user")):
             desc.append("\n" + escape_markdown(user_message))
 
         return "\n".join(desc) if desc else None
@@ -221,11 +221,12 @@ class BuildHandler[BotT: RedstoneSquid]:
 
         fields["Versions"] = build.version_spec or "Unknown"
 
-        if ip := build.server_info.get("server_ip"):
+        server_info = build.extra_info.get("server_info", {})
+        if ip := server_info.get("server_ip"):
             fields["Server"] = ip
-            if coordinates := build.server_info.get("coordinates"):
+            if coordinates := server_info.get("coordinates"):
                 fields["Coordinates"] = coordinates
-            if command := build.server_info.get("command_to_build"):
+            if command := server_info.get("command_to_build"):
                 fields["Command"] = command
 
         if build.world_download_urls:

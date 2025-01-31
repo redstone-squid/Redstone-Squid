@@ -319,25 +319,25 @@ values
 ('Bedrock', 1, 2, 1),
 ('Bedrock', 1, 2, 0);
 
-INSERT INTO messages ("server_id", "build_id", "channel_id", "message_id", "edited_time", "purpose", "vote_session_id", "content")
+INSERT INTO messages ("server_id", "build_id", "channel_id", "message_id", "updated_at", "purpose", "vote_session_id", "content")
 VALUES
 ('433618741528625152', null, '667401499554611210', '1327569309899292754', '2025-01-11 15:06:07+00', 'build_original_message', null, 'some random message'),
  ('433618741528625152', null, '667401499554611210', '1327613153755791412', '2025-01-11 15:06:45+00', 'build_original_message', null, 'Fastest 8x8 piston door'),
  ('433618741528625152', null, '667401499554611210', '1328158928638443571', '2025-01-13 02:41:21+00', 'build_original_message', null, '# **Smallest 0.9 6x6**');
 
-INSERT INTO builds ("id", "submission_status", "edited_time", "record_category", "information", "width", "height", "depth", "completion_time", "submission_time", "category", "server_info", "submitter_id", "ai_generated", "original_message_id", "version_spec", "embedding")
+INSERT INTO builds ("id", "submission_status", "edited_time", "record_category", "extra_info", "width", "height", "depth", "completion_time", "submission_time", "category", "submitter_id", "ai_generated", "original_message_id", "version_spec", "embedding")
 VALUES
-('1', '1', '2025-01-09 15:06:25', 'Smallest', '{"user":"it has egg\\\\nhttps://imgur.com/a/XhVjrzc","unknown_restrictions":{"wiring_placement_restrictions":["Seamless","Flush"]}}', '11', '7', '3', '2023-04-29 11:22 PM EST', '2024-02-28 04:11:00', 'Door', '{}', '462848121081167873', 'false', null, null, null),
+('1', '1', '2025-01-09 15:06:25', 'Smallest', '{"user":"it has egg\\\\nhttps://imgur.com/a/XhVjrzc","unknown_restrictions":{"wiring_placement_restrictions":["Seamless","Flush"]}}', '11', '7', '3', '2023-04-29 11:22 PM EST', '2024-02-28 04:11:00', 'Door', '462848121081167873', 'false', null, null, null),
 
-('2', '0', '2025-01-09 15:07:03', 'Fastest', '{"unknown_restrictions":{"component_restrictions":["Slimeless"],"wiring_placement_restrictions":["Seamless"]}}', '15', '21', '9', null, '2024-04-04 13:41:30', 'Door', '{}', '353089661175988224', 'false', null, null, null),
+('2', '0', '2025-01-09 15:07:03', 'Fastest', '{"unknown_restrictions":{"component_restrictions":["Slimeless"],"wiring_placement_restrictions":["Seamless"]}}', '15', '21', '9', null, '2024-04-04 13:41:30', 'Door', '353089661175988224', 'false', null, null, null),
 
-('3', '1', '2025-01-11 15:06:03', 'Fastest', '{"user":"Improved version\\n**size**\\n22x11x4=968b\\n**other info**\\nuncontained cus layout big\\nfound out it was loc and dir, now it''s reliable\\nvideo should be less laggy now :)","unknown_patterns":[],"unknown_restrictions":{"component_restrictions":["Obsless","Entityless"],"miscellaneous_restrictions":["Only piston sounds"],"wiring_placement_restrictions":["Unseamless"]}}', '22', '11', '4', null, '2025-01-11 15:06:04.110194', 'Door', '{}', '1159485264570359839', 'true', '1327569309899292754', 'Java 1.21.1', null),
+('3', '1', '2025-01-11 15:06:03', 'Fastest', '{"user":"Improved version\\n**size**\\n22x11x4=968b\\n**other info**\\nuncontained cus layout big\\nfound out it was loc and dir, now it''s reliable\\nvideo should be less laggy now :)","unknown_patterns":[],"unknown_restrictions":{"component_restrictions":["Obsless","Entityless"],"miscellaneous_restrictions":["Only piston sounds"],"wiring_placement_restrictions":["Unseamless"]}}', '22', '11', '4', null, '2025-01-11 15:06:04.110194', 'Door', '1159485264570359839', 'true', '1327569309899292754', 'Java 1.21.1', null),
 
-('4', '1', '2025-01-11 15:06:41', 'Fastest', '{"unknown_patterns":[],"unknown_restrictions":{"miscellaneous_restrictions":["Reliable","Entityless"]}}', '23', '16', '8', null, '2025-01-11 15:06:42.09222', 'Door', '{}', '1076744341944533053', 'true', '1327613153755791412', 'Java 1.21.1', null),
+('4', '1', '2025-01-11 15:06:41', 'Fastest', '{"unknown_patterns":[],"unknown_restrictions":{"miscellaneous_restrictions":["Reliable","Entityless"]}}', '23', '16', '8', null, '2025-01-11 15:06:42.09222', 'Door', '1076744341944533053', 'true', '1327613153755791412', 'Java 1.21.1', null),
 
-('5', '1', '2025-01-13 02:41:17', 'Smallest', '{"user":"Finished: Jan 12, 2025\\nNo Input Delay\\nOnly 7 Deep because not cringe","unknown_patterns":[],"unknown_restrictions":{"component_restrictions":["Slimeless"],"miscellaneous_restrictions":["Fully Reliable","Contained","Piston Sounds Only","0.9s"]}}', '16', '7', '18', null, '2025-01-13 02:41:18.030881', 'Door', '{}', '689549609605136393', 'true', '1328158928638443571', 'Java 1.21.1', null),
+('5', '1', '2025-01-13 02:41:17', 'Smallest', '{"user":"Finished: Jan 12, 2025\\nNo Input Delay\\nOnly 7 Deep because not cringe","unknown_patterns":[],"unknown_restrictions":{"component_restrictions":["Slimeless"],"miscellaneous_restrictions":["Fully Reliable","Contained","Piston Sounds Only","0.9s"]}}', '16', '7', '18', null, '2025-01-13 02:41:18.030881', 'Door', '689549609605136393', 'true', '1328158928638443571', 'Java 1.21.1', null),
 
-('6', '0', '2025-01-13 04:27:06', 'Smallest', '{"unknown_patterns":[],"unknown_restrictions":{}}', null, null, null, null, '2025-01-13 04:27:06.610537', 'Door', '{}', '987131131767959614', 'true', null, 'MCBE', null);
+('6', '0', '2025-01-13 04:27:06', 'Smallest', '{"unknown_patterns":[],"unknown_restrictions":{}}', null, null, null, null, '2025-01-13 04:27:06.610537', 'Door', '987131131767959614', 'true', null, 'MCBE', null);
 
 ALTER SEQUENCE submissions_submission_id_seq RESTART WITH 100;
 -- Reserve the first 100 submissions for testing data

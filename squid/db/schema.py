@@ -19,6 +19,7 @@ class Info(TypedDict, total=False):
     user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
+    server_info: ServerInfo
 
 
 class ServerInfo(TypedDict, total=False):
@@ -52,7 +53,7 @@ class BuildRecord(TypedDict):
     id: int
     submission_status: Status
     record_category: RecordCategory | None
-    information: Info
+    extra_info: Info
     submission_time: str
     edited_time: str
     width: int | None
@@ -60,7 +61,6 @@ class BuildRecord(TypedDict):
     depth: int | None
     completion_time: str | None  # Given by user, not parsable as a datetime
     category: Category
-    server_info: ServerInfo | None
     submitter_id: int
     original_message_id: int
     version_spec: str
@@ -75,6 +75,7 @@ class MessageRecord(TypedDict):
     edited_time: str
     server_id: int
     channel_id: int
+    author_id: int
     purpose: MessagePurpose
     build_id: int | None
     vote_session_id: int | None

@@ -54,11 +54,9 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             if (works_in := self.works_in) is not None:
                 build.version_spec = works_in
             if (build_size := self.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
+                build.dimensions = parse_dimensions(build_size)
             if (door_size := self.door_size) is not None:
-                door_dimensions = parse_dimensions(door_size)
-                build.door_width, build.door_height, build.door_depth = door_dimensions
+                build.door_dimensions = parse_dimensions(door_size)
             if (pattern := self.pattern) is not None:
                 build.door_type = pattern.split(", ")
             if (door_type := self.door_type) is not None:
@@ -67,14 +65,14 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 build.wiring_placement_restrictions = wp_res.split(", ")
             if (co_res := self.component_restrictions) is not None:
                 build.component_restrictions = co_res.split(", ")
-            misc_restrictions = [self.locationality, self.directionality]
+            misc_restrictions = [self.locationality, self.directionality]  # FIXME: This is always overriding
             build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
             if self.normal_closing_time is not None:
                 build.normal_closing_time = self.normal_closing_time
             if self.normal_opening_time is not None:
                 build.normal_opening_time = self.normal_opening_time
             if self.information_about_build is not None:
-                build.information["user"] = self.information_about_build
+                build.extra_info["user"] = self.information_about_build
             if (ign := self.in_game_name_of_creator) is not None:
                 build.creators_ign = ign.split(", ")
             if self.link_to_image is not None:
@@ -83,12 +81,16 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 build.video_urls = [self.link_to_youtube_video]
             if self.link_to_world_download is not None:
                 build.world_download_urls = [self.link_to_world_download]
+
+            server_info = build.extra_info.get("server_info", {})
             if self.server_ip is not None:
-                build.server_info["server_ip"] = self.server_ip
+                server_info |= {"server_ip": self.server_ip}
             if self.coordinates is not None:
-                build.server_info["coordinates"] = self.coordinates
+                server_info |= {"coordinates": self.coordinates}
             if self.command_to_get_to_build is not None:
-                build.server_info["command_to_build"] = self.command_to_get_to_build
+                server_info |= {"command_to_build": self.command_to_get_to_build}
+            build.extra_info["server_info"] = server_info
+
             if self.date_of_creation is not None:
                 build.completion_time = self.date_of_creation
             return build
