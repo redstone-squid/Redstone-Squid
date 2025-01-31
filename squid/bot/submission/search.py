@@ -30,13 +30,9 @@ class SearchCog[BotT: RedstoneSquid](Cog):
         self.bot = bot
 
     @commands.hybrid_command("search")
+    @app_commands.describe(query="Whatever you want to search for.")
     async def search_builds(self, ctx: Context[BotT], query: str):
-        """
-        Searches for a build with natural language.
-
-        Args:
-            query: The query to search for.
-        """
+        """Searches for a build with natural language."""
         await ctx.defer()
         client = AsyncOpenAI()
         response = await client.embeddings.create(input=query, model="text-embedding-3-small")
