@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import TracebackType
 import logging
 import os
 import re
@@ -548,6 +549,25 @@ class Build:
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
+    @property
+    def lock(self) -> BuildLock:
+        """Locks the build for editing."""
+        return BuildLock(self)
+
+    async def try_acquire_lock(self) -> bool:
+        """Tries to acquire a lock on the build to prevent concurrent modifications."""
+        response = await DatabaseManager().table("builds").update({"is_locked": True}, count=CountMethod.exact).eq("id", self.id).execute()
+        return response.count == 1
+
+    async def _acquire_lock(self) -> None:
+        """Acquires a lock on the build to prevent concurrent modifications."""
+        while not await self.try_acquire_lock():
+            await asyncio.sleep(0.1)
+
+    async def _release_lock(self) -> None:
+        """Releases the lock on the build."""
+        await DatabaseManager().table("builds").update({"is_locked": False}).eq("id", self.id).execute()
+
     def get_restrictions(
         self,
     ) -> dict[
@@ -1027,6 +1047,20 @@ class Build:
             )
             .execute()
         )
+
+
+class BuildLock:
+    """A context manager for locking a build."""
+
+    def __init__(self, build: Build):
+        self.build = build
+
+    async def __aenter__(self):
+        await self.build._acquire_lock()
+        return self.build
+
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None):
+        await self.build._release_lock()
 
 
 async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
