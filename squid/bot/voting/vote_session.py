@@ -305,7 +305,9 @@ class AbstractVoteSession(ABC):
             self._votes[user_id] = weight
 
         if not self.fail_threshold < self.net_votes < self.pass_threshold:
-            self._tasks.add(asyncio.create_task(self.close()))
+            task = asyncio.create_task(self.close())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
         # Create tasks for the updates
         if self.id is not None:
