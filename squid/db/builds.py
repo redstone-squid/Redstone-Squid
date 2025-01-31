@@ -880,7 +880,10 @@ class Build:
         except:
             vx.disconnect()
             if delete_build_on_error:
+                logger.warning("Failed to save build %s, deleting it", repr(self))
                 await db.table("builds").delete().eq("id", self.id).execute()
+            else:
+                logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(self))
             raise
 
     async def _update_build_subcategory_table(self) -> None:
