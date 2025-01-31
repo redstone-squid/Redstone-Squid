@@ -19,7 +19,7 @@ dependencies = [
     "vecs",
     "gitpython",
     "beartype",
-    "discord-ext-menus",
+    "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
 ]
 
 [dependency-groups]
@@ -36,11 +36,11 @@ dev = [
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = []
+
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-discord-ext-menus = { git = "https://github.com/Rapptz/discord-ext-menus" }
 
 [tool.ruff]
 line-length = 120
