@@ -1,3 +1,10 @@
+Pre-requisites:
+- You have access to the supabase project
+- `supabase` CLI is installed - read https://supabase.com/docs/guides/local-development
+- You linked a local db to the supabase project
+
+
+Steps:
 1. `supabase migration new <name>`
 2. Write the SQL manually, or use the studio to make the changes then run `supabase db diff`
 3. If changed column names, update `seed.sql`, and all the references in the code base
