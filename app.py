@@ -16,12 +16,4 @@ from squid.config import DEV_MODE
 if __name__ == "__main__":
     # Check bot/config.py for configuration, .env.example for environment variables
     multiprocessing.Process(target=api_main).start()
-
-    if sys.platform == "win32" and find_spec("aiodns"):
-        # https://github.com/Rapptz/discord.py/pull/9898 & https://github.com/aio-libs/aiodns/issues/86
-        raise RuntimeError(
-            "aiodns is not needed on Windows. You can safely uninstall it. Setting Windows Selector Event Loop Policy is not an option because ProactorEventLoop is needed for subprocesses."
-        )
-        # https://stackoverflow.com/questions/44633458/why-am-i-getting-notimplementederror-with-async-and-await-on-windows
-
     asyncio.run(bot_main(), debug=DEV_MODE)
