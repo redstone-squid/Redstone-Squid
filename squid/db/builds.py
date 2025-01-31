@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import TracebackType
 import logging
 import os
 import re
@@ -559,6 +560,25 @@ class Build:
     @door_dimensions.setter
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
+
+    @property
+    def lock(self) -> BuildLock:
+        """Locks the build for editing."""
+        return BuildLock(self)
+
+    async def try_acquire_lock(self) -> bool:
+        """Tries to acquire a lock on the build to prevent concurrent modifications."""
+        response = await DatabaseManager().table("builds").update({"is_locked": True}, count=CountMethod.exact).eq("id", self.id).execute()
+        return response.count == 1
+
+    async def _acquire_lock(self) -> None:
+        """Acquires a lock on the build to prevent concurrent modifications."""
+        while not await self.try_acquire_lock():
+            await asyncio.sleep(0.1)
+
+    async def _release_lock(self) -> None:
+        """Releases the lock on the build."""
+        await DatabaseManager().table("builds").update({"is_locked": False}).eq("id", self.id).execute()
 
     def get_restrictions(
         self,
