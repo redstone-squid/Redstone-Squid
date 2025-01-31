@@ -14,7 +14,7 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils import MISSING, MissingType, RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
-from squid.bot.converter import DimensionsConverter, ListConverter
+from squid.bot.converter import DimensionsConverter, ListConverter, GameTickConverter, NoneStrConverter
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
@@ -135,24 +135,24 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
         build_id: int = flag(description='The ID of the submission.')
         door_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='e.g. *2x2* piston door. In width x height (x depth).')
         pattern: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
-        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | MissingType = flag(default=MISSING, description='Door, Skydoor, or Trapdoor.')
+        door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Door", "Skydoor", "Trapdoor"]), description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
-        works_in: str | None | MissingType = flag(default=MISSING, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
+        works_in: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
         component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
-        extra_user_info: str | None | MissingType = flag(name="notes", default=MISSING, description='Any additional information about the build.')
-        normal_closing_time: int | None | MissingType = flag(default=MISSING, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int | None | MissingType = flag(default=MISSING, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
-        date_of_creation: str | None | MissingType = flag(default=MISSING, description='The date the build was created.')
+        extra_user_info: str | None | MissingType = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
+        normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
+        normal_opening_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        date_of_creation: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The date the build was created.')
         creators: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes", "Not locational"] | MissingType = flag(default=MISSING, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes", "Not directional"] = flag(default=MISSING, description='Whether the build works in all directions, or only in certain directions.')
+        locationality: Literal["Locational", "Locational with fixes", "Not locational"] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Locational", "Locational with fixes", "Not locational"]), description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes", "Not directional"] = flag(default=MISSING, converter=NoneStrConverter(choices=["Directional", "Directional with fixes", "Not directional"]), description='Whether the build works in all directions, or only in certain directions.')
         image_urls: list[str] | MissingType = flag(name="image_links", default=MISSING, converter=ListConverter, description='Links to images of the build.')
         video_urls: list[str] | MissingType = flag(name="video_links", default=MISSING, converter=ListConverter, description='Links to videos of the build.')
         world_download_urls: list[str] | MissingType = flag(name="world_download_links", default=MISSING, converter=ListConverter, description='Links to download the world.')
-        server_ip: str | None | MissingType = flag(default=MISSING, description='The IP of the server where the build is located.')
-        coordinates: str | None | MissingType = flag(default=MISSING, description='The coordinates of the build in the server.')
-        command_to_get_to_build: str | None | MissingType = flag(default=MISSING, description='The command to get to the build in the server.')
+        server_ip: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The IP of the server where the build is located.')
+        coordinates: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
         # fmt: on
 
     @edit_group.command(name="door")
