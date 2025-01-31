@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -90,7 +91,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         message = await channel.fetch_message(payload.message_id)
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = message.remove_reaction(payload.emoji, user)  # await later as this is not critical
+        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))  # await later as this is not critical
 
         if user.bot:
             return  # Ignore bot reactions
