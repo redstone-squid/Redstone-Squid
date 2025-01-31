@@ -1,3 +1,4 @@
+"""Custom converters for the bot commands."""
 from typing import Any, override
 
 from discord import app_commands
@@ -12,7 +13,7 @@ from squid.bot.submission.parse import parse_dimensions
 
 
 class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int | None]]):
-
+    """Converts the string "none" to None and then try to parse the argument as a valid dimension."""
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> tuple[int | None, int | None, int | None]:
         if argument == "none":
@@ -27,7 +28,7 @@ class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int |
 
 
 class ListConverter(commands.Converter[list[str]]):
-
+    """Converts the string "none" to an empty list and then split the argument by commas."""
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> list[str]:
         if argument == "" or argument == "none":
