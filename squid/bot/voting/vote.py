@@ -1,3 +1,4 @@
+"""Handles reaction-based voting for various purposes."""
 from __future__ import annotations
 
 import asyncio
