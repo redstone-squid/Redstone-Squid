@@ -6,7 +6,7 @@ from discord.ext.commands import Context
 from squid.bot.submission.parse import parse_dimensions
 
 
-class DimensionsConverter(commands.Converter):
+class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int | None]]):
 
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> tuple[int | None, int | None, int | None]:
@@ -21,7 +21,7 @@ class DimensionsConverter(commands.Converter):
             return dims
 
 
-class ListConverter(commands.Converter):
+class ListConverter(commands.Converter[list[str]]):
 
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> list[str]:
@@ -31,7 +31,7 @@ class ListConverter(commands.Converter):
         lst = argument.split(",")
         return [x.strip() for x in lst]
 
-class NoneStrConverter(commands.Converter):
+class NoneStrConverter(commands.Converter[str | None]):
 
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> str | None:
