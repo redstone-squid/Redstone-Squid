@@ -9,6 +9,7 @@ import vecs
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
+from discord.utils import escape_markdown
 from openai import AsyncOpenAI
 
 from squid.bot import utils
@@ -131,6 +132,19 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                 await sent_message.edit(
                     content=build.original_link, embed=await self.bot.for_build(build).generate_embed()
                 )
+
+    @build_hybrid_group.command(name="debug")
+    @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
+    async def debug_build(self, ctx: Context[BotT], build_id: int):
+        """Displays a submission's debug info."""
+        async with utils.RunningMessage(ctx) as sent_message:
+            build = await Build.from_id(build_id)
+
+            if build is None:
+                error_embed = utils.error_embed("Error", "No build with that ID.")
+                return await sent_message.edit(embed=error_embed)
+
+            await sent_message.edit(content=escape_markdown(str(build.__dict__)), embed=None)
 
 
 async def setup(bot: RedstoneSquid):
