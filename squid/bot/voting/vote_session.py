@@ -461,6 +461,7 @@ class BuildVoteSession(AbstractVoteSession):
         # We can skip _async_init because we already have the id and everything has been tracked before
         session.id = record["id"]
         session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+        session.is_closed = record["status"] == "closed"
 
         return session
 
@@ -635,6 +636,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             "id"
         ]  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+        self.is_closed = record["status"] == "closed"
         return self
 
     @override
