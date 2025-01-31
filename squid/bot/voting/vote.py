@@ -74,9 +74,6 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        if payload.guild_id is None:
-            raise NotImplementedError("Cannot vote in DMs.")
-
         if (vote_session := self._open_vote_sessions.get(payload.message_id)) is None:
             vote_session = await self.get_vote_session(payload.message_id, status="open")
             if vote_session is None:
@@ -102,6 +99,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 
         if isinstance(vote_session, DeleteLogVoteSession):
             # Check if the user has a trusted role
+            if payload.guild_id is None:
+                raise NotImplementedError("Cannot vote in DMs.")
+
             trusted_role_ids = await self.bot.db.server_setting.get_single(
                 server_id=payload.guild_id, setting="Trusted"
             )
