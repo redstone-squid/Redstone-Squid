@@ -568,6 +568,8 @@ class Build:
 
     async def try_acquire_lock(self) -> bool:
         """Tries to acquire a lock on the build to prevent concurrent modifications."""
+        if self.id is None:
+            raise ValueError("Cannot lock a build without an ID.")
         response = await DatabaseManager().table("builds").update({"is_locked": True}, count=CountMethod.exact).eq("id", self.id).execute()
         return response.count == 1
 
