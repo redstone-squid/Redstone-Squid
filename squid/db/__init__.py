@@ -87,6 +87,8 @@ class DatabaseManager(AsyncClient):
     async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await self.get_or_fetch_versions_list(edition=edition)
+        if len(versions) == 0:
+            raise RuntimeError(f"No {edition} versions found.")
         return get_version_string(versions[-1])
 
     async def find_versions_from_spec(self, version_spec: str) -> list[str]:
