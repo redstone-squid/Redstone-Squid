@@ -16,7 +16,7 @@ from discord.ext.commands import (
 
 from squid.bot import utils
 from squid.bot._types import GuildMessageable
-from squid.bot.submission.parse import parse_dimensions
+from squid.bot.converter import DimensionsConverter, ListConverter
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
@@ -50,66 +50,53 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             build = Build()
             build.record_category = self.record_category
             build.version_spec = self.works_in
-
-            if (build_size := self.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
-
-            door_dimensions = parse_dimensions(self.door_size)
-            build.door_width, build.door_height, build.door_depth = door_dimensions
-
-            build.door_type = self.pattern.split(", ")
+            build.width, build.height, build.depth = self.build_size
+            build.door_width, build.door_height, build.door_depth = self.door_size
+            build.door_type = self.pattern
             build.door_orientation_type = self.door_type
+            build.wiring_placement_restrictions = self.wiring_placement_restrictions
+            build.component_restrictions = self.component_restrictions
 
-            if (wp_res := self.wiring_placement_restrictions) is not None:
-                build.wiring_placement_restrictions = wp_res.split(", ")
-            else:
-                build.wiring_placement_restrictions = []
-
-            if (co_res := self.component_restrictions) is not None:
-                build.component_restrictions = co_res.split(", ")
-            else:
-                build.component_restrictions = []
-            misc_restrictions = [self.locationality, self.directionality]
-            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+            if (locationality := self.locationality) is not None and locationality != "Not locational":
+                build.miscellaneous_restrictions.append(locationality)
+            if (directionality := self.directionality) is not None and directionality != "Not directional":
+                build.miscellaneous_restrictions.append(directionality)
 
             build.normal_closing_time = self.normal_closing_time
             build.normal_opening_time = self.normal_opening_time
 
             if self.information_about_build is not None:
                 build.information["user"] = self.information_about_build
-            if (ign := self.in_game_name_of_creator) is not None:
-                build.creators_ign = ign.split(", ")
-            else:
-                build.creators_ign = []
-
-            build.image_urls = [self.link_to_image] if self.link_to_image is not None else []
-            build.video_urls = [self.link_to_youtube_video] if self.link_to_youtube_video is not None else []
-            build.world_download_urls = [self.link_to_world_download] if self.link_to_world_download is not None else []
+            build.creators_ign = self.creators
+            build.image_urls = self.image_urls
+            build.video_urls = self.video_urls
+            build.world_download_urls = self.world_download_urls
             build.completion_time = self.date_of_creation
             return build
 
+        _list_default = lambda ctx: []  # noqa: E731
+
         # fmt: off
         # Intentionally moved closer to the submit command
-        door_size: str = flag(description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
-        record_category: Literal['Smallest', 'Fastest', 'First'] = flag(default=None, description='Is this build a record?')
-        pattern: str = flag(default='Regular', description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_size: tuple[int | None, int | None, int | None] = flag(converter=DimensionsConverter, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
+        record_category: Literal['Smallest', 'Fastest', 'First'] | None = flag(default=None, description='Is this build a record?')
+        pattern: list[str] = flag(default=lambda ctx: ['Regular'], converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
-        build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
+        build_size: tuple[int | None, int | None, int | None] = flag(default=lambda ctx: (None, None, None), converter=DimensionsConverter, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         # TODO: merge all restrictions into one field and use build.set_restrictions
-        wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        wiring_placement_restrictions: list[str] = flag(default=_list_default, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: list[str] = flag(default=_list_default, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
         normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
         normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
         date_of_creation: str | None = flag(default=None, description='The date the build was created.')
-        in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
-        link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
-        link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
-        link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
+        creators: list[str] = flag(default=_list_default, converter=ListConverter, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes", "Not locational"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes", "Not directional"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        image_urls: list[str] = flag(name="image_links", default=_list_default, converter=ListConverter, description='Links to images of the build.')
+        video_urls: list[str] = flag(name="video_links", default=_list_default, converter=ListConverter, description='Links to videos of the build.')
+        world_download_urls: list[str] = flag(name="world_download_links", default=_list_default, converter=ListConverter, description='Links to download the world.')
         # fmt: on
 
     @submit_group.command(name="door")

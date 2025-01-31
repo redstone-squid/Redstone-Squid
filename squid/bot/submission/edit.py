@@ -11,10 +11,10 @@ from discord.ext.commands import Cog, Context, flag
 from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot import utils
-from squid.bot.submission.parse import parse_dimensions
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
+from squid.bot.converter import DimensionsConverter, ListConverter
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
@@ -50,39 +50,61 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             if build is None:
                 return None
 
+            # Technically we can match both the variable names and the attribute names and use setattr
+            # to set the values in a loop, but this explicitness helps with refactoring and readability.
             # FIXME: need to distinguish between None and removing the value
-            if (works_in := self.works_in) is not None:
-                build.version_spec = works_in
-            if (build_size := self.build_size) is not None:
-                build_dimensions = parse_dimensions(build_size)
-                build.width, build.height, build.depth = build_dimensions
-            if (door_size := self.door_size) is not None:
-                door_dimensions = parse_dimensions(door_size)
-                build.door_width, build.door_height, build.door_depth = door_dimensions
-            if (pattern := self.pattern) is not None:
-                build.door_type = pattern.split(", ")
-            if (door_type := self.door_type) is not None:
-                build.door_orientation_type = door_type
-            if (wp_res := self.wiring_placement_restrictions) is not None:
-                build.wiring_placement_restrictions = wp_res.split(", ")
-            if (co_res := self.component_restrictions) is not None:
-                build.component_restrictions = co_res.split(", ")
-            misc_restrictions = [self.locationality, self.directionality]
-            build.miscellaneous_restrictions = [x for x in misc_restrictions if x is not None]
+            if self.works_in is not None:
+                build.version_spec = self.works_in
+            if self.build_size is not None:
+                build.width, build.height, build.depth = self.build_size
+            if self.door_size is not None:
+                build.door_width, build.door_height, build.door_depth = self.door_size
+            if self.pattern is not None:
+                build.door_type = self.pattern
+            if self.door_type is not None:
+                build.door_orientation_type = self.door_type
+            if self.wiring_placement_restrictions is not None:
+                build.wiring_placement_restrictions = self.wiring_placement_restrictions
+            if self.component_restrictions is not None:
+                build.component_restrictions = self.component_restrictions
+            if self.locationality is not None:
+                try:
+                    build.miscellaneous_restrictions.remove("Locational")
+                except ValueError:
+                    pass
+                try:
+                    build.miscellaneous_restrictions.remove("Locational with fixes")
+                except ValueError:
+                    pass
+                if self.locationality != "Not locational":
+                    build.miscellaneous_restrictions.append(self.locationality)
+
+            if self.directionality is not None:
+                try:
+                    build.miscellaneous_restrictions.remove("Directional")
+                except ValueError:
+                    pass
+                try:
+                    build.miscellaneous_restrictions.remove("Directional with fixes")
+                except ValueError:
+                    pass
+                if self.directionality != "Not directional":
+                    build.miscellaneous_restrictions.append(self.directionality)
+
             if self.normal_closing_time is not None:
                 build.normal_closing_time = self.normal_closing_time
             if self.normal_opening_time is not None:
                 build.normal_opening_time = self.normal_opening_time
-            if self.information_about_build is not None:
-                build.information["user"] = self.information_about_build
-            if (ign := self.in_game_name_of_creator) is not None:
-                build.creators_ign = ign.split(", ")
-            if self.link_to_image is not None:
-                build.image_urls = [self.link_to_image]
-            if self.link_to_youtube_video is not None:
-                build.video_urls = [self.link_to_youtube_video]
-            if self.link_to_world_download is not None:
-                build.world_download_urls = [self.link_to_world_download]
+            if self.extra_user_info is not None:
+                build.information["user"] = self.extra_user_info
+            if self.creators is not None:
+                build.creators_ign = self.creators
+            if self.image_urls is not None:
+                build.image_urls = self.image_urls
+            if self.video_urls is not None:
+                build.video_urls = self.video_urls
+            if self.world_download_urls is not None:
+                build.world_download_urls = self.world_download_urls
             if self.server_ip is not None:
                 build.server_info["server_ip"] = self.server_ip
             if self.coordinates is not None:
@@ -95,23 +117,23 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
         # fmt: off
         build_id: int = flag(description='The ID of the submission.')
-        door_size: str | None = flag(default=None, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
-        pattern: str | None = flag(default=None, description='The pattern type of the door. For example, "full lamp" or "funnel".')
+        door_size: tuple[int | None, int | None, int | None] | None = flag(default=None, converter=DimensionsConverter, description='e.g. *2x2* piston door. In width x height (x depth).')
+        pattern: list[str] | None = flag(default=None, converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | None = flag(default=None, description='Door, Skydoor, or Trapdoor.')
-        build_size: str | None = flag(default=None, description='The dimension of the build. In width x height (x depth), spaces optional.')
+        build_size: tuple[int | None, int | None, int | None] | None = flag(default=None, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
         works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
-        wiring_placement_restrictions: str | None = flag(default=None, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: str | None = flag(default=None, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
-        information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
+        wiring_placement_restrictions: list[str] | None = flag(default=None, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        component_restrictions: list[str] | None = flag(default=None, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        extra_user_info: str | None = flag(name="notes", default=None, description='Any additional information about the build.')
         normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
         normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
         date_of_creation: str | None = flag(default=None, description='The date the build was created.')
-        in_game_name_of_creator: str | None = flag(default=None, description='The in-game name of the creator(s).')
-        locationality: Literal["Locational", "Locational with fixes"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
-        directionality: Literal["Directional", "Directional with fixes"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
-        link_to_image: str | None = flag(default=None, description='A link to an image of the build. Use direct links only. e.g."https://i.imgur.com/abc123.png"')
-        link_to_youtube_video: str | None = flag(default=None, description='A link to a video of the build.')
-        link_to_world_download: str | None = flag(default=None, description='A link to download the world.')
+        creators: list[str] | None = flag(default=None, converter=ListConverter, description='The in-game name of the creator(s).')
+        locationality: Literal["Locational", "Locational with fixes", "Not locational"] | None = flag(default=None, description='Whether the build works everywhere, or only in certain locations.')
+        directionality: Literal["Directional", "Directional with fixes", "Not directional"] | None = flag(default=None, description='Whether the build works in all directions, or only in certain directions.')
+        image_urls: list[str] | None = flag(name="image_links", default=None, converter=ListConverter, description='Links to images of the build.')
+        video_urls: list[str] | None = flag(name="video_links", default=None, converter=ListConverter, description='Links to videos of the build.')
+        world_download_urls: list[str] | None = flag(name="world_download_links", default=None, converter=ListConverter, description='Links to download the world.')
         server_ip: str | None = flag(default=None, description='The IP of the server where the build is located.')
         coordinates: str | None = flag(default=None, description='The coordinates of the build in the server.')
         command_to_get_to_build: str | None = flag(default=None, description='The command to get to the build in the server.')
