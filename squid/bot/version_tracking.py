@@ -38,8 +38,6 @@ class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
         channel_id = message.channel.id
         if channel_id != 1334168723170263122:
             return
-            # [ await ServerSettingManager.get_single(self, message.guild.id, "JavaChangelog"),
-            # await ServerSettingManager.get_single(self, message.guild.id, "BedrockChangelog"), # would probably be a good idea to manage channels IDs from setting but i'm not sure how]
 
         first_line = message.content.split("\n", 1)[0]
         edition, major_version, minor_version, patch = parse_version_string(first_line)
