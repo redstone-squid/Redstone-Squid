@@ -4,5 +4,4 @@
 pip-tools
 ruff
 basedpyright
-pre-commit
 bump-my-version
