@@ -1,0 +1,23 @@
+#!/bin/sh
+#!/usr/bin/env bash
+
+echo "Running ruff check..."
+if ! ruff check --extend-select I --fix --exit-zero
+then
+    echo "ruff check failed."
+    exit 1
+fi
+
+echo "Running ruff format..."
+if ! ruff format --check --target-version py312 --quiet
+then
+    ruff format --target-version py312
+    # Currently, we cant distinguish between formatting errors and actual ruff internal errors, so we just run the check again
+    if ruff format --check --target-version py312 --quiet
+    then
+        echo "ruff format failed."
+        exit 1
+    fi
+fi
+
+echo "ruff checks and formatting completed successfully."
