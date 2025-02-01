@@ -1,4 +1,5 @@
 """Handles reaction-based voting for various purposes."""
+
 from __future__ import annotations
 
 import asyncio
@@ -36,7 +37,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             return 3
         return 1
 
-    async def get_vote_session(self, message_id: int, *, status: Literal["open", "closed"] | None = None) -> AbstractVoteSession | None:
+    async def get_vote_session(
+        self, message_id: int, *, status: Literal["open", "closed"] | None = None
+    ) -> AbstractVoteSession | None:
         """Gets a vote session from the database.
 
         Args:
@@ -89,7 +92,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         message = await channel.fetch_message(payload.message_id)
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))  # await later as this is not critical
+        remove_reaction_task = asyncio.create_task(
+            message.remove_reaction(payload.emoji, user)
+        )  # await later as this is not critical
 
         if user.bot:
             return  # Ignore bot reactions

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 import logging
 import os
 import re
@@ -34,7 +33,6 @@ from squid.db.schema import (
     QuantifiedVersionRecord,
     RecordCategory,
     RestrictionRecord,
-    ServerInfo,
     Status,
     TypeRecord,
     UnknownRestrictions,
@@ -845,11 +843,11 @@ class Build:
 
             if unknown_restrictions.result():
                 self.extra_info["unknown_restrictions"] = (
-                        self.extra_info.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                    self.extra_info.get("unknown_restrictions", {}) | unknown_restrictions.result()
                 )
             if unknown_types.result():
                 self.extra_info["unknown_patterns"] = (
-                        self.extra_info.get("unknown_patterns", []) + unknown_types.result()
+                    self.extra_info.get("unknown_patterns", []) + unknown_types.result()
                 )
 
             await message_insert_task
