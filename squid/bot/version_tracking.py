@@ -7,10 +7,11 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog
 from postgrest.base_request_builder import APIResponse
 
+from squid.bot import RedstoneSquid
+from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db import DatabaseManager
 from squid.db.schema import VersionRecord
 from squid.db.utils import parse_version_string
-from squid.bot import RedstoneSquid
 
 
 class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
@@ -18,6 +19,8 @@ class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
         self.bot = bot
 
     @commands.hybrid_command()
+    @check_is_staff()
+    @check_is_owner_server()
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a new version to the database"""
         db = DatabaseManager()
