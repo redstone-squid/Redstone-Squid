@@ -800,7 +800,7 @@ class Build:
         build_data = {
             "submission_status": self.submission_status,
             "record_category": self.record_category,
-            # "information": self.information,
+            # "extra_info": self.extra_info,
             "edited_time": self.edited_time,
             "width": self.width,
             "height": self.height,
@@ -853,7 +853,7 @@ class Build:
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"information": self.extra_info, "original_message_id": self.original_message_id})
+                .update({"extra_info": self.extra_info, "original_message_id": self.original_message_id})
                 .eq("id", self.id)
                 .execute()
             )
