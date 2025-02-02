@@ -1,6 +1,7 @@
 """A cog to manage new minecraft versions"""
 
-# from typing import TYPE_CHECKING
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import discord
 import discord.ext.commands as commands
@@ -8,9 +9,8 @@ from discord.ext.commands import Cog
 from squid.db import DatabaseManager
 from squid.db.utils import parse_version_string
 
-# if TYPE_CHECKING: # not sure what this is but it was throwing exeptions
-#   from squid.bot import RedstoneSquid
-from squid.bot import RedstoneSquid
+if TYPE_CHECKING:
+    from squid.bot import RedstoneSquid
 
 
 class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
