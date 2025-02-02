@@ -61,7 +61,7 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
     ["Java" | "Bedrock"] major_version.minor_version.patch_number
     """
 
-    pattern = r"^[^\w]*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)[^\w]*$"
+    pattern = r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$"
     match = re.match(pattern, version_string, re.IGNORECASE)
     if not match:
         raise ValueError("Invalid version string format.")
