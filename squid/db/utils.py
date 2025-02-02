@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import wraps
+from typing import Literal
 
 import aiohttp
 
@@ -53,8 +54,8 @@ def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:
         return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
 
 
-def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
-    """Parses a version string into its components.
+def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"], int, int, int]:
+    """Parses a version string into its components. Defaults to Java edition if no edition is specified in the string.
 
     A version string is formatted as follows:
     ["Java" | "Bedrock"] major_version.minor_version.patch_number
@@ -66,7 +67,7 @@ def parse_version_string(version_string: str) -> tuple[str, int, int, int]:
         raise ValueError("Invalid version string format.")
 
     edition, major, minor, patch = match.groups()
-    return edition or "Java", int(major), int(minor), int(patch)
+    return edition or "Java", int(major), int(minor), int(patch)  # type: ignore
 
 
 SENTINEL = object()
