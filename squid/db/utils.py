@@ -13,6 +13,9 @@ import aiohttp
 from squid.db.schema import VersionRecord
 
 
+VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
+
+
 def utcnow() -> str:
     """Returns the current time in UTC in the format of a string."""
     current_utc = datetime.now(tz=timezone.utc)
@@ -61,8 +64,7 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
     ["Java" | "Bedrock"] major_version.minor_version.patch_number
     """
 
-    pattern = r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$"
-    match = re.match(pattern, version_string, re.IGNORECASE)
+    match = VERSION_PATTERN.match(version_string)
     if not match:
         raise ValueError("Invalid version string format.")
 
