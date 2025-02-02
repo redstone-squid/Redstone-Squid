@@ -165,12 +165,22 @@ class RunningMessage:
         return False
 
 
-def check_is_owner_server(ctx: Context[Any]):
+def check_is_owner_server():
     """Check if the command is executed on the owner's server."""
 
-    if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
+    async def predicate(ctx: Context[Any]) -> bool:
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+        if ctx.guild.id == config.OWNER_SERVER_ID:
+            return True
         raise CheckFailure("This command can only be executed on certain servers.")
-    return True
+
+    return check(predicate)
+
+
+def is_owner_server(server_id: int) -> bool:
+    """Check if the server is the owner's server."""
+    return server_id == config.OWNER_SERVER_ID
 
 
 def check_is_staff():
