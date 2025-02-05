@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from types import TracebackType
 import logging
 import os
 import re
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
+from datetime import timedelta
 from functools import cached_property
 from importlib import resources
+from types import TracebackType
 from typing import Any, Callable, Final, Literal, Self, overload
 
 import discord
 import vecs
 from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod
+from postgrest.types import CountMethod, ReturnMethod
 
 from squid.db import DatabaseManager
 from squid.db.schema import (
@@ -153,6 +154,10 @@ class Build:
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
+
+    Locking:
+        A build can be locked to prevent concurrent modifications.
+        This lock is a simple boolean in the database, but is implemented as a counter in the object to allow nested locks (reentrant locks).
     """
 
     id: int | None = None
@@ -201,6 +206,8 @@ class Build:
 
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
+
+    _lock_count: int = field(default=0, init=False, repr=False, compare=False)
 
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
@@ -554,21 +561,54 @@ class Build:
         """Locks the build for editing."""
         return BuildLock(self)
 
+    @property
+    def is_locked(self) -> bool:
+        """Whether the build is locked."""
+        # This assumes that when _lock_count is > 0, it is ALWAYS synced with the database is_locked value
+        return self._lock_count > 0
+
     async def try_acquire_lock(self) -> bool:
         """Tries to acquire a lock on the build to prevent concurrent modifications."""
         if self.id is None:
             raise ValueError("Cannot lock a build without an ID.")
-        response = await DatabaseManager().table("builds").update({"is_locked": True}, count=CountMethod.exact).eq("id", self.id).execute()
-        return response.count == 1
+        if self.is_locked:
+            self._lock_count += 1
+            return True
 
-    async def _acquire_lock(self) -> None:
+        response = (
+            await DatabaseManager()
+            .table("builds")
+            .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.minimal)
+            .eq("id", self.id)
+            .execute()
+        )
+        if response.count == 1:
+            self._lock_count = 1
+            return True
+        return False
+
+    async def acquire_lock(self) -> None:
         """Acquires a lock on the build to prevent concurrent modifications."""
         while not await self.try_acquire_lock():
             await asyncio.sleep(0.1)
 
-    async def _release_lock(self) -> None:
-        """Releases the lock on the build."""
-        await DatabaseManager().table("builds").update({"is_locked": False}).eq("id", self.id).execute()
+    async def release_lock(self) -> None:
+        """Releases the lock on the build.
+
+        If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
+        """
+        if self._lock_count <= 0:
+            return
+
+        self._lock_count -= 1
+        if self._lock_count == 0:
+            await (
+                DatabaseManager()
+                .table("builds")
+                .update({"is_locked": False}, returning=ReturnMethod.minimal)
+                .eq("id", self.id)
+                .execute()
+            )
 
     def get_restrictions(
         self,
@@ -779,14 +819,15 @@ class Build:
         Raises:
             ValueError: If the build could not be confirmed.
         """
-        self.submission_status = Status.CONFIRMED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
+        async with self.lock:
+            self.submission_status = Status.CONFIRMED
+            response: APIResponse[BuildRecord] = (
+                await DatabaseManager()
+                .table("builds")
+                .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
+                .eq("id", self.id)
+                .execute()
+            )
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
 
@@ -796,14 +837,15 @@ class Build:
         Raises:
             ValueError: If the build could not be denied.
         """
-        self.submission_status = Status.DENIED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
+        async with self.lock:
+            self.submission_status = Status.DENIED
+            response: APIResponse[BuildRecord] = (
+                await DatabaseManager()
+                .table("builds")
+                .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
+                .eq("id", self.id)
+                .execute()
+            )
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
@@ -838,15 +880,17 @@ class Build:
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
-        if self.id:
-            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
-            assert response.count == 1
-            delete_build_on_error = False
-        else:
+        if self.id is None:
             response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
             assert response.count == 1
             self.id = response.data[0]["id"]
+            await self.acquire_lock()  # TODO: add a timeout to this
             delete_build_on_error = True
+        else:
+            await self.acquire_lock()
+            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
+            assert response.count == 1
+            delete_build_on_error = False
 
         message_insert_task = asyncio.create_task(self._update_messages_table())
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
@@ -888,9 +932,10 @@ class Build:
             raise
         finally:
             vx.disconnect()
+            await self.release_lock()
 
     async def _update_build_subcategory_table(self) -> None:
-        """Updates the subcategory table with the given data."""
+        """Updates the subcategory table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         if self.category == "Door":
             doors_data = {
@@ -915,7 +960,7 @@ class Build:
             raise ValueError("Build category must be set")
 
     async def _update_build_restrictions_table(self) -> UnknownRestrictions:
-        """Updates the build_restrictions table with the given data"""
+        """Updates the build_restrictions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         build_restrictions: list[str] = (
             self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
@@ -960,7 +1005,7 @@ class Build:
         return unknown_restrictions
 
     async def _update_build_types_table(self) -> list[str]:
-        """Updates the build_types table with the given data.
+        """Updates the build_types table with the given data. This function assumes lock is acquired.
 
         Returns:
             A list of unknown types.
@@ -984,7 +1029,7 @@ class Build:
         return unknown_types
 
     async def _update_build_links_table(self) -> None:
-        """Updates the build_links table with the given data."""
+        """Updates the build_links table with the given data. This function assumes lock is acquired."""
         build_links_data = []
         if self.image_urls:
             build_links_data.extend(
@@ -1002,7 +1047,7 @@ class Build:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()
 
     async def _update_build_creators_table(self) -> None:
-        """Updates the build_creators table with the given data."""
+        """Updates the build_creators table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         creator_ids: list[int] = []
         for creator_ign in self.creators_ign:
@@ -1020,7 +1065,7 @@ class Build:
             await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
 
     async def _update_build_versions_table(self) -> None:
-        """Updates the build_versions table with the given data."""
+        """Updates the build_versions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
 
@@ -1034,7 +1079,7 @@ class Build:
             await db.table("build_versions").upsert(build_versions_data).execute()
 
     async def _update_messages_table(self) -> None:
-        """Updates the messages table with the given data."""
+        """Updates the messages table with the given data. This function assumes lock is acquired."""
         if self.original_message_id is None:
             return
 
@@ -1062,11 +1107,24 @@ class BuildLock:
         self.build = build
 
     async def __aenter__(self):
-        await self.build._acquire_lock()
+        await self.build.acquire_lock()
         return self.build
 
-    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None):
-        await self.build._release_lock()
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ):
+        await self.build.release_lock()
+
+
+async def clean_locks() -> None:
+    """Cleans up locks that were not released properly."""
+    await (
+        DatabaseManager()
+        .table("builds")
+        .update({"is_locked": False}, returning=ReturnMethod.minimal)
+        .lt("locked_at", discord.utils.utcnow() - timedelta(minutes=5))
+        .execute()
+    )
 
 
 async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
@@ -1184,8 +1242,14 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
-    response = await DatabaseManager().table("builds").select(all_build_columns).eq("id", 172).execute()
-    print(response.data)
+    response = (
+        await DatabaseManager()
+        .table("builds")
+        .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.representation)
+        .eq("id", 6)
+        .execute()
+    )
+    print(response)
     build = await Build.from_id(43)
     if build:
         print(repr(build))
