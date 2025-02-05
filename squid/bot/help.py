@@ -29,9 +29,7 @@ class HelpCog[BotT: commands.Bot](Cog):
     @app_commands.describe(command="The command to get help for.")
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show help for a command or a group of commands."""
-        # noinspection PyTypeChecker
-        response: InteractionResponse = interaction.response
-        await response.defer()
+        await interaction.response.defer()
         ctx = await self.bot.get_context(interaction, cls=Context)
         if command is not None:
             await ctx.send_help(command)
