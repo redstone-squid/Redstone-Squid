@@ -4,8 +4,6 @@
 #
 #    pip-compile --output-file=requirements/base.txt pyproject.toml
 #
-aiodns==3.2.0
-    # via discord-py
 aiohappyeyeballs==2.4.4
     # via aiohttp
 aiohttp==3.11.11
@@ -40,8 +38,6 @@ certifi==2024.12.14
     #   httpcore
     #   httpx
     #   requests
-cffi==1.17.1
-    # via pycares
 charset-normalizer==3.4.1
     # via requests
 click==8.1.8
@@ -56,9 +52,9 @@ deprecated==1.2.15
     # via vecs
 deprecation==2.1.0
     # via postgrest
-discord-ext-menus==1.1
+discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus
     # via redstone-squid (pyproject.toml)
-discord-py[speed]==2.4.0
+discord-py[speed] @ git+https://github.com/Rapptz/discord.py
     # via
     #   discord-ext-menus
     #   jishaku
@@ -143,8 +139,10 @@ packaging==24.2
     # via deprecation
 pgvector==0.3.6
     # via vecs
-postgrest==0.19.1
-    # via supabase
+postgrest @ git+https://github.com/redstone-squid/postgrest-py
+    # via
+    #   redstone-squid (pyproject.toml)
+    #   supabase
 propcache==0.2.1
     # via
     #   aiohttp
@@ -160,10 +158,6 @@ pyasn1-modules==0.4.1
     # via
     #   google-auth
     #   oauth2client
-pycares==4.5.0
-    # via aiodns
-pycparser==2.22
-    # via cffi
 pydantic==2.10.4
     # via
     #   fastapi
@@ -242,3 +236,5 @@ wrapt==1.17.0
     # via deprecated
 yarl==1.18.3
     # via aiohttp
+zstandard==0.23.0
+    # via discord-py

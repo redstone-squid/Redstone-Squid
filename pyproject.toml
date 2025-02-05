@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
     "oauth2client",
-    "discord-py[speed]>=2",
+    "discord-py[speed] @ git+https://github.com/Rapptz/discord.py",  # TODO: Remove this once discord.py is updated to 2.5.0
     "gspread",
     "supabase",
     "python-dotenv",
@@ -21,7 +21,7 @@ dependencies = [
     "vecs",
     "gitpython",
     "beartype",
-    "discord-ext-menus",
+    "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
 ]
 
 [dependency-groups]
@@ -37,11 +37,11 @@ dev = [
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = []
+
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-discord-ext-menus = { git = "https://github.com/Rapptz/discord-ext-menus" }
 
 [tool.ruff]
 line-length = 120
@@ -49,6 +49,9 @@ target-version = "py312"
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.ruff.lint]
+ignore = ["E731"]
 
 [tool.bumpversion]
 current_version = "1.5.7"
