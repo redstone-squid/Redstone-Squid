@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import sys
 from enum import Enum
+from functools import cache
 from traceback import format_tb
 from types import FrameType, TracebackType
 from typing import Any, TypedDict, override
@@ -182,6 +183,7 @@ def check_is_owner_server(ctx: Context[Any]):
     return True
 
 
+@cache
 def check_is_staff():
     """Check if the user has a staff role, as defined in the server settings."""
 
@@ -218,6 +220,7 @@ async def is_staff(bot: discord.Client, server_id: int | None, user_id: int) -> 
     return False
 
 
+@cache
 def check_is_trusted_or_staff():
     """Check if the user has a trusted or staff role, as defined in the server settings."""
 
