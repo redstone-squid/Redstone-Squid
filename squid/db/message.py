@@ -47,7 +47,6 @@ class MessageManager:
                     "message_id": message.id,
                     "build_id": build_id,
                     "vote_session_id": vote_session_id,
-                    "edited_time": utcnow(),
                     "purpose": purpose,
                 }
             )

@@ -305,7 +305,9 @@ class AbstractVoteSession(ABC):
             self._votes[user_id] = weight
 
         if not self.fail_threshold < self.net_votes < self.pass_threshold:
-            self._tasks.add(asyncio.create_task(self.close()))
+            task = asyncio.create_task(self.close())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
         # Create tasks for the updates
         if self.id is not None:
@@ -445,9 +447,9 @@ class BuildVoteSession(AbstractVoteSession):
         build = await Build.from_id(build_id)
 
         assert build is not None
-        session = cls.__new__(cls)
-        session._allow_init = True
-        session.__init__(
+        self = cls.__new__(cls)
+        self._allow_init = True
+        self.__init__(
             bot=bot,
             messages=[msg["message_id"] for msg in record["messages"]],
             author_id=record["author_id"],
@@ -457,10 +459,11 @@ class BuildVoteSession(AbstractVoteSession):
             fail_threshold=record["fail_threshold"],
         )
         # We can skip _async_init because we already have the id and everything has been tracked before
-        session.id = record["id"]
-        session._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+        self.id = record["id"]
+        self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+        self.is_closed = record["status"] == "closed"
 
-        return session
+        return self
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
@@ -633,6 +636,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             "id"
         ]  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
+        self.is_closed = record["status"] == "closed"
         return self
 
     @override

@@ -97,9 +97,9 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 build.normal_opening_time = self.normal_opening_time
             if (user_info := self.extra_user_info) is not MISSING:
                 if user_info is not None:
-                    build.information["user"] = user_info
+                    build.extra_info["user"] = user_info
                 else:
-                    build.information.pop("user", None)
+                    build.extra_info.pop("user", None)
             if self.creators is not MISSING:
                 build.creators_ign = self.creators
             if self.image_urls is not MISSING:
@@ -109,23 +109,26 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             if self.world_download_urls is not MISSING:
                 build.world_download_urls = self.world_download_urls
 
+            server_info = build.extra_info.get("server_info", {})
             if (server_ip := self.server_ip) is not MISSING:
                 if server_ip is not None:
-                    build.server_info["server_ip"] = server_ip
+                    server_info["server_ip"] = server_ip
                 else:
-                    build.server_info.pop("server_ip", None)
+                    server_info.pop("server_ip", None)
 
             if (coordinates := self.coordinates) is not MISSING:
                 if coordinates is not None:
-                    build.server_info["coordinates"] = coordinates
+                    server_info["coordinates"] = coordinates
                 else:
-                    build.server_info.pop("coordinates", None)
+                    server_info.pop("coordinates", None)
 
             if (command_to_get_to_build := self.command_to_get_to_build) is not MISSING:
                 if command_to_get_to_build is not None:
-                    build.server_info["command_to_build"] = command_to_get_to_build
+                    server_info["command_to_build"] = command_to_get_to_build
                 else:
-                    build.server_info.pop("command_to_build", None)
+                    server_info.pop("command_to_build", None)
+            if server_info:
+                build.extra_info["server_info"] = server_info
 
             if self.date_of_creation is not MISSING:
                 build.completion_time = self.date_of_creation

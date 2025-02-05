@@ -1,7 +1,10 @@
+"""Handles reaction-based voting for various purposes."""
+
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import discord
 from discord.ext.commands import Cog, Context, hybrid_command
@@ -34,17 +37,26 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             return 3
         return 1
 
-    async def get_vote_session(self, message_id: int) -> AbstractVoteSession | None:
-        """Gets a vote session from the database."""
+    async def get_vote_session(
+        self, message_id: int, *, status: Literal["open", "closed"] | None = None
+    ) -> AbstractVoteSession | None:
+        """Gets a vote session from the database.
 
-        response: SingleAPIResponse[dict[str, Any]] | None = (
-            await self.bot.db.table("messages")
+        Args:
+            message_id: The message ID of the vote session.
+            status: The status of the vote session. If None, it will get any status.
+        """
+
+        query = (
+            self.bot.db.table("messages")
             .select("vote_session_id, vote_sessions(kind)")
             .eq("message_id", message_id)
             .eq("purpose", "vote")
-            .maybe_single()
-            .execute()
         )
+        if status is not None:
+            query.eq("vote_sessions(status)", status)
+        response: SingleAPIResponse[dict[str, Any]] | None = await query.maybe_single().execute()
+
         if response is None:
             return None
 
@@ -66,11 +78,8 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        if payload.guild_id is None:
-            raise NotImplementedError("Cannot vote in DMs.")
-
         if (vote_session := self._open_vote_sessions.get(payload.message_id)) is None:
-            vote_session = await self.get_vote_session(payload.message_id)
+            vote_session = await self.get_vote_session(payload.message_id, status="open")
             if vote_session is None:
                 return
 
@@ -83,7 +92,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         message = await channel.fetch_message(payload.message_id)
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = message.remove_reaction(payload.emoji, user)  # await later as this is not critical
+        remove_reaction_task = asyncio.create_task(
+            message.remove_reaction(payload.emoji, user)
+        )  # await later as this is not critical
 
         if user.bot:
             return  # Ignore bot reactions
@@ -94,6 +105,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 
         if isinstance(vote_session, DeleteLogVoteSession):
             # Check if the user has a trusted role
+            if payload.guild_id is None:
+                raise NotImplementedError("Cannot vote in DMs.")
+
             trusted_role_ids = await self.bot.db.server_setting.get_single(
                 server_id=payload.guild_id, setting="Trusted"
             )

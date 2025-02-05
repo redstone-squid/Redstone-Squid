@@ -33,7 +33,6 @@ from squid.db.schema import (
     QuantifiedVersionRecord,
     RecordCategory,
     RestrictionRecord,
-    ServerInfo,
     Status,
     TypeRecord,
     UnknownRestrictions,
@@ -182,13 +181,12 @@ class Build:
     visible_closing_time: int | None = None
     visible_opening_time: int | None = None
 
-    information: Info = field(default_factory=dict)  # type: ignore
+    extra_info: Info = field(default_factory=lambda: Info())
     creators_ign: list[str] = field(default_factory=list)
 
     image_urls: list[str] = field(default_factory=list)
     video_urls: list[str] = field(default_factory=list)
     world_download_urls: list[str] = field(default_factory=list)
-    server_info: ServerInfo = field(default_factory=dict)  # type: ignore
 
     submitter_id: int | None = None
     # TODO: save the submitted time too
@@ -304,7 +302,7 @@ class Build:
         component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
         miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
 
-        information = data["information"]
+        extra_info = data["extra_info"]
 
         creators = data.get("users", [])
         creators_ign = [creator["ign"] for creator in creators]
@@ -317,8 +315,6 @@ class Build:
         image_urls = [link["url"] for link in links if link["media_type"] == "image"]
         video_urls = [link["url"] for link in links if link["media_type"] == "video"]
         world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
-
-        server_info: ServerInfo = data["server_info"] or {}
 
         submitter_id = data["submitter_id"]
         completion_time = data["completion_time"]
@@ -359,12 +355,11 @@ class Build:
             normal_opening_time=normal_opening_time,
             visible_closing_time=visible_closing_time,
             visible_opening_time=visible_opening_time,
-            information=information,
+            extra_info=extra_info,
             creators_ign=creators_ign,
             image_urls=image_urls,
             video_urls=video_urls,
             world_download_urls=world_download_urls,
-            server_info=server_info,
             submitter_id=submitter_id,
             completion_time=completion_time,
             edited_time=edited_time,
@@ -481,25 +476,25 @@ class Build:
             ai_generated=True,
         )
         build.record_category = variables["record_category"]  # type: ignore
-        build.information["unknown_restrictions"] = {}
+        build.extra_info["unknown_restrictions"] = {}
         if variables["component_restriction"] is not None:
             comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
             build.component_restrictions = comps[0]
-            build.information["unknown_restrictions"]["component_restrictions"] = comps[1]
+            build.extra_info["unknown_restrictions"]["component_restrictions"] = comps[1]
         if variables["wiring_placement_restrictions"] is not None:
             wirings = await validate_restrictions(
                 variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
             )
             build.wiring_placement_restrictions = wirings[0]
-            build.information["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
+            build.extra_info["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
         if variables["miscellaneous_restrictions"] is not None:
             miscs = await validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
             build.miscellaneous_restrictions = miscs[0]
-            build.information["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
+            build.extra_info["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
         if variables["piston_door_type"] is not None:
             door_types = await validate_door_types(variables["piston_door_type"].split(", "))
             build.door_type = door_types[0]
-            build.information["unknown_patterns"] = door_types[1]
+            build.extra_info["unknown_patterns"] = door_types[1]
         orientation = variables["door_orientation"]
         if orientation == "Normal":
             build.door_orientation_type = "Door"
@@ -518,7 +513,7 @@ class Build:
         build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
-            build.information["user"] = variables["author_note"].replace("\\n", "\n")
+            build.extra_info["user"] = variables["author_note"].replace("\\n", "\n")
         return build
 
     def __iter__(self):
@@ -611,7 +606,7 @@ class Build:
             title += f"{self.record_category} "
 
         # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
-        for restriction in self.information.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
+        for restriction in self.extra_info.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
             if re.match(r"\d+\.\d+\s*s", restriction):
                 title += f"{restriction} "
             elif re.match(r"\d+\s*[Bb]locks", restriction):
@@ -620,7 +615,7 @@ class Build:
         # FIXME: This is included in the title for now to match people's expectations
         for restriction in self.component_restrictions:
             title += f"{restriction} "
-        for restriction in self.information.get("unknown_restrictions", {}).get("component_restrictions", []):
+        for restriction in self.extra_info.get("unknown_restrictions", {}).get("component_restrictions", []):
             title += f"*{restriction}* "
 
         # Door dimensions
@@ -637,7 +632,7 @@ class Build:
         for restriction in self.wiring_placement_restrictions:
             title += f"{restriction} "
 
-        for restriction in self.information.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
+        for restriction in self.extra_info.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
             title += f"*{restriction}* "
 
         # Pattern
@@ -645,7 +640,7 @@ class Build:
             if pattern != "Regular":
                 title += f"{pattern} "
 
-        for pattern in self.information.get("unknown_patterns", []):
+        for pattern in self.extra_info.get("unknown_patterns", []):
             title += f"*{pattern}* "
 
         # Door type
@@ -805,7 +800,7 @@ class Build:
         build_data = {
             "submission_status": self.submission_status,
             "record_category": self.record_category,
-            # "information": self.information,
+            # "extra_info": self.extra_info,
             "edited_time": self.edited_time,
             "width": self.width,
             "height": self.height,
@@ -847,18 +842,18 @@ class Build:
             build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
-                self.information["unknown_restrictions"] = (
-                    self.information.get("unknown_restrictions", {}) | unknown_restrictions.result()
+                self.extra_info["unknown_restrictions"] = (
+                    self.extra_info.get("unknown_restrictions", {}) | unknown_restrictions.result()
                 )
             if unknown_types.result():
-                self.information["unknown_patterns"] = (
-                    self.information.get("unknown_patterns", []) + unknown_types.result()
+                self.extra_info["unknown_patterns"] = (
+                    self.extra_info.get("unknown_patterns", []) + unknown_types.result()
                 )
 
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"information": self.information, "original_message_id": self.original_message_id})
+                .update({"extra_info": self.extra_info, "original_message_id": self.original_message_id})
                 .eq("id", self.id)
                 .execute()
             )
@@ -1026,7 +1021,6 @@ class Build:
                     "channel_id": self.original_channel_id,
                     "message_id": self.original_message_id,
                     "build_id": self.id,
-                    "edited_time": utcnow(),
                     "purpose": "build_original_message",
                     "content": self.original_message,
                 }
