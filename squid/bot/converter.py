@@ -1,11 +1,10 @@
 """Custom converters for the bot commands."""
+
 from typing import Any, override
 
-from discord import app_commands
-from discord import Interaction
+from discord import Interaction, app_commands
 from discord._types import ClientT
 from discord.app_commands import Choice
-
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -14,6 +13,7 @@ from squid.bot.submission.parse import parse_dimensions
 
 class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int | None]]):
     """Converts the string "none" to None and then try to parse the argument as a valid dimension."""
+
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> tuple[int | None, int | None, int | None]:
         if argument == "none":
@@ -29,6 +29,7 @@ class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int |
 
 class ListConverter(commands.Converter[list[str]]):
     """Converts the string "none" to an empty list and then split the argument by commas."""
+
     @override
     async def convert(self, ctx: Context[Any], argument: str) -> list[str]:
         if argument == "" or argument == "none":
@@ -36,6 +37,7 @@ class ListConverter(commands.Converter[list[str]]):
 
         lst = argument.split(",")
         return [x.strip() for x in lst]
+
 
 class NoneStrConverter(commands.Converter[str | None], app_commands.Transformer[commands.Bot]):
     """Converts the string "none" to None."""

@@ -6,8 +6,6 @@ https://github.com/redstone-squid/Redstone-Squid"
 
 import asyncio
 import multiprocessing
-import sys
-from importlib.util import find_spec
 
 from squid.api import main as api_main
 from squid.bot import main as bot_main

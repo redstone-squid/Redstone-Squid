@@ -11,10 +11,17 @@ from discord.ext.commands import Cog, Context, flag
 from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot import utils
+from squid.bot.converter import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
-from squid.bot.utils import MISSING, MissingType, RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
-from squid.bot.converter import DimensionsConverter, ListConverter, GameTickConverter, NoneStrConverter
+from squid.bot.utils import (
+    MISSING,
+    MissingType,
+    RunningMessage,
+    check_is_owner_server,
+    check_is_trusted_or_staff,
+    fix_converter_annotations,
+)
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
