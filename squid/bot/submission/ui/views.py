@@ -177,7 +177,6 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
 
     This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.
     """
-
     def __init__(
         self,
         build: Build,
