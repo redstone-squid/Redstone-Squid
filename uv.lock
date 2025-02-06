@@ -1031,16 +1031,12 @@ wheels = [
 
 [[package]]
 name = "postgrest"
-version = "0.19.1"
-source = { registry = "https://pypi.org/simple" }
+version = "0.19.3"
+source = { git = "https://github.com/redstone-squid/postgrest-py#2251c7cfe1749ec1992841380034d29e283cb446" }
 dependencies = [
     { name = "deprecation" },
     { name = "httpx", extra = ["http2"] },
     { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2c/0c/7b98d366e86a79b13237efb891321c867bb3d2ac6538af0da7c9eb8556b1/postgrest-0.19.1.tar.gz", hash = "sha256:d8fa88953cced4f45efa0f412056c364f64ece8a35b5b35f458a7e58c133fbca", size = 15034 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/d2/480b92b0fb237fa00d10aa3c10d6a443a0a2b517ef1f1a492737829f1c02/postgrest-0.19.1-py3-none-any.whl", hash = "sha256:a8e7be4e1abc69fd8eee5a49d7dc3a76dfbffbd778beed0b2bd7accb3f4f3a2a", size = 22115 },
 ]
 
 [[package]]
@@ -1350,6 +1346,7 @@ dependencies = [
     { name = "markdown" },
     { name = "oauth2client" },
     { name = "openai" },
+    { name = "postgrest" },
     { name = "python-dotenv" },
     { name = "supabase" },
     { name = "uvicorn" },
@@ -1378,6 +1375,7 @@ requires-dist = [
     { name = "markdown" },
     { name = "oauth2client" },
     { name = "openai" },
+    { name = "postgrest", git = "https://github.com/redstone-squid/postgrest-py" },
     { name = "python-dotenv" },
     { name = "supabase" },
     { name = "uvicorn" },

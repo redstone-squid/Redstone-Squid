@@ -1,7 +1,7 @@
 """
 Entry point of the bot and the API.
 
-https://github.com/redstone-squid/Redstone-Squid"
+https://github.com/redstone-squid/Redstone-Squid
 """
 
 import asyncio
