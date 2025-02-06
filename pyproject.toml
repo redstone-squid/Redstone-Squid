@@ -47,6 +47,9 @@ package = false
 line-length = 120
 target-version = "py312"
 
+[tool.ruff.lint]
+ignore = ["E731"]
+
 [tool.ruff.format]
 docstring-code-format = true
 

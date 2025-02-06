@@ -6,6 +6,7 @@ import io
 import logging
 import mimetypes
 import sys
+from enum import Enum
 from traceback import format_tb
 from types import FrameType, TracebackType
 from typing import Any, TypedDict, override
@@ -90,8 +91,16 @@ class Sentinel:
         )
 
 
-MISSING: Any = Sentinel("MISSING", repr="...")
-DEFAULT: Any = Sentinel("DEFAULT")
+class MissingType(Enum):
+    MISSING = Sentinel("MISSING", repr="...")
+
+
+class DefaultType(Enum):
+    DEFAULT = Sentinel("DEFAULT")
+
+
+MISSING = MissingType.MISSING
+DEFAULT = DefaultType.DEFAULT
 
 
 def error_embed(title: str, description: str | None):
