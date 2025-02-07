@@ -176,7 +176,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            if not await build.try_acquire_lock():
+            if not await build.lock.try_lock():
                 return await sent_message.edit(
                     embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
                 )
@@ -197,20 +197,20 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 await preview.delete()
                 if view.value is None:
                     await asyncio.gather(
-                        build.release_lock(),
+                        build.lock.release_lock(),
                         sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")),
                     )
                     return
                 elif view.value is False:
                     await asyncio.gather(
-                        build.release_lock(),
+                        build.lock.release_lock(),
                         sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user")),
                     )
                     return
 
             await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
             await build.save()
-            await build.release_lock()
+            await build.lock.release_lock()
             await self.bot.for_build(build).update_messages()
             await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
