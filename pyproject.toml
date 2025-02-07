@@ -53,9 +53,6 @@ ignore = ["E731"]
 [tool.ruff.format]
 docstring-code-format = true
 
-[tool.ruff.lint]
-ignore = ["E731"]
-
 [tool.bumpversion]
 current_version = "1.5.7"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
