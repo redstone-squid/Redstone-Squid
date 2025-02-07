@@ -54,7 +54,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             .eq("purpose", "vote")
         )
         if status is not None:
-            query.eq("vote_sessions(status)", status)
+            query.eq("vote_sessions.status", status)
         response: SingleAPIResponse[dict[str, Any]] | None = await query.maybe_single().execute()
 
         if response is None:
