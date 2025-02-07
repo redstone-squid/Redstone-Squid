@@ -849,7 +849,7 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
         else:
-            await self.lock.acquire()
+            await self.lock.acquire(timeout=30)
             response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
             assert response.count == 1
             delete_build_on_error = False
