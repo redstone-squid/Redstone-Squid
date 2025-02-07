@@ -881,10 +881,14 @@ class Build:
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
         if self.id is None:
+            # Lock the build immediately on creation instead of calling self.acquire_lock()
+            # to avoid issues where another task modifies the build before it is locked
+            build_data |= {"is_locked": True}
             response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
+            self._lock_count = 1
+
             assert response.count == 1
             self.id = response.data[0]["id"]
-            await self.acquire_lock()  # TODO: add a timeout to this
             delete_build_on_error = True
         else:
             await self.acquire_lock()
