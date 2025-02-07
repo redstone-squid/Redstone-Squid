@@ -299,6 +299,7 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
 
     @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
+        await interaction.response.defer()
         await self.build.save()
         await interaction.followup.send(
             content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True
