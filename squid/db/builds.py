@@ -901,7 +901,6 @@ class Build:
 
             assert response.count == 1
             self.id = response.data[0]["id"]
-            await self.acquire_lock()  # TODO: add a timeout to this
             delete_build_on_error = True
         else:
             await self.lock.acquire(timeout=30)
