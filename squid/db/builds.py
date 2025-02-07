@@ -773,7 +773,7 @@ class Build:
             raise ValueError("Build ID is missing.")
         assert self.lock is not None
 
-        async with self.lock:
+        async with self.lock(timeout=30):
             self.submission_status = Status.CONFIRMED
             response: APIResponse[BuildRecord] = (
                 await DatabaseManager()
@@ -795,7 +795,7 @@ class Build:
             raise ValueError("Build ID is missing.")
         assert self.lock is not None
 
-        async with self.lock:
+        async with self.lock(timeout=30):
             self.submission_status = Status.DENIED
             response: APIResponse[BuildRecord] = (
                 await DatabaseManager()
@@ -1079,14 +1079,8 @@ class BuildLock:
         """Whether the build is locked."""
         return self._lock_count > 0
 
-    async def __aenter__(self):
-        await self.acquire()
-        return self
-
-    async def __aexit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
-    ):
-        await self.release()
+    def __call__(self, *, blocking: bool = True, timeout: float = -1) -> LockContextManager:
+        return LockContextManager(self, blocking=blocking, timeout=timeout)
 
     async def _try_lock(self) -> bool:
         """Tries to acquire the lock."""
@@ -1156,6 +1150,24 @@ class BuildLock:
                 .eq("id", self.build_id)
                 .execute()
             )
+
+
+class LockContextManager:
+    """A context manager for BuildLock."""
+    def __init__(self, lock: BuildLock, *, blocking: bool = True, timeout: float = -1):
+        self.lock = lock
+        self.blocking = blocking
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        if await self.lock.acquire(blocking=self.blocking, timeout=self.timeout):
+            return self.lock
+        raise asyncio.TimeoutError("Timed out waiting for lock")
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ):
+        await self.lock.release()
 
 
 async def clean_locks() -> None:
