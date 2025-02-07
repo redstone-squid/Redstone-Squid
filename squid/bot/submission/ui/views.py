@@ -22,7 +22,7 @@ from squid.bot.submission.ui.components import (
     RecordCategorySelect,
     get_text_input,
 )
-from squid.bot.utils import DEFAULT
+from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import Category, Status
 
@@ -180,7 +180,7 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
     def __init__(
         self,
         build: Build,
-        items: Sequence[BuildField] = DEFAULT,
+        items: Sequence[BuildField] | DefaultType = DEFAULT,
         *,
         timeout: float = 300,
     ):
