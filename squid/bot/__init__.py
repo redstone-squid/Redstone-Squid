@@ -103,6 +103,10 @@ def setup_logging():
     logger = logging.getLogger("discord")
     logger.setLevel(logging.INFO)
 
+    if DEV_MODE:
+        # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
+        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
+
     file_handler = RotatingFileHandler(
         filename="discord.log",
         encoding="utf-8",
