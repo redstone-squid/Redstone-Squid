@@ -1091,6 +1091,7 @@ class BuildLock:
             .table("builds")
             .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.minimal)
             .eq("id", self.build_id)
+            .eq("is_locked", False)
             .execute()
         )
         if response.count == 1:
