@@ -8,7 +8,7 @@ from typing import Any, override
 
 import discord
 import git
-from discord import InteractionResponse, app_commands
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
 
