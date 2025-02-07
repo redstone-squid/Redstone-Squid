@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
@@ -848,7 +849,7 @@ class Build:
             self.id = response.data[0]["id"]
             delete_build_on_error = True
         else:
-            await self.lock.acquire_lock()
+            await self.lock.acquire()
             response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
             assert response.count == 1
             delete_build_on_error = False
@@ -893,7 +894,7 @@ class Build:
             raise
         finally:
             vx.disconnect()
-            await self.lock.release_lock()
+            await self.lock.release()
 
     async def _update_build_subcategory_table(self) -> None:
         """Updates the subcategory table with the given data. This function assumes lock is acquired."""
@@ -1062,6 +1063,7 @@ class Build:
 
 
 class BuildLock:
+    """A reentrant lock to prevent concurrent modifications to a build."""
     def __init__(self, build_id: int | None):
         """Initializes the lock
 
@@ -1073,29 +1075,22 @@ class BuildLock:
         # This assumes that when _lock_count is > 0, it is ALWAYS synced with the database is_locked value
         self._lock_count = 0
 
-    def __bool__(self):
+    def locked(self):
         """Whether the build is locked."""
         return self._lock_count > 0
 
     async def __aenter__(self):
-        await self.acquire_lock()
+        await self.acquire()
         return self
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ):
-        await self.release_lock()
+        await self.release()
 
-    async def try_lock(self) -> bool:
-        """Tries to acquire a lock on the build to prevent concurrent modifications."""
-        if self.build_id is None:  # No need to lock if the build is not in the database
-            self._lock_count += 1
-            return True
-
-        if self._lock_count > 0:
-            self._lock_count += 1
-            return True
-
+    async def _try_lock(self) -> bool:
+        """Tries to acquire the lock."""
+        assert self.build_id is not None
         response = (
             await DatabaseManager()
             .table("builds")
@@ -1108,12 +1103,40 @@ class BuildLock:
             return True
         return False
 
-    async def acquire_lock(self) -> None:
-        """Acquires a lock on the build to prevent concurrent modifications."""
-        while not await self.try_lock():
-            await asyncio.sleep(0.1)
+    async def acquire(self, *, blocking: bool = True, timeout: float = -1) -> bool:
+        """Acquires a lock on the build to prevent concurrent modifications.
 
-    async def release_lock(self) -> None:
+        Args:
+            blocking: Whether to block until the lock is acquired. If False, the function will return immediately if the lock cannot be acquired.
+            timeout: The maximum time to wait for the lock. If -1, the function will wait indefinitely.
+        """
+        # No need to lock if the build is not in the database
+        if self.build_id is None:
+            return True
+
+        if self._lock_count > 0:
+            self._lock_count += 1
+            return True
+
+        if not blocking:
+            if not await self._try_lock():
+                return False
+            return True
+
+        if timeout >= 0:
+            start_time = time.monotonic()
+            while True:
+                if await self._try_lock():
+                    return True
+                if time.monotonic() - start_time >= timeout:
+                    return False
+                await asyncio.sleep(0.1)
+        else:
+            while not await self._try_lock():
+                await asyncio.sleep(0.1)
+            return True
+
+    async def release(self) -> None:
         """Releases the lock on the build.
 
         If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
