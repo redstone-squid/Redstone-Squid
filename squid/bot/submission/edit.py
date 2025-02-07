@@ -198,7 +198,9 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 if view.value is None:
                     await asyncio.gather(
                         build.lock.release(),
-                        sent_message.edit(embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")),
+                        sent_message.edit(
+                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                        ),
                     )
                     return
                 elif view.value is False:

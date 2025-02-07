@@ -177,6 +177,7 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
 
     This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.
     """
+
     def __init__(
         self,
         build: Build,
@@ -231,7 +232,11 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
 
     def get_modal(self) -> EditModal:
         """Page is 1-indexed"""
-        modal = EditModal(parent=self, title=f"Edit Build (Page {self.page})", timeout=(self.expiry_time - discord.utils.utcnow()).seconds)
+        modal = EditModal(
+            parent=self,
+            title=f"Edit Build (Page {self.page})",
+            timeout=(self.expiry_time - discord.utils.utcnow()).seconds,
+        )
         if 5 * self.page <= len(self.items):
             for i in range(5):
                 base_index = 5 * (self.page - 1)

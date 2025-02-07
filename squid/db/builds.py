@@ -1064,6 +1064,7 @@ class Build:
 
 class BuildLock:
     """A reentrant lock to prevent concurrent modifications to a build."""
+
     def __init__(self, build_id: int | None):
         """Initializes the lock
 
@@ -1154,6 +1155,7 @@ class BuildLock:
 
 class LockContextManager:
     """A context manager for BuildLock."""
+
     def __init__(self, lock: BuildLock, *, blocking: bool = True, timeout: float = -1):
         self.lock = lock
         self.blocking = blocking
