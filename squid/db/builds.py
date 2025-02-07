@@ -560,60 +560,6 @@ class Build:
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
-    @property
-    def lock(self) -> BuildLock:
-        """Locks the build for editing."""
-        return BuildLock(self)
-
-    @property
-    def is_locked(self) -> bool:
-        """Whether the build is locked."""
-        # This assumes that when _lock_count is > 0, it is ALWAYS synced with the database is_locked value
-        return self._lock_count > 0
-
-    async def try_acquire_lock(self) -> bool:
-        """Tries to acquire a lock on the build to prevent concurrent modifications."""
-        if self.id is None:
-            raise ValueError("Cannot lock a build without an ID.")
-        if self.is_locked:
-            self._lock_count += 1
-            return True
-
-        response = (
-            await DatabaseManager()
-            .table("builds")
-            .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.minimal)
-            .eq("id", self.id)
-            .execute()
-        )
-        if response.count == 1:
-            self._lock_count = 1
-            return True
-        return False
-
-    async def acquire_lock(self) -> None:
-        """Acquires a lock on the build to prevent concurrent modifications."""
-        while not await self.try_acquire_lock():
-            await asyncio.sleep(0.1)
-
-    async def release_lock(self) -> None:
-        """Releases the lock on the build.
-
-        If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
-        """
-        if self._lock_count <= 0:
-            return
-
-        self._lock_count -= 1
-        if self._lock_count == 0:
-            await (
-                DatabaseManager()
-                .table("builds")
-                .update({"is_locked": False}, returning=ReturnMethod.minimal)
-                .eq("id", self.id)
-                .execute()
-            )
-
     def get_restrictions(
         self,
     ) -> dict[
