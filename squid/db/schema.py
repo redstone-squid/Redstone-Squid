@@ -66,6 +66,8 @@ class BuildRecord(TypedDict):
     version_spec: str
     ai_generated: bool
     embedding: list[float] | None
+    is_locked: bool
+    locked_at: str | None  # timestamptz
 
 
 class MessageRecord(TypedDict):

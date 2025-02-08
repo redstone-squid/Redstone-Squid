@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -175,15 +176,19 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            preview_embed = await self.bot.for_build(build).generate_embed()
+            if not await build.lock.acquire(blocking=False):
+                return await sent_message.edit(
+                    embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
+                )
 
-            # Show a preview of the changes and ask for confirmation
-            await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
+            # If in a slash command, we show a preview and ask for confirmation, otherwise we just edit the build
             if ctx.interaction:
+                # Show a preview of the changes and ask for confirmation
+                await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
                 view = ConfirmationView()
                 preview = await ctx.interaction.followup.send(
                     "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                    embed=preview_embed,
+                    embed=await self.bot.for_build(build).generate_embed(),
                     view=view,
                     ephemeral=True,
                     wait=True,
@@ -191,21 +196,25 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                 await view.wait()
                 await preview.delete()
                 if view.value is None:
-                    await sent_message.edit(
-                        embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                    await asyncio.gather(
+                        build.lock.release(),
+                        sent_message.edit(
+                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                        ),
                     )
-                elif view.value:
-                    await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                    await build.save()
-                    await self.bot.for_build(build).update_messages()
-                    await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
-                else:
-                    await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
-            else:  # Not an interaction, so we can't use buttons for confirmation
-                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                await build.save()
-                await self.bot.for_build(build).update_messages()
-                await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+                    return
+                elif view.value is False:
+                    await asyncio.gather(
+                        build.lock.release(),
+                        sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user")),
+                    )
+                    return
+
+            await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+            await build.save()
+            await build.lock.release()
+            await self.bot.for_build(build).update_messages()
+            await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
