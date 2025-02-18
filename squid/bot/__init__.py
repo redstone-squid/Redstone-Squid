@@ -19,7 +19,7 @@ from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
 from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, PREFIX
 from squid.db import DatabaseManager
-from squid.db.builds import Build
+from squid.db.builds import Build, clean_locks
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
@@ -59,6 +59,11 @@ class RedstoneSquid(Bot):
     async def call_supabase_to_prevent_deactivation(self):
         """Supabase deactivates a database in the free tier if it's not used for 7 days."""
         await self.db.table("builds").select("id").limit(1).execute()
+
+    @tasks.loop(minutes=5)
+    async def clean_dangling_build_locks(self):
+        """Clean up dangling build locks in case some functions failed to release them."""
+        await clean_locks()
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
         """

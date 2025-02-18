@@ -12,7 +12,6 @@ from beartype.door import is_bearable
 from discord import Interaction, TextStyle
 from discord.ui import Item
 
-from squid.bot.submission import ui
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.db.builds import Build
 from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES
@@ -224,12 +223,7 @@ class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
 
     @override
     async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]
-        async def _parent() -> ui.views.BuildInfoView[BotT]:
-            # await self.build.reload()  # TODO: reload() is not implemented
-            build = await self.build.get_persisted_copy()
-            return ui.views.BuildInfoView(build)
-
-        await BuildEditView(self.build, parent=_parent).update(interaction)
+        await BuildEditView(self.build).send(interaction)
 
 
 class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
