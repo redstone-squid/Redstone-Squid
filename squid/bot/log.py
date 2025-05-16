@@ -33,7 +33,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         """
         timestamp_msg = utcnow() + msg
         if first_log:
-            timestamp_msg = f"{"-" * 90}\n{timestamp_msg}"
+            timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
         if dm_owner and self.owner:
             await self.owner.send(timestamp_msg)
         print(timestamp_msg)
@@ -57,9 +57,9 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         command = f"{ctx.command.qualified_name}"
         if ctx.args:
             # The first two arguments are the cog/bot and the context respectively
-            command += f" {" ".join(str(arg) for arg in ctx.args[2:])}"
+            command += f" {' '.join(str(arg) for arg in ctx.args[2:])}"
         if ctx.kwargs:
-            command += f" {" ".join(f'{k}:{v}' for k, v in ctx.kwargs.items())}"
+            command += f" {' '.join(f'{k}:{v}' for k, v in ctx.kwargs.items())}"
         if ctx.guild is not None:
             log_message = f'{str(ctx.author)} ran: "{command}" in server: {ctx.guild.name}.'
         else:

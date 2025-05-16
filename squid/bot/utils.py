@@ -43,7 +43,7 @@ class Sentinel:
     _module_name: str
 
     def __new__(cls, name: str, repr: str | None = None, bool_value: bool = True, module_name: str | None = None):
-        repr = repr if repr else f'<{name.split(".")[-1]}>'
+        repr = repr if repr else f"<{name.split('.')[-1]}>"
         if module_name is None:
             try:
                 module_name = sys._getframe(1).f_globals.get("__name__", "__main__")  # type: ignore
@@ -162,7 +162,7 @@ class RunningMessage:
         if exc_type is not None:
             description = f"{str(exc_val)}"
             if PRINT_TRACEBACKS:
-                description += f'\n\n```{"".join(format_tb(exc_tb))}```'
+                description += f"\n\n```{''.join(format_tb(exc_tb))}```"
             await self.sent_message.edit(
                 content=f"<@{OWNER_ID}>",
                 embed=error_embed(f"An error has occurred: {exc_type.__name__}", description),

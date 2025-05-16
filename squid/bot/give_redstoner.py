@@ -29,7 +29,7 @@ class GiveRedstoner(Cog):
         mentions = message.mentions
         if len(mentions) != 1:
             await self.bot.get_channel(1332630008270684241).send(
-                f"Expected 1 mention from starboard in {message.jump_url}, got {", ".join(mention.name for mention in mentions)}"
+                f"Expected 1 mention from starboard in {message.jump_url}, got {', '.join(mention.name for mention in mentions)}"
             )
             return
 

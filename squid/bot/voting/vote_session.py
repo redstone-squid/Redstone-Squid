@@ -442,7 +442,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> BuildVoteSession:
         """Create a vote session from a database record."""
         if record["build_vote_sessions"] is None:
-            raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
+            raise ValueError(f"Found a build vote session with no associated build id. session_id={record['id']}")
         build_id: int = record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
 
