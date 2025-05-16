@@ -12,8 +12,8 @@ dependencies = [
     "gspread>=6.1.4",
     "supabase>=2.11.0",
     "python-dotenv>=1.0.1",
-    "postgrest @ git+https://github.com/redstone-squid/postgrest-py",
     # Using our own fork which fixes https://github.com/supabase/postgrest-py/issues/340
+    "postgrest @ git+https://github.com/redstone-squid/postgrest-py",
     "jishaku>=2.6.0",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
