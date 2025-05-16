@@ -50,7 +50,7 @@ deprecation==2.1.0
     # via postgrest
 discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus@8686b5d1bbc1d3c862292eb436ab630d6e9c9b53
     # via redstone-squid (pyproject.toml)
-discord-py @ git+https://github.com/Rapptz/discord.py@26855160f8a8f0dfade609cce6b1bc97f8b8fa14
+discord-py==2.5.2
     # via
     #   redstone-squid (pyproject.toml)
     #   discord-ext-menus
