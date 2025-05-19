@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,36 +30,16 @@ jobs:
     - name: Install the project
       run: uv sync --all-extras --dev
 
-  lint:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
     - name: See if there are linting or formatting issues
       run: uv run ruff check --extend-select I
         uv run ruff format --target-version py312 --check
 
-  format:
-    runs-on: ubuntu-latest
-    needs: setup
+    - name: See if there are linting or formatting issues
+      run: uv run ruff format --target-version py312 --check
 
-    steps:
-      - name: See if there are linting or formatting issues
-        run: uv run ruff format --target-version py312 --check
-
-  typecheck:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
     - name: See if there are type checking issues
       run: uv run basedpyright
 
-  test:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
     - name: Run tests
       run: uv run pytest tests --cov=squid --cov-report=term-missing --cov-report=html
 
@@ -69,10 +49,5 @@ jobs:
         name: coverage
         path: htmlcov/
 
-  cleanup:
-    runs-on: ubuntu-latest
-    needs: [lint, format, typecheck, test]
-
-    steps:
     - name: Minimize uv cache
       run: uv cache prune --ci
