@@ -30,9 +30,6 @@ while getopts "d" opt; do
     esac
 done
 
-# Source activate
-. .venv/bin/activate
-
 # Pull latest changes from git
 echo "Pulling latest changes..."
 git pull
@@ -69,12 +66,12 @@ fi
 # Run the application
 if [ "$detach" = true ]; then
     echo "Starting app in detached mode..."
-    nohup python3 app.py > app.log 2>&1 &
+    nohup uv run app.py > app.log 2>&1 &
     echo "$!" > "$PIDFILE"
     echo "App started in background. Check app.log for output."
 else
     echo "Starting app in foreground..."
-    python3 app.py &
+    uv run app.py &
     echo "$!" > "$PIDFILE"
     wait
 fi
