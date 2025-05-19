@@ -32,7 +32,6 @@ jobs:
 
     - name: See if there are linting or formatting issues
       run: uv run ruff check --extend-select I
-        uv run ruff format --target-version py312 --check
 
     - name: See if there are linting or formatting issues
       run: uv run ruff format --target-version py312 --check
