@@ -35,6 +35,8 @@ In the root directory of the repository you can use the following command to ins
 pip install -r requirements/base.txt requirements/dev.txt
 ```
 
+Alternatively, if you use `uv`, you can run `uv sync`. The requirements folder and `uv.lock` are kept in sync.
+
 ### Credential Files
 
 Google services requires a google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
