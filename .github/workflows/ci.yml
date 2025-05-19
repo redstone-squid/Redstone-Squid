@@ -1,0 +1,78 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        # Install a specific version of uv.
+        version: "0.6.14"
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: "Set up Python"
+      uses: actions/setup-python@v5
+      with:
+        python-version-file: "pyproject.toml"
+
+    - name: Install the project
+      run: uv sync --all-extras --dev
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: See if there are linting or formatting issues
+      run: uv run ruff check --extend-select I
+        uv run ruff format --target-version py312 --check
+
+  format:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+      - name: See if there are linting or formatting issues
+        run: uv run ruff format --target-version py312 --check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: See if there are type checking issues
+      run: uv run basedpyright
+
+  test:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: Run tests
+      run: uv run pytest tests --cov=squid --cov-report=term-missing --cov-report=html
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: htmlcov/
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [lint, format, typecheck, test]
+
+    steps:
+    - name: Minimize uv cache
+      run: uv cache prune --ci
