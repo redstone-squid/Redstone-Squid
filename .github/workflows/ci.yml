@@ -30,6 +30,15 @@ jobs:
     - name: Install the project
       run: uv sync --all-extras --dev
 
+    - name: Check all files have corresponding gitattributes
+      run: |  # https://github.com/gitattributes/gitattributes
+        missing_attributes=$(git ls-files | git check-attr -a --stdin | grep 'text: auto' || printf '\n')
+        if [ -n "$missing_attributes" ]; then
+          printf '%s\n%s\n' '.gitattributes rule missing for the following files:' "$missing_attributes"
+        else
+          printf '%s\n' 'All files have a corresponding rule in .gitattributes'
+        fi
+
     - name: See if there are linting or formatting issues
       run: uv run ruff check --extend-select I
 
