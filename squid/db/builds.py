@@ -22,6 +22,7 @@ from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod, ReturnMethod
 
+from squid.config import BOT_USER_ID
 from squid.db import DatabaseManager
 from squid.db.schema import (
     BuildRecord,
@@ -670,10 +671,12 @@ class Build:
         return await Build.from_id(self.id)  # type: ignore
 
     async def get_display_messages(self) -> list[MessageRecord]:
-        """Get all messages which showed this build."""
+        """Get all messages from the bot that are related to this build.
+
+        This does not include messages from other users, only the bot's messages.
+        """
         response: APIResponse[MessageRecord] = (
-            # FIXME: This included the original message, we need to filter by author_id but this doesn't exist in the database
-            await DatabaseManager().table("messages").select("*").eq("build_id", self.id).execute()
+            await DatabaseManager().table("messages").select("*").eq("build_id", self.id).eq("author_id", BOT_USER_ID).execute()
         )
         return response.data
 
