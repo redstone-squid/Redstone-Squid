@@ -135,7 +135,7 @@ packaging==24.2
     # via deprecation
 pgvector==0.3.6
     # via vecs
-postgrest @ git+https://github.com/redstone-squid/postgrest-py@2251c7cfe1749ec1992841380034d29e283cb446
+postgrest @ git+https://github.com/redstone-squid/postgrest-py@acaa901cbfc294912a76179f0cc81c09eccd4c22
     # via
     #   redstone-squid (pyproject.toml)
     #   supabase
