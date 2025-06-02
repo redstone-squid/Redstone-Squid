@@ -44,14 +44,19 @@ class MessageManager:
                 {
                     "server_id": message.guild.id,
                     "channel_id": message.channel.id,
-                    "message_id": message.id,
+                    "id": message.id,
                     "build_id": build_id,
-                    "vote_session_id": vote_session_id,
+                    "author_id": message.author.id,
                     "purpose": purpose,
                 }
             )
             .execute()
         )
+
+        if vote_session_id is not None:
+            await self.client.table("vote_session_messages").insert(
+                {"vote_session_id": vote_session_id, "message_id": message.id}
+            ).execute()
 
     async def update_message_edited_time(self, message: int | discord.Message) -> None:
         """
@@ -61,7 +66,7 @@ class MessageManager:
             message: The message to update. Either the message id or the message object.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
-        await self.client.table("messages").update({"edited_time": utcnow()}).eq("message_id", message_id).execute()
+        await self.client.table("messages").update({"edited_time": utcnow()}).eq("id", message_id).execute()
 
     async def untrack_message(self, message: int | discord.Message) -> MessageRecord:
         """Untrack message from the database. The message is not deleted on discord.
@@ -77,7 +82,7 @@ class MessageManager:
         """
         message_id = message.id if isinstance(message, discord.Message) else message
         response: APIResponse[MessageRecord] = (
-            await self.client.table("messages").delete().eq("message_id", message_id).execute()
+            await self.client.table("messages").delete().eq("id", message_id).execute()
         )
         if response.data:
             return response.data[0]
