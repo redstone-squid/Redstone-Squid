@@ -1110,7 +1110,7 @@ wheels = [
 [[package]]
 name = "postgrest"
 version = "1.0.1"
-source = { git = "https://github.com/redstone-squid/postgrest-py#2bea734b9161844f60840263bbab61a2d6c6027c" }
+source = { git = "https://github.com/redstone-squid/postgrest-py#acaa901cbfc294912a76179f0cc81c09eccd4c22" }
 dependencies = [
     { name = "deprecation" },
     { name = "httpx", extra = ["http2"] },
