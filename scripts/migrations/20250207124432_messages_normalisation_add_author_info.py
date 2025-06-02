@@ -6,7 +6,6 @@ import asyncio
 import os
 
 from discord.ext import commands
-from discord.ext.commands.bot import Context
 from dotenv import load_dotenv
 
 from squid.bot import RedstoneSquid, setup_logging
