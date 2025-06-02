@@ -10,6 +10,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -25,7 +28,7 @@ jobs:
     - name: "Set up Python"
       uses: actions/setup-python@v5
       with:
-        python-version-file: "pyproject.toml"
+        python-version: ${{ matrix.python-version }}
 
     - name: Install the project
       run: uv sync --all-extras --dev
@@ -54,7 +57,7 @@ jobs:
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
-        name: coverage
+        name: coverage (${{ github.event_name }}) (${{ matrix.python-version }})
         path: htmlcov/
 
     - name: Minimize uv cache
