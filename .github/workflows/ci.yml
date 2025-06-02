@@ -57,7 +57,7 @@ jobs:
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
-        name: coverage
+        name: coverage (${{ github.event_name }}) (${{ matrix.python-version }})
         path: htmlcov/
 
     - name: Minimize uv cache
