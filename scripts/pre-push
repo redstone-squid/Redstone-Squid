@@ -3,16 +3,16 @@
 
 exit=0
 echo "Running ruff check..."
-if ! ruff check --extend-select I --fix
+if ! ruff check squid scripts tests --extend-select I --fix
 then
     exit=1
 fi
 
 echo "Running ruff format..."
-if ! ruff format --check --target-version py312 --quiet
+if ! ruff format squid scripts tests --check --target-version py312 --quiet
 then
     exit=1
-    ruff format --target-version py312
+    ruff format squid scripts tests --target-version py312
 fi
 
 if [ $exit -ne 0 ]
