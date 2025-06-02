@@ -843,7 +843,7 @@ class Build:
             # to avoid issues where another task modifies the build before it is locked
             build_data |= {"is_locked": True}
             response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
-            self.lock._lock_count = 1
+            self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
 
             assert response.count == 1
             self.id = response.data[0]["id"]

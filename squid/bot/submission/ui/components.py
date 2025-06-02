@@ -194,7 +194,6 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     """
     if attr_type is None:
         attr_type = build.get_attr_type(attribute)
-    attr_type = cast(type[T], attr_type)
     formatter, parser = get_formatter_and_parser_for_type(attr_type)
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 

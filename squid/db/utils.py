@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import wraps
+from typing import Any
 
 import aiohttp
 
@@ -189,7 +190,7 @@ def callable_cached[T](func: Callable[..., T]) -> Callable[..., T]:
     args_flat_to_exception_get = args_flat_to_exception.get
 
     @wraps(func)
-    def _callable_cached(*args):
+    def _callable_cached(*args: Any):
         f"""
         Memoized variant of the {func.__name__}() callable.
 

@@ -306,7 +306,7 @@ async def get_website_preview(url: str) -> Preview:
         """Helper function to extract content from meta tags."""
         tag = soup.find("meta", attrs={attribute_type: property_name})
 
-        assert not isinstance(tag, bs4.NavigableString), f"tag is a bs4.NavigableString: {tag}"
+        assert isinstance(tag, bs4.element.Tag | None), "tag is not a BeautifulSoup Tag or None"
         if tag and tag.get("content"):
             content = tag["content"]
             assert isinstance(content, str), "tag['content'] is not a string"
