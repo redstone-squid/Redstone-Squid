@@ -36,6 +36,7 @@ dev = [
     "ruff>=0.5.1",
     "basedpyright>=1.24.0",
     "bump-my-version>=0.29.0",
+    "pytest-cov>=6.1.1",
 ]
 
 [build-system]
