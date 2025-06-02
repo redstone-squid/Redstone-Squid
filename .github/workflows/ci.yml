@@ -46,7 +46,7 @@ jobs:
       run: uv run ruff format --target-version py312 --check
 
     - name: See if there are type checking issues
-      run: uv run basedpyright
+      run: uv run basedpyright --level=warning
 
     - name: Run tests
       run: uv run pytest tests --cov=squid --cov-report=term-missing --cov-report=html
