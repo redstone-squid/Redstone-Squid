@@ -402,13 +402,15 @@ class Build:
             return None
 
     @staticmethod
-    async def ai_generate_from_message(message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "deepseek/deepseek-chat") -> Build | None:
+    async def ai_generate_from_message(
+        message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
+    ) -> Build | None:
         """Parses a build from a message using AI.
 
         Args:
             message: The discord message
             prompt_path: Relative path to the prompt file, defaults to "prompt.txt" in the squid.db package.
-            model: The LLM model to use for the AI generation, defaults to "deepseek/deepseek-chat".
+            model: The LLM model to use for the AI generation, defaults to "gpt-4.1-nano".
         """
         base_url = os.getenv("OPENAI_BASE_URL")
         if not base_url:
