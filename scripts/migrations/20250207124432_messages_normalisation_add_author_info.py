@@ -17,9 +17,14 @@ async def migrate(bot: RedstoneSquid):
     db = DatabaseManager()
     response = await db.table("messages").select("*").execute()
     for row in response.data:
+        if row["author_id"] is not None:
+            continue
         message = await bot.get_or_fetch_message(row["channel_id"], row["message_id"])
         if message is not None:
             await db.table("messages").update({"author_id": message.author.id}).eq("message_id", message.id).execute()
+        else:
+            print(row)
+            print(f"Message {row['message_id']} not found in channel {row['channel_id']}. Skipping.")
 
 
 async def main():
