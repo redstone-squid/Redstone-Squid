@@ -52,3 +52,12 @@ sync:
 lint:
     {{python}} -m ruff check --extend-select I --fix --exit-zero
     {{python}} -m ruff format --target-version py312
+
+typecheck:
+    {{python}} -m basedpyright
+
+build:
+    docker build --build-arg GIT_COMMIT_HASH=$(git rev-parse HEAD) --build-arg GIT_COMMIT_MESSAGE="$(git log -1 --pretty=%s)" -t rssquid .
+
+docker-run: build
+    docker run --env-file .env --rm -p 8000:8000 rssquid
