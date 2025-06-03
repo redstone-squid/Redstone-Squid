@@ -1,0 +1,83 @@
+---
+description: This rule contains comprehensive information about the Redstone Squid Discord bot project structure, codebase organization, and development workflow.
+globs: 
+alwaysApply: false
+---
+# Redstone Squid Project Overview
+
+## Project Purpose
+Redstone Squid is a Discord bot designed to manage and streamline the submission, review, and approval process for Minecraft redstone contraption records. The bot automates database management for redstone building records and provides a comprehensive submission workflow with community voting features.
+
+## Application Entry Points
+- **Main Entry**: [app.py](mdc:app.py) - Starts both the Discord bot and FastAPI server in parallel processes
+- **Bot Main**: [squid/bot/__init__.py](mdc:squid/bot/__init__.py) - Discord bot initialization and command loading
+- **API Main**: [squid/api.py](mdc:squid/api.py) - FastAPI web server for external integrations
+
+## Core Directory Structure
+
+### `/squid/` - Main Application Code
+- **`/squid/bot/`** - Discord bot implementation with commands, utilities, and event handlers
+- **`/squid/db/`** - Database layer with models, queries, and schema definitions  
+- **`/squid/google/`** - Google Services integration for Forms/Sheets
+- **`/squid/config.py`** - Bot configuration and constants
+
+### `/supabase/` - Database Management  
+- **`/supabase/migrations/`** - PostgreSQL schema migrations in chronological order
+- **`/supabase/seed.sql`** - Initial database seeding data
+- **`/supabase/config.toml`** - Supabase local development configuration
+
+### `/requirements/` - Dependency Management
+- **`base.txt`** - Core production dependencies
+- **`dev.txt`** - Development dependencies  
+- **`dev.in`** - Development dependency sources for compilation
+
+## Key Configuration Files
+- **[pyproject.toml](mdc:pyproject.toml)** - Modern Python project configuration with dependencies, build settings, and tool configurations
+- **[justfile](mdc:justfile)** - Task runner with commands for development, deployment, and maintenance
+- **[uv.lock](mdc:uv.lock)** - Dependency lock file for reproducible builds
+
+## Database Schema
+The database uses PostgreSQL via Supabase with these core tables:
+- **`submissions`** - Redstone contraption record submissions with detailed specifications
+- **`builds`** - Approved builds with metadata and links
+- **`server_settings`** - Per-Discord-server configuration for channels
+- **`messages`** - Tracking of bot messages across servers
+- **`vote_sessions`** - Community voting system for submission validation
+- **`users`** - User verification and authentication
+
+## Bot Features & Commands
+- **Submission Management**: `!submissions` commands for reviewing, confirming, and denying records
+- **Server Settings**: `!settings` commands for configuring channels and bot behavior
+- **Record Posting**: Automatic posting of confirmed records to configured Discord channels
+- **Voting System**: Community-driven validation of submissions
+- **Admin Commands**: Moderation and management tools
+- **Help System**: Self-documenting command help via discord.py
+
+## Development Workflow
+- **Task Runner**: Use `just <command>` for common development tasks
+- **Environment**: Virtual environment managed via `uv` package manager
+- **Code Quality**: `ruff` for formatting/linting, `basedpyright` for type checking
+- **Testing**: Basic pytest setup in `/tests/` directory
+- **CI/CD**: GitHub Actions workflow in `.github/workflows/ci.yml`
+
+## External Integrations
+- **Discord**: Primary interface via discord.py library
+- **Supabase**: PostgreSQL database hosting and real-time features
+- **Google Forms**: Record submission collection
+- **OpenAI**: AI processing and embeddings for builds
+- **Catbox**: File hosting for images and downloads
+
+## Important File References
+- **Bot Commands**: Located in [squid/bot/](mdc:squid/bot) with separate files per command category
+- **Database Models**: [squid/db/builds.py](mdc:squid/db/builds.py) and [squid/db/schema.py](mdc:squid/db/schema.py)
+- **Configuration**: [squid/config.py](mdc:squid/config.py) for bot settings and constants
+- **Latest Migration**: Check `/supabase/migrations/` for most recent database schema changes
+
+## Development Setup
+1. Use `just init` to set up virtual environment
+2. Use `just sync` to install dependencies  
+3. Configure `.env` file with required API keys (Discord, Supabase, etc.)
+4. Use `just run` to start the application
+5. Use `just lint` for code quality checks
+
+
