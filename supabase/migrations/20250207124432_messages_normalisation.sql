@@ -12,6 +12,8 @@ where vote_session_id is not null;
 
 alter table messages drop column vote_session_id;
 
+update messages set author_id = 0 where author_id is null;
+
 alter table messages alter column author_id set not null;
 
 alter table builds alter column edited_time set data type timestamp with time zone using edited_time::timestamp with time zone;
