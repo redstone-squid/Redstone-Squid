@@ -402,16 +402,34 @@ class Build:
             return None
 
     @staticmethod
-    async def ai_generate_from_message(message: discord.Message) -> Build | None:
-        """Parses a build from a message using AI."""
+    async def ai_generate_from_message(
+        message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
+    ) -> Build | None:
+        """Parses a build from a message using AI.
+
+        Args:
+            message: The discord message
+            prompt_path: Relative path to the prompt file, defaults to "prompt.txt" in the squid.db package.
+            model: The LLM model to use for the AI generation, defaults to "gpt-4.1-nano".
+        """
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if not base_url:
+            logger.warning("No OpenAI base URL found, defaulting to https://api.openai.com/v1.")
+            base_url = "https://api.openai.com/v1"
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("No OpenAI API key found, cannot generate build from message.")
+            return None
+
         client = AsyncOpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url=base_url,
+            api_key=api_key,
         )
 
-        prompt = resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8")
+        prompt = resources.files("squid.db").joinpath(prompt_path).read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
-            model="deepseek/deepseek-chat",
+            model=model,
             messages=[
                 {
                     "role": "user",
