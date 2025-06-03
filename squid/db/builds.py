@@ -244,7 +244,7 @@ class Build:
         response: SingleAPIResponse[MessageRecord] | None = (
             await db.table("messages")
             .select("build_id", count=CountMethod.exact)
-            .eq("message_id", message_id)
+            .eq("id", message_id)
             .maybe_single()
             .execute()
         )
@@ -1052,7 +1052,7 @@ class Build:
                 {
                     "server_id": self.original_server_id,
                     "channel_id": self.original_channel_id,
-                    "message_id": self.original_message_id,
+                    "id": self.original_message_id,
                     "build_id": self.id,
                     "purpose": "build_original_message",
                     "content": self.original_message,
