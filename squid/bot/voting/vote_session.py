@@ -258,7 +258,7 @@ class AbstractVoteSession(ABC):
             return self._messages
 
         messages_record: APIResponse[MessageRecord] = (
-            await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
+            await DatabaseManager().table("messages").select("*").in_("id", self.message_ids).execute()
         )
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
@@ -426,7 +426,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> BuildVoteSession | None:
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
+            .select("*, vote_session_messages(*), messages(*), votes(*), build_vote_sessions(*)")
             .eq("id", vote_session_id)
             .eq("kind", cls.kind)
             .maybe_single()
@@ -508,7 +508,7 @@ class BuildVoteSession(AbstractVoteSession):
         """Get all open vote sessions from the database."""
         records: list[dict[str, Any]] = (
             await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
+            .select("*, vote_session_messages(*), messages(*), votes(*), build_vote_sessions(*)")
             .eq("status", "open")
             .eq("kind", cls.kind)
             .execute()
@@ -593,7 +593,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> DeleteLogVoteSession | None:
         vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
             await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
+            .select("*, vote_session_messages(*), messages(*), votes(*), delete_log_vote_sessions(*)")
             .eq("id", vote_session_id)
             .eq("kind", cls.kind)
             .maybe_single()
@@ -690,7 +690,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         """Get all open vote sessions from the database."""
         records: list[VoteSessionRecord] = (
             await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
+            .select("*, vote_session_messages(*), messages(*), votes(*), delete_log_vote_sessions(*)")
             .eq("status", "open")
             .eq("kind", cls.kind)
             .execute()
