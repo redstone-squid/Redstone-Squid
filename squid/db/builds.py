@@ -406,7 +406,7 @@ class Build:
         """Parses a build from a message using AI."""
         client = AsyncOpenAI(
             base_url=os.getenv("OPENAI_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),
         )
 
         prompt = resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8")
