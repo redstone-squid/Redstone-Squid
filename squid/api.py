@@ -53,7 +53,7 @@ def main() -> None:
     """Run the FastAPI server."""
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("API_PORT", 8000)), log_level="info")
 
 
 if __name__ == "__main__":
