@@ -38,12 +38,8 @@ class HelpCog[BotT: commands.Bot](Cog):
 
     @help.autocomplete("command")
     async def command_autocomplete(
-        self, interaction: discord.Interaction[BotT], needle: str
+        self, _interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
-        assert self.bot.help_command
-        ctx = await self.bot.get_context(interaction)
-        help_command = self.bot.help_command.copy()
-        help_command.context = ctx
         if not needle:
             return [
                 app_commands.Choice(name=cog_name, value=cog_name)
@@ -68,11 +64,11 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
-        
+
         # We do not filter commands here, because it is too slow.
         # Every command needs to run its own checks even if the same check is used.
         # filtered_commands = await self.filter_commands(commands_, sort=True)
-        
+
         repo = git.Repo(search_parent_directories=True)
         desc = dedent(
             f"""\
