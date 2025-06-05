@@ -87,7 +87,7 @@ class RedstoneSquid(Bot):
             return await channel.fetch_message(message_id)
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
-            await untrack_message(message_id)
+            await DatabaseManager().message.untrack_message(message_id)
         except discord.Forbidden:
             pass
         return None
