@@ -90,7 +90,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            pending_submissions = await get_all_builds(Status.PENDING)
+            pending_submissions = await get_all_builds(filter={"submission_status": Status.PENDING})
 
             if len(pending_submissions) == 0:
                 desc = "No open submissions."
