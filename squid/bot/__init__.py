@@ -108,8 +108,8 @@ def setup_logging():
     stream_handler.setFormatter(formatter)
     logging.root.addHandler(stream_handler)
 
-    logger = logging.getLogger("discord")
-    logger.setLevel(logging.INFO)
+    discord_logger = logging.getLogger("discord")
+    discord_logger.setLevel(logging.INFO)
 
     if DEV_MODE:
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
