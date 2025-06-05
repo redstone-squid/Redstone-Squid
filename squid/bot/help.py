@@ -48,12 +48,12 @@ class HelpCog[BotT: commands.Bot](Cog):
             return [
                 app_commands.Choice(name=cog_name, value=cog_name)
                 for cog_name, cog in self.bot.cogs.items()
-                if await help_command.filter_commands(cog.get_commands())
+                if cog.get_commands()
             ][:25]
         needle = needle.lower()
         return [
             app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
-            for command in await help_command.filter_commands(self.bot.walk_commands(), sort=True)
+            for command in self.bot.walk_commands()
             if needle in command.qualified_name
         ][:25]
 
@@ -68,13 +68,17 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
-        filtered_commands = await self.filter_commands(commands_, sort=True)
+        
+        # We do not filter commands here, because it is too slow.
+        # Every command needs to run its own checks even if the same check is used.
+        # filtered_commands = await self.filter_commands(commands_, sort=True)
+        
         repo = git.Repo(search_parent_directories=True)
         desc = dedent(
             f"""\
             {self.context.bot.description}
     
-            Commands:{self.get_commands_brief_details(filtered_commands)}
+            Commands:{self.get_commands_brief_details(commands_)}
     
             {MORE_INFORMATION}
             """
@@ -122,14 +126,13 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_group_help(self, group: Group[Any, ..., Any], /) -> None:
         """Sends help for a group command."""
-        subcommands = group.commands
+        commands_ = group.commands
 
         if len(subcommands) == 0:
             # Group is a subclass of Command
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        commands_ = await self.filter_commands(subcommands, sort=True)
         command_details = self.get_commands_brief_details(commands_)
         desc = f"""{group.cog.description}
 
@@ -143,7 +146,7 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
-        commands_ = await self.filter_commands(cog.walk_commands(), sort=True)
+        commands_ = cog.walk_commands()
         command_details = self.get_commands_brief_details(commands_)
         desc = f"""{cog.description}
 
