@@ -124,12 +124,12 @@ class Help(commands.MinimalHelpCommand):
         """Sends help for a group command."""
         commands_ = group.commands
 
-        if len(subcommands) == 0:
+        if len(commands_) == 0:
             # Group is a subclass of Command
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        command_details = self.get_commands_brief_details(commands_)
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = f"""{group.cog.description}
 
             Usable Subcommands: {command_details or "None"}
@@ -143,7 +143,7 @@ class Help(commands.MinimalHelpCommand):
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
         commands_ = cog.walk_commands()
-        command_details = self.get_commands_brief_details(commands_)
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = f"""{cog.description}
 
             Usable Subcommands:{command_details or "None"}
