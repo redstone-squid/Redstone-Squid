@@ -21,6 +21,9 @@ from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, 
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 
+logger = logging.getLogger(__name__)
+
+
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
 
@@ -83,8 +86,8 @@ class RedstoneSquid(Bot):
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:
-            pass
-            # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+            logger.debug("Message %s not found in channel %s.", message_id, channel_id)
+            await untrack_message(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -120,7 +123,7 @@ def setup_logging():
     )
 
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    discord_logger.addHandler(file_handler)
 
 
 async def main():
