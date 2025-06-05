@@ -1344,11 +1344,21 @@ async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[st
     return valid_door_types, invalid_door_types
 
 
-async def get_all_builds(submission_status: Status | None = None) -> list[Build]:
+async def get_all_builds(*, filter: Mapping[str, Any] | None = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:
-        submission_status: The status of the submissions to filter by. If None, all submissions are returned. See Build class for possible values.
+        filter: A dictionary containing filter criteria, only exact matches are supported.
+
+            A filter is of the format {"column_name": value}, where column_name is the name of the column
+            in the database and value is the value to filter by. In general, the attribute names of the Build class
+            are the same, but in some cases they are different and the only way to know is to look at the database schema.
+            Also, if the attribute you are trying to filter is not in the builds table, you will need to use a join table
+            syntax.
+
+            For example, to filter by submission status, use {"submission_status": 1}. To filter by door opening time,
+            use {"doors(normal_opening_time)": 0.5}. where doors is a join table. The join is automatically done by
+            the supabase client when you use the `select` method with the correct column name.
 
     Returns:
         A list of Build objects.
@@ -1356,8 +1366,9 @@ async def get_all_builds(submission_status: Status | None = None) -> list[Build]
     db = DatabaseManager()
     query = db.table("builds").select(all_build_columns)
 
-    if submission_status is not None:
-        query = query.eq("submission_status", submission_status.value)
+    if filter is not None:
+        for column, value in filter.items():
+            query = query.eq(column, value)
 
     response = await query.execute()
     if not response:
