@@ -38,7 +38,7 @@ class BuildHandler[BotT: RedstoneSquid]:
     def __repr__(self):
         return f"<BuildHandler(bot={self.bot}, build={self.build})>"
 
-    async def get_channels_to_post_to(self) -> list[GuildMessageable]:  # type: ignore
+    async def get_channels_to_post_to(self) -> list[GuildMessageable]:
         """Gets the channels in which this build should be posted to."""
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
@@ -92,7 +92,7 @@ class BuildHandler[BotT: RedstoneSquid]:
         assert build.submitter_id is not None
         await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
 
-    async def get_original_message(self) -> discord.Message | None:  # type: ignore
+    async def get_original_message(self) -> discord.Message | None:
         """Gets the original message of the build."""
         if self._build_original_message_obj:
             return self._build_original_message_obj
@@ -102,7 +102,7 @@ class BuildHandler[BotT: RedstoneSquid]:
             return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
         return None
 
-    async def update_messages(self) -> None:  # type: ignore
+    async def update_messages(self) -> None:
         """Updates all messages which for this build."""
         if self.build.id is None:
             raise ValueError("Build id is None.")
@@ -122,7 +122,7 @@ class BuildHandler[BotT: RedstoneSquid]:
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
 
-    async def generate_embed(self) -> discord.Embed:  # type: ignore
+    async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         build = self.build
         em = bot_utils.info_embed(title=self.build.get_title(), description=await self.get_description())
