@@ -182,11 +182,11 @@ class RunningMessage:
         return False
 
 
-def check_is_owner_server(ctx: Context[Any]):
+def check_is_owner_server(ctx: Context[RedstoneSquid]) -> bool:
     """Check if the command is executed on the owner's server."""
 
-    if not ctx.guild or not ctx.guild.id == config.OWNER_SERVER_ID:
-        raise CheckFailure("This command can only be executed on certain servers.")
+    if not ctx.guild or not ctx.guild.id == ctx.bot.owner_server_id:
+        raise CheckFailure("This command can only be executed on the owner server.")
     return True
 
 
