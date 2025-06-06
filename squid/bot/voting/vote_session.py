@@ -452,7 +452,7 @@ class BuildVoteSession(AbstractVoteSession):
         self._allow_init = True
         self.__init__(
             bot=bot,
-            messages=[msg["message_id"] for msg in record["messages"]],
+            messages=[msg["id"] for msg in record["messages"]],
             author_id=record["author_id"],
             build=build,
             type="add",
@@ -627,7 +627,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self._allow_init = True
         self.__init__(
             bot,
-            [msg["message_id"] for msg in record["messages"]],
+            [msg["id"] for msg in record["messages"]],
             record["author_id"],
             target_message,
             record["pass_threshold"],
