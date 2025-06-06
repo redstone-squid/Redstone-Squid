@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
+from postgrest.base_request_builder import APIResponse
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import Status
+from squid.db.schema import MessageRecord, Status
 from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
@@ -102,6 +103,15 @@ class BuildHandler[BotT: RedstoneSquid]:
             return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
         return None
 
+    async def get_display_messages(self) -> list[discord.Message]:
+        """Get all messages from the bot that are related to this build."""
+        response: APIResponse[MessageRecord] = (
+            await DatabaseManager().table("messages").select("*").eq("build_id", self.build.id).execute()
+        )
+        maybe_messages = await asyncio.gather(*(self.bot.get_or_fetch_message(row["channel_id"], row["id"]) for row in response.data))
+        messages = [msg for msg in maybe_messages if msg is not None]
+        return messages
+
     async def update_messages(self) -> None:
         """Updates all messages which for this build."""
         if self.build.id is None:
@@ -109,16 +119,13 @@ class BuildHandler[BotT: RedstoneSquid]:
 
         # Get all messages for a build
         async with asyncio.TaskGroup() as tg:
-            msg_task = tg.create_task(self.build.get_display_messages())
+            msg_task = tg.create_task(self.get_display_messages())
             em_task = tg.create_task(self.generate_embed())
 
-        message_records = await msg_task
+        messages = await msg_task
         em = await em_task
 
-        for record in message_records:
-            message = await self.bot.get_or_fetch_message(record["channel_id"], record["id"])
-            if message is None:
-                continue
+        for message in messages:
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
 
