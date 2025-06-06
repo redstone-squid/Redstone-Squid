@@ -36,9 +36,10 @@ class Miscellaneous[BotT: RedstoneSquid](Cog):
     @commands.hybrid_command()
     async def google_forms(self, ctx: Context[BotT]):
         """Links you to our record submission form. You want to use /submit instead."""
+        BUILD_SUBMISSION_FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
         em = discord.Embed(
             title="Submission form.",
-            description=f"You can submit new records with ease via our google form: {FORM_LINK}",
+            description=f"You can submit new records with ease via our google form: {BUILD_SUBMISSION_FORM_LINK}",
             colour=utils.discord_green,
         )
         await ctx.send(embed=em)

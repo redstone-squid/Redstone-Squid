@@ -12,7 +12,6 @@ DEV_PREFIX = "."
 BOT_NAME = "Redstone Squid"
 BOT_VERSION = "1.5.7"
 SOURCE_CODE_URL = "https://github.com/redstone-squid/Redstone-Squid"
-FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
 
 # Whether to print tracebacks directly to the user, may leak system information
 PRINT_TRACEBACKS = True
