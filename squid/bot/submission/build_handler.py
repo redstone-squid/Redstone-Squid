@@ -116,7 +116,7 @@ class BuildHandler[BotT: RedstoneSquid]:
         em = await em_task
 
         for record in message_records:
-            message = await self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+            message = await self.bot.get_or_fetch_message(record["channel_id"], record["id"])
             if message is None:
                 continue
             await message.edit(content=self.build.original_link, embed=em)
