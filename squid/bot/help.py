@@ -39,7 +39,7 @@ class HelpCog[BotT: commands.Bot](Cog):
         # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
         # and one message with the help information.
         await interaction.response.send_message(content="loading...", ephemeral=True, delete_after=0, silent=True)
-        ctx = await self.bot.get_context(interaction, cls=Context)
+        ctx = await self.bot.get_context(interaction, cls=Context[BotT])
         if command is not None:
             await ctx.send_help(command)
         else:
@@ -102,13 +102,15 @@ class Help(commands.MinimalHelpCommand):
         await self.get_destination().send(embed=em)
 
     @staticmethod
-    def get_commands_brief_details(commands_: Sequence[Command], return_as_list: bool = False) -> list[str] | str:
+    def get_commands_brief_details(
+        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
+    ) -> list[str] | str:
         """
         Formats the prefix, command name and signature, and short doc for an iterable of commands.
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """
-        details = []
+        details: list[str] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
             details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}")
@@ -146,6 +148,7 @@ class Help(commands.MinimalHelpCommand):
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
         await self.get_destination().send(embed=em)
+        return None
 
     # !help <cog>
     @override

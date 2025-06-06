@@ -64,6 +64,7 @@ class BuildHandler[BotT: RedstoneSquid]:
             self.bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None
         ]
         channels = [channel for channel in maybe_channels if channel is not None]
+        # noinspection PyTypeHints: PyCharm thinks this cast is invalid
         return cast(list[GuildMessageable], channels)
 
     async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:

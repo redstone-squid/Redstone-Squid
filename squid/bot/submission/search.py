@@ -117,10 +117,12 @@ class SearchCog[BotT: RedstoneSquid](Cog):
             build = await Build.from_id(build_id)
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                return None
 
             view = BuildInfoView(build)
             await view.send(interaction)
+            return None
         else:
             async with utils.RunningMessage(ctx) as sent_message:
                 build = await Build.from_id(build_id)
@@ -132,6 +134,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                 await sent_message.edit(
                     content=build.original_link, embed=await self.bot.for_build(build).generate_embed()
                 )
+            return None
 
     @build_hybrid_group.command(name="debug")
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
@@ -145,6 +148,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                 return await sent_message.edit(embed=error_embed)
 
             await sent_message.edit(content=escape_markdown(str(build.__dict__)), embed=None)
+        return None
 
 
 async def setup(bot: RedstoneSquid):
