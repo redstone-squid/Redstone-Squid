@@ -691,14 +691,6 @@ class Build:
 
         return await Build.from_id(self.id)  # type: ignore
 
-    async def get_display_messages(self) -> list[MessageRecord]:
-        """Get all messages which showed this build."""
-        response: APIResponse[MessageRecord] = (
-            # FIXME: This included the original message, we need to filter by author_id but this doesn't exist in the database
-            await DatabaseManager().table("messages").select("*").eq("build_id", self.id).execute()
-        )
-        return response.data
-
     async def generate_embedding(self) -> list[float] | None:
         """
         Generates embedding for the build using OpenAI's API.
