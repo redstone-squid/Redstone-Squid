@@ -12,7 +12,6 @@ import aiohttp
 
 from squid.db.schema import VersionRecord
 
-
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
 
 

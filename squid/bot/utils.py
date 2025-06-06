@@ -12,7 +12,7 @@ from enum import Enum
 from functools import cache
 from traceback import format_tb
 from types import FrameType, TracebackType
-from typing import TYPE_CHECKING, Any, TypedDict, override
+from typing import TYPE_CHECKING, TypedDict, override
 
 import aiohttp
 import bs4
@@ -21,8 +21,6 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import CheckFailure, Context, FlagConverter, MissingAnyRole, NoPrivateMessage, check
 
-from squid import config
-from squid.config import OWNER_ID, PRINT_TRACEBACKS
 from squid.db import DatabaseManager
 
 if TYPE_CHECKING:
@@ -143,12 +141,16 @@ class RunningMessage:
         title: str = "Working",
         description: str = "Getting information...",
         delete_on_exit: bool = False,
+        print_tracebacks: bool = False,  # Whether to print tracebacks in the message
+        id_to_mention_on_error: int | None = None,
     ):
         self.ctx = ctx
         self.title = title
         self.description = description
         self.delete_on_exit = delete_on_exit
         self.sent_message: Message
+        self.print_tracebacks = print_tracebacks
+        self.id_to_mention_on_error = id_to_mention_on_error
 
     async def __aenter__(self) -> Message:
         sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
@@ -166,10 +168,10 @@ class RunningMessage:
         # Handle exceptions
         if exc_type is not None:
             description = f"{str(exc_val)}"
-            if PRINT_TRACEBACKS:
+            if self.print_tracebacks:
                 description += f"\n\n```{''.join(format_tb(exc_tb))}```"
             await self.sent_message.edit(
-                content=f"<@{OWNER_ID}>",
+                content=f"<@{self.id_to_mention_on_error}>" if self.id_to_mention_on_error else None,
                 embed=error_embed(f"An error has occurred: {exc_type.__name__}", description),
             )
             return False
@@ -183,10 +185,13 @@ class RunningMessage:
 def check_is_owner_server():
     """Check if the command is executed on the owner's server."""
 
-    async def predicate(ctx: Context[Any]) -> bool:
+    async def predicate(ctx: Context[RedstoneSquid]) -> bool:
+        if ctx.bot.owner_server_id is None:
+            return True  # No owner server set, so we allow the command to run anywhere
+
         if ctx.guild is None:
             raise NoPrivateMessage()
-        if ctx.guild.id == config.OWNER_SERVER_ID:
+        if ctx.guild.id == ctx.bot.owner_server_id:
             return True
         raise CheckFailure("This command can only be executed on certain servers.")
 

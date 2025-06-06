@@ -10,10 +10,8 @@ import os
 from functools import cache
 from typing import Any, ClassVar, Literal
 
-from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
 
-from squid.config import DEV_MODE
 from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
 from squid.db.server_settings import ServerSettingManager
@@ -44,9 +42,6 @@ class DatabaseManager(AsyncClient):
             return
         self._initialized = True
 
-        # This is necessary if the user is not running from app.py.
-        if DEV_MODE:
-            load_dotenv()
         supabase_url = os.environ.get("SUPABASE_URL")
         supabase_key = os.environ.get("SUPABASE_KEY")
         if not supabase_url:

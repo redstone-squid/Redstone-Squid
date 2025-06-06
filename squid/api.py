@@ -52,11 +52,12 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
 def main() -> None:
     """Run the FastAPI server."""
     import uvicorn
-    from dotenv import load_dotenv
 
-    load_dotenv()
     uvicorn.run(app, host="0.0.0.0", port=3000)
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
     main()

@@ -9,7 +9,6 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
-from squid.config import BOT_NAME, FORM_LINK, SOURCE_CODE_URL
 from squid.db import get_version_string
 
 if TYPE_CHECKING:
@@ -19,6 +18,7 @@ if TYPE_CHECKING:
 class Miscellaneous[BotT: RedstoneSquid](Cog):
     def __init__(self, bot: BotT):
         self.bot: RedstoneSquid = bot
+        self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
     async def invite_link(self, ctx: Context[BotT]):
@@ -27,18 +27,20 @@ class Miscellaneous[BotT: RedstoneSquid](Cog):
             f"https://discordapp.com/oauth2/authorize?client_id={ctx.bot.user.id}&scope=bot&permissions=8"  # type: ignore
         )
 
-    # Docstring can't be an f-string, so we use the help parameter instead.
-    @commands.hybrid_command(help=f"Link to {BOT_NAME}'s source code.")
+    # Note that the help text is replaced in the __init__ method
+    # because the bot's name is not available at the time of class definition.
+    @commands.hybrid_command()
     async def source_code(self, ctx: Context[BotT]):
-        """Send a link to the source code."""
-        await ctx.send(f"Source code can be found at: {SOURCE_CODE_URL}.")
+        """Link to the bot's source code."""
+        await ctx.send(f"Source code can be found at: {self.bot.source_code_url}.")
 
     @commands.hybrid_command()
     async def google_forms(self, ctx: Context[BotT]):
         """Links you to our record submission form. You want to use /submit instead."""
+        BUILD_SUBMISSION_FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
         em = discord.Embed(
             title="Submission form.",
-            description=f"You can submit new records with ease via our google form: {FORM_LINK}",
+            description=f"You can submit new records with ease via our google form: {BUILD_SUBMISSION_FORM_LINK}",
             colour=utils.discord_green,
         )
         await ctx.send(embed=em)
