@@ -1,5 +1,7 @@
 """Utility functions for the bot."""
 
+from __future__ import annotations
+
 import asyncio
 import inspect
 import io
@@ -10,7 +12,7 @@ from enum import Enum
 from functools import cache
 from traceback import format_tb
 from types import FrameType, TracebackType
-from typing import Any, TypedDict, override
+from typing import TYPE_CHECKING, Any, TypedDict, override
 
 import aiohttp
 import bs4
@@ -20,9 +22,11 @@ from discord.abc import Messageable
 from discord.ext.commands import CheckFailure, Context, FlagConverter, MissingAnyRole, NoPrivateMessage, check
 
 from squid import config
-from squid.bot import RedstoneSquid
 from squid.config import OWNER_ID, PRINT_TRACEBACKS
 from squid.db import DatabaseManager
+
+if TYPE_CHECKING:
+    from squid.bot import RedstoneSquid
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
