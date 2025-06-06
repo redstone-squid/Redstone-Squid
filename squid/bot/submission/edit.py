@@ -43,7 +43,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
     @commands.hybrid_group(name="edit")
     @check_is_trusted_or_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def edit_group(self, ctx: Context[BotT]):
         """Edits a record in the database directly."""
         await ctx.send_help("edit")

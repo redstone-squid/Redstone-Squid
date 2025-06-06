@@ -182,15 +182,25 @@ class RunningMessage:
         return False
 
 
-def check_is_owner_server(ctx: Context[RedstoneSquid]) -> bool:
+def check_is_owner_server():
     """Check if the command is executed on the owner's server."""
 
-    if ctx.bot.owner_server_id is None:
-        return True  # No owner server set, so we allow the command to run anywhere
+    async def predicate(ctx: Context[RedstoneSquid]) -> bool:
+        if ctx.bot.owner_server_id is None:
+            return True  # No owner server set, so we allow the command to run anywhere
 
-    if not ctx.guild or not ctx.guild.id == ctx.bot.owner_server_id:
-        raise CheckFailure("This command can only be executed on the owner server.")
-    return True
+        if ctx.guild is None:
+            raise NoPrivateMessage()
+        if ctx.guild.id == ctx.bot.owner_server_id:
+            return True
+        raise CheckFailure("This command can only be executed on certain servers.")
+
+    return check(predicate)
+
+
+def is_owner_server(bot: RedstoneSquid, server_id: int) -> bool:
+    """Check if the server is the owner's server."""
+    return server_id == bot.owner_server_id
 
 
 @cache
@@ -212,12 +222,12 @@ def check_is_staff():
     return check(predicate)
 
 
-async def is_staff(bot: discord.Client, server_id: int | None, user_id: int) -> bool:
+async def is_staff(bot: RedstoneSquid, server_id: int | None, user_id: int) -> bool:
     """Check if the user has a staff role, as defined in the server settings."""
     if server_id is None:
         return False  # TODO: global staff role
 
-    staff_role_ids = await DatabaseManager().server_setting.get_single(server_id=server_id, setting="Staff")
+    staff_role_ids = await bot.db.server_setting.get_single(server_id=server_id, setting="Staff")
     server = bot.get_guild(server_id)
     if server is None:
         return False

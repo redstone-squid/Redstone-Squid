@@ -49,7 +49,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
 
     @commands.command("search_restrictions")
     @check_is_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
