@@ -104,11 +104,22 @@ class BuildHandler[BotT: RedstoneSquid]:
         return None
 
     async def get_display_messages(self) -> list[discord.Message]:
-        """Get all messages from the bot that are related to this build."""
+        """Get all messages from the bot that are related to this build.
+
+        This does not include messages from other users, only the bot's messages.
+        """
+        assert self.bot.user is not None, "Bot should be logged in"
         response: APIResponse[MessageRecord] = (
-            await DatabaseManager().table("messages").select("*").eq("build_id", self.build.id).execute()
+            await DatabaseManager()
+            .table("messages")
+            .select("*")
+            .eq("build_id", self.build.id)
+            .eq("author_id", self.bot.user.id)
+            .execute()
         )
-        maybe_messages = await asyncio.gather(*(self.bot.get_or_fetch_message(row["channel_id"], row["id"]) for row in response.data))
+        maybe_messages = await asyncio.gather(
+            *(self.bot.get_or_fetch_message(row["channel_id"], row["id"]) for row in response.data)
+        )
         messages = [msg for msg in maybe_messages if msg is not None]
         return messages
 
