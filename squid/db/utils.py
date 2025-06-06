@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Literal
+from typing import Any, Literal
 
 import aiohttp
 
@@ -43,7 +43,7 @@ async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: st
         data.add_field("userhash", userhash)
     data.add_field("fileToUpload", file, filename=filename, content_type=mimetype)
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         async with session.post(catbox_url, data=data) as response:
             response_text = await response.text()
             return response_text
@@ -192,7 +192,7 @@ def callable_cached[T](func: Callable[..., T]) -> Callable[..., T]:
     args_flat_to_exception_get = args_flat_to_exception.get
 
     @wraps(func)
-    def _callable_cached(*args):
+    def _callable_cached(*args: Any):
         f"""
         Memoized variant of the {func.__name__}() callable.
 

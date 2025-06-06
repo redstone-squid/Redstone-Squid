@@ -66,12 +66,14 @@ class BuildRecord(TypedDict):
     version_spec: str
     ai_generated: bool
     embedding: list[float] | None
+    is_locked: bool
+    locked_at: str | None  # timestamptz
 
 
 class MessageRecord(TypedDict):
     """A record of a message in the database."""
 
-    message_id: int
+    id: int
     edited_time: str
     server_id: int
     channel_id: int

@@ -1,7 +1,7 @@
 # https://github.com/jazzband/pip-tools#workflow-for-layered-requirements
 # This file can be removed after https://github.com/jazzband/pip-tools/issues/2062
 # Note: changes to this file has to be synced with pyproject.toml
-pip-tools
-ruff
-basedpyright
-bump-my-version
+pip-tools>=7.4.1
+ruff>=0.5.1
+basedpyright>=1.24.0
+bump-my-version>=0.29.0

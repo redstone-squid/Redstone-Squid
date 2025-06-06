@@ -8,7 +8,7 @@ from typing import Any, override
 
 import discord
 import git
-from discord import InteractionResponse, app_commands
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
 
@@ -29,10 +29,17 @@ class HelpCog[BotT: commands.Bot](Cog):
     @app_commands.describe(command="The command to get help for.")
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show help for a command or a group of commands."""
-        # noinspection PyTypeChecker
-        response: InteractionResponse = interaction.response
-        await response.defer()
-        ctx = await self.bot.get_context(interaction, cls=Context)
+        # We are using a hack to make this slash command:
+        #
+        # The ctx.send_help method is supposed to be used in a prefix command and do not handle interactions,
+        # this means that we intentionally send an empty message to make discord think that the interaction is handled,
+        # and then we use ctx.send_help to send the help message, which just sends a message to the channel
+        # instead of replying to the interaction.
+        #
+        # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
+        # and one message with the help information.
+        await interaction.response.send_message(content="loading...", ephemeral=True, delete_after=0, silent=True)
+        ctx = await self.bot.get_context(interaction, cls=Context[BotT])
         if command is not None:
             await ctx.send_help(command)
         else:
@@ -40,22 +47,18 @@ class HelpCog[BotT: commands.Bot](Cog):
 
     @help.autocomplete("command")
     async def command_autocomplete(
-        self, interaction: discord.Interaction[BotT], needle: str
+        self, _interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
-        assert self.bot.help_command
-        ctx = await self.bot.get_context(interaction)
-        help_command = self.bot.help_command.copy()
-        help_command.context = ctx
         if not needle:
             return [
                 app_commands.Choice(name=cog_name, value=cog_name)
                 for cog_name, cog in self.bot.cogs.items()
-                if await help_command.filter_commands(cog.get_commands())
+                if cog.get_commands()
             ][:25]
         needle = needle.lower()
         return [
             app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
-            for command in await help_command.filter_commands(self.bot.walk_commands(), sort=True)
+            for command in self.bot.walk_commands()
             if needle in command.qualified_name
         ][:25]
 
@@ -70,13 +73,17 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
-        filtered_commands = await self.filter_commands(commands_, sort=True)
+
+        # We do not filter commands here, because it is too slow.
+        # Every command needs to run its own checks even if the same check is used.
+        # filtered_commands = await self.filter_commands(commands_, sort=True)
+
         repo = git.Repo(search_parent_directories=True)
         desc = dedent(
             f"""\
             {self.context.bot.description}
     
-            Commands:{self.get_commands_brief_details(filtered_commands)}
+            Commands:{self.get_commands_brief_details(commands_)}
     
             {MORE_INFORMATION}
             """
@@ -95,13 +102,15 @@ class Help(commands.MinimalHelpCommand):
         await self.get_destination().send(embed=em)
 
     @staticmethod
-    def get_commands_brief_details(commands_: Sequence[Command], return_as_list: bool = False) -> list[str] | str:
+    def get_commands_brief_details(
+        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
+    ) -> list[str] | str:
         """
         Formats the prefix, command name and signature, and short doc for an iterable of commands.
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """
-        details = []
+        details: list[str] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
             details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}")
@@ -124,15 +133,14 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_group_help(self, group: Group[Any, ..., Any], /) -> None:
         """Sends help for a group command."""
-        subcommands = group.commands
+        commands_ = group.commands
 
-        if len(subcommands) == 0:
+        if len(commands_) == 0:
             # Group is a subclass of Command
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        commands_ = await self.filter_commands(subcommands, sort=True)
-        command_details = self.get_commands_brief_details(commands_)
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = f"""{group.cog.description}
 
             Usable Subcommands: {command_details or "None"}
@@ -140,13 +148,14 @@ class Help(commands.MinimalHelpCommand):
             {MORE_INFORMATION}"""
         em = utils.help_embed("Command Help", desc)
         await self.get_destination().send(embed=em)
+        return None
 
     # !help <cog>
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
-        commands_ = await self.filter_commands(cog.walk_commands(), sort=True)
-        command_details = self.get_commands_brief_details(commands_)
+        commands_ = cog.walk_commands()
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = f"""{cog.description}
 
             Usable Subcommands:{command_details or "None"}

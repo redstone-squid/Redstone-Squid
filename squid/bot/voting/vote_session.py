@@ -251,6 +251,7 @@ class AbstractVoteSession(ABC):
         """Get the messages of the vote session if they exist in the cache"""
         if len(self.message_ids) == len(self._messages):
             return self._messages
+        return None
 
     async def fetch_messages(self) -> set[discord.Message]:
         """Fetch the messages of the vote session"""
@@ -258,14 +259,14 @@ class AbstractVoteSession(ABC):
             return self._messages
 
         messages_record: APIResponse[MessageRecord] = (
-            await DatabaseManager().table("messages").select("*").in_("message_id", self.message_ids).execute()
+            await DatabaseManager().table("messages").select("*").in_("id", self.message_ids).execute()
         )
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
             *(
-                self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+                self.bot.get_or_fetch_message(record["channel_id"], record["id"])
                 for record in messages_record.data
-                if record["message_id"] not in cached_ids
+                if record["id"] not in cached_ids
             )
         )
         new_messages = (message for message in new_messages if message is not None)
@@ -442,7 +443,7 @@ class BuildVoteSession(AbstractVoteSession):
     async def _from_record(cls, bot: RedstoneSquid, record: dict[str, Any]) -> BuildVoteSession:
         """Create a vote session from a database record."""
         if record["build_vote_sessions"] is None:
-            raise ValueError(f"Found a build vote session with no associated build id. session_id={record["id"]}")
+            raise ValueError(f"Found a build vote session with no associated build id. session_id={record['id']}")
         build_id: int = record["build_vote_sessions"]["build_id"]
         build = await Build.from_id(build_id)
 
@@ -451,7 +452,7 @@ class BuildVoteSession(AbstractVoteSession):
         self._allow_init = True
         self.__init__(
             bot=bot,
-            messages=[msg["message_id"] for msg in record["messages"]],
+            messages=[msg["id"] for msg in record["messages"]],
             author_id=record["author_id"],
             build=build,
             type="add",
@@ -626,7 +627,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self._allow_init = True
         self.__init__(
             bot,
-            [msg["message_id"] for msg in record["messages"]],
+            [msg["id"] for msg in record["messages"]],
             record["author_id"],
             target_message,
             record["pass_threshold"],

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from functools import cache
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from dotenv import load_dotenv
 from postgrest.base_request_builder import APIResponse
@@ -28,7 +28,7 @@ class DatabaseManager(AsyncClient):
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
     _instance: ClassVar[DatabaseManager | None] = None
 
-    def __new__(cls, *args, **kwargs) -> DatabaseManager:
+    def __new__(cls, *args: Any, **kwargs: Any) -> DatabaseManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -87,6 +87,8 @@ class DatabaseManager(AsyncClient):
     async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
         versions = await self.get_or_fetch_versions_list(edition=edition)
+        if len(versions) == 0:
+            raise RuntimeError(f"No {edition} versions found.")
         return get_version_string(versions[-1])
 
     async def find_versions_from_spec(self, version_spec: str) -> list[str]:
@@ -113,6 +115,7 @@ class DatabaseManager(AsyncClient):
         parts = [part.strip() for part in version_spec.split(",")]
 
         valid_tuples: list[tuple[int, int, int]] = []
+        v_tuple: tuple[int, int, int]
 
         for part in parts:
             # Case 1: range like "1.14 - 1.16.1"
@@ -160,7 +163,7 @@ class DatabaseManager(AsyncClient):
                             valid_tuples.append(v_tuple)
                 # If a full version specified (like "1.17.1"), match exactly that version
                 elif len(subparts) == 3:
-                    v_tuple = tuple(map(int, subparts))
+                    v_tuple = tuple(map(int, subparts))  # pyright: ignore[reportAssignmentType]
                     if v_tuple in all_version_tuples:
                         valid_tuples.append(v_tuple)
                 else:

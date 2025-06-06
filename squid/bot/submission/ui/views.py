@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import re
-from typing import TYPE_CHECKING, Sequence, override
+from typing import TYPE_CHECKING, Sequence, cast, override
 
 import discord
+from discord import Interaction
 
 from squid.bot.submission import ui
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
@@ -20,7 +22,7 @@ from squid.bot.submission.ui.components import (
     RecordCategorySelect,
     get_text_input,
 )
-from squid.bot.utils import DEFAULT
+from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import Category, Status
 
@@ -103,6 +105,8 @@ class SubmissionModal(discord.ui.Modal):
 
 
 class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
+    """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
+
     def __init__(
         self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
     ):
@@ -168,15 +172,29 @@ class ConfirmationView(discord.ui.View):
         self.stop()
 
 
-class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
+class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
+    """A view that allows users to edit a build.
+
+    This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.
+    """
+
     def __init__(
         self,
         build: Build,
-        items: Sequence[BuildField] = DEFAULT,
+        items: Sequence[BuildField] | DefaultType = DEFAULT,
         *,
-        parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None,
+        timeout: float = 300,
     ):
-        super().__init__(parent=parent, timeout=None)
+        """Initializes the BuildEditView.
+
+        Args:
+            build: The build to edit.
+            items: The items to display in the view.
+            parent: The parent view.
+            timeout: The timeout for the view.
+        """
+        super().__init__(timeout=timeout)
+        self.timeout = cast(float, self.timeout)
         self.build = build
         if items is DEFAULT:
             items = [
@@ -201,10 +219,24 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
         self.items = items
         self.page = 1
         self._max_pages = len(self.items) // 5 + 1
+        self.expiry_time: datetime.datetime = discord.utils.utcnow() + datetime.timedelta(seconds=self.timeout)
 
-    def get_modal(self) -> discord.ui.Modal:
+    @override
+    async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]
+        if discord.utils.utcnow() > self.expiry_time:
+            for item in self.children:
+                item.disabled = True  # type: ignore
+            await interaction.followup.send("This edit session has expired. Your edits are not saved.", ephemeral=True)
+            return False
+        return True
+
+    def get_modal(self) -> EditModal:
         """Page is 1-indexed"""
-        modal = EditModal(parent=self, title=f"Edit Build (Page {self.page})", timeout=None)
+        modal = EditModal(
+            parent=self,
+            title=f"Edit Build (Page {self.page})",
+            timeout=(self.expiry_time - discord.utils.utcnow()).seconds,
+        )
         if 5 * self.page <= len(self.items):
             for i in range(5):
                 base_index = 5 * (self.page - 1)
@@ -219,7 +251,6 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
         self.previous_page.disabled = self.page == 1
         self.next_page.disabled = self.page == self._max_pages
 
-    @override
     async def send(self, interaction: discord.Interaction[BotT], ephemeral: bool = False) -> None:
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=ephemeral)
@@ -231,7 +262,6 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
             ephemeral=ephemeral,
         )
 
-    @override
     async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()
         await interaction.response.edit_message(
@@ -252,7 +282,7 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
         return discord.Embed(title="Build Summary", description="\n".join(summaries))
 
     @discord.ui.button(label="Open", style=discord.ButtonStyle.primary)
-    async def open(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def open(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await interaction.response.send_modal(self.get_modal())
 
     @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
@@ -269,7 +299,7 @@ class BuildEditView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
 
     @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
-        await self.press_home(interaction)
+        await interaction.response.defer()
         await self.build.save()
         await interaction.followup.send(
             content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True

@@ -6,18 +6,21 @@ import asyncio
 import logging
 import os
 import re
+import time
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
+from datetime import timedelta
 from functools import cached_property
 from importlib import resources
+from types import TracebackType
 from typing import Any, Callable, Final, Literal, Self, overload
 
 import discord
 import vecs
 from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod
+from postgrest.types import CountMethod, ReturnMethod
 
 from squid.db import DatabaseManager
 from squid.db.schema import (
@@ -152,6 +155,10 @@ class Build:
     - Properties
     - Normal methods
     - load(), save() and the helper methods it calls
+
+    Locking:
+        A build can be locked to prevent concurrent modifications.
+        This lock is a simple boolean in the database, but is implemented as a counter in the object to allow nested locks (reentrant locks).
     """
 
     id: int | None = None
@@ -196,10 +203,16 @@ class Build:
     original_server_id: Final[int | None] = frozen_field(default=None)
     original_channel_id: Final[int | None] = frozen_field(default=None)
     original_message_id: Final[int | None] = frozen_field(default=None)
+    original_message_author_id: Final[int | None] = frozen_field(default=None)
     original_message: Final[str | None] = frozen_field(default=None)
 
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
+
+    lock: BuildLock = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        self.lock = BuildLock(self.id)
 
     @staticmethod
     async def from_id(build_id: int) -> Build | None:
@@ -232,7 +245,7 @@ class Build:
         response: SingleAPIResponse[MessageRecord] | None = (
             await db.table("messages")
             .select("build_id", count=CountMethod.exact)
-            .eq("message_id", message_id)
+            .eq("id", message_id)
             .maybe_single()
             .execute()
         )
@@ -322,12 +335,13 @@ class Build:
 
         message_record: MessageRecord | None = data["messages"]
         if message_record is None:
-            original_server_id = original_channel_id = original_message_id = None
+            original_server_id = original_channel_id = original_message_id = original_message_author_id = None
             original_message = None
         else:
             original_server_id = message_record["server_id"]
             original_channel_id = message_record["channel_id"]
             original_message_id = data["original_message_id"]
+            original_message_author_id = message_record["author_id"]
             original_message = message_record["content"]
 
         ai_generated = data["ai_generated"]
@@ -366,6 +380,7 @@ class Build:
             original_server_id=original_server_id,
             original_channel_id=original_channel_id,
             original_message_id=original_message_id,
+            original_message_author_id=original_message_author_id,
             original_message=original_message,
             ai_generated=ai_generated,
             embedding=embedding,
@@ -390,16 +405,34 @@ class Build:
             return None
 
     @staticmethod
-    async def ai_generate_from_message(message: discord.Message) -> Build | None:
-        """Parses a build from a message using AI."""
+    async def ai_generate_from_message(
+        message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
+    ) -> Build | None:
+        """Parses a build from a message using AI.
+
+        Args:
+            message: The discord message
+            prompt_path: Relative path to the prompt file, defaults to "prompt.txt" in the squid.db package.
+            model: The LLM model to use for the AI generation, defaults to "gpt-4.1-nano".
+        """
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if not base_url:
+            logger.warning("No OpenAI base URL found, defaulting to https://api.openai.com/v1.")
+            base_url = "https://api.openai.com/v1"
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("No OpenAI API key found, cannot generate build from message.")
+            return None
+
         client = AsyncOpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url=base_url,
+            api_key=api_key,
         )
 
-        prompt = resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8")
+        prompt = resources.files("squid.db").joinpath(prompt_path).read_text(encoding="utf-8")
         completion = await client.beta.chat.completions.parse(
-            model="deepseek/deepseek-chat",
+            model=model,
             messages=[
                 {
                     "role": "user",
@@ -466,17 +499,18 @@ class Build:
         # All keys must be present
         if not all(key in variables for key in acceptable_keys):
             logging.debug("Missing keys in AI output variables")
-            return
+            return None
 
         build = Build(
             original_server_id=message.guild.id if message.guild is not None else None,
             original_channel_id=message.channel.id,
             original_message_id=message.id,
+            original_message_author_id=message.author.id,
             original_message=message.clean_content,
             ai_generated=True,
         )
         build.record_category = variables["record_category"]  # type: ignore
-        build.extra_info["unknown_restrictions"] = {}
+        build.extra_info["unknown_restrictions"] = UnknownRestrictions()
         if variables["component_restriction"] is not None:
             comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
             build.component_restrictions = comps[0]
@@ -672,12 +706,16 @@ class Build:
         Returns:
             The embedding generated by the API, or None if the API call failed for any reason (e.g. no API key).
         """
+        # The EMBEDDING_ environmental variables are an override for the OPENAI_ ones.
+        base_url = os.getenv("EMBEDDING_OPENAI_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        api_key = os.getenv("EMBEDDING_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+        model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         try:
-            client = AsyncOpenAI()
-            response = await client.embeddings.create(input=str(self), model="text-embedding-3-small")
+            client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+            response = await client.embeddings.create(input=str(self), model=model)
             return response.data[0].embedding
         except OpenAIError as e:
-            logger.error(f"Failed to generate embedding for build {self.id}: {e}")
+            logger.debug(f"Failed to generate embedding for build {self.id}: {e}")
             return None
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
@@ -737,7 +775,7 @@ class Build:
 
     @staticmethod
     def get_attr_type(attribute: str) -> type:
-        """Gets the type of an attribute in the Build class."""
+        """Gets the type of the attribute in the Build class."""
         if attribute in Build.__annotations__:
             attr_type = typing.get_type_hints(Build)[attribute]
         else:
@@ -757,14 +795,19 @@ class Build:
         Raises:
             ValueError: If the build could not be confirmed.
         """
-        self.submission_status = Status.CONFIRMED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
+        if self.id is None:
+            raise ValueError("Build ID is missing.")
+        assert self.lock is not None
+
+        async with self.lock(timeout=30):
+            self.submission_status = Status.CONFIRMED
+            response: APIResponse[BuildRecord] = (
+                await DatabaseManager()
+                .table("builds")
+                .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
+                .eq("id", self.id)
+                .execute()
+            )
         if response.count != 1:
             raise ValueError("Failed to confirm submission in the database.")
 
@@ -774,14 +817,19 @@ class Build:
         Raises:
             ValueError: If the build could not be denied.
         """
-        self.submission_status = Status.DENIED
-        db = DatabaseManager()
-        response: APIResponse[BuildRecord] = (
-            await db.table("builds")
-            .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
-            .eq("id", self.id)
-            .execute()
-        )
+        if self.id is None:
+            raise ValueError("Build ID is missing.")
+        assert self.lock is not None
+
+        async with self.lock(timeout=30):
+            self.submission_status = Status.DENIED
+            response: APIResponse[BuildRecord] = (
+                await DatabaseManager()
+                .table("builds")
+                .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
+                .eq("id", self.id)
+                .execute()
+            )
         if response.count != 1:
             raise ValueError("Failed to deny submission in the database.")
 
@@ -800,7 +848,7 @@ class Build:
         build_data = {
             "submission_status": self.submission_status,
             "record_category": self.record_category,
-            # "information": self.information,
+            # "extra_info": self.extra_info,
             "edited_time": self.edited_time,
             "width": self.width,
             "height": self.height,
@@ -816,15 +864,21 @@ class Build:
 
         db = DatabaseManager()
         response: APIResponse[BuildRecord]
-        if self.id:
-            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
-            assert response.count == 1
-            delete_build_on_error = False
-        else:
+        if self.id is None:
+            # Lock the build immediately on creation instead of calling self.lock.acquire_lock()
+            # to avoid issues where another task modifies the build before it is locked
+            build_data |= {"is_locked": True}
             response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
+            self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
+
             assert response.count == 1
             self.id = response.data[0]["id"]
             delete_build_on_error = True
+        else:
+            await self.lock.acquire(timeout=30)
+            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
+            assert response.count == 1
+            delete_build_on_error = False
 
         message_insert_task = asyncio.create_task(self._update_messages_table())
         vx = vecs.create_client(os.environ["DB_CONNECTION"])
@@ -837,9 +891,14 @@ class Build:
                 unknown_restrictions = tg.create_task(self._update_build_restrictions_table())
                 unknown_types = tg.create_task(self._update_build_types_table())
                 embedding_task = tg.create_task(self.generate_embedding())
-            build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
+            build_vecs = vx.get_or_create_collection(
+                name="builds", dimension=int(os.getenv("EMBEDDING_DIMENSION", "1536"))
+            )
             self.embedding = await embedding_task
-            build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
+            if self.embedding is None:
+                logger.debug("Failed to generate embedding for build id %s, skipping vector update", self.id)
+            else:
+                build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
                 self.extra_info["unknown_restrictions"] = (
@@ -853,18 +912,23 @@ class Build:
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"information": self.extra_info, "original_message_id": self.original_message_id})
+                .update({"extra_info": self.extra_info, "original_message_id": self.original_message_id})
                 .eq("id", self.id)
                 .execute()
             )
         except:
-            vx.disconnect()
             if delete_build_on_error:
+                logger.warning("Failed to save build %s, deleting it", repr(self))
                 await db.table("builds").delete().eq("id", self.id).execute()
+            else:
+                logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(self))
             raise
+        finally:
+            vx.disconnect()
+            await self.lock.release()
 
     async def _update_build_subcategory_table(self) -> None:
-        """Updates the subcategory table with the given data."""
+        """Updates the subcategory table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         if self.category == "Door":
             doors_data = {
@@ -889,7 +953,7 @@ class Build:
             raise ValueError("Build category must be set")
 
     async def _update_build_restrictions_table(self) -> UnknownRestrictions:
-        """Updates the build_restrictions table with the given data"""
+        """Updates the build_restrictions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         build_restrictions: list[str] = (
             self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
@@ -934,7 +998,7 @@ class Build:
         return unknown_restrictions
 
     async def _update_build_types_table(self) -> list[str]:
-        """Updates the build_types table with the given data.
+        """Updates the build_types table with the given data. This function assumes lock is acquired.
 
         Returns:
             A list of unknown types.
@@ -958,7 +1022,7 @@ class Build:
         return unknown_types
 
     async def _update_build_links_table(self) -> None:
-        """Updates the build_links table with the given data."""
+        """Updates the build_links table with the given data. This function assumes lock is acquired."""
         build_links_data = []
         if self.image_urls:
             build_links_data.extend(
@@ -976,7 +1040,7 @@ class Build:
             await DatabaseManager().table("build_links").upsert(build_links_data).execute()
 
     async def _update_build_creators_table(self) -> None:
-        """Updates the build_creators table with the given data."""
+        """Updates the build_creators table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         creator_ids: list[int] = []
         for creator_ign in self.creators_ign:
@@ -994,7 +1058,7 @@ class Build:
             await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
 
     async def _update_build_versions_table(self) -> None:
-        """Updates the build_versions table with the given data."""
+        """Updates the build_versions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
         functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
 
@@ -1008,7 +1072,7 @@ class Build:
             await db.table("build_versions").upsert(build_versions_data).execute()
 
     async def _update_messages_table(self) -> None:
-        """Updates the messages table with the given data."""
+        """Updates the messages table with the given data. This function assumes lock is acquired."""
         if self.original_message_id is None:
             return
 
@@ -1019,14 +1083,137 @@ class Build:
                 {
                     "server_id": self.original_server_id,
                     "channel_id": self.original_channel_id,
-                    "message_id": self.original_message_id,
+                    "id": self.original_message_id,
                     "build_id": self.id,
                     "purpose": "build_original_message",
                     "content": self.original_message,
+                    "author_id": self.original_message_author_id,
                 }
             )
             .execute()
         )
+
+
+class BuildLock:
+    """A reentrant lock to prevent concurrent modifications to a build."""
+
+    def __init__(self, build_id: int | None):
+        """Initializes the lock
+
+        Args:
+            build_id: The ID of the build to lock. If None, this lock becomes a no-op.
+            None is supported mainly so users of Build doesn't have to check if the build ID is None before creating a lock.
+        """
+        self.build_id = build_id
+        # This assumes that when _lock_count is > 0, it is ALWAYS synced with the database is_locked value
+        self._lock_count = 0
+
+    def locked(self):
+        """Whether the build is locked."""
+        return self._lock_count > 0
+
+    def __call__(self, *, blocking: bool = True, timeout: float = -1) -> LockContextManager:
+        return LockContextManager(self, blocking=blocking, timeout=timeout)
+
+    async def _try_lock(self) -> bool:
+        """Tries to acquire the lock."""
+        assert self.build_id is not None
+        response = (
+            await DatabaseManager()
+            .table("builds")
+            .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.minimal)
+            .eq("id", self.build_id)
+            .eq("is_locked", False)
+            .execute()
+        )
+        if response.count == 1:
+            self._lock_count = 1
+            return True
+        return False
+
+    async def acquire(self, *, blocking: bool = True, timeout: float = -1) -> bool:
+        """Acquires a lock on the build to prevent concurrent modifications.
+
+        Args:
+            blocking: Whether to block until the lock is acquired. If False, the function will return immediately if the lock cannot be acquired.
+            timeout: The maximum time to wait for the lock. If -1, the function will wait indefinitely.
+        """
+        # No need to lock if the build is not in the database
+        if self.build_id is None:
+            return True
+
+        if self._lock_count > 0:
+            self._lock_count += 1
+            return True
+
+        if not blocking:
+            if not await self._try_lock():
+                return False
+            return True
+
+        if timeout >= 0:
+            start_time = time.monotonic()
+            while True:
+                if await self._try_lock():
+                    return True
+                if time.monotonic() - start_time >= timeout:
+                    return False
+                await asyncio.sleep(0.1)
+        else:
+            while not await self._try_lock():
+                await asyncio.sleep(0.1)
+            return True
+
+    async def release(self) -> None:
+        """Releases the lock on the build.
+
+        If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
+        """
+        if self._lock_count <= 0:
+            return
+        self._lock_count -= 1
+
+        if self.build_id is None:  # No need to release if the build is not in the database
+            return
+
+        if self._lock_count == 0:
+            await (
+                DatabaseManager()
+                .table("builds")
+                .update({"is_locked": False}, returning=ReturnMethod.minimal)
+                .eq("id", self.build_id)
+                .execute()
+            )
+
+
+class LockContextManager:
+    """A context manager for BuildLock."""
+
+    def __init__(self, lock: BuildLock, *, blocking: bool = True, timeout: float = -1):
+        self.lock = lock
+        self.blocking = blocking
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        if await self.lock.acquire(blocking=self.blocking, timeout=self.timeout):
+            return self.lock
+        raise asyncio.TimeoutError("Timed out waiting for lock")
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ):
+        await self.lock.release()
+
+
+async def clean_locks() -> None:
+    """Cleans up locks that were not released properly."""
+    await (
+        DatabaseManager()
+        .table("builds")
+        .update({"is_locked": False}, returning=ReturnMethod.minimal)
+        .lt("locked_at", discord.utils.utcnow() - timedelta(minutes=5))
+        .execute()
+    )
 
 
 async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
@@ -1144,8 +1331,14 @@ async def main():
     from dotenv import load_dotenv
 
     load_dotenv()
-    response = await DatabaseManager().table("builds").select(all_build_columns).eq("id", 172).execute()
-    print(response.data)
+    response = (
+        await DatabaseManager()
+        .table("builds")
+        .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.representation)
+        .eq("id", 6)
+        .execute()
+    )
+    print(response)
     build = await Build.from_id(43)
     if build:
         print(repr(build))

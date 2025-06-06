@@ -124,7 +124,7 @@ Vinsamlega lestu [CODE_OF_CONDUC.md](https://github.com/Kappeh/Redstone-Squid/bl
 
 ## Leyfi
 
-Þetta verkefni er með leyfi samkvæmt MIT leyfinu - sjá [LICENSE.md](LICENSE.md) skrána fyrir frekari upplýsingar
+Þetta verkefni er með leyfi samkvæmt MIT leyfinu - sjá [LICENSE](../../LICENSE) skrána fyrir frekari upplýsingar
 
 ## Viðurkenningar
 

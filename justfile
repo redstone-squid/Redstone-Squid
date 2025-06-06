@@ -43,17 +43,11 @@ init: && sync
     {{python}} -m pip install --upgrade pip pip-tools
 
 compile:
-    {{python_dir}}/pip-compile --output-file=requirements.txt requirements.in
-    {{python_dir}}/pip-compile --constraint=requirements.txt --output-file=dev-requirements.txt dev-requirements.in
+    {{python_dir}}/pip-compile --output-file=requirements/base.txt pyproject.toml
+    {{python_dir}}/pip-compile --constraint=requirements/base.txt --output-file=requirements/dev.txt requirements/dev.in
 
-[unix]
 sync:
-    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt dev-requirements.txt
-
-[windows]
-sync:
-    {{python_dir}}/pip-sync --python-executable {{python}} requirements.txt dev-requirements.txt
-    {{python_dir}}/pip uninstall -y aiodns
+    {{python_dir}}/pip-sync --python-executable {{python}} requirements/base.txt requirements/dev.txt
 
 lint:
     {{python}} -m ruff check --extend-select I --fix --exit-zero

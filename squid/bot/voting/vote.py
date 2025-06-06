@@ -50,11 +50,11 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         query = (
             self.bot.db.table("messages")
             .select("vote_session_id, vote_sessions(kind)")
-            .eq("message_id", message_id)
+            .eq("id", message_id)
             .eq("purpose", "vote")
         )
         if status is not None:
-            query.eq("vote_sessions(status)", status)
+            query.eq("vote_sessions.status", status)
         response: SingleAPIResponse[dict[str, Any]] | None = await query.maybe_single().execute()
 
         if response is None:
@@ -157,11 +157,14 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     cog = VoteCog(bot)
-    open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
-        bot
-    ) + await DeleteLogVoteSession.get_open_vote_sessions(bot)
-    for session in open_vote_sessions:
-        for message_id in session.message_ids:
-            cog._open_vote_sessions[message_id] = session  # pyright: ignore [reportPrivateUsage]
+    try:
+        open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
+            bot
+        ) + await DeleteLogVoteSession.get_open_vote_sessions(bot)
+        for session in open_vote_sessions:
+            for message_id in session.message_ids:
+                cog._open_vote_sessions[message_id] = session  # pyright: ignore [reportPrivateUsage]
+    except Exception as e:
+        logger.error(f"Failed to load open vote sessions: {e}")
 
     await bot.add_cog(cog)

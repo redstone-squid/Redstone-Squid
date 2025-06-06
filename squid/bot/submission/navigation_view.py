@@ -69,7 +69,7 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
         self.parent: Final = parent
         super().__init__(timeout=timeout)
 
-    def __init_subclass__(cls: type[Self]) -> None:
+    def __init_subclass__(cls: type[BaseNavigableView[Any]]) -> None:
         """Wrap the init method of the child view to add the "Stop", "Go Home", and "Go Back" buttons."""
         cls.__init__ = BaseNavigableView._wrap_init(cls.__init__)
         return super().__init_subclass__()

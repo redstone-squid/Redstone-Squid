@@ -19,7 +19,10 @@ from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
 from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, PREFIX
 from squid.db import DatabaseManager
-from squid.db.builds import Build
+from squid.db.builds import Build, clean_locks
+
+logger = logging.getLogger(__name__)
+
 
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
@@ -61,6 +64,11 @@ class RedstoneSquid(Bot):
         """Supabase deactivates a database in the free tier if it's not used for 7 days."""
         await self.db.table("builds").select("id").limit(1).execute()
 
+    @tasks.loop(minutes=5)
+    async def clean_dangling_build_locks(self):
+        """Clean up dangling build locks in case some functions failed to release them."""
+        await clean_locks()
+
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
         """
         Fetches a message from the cache or the API.
@@ -79,8 +87,8 @@ class RedstoneSquid(Bot):
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:
-            pass
-            # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+            logger.debug("Message %s not found in channel %s.", message_id, channel_id)
+            await DatabaseManager().message.untrack_message(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -101,8 +109,12 @@ def setup_logging():
     stream_handler.setFormatter(formatter)
     logging.root.addHandler(stream_handler)
 
-    logger = logging.getLogger("discord")
-    logger.setLevel(logging.INFO)
+    discord_logger = logging.getLogger("discord")
+    discord_logger.setLevel(logging.INFO)
+
+    if DEV_MODE:
+        # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
+        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
 
     file_handler = RotatingFileHandler(
         filename="discord.log",
@@ -112,7 +124,7 @@ def setup_logging():
     )
 
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    discord_logger.addHandler(file_handler)
 
 
 async def main():

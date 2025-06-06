@@ -3,47 +3,58 @@ name = "redstone-squid"
 version = "1.5.7"
 requires-python = ">=3.12"
 readme = "README.md"
+# Whenever the dependencies change, run
+# 1. uv pip compile --output-file=requirements/base.txt pyproject.toml
+# 2. uv pip compile --constraint=requirements/base.txt --output-file=requirements/dev.txt requirements/dev.in
 dependencies = [
-    "oauth2client",
-    "discord-py[speed]>=2",
-    "gspread",
-    "supabase",
-    "python-dotenv",
-    "jishaku",
-    "fastapi",
-    "uvicorn",
-    "openai",
-    "async-lru",
-    "markdown",
-    "beautifulsoup4",
-    "vecs",
-    "gitpython",
-    "beartype",
-    "discord-ext-menus",
+    "oauth2client>=4.1.3",
+    "discord-py[speed]>=2.5.0,<3",
+    "gspread>=6.1.4",
+    "supabase>=2.11.0",
+    "python-dotenv>=1.0.1",
+    # Using our own fork which fixes https://github.com/supabase/postgrest-py/issues/340
+    "postgrest @ git+https://github.com/redstone-squid/postgrest-py",
+    "jishaku>=2.6.0",
+    "fastapi>=0.115.6",
+    "uvicorn>=0.34.0",
+    "openai>=1.58.1",
+    "async-lru>=2.0.4",
+    "markdown>=3.7",
+    "beautifulsoup4>=4.12.3",
+    "vecs>=0.4.5",
+    "gitpython>=3.1.31",
+    "beartype>=0.19.0",
+    "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
 ]
 
 [dependency-groups]
 # Note: changes to this group has to be synced with requirements/dev.in
+# Also update requirements/dev.txt with:
+# uv pip compile --constraint=requirements/base.txt --output-file=requirements/dev.txt requirements/dev.in
 dev = [
-    "pip-tools",
-    "ruff",
-    "basedpyright",
-    "bump-my-version",
+    "pip-tools>=7.4.1",
+    "ruff>=0.5.1",
+    "basedpyright>=1.24.0",
+    "bump-my-version>=0.29.0",
+    "pytest-cov>=6.1.1",
 ]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = []
+
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-discord-ext-menus = { git = "https://github.com/Rapptz/discord-ext-menus" }
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["E731"]
 
 [tool.ruff.format]
 docstring-code-format = true

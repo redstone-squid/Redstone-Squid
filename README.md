@@ -7,7 +7,7 @@ Read this in other languages: [🇮🇸](./docs/readme/README-is.md)
 
 ## Getting Started
 
-Setting up your own version of this bot is **NOT RECOMMENDED** as their is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
+Setting up your own version of this bot is **NOT RECOMMENDED** as there is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
 
 To get this bot up and running on your machine, you will need a copy of this repository. To clone the repository, use:
 ```bash
@@ -35,9 +35,11 @@ In the root directory of the repository you can use the following command to ins
 pip install -r requirements/base.txt requirements/dev.txt
 ```
 
+Alternatively, if you use `uv`, you can run `uv sync`. The requirements folder and `uv.lock` are kept in sync.
+
 ### Credential Files
 
-Google services requires a google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
+Google services requires a Google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
 
 Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `.env` in the root directory with the following contents:
 ```
@@ -58,7 +60,7 @@ CATBOX_USERHASH = <Replace this with your catbox user hash>
 
 ### Running The Application
 
-The application can now be ran simply with:
+The application can now be run simply with:
 ```
 python app.py
 ```
@@ -66,7 +68,7 @@ python app.py
 ## Discord Set Up
 
 ###  Adding Bot To Servers
-You can add your bot to your server by going to `https://discordapp.com/oauth2/authorize?client_id=<REPLACE WITH YOUR BOT'S ID>&scope=bot`. It is recommended to give the bot administrator permissions but is not required for it's functionality.
+You can add your bot to your server by going to `https://discordapp.com/oauth2/authorize?client_id=<REPLACE WITH YOUR BOT'S ID>&scope=bot`. It is recommended to give the bot administrator permissions but is not required for its functionality.
 
 If you wish to invite the main instance to your server, click [here](https://discordapp.com/oauth2/authorize?client_id=528946065668308992&scope=bot&permissions=8).
 
