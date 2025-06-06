@@ -49,7 +49,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 
         query = (
             self.bot.db.table("messages")
-            .select("vote_session_messages(vote_session_id), vote_sessions(kind)")
+            .select("vote_session_id, vote_sessions(kind)")
             .eq("id", message_id)
             .eq("purpose", "vote")
         )
@@ -60,7 +60,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         if response is None:
             return None
 
-        vote_session_id: int = response.data["vote_session_messages"]["vote_session_id"]
+        vote_session_id: int = response.data["vote_session_id"]
         kind: str = response.data["vote_sessions"]["kind"]
 
         if kind == "build":

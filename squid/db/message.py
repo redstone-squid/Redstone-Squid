@@ -47,18 +47,12 @@ class MessageManager:
                     "id": message.id,
                     "build_id": build_id,
                     "author_id": message.author.id,
+                    "vote_session_id": vote_session_id,
                     "purpose": purpose,
                 }
             )
             .execute()
         )
-
-        if vote_session_id is not None:
-            await (
-                self.client.table("vote_session_messages")
-                .insert({"vote_session_id": vote_session_id, "message_id": message.id})
-                .execute()
-            )
 
     async def update_message_edited_time(self, message: int | discord.Message) -> None:
         """
