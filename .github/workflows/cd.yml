@@ -24,6 +24,16 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          # https://github.com/appleboy/ssh-action/issues/31#issuecomment-1006565847
+          # Note that because .bashrc does nothing by default for non-interactive shells,
+          # we actually need to edit the .bashrc file to get the environment variables to load.
+          # In particular, I edited the .bashrc file to add uv to the PATH regardless of whether the shell
+          # is interactive or not by adding the following line at the START of the file:
+          #
+          # export PATH="$HOME/.local/bin:$PATH"
+          #
+          # This is quite a hacky solution, but it works for now.
+          # Also, you need to set up the repo on the server first.
           script: |
             source ~/.bashrc
             cd Redstone-Squid
