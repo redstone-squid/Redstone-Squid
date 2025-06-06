@@ -26,7 +26,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
     @check_is_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def confirm_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as confirmed.
 
@@ -48,7 +48,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.hybrid_command(name="deny")
     @app_commands.describe(build_id="The ID of the build you want to deny.")
     @check_is_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as denied."""
         async with self.bot.get_running_message(ctx) as sent_message:
@@ -67,7 +67,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
 
     @commands.hybrid_command("add_alias")
     @check_is_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def add_restriction_alias(self, ctx: Context[BotT], restriction_id: int, alias: str):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:

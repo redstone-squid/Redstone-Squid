@@ -243,7 +243,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
 
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()
-    @commands.check(check_is_owner_server)
+    @check_is_owner_server()
     async def recalc(self, ctx: Context[BotT], message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
