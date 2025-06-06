@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Awaitable, Iterable
+from collections.abc import Awaitable
 from logging.handlers import RotatingFileHandler
-from typing import Callable, Self, override
+from typing import Callable, Self, TypedDict, override
 
 import discord
 from discord import Message, Webhook
@@ -22,7 +22,27 @@ from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 
+
+logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
+
+
+class BotConfig(TypedDict, total=False):
+    """Configuration for the Redstone Squid bot."""
+    prefix: str
+    """The command prefix for the bot. Defaults to `!` if not found in this config."""
+    bot_name: str
+    """The name of the bot, used in the help command."""
+    bot_version: str
+    """The version of the bot, used in the help command."""
+    owner_id: int
+    """The ID of the bot owner, used for commands that only the owner can use. e.g. `sync` which syncs the bot's commands with Discord."""
+    owner_server_id: int
+    """Select one "home" server where some commands are only available in this server. If not set, the bot will not restrict commands to a specific server."""
+    source_code_url: str
+    """The URL of the source code repository, used in the help command."""
+    print_tracebacks: bool
+    """Whether to print tracebacks directly to the user, may leak system information"""
 
 
 class RedstoneSquid(Bot):
@@ -30,15 +50,33 @@ class RedstoneSquid(Bot):
 
     def __init__(
         self,
-        command_prefix: Iterable[str] | str | MaybeAwaitableFunc[[RedstoneSquid, Message], Iterable[str] | str],
+        config: BotConfig | None = None,
     ):
+        if config is None:
+            config = {}
+        description = ""
+        if config.get("bot_name"):
+            description += f"{config.get("bot_name")} "
+        if config.get("bot_version"):
+            description += f"v{config.get("bot_version")}"
+
+        prefix = config.get("prefix")
+        if prefix is None:
+            logger.info("No prefix found in config, using default '!'")
+            prefix = "!"
         super().__init__(
-            command_prefix=command_prefix,
-            owner_id=OWNER_ID,
+            command_prefix=commands.when_mentioned_or(prefix),
+            owner_id=config.get("owner_id"),
             intents=discord.Intents.all(),
-            description=f"{BOT_NAME} v{BOT_VERSION}",
+            description=description or None,
         )
-        assert self.owner_id is not None
+
+        # Store bot configuration as instance attributes
+        self.bot_name = config.get("bot_name")
+        self.bot_version = config.get("bot_version")
+        self.owner_server_id = config.get("owner_server_id")
+        self.source_code_url = config.get("source_code_url")
+        self.print_tracebacks = config.get("print_tracebacks", False)
 
     @override
     async def setup_hook(self) -> None:
@@ -158,7 +196,7 @@ async def main():
     prefix = PREFIX if not DEV_MODE else DEV_PREFIX
 
     setup_logging()
-    async with RedstoneSquid(command_prefix=commands.when_mentioned_or(prefix)) as bot:
+    async with RedstoneSquid(config=BotConfig(prefix=prefix)) as bot:
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:
