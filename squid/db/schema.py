@@ -73,7 +73,7 @@ class BuildRecord(TypedDict):
 class MessageRecord(TypedDict):
     """A record of a message in the database."""
 
-    message_id: int
+    id: int
     edited_time: str
     server_id: int
     channel_id: int

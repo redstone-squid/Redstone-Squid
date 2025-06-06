@@ -223,7 +223,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             return await interaction.followup.send("This does not look like a build.", ephemeral=True)
 
         response: SingleAPIResponse[dict[str, int | None]] | None = (
-            await self.bot.db.table("messages").select("build_id").eq("message_id", message.id).maybe_single().execute()
+            await self.bot.db.table("messages").select("build_id").eq("id", message.id).maybe_single().execute()
         )
         if response is None:
             return await interaction.followup.send("This does not look like a build.", ephemeral=True)

@@ -264,9 +264,9 @@ class AbstractVoteSession(ABC):
         cached_ids = {message.id for message in self._messages}
         new_messages = await asyncio.gather(
             *(
-                self.bot.get_or_fetch_message(record["channel_id"], record["message_id"])
+                self.bot.get_or_fetch_message(record["channel_id"], record["id"])
                 for record in messages_record.data
-                if record["message_id"] not in cached_ids
+                if record["id"] not in cached_ids
             )
         )
         new_messages = (message for message in new_messages if message is not None)
