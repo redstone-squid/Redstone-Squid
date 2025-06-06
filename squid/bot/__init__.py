@@ -133,8 +133,8 @@ class RedstoneSquid(Bot):
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:
-            pass
-            # await untrack_message(message_id)  # FIXME: This is accidentally removing a lot of messages
+            logger.debug("Message %s not found in channel %s.", message_id, channel_id)
+            await DatabaseManager().message.untrack_message(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -184,8 +184,8 @@ def setup_logging(dev_mode: bool = False):
     stream_handler.setFormatter(formatter)
     logging.root.addHandler(stream_handler)
 
-    logger = logging.getLogger("discord")
-    logger.setLevel(logging.INFO)
+    discord_logger = logging.getLogger("discord")
+    discord_logger.setLevel(logging.INFO)
 
     if dev_mode:
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
@@ -199,7 +199,7 @@ def setup_logging(dev_mode: bool = False):
     )
 
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    discord_logger.addHandler(file_handler)
 
 
 DEFAULT_CONFIG: Final[ApplicationConfig] = {
