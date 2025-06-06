@@ -44,9 +44,9 @@ echo "Killing existing app.py process..."
 if [ -f "$PIDFILE" ]; then
   echo "Found PID file in $PIDFILE"
   PID=$(<"$PIDFILE")
-  if kill -0 $PID 2>/dev/null; then
+  if kill -0 "$PID" 2>/dev/null; then
     echo "Stopping app (PID $PID)…"
-    kill $PID
+    kill "$PID"
     rm "$PIDFILE"
   else
     echo "No process $PID; removing stale PID file."

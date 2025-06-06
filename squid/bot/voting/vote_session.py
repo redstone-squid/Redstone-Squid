@@ -251,6 +251,7 @@ class AbstractVoteSession(ABC):
         """Get the messages of the vote session if they exist in the cache"""
         if len(self.message_ids) == len(self._messages):
             return self._messages
+        return None
 
     async def fetch_messages(self) -> set[discord.Message]:
         """Fetch the messages of the vote session"""

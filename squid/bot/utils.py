@@ -20,6 +20,7 @@ from discord.abc import Messageable
 from discord.ext.commands import CheckFailure, Context, FlagConverter, MissingAnyRole, NoPrivateMessage, check
 
 from squid import config
+from squid.bot import RedstoneSquid
 from squid.config import OWNER_ID, PRINT_TRACEBACKS
 from squid.db import DatabaseManager
 
@@ -31,7 +32,7 @@ discord_green = 0x43B581
 logger = logging.getLogger(__name__)
 
 
-_registry = {}
+_registry: dict[str, "Sentinel"] = {}
 
 
 class Sentinel:
@@ -187,12 +188,12 @@ def check_is_owner_server(ctx: Context[Any]):
 def check_is_staff():
     """Check if the user has a staff role, as defined in the server settings."""
 
-    async def predicate(ctx: Context) -> bool:
+    async def predicate(ctx: Context[RedstoneSquid]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
         server_id = ctx.guild.id
-        staff_role_ids = await DatabaseManager().server_setting.get_single(server_id=server_id, setting="Staff")
+        staff_role_ids = await ctx.bot.db.server_setting.get_single(server_id=server_id, setting="Staff")
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         if any(ctx.author.get_role(item) is not None for item in staff_role_ids):  # type: ignore
@@ -224,7 +225,7 @@ async def is_staff(bot: discord.Client, server_id: int | None, user_id: int) -> 
 def check_is_trusted_or_staff():
     """Check if the user has a trusted or staff role, as defined in the server settings."""
 
-    async def predicate(ctx: Context) -> bool:
+    async def predicate(ctx: Context[RedstoneSquid]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
         db = DatabaseManager()

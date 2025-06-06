@@ -58,6 +58,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
                         if value is None:
                             desc += f"{setting} channel: _Not set_\n"
                             continue
+                        # noinspection PyTypeHints: PyCharm thinks this cast is invalid
                         channel = cast(GuildMessageable | None, ctx.guild.get_channel(value))
                         display_value = channel.name if channel is not None else "_Not found_"
                         desc += f"{setting} channel: {display_value}\n"

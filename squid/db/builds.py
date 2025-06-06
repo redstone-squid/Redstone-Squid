@@ -496,7 +496,7 @@ class Build:
         # All keys must be present
         if not all(key in variables for key in acceptable_keys):
             logging.debug("Missing keys in AI output variables")
-            return
+            return None
 
         build = Build(
             original_server_id=message.guild.id if message.guild is not None else None,
@@ -506,7 +506,7 @@ class Build:
             ai_generated=True,
         )
         build.record_category = variables["record_category"]  # type: ignore
-        build.extra_info["unknown_restrictions"] = {}
+        build.extra_info["unknown_restrictions"] = UnknownRestrictions()
         if variables["component_restriction"] is not None:
             comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
             build.component_restrictions = comps[0]
@@ -767,7 +767,7 @@ class Build:
 
     @staticmethod
     def get_attr_type(attribute: str) -> type:
-        """Gets the type of an attribute in the Build class."""
+        """Gets the type of the attribute in the Build class."""
         if attribute in Build.__annotations__:
             attr_type = typing.get_type_hints(Build)[attribute]
         else:
