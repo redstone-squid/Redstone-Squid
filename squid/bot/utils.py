@@ -282,7 +282,7 @@ async def get_website_preview(url: str) -> Preview:
 
     try:
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
             async with session.get(url, headers={"User-Agent": user_agent}) as response:
                 response.raise_for_status()
                 content_type = response.headers.get("Content-Type")

@@ -40,7 +40,7 @@ async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: st
         data.add_field("userhash", userhash)
     data.add_field("fileToUpload", file, filename=filename, content_type=mimetype)
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=True) as session:
         async with session.post(catbox_url, data=data) as response:
             response_text = await response.text()
             return response_text
