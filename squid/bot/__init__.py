@@ -124,7 +124,7 @@ class RedstoneSquid(Bot):
         return BuildHandler(self, build)
 
 
-def setup_logging():
+def setup_logging(dev_mode: bool = False):
     """Set up logging for the bot process."""
     # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
     dt_fmt = "%Y-%m-%d %H:%M:%S"
@@ -138,7 +138,7 @@ def setup_logging():
     logger = logging.getLogger("discord")
     logger.setLevel(logging.INFO)
 
-    if DEV_MODE:
+    if dev_mode:
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
         logging.getLogger("discord.gateway").setLevel(logging.ERROR)
 

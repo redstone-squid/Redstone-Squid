@@ -21,7 +21,6 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext.commands import CheckFailure, Context, FlagConverter, MissingAnyRole, NoPrivateMessage, check
 
-from squid import config
 from squid.db import DatabaseManager
 
 if TYPE_CHECKING:
