@@ -174,12 +174,14 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
             build = await flags.to_build()
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                await sent_message.edit(embed=error_embed)
+                return None
 
             if not await build.lock.acquire(blocking=False):
-                return await sent_message.edit(
+                await sent_message.edit(
                     embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
                 )
+                return None
 
             # If in a slash command, we show a preview and ask for confirmation, otherwise we just edit the build
             if ctx.interaction:
@@ -202,19 +204,21 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
                             embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
                         ),
                     )
-                    return
+                    return None
                 elif view.value is False:
                     await asyncio.gather(
                         build.lock.release(),
                         sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user")),
                     )
-                    return
+                    return None
 
             await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
             await build.save()
             await build.lock.release()
             await self.bot.for_build(build).update_messages()
             await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+            return None
+        return None
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
@@ -236,6 +240,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
         build = await Build.from_id(build_id)
         assert build is not None
         await BuildEditView(build).send(interaction, ephemeral=True)
+        return None
 
 
 async def setup(bot: RedstoneSquid) -> None:
