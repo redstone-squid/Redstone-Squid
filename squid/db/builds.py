@@ -885,7 +885,10 @@ class Build:
                 embedding_task = tg.create_task(self.generate_embedding())
             build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
             self.embedding = await embedding_task
-            build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
+            if self.embedding is None:
+                logger.debug("Failed to generate embedding for build id %s, skipping vector update", self.id)
+            else:
+                build_vecs.upsert(records=[(str(self.id), self.embedding, {})])
 
             if unknown_restrictions.result():
                 self.extra_info["unknown_restrictions"] = (
