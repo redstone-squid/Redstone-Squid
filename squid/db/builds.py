@@ -707,7 +707,7 @@ class Build:
             response = await client.embeddings.create(input=str(self), model="text-embedding-3-small")
             return response.data[0].embedding
         except OpenAIError as e:
-            logger.error(f"Failed to generate embedding for build {self.id}: {e}")
+            logger.debug(f"Failed to generate embedding for build {self.id}: {e}")
             return None
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
