@@ -1079,7 +1079,7 @@ class Build:
         await (
             DatabaseManager()
             .table("messages")
-            .upsert(
+            .insert(
                 {
                     "server_id": self.original_server_id,
                     "channel_id": self.original_channel_id,
