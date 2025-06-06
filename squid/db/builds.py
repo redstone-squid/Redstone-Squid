@@ -203,6 +203,7 @@ class Build:
     original_server_id: Final[int | None] = frozen_field(default=None)
     original_channel_id: Final[int | None] = frozen_field(default=None)
     original_message_id: Final[int | None] = frozen_field(default=None)
+    original_message_author_id: Final[int | None] = frozen_field(default=None)
     original_message: Final[str | None] = frozen_field(default=None)
 
     ai_generated: bool | None = None
@@ -334,12 +335,13 @@ class Build:
 
         message_record: MessageRecord | None = data["messages"]
         if message_record is None:
-            original_server_id = original_channel_id = original_message_id = None
+            original_server_id = original_channel_id = original_message_id = original_message_author_id = None
             original_message = None
         else:
             original_server_id = message_record["server_id"]
             original_channel_id = message_record["channel_id"]
             original_message_id = data["original_message_id"]
+            original_message_author_id = message_record["author_id"]
             original_message = message_record["content"]
 
         ai_generated = data["ai_generated"]
@@ -378,6 +380,7 @@ class Build:
             original_server_id=original_server_id,
             original_channel_id=original_channel_id,
             original_message_id=original_message_id,
+            original_message_author_id=original_message_author_id,
             original_message=original_message,
             ai_generated=ai_generated,
             embedding=embedding,
@@ -502,6 +505,7 @@ class Build:
             original_server_id=message.guild.id if message.guild is not None else None,
             original_channel_id=message.channel.id,
             original_message_id=message.id,
+            original_message_author_id=message.author.id,
             original_message=message.clean_content,
             ai_generated=True,
         )
@@ -1083,6 +1087,7 @@ class Build:
                     "build_id": self.id,
                     "purpose": "build_original_message",
                     "content": self.original_message,
+                    "author_id": self.original_message_author_id,
                 }
             )
             .execute()
