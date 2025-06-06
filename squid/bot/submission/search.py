@@ -89,7 +89,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
     @build_hybrid_group.command(name="pending")
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             pending_submissions = await get_all_builds(Status.PENDING)
 
             if len(pending_submissions) == 0:
@@ -124,7 +124,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
             await view.send(interaction)
             return None
         else:
-            async with utils.RunningMessage(ctx) as sent_message:
+            async with self.bot.get_running_message(ctx) as sent_message:
                 build = await Build.from_id(build_id)
 
                 if build is None:
@@ -140,7 +140,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission's debug info."""
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             build = await Build.from_id(build_id)
 
             if build is None:

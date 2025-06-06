@@ -10,14 +10,15 @@ from logging.handlers import RotatingFileHandler
 from typing import Callable, Self, override
 
 import discord
-from discord import Message
+from discord import Message, Webhook
+from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
 from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
-from squid.config import BOT_NAME, BOT_VERSION, DEV_MODE, DEV_PREFIX, OWNER_ID, PREFIX
+from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 
@@ -88,6 +89,35 @@ class RedstoneSquid(Bot):
         except discord.Forbidden:
             pass
         return None
+
+    def get_running_message(
+        self,
+        ctx: Messageable | Webhook,
+        *,
+        title: str = "Working",
+        description: str = "Getting information...",
+        delete_on_exit: bool = False,
+    ) -> RunningMessage:
+        """
+        Returns a context manager which can be used to display a message that will be updated
+        as the command progresses.
+
+        Usage:
+            ```python
+            async with bot.get_running_message(ctx, title="Processing") as msg:
+                await msg.edit(description="Still working...")
+                # Do some work here
+                await msg.edit(description="Done!")
+            ```
+        """
+        return RunningMessage(
+            ctx,
+            title=title,
+            description=description,
+            delete_on_exit=delete_on_exit,
+            print_tracebacks=self.print_tracebacks,
+            id_to_mention_on_error=self.owner_id,
+        )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
         """A helper function to create a BuildHandler with the bot instance."""

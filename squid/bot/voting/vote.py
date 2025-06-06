@@ -147,7 +147,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             await ctx.send("The message is not from this guild.")
             return
 
-        async with utils.RunningMessage(ctx) as message:
+        async with self.bot.get_running_message(ctx) as message:
             vote_session = await DeleteLogVoteSession.create(
                 self.bot, [message], author_id=ctx.author.id, target_message=target_message
             )
