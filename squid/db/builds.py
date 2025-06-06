@@ -14,7 +14,7 @@ from datetime import timedelta
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
-from typing import Any, Callable, Final, Literal, Self, overload
+from typing import Any, Awaitable, Callable, Final, Literal, Self, overload
 
 import discord
 import vecs
@@ -511,24 +511,36 @@ class Build:
         )
         build.record_category = variables["record_category"]  # type: ignore
         build.extra_info["unknown_restrictions"] = UnknownRestrictions()
+        
+        validation_tasks: list[tuple[str, Awaitable[tuple[list[str], list[str]]]]] = []
         if variables["component_restriction"] is not None:
-            comps = await validate_restrictions(variables["component_restriction"].split(", "), "component")
-            build.component_restrictions = comps[0]
-            build.extra_info["unknown_restrictions"]["component_restrictions"] = comps[1]
+            validation_tasks.append(("component", validate_restrictions(variables["component_restriction"].split(", "), "component")))
         if variables["wiring_placement_restrictions"] is not None:
-            wirings = await validate_restrictions(
-                variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
-            )
-            build.wiring_placement_restrictions = wirings[0]
-            build.extra_info["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
+            validation_tasks.append(("wiring", validate_restrictions(variables["wiring_placement_restrictions"].split(", "), "wiring-placement")))
         if variables["miscellaneous_restrictions"] is not None:
-            miscs = await validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
-            build.miscellaneous_restrictions = miscs[0]
-            build.extra_info["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
+            validation_tasks.append(("misc", validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")))
         if variables["piston_door_type"] is not None:
-            door_types = await validate_door_types(variables["piston_door_type"].split(", "))
-            build.door_type = door_types[0]
-            build.extra_info["unknown_patterns"] = door_types[1]
+            validation_tasks.append(("door_types", validate_door_types(variables["piston_door_type"].split(", "))))
+        
+        results = await asyncio.gather(*(task for _, task in validation_tasks))
+        for i, (task_type, _) in enumerate(validation_tasks):
+            if task_type == "component":
+                comps = results[i]
+                build.component_restrictions = comps[0]
+                build.extra_info["unknown_restrictions"]["component_restrictions"] = comps[1]
+            elif task_type == "wiring":
+                wirings = results[i]
+                build.wiring_placement_restrictions = wirings[0]
+                build.extra_info["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
+            elif task_type == "misc":
+                miscs = results[i]
+                build.miscellaneous_restrictions = miscs[0]
+                build.extra_info["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
+            elif task_type == "door_types":
+                door_types = results[i]
+                build.door_type = door_types[0]
+                build.extra_info["unknown_patterns"] = door_types[1]
+
         orientation = variables["door_orientation"]
         if orientation == "Normal":
             build.door_orientation_type = "Door"
@@ -1034,16 +1046,29 @@ class Build:
     async def _update_build_creators_table(self) -> None:
         """Updates the build_creators table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
+        
+        lookup_tasks = (
+            db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
+            for creator_ign in self.creators_ign
+        )
+        responses = await asyncio.gather(*lookup_tasks)
+        
         creator_ids: list[int] = []
-        for creator_ign in self.creators_ign:
-            response: SingleAPIResponse[UserRecord] | None = (
-                await db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
-            )
+        missing_creator_tasks = []
+        missing_creator_indices = []
+        
+        for i, (creator_ign, response) in enumerate(zip(self.creators_ign, responses)):
             if response:
                 creator_ids.append(response.data["id"])
             else:
-                creator_id = await add_user(ign=creator_ign)
-                creator_ids.append(creator_id)
+                missing_creator_tasks.append(add_user(ign=creator_ign))
+                missing_creator_indices.append(len(creator_ids))
+                creator_ids.append(None)  # Placeholder
+        
+        if missing_creator_tasks:
+            missing_creator_ids = await asyncio.gather(*missing_creator_tasks)
+            for idx, creator_id in zip(missing_creator_indices, missing_creator_ids):
+                creator_ids[idx] = creator_id
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
         if build_creators_data:

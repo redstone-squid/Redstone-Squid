@@ -136,9 +136,11 @@ class BuildHandler[BotT: RedstoneSquid]:
         messages = await msg_task
         em = await em_task
 
-        for message in messages:
+        async def _update_single_message(message: discord.Message):
             await message.edit(content=self.build.original_link, embed=em)
             await self.bot.db.message.update_message_edited_time(message)
+
+        await asyncio.gather(*(_update_single_message(message) for message in messages))
 
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""

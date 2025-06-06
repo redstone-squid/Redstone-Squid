@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import TYPE_CHECKING
 
@@ -54,15 +55,13 @@ class SearchCog[BotT: RedstoneSquid](Cog):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
             if query:
-                response: APIResponse[RestrictionRecord] = (
-                    await self.bot.db.table("restrictions").select("*").ilike("name", f"%{query}%").execute()
-                )
-                response_alias: APIResponse[RestrictionAliasRecord] = (
-                    await self.bot.db.table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
-                )
+                response_task = self.bot.db.table("restrictions").select("*").ilike("name", f"%{query}%").execute()
+                response_alias_task = self.bot.db.table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
+                response, response_alias = await asyncio.gather(response_task, response_alias_task)
             else:
-                response = await self.bot.db.table("restrictions").select("*").execute()
-                response_alias = await self.bot.db.table("restriction_aliases").select("*").execute()
+                response_task = self.bot.db.table("restrictions").select("*").execute()
+                response_alias_task = self.bot.db.table("restriction_aliases").select("*").execute()
+                response, response_alias = await asyncio.gather(response_task, response_alias_task)
             restrictions = response.data
             aliases = response_alias.data
 

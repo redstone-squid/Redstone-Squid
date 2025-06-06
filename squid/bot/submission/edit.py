@@ -214,9 +214,12 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
             await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
             await build.save()
-            await build.lock.release()
-            await self.bot.for_build(build).update_messages()
-            await sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+            # Parallelize lock release and message updates since they don't depend on each other  
+            await asyncio.gather(
+                build.lock.release(),
+                self.bot.for_build(build).update_messages(),
+                sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully"))
+            )
             return None
         return None
 
