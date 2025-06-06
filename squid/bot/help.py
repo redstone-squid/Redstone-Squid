@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
 from typing import Any, override
@@ -77,8 +78,6 @@ class Help(commands.MinimalHelpCommand):
         # We do not filter commands here, because it is too slow.
         # Every command needs to run its own checks even if the same check is used.
         # filtered_commands = await self.filter_commands(commands_, sort=True)
-
-        repo = git.Repo(search_parent_directories=True)
         desc = dedent(
             f"""\
             {self.context.bot.description}
@@ -89,7 +88,17 @@ class Help(commands.MinimalHelpCommand):
             """
         )
         em = utils.help_embed("Help", desc)
-        em.set_footer(text=f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}")
+
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            em.set_footer(text=f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}")
+        except git.InvalidGitRepositoryError:
+            # If the repo is not a git repository, we can still use environment variables if available
+            # Usually this is because the bot is running in a container
+            git_commit_hash = os.getenv("GIT_COMMIT_HASH")
+            git_commit_message = os.getenv("GIT_COMMIT_MESSAGE")
+            if git_commit_hash is not None and git_commit_message is not None:
+                em.set_footer(text=f"commit: {git_commit_hash[:7]}, message: {git_commit_message.strip()}")
         await self.get_destination().send(embed=em)
 
     # !help <command>

@@ -53,6 +53,7 @@ if [ -f "$PIDFILE" ]; then
     rm "$PIDFILE"
   fi
 
+  sleep 2  # Wait for a moment to ensure the process has time to terminate
   # Double-check if the process is still running
   if kill -0 "$PID" 2>/dev/null; then
     echo "Process $PID is still running after kill command. Exiting."

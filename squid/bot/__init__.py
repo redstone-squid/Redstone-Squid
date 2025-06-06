@@ -192,8 +192,12 @@ def setup_logging(dev_mode: bool = False):
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
         logging.getLogger("discord.gateway").setLevel(logging.ERROR)
 
+    # Create logs directory if it doesn't exist
+    logs_dir = "logs"
+    os.makedirs(logs_dir, exist_ok=True)
+
     file_handler = RotatingFileHandler(
-        filename="discord.log",
+        filename=os.path.join(logs_dir, "discord.log"),
         encoding="utf-8",
         maxBytes=32 * 1024 * 1024,  # 32 MiB
         backupCount=5,  # Rotate through 5 files
