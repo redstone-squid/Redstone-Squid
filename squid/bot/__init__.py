@@ -205,4 +205,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main(), debug=DEV_MODE)
+    # You probably want to run app.py instead, this is just for convenience
+    asyncio.run(main())
