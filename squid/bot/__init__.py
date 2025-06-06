@@ -7,14 +7,14 @@ import logging
 import os
 from collections.abc import Awaitable
 from logging.handlers import RotatingFileHandler
-from typing import Callable, Self, TypedDict, override
+from typing import Callable, Final, Self, TypedDict, override
 
 import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
-from dotenv import load_dotenv
+from dotenv.main import StrPath
 
 from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
@@ -43,6 +43,16 @@ class BotConfig(TypedDict, total=False):
     """The URL of the source code repository, used in the help command."""
     print_tracebacks: bool
     """Whether to print tracebacks directly to the user, may leak system information"""
+
+
+class ApplicationConfig(TypedDict, total=False):
+    """Configuration for the Redstone Squid system."""
+    dev_mode: bool
+    """Whether the bot is running in development mode, which changes some small behaviors to make development easier."""
+    dotenv_path: StrPath | None
+    """The path to the .env file, used to load environment variables. Use None for auto-detection, remove this key to disable loading .env file."""
+    bot_config: BotConfig
+    """Configuration for the bot."""
 
 
 class RedstoneSquid(Bot):
@@ -191,13 +201,19 @@ def setup_logging(dev_mode: bool = False):
     logger.addHandler(file_handler)
 
 
-async def main():
-    """Main entry point for the bot."""
-    prefix = PREFIX if not DEV_MODE else DEV_PREFIX
+DEFAULT_CONFIG: Final[ApplicationConfig] = {
+    "dev_mode": False,
+    "bot_config": {
+        "prefix": "!",
+        "bot_name": "Redstone Squid",
+    },
+}
 
-    setup_logging()
-    async with RedstoneSquid(config=BotConfig(prefix=prefix)) as bot:
-        load_dotenv()
+
+async def main(config: ApplicationConfig = DEFAULT_CONFIG):
+    """Main entry point for the bot."""
+    setup_logging(config.get("dev_mode", False))
+    async with RedstoneSquid(config=config.get("bot_config")) as bot:
         token = os.environ.get("BOT_TOKEN")
         if not token:
             raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
