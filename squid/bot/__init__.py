@@ -22,13 +22,13 @@ from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 
-
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
 
 class BotConfig(TypedDict, total=False):
     """Configuration for the Redstone Squid bot."""
+
     prefix: str
     """The command prefix for the bot. Defaults to `!` if not found in this config."""
     bot_name: str
@@ -47,6 +47,7 @@ class BotConfig(TypedDict, total=False):
 
 class ApplicationConfig(TypedDict, total=False):
     """Configuration for the Redstone Squid system."""
+
     dev_mode: bool
     """Whether the bot is running in development mode, which changes some small behaviors to make development easier."""
     dotenv_path: StrPath | None
@@ -66,9 +67,9 @@ class RedstoneSquid(Bot):
             config = {}
         description = ""
         if config.get("bot_name"):
-            description += f"{config.get("bot_name")} "
+            description += f"{config.get('bot_name')} "
         if config.get("bot_version"):
-            description += f"v{config.get("bot_version")}"
+            description += f"v{config.get('bot_version')}"
 
         prefix = config.get("prefix")
         if prefix is None:

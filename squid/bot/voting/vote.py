@@ -10,7 +10,6 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 from postgrest.base_request_builder import SingleAPIResponse
 
-from squid.bot import utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import is_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession

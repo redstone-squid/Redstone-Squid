@@ -12,7 +12,7 @@ from enum import Enum
 from functools import cache
 from traceback import format_tb
 from types import FrameType, TracebackType
-from typing import TYPE_CHECKING, Any, TypedDict, override
+from typing import TYPE_CHECKING, TypedDict, override
 
 import aiohttp
 import bs4
