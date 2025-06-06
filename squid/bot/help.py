@@ -29,7 +29,16 @@ class HelpCog[BotT: commands.Bot](Cog):
     @app_commands.describe(command="The command to get help for.")
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show help for a command or a group of commands."""
-        await interaction.response.defer()
+        # We are using a hack to make this slash command:
+        #
+        # The ctx.send_help method is supposed to be used in a prefix command and do not handle interactions,
+        # this means that we intentionally send an empty message to make discord think that the interaction is handled,
+        # and then we use ctx.send_help to send the help message, which just sends a message to the channel
+        # instead of replying to the interaction.
+        #
+        # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
+        # and one message with the help information.
+        await interaction.response.send_message(content="loading...", ephemeral=True, delete_after=0, silent=True)
         ctx = await self.bot.get_context(interaction, cls=Context)
         if command is not None:
             await ctx.send_help(command)
