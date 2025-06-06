@@ -48,7 +48,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
     async def show_server_settings(self, ctx: Context[BotT]):
         """Show all settings for this server."""
         assert ctx.guild is not None
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             settings = await self.bot.db.server_setting.get_all(ctx.guild.id)
             desc = ""
             for setting, value in settings.items():
@@ -82,7 +82,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
 
         title: str
         description: str
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             match setting:
                 case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
                     title = f"{setting} Channel Info"
@@ -129,7 +129,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             )
             return
 
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             if setting in {"Smallest", "Fastest", "First", "Builds", "Vote"}:
                 if channel is None:
                     await sent_message.edit(
@@ -174,7 +174,7 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
         """Set this setting to None."""
         assert ctx.guild is not None
 
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             await self.bot.db.server_setting.set(ctx.guild.id, setting, None)
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 

@@ -31,7 +31,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
         """Marks a submission as confirmed.
 
         This posts the submission to all the servers which configured the bot."""
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             build = await Build.from_id(build_id)
 
             if build is None:
@@ -51,7 +51,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.check(check_is_owner_server)
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as denied."""
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             build = await Build.from_id(build_id)
 
             if build is None:
@@ -70,7 +70,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.check(check_is_owner_server)
     async def add_restriction_alias(self, ctx: Context[BotT], restriction_id: int, alias: str):
         """Add an alias for a restriction."""
-        async with utils.RunningMessage(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx) as sent_message:
             await (
                 self.bot.db.table("restriction_aliases")
                 .insert({"restriction_id": restriction_id, "alias": alias})
@@ -149,7 +149,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.is_owner()
     async def error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
-        async with utils.RunningMessage(ctx, delete_on_exit=True):
+        async with self.bot.get_running_message(ctx, delete_on_exit=True):
             raise ValueError("This is a test error.")
 
 
