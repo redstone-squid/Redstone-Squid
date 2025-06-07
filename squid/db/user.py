@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-import requests
+import aiohttp
 
 from squid.db import DatabaseManager
 from squid.db.utils import utcnow
@@ -81,7 +81,7 @@ async def unlink_minecraft_account(user_id: int) -> bool:
     return True
 
 
-def get_minecraft_username(user_uuid: str | UUID) -> str | None:
+async def get_minecraft_username(user_uuid: str | UUID) -> str | None:
     """Get a user's Minecraft username from their UUID.
 
     Args:
@@ -91,12 +91,14 @@ def get_minecraft_username(user_uuid: str | UUID) -> str | None:
         The user's Minecraft username. None if the UUID is invalid.
     """
     # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
-    response = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}")
-    if response.status_code == 200:
-        return response.json()["name"]
-    elif response.status_code == 204:  # No content
-        return None
-    else:
-        raise ValueError(
-            f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status_code}."
-        )
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}") as response:
+            if response.status == 200:
+                data = await response.json()
+                return data["name"]
+            elif response.status == 204:  # No content
+                return None
+            else:
+                raise ValueError(
+                    f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status}."
+                )
