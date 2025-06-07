@@ -27,7 +27,7 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if (username := get_minecraft_username(user.uuid)) is None:
+    if (username := await get_minecraft_username(user.uuid)) is None:
         raise HTTPException(status_code=400, detail="Invalid user")
 
     db = DatabaseManager()
