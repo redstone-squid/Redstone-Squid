@@ -515,21 +515,37 @@ class Build:
         validation_tasks: list[tuple[str, Awaitable[tuple[list[str], list[str]]]]] = []
         if variables["component_restriction"] is not None:
             validation_tasks.append(
-                ("component", validate_restrictions(variables["component_restriction"].split(", "), "component"))
+                (
+                    "component",
+                    asyncio.create_task(
+                        validate_restrictions(variables["component_restriction"].split(", "), "component")
+                    ),
+                )
             )
         if variables["wiring_placement_restrictions"] is not None:
             validation_tasks.append(
                 (
                     "wiring",
-                    validate_restrictions(variables["wiring_placement_restrictions"].split(", "), "wiring-placement"),
+                    asyncio.create_task(
+                        validate_restrictions(
+                            variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
+                        )
+                    ),
                 )
             )
         if variables["miscellaneous_restrictions"] is not None:
             validation_tasks.append(
-                ("misc", validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous"))
+                (
+                    "misc",
+                    asyncio.create_task(
+                        validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
+                    ),
+                )
             )
         if variables["piston_door_type"] is not None:
-            validation_tasks.append(("door_types", validate_door_types(variables["piston_door_type"].split(", "))))
+            validation_tasks.append(
+                ("door_types", asyncio.create_task(validate_door_types(variables["piston_door_type"].split(", "))))
+            )
 
         results = await asyncio.gather(*(task for _, task in validation_tasks))
         for i, (task_type, _) in enumerate(validation_tasks):
