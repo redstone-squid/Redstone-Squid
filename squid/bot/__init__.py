@@ -93,11 +93,11 @@ class RedstoneSquid(Bot):
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
         self.db = DatabaseManager()
-            
+
         # Load extensions in parallel to speed up bot startup
         extensions = [
             "squid.bot.misc_commands",
-            "squid.bot.settings", 
+            "squid.bot.settings",
             "squid.bot.submission",
             "squid.bot.log",
             "squid.bot.help",
@@ -106,9 +106,9 @@ class RedstoneSquid(Bot):
             "squid.bot.verify",
             "squid.bot.admin",
             "squid.bot.give_redstoner",
-            "squid.bot.version_tracking"
+            "squid.bot.version_tracking",
         ]
-        
+
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
         self.call_supabase_to_prevent_deactivation.start()
 

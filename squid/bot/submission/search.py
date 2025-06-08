@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from postgrest.base_request_builder import APIResponse
 
     from squid.bot import RedstoneSquid
-    from squid.db.schema import RestrictionAliasRecord, RestrictionRecord, TypeRecord
+    from squid.db.schema import TypeRecord
 
 
 class SearchCog[BotT: RedstoneSquid](Cog):
@@ -56,7 +56,9 @@ class SearchCog[BotT: RedstoneSquid](Cog):
         async with RunningMessage(ctx) as sent_message:
             if query:
                 response_task = self.bot.db.table("restrictions").select("*").ilike("name", f"%{query}%").execute()
-                response_alias_task = self.bot.db.table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
+                response_alias_task = (
+                    self.bot.db.table("restriction_aliases").select("*").ilike("alias", f"%{query}%").execute()
+                )
                 response, response_alias = await asyncio.gather(response_task, response_alias_task)
             else:
                 response_task = self.bot.db.table("restrictions").select("*").execute()
