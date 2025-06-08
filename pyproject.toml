@@ -37,6 +37,9 @@ dev = [
     "basedpyright>=1.24.0",
     "bump-my-version>=0.29.0",
     "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=1.0.0",
 ]
 
 [build-system]
@@ -105,3 +108,17 @@ reportUnnecessaryContains = "error"
 reportImplicitOverride = "error"
 reportShadowedImports = "error"
 reportAny = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"] 
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",                 # short summary of skips/xfails
+    "--cov=squid",
+]
+asyncio_mode = "auto"
+markers = [
+  "unit: fast, self-contained tests",
+]
