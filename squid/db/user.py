@@ -92,7 +92,9 @@ async def get_minecraft_username(user_uuid: str | UUID) -> str | None:
     """
     # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}") as response:
+        async with session.get(
+            f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}"
+        ) as response:
             if response.status == 200:
                 data = await response.json()
                 return data["name"]
