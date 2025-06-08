@@ -1062,22 +1062,23 @@ class Build:
         )
         responses = await asyncio.gather(*lookup_tasks)
 
-        creator_ids: list[int] = []
-        missing_creator_tasks = []
-        missing_creator_indices = []
+        creator_ids: list[int | None] = []
+        missing_creator_tasks: list[asyncio.Task[int]] = []
+        missing_creator_indices: list[int] = []
 
         for i, (creator_ign, response) in enumerate(zip(self.creators_ign, responses)):
             if response:
                 creator_ids.append(response.data["id"])
             else:
-                missing_creator_tasks.append(add_user(ign=creator_ign))
+                missing_creator_tasks.append(asyncio.create_task(add_user(ign=creator_ign)))
                 missing_creator_indices.append(len(creator_ids))
                 creator_ids.append(None)  # Placeholder
 
-        if missing_creator_tasks:
-            missing_creator_ids = await asyncio.gather(*missing_creator_tasks)
-            for idx, creator_id in zip(missing_creator_indices, missing_creator_ids):
-                creator_ids[idx] = creator_id
+        # Add missing creators to the database
+        missing_creator_ids = await asyncio.gather(*missing_creator_tasks)
+        for idx, creator_id in zip(missing_creator_indices, missing_creator_ids):
+            creator_ids[idx] = creator_id
+        assert all(creator_id is not None for creator_id in creator_ids), "All creators must have an ID."
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
         if build_creators_data:
