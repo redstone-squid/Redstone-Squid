@@ -1344,7 +1344,7 @@ async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[st
     return valid_door_types, invalid_door_types
 
 
-async def get_all_builds(*, filter: Mapping[str, Any] | None = None) -> list[Build]:
+async def get_builds_by_filter(*, filter: Mapping[str, Any] | None = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
     Args:

@@ -17,7 +17,7 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
-from squid.db.builds import Build, get_all_builds
+from squid.db.builds import Build, get_builds_by_filter
 from squid.db.schema import Status
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            pending_submissions = await get_all_builds(filter={"submission_status": Status.PENDING})
+            pending_submissions = await get_builds_by_filter(filter={"submission_status": Status.PENDING})
 
             if len(pending_submissions) == 0:
                 desc = "No open submissions."
