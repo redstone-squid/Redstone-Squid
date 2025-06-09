@@ -1,6 +1,7 @@
 """Some functions related to storing and changing server ids for sending records."""
 
-from typing import Iterable, Literal, overload
+from collections.abc import Iterable
+from typing import Literal, overload
 
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod
