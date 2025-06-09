@@ -1377,7 +1377,7 @@ async def get_all_builds(*, filter: Mapping[str, Any] | None = None) -> list[Bui
         return [Build.from_json(build_json) for build_json in response.data]
 
 
-async def get_builds(build_ids: list[int]) -> list[Build | None]:
+async def get_builds_by_id(build_ids: list[int]) -> list[Build | None]:
     """Fetches builds from the database with the given IDs."""
     if len(build_ids) == 0:
         return []
