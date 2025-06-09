@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -12,7 +13,7 @@ from postgrest.types import ReturnMethod
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.db.builds import Build
+from squid.db.builds import Build, recalculate_unknown_attributes
 
 if TYPE_CHECKING:
     from squid.bot import RedstoneSquid
@@ -23,6 +24,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
+        self._tasks: set[asyncio.Task[None]] = set()
 
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
@@ -78,6 +80,9 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
                 .execute()
             )
             await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+        
+        recalc_task = asyncio.create_task(recalculate_unknown_attributes())
+        self._tasks.add(recalc_task.add_done_callback(self._tasks.discard))
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
