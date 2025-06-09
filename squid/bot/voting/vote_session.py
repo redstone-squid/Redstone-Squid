@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, ove
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
+from postgrest.types import ReturnMethod
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -78,7 +79,12 @@ async def close_vote_session(vote_session_id: int) -> None:
         vote_session_id: The id of the vote session.
     """
     db = DatabaseManager()
-    await db.table("vote_sessions").update({"status": "closed"}).eq("id", vote_session_id).execute()
+    await (
+        db.table("vote_sessions")
+        .update({"status": "closed"}, returning=ReturnMethod.minimal)
+        .eq("id", vote_session_id)
+        .execute()
+    )
 
 
 async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
@@ -90,7 +96,13 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
         weight: The weight of the vote. None to remove the vote.
     """
     db = DatabaseManager()
-    await db.table("votes").upsert({"vote_session_id": vote_session_id, "user_id": user_id, "weight": weight}).execute()
+    await (
+        db.table("votes")
+        .upsert(
+            {"vote_session_id": vote_session_id, "user_id": user_id, "weight": weight}, returning=ReturnMethod.minimal
+        )
+        .execute()
+    )
 
 
 class AbstractVoteSession(ABC):
@@ -408,7 +420,8 @@ class BuildVoteSession(AbstractVoteSession):
                     "vote_session_id": self.id,
                     "build_id": self.build.id,
                     "changes": changes,
-                }
+                },
+                returning=ReturnMethod.minimal,
             )
             .execute()
         )
@@ -577,7 +590,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
                     "target_message_id": self.target_message.id,
                     "target_channel_id": self.target_message.channel.id,
                     "target_server_id": self.target_message.guild.id,  # type: ignore
-                }
+                },
+                returning=ReturnMethod.minimal,
             )
             .execute()
         )

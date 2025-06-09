@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import Literal, overload
 
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod
+from postgrest.types import CountMethod, ReturnMethod
 
 from squid.db.schema import (
     SETTINGS,
@@ -112,9 +112,17 @@ class ServerSettingManager:
     async def set(self, server_id: int, setting: Setting, value: int | list[int] | None) -> None:
         """Updates a setting for a server."""
         col_name = _SETTING_TO_DB_KEY[setting]
-        await self.client.table("server_settings").upsert({"server_id": server_id, col_name: value}).execute()
+        await (
+            self.client.table("server_settings")
+            .upsert({"server_id": server_id, col_name: value}, returning=ReturnMethod.minimal)
+            .execute()
+        )
 
     async def set_all(self, server_id: int, settings: dict[Setting, int | list[int] | None]) -> None:
         """Updates a list of settings for a server."""
         data = {_SETTING_TO_DB_KEY[setting]: value for setting, value in settings.items()}
-        await self.client.table("server_settings").upsert({"server_id": server_id, **data}).execute()
+        await (
+            self.client.table("server_settings")
+            .upsert({"server_id": server_id, **data}, returning=ReturnMethod.minimal)
+            .execute()
+        )

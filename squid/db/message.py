@@ -2,6 +2,7 @@
 
 import discord
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
+from postgrest.types import ReturnMethod
 
 from squid.db.schema import MessagePurpose, MessageRecord
 from squid.db.utils import utcnow
@@ -49,7 +50,8 @@ class MessageManager:
                     "author_id": message.author.id,
                     "vote_session_id": vote_session_id,
                     "purpose": purpose,
-                }
+                },
+                returning=ReturnMethod.minimal,
             )
             .execute()
         )
@@ -62,7 +64,12 @@ class MessageManager:
             message: The message to update. Either the message id or the message object.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
-        await self.client.table("messages").update({"edited_time": utcnow()}).eq("id", message_id).execute()
+        await (
+            self.client.table("messages")
+            .update({"edited_time": utcnow()}, returning=ReturnMethod.minimal)
+            .eq("id", message_id)
+            .execute()
+        )
 
     async def untrack_message(self, message: int | discord.Message) -> MessageRecord:
         """Untrack message from the database. The message is not deleted on discord.

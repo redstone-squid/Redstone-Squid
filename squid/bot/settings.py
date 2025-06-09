@@ -32,7 +32,11 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, add the guild to the database."""
-        await self.bot.db.table("server_settings").upsert({"server_id": guild.id}).execute()
+        await (
+            self.bot.db.table("server_settings")
+            .upsert({"server_id": guild.id}, returning=ReturnMethod.minimal)
+            .execute()
+        )
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):

@@ -941,14 +941,17 @@ class Build:
             await message_insert_task
             await (
                 db.table("builds")
-                .update({"extra_info": self.extra_info, "original_message_id": self.original_message_id})
+                .update(
+                    {"extra_info": self.extra_info, "original_message_id": self.original_message_id},
+                    returning=ReturnMethod.minimal,
+                )
                 .eq("id", self.id)
                 .execute()
             )
         except:
             if delete_build_on_error:
                 logger.warning("Failed to save build %s, deleting it", repr(self))
-                await db.table("builds").delete().eq("id", self.id).execute()
+                await db.table("builds").delete(returning=ReturnMethod.minimal).eq("id", self.id).execute()
             else:
                 logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(self))
             raise
@@ -971,7 +974,7 @@ class Build:
                 "visible_closing_time": self.visible_closing_time,
                 "visible_opening_time": self.visible_opening_time,
             }
-            await db.table("doors").upsert(doors_data).execute()
+            await db.table("doors").upsert(doors_data, returning=ReturnMethod.minimal).execute()
         elif self.category == "Extender":
             raise NotImplementedError
         elif self.category == "Utility":
@@ -996,7 +999,9 @@ class Build:
             {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
         )
         if build_restrictions_data:
-            await db.table("build_restrictions").upsert(build_restrictions_data).execute()
+            await (
+                db.table("build_restrictions").upsert(build_restrictions_data, returning=ReturnMethod.minimal).execute()
+            )
 
         unknown_restrictions: UnknownRestrictions = {}
         unknown_wiring_restrictions = []
@@ -1043,7 +1048,7 @@ class Build:
         type_ids = [type_["id"] for type_ in response.data]
         build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
         if build_types_data:
-            await db.table("build_types").upsert(build_types_data).execute()
+            await db.table("build_types").upsert(build_types_data, returning=ReturnMethod.minimal).execute()
         unknown_types: list[str] = []
         for door_type in self.door_type:
             if door_type not in [type_["name"] for type_ in response.data]:
@@ -1066,7 +1071,12 @@ class Build:
                 {"build_id": self.id, "url": link, "media_type": "world_download"} for link in self.world_download_urls
             )
         if build_links_data:
-            await DatabaseManager().table("build_links").upsert(build_links_data).execute()
+            await (
+                DatabaseManager()
+                .table("build_links")
+                .upsert(build_links_data, returning=ReturnMethod.minimal)
+                .execute()
+            )
 
     async def _update_build_creators_table(self) -> None:
         """Updates the build_creators table with the given data. This function assumes lock is acquired."""
@@ -1098,7 +1108,12 @@ class Build:
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
         if build_creators_data:
-            await DatabaseManager().table("build_creators").upsert(build_creators_data).execute()
+            await (
+                DatabaseManager()
+                .table("build_creators")
+                .upsert(build_creators_data, returning=ReturnMethod.minimal)
+                .execute()
+            )
 
     async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data. This function assumes lock is acquired."""
@@ -1112,7 +1127,7 @@ class Build:
         version_ids = [version["id"] for version in response.data]
         build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
         if build_versions_data:
-            await db.table("build_versions").upsert(build_versions_data).execute()
+            await db.table("build_versions").upsert(build_versions_data, returning=ReturnMethod.minimal).execute()
 
     async def _update_messages_table(self) -> None:
         """Updates the messages table with the given data. This function assumes lock is acquired."""
@@ -1131,7 +1146,8 @@ class Build:
                     "purpose": "build_original_message",
                     "content": self.original_message,
                     "author_id": self.original_message_author_id,
-                }
+                },
+                returning=ReturnMethod.minimal,
             )
             .execute()
         )

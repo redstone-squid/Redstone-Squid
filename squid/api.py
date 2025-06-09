@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException
+from postgrest.types import ReturnMethod
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
@@ -34,7 +35,7 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     # Invalidate existing codes for this user
     await (
         db.table("verification_codes")
-        .update({"valid": False})
+        .update({"valid": False}, returning=ReturnMethod.minimal)
         .eq("minecraft_uuid", str(user.uuid))
         .gt("expires", utcnow())
         .execute()
@@ -43,7 +44,7 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     code = random.randint(100000, 999999)
     await (
         db.table("verification_codes")
-        .insert({"minecraft_uuid": str(user.uuid), "username": username, "code": code})
+        .insert({"minecraft_uuid": str(user.uuid), "username": username, "code": code}, returning=ReturnMethod.minimal)
         .execute()
     )
     return code

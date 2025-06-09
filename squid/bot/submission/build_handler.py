@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from postgrest.base_request_builder import APIResponse
+from postgrest.base_request_builder import APIResponse, ReturnMethod
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
@@ -178,7 +178,10 @@ class BuildHandler[BotT: RedstoneSquid]:
                                 asyncio.create_task(
                                     DatabaseManager()
                                     .table("build_links")
-                                    .insert({"build_id": build.id, "url": preview_url, "media_type": "image"})
+                                    .insert(
+                                        {"build_id": build.id, "url": preview_url, "media_type": "image"},
+                                        returning=ReturnMethod.minimal,
+                                    )
                                     .execute()
                                 )
                             )

@@ -3,6 +3,7 @@
 from uuid import UUID
 
 import aiohttp
+from postgrest.types import ReturnMethod
 
 from squid.db import DatabaseManager
 from squid.db.utils import utcnow
@@ -54,14 +55,17 @@ async def link_minecraft_account(user_id: int, code: str) -> bool:
     # TODO: This currently does not check if the ign is already in use without a UUID or discord ID given.
     response = (
         await db.table("users")
-        .update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username})
+        .update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username}, returning=ReturnMethod.minimal)
         .eq("discord_id", user_id)
         .execute()
     )
     if not response.data:
         await (
             db.table("users")
-            .insert({"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username})
+            .insert(
+                {"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username},
+                returning=ReturnMethod.minimal,
+            )
             .execute()
         )
     return True
@@ -77,7 +81,12 @@ async def unlink_minecraft_account(user_id: int) -> bool:
         True if the accounts were successfully unlinked, False otherwise.
     """
     db = DatabaseManager()
-    await db.table("users").update({"minecraft_uuid": None}).eq("discord_id", user_id).execute()
+    await (
+        db.table("users")
+        .update({"minecraft_uuid": None}, returning=ReturnMethod.minimal)
+        .eq("discord_id", user_id)
+        .execute()
+    )
     return True
 
 

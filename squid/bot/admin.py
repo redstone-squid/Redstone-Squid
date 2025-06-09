@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
+from postgrest.types import ReturnMethod
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
@@ -73,7 +74,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
         async with self.bot.get_running_message(ctx) as sent_message:
             await (
                 self.bot.db.table("restriction_aliases")
-                .insert({"restriction_id": restriction_id, "alias": alias})
+                .insert({"restriction_id": restriction_id, "alias": alias}, returning=ReturnMethod.minimal)
                 .execute()
             )
             await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
