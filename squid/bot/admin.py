@@ -120,6 +120,26 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
         recalc_task.add_done_callback(self._tasks.discard)
         self._tasks.add(recalc_task)
 
+    @add_restriction_alias.autocomplete("restriction")
+    async def restriction_autocomplete(
+        self, _interaction: discord.Interaction[BotT], current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Provide autocomplete for restriction names."""
+        restrictions = await self.bot.db.fetch_all_restrictions()
+
+        filtered = [r for r in restrictions if current.lower() in r["name"].lower()]
+        # Sort by name and limit to 25 (Discord's limit)
+        filtered.sort(key=lambda x: x["name"])
+        filtered = filtered[:25]
+
+        return [
+            app_commands.Choice(
+                name=restriction['name'],
+                value=restriction["name"]
+            )
+            for restriction in filtered
+        ]
+
     @commands.hybrid_command(name="archive")
     @check_is_staff()
     async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = False):
