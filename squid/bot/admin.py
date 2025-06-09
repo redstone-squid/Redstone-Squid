@@ -82,7 +82,8 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
             await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
         
         recalc_task = asyncio.create_task(recalculate_unknown_attributes())
-        self._tasks.add(recalc_task.add_done_callback(self._tasks.discard))
+        recalc_task.add_done_callback(self._tasks.discard)
+        self._tasks.add(recalc_task)
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
