@@ -1366,7 +1366,7 @@ async def get_builds_by_filter(*, filter: Mapping[str, Any] | None = None) -> li
     db = DatabaseManager()
     query = db.table("builds").select(all_build_columns)
 
-    if filter is not None:
+    if filter is not None:  # TODO: Support more complex filters (in_ being the most important)
         for column, value in filter.items():
             query = query.eq(column, value)
 
