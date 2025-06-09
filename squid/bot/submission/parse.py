@@ -5,13 +5,12 @@ import json
 import logging
 import re
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, MutableMapping
 from io import StringIO
-from collections.abc import Iterator, MutableMapping
 from typing import Any, Literal, Protocol, cast, overload
 from xml.etree.ElementTree import Element
 
-from beartype.door import is_bearable, is_subhint
+from beartype.door import is_bearable, is_subhint  # type: ignore [reportUnknownVariableType]
 from markdown import Markdown
 
 logger = logging.getLogger(__name__)

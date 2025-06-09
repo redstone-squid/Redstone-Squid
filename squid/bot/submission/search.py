@@ -120,7 +120,7 @@ class SearchCog[BotT: RedstoneSquid](Cog):
                 await interaction.followup.send(embed=error_embed, ephemeral=True)
                 return None
 
-            view = BuildInfoView(build)
+            view = BuildInfoView[BotT](build)
             await view.send(interaction)
             return None
         else:

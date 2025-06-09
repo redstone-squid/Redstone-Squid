@@ -8,7 +8,7 @@ import os
 import re
 import time
 import typing
-from collections.abc import Mapping, Sequence, Awaitable
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from datetime import timedelta
 from functools import cached_property
@@ -797,7 +797,7 @@ class Build:
 
     def as_dict(self) -> dict[str, Any]:
         """Converts the build to a dictionary."""
-        build = {}
+        build: dict[str, Any] = {}
         for attr in self:
             build[attr] = getattr(self, attr)
         return build
