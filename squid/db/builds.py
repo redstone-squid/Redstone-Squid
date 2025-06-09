@@ -8,13 +8,13 @@ import os
 import re
 import time
 import typing
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Awaitable
 from dataclasses import dataclass, field, fields
 from datetime import timedelta
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
-from typing import Any, Awaitable, Callable, Final, Literal, Self, overload
+from typing import Any, Callable, Final, Literal, Self, overload
 
 import discord
 import vecs

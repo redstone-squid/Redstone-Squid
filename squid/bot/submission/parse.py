@@ -7,7 +7,8 @@ import re
 import typing
 from collections.abc import Callable
 from io import StringIO
-from typing import Any, Iterator, Literal, MutableMapping, Protocol, cast, overload
+from collections.abc import Iterator, MutableMapping
+from typing import Any, Literal, Protocol, cast, overload
 from xml.etree.ElementTree import Element
 
 from beartype.door import is_bearable, is_subhint
