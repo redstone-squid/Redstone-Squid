@@ -18,7 +18,7 @@ from squid.db.build_tags import (
     RestrictionNotFound,
     add_restriction_alias,
 )
-from squid.db.builds import Build, recalculate_unknown_attributes
+from squid.db.builds import Build
 
 if TYPE_CHECKING:
     from squid.bot import RedstoneSquid
@@ -29,7 +29,6 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
-        self._tasks: set[asyncio.Task[None]] = set()
 
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
@@ -94,10 +93,6 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
                 )
             else:
                 await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
-
-        recalc_task = asyncio.create_task(recalculate_unknown_attributes())
-        recalc_task.add_done_callback(self._tasks.discard)
-        self._tasks.add(recalc_task)
 
     @add_restriction_alias.autocomplete("restriction")
     async def restriction_autocomplete(
