@@ -122,12 +122,12 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
 
     async def press_back(self, interaction: discord.Interaction[ClientT]) -> None:
         """Press the back button."""
-        back_button = next(button for button in self.children if isinstance(button, BackButton))
+        back_button = next(button for button in self.children if isinstance(button, BackButton))  # pyright: ignore [reportUnknownVariableType]
         await back_button.callback(interaction)
 
     async def press_home(self, interaction: discord.Interaction[ClientT]) -> None:
         """Press the home button."""
-        home_button = next(button for button in self.children if isinstance(button, HomeButton))
+        home_button = next(button for button in self.children if isinstance(button, HomeButton))  # pyright: ignore [reportUnknownVariableType]
         await home_button.callback(interaction)
 
     @override

@@ -6,7 +6,7 @@ import asyncio
 import datetime
 import re
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 from discord import Interaction
@@ -182,7 +182,7 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
     def __init__(
         self,
         build: Build,
-        items: Sequence[BuildField] | DefaultType = DEFAULT,
+        items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
         *,
         timeout: float = 300,
     ):

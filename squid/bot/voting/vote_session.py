@@ -398,7 +398,7 @@ class BuildVoteSession(AbstractVoteSession):
         else:
             original = await Build.from_id(self.build.id)
             assert original is not None
-            changes = original.diff(self.build)
+            changes: list[tuple[str, Any, Any]] = original.diff(self.build)
 
         await (
             DatabaseManager()

@@ -74,7 +74,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
             build.completion_time = self.date_of_creation
             return build
 
-        _list_default = lambda ctx: []  # noqa: E731
+        _list_default = lambda ctx: []  # noqa: E731  # type: ignore
 
         # fmt: off
         # Intentionally moved closer to the submit command
