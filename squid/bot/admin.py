@@ -9,13 +9,15 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
-from postgrest.base_request_builder import SingleAPIResponse
-from postgrest.exceptions import APIError
-from postgrest.types import ReturnMethod
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.db.build_tags import AliasAlreadyAdded, AliasTakenByOther, RestrictionNotFound, add_restriction_alias, add_restriction_alias_by_id, get_restriction_id
+from squid.db.build_tags import (
+    AliasAlreadyAdded,
+    AliasTakenByOther,
+    RestrictionNotFound,
+    add_restriction_alias,
+)
 from squid.db.builds import Build, recalculate_unknown_attributes
 
 if TYPE_CHECKING:
@@ -109,13 +111,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
         filtered.sort(key=lambda x: x["name"])
         filtered = filtered[:25]
 
-        return [
-            app_commands.Choice(
-                name=restriction['name'],
-                value=restriction["name"]
-            )
-            for restriction in filtered
-        ]
+        return [app_commands.Choice(name=restriction["name"], value=restriction["name"]) for restriction in filtered]
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
