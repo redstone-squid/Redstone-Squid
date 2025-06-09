@@ -3,21 +3,26 @@
 import asyncio
 
 from postgrest.exceptions import APIError
+
 from squid.db import DatabaseManager
+
 
 class RestrictionError(Exception):
     """Base for *all* restriction/alias problems."""
+
 
 class RestrictionNotFound(RestrictionError):
     def __init__(self, name: str) -> None:
         self.name = name
         super().__init__(f"Restriction '{name}' does not exist")
 
+
 class AliasAlreadyAdded(RestrictionError):
     def __init__(self, alias: str, restriction_id: int) -> None:
         self.alias = alias
         self.restriction_id = restriction_id
         super().__init__(f"Alias '{alias}' is already on restriction {restriction_id}")
+
 
 class AliasTakenByOther(RestrictionError):
     def __init__(self, alias: str, other_id: int) -> None:
@@ -42,7 +47,9 @@ async def get_restriction_id(name_or_alias: str) -> int | None:
         return restrictions_query.data[0]["id"]
 
     aliases_query = (
-        await DatabaseManager().table("restriction_aliases").select("restriction_id")
+        await DatabaseManager()
+        .table("restriction_aliases")
+        .select("restriction_id")
         .ilike("alias", f"%{name_or_alias}%")
         .execute()
     )
@@ -60,7 +67,12 @@ async def add_restriction_alias_by_id(restriction_id: int, alias: str) -> None:
         alias (str): The alias to add.
     """
     try:
-        await DatabaseManager().table("restriction_aliases").insert({"restriction_id": restriction_id, "alias": alias}).execute()
+        await (
+            DatabaseManager()
+            .table("restriction_aliases")
+            .insert({"restriction_id": restriction_id, "alias": alias})
+            .execute()
+        )
     except APIError as e:
         if e.code == "23505":  # Unique violation error
             alias_rid = await get_restriction_id(alias)
