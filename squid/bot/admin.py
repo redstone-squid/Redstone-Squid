@@ -9,6 +9,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
+from postgrest.base_request_builder import SingleAPIResponse
+from postgrest.exceptions import APIError
 from postgrest.types import ReturnMethod
 
 from squid.bot import utils
@@ -74,12 +76,33 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     async def add_restriction_alias(self, ctx: Context[BotT], restriction_id: int, alias: str):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            await (
-                self.bot.db.table("restriction_aliases")
-                .insert({"restriction_id": restriction_id, "alias": alias}, returning=ReturnMethod.minimal)
+            response: SingleAPIResponse | None = (
+                await self.bot.db.table("restriction_aliases")
+                .select("restrictions(name,id)")
+                .eq("alias", alias)
+                .maybe_single()
                 .execute()
             )
-            await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+            if response is None:
+                await (
+                    self.bot.db.table("restriction_aliases")
+                    .insert({"restriction_id": restriction_id, "alias": alias}, returning=ReturnMethod.minimal)
+                    .execute()
+                )
+                await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+            elif response.data["restrictions"]["id"] != restriction_id:
+                await sent_message.edit(
+                    embed=utils.error_embed(
+                        "Error",
+                        f"Alias is already used for another restriction: {response.data['restrictions']['name']} (ID: {response.data['restrictions']['id']})",
+                    )
+                )
+                return
+            else:
+                await sent_message.edit(
+                    embed=utils.info_embed("Already added", "Alias already added to this restriction.")
+                )
+                return
         
         recalc_task = asyncio.create_task(recalculate_unknown_attributes())
         recalc_task.add_done_callback(self._tasks.discard)
