@@ -15,6 +15,7 @@ from postgrest.types import ReturnMethod
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
+from squid.db.build_tags import AliasAlreadyAdded, AliasTakenByOther, RestrictionNotFound, add_restriction_alias, add_restriction_alias_by_id, get_restriction_id
 from squid.db.builds import Build, recalculate_unknown_attributes
 
 if TYPE_CHECKING:
@@ -76,45 +77,21 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            # Look up the restriction ID from the name
-            restriction_id_response = (
-                await self.bot.db.table("restrictions").select("id").eq("name", restriction).maybe_single().execute()
-            )
-
-            if not restriction_id_response:
-                error_embed = utils.error_embed("Error", f"No restriction found with name '{restriction}'.")
-                await sent_message.edit(embed=error_embed)
-                return
-
-            restriction_id = restriction_id_response.data["id"]
-
-            response: SingleAPIResponse | None = (
-                await self.bot.db.table("restriction_aliases")
-                .select("restrictions(name,id)")
-                .eq("alias", alias)
-                .maybe_single()
-                .execute()
-            )
-            if response is None:
-                await (
-                    self.bot.db.table("restriction_aliases")
-                    .insert({"restriction_id": restriction_id, "alias": alias}, returning=ReturnMethod.minimal)
-                    .execute()
-                )
-                await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
-            elif response.data["restrictions"]["id"] != restriction_id:
+            try:
+                await add_restriction_alias(restriction, alias)
+            except RestrictionNotFound:
+                await sent_message.edit(embed=utils.error_embed("Error", f"No restriction named '{restriction}'."))
+            except AliasAlreadyAdded:
+                await sent_message.edit(embed=utils.info_embed("Already added", "Alias already on this restriction."))
+            except AliasTakenByOther as e:
                 await sent_message.edit(
                     embed=utils.error_embed(
                         "Error",
-                        f"Alias is already used for another restriction: {response.data['restrictions']['name']} (ID: {response.data['restrictions']['id']})",
+                        f"Alias in use by another restriction (ID: {e.other_id}).",
                     )
                 )
-                return
             else:
-                await sent_message.edit(
-                    embed=utils.info_embed("Already added", "Alias already added to this restriction.")
-                )
-                return
+                await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
 
         recalc_task = asyncio.create_task(recalculate_unknown_attributes())
         recalc_task.add_done_callback(self._tasks.discard)
