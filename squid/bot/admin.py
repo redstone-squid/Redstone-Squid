@@ -73,9 +73,21 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
     @commands.hybrid_command("add_alias")
     @check_is_staff()
     @check_is_owner_server()
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction_id: int, alias: str):
+    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:
+            # Look up the restriction ID from the name
+            restriction_id_response = (
+                await self.bot.db.table("restrictions").select("id").eq("name", restriction).maybe_single().execute()
+            )
+
+            if not restriction_id_response:
+                error_embed = utils.error_embed("Error", f"No restriction found with name '{restriction}'.")
+                await sent_message.edit(embed=error_embed)
+                return
+
+            restriction_id = restriction_id_response.data["id"]
+
             response: SingleAPIResponse | None = (
                 await self.bot.db.table("restriction_aliases")
                 .select("restrictions(name,id)")
@@ -103,7 +115,7 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
                     embed=utils.info_embed("Already added", "Alias already added to this restriction.")
                 )
                 return
-        
+
         recalc_task = asyncio.create_task(recalculate_unknown_attributes())
         recalc_task.add_done_callback(self._tasks.discard)
         self._tasks.add(recalc_task)
