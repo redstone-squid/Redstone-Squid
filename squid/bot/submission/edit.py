@@ -60,7 +60,6 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
 
             # Technically we can match both the variable names and the attribute names and use setattr
             # to set the values in a loop, but this explicitness helps with refactoring and readability.
-            # FIXME: need to distinguish between None and removing the value
             if self.works_in is not MISSING:
                 build.version_spec = self.works_in
             if self.build_size is not MISSING:
