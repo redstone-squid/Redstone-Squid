@@ -175,17 +175,17 @@ class BuildHandler[BotT: RedstoneSquid]:
                         )
                         build.image_urls.append(preview_url)
                         if build.id is not None:
-                            background_tasks.add(
-                                asyncio.create_task(
-                                    DatabaseManager()
-                                    .table("build_links")
-                                    .insert(
-                                        {"build_id": build.id, "url": preview_url, "media_type": "image"},
-                                        returning=ReturnMethod.minimal,
-                                    )
-                                    .execute()
+                            task = asyncio.create_task(
+                                DatabaseManager()
+                                .table("build_links")
+                                .insert(
+                                    {"build_id": build.id, "url": preview_url, "media_type": "image"},
+                                    returning=ReturnMethod.minimal,
                                 )
+                                .execute()
                             )
+                            background_tasks.add(task)
+                            task.add_done_callback(background_tasks.discard)
                         em.set_image(url=preview_url)
                     break
 

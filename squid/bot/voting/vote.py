@@ -30,6 +30,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def load_vote_sessions(self):
         """Load open vote sessions from the database."""
@@ -107,6 +108,8 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         remove_reaction_task = asyncio.create_task(
             message.remove_reaction(payload.emoji, user)
         )  # await later as this is not critical
+        self._background_tasks.add(remove_reaction_task)
+        remove_reaction_task.add_done_callback(self._background_tasks.discard)
 
         if user.bot:
             return  # Ignore bot reactions
@@ -145,11 +148,6 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         else:
             return
         await vote_session.update_messages()
-
-        try:
-            await remove_reaction_task
-        except (discord.Forbidden, discord.NotFound):
-            pass  # Ignore if we can't remove the reaction
 
     @hybrid_command(name="start_vote")
     async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
