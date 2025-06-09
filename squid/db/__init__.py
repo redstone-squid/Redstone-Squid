@@ -7,9 +7,9 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 from __future__ import annotations
 
 import os
-from functools import cache
 from typing import Any, ClassVar, Literal
 
+from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
 
 from squid.db.message import MessageManager
@@ -54,7 +54,7 @@ class DatabaseManager(AsyncClient):
         self.message = MessageManager(self)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @cache
+    @alru_cache
     async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
         """Fetches all restrictions from the database."""
         response: APIResponse[RestrictionRecord] = await self.table("restrictions").select("*").execute()
