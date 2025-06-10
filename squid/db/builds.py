@@ -1402,17 +1402,6 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
 
 
-async def recalculate_unknown_attributes(*, filter: Mapping[str, Any] | None = None) -> None:
-    """Recalculates the unknown attributes (i.e. unknown_information column) of builds in the database, optionally filtered by the given criteria(s).
-
-    Args:
-        filter: A dictionary containing filter criteria, only exact matches are supported.
-            See `get_builds_by_filter` for more information.
-    """
-    builds = await get_builds_by_filter(filter=filter)
-    await asyncio.gather(*(build.save() for build in builds))
-
-
 async def main():
     from dotenv import load_dotenv
 
