@@ -25,6 +25,7 @@ dependencies = [
     "gitpython>=3.1.31",
     "beartype>=0.19.0",
     "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
+    "rapidfuzz>=3.13.0",
 ]
 
 [dependency-groups]

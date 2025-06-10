@@ -12,6 +12,7 @@ import git
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
+from rapidfuzz import process
 
 from squid.bot import utils
 
@@ -56,12 +57,16 @@ class HelpCog[BotT: commands.Bot](Cog):
                 for cog_name, cog in self.bot.cogs.items()
                 if cog.get_commands()
             ][:25]
-        needle = needle.lower()
-        return [
-            app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
-            for command in self.bot.walk_commands()
-            if needle in command.qualified_name
-        ][:25]
+
+        commands = [command.qualified_name for command in self.bot.walk_commands()]
+
+        matches = process.extract(
+            needle,
+            commands,
+            limit=25,
+            score_cutoff=30,
+        )
+        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
 
 
 class Help(commands.MinimalHelpCommand):
