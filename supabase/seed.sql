@@ -319,11 +319,11 @@ values
 ('Bedrock', 1, 2, 1),
 ('Bedrock', 1, 2, 0);
 
-INSERT INTO messages ("server_id", "build_id", "channel_id", "id", "updated_at", "purpose", "vote_session_id", "content")
+INSERT INTO messages ("server_id", "build_id", "channel_id", "id", "updated_at", "purpose", "vote_session_id", "content", "author_id")
 VALUES
-('433618741528625152', null, '667401499554611210', '1327569309899292754', '2025-01-11 15:06:07+00', 'build_original_message', null, 'some random message'),
- ('433618741528625152', null, '667401499554611210', '1327613153755791412', '2025-01-11 15:06:45+00', 'build_original_message', null, 'Fastest 8x8 piston door'),
- ('433618741528625152', null, '667401499554611210', '1328158928638443571', '2025-01-13 02:41:21+00', 'build_original_message', null, '# **Smallest 0.9 6x6**');
+('433618741528625152', null, '667401499554611210', '1327569309899292754', '2025-01-11 15:06:07+00', 'build_original_message', null, 'some random message', '353089661175988224'),
+ ('433618741528625152', null, '667401499554611210', '1327613153755791412', '2025-01-11 15:06:45+00', 'build_original_message', null, 'Fastest 8x8 piston door', '353089661175988224'),
+ ('433618741528625152', null, '667401499554611210', '1328158928638443571', '2025-01-13 02:41:21+00', 'build_original_message', null, '# **Smallest 0.9 6x6**', '353089661175988224');
 
 INSERT INTO builds ("id", "submission_status", "edited_time", "record_category", "extra_info", "width", "height", "depth", "completion_time", "submission_time", "category", "submitter_id", "ai_generated", "original_message_id", "version_spec", "embedding")
 VALUES
