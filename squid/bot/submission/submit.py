@@ -43,7 +43,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     class SubmitDoorFlags(commands.FlagConverter):
         """Parameters information for the /submit door command."""
 
-        def to_build(self) -> Build:
+        async def to_build(self) -> Build:
             """Convert the flags to a build object."""
             build = Build()
             build.record_category = self.record_category
@@ -52,8 +52,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             build.door_width, build.door_height, build.door_depth = self.door_size
             build.door_type = self.pattern
             build.door_orientation_type = self.door_type
-            build.wiring_placement_restrictions = self.wiring_placement_restrictions
-            build.component_restrictions = self.component_restrictions
+            await build.set_restrictions(self.restrictions)
 
             if (locationality := self.locationality) is not None and locationality != "Not locational":
                 build.miscellaneous_restrictions.append(locationality)
@@ -82,9 +81,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] = flag(default=lambda ctx: (None, None, None), converter=DimensionsConverter, description='The dimension of the build. In width x height (x depth), spaces optional.')
         works_in: str | None = flag(default=None, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
-        # TODO: merge all restrictions into one field and use build.set_restrictions
-        wiring_placement_restrictions: list[str] = flag(default=_list_default, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        component_restrictions: list[str] = flag(default=_list_default, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        restrictions: list[str] = flag(default=_list_default, converter=ListConverter, description='For example, "Seamless, Full Flush, No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         information_about_build: str | None = flag(default=None, description='Any additional information about the build.')
         normal_closing_time: int | None = flag(default=None, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
         normal_opening_time: int | None = flag(default=None, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
@@ -107,7 +104,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             followup = interaction.followup
 
             async with RunningMessage(followup) as message:
-                build = flags.to_build()
+                build = await flags.to_build()
                 build.submitter_id = ctx.author.id
                 build.ai_generated = False
                 build.category = Category.DOOR
