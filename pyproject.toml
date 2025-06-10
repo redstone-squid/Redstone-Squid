@@ -87,7 +87,6 @@ strictDictionaryInference = true
 strictSetInference = true
 deprecateTypingAliases = true
 reportPropertyTypeMismatch = "error"
-reportImportCycles = "information"
 reportUntypedFunctionDecorator = "information"
 reportUntypedClassDecorator = "information"
 reportUntypedBaseClass = "information"

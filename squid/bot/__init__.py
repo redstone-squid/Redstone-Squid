@@ -16,6 +16,8 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv.main import StrPath
 
+# Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
+# will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
