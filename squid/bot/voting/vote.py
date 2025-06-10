@@ -23,12 +23,25 @@ DENY_EMOJIS = ["👎", "❌"]
 # TODO: Unhardcode these emojis
 
 logger = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class VoteCog[BotT: RedstoneSquid](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
+
+    async def _load_vote_sessions(self):
+        """Load open vote sessions from the database."""
+        try:
+            open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
+                self.bot
+            ) + await DeleteLogVoteSession.get_open_vote_sessions(self.bot)
+            for session in open_vote_sessions:
+                for message_id in session.message_ids:
+                    self._open_vote_sessions[message_id] = session
+        except Exception as e:
+            logger.error(f"Failed to load open vote sessions: {e}")
 
     async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
         """Get the voting weight of a user."""
@@ -156,14 +169,9 @@ class VoteCog[BotT: RedstoneSquid](Cog):
 async def setup(bot: RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     cog = VoteCog(bot)
-    try:
-        open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
-            bot
-        ) + await DeleteLogVoteSession.get_open_vote_sessions(bot)
-        for session in open_vote_sessions:
-            for message_id in session.message_ids:
-                cog._open_vote_sessions[message_id] = session  # pyright: ignore [reportPrivateUsage]
-    except Exception as e:
-        logger.error(f"Failed to load open vote sessions: {e}")
-
+    # Load open vote sessions in the background because it can take a while
+    # and this cog does not need to wait for it to finish
+    load_task = asyncio.create_task(cog._load_vote_sessions())
+    _background_tasks.add(load_task)
+    load_task.add_done_callback(_background_tasks.discard)
     await bot.add_cog(cog)
