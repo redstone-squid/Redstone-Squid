@@ -31,7 +31,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
 
-    async def _load_vote_sessions(self):
+    async def load_vote_sessions(self):
         """Load open vote sessions from the database."""
         try:
             open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
@@ -171,7 +171,7 @@ async def setup(bot: RedstoneSquid):
     cog = VoteCog(bot)
     # Load open vote sessions in the background because it can take a while
     # and this cog does not need to wait for it to finish
-    load_task = asyncio.create_task(cog._load_vote_sessions())
+    load_task = asyncio.create_task(cog.load_vote_sessions())
     _background_tasks.add(load_task)
     load_task.add_done_callback(_background_tasks.discard)
     await bot.add_cog(cog)
