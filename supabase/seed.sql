@@ -319,7 +319,7 @@ values
 ('Bedrock', 1, 2, 1),
 ('Bedrock', 1, 2, 0);
 
-INSERT INTO messages ("server_id", "build_id", "channel_id", "message_id", "updated_at", "purpose", "vote_session_id", "content")
+INSERT INTO messages ("server_id", "build_id", "channel_id", "id", "updated_at", "purpose", "vote_session_id", "content")
 VALUES
 ('433618741528625152', null, '667401499554611210', '1327569309899292754', '2025-01-11 15:06:07+00', 'build_original_message', null, 'some random message'),
  ('433618741528625152', null, '667401499554611210', '1327613153755791412', '2025-01-11 15:06:45+00', 'build_original_message', null, 'Fastest 8x8 piston door'),
@@ -342,9 +342,9 @@ VALUES
 ALTER SEQUENCE submissions_submission_id_seq RESTART WITH 100;
 -- Reserve the first 100 submissions for testing data
 
-UPDATE messages SET build_id = '3' WHERE message_id = '1327569309899292754';
-UPDATE messages SET build_id = '4' WHERE message_id = '1327613153755791412';
-UPDATE messages SET build_id = '5' WHERE message_id = '1328158928638443571';
+UPDATE messages SET build_id = '3' WHERE id = '1327569309899292754';
+UPDATE messages SET build_id = '4' WHERE id = '1327613153755791412';
+UPDATE messages SET build_id = '5' WHERE id = '1328158928638443571';
 
 
 INSERT INTO doors ("build_id", "orientation", "door_width", "door_height", "door_depth", "normal_opening_time", "normal_closing_time", "visible_opening_time", "visible_closing_time")
