@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from postgrest.base_request_builder import APIResponse, ReturnMethod
+from postgrest.types import ReturnMethod
+from postgrest.base_request_builder import APIResponse
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
