@@ -10,6 +10,7 @@ from typing import ClassVar, Literal
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
 
+from realtime._async.channel import AsyncRealtimeChannel
 from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
 from squid.db.server_settings import ServerSettingManager
@@ -21,7 +22,15 @@ from supabase.lib.client_options import AsyncClientOptions
 class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
-    version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
+    _instance: ClassVar[DatabaseManager | None] = None
+    _realtime_restriction_channel: ClassVar[AsyncRealtimeChannel | None] = None
+    _realtime_version_channel: ClassVar[AsyncRealtimeChannel | None] = None
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> DatabaseManager:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(
         self,
@@ -47,20 +56,34 @@ class DatabaseManager(AsyncClient):
         self.server_setting = ServerSettingManager(self)
         self.message = MessageManager(self)
 
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
     async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
         """Fetches all restrictions from the database."""
         response: APIResponse[RestrictionRecord] = await self.table("restrictions").select("*").execute()
+
+        # Subscribe to realtime updates to invalidate the cache
+        if not self._realtime_restriction_channel:
+            self._realtime_restriction_channel = (
+                await self.channel("restrictions")
+                .on_postgres_changes("*", schema="public", table="restrictions", callback=self.handle_record_updated)
+                .subscribe()
+            )
+
         return response.data
 
-    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
+    def handle_restriction_updated(self, _payload: dict[str, Any]) -> None:
+        """Callback for when a restriction is updated."""
+        self.fetch_all_restrictions.cache_clear()
+
+    def handle_version_updated(self, _payload: dict[str, Any]) -> None:
+        """Callback for when a version is updated."""
+        self.fetch_versions_list.cache_clear()
+
+    @alru_cache
+    async def fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
-        if versions := self.version_cache.get(edition):
-            return versions
-
         versions_response: APIResponse[VersionRecord] = (
             await self.table("versions")
             .select("*")
@@ -70,12 +93,20 @@ class DatabaseManager(AsyncClient):
             .order("patch_number")
             .execute()
         )
-        self.version_cache[edition] = versions_response.data
+
+        # Subscribe to realtime updates to invalidate the cache
+        if not self._realtime_version_channel:
+            self._realtime_version_channel = (
+                await self.channel("versions")
+                .on_postgres_changes("*", schema="public", table="versions", callback=self.handle_version_updated)
+                .subscribe()
+            )
+
         return versions_response.data
 
-    async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
+    async def fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
-        versions = await self.get_or_fetch_versions_list(edition=edition)
+        versions = await self.fetch_versions_list(edition=edition)
         if len(versions) == 0:
             raise RuntimeError(f"No {edition} versions found.")
         return get_version_string(versions[-1])
@@ -97,7 +128,7 @@ class DatabaseManager(AsyncClient):
 
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
-        all_versions = await self.get_or_fetch_versions_list(edition)
+        all_versions = await self.fetch_versions_list(edition)
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts

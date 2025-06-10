@@ -198,7 +198,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         if build.component_restrictions and build.component_restrictions[0] != "None":
             desc.append(", ".join(build.component_restrictions))
 
-        if await DatabaseManager().get_or_fetch_newest_version(edition="Java") not in build.versions:
+        if await DatabaseManager().fetch_newest_version(edition="Java") not in build.versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in build.miscellaneous_restrictions:

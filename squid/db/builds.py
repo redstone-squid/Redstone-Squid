@@ -579,7 +579,7 @@ class Build:
         build.normal_opening_time = Build.parse_time_string(variables["opening_time"])
         build.normal_closing_time = Build.parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-        build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
+        build.version_spec = variables["version"] or await DatabaseManager().fetch_newest_version(edition="Java")
         build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
         build.image_urls = variables["image"].split(", ") if variables["image"] else []
         if variables["author_note"] is not None:
@@ -1117,7 +1117,7 @@ class Build:
     async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
-        functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
+        functional_versions = self.versions or await db.fetch_newest_version(edition="Java")
 
         # TODO: raise an error if any versions are not found in the database
         response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
