@@ -87,6 +87,8 @@ async def add_restriction_alias_by_id(restriction_id: int, alias: str) -> None:
     recalc_task = asyncio.create_task(recalculate_unknown_attributes())
     recalc_task.add_done_callback(_background_tasks.discard)
     _background_tasks.add(recalc_task)
+        else:
+            raise e
 
 
 async def add_restriction_alias(name_or_alias: str, alias: str) -> None:
