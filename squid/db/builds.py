@@ -1210,6 +1210,9 @@ class BuildLock:
                 return False
             return True
 
+        # Exponential backoff for acquiring the lock
+        sleep_time = 0.01
+        max_sleep = 0.5
         if timeout >= 0:
             start_time = time.monotonic()
             while True:
@@ -1217,10 +1220,12 @@ class BuildLock:
                     return True
                 if time.monotonic() - start_time >= timeout:
                     return False
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(sleep_time)
+                sleep_time = min(sleep_time * 1.5, max_sleep)
         else:
             while not await self._try_lock():
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(sleep_time)
+                sleep_time = min(sleep_time * 1.5, max_sleep)
             return True
 
     async def release(self) -> None:
