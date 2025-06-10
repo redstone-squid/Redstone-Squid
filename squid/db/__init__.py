@@ -120,10 +120,17 @@ class DatabaseManager(AsyncClient):
                     if start_str.count(".") == 2
                     else parse_version_string(start_str + ".0")
                 )
-                # FIXME: for something like 1.14 - 1.16, 1.16 should mean the last patch of 1.16, not 1.16.0
-                end_tuple = (
-                    parse_version_string(end_str) if end_str.count(".") == 2 else parse_version_string(end_str + ".0")
-                )
+
+                if end_str.count(".") == 2:
+                    end_tuple = parse_version_string(end_str)
+                else:
+                    # When no patch is specified (e.g. "1.16"), find the highest patch number for that major.minor
+                    major, minor = map(int, end_str.split("."))
+                    max_patch = 0
+                    for v_tuple in all_version_tuples:
+                        if v_tuple[0] == major and v_tuple[1] == minor:
+                            max_patch = max(max_patch, v_tuple[2])
+                    end_tuple = (major, minor, max_patch)
 
                 for v_tuple in all_version_tuples:
                     if start_tuple[1:] <= v_tuple <= end_tuple[1:]:
