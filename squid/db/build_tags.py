@@ -6,8 +6,6 @@ from typing import Any
 from postgrest.exceptions import APIError
 
 from squid.db import DatabaseManager
-from squid.db.builds import recalculate_unknown_attributes
-
 
 _background_tasks: set[asyncio.Task[Any]] = set()
 
@@ -83,10 +81,6 @@ async def add_restriction_alias_by_id(restriction_id: int, alias: str) -> None:
             alias_rid = await get_restriction_id(alias)
             assert alias_rid is not None
             raise AliasAlreadyAdded(alias, alias_rid)
-
-    recalc_task = asyncio.create_task(recalculate_unknown_attributes())
-    recalc_task.add_done_callback(_background_tasks.discard)
-    _background_tasks.add(recalc_task)
         else:
             raise e
 
@@ -104,7 +98,6 @@ async def add_restriction_alias(name_or_alias: str, alias: str) -> None:
         AliasTakenByOther: If the alias is already taken by another restriction.
     """
     rid, alias_rid = await asyncio.gather(get_restriction_id(name_or_alias), get_restriction_id(alias))
-
     if rid is None:
         raise RestrictionNotFound(name_or_alias)
 
