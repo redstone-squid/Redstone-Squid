@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
+from rapidfuzz import process
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
@@ -98,14 +99,15 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
         self, _interaction: discord.Interaction[BotT], current: str
     ) -> list[app_commands.Choice[str]]:
         """Provide autocomplete for restriction names."""
-        restrictions = await self.bot.db.fetch_all_restrictions()
-
-        filtered = [r for r in restrictions if current.lower() in r["name"].lower()]
-        # Sort by name and limit to 25 (Discord's limit)
-        filtered.sort(key=lambda x: x["name"])
-        filtered = filtered[:25]
-
-        return [app_commands.Choice(name=restriction["name"], value=restriction["name"]) for restriction in filtered]
+        restriction_records = await self.bot.db.fetch_all_restrictions()
+        restrictions = [r["name"] for r in restriction_records]
+        matches = process.extract(
+            current,
+            restrictions,
+            limit=25,
+            score_cutoff=30,
+        )
+        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
