@@ -24,30 +24,26 @@ class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
     version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
-    _instance: ClassVar[DatabaseManager | None] = None
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> DatabaseManager:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
 
     def __init__(
         self,
+        supabase_url: str | None = None,
+        supabase_key: str | None = None,
         options: AsyncClientOptions | None = None,
     ):
         """Initializes the DatabaseManager."""
-        # Singleton object should only be initialized once
-        if self._initialized:
-            return
-        self._initialized = True
-
-        supabase_url = os.environ.get("SUPABASE_URL")
-        supabase_key = os.environ.get("SUPABASE_KEY")
+        supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
+        supabase_key = supabase_key or os.environ.get("SUPABASE_KEY")
         if not supabase_url:
-            raise RuntimeError("Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable.")
+            raise RuntimeError(
+                "supabase_url not given and no SUPABASE_URL environmental variable found. "
+                "Specify SUPABASE_URL either with a .env file or a SUPABASE_URL environment variable."
+            )
         if not supabase_key:
-            raise RuntimeError("Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable.")
+            raise RuntimeError(
+                "supabase_key not given and no SUPABASE_KEY environmental variable found. "
+                "Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable."
+            )
 
         super().__init__(supabase_url, supabase_key, options)
         self.server_setting = ServerSettingManager(self)
