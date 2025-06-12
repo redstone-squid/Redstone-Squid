@@ -12,7 +12,6 @@ from discord.ext.commands import Cog, Context, flag
 from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot import utils
-from squid.bot.utils.converters import DimensionsConverter, ListConverter, NoneStrConverter, GameTickConverter
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils import (
@@ -23,6 +22,7 @@ from squid.bot.utils import (
     check_is_trusted_or_staff,
     fix_converter_annotations,
 )
+from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
 from squid.db.builds import Build
 
 if TYPE_CHECKING:

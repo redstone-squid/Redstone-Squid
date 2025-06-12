@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from traceback import format_tb
 from types import TracebackType
-from typing import TYPE_CHECKING
 
 import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
-
 
 discord_red = 0xF04747
 discord_yellow = 0xFAA61A
@@ -88,4 +86,4 @@ class RunningMessage:
         # Handle normal exit
         if self.delete_on_exit:
             await self.sent_message.delete()
-        return False 
+        return False

@@ -6,7 +6,6 @@ import sys
 from enum import Enum
 from typing import override
 
-
 _registry: dict[str, "Sentinel"] = {}
 
 
@@ -77,4 +76,4 @@ class DefaultType(Enum):
 
 
 MISSING = MissingType.MISSING
-DEFAULT = DefaultType.DEFAULT 
+DEFAULT = DefaultType.DEFAULT

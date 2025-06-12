@@ -89,4 +89,4 @@ def check_is_trusted_or_staff():
             return True
         raise MissingAnyRole(list(allowed_role_ids))
 
-    return check(predicate) 
+    return check(predicate)

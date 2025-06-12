@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import inspect
 from types import FrameType
-from typing import override, Any
+from typing import Any, override
 
-from discord import app_commands, Interaction
+from discord import Interaction, app_commands
 from discord._types import ClientT
 from discord.app_commands import Choice
-
 from discord.ext import commands
-from discord.ext.commands import FlagConverter, Context
+from discord.ext.commands import Context, FlagConverter
 
 from squid.bot.submission.parse import parse_dimensions
 

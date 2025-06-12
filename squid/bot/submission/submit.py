@@ -16,10 +16,10 @@ from discord.ext.commands import (
 
 from squid.bot import utils
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
+from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
 from squid.db.schema import Category, Status
 from squid.db.utils import upload_to_catbox

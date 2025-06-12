@@ -11,7 +11,6 @@ from typing import TypedDict
 import aiohttp
 import bs4
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -144,4 +143,4 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
     if process.returncode != 0:
         raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
 
-    return io.BytesIO(out) 
+    return io.BytesIO(out)
