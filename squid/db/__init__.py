@@ -7,7 +7,7 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 from __future__ import annotations
 
 import os
-from typing import Any, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
