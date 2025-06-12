@@ -99,7 +99,7 @@ class DatabaseManager(AsyncClient):
 
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
-        all_versions = await self.get_or_fetch_versions_list("Java")
+        all_versions = await self.get_or_fetch_versions_list(edition)
         all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
