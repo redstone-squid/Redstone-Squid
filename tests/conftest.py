@@ -5,8 +5,10 @@ Global pytest configuration and shared fixtures.
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import dotenv
 import pytest
 from postgrest import APIResponse
+from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
 from squid.db.schema import RestrictionRecord, VersionRecord
@@ -42,6 +44,20 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
 
         DatabaseManager.version_cache = {}
         yield DatabaseManager()
+
+
+@pytest.fixture(scope="session")
+async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager, None]:
+    """Create a DatabaseManager instance using a Docker-backed Supabase container.
+
+    This fixture is used for integration tests that require a real database connection.
+    As creating a Supabase container can be time-consuming, it is scoped to the session.
+    """
+    with DockerCompose(
+        "supabase/docker/", compose_file_name=["docker-compose.yml"], pull=True, env_file=".env"
+    ) as compose:
+        envs = dotenv.dotenv_values(compose.env_file)
+        yield DatabaseManager(supabase_url=envs["API_EXTERNAL_URL"], supabase_key=envs["SERVICE_ROLE_KEY"])
 
 
 @pytest.fixture
