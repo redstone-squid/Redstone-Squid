@@ -105,9 +105,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
         message = await channel.fetch_message(payload.message_id)
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = asyncio.create_task(
-            message.remove_reaction(payload.emoji, user)
-        )  # await later as this is not critical
+        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
         self._background_tasks.add(remove_reaction_task)
         remove_reaction_task.add_done_callback(self._background_tasks.discard)
 
