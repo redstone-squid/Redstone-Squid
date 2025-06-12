@@ -61,3 +61,6 @@ build:
 
 docker-run: build
     docker run --env-file .env --rm -p 8000:8000 rssquid
+
+generate-schema:
+    pg_dump -h aws-0-us-west-1.pooler.supabase.com -U postgres.jnushtruzgnnmmxabsxi -d postgres --schema-only --no-owner --no-privileges > schema_dump.sql
