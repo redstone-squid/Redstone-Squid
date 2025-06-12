@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
 import pytest
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager

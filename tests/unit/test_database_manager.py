@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 import pytest
-from postgrest import APIResponse
+from postgrest.base_request_builder import APIResponse
 
 from squid.db import DatabaseManager
 from squid.db.schema import RestrictionRecord, VersionRecord
@@ -22,7 +22,7 @@ class TestDatabaseManager:
         self, mock_db_manager: DatabaseManager, sample_version_data: list[VersionRecord]
     ) -> None:
         """Test that version list is properly cached."""
-        mock_db_manager.table().select().execute.return_value = APIResponse(
+        mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
             data=sample_version_data, count=len(sample_version_data)
         )
         # First call should query the database
@@ -34,7 +34,7 @@ class TestDatabaseManager:
         assert versions2 == sample_version_data
 
         # Verify database was only queried once
-        mock_db_manager.table().select().execute.assert_called_once()
+        mock_db_manager.table().select().execute.assert_called_once()  # type: ignore
 
     @pytest.mark.parametrize(
         "spec,expected",
@@ -58,7 +58,7 @@ class TestDatabaseManager:
         self, mock_db_manager: DatabaseManager, sample_restriction_data: list[RestrictionRecord]
     ) -> None:
         """Test that restrictions are properly cached."""
-        mock_db_manager.table().select().execute.return_value = APIResponse(
+        mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
             data=sample_restriction_data, count=len(sample_restriction_data)
         )
 
@@ -71,4 +71,4 @@ class TestDatabaseManager:
         assert restrictions2 == sample_restriction_data
 
         # Verify database was only queried once
-        mock_db_manager.table().select().execute.assert_called_once()
+        mock_db_manager.table().select().execute.assert_called_once()  # type: ignore
