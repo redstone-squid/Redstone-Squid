@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from postgrest.base_request_builder import SingleAPIResponse
 
 from squid.bot._types import GuildMessageable
-from squid.bot.utils import is_staff
+from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 
 if TYPE_CHECKING:
@@ -123,20 +123,11 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             if payload.guild_id is None:
                 raise NotImplementedError("Cannot vote in DMs.")
 
-            trusted_role_ids = await self.bot.db.server_setting.get_single(
-                server_id=payload.guild_id, setting="Trusted"
-            )
-
-            guild = self.bot.get_guild(payload.guild_id)
-            assert guild is not None
-            member = guild.get_member(user.id)
-            assert member is not None
-            for role in member.roles:
-                if role.id in trusted_role_ids:
-                    break
+            if await is_trusted_or_staff(self.bot, payload.guild_id, user_id):
+                pass
             else:
                 await channel.send("You do not have a trusted role.")
-                return  # User does not have a trusted role
+                return
 
         # The vote session will handle the closing of the vote session
         original_vote = vote_session[user_id]
