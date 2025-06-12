@@ -90,3 +90,24 @@ def check_is_trusted_or_staff():
         raise MissingAnyRole(list(allowed_role_ids))
 
     return check(predicate)
+
+
+async def is_trusted_or_staff(bot: RedstoneSquid, server_id: int, user_id: int) -> bool:
+    """Check if the user has a trusted or staff role, as defined in the server settings."""
+    server = bot.get_guild(server_id)
+    if server is None:
+        return False
+
+    db = DatabaseManager()
+    staff_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Staff")
+    trusted_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Trusted")
+    allowed_role_ids = staff_role_ids + trusted_role_ids
+
+    member = server.get_member(user_id)
+    if member is None:
+        return False
+
+    for role in member.roles:
+        if role.id in allowed_role_ids:
+            return True
+    return False
