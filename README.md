@@ -13,6 +13,10 @@ To get this bot up and running on your machine, you will need a copy of this rep
 ```bash
 git clone https://github.com/redstone-squid/Redstone-Squid.git
 ```
+
+> [!NOTE]  
+> If you have `submodule.recurse` set to `true`, you will pull [supabase](https://github.com/supabase/supabase) (2GB) for no reason other than running integration tests. It is recommended to set `submodule.recurse` to `false` before cloning this repository.
+
 Then you can move to the repository's root directory with
 ```bash
 cd Redstone-Squid
