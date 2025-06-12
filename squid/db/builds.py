@@ -396,6 +396,7 @@ class Build:
         Returns:
             The time in ticks.
         """
+        # TODO: parse "ticks"
         if time_string is None:
             return None
         time_string = time_string.replace("s", "").replace("~", "").strip()
