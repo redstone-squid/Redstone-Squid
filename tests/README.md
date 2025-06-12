@@ -1,1 +1,0 @@
-This is a placeholder for now. The tests directory needs to exist for CI to work properly. No tests have been written yet.
