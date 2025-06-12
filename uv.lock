@@ -1616,6 +1616,7 @@ dependencies = [
     { name = "postgrest" },
     { name = "python-dotenv" },
     { name = "rapidfuzz" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "supabase" },
     { name = "uvicorn" },
     { name = "vecs" },
@@ -1651,6 +1652,7 @@ requires-dist = [
     { name = "postgrest", git = "https://github.com/redstone-squid/postgrest-py" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "rapidfuzz", specifier = ">=3.13.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.41" },
     { name = "supabase", specifier = ">=2.11.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "vecs", specifier = ">=0.4.5" },
@@ -1833,6 +1835,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/2e/677c17c5d6a004c3c45334ab1dbe7b7deb834430b282b8a0f75ae220c8eb/sqlalchemy-2.0.41-cp313-cp313-win32.whl", hash = "sha256:bfc9064f6658a3d1cadeaa0ba07570b83ce6801a1314985bf98ec9b95d74e15f", size = 2082420, upload-time = "2025-05-14T17:55:52.69Z" },
     { url = "https://files.pythonhosted.org/packages/e9/61/e8c1b9b6307c57157d328dd8b8348ddc4c47ffdf1279365a13b2b98b8049/sqlalchemy-2.0.41-cp313-cp313-win_amd64.whl", hash = "sha256:82ca366a844eb551daff9d2e6e7a9e5e76d2612c8564f58db6c19a726869c1df", size = 2108329, upload-time = "2025-05-14T17:55:54.495Z" },
     { url = "https://files.pythonhosted.org/packages/1c/fc/9ba22f01b5cdacc8f5ed0d22304718d2c758fce3fd49a5372b886a86f37c/sqlalchemy-2.0.41-py3-none-any.whl", hash = "sha256:57df5dc6fdb5ed1a88a1ed2195fd31927e705cad62dedd86b46972752a80f576", size = 1911224, upload-time = "2025-05-14T17:39:42.154Z" },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "greenlet" },
 ]
 
 [[package]]
