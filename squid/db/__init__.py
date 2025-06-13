@@ -64,7 +64,6 @@ class DatabaseManager(AsyncClient):
 
         # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
-        self.message = MessageManager(self)
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
@@ -73,6 +72,8 @@ class DatabaseManager(AsyncClient):
         self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=False)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
+        # Initialize managers
+        self.message = MessageManager(self.async_session)
         self.server_setting = ServerSettingManager(self.async_session)
         self.user = UserManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
