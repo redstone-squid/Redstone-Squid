@@ -190,7 +190,7 @@ class RestrictionRecord(TypedDict):
     id: int
     build_category: BuildType
     name: str
-    type: Restriction
+    type: RestrictionType
 
 
 class RestrictionAliasRecord(TypedDict):
