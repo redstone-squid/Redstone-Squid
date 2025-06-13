@@ -27,6 +27,7 @@ dependencies = [
     "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
     "rapidfuzz>=3.13.0",
     "sqlalchemy[asyncio]>=2.0.41",
+    "asyncpg>=0.30.0",
 ]
 
 [dependency-groups]
