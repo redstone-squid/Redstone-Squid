@@ -65,7 +65,6 @@ class DatabaseManager(AsyncClient):
         # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
         self.message = MessageManager(self)
-        self.build_tags = BuildTagsManager(self)
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
@@ -76,6 +75,7 @@ class DatabaseManager(AsyncClient):
 
         self.server_setting = ServerSettingManager(self.async_session)
         self.user = UserManager(self.async_session)
+        self.build_tags = BuildTagsManager(self.async_session)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""
