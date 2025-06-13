@@ -1,0 +1,11 @@
+---
+description: Read this if you want to create a new migration.
+globs:
+alwaysApply: false
+---
+Steps:
+1. `supabase migration new <name>`
+2. Write the SQL manually in the file name returned by the command.
+3. If changed column names, update `seed.sql`, and all the references in the code base
+
+Read `docs/new-build-attribute.md` for more details if you have to add a new build attribute.
