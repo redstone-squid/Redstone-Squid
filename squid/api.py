@@ -10,7 +10,6 @@ from postgrest.types import ReturnMethod
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
-from squid.db.user import get_minecraft_username
 from squid.db.utils import utcnow
 
 app = FastAPI()
@@ -28,10 +27,10 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if (username := await get_minecraft_username(user.uuid)) is None:
+    db = DatabaseManager()
+    if (username := await db.user.get_minecraft_username(user.uuid)) is None:
         raise HTTPException(status_code=400, detail="Invalid user")
 
-    db = DatabaseManager()
     # Invalidate existing codes for this user
     await (
         db.table("verification_codes")

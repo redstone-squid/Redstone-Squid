@@ -9,107 +9,106 @@ from squid.db import DatabaseManager
 from squid.db.utils import utcnow
 
 
-async def add_user(user_id: int | None = None, ign: str | None = None) -> int:
-    """Add a user to the database.
+class UserManager:
+    """A class for managing user data and operations."""
 
-    Args:
-        user_id: The user's Discord ID.
-        ign: The user's in-game name.
+    def __init__(self, db: DatabaseManager):
+        self.db = db
 
-    Returns:
-        The ID of the new user.
-    """
-    if user_id is None and ign is None:
-        raise ValueError("No user data provided.")
+    async def add_user(self, user_id: int | None = None, ign: str | None = None) -> int:
+        """Add a user to the database.
 
-    db = DatabaseManager()
-    response = await db.table("users").insert({"discord_id": user_id, "ign": ign}).execute()
-    return response.data[0]["id"]
+        Args:
+            user_id: The user's Discord ID.
+            ign: The user's in-game name.
 
+        Returns:
+            The ID of the new user.
+        """
+        if user_id is None and ign is None:
+            raise ValueError("No user data provided.")
 
-async def link_minecraft_account(user_id: int, code: str) -> bool:
-    """Using a verification code, link a user's Discord account with their Minecraft account.
+        response = await self.db.table("users").insert({"discord_id": user_id, "ign": ign}).execute()
+        return response.data[0]["id"]
 
-    Args:
-        user_id: The user's Discord ID.
-        code: The verification code.
+    async def link_minecraft_account(self, user_id: int, code: str) -> bool:
+        """Using a verification code, link a user's Discord account with their Minecraft account.
 
-    Returns:
-        True if the code is valid and the accounts are linked, False otherwise.
-    """
-    db = DatabaseManager()
+        Args:
+            user_id: The user's Discord ID.
+            code: The verification code.
 
-    response = (
-        await db.table("verification_codes")
-        .select("minecraft_uuid", "minecraft_username")
-        .eq("code", code)
-        .gt("expires", utcnow())
-        .maybe_single()
-        .execute()
-    )
-    if response is None:
-        return False
-    minecraft_uuid = response.data["minecraft_uuid"]
-    minecraft_username = response.data["minecraft_username"]
-
-    # TODO: This currently does not check if the ign is already in use without a UUID or discord ID given.
-    response = (
-        await db.table("users")
-        .update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username}, returning=ReturnMethod.minimal)
-        .eq("discord_id", user_id)
-        .execute()
-    )
-    if not response.data:
-        await (
-            db.table("users")
-            .insert(
-                {"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username},
-                returning=ReturnMethod.minimal,
-            )
+        Returns:
+            True if the code is valid and the accounts are linked, False otherwise.
+        """
+        response = (
+            await self.db.table("verification_codes")
+            .select("minecraft_uuid", "minecraft_username")
+            .eq("code", code)
+            .gt("expires", utcnow())
+            .maybe_single()
             .execute()
         )
-    return True
+        if response is None:
+            return False
+        minecraft_uuid = response.data["minecraft_uuid"]
+        minecraft_username = response.data["minecraft_username"]
 
-
-async def unlink_minecraft_account(user_id: int) -> bool:
-    """Unlink a user's Minecraft account from their Discord account.
-
-    Args:
-        user_id: The user's Discord ID.
-
-    Returns:
-        True if the accounts were successfully unlinked, False otherwise.
-    """
-    db = DatabaseManager()
-    await (
-        db.table("users")
-        .update({"minecraft_uuid": None}, returning=ReturnMethod.minimal)
-        .eq("discord_id", user_id)
-        .execute()
-    )
-    return True
-
-
-async def get_minecraft_username(user_uuid: str | UUID) -> str | None:
-    """Get a user's Minecraft username from their UUID.
-
-    Args:
-        user_uuid: The user's Minecraft UUID.
-
-    Returns:
-        The user's Minecraft username. None if the UUID is invalid.
-    """
-    # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}"
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data["name"]
-            elif response.status == 204:  # No content
-                return None
-            else:
-                raise ValueError(
-                    f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status}."
+        # TODO: This currently does not check if the ign is already in use without a UUID or discord ID given.
+        response = (
+            await self.db.table("users")
+            .update({"minecraft_uuid": minecraft_uuid, "ign": minecraft_username}, returning=ReturnMethod.minimal)
+            .eq("discord_id", user_id)
+            .execute()
+        )
+        if not response.data:
+            await (
+                self.db.table("users")
+                .insert(
+                    {"discord_id": user_id, "minecraft_uuid": minecraft_uuid, "ign": minecraft_username},
+                    returning=ReturnMethod.minimal,
                 )
+                .execute()
+            )
+        return True
+
+    async def unlink_minecraft_account(self, user_id: int) -> bool:
+        """Unlink a user's Minecraft account from their Discord account.
+
+        Args:
+            user_id: The user's Discord ID.
+
+        Returns:
+            True if the accounts were successfully unlinked, False otherwise.
+        """
+        await (
+            self.db.table("users")
+            .update({"minecraft_uuid": None}, returning=ReturnMethod.minimal)
+            .eq("discord_id", user_id)
+            .execute()
+        )
+        return True
+
+    async def get_minecraft_username(self, user_uuid: str | UUID) -> str | None:
+        """Get a user's Minecraft username from their UUID.
+
+        Args:
+            user_uuid: The user's Minecraft UUID.
+
+        Returns:
+            The user's Minecraft username. None if the UUID is invalid.
+        """
+        # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://sessionserver.mojang.com/session/minecraft/profile/{str(user_uuid)}"
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data["name"]
+                elif response.status == 204:  # No content
+                    return None
+                else:
+                    raise ValueError(
+                        f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status}."
+                    )
