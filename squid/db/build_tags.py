@@ -2,9 +2,11 @@
 
 import asyncio
 
-from postgrest.exceptions import APIError
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from supabase import AsyncClient
+from squid.db.schema import Restriction, RestrictionAlias
 
 
 class RestrictionError(Exception):
@@ -34,8 +36,8 @@ class AliasTakenByOther(RestrictionError):
 class BuildTagsManager:
     """A class for managing build tags and restrictions."""
 
-    def __init__(self, client: AsyncClient):
-        self.client = client
+    def __init__(self, session: async_sessionmaker[AsyncSession]):
+        self.session = session
 
     async def get_restriction_id(self, name_or_alias: str) -> int | None:
         """Find a restriction by its name or alias.
@@ -46,22 +48,22 @@ class BuildTagsManager:
         Returns:
             The ID of the restriction if found, otherwise None.
         """
-        restrictions_query = (
-            await self.client.table("restrictions").select("id").ilike("name", f"%{name_or_alias}%").execute()
-        )
-        if restrictions_query.data:
-            return restrictions_query.data[0]["id"]
+        async with self.session() as session:
+            # Try to find by name
+            stmt = select(Restriction).where(Restriction.name.ilike(f"%{name_or_alias}%"))
+            result = await session.execute(stmt)
+            restriction = result.scalar_one_or_none()
+            if restriction:
+                return restriction.id
 
-        aliases_query = (
-            await self.client.table("restriction_aliases")
-            .select("restriction_id")
-            .ilike("alias", f"%{name_or_alias}%")
-            .execute()
-        )
-        if aliases_query.data:
-            return aliases_query.data[0]["restriction_id"]
+            # Try to find by alias
+            stmt = select(RestrictionAlias).where(RestrictionAlias.alias.ilike(f"%{name_or_alias}%"))
+            result = await session.execute(stmt)
+            alias = result.scalar_one_or_none()
+            if alias:
+                return alias.restriction_id
 
-        return None
+            return None
 
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
         """Add an alias for a restriction by its ID.
@@ -70,19 +72,17 @@ class BuildTagsManager:
             restriction_id (int): The ID of the restriction.
             alias (str): The alias to add.
         """
-        try:
-            await (
-                self.client.table("restriction_aliases")
-                .insert({"restriction_id": restriction_id, "alias": alias})
-                .execute()
-            )
-        except APIError as e:
-            if e.code == "23505":  # Unique violation error
+        async with self.session() as session:
+            try:
+                restriction_alias = RestrictionAlias(restriction_id=restriction_id, alias=alias)
+                session.add(restriction_alias)
+                await session.commit()
+            except IntegrityError:
+                # Likely because the alias is already taken by another restriction.
+                await session.rollback()
                 alias_rid = await self.get_restriction_id(alias)
                 assert alias_rid is not None
                 raise AliasAlreadyAdded(alias, alias_rid)
-            else:
-                raise e
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
         """Add an alias for a restriction by its name or alias.
