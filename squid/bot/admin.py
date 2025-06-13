@@ -14,7 +14,6 @@ from squid.db.build_tags import (
     AliasAlreadyAdded,
     AliasTakenByOther,
     RestrictionNotFound,
-    add_restriction_alias,
 )
 from squid.db.builds import Build
 
@@ -77,7 +76,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:
             try:
-                await add_restriction_alias(restriction, alias)
+                await self.bot.db.build_tags.add_restriction_alias(restriction, alias)
             except RestrictionNotFound:
                 await sent_message.edit(embed=utils.error_embed("Error", f"No restriction named '{restriction}'."))
             except AliasAlreadyAdded:
