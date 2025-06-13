@@ -1,16 +1,13 @@
 """Simple FastAPI server to generate verification codes for users."""
 
 import os
-import random
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException
-from postgrest.types import ReturnMethod
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
-from squid.db.utils import utcnow
 
 app = FastAPI()
 
@@ -28,25 +25,10 @@ async def get_verification_code(user: User, authorization: Annotated[str, Header
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     db = DatabaseManager()
-    if (username := await db.user.get_minecraft_username(user.uuid)) is None:
-        raise HTTPException(status_code=400, detail="Invalid user")
-
-    # Invalidate existing codes for this user
-    await (
-        db.table("verification_codes")
-        .update({"valid": False}, returning=ReturnMethod.minimal)
-        .eq("minecraft_uuid", str(user.uuid))
-        .gt("expires", utcnow())
-        .execute()
-    )
-
-    code = random.randint(100000, 999999)
-    await (
-        db.table("verification_codes")
-        .insert({"minecraft_uuid": str(user.uuid), "username": username, "code": code}, returning=ReturnMethod.minimal)
-        .execute()
-    )
-    return code
+    try:
+        return await db.user.generate_verification_code(user.uuid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def main() -> None:
