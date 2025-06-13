@@ -52,11 +52,11 @@ class UserManager:
                 select(VerificationCode)
                 .where(VerificationCode.code == code)
                 .where(VerificationCode.expires > utcnow())
-                .where(VerificationCode.valid == True)
+                .where(VerificationCode.valid.is_(True))
             )
             result = await session.execute(stmt)
             verification_code = result.scalar_one_or_none()
-            
+
             if verification_code is None:
                 return False
 
@@ -70,9 +70,7 @@ class UserManager:
                 user.ign = verification_code.username
             else:
                 user = User(
-                    discord_id=user_id,
-                    minecraft_uuid=verification_code.minecraft_uuid,
-                    ign=verification_code.username
+                    discord_id=user_id, minecraft_uuid=verification_code.minecraft_uuid, ign=verification_code.username
                 )
                 session.add(user)
 
@@ -89,11 +87,7 @@ class UserManager:
             True if the accounts were successfully unlinked, False otherwise.
         """
         async with self.session() as session:
-            stmt = (
-                update(User)
-                .where(User.discord_id == user_id)
-                .values(minecraft_uuid=None)
-            )
+            stmt = update(User).where(User.discord_id == user_id).values(minecraft_uuid=None)
             await session.execute(stmt)
             await session.flush()
             return True
@@ -151,9 +145,7 @@ class UserManager:
             # Create new verification code
             code = random.randint(100000, 999999)
             verification_code = VerificationCode(
-                minecraft_uuid=str(user_uuid),
-                code=str(code),
-                username=minecraft_username
+                minecraft_uuid=str(user_uuid), code=str(code), username=minecraft_username
             )
             session.add(verification_code)
             await session.flush()
