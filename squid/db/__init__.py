@@ -16,6 +16,7 @@ from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
 from squid.db.build_tags import BuildTagsManager
+from squid.db.message import MessageManager
 from squid.db.schema import Restriction, Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
@@ -74,7 +75,6 @@ class DatabaseManager(AsyncClient):
         self.async_session = async_sessionmaker(self.async_engine, expire_on_commit=False)
         self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
-
         # Initialize managers
         self.message = MessageManager(self.async_session)
         self.server_setting = ServerSettingManager(self.async_session)

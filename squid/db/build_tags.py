@@ -1,9 +1,10 @@
 """Functions for build types and restrictions."""
 
 import asyncio
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Restriction, RestrictionAlias
 

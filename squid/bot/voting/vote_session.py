@@ -16,7 +16,9 @@ from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import MessageRecord, Status, VoteKind, VoteSessionRecord
+from squid.db.schema import BuildVoteSession as BuildVoteSessionModel
+from squid.db.schema import DeleteLogVoteSession as DeleteLogVoteSessionModel
+from squid.db.schema import Message, Status, Vote, VoteKind, VoteSession
 
 if TYPE_CHECKING:
     import squid.bot
@@ -50,25 +52,27 @@ async def track_vote_session(
         The id of the vote session.
     """
     db = DatabaseManager()
-    response: APIResponse[VoteSessionRecord] = (
-        await db.table("vote_sessions")
-        .insert(
-            {
-                "status": "open",
-                "author_id": author_id,
-                "kind": kind,
-                "pass_threshold": pass_threshold,
-                "fail_threshold": fail_threshold,
-            }
+    async with db.async_session() as session:
+        stmt = (
+            insert(VoteSession)
+            .values(
+                status="open",
+                author_id=author_id,
+                kind=kind,
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
+            )
+            .returning(VoteSession)
         )
-        .execute()
-    )
-    session_id = response.data[0]["id"]
-    coros = [
-        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
-    ]
-    await asyncio.gather(*coros)
-    return session_id
+        result = await session.execute(stmt)
+        await session.commit()
+        session_id = result.scalar_one().id
+        coros = [
+            db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id)
+            for message in messages
+        ]
+        await asyncio.gather(*coros)
+        return session_id
 
 
 async def close_vote_session(vote_session_id: int) -> None:
@@ -78,12 +82,10 @@ async def close_vote_session(vote_session_id: int) -> None:
         vote_session_id: The id of the vote session.
     """
     db = DatabaseManager()
-    await (
-        db.table("vote_sessions")
-        .update({"status": "closed"}, returning=ReturnMethod.minimal)
-        .eq("id", vote_session_id)
-        .execute()
-    )
+    async with db.async_session() as session:
+        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed")
+        await session.execute(stmt)
+        await session.commit()
 
 
 async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
@@ -95,13 +97,18 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
         weight: The weight of the vote. None to remove the vote.
     """
     db = DatabaseManager()
-    await (
-        db.table("votes")
-        .upsert(
-            {"vote_session_id": vote_session_id, "user_id": user_id, "weight": weight}, returning=ReturnMethod.minimal
+    async with db.async_session() as session:
+        stmt = (
+            pg_insert(Vote)
+            .values(
+                vote_session_id=vote_session_id,
+                user_id=user_id,
+                weight=weight,
+            )
+            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight))
         )
-        .execute()
-    )
+        await session.execute(stmt)
+        await session.commit()
 
 
 class AbstractVoteSession(ABC):
@@ -265,25 +272,27 @@ class AbstractVoteSession(ABC):
         return None
 
     async def fetch_messages(self) -> set[discord.Message]:
-        """Fetch the messages of the vote session"""
+        """Fetch all messages for this vote session."""
         if len(self.message_ids) == len(self._messages):
             return self._messages
 
-        messages_record: APIResponse[MessageRecord] = (
-            await DatabaseManager().table("messages").select("*").in_("id", self.message_ids).execute()
-        )
-        cached_ids = {message.id for message in self._messages}
-        new_messages = await asyncio.gather(
-            *(
-                self.bot.get_or_fetch_message(record["channel_id"], record["id"])
-                for record in messages_record.data
-                if record["id"] not in cached_ids
+        async with self.bot.db.async_session() as session:
+            stmt = select(Message).where(Message.id.in_(self.message_ids))
+            result = await session.execute(stmt)
+            messages_record = result.scalars().all()
+
+            cached_ids = {message.id for message in self._messages}
+            new_messages = await asyncio.gather(
+                *(
+                    self.bot.get_or_fetch_message(record.channel_id, record.id)
+                    for record in messages_record
+                    if record.id not in cached_ids
+                )
             )
-        )
-        new_messages = (message for message in new_messages if message is not None)
-        self._messages.update(new_messages)
-        assert len(self._messages) == len(self.message_ids)
-        return self._messages
+            new_messages = (message for message in new_messages if message is not None)
+            self._messages.update(new_messages)
+            assert len(self._messages) == len(self.message_ids)
+            return self._messages
 
     @abstractmethod
     async def update_messages(self) -> None:
@@ -411,19 +420,14 @@ class BuildVoteSession(AbstractVoteSession):
             assert original is not None
             changes: list[tuple[str, Any, Any]] = original.diff(self.build)
 
-        await (
-            DatabaseManager()
-            .table("build_vote_sessions")
-            .insert(
-                {
-                    "vote_session_id": self.id,
-                    "build_id": self.build.id,
-                    "changes": changes,
-                },
-                returning=ReturnMethod.minimal,
+        async with DatabaseManager().async_session() as session:
+            stmt = insert(BuildVoteSessionModel).values(
+                vote_session_id=self.id,
+                build_id=self.build.id,
+                changes=changes,
             )
-            .execute()
-        )
+            await session.execute(stmt)
+            await session.commit()
 
         await self.update_messages()
 
@@ -620,20 +624,15 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self.id = await track_vote_session(
             await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
-        await (
-            DatabaseManager()
-            .table("delete_log_vote_sessions")
-            .insert(
-                {
-                    "vote_session_id": self.id,
-                    "target_message_id": self.target_message.id,
-                    "target_channel_id": self.target_message.channel.id,
-                    "target_server_id": self.target_message.guild.id,  # type: ignore
-                },
-                returning=ReturnMethod.minimal,
+        async with DatabaseManager().async_session() as session:
+            stmt = insert(DeleteLogVoteSessionModel).values(
+                vote_session_id=self.id,
+                target_message_id=self.target_message.id,
+                target_channel_id=self.target_message.channel.id,
+                target_server_id=self.target_message.guild.id,  # type: ignore
             )
-            .execute()
-        )
+            await session.execute(stmt)
+            await session.commit()
         await self.update_messages()
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
@@ -674,7 +673,6 @@ class DeleteLogVoteSession(AbstractVoteSession):
                     "target_server_id": record.delete_log_vote_sessions.target_server_id,
                 },
             }
-
             return await cls._from_record(bot, vote_session_record)
 
     @classmethod

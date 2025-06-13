@@ -6,11 +6,11 @@ import discord
 import discord.ext.commands as commands
 from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
-from postgrest.base_request_builder import APIResponse
+from sqlalchemy import insert
 
 from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db import DatabaseManager
-from squid.db.schema import VersionRecord
+from squid.db.schema import Version
 from squid.db.utils import parse_version_string
 
 if TYPE_CHECKING:
@@ -35,8 +35,12 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
             "minor_version": minor,
             "patch_number": patch,
         }
-        response: APIResponse[VersionRecord] = await db.table("versions").insert(version_record).execute()
-        await ctx.send(f"Version added successfully: {response.data}")
+        async with db.async_session() as session:
+            stmt = insert(Version).values(**version_record).returning(Version)
+            result = await session.execute(stmt)
+            await session.commit()
+            version = result.scalar_one()
+            await ctx.send(f"Version added successfully: {version}")
 
     @Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message):
@@ -58,8 +62,12 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
             "patch_number": patch,
         }
 
-        response: APIResponse[VersionRecord] = await db.table("versions").insert(version_record).execute()
-        await self.bot.get_channel(channel_id).send(f"Version added successfully: {response.data}")  # type: ignore
+        async with db.async_session() as session:
+            stmt = insert(Version).values(**version_record).returning(Version)
+            result = await session.execute(stmt)
+            await session.commit()
+            version = result.scalar_one()
+            await self.bot.get_channel(channel_id).send(f"Version added successfully: {version}")  # type: ignore
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):

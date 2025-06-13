@@ -140,6 +140,17 @@ class Type(Base):
     builds: AssociationProxy[list[Build]] = association_proxy("build_types", "build", default_factory=list)
 
 
+class Type(Base):
+    """A build pattern."""
+
+    __tablename__ = "types"
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    build_category: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True
+    )  # FIXME: This should be unique per build category
+
+
 class Build(Base):
     """A build submitted by a user."""
 

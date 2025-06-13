@@ -60,11 +60,7 @@ class MessageManager:
         """
         message_id = message.id if isinstance(message, discord.Message) else message
         async with self.session() as session:
-            stmt = (
-                update(Message)
-                .where(Message.id == message_id)
-                .values(edited_time=utcnow())
-            )
+            stmt = update(Message).where(Message.id == message_id).values(edited_time=utcnow())
             await session.execute(stmt)
             await session.commit()
 
@@ -88,7 +84,6 @@ class MessageManager:
 
             if message_obj is None:
                 raise ValueError(f"Message with id {message_id} not found.")
-
 
 
             await session.delete(message_obj)
