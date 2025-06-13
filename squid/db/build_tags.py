@@ -1,13 +1,10 @@
 """Functions for build types and restrictions."""
 
 import asyncio
-from typing import Any
 
 from postgrest.exceptions import APIError
 
-from squid.db import DatabaseManager
-
-_background_tasks: set[asyncio.Task[Any]] = set()
+from supabase import AsyncClient
 
 
 class RestrictionError(Exception):
@@ -34,76 +31,78 @@ class AliasTakenByOther(RestrictionError):
         super().__init__(f"Alias '{alias}' belongs to restriction {other_id}")
 
 
-async def get_restriction_id(name_or_alias: str) -> int | None:
-    """Find a restriction by its name or alias.
+class BuildTagsManager:
+    """A class for managing build tags and restrictions."""
 
-    Args:
-        name_or_alias (str): The name or alias of the restriction.
+    def __init__(self, client: AsyncClient):
+        self.client = client
 
-    Returns:
-        The ID of the restriction if found, otherwise None.
-    """
-    restrictions_query = (
-        await DatabaseManager().table("restrictions").select("id").ilike("name", f"%{name_or_alias}%").execute()
-    )
-    if restrictions_query.data:
-        return restrictions_query.data[0]["id"]
+    async def get_restriction_id(self, name_or_alias: str) -> int | None:
+        """Find a restriction by its name or alias.
 
-    aliases_query = (
-        await DatabaseManager()
-        .table("restriction_aliases")
-        .select("restriction_id")
-        .ilike("alias", f"%{name_or_alias}%")
-        .execute()
-    )
-    if aliases_query.data:
-        return aliases_query.data[0]["restriction_id"]
+        Args:
+            name_or_alias (str): The name or alias of the restriction.
 
-    return None
+        Returns:
+            The ID of the restriction if found, otherwise None.
+        """
+        restrictions_query = (
+            await self.client.table("restrictions").select("id").ilike("name", f"%{name_or_alias}%").execute()
+        )
+        if restrictions_query.data:
+            return restrictions_query.data[0]["id"]
 
-
-async def add_restriction_alias_by_id(restriction_id: int, alias: str) -> None:
-    """Add an alias for a restriction by its ID.
-
-    Args:
-        restriction_id (int): The ID of the restriction.
-        alias (str): The alias to add.
-    """
-    try:
-        await (
-            DatabaseManager()
-            .table("restriction_aliases")
-            .insert({"restriction_id": restriction_id, "alias": alias})
+        aliases_query = (
+            await self.client.table("restriction_aliases")
+            .select("restriction_id")
+            .ilike("alias", f"%{name_or_alias}%")
             .execute()
         )
-    except APIError as e:
-        if e.code == "23505":  # Unique violation error
-            alias_rid = await get_restriction_id(alias)
-            assert alias_rid is not None
-            raise AliasAlreadyAdded(alias, alias_rid)
-        else:
-            raise e
+        if aliases_query.data:
+            return aliases_query.data[0]["restriction_id"]
 
+        return None
 
-async def add_restriction_alias(name_or_alias: str, alias: str) -> None:
-    """Add an alias for a restriction by its name or alias.
+    async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
+        """Add an alias for a restriction by its ID.
 
-    Args:
-        name_or_alias (str): The name or alias of the restriction.
-        alias (str): The alias to add.
+        Args:
+            restriction_id (int): The ID of the restriction.
+            alias (str): The alias to add.
+        """
+        try:
+            await (
+                self.client.table("restriction_aliases")
+                .insert({"restriction_id": restriction_id, "alias": alias})
+                .execute()
+            )
+        except APIError as e:
+            if e.code == "23505":  # Unique violation error
+                alias_rid = await self.get_restriction_id(alias)
+                assert alias_rid is not None
+                raise AliasAlreadyAdded(alias, alias_rid)
+            else:
+                raise e
 
-    Raises:
-        RestrictionNotFound: If the restriction does not exist.
-        AliasAlreadyAdded: If the alias is already added to the restriction.
-        AliasTakenByOther: If the alias is already taken by another restriction.
-    """
-    rid, alias_rid = await asyncio.gather(get_restriction_id(name_or_alias), get_restriction_id(alias))
-    if rid is None:
-        raise RestrictionNotFound(name_or_alias)
+    async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
+        """Add an alias for a restriction by its name or alias.
 
-    if alias_rid is not None:
-        if alias_rid == rid:
-            raise AliasAlreadyAdded(alias, rid)
-        raise AliasTakenByOther(alias, alias_rid)
+        Args:
+            name_or_alias (str): The name or alias of the restriction.
+            alias (str): The alias to add.
 
-    await add_restriction_alias_by_id(rid, alias)
+        Raises:
+            RestrictionNotFound: If the restriction does not exist.
+            AliasAlreadyAdded: If the alias is already added to the restriction.
+            AliasTakenByOther: If the alias is already taken by another restriction.
+        """
+        rid, alias_rid = await asyncio.gather(self.get_restriction_id(name_or_alias), self.get_restriction_id(alias))
+        if rid is None:
+            raise RestrictionNotFound(name_or_alias)
+
+        if alias_rid is not None:
+            if alias_rid == rid:
+                raise AliasAlreadyAdded(alias, rid)
+            raise AliasTakenByOther(alias, alias_rid)
+
+        await self.add_restriction_alias_by_id(rid, alias)

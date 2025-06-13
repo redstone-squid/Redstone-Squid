@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
+from squid.db.build_tags import BuildTagsManager
 from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
@@ -64,6 +65,7 @@ class DatabaseManager(AsyncClient):
         # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
         self.message = MessageManager(self)
+        self.build_tags = BuildTagsManager(self)
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
