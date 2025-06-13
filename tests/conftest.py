@@ -19,7 +19,14 @@ async def mock_env_vars() -> AsyncGenerator[None, None]:
     """
     Fixture that mocks required environment variables.
     """
-    with patch.dict("os.environ", {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_KEY": "test-key-123"}):
+    with patch.dict(
+        "os.environ",
+        {
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_KEY": "test-key-123",
+            "DB_CONNECTION": "postgresql+asyncpg://user:password@localhost:5432/test_db",
+        },
+    ):
         yield
 
 
