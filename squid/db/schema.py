@@ -13,8 +13,8 @@ BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType)
 DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
-Restriction = Literal["wiring-placement", "component", "miscellaneous"]
-RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
+RestrictionStr = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[RestrictionStr], get_args(RestrictionStr))
 
 MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
@@ -190,7 +190,7 @@ class RestrictionRecord(TypedDict):
     id: int
     build_category: BuildType
     name: str
-    type: Restriction
+    type: "RestrictionStr"
 
 
 class RestrictionAliasRecord(TypedDict):
