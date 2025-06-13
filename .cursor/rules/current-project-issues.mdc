@@ -1,0 +1,6 @@
+---
+description: Issues with the current project that the developers are trying to improve on
+globs: 
+alwaysApply: false
+---
+I am progressively moving away from the supabase client to just using SQLAlchemy. To aid in the transition, we will keep both the supabase client and the sqlalchemy (async) engine inside DatabaseManager.
