@@ -1,5 +1,6 @@
 """Handles user data and operations."""
 
+import random
 from uuid import UUID
 
 import aiohttp
@@ -112,3 +113,43 @@ class UserManager:
                     raise ValueError(
                         f"Failed to get username for UUID {user_uuid}. The Mojang API returned status code {response.status}."
                     )
+
+    async def generate_verification_code(self, user_uuid: str | UUID) -> int:
+        """Generate a new verification code for a user and invalidate any existing ones.
+
+        Args:
+            user_uuid: The user's Minecraft UUID.
+
+        Returns:
+            The generated verification code.
+
+        Raises:
+            ValueError: user_uuid does not match a valid Minecraft account.
+        """
+        minecraft_username = await self.get_minecraft_username(user_uuid)
+        if minecraft_username is None:
+            raise ValueError(f"User {user_uuid} does not match a valid Minecraft account.")
+
+        # Invalidate existing codes for this user
+        await (
+            self.db.table("verification_codes")
+            .update({"valid": False}, returning=ReturnMethod.minimal)
+            .eq("minecraft_uuid", str(user_uuid))
+            .gt("expires", utcnow())
+            .execute()
+        )
+
+        code = random.randint(100000, 999999)
+        await (
+            self.db.table("verification_codes")
+            .insert(
+                {
+                    "minecraft_uuid": str(user_uuid),
+                    "username": minecraft_username,
+                    "code": code,
+                },
+                returning=ReturnMethod.minimal,
+            )
+            .execute()
+        )
+        return code
