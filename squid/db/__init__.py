@@ -8,38 +8,15 @@ import os
 from typing import ClassVar, Literal
 
 from async_lru import alru_cache
-from sqlalchemy import SmallInteger, String, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 
 from squid.db.message import MessageManager
-from squid.db.schema import Category, RestrictionRecord, VersionRecord
+from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 from squid.db.server_settings import ServerSettingManager
 from squid.db.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
-
-
-# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(MappedAsDataclass, DeclarativeBase):
-    pass
-
-
-class Restriction(Base):
-    __tablename__ = "restrictions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    build_category: Mapped[Category] = mapped_column(String)
-    name: Mapped[str] = mapped_column(String)
-    type: Mapped[str] = mapped_column(String)
-
-
-class Version(Base):
-    __tablename__ = "versions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    edition: Mapped[str] = mapped_column(String, nullable=False)
-    major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 
 class DatabaseManager(AsyncClient):

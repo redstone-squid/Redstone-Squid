@@ -3,6 +3,30 @@ from enum import IntEnum, StrEnum
 from typing import Literal, TypeAlias, TypedDict, cast, get_args
 
 from pydantic.types import Json
+from sqlalchemy import SmallInteger, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
+
+
+# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
+class Base(MappedAsDataclass, DeclarativeBase):
+    pass
+
+
+class Restriction(Base):
+    __tablename__ = "restrictions"
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    build_category: Mapped[Category] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String)
+    type: Mapped[str] = mapped_column(String)
+
+
+class Version(Base):
+    __tablename__ = "versions"
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    edition: Mapped[str] = mapped_column(String, nullable=False)
+    major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
