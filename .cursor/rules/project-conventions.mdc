@@ -48,3 +48,7 @@ Example:
 # AIDEV-NOTE: perf-hot-path; avoid extra allocations (see ADR-24)  
 async def render_feed(...):  
     ...  
+
+## Extra Information
+
+- The current database schema is in `schema_dump.sql` in the root directory.
