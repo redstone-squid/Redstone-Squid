@@ -73,6 +73,7 @@ class DatabaseManager(AsyncClient):
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
         self.server_setting = ServerSettingManager(self.async_session)
+        self.user = UserManager(self.async_session)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""
