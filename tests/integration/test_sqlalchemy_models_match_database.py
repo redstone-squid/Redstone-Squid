@@ -31,6 +31,11 @@ from sqlalchemy.sql.type_api import TypeEngine
 from squid.db.schema import is_sane_database
 
 
+# TODO: table names
+# TODO: move some fixtures to conftest.py
+# TODO: rename base_and_xxx_model
+# TODO: Think about what kind of tests are missing
+# TODO: See is_sane_database AI implementations
 @pytest.fixture
 def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing a base class and a simple test model."""
