@@ -1,6 +1,5 @@
 """Tests for checking database sanity checks functions correctly."""
 
-# noinspection SqlResolve
 from collections.abc import Generator
 from typing import cast
 
@@ -23,6 +22,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, declarative_base, relationship, sessionmaker
@@ -82,6 +82,38 @@ def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[Declarativ
             return self._password
 
     return Base, DeclarativeTestModel
+
+
+@pytest.fixture
+def base_and_many_to_many_models():
+    """Fixture providing base class and many-to-many related test models."""
+    class Base(DeclarativeBase):
+        pass
+
+    class ManyToManyModel1(Base):
+        __tablename__ = "many_to_many_test_1"
+        id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
+        model2s: AssociationProxy[list["ManyToManyModel2"]] = relationship(
+            "ManyToManyModel2", secondary="many_to_many_association", back_populates="model1s"
+        )
+
+    class ManyToManyModel2(Base):
+        __tablename__ = "many_to_many_test_2"
+        id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
+        model1s: AssociationProxy[list[ManyToManyModel1]] = relationship(
+            "ManyToManyModel1", secondary="many_to_many_association", back_populates="model2s"
+        )
+
+    association_table = sqlalchemy.Table(  # noqa: F841
+        "many_to_many_association",
+        Base.metadata,
+        Column("model1_id", Integer, ForeignKey("many_to_many_test_1.id")),
+        Column("model2_id", Integer, ForeignKey("many_to_many_test_2.id")),
+    )
+
+    return Base, ManyToManyModel1, ManyToManyModel2
 
 
 @pytest.fixture
@@ -209,36 +241,6 @@ def test_sanity_check_passes_with_declarative_attributes(
         Base.metadata.drop_all(db_engine)
 
 
-@pytest.fixture
-def base_and_many_to_many_models():
-    """Fixture providing base class and many-to-many related test models."""
-    Base = declarative_base()
-
-    class ManyToManyModel1(Base):
-        __tablename__ = "many_to_many_test_1"
-        id = Column(Integer, primary_key=True)
-        name = Column(String(50), nullable=False)
-
-    class ManyToManyModel2(Base):
-        __tablename__ = "many_to_many_test_2"
-        id = Column(Integer, primary_key=True)
-        name = Column(String(50), nullable=False)
-
-    # Association table
-    association_table = sqlalchemy.Table(
-        "many_to_many_association",
-        Base.metadata,
-        Column("model1_id", Integer, ForeignKey("many_to_many_test_1.id")),
-        Column("model2_id", Integer, ForeignKey("many_to_many_test_2.id")),
-    )
-
-    # Add relationships
-    ManyToManyModel1.model2s = relationship("ManyToManyModel2", secondary=association_table, back_populates="model1s")
-    ManyToManyModel2.model1s = relationship("ManyToManyModel1", secondary=association_table, back_populates="model2s")
-
-    return Base, ManyToManyModel1, ManyToManyModel2
-
-
 def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list[str]:
     """Generate SQLite ALTER TABLE statement to change column type."""
     return [
@@ -287,6 +289,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
 
     # Create a new model with the wrong column type
     incorrect_column_type = Integer if db_type != "Integer" else Boolean
+
     class TestModel(Base):
         __tablename__ = "sanity_check_test_mismatch_column"
         id = Column(Integer, primary_key=True)
@@ -322,17 +325,14 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
 ):
     """Test that database sanity check fails when a many-to-many relationship is missing from the model."""
     Base, ManyToManyModel1, ManyToManyModel2 = base_and_many_to_many_models
-    
-    try:
-        Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
-        pass
 
     # Create all tables including the association table
+    Base.metadata.drop_all(db_engine)
     Base.metadata.create_all(db_engine)
-    
-    # Create a new model without the many-to-many relationship
-    class MissingRelationshipModel(Base):
+
+    # Re-create ManyToManyModel1 without the relationship to ManyToManyModel2
+    Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+    class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "many_to_many_test_1"
         id = Column(Integer, primary_key=True)
         name = Column(String(50), nullable=False)
@@ -350,18 +350,15 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
     base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
 ):
     """Test that database sanity check fails when a one-to-many relationship is missing from the model."""
-    Base, RelationTestModel, RelationTestModel2 = base_and_relation_models
-    
-    try:
-        Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
-        pass
+    Base, ManyToManyModel1, ManyToManyModel2 = base_and_relation_models
 
     # Create all tables
+    Base.metadata.drop_all(db_engine)
     Base.metadata.create_all(db_engine)
-    
+
     # Create a new model without the one-to-many relationship
-    class MissingRelationshipModel(Base):
+    Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+    class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "sanity_check_test_2"
         id = Column(Integer, primary_key=True)
         test_relationship_id = Column(ForeignKey("sanity_check_test_3.id"))
