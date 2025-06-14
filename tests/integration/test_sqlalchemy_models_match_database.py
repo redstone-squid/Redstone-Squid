@@ -1,7 +1,7 @@
 """Tests for checking database sanity checks functions correctly."""
 
 import pytest
-from sqlalchemy import Engine, engine_from_config, Column, Integer, String, ForeignKey, text
+from sqlalchemy import Engine, engine_from_config, Column, Integer, String, ForeignKey, text, Boolean, Float, BigInteger, SmallInteger, JSON, ARRAY
 import sqlalchemy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -169,3 +169,120 @@ def test_sanity_check_passes_with_declarative_attributes(db_engine, db_session, 
         assert is_sane_database(Base, db_session) is True, "Database should be considered sane with declarative attributes"
     finally:
         Base.metadata.drop_all(db_engine)
+
+
+@pytest.fixture
+def base_and_many_to_many_models():
+    """Fixture providing base class and many-to-many related test models."""
+    Base = declarative_base()
+
+    class ManyToManyModel1(Base):
+        __tablename__ = "many_to_many_test_1"
+        id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
+
+    class ManyToManyModel2(Base):
+        __tablename__ = "many_to_many_test_2"
+        id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
+
+    # Association table
+    association_table = sqlalchemy.Table(
+        'many_to_many_association',
+        Base.metadata,
+        Column('model1_id', Integer, ForeignKey('many_to_many_test_1.id')),
+        Column('model2_id', Integer, ForeignKey('many_to_many_test_2.id'))
+    )
+
+    # Add relationships
+    ManyToManyModel1.model2s = relationship(
+        "ManyToManyModel2",
+        secondary=association_table,
+        back_populates="model1s"
+    )
+    ManyToManyModel2.model1s = relationship(
+        "ManyToManyModel1",
+        secondary=association_table,
+        back_populates="model2s"
+    )
+
+    return Base, ManyToManyModel1, ManyToManyModel2
+
+
+@pytest.mark.parametrize("column_type,db_type", [
+    (String(50), "VARCHAR(50)"),
+    (Integer, "INTEGER"),
+    (Boolean, "BOOLEAN"),
+    (Float, "FLOAT"),
+    (BigInteger, "BIGINT"),
+    (SmallInteger, "SMALLINT"),
+    (JSON, "JSON"),
+    (ARRAY(Integer), "INTEGER[]"),
+])
+def test_sanity_check_fails_with_column_type_mismatch(db_engine: Engine, db_session, base_and_sane_model, column_type, db_type):
+    """Test that database sanity check fails when a column type doesn't match the model."""
+    Base, SaneTestModel = base_and_sane_model
+    
+    # Create a new model with the specified column type
+    class TestModel(Base):
+        __tablename__ = "sanity_check_test"
+        id = Column(Integer, primary_key=True)
+        test_column = Column(column_type, nullable=False)
+    
+    try:
+        Base.metadata.drop_all(db_engine, tables=[TestModel.__table__])
+    except sqlalchemy.exc.NoSuchTableError:
+        pass
+    
+    Base.metadata.create_all(db_engine, tables=[TestModel.__table__])
+    with db_engine.connect() as connection:
+        # Change the type of the test_column to a different type
+        connection.execute(text(f"ALTER TABLE sanity_check_test ALTER COLUMN test_column TYPE {db_type}"))
+
+    assert is_sane_database(Base, db_session) is False, f"Database should not be considered sane with mismatched column types: {column_type} vs {db_type}"
+
+
+@pytest.mark.integration
+def test_sanity_check_fails_with_missing_many_to_many_relationship(db_engine: Engine, db_session, base_and_many_to_many_models):
+    """Test that database sanity check fails when a many-to-many relationship is missing from the model."""
+    Base, ManyToManyModel1, ManyToManyModel2 = base_and_many_to_many_models
+    
+    try:
+        Base.metadata.drop_all(db_engine)
+    except sqlalchemy.exc.NoSuchTableError:
+        pass
+    
+    # Create all tables including the association table
+    Base.metadata.create_all(db_engine)
+    
+    # Create a new model without the many-to-many relationship
+    class MissingRelationshipModel(Base):
+        __tablename__ = "many_to_many_test_1"
+        id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
+        # Intentionally missing the model2s relationship
+    
+    assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing many-to-many relationship"
+
+
+@pytest.mark.integration
+def test_sanity_check_fails_with_missing_one_to_many_relationship(db_engine: Engine, db_session, base_and_relation_models):
+    """Test that database sanity check fails when a one-to-many relationship is missing from the model."""
+    Base, RelationTestModel, RelationTestModel2 = base_and_relation_models
+    
+    try:
+        Base.metadata.drop_all(db_engine)
+    except sqlalchemy.exc.NoSuchTableError:
+        pass
+    
+    # Create all tables
+    Base.metadata.create_all(db_engine)
+    
+    # Create a new model without the one-to-many relationship
+    class MissingRelationshipModel(Base):
+        __tablename__ = "sanity_check_test_2"
+        id = Column(Integer, primary_key=True)
+        test_relationship_id = Column(ForeignKey("sanity_check_test_3.id"))
+        # Intentionally missing the test_relationship relationship
+    
+    assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing one-to-many relationship"
