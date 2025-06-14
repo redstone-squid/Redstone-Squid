@@ -162,7 +162,11 @@ def test_sanity_check_fails_with_missing_column(
 
 
 @pytest.mark.integration
-def test_sanity_check_passes_with_relationships(db_engine, db_session, base_and_relation_models):
+def test_sanity_check_passes_with_relationships(
+    db_engine: Engine,
+    db_session: Session,
+    base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
+):
     """Test that database sanity check correctly handles relationship tables."""
     Base, RelationTestModel, RelationTestModel2 = base_and_relation_models
 
@@ -174,7 +178,7 @@ def test_sanity_check_passes_with_relationships(db_engine, db_session, base_and_
         pass
 
     Base.metadata.create_all(
-        db_engine, tables=[cast(Table, RelationTestModel.__table__), (Table, RelationTestModel2.__table__)]
+        db_engine, tables=[cast(Table, RelationTestModel.__table__), cast(Table, RelationTestModel2.__table__)]
     )
 
     try:
