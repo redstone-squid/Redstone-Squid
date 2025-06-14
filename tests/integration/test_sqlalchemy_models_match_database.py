@@ -237,6 +237,9 @@ def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list
 ])
 def test_sanity_check_fails_with_column_type_mismatch(db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]], column_type: TypeEngine, db_type: str):
     """Test that database sanity check fails when a column type doesn't match the model."""
+    if db_engine.name != "postgresql" and db_type == ARRAY:
+        pytest.skip("ARRAY type is only supported in PostgreSQL")
+
     Base, SaneTestModel = base_and_sane_model
     
     # Create a new model with the specified column type
