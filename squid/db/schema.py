@@ -3,6 +3,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from enum import IntEnum, StrEnum
+import logging
 from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
@@ -17,18 +18,83 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    inspect,
     text,
     UUID,
     TIMESTAMP,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, RelationshipProperty, Session, mapped_column, relationship
+from sqlalchemy.orm.clsregistry import _ModuleMarker
 from sqlalchemy.sql import func
+
+
+logger = logging.getLogger(__name__)
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
 class Base(MappedAsDataclass, DeclarativeBase):
     pass
+
+
+def is_sane_database(base_cls: type[Base], session: Session) -> bool:
+    """Check whether the current database matches the models declared in model base.
+
+    Currently we check that all tables exist with all columns. What is not checked
+
+    * Column types are not verified
+
+    * Relationships are not verified at all (TODO)
+
+    Args:
+        base_cls (type[Base]): The SQLAlchemy declarative base class containing the models to check.
+        session: The SQLAlchemy session bound to the database engine.
+
+    Returns:
+        bool: True if all declared models have corresponding tables and columns.
+
+    References:
+        https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
+    """
+
+    engine = session.get_bind()
+    iengine = inspect(engine)
+
+    errors = False
+
+    tables = iengine.get_table_names()
+
+    # Go through all SQLAlchemy models
+    for name, klass in base_cls._decl_class_registry.items():
+
+        if isinstance(klass, _ModuleMarker):
+            # Not a model
+            continue
+
+        table = klass.__tablename__
+        if table in tables:
+            # Check all columns are found
+            # Looks like [{'default': "nextval('sanity_check_test_id_seq'::regclass)", 'autoincrement': True, 'nullable': False, 'type': INTEGER(), 'name': 'id'}]
+
+            columns = [c["name"] for c in iengine.get_columns(table)]
+            mapper = inspect(klass)
+
+            for column_prop in mapper.attrs:
+                if isinstance(column_prop, RelationshipProperty):
+                    # TODO: Add sanity checks for relations
+                    pass
+                else:
+                    for column in column_prop.columns:
+                        # Assume normal flat column
+                        if not column.key in columns:
+                            logger.error("Model %s declares column %s which does not exist in database %s", klass, column.key, engine)
+                            errors = True
+        else:
+            logger.error("Model %s declares table %s which does not exist in database %s", klass, table, engine)
+            errors = True
+
+    return not errors
 
 
 class User(Base):
