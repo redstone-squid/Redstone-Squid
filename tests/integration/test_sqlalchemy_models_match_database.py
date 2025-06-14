@@ -276,7 +276,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
     db_type: str,
 ):
     """Test that database sanity check fails when a column type doesn't match the model."""
-    if db_engine.name != "postgresql" and db_type == ARRAY:
+    if db_engine.name != "postgresql" and isinstance(column_type, ARRAY):
         pytest.skip("ARRAY type is only supported in PostgreSQL")
 
     Base, SaneTestModel = base_and_sane_model
