@@ -71,8 +71,6 @@ def is_sane_database(base_cls: type[Base], session: Session) -> bool:
             # Not a model
             continue
 
-        assert isinstance(klass, Base)
-
         table: str = klass.__tablename__
         if table in tables:
             # Check all columns are found
