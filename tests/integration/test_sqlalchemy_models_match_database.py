@@ -246,7 +246,7 @@ def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list
 
 
 @pytest.mark.parametrize(
-    "column_type,db_type",
+    "supposed_column_type,db_type",
     [
         (String(50), "VARCHAR(50)"),
         (Integer, "INTEGER"),
@@ -272,20 +272,21 @@ def test_sanity_check_fails_with_column_type_mismatch(
     db_engine: Engine,
     db_session: Session,
     base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]],
-    column_type: TypeEngine,
+    supposed_column_type: TypeEngine,
     db_type: str,
 ):
     """Test that database sanity check fails when a column type doesn't match the model."""
-    if db_engine.name != "postgresql" and isinstance(column_type, ARRAY):
+    if db_engine.name != "postgresql" and isinstance(supposed_column_type, ARRAY):
         pytest.skip("ARRAY type is only supported in PostgreSQL")
 
     Base, SaneTestModel = base_and_sane_model
 
-    # Create a new model with the specified column type
+    # Create a new model with the wrong column type
+    incorrect_column_type = Integer if db_type != "Integer" else Boolean
     class TestModel(Base):
         __tablename__ = "sanity_check_test_mismatch_column"
         id = Column(Integer, primary_key=True)
-        test_column = Column(column_type, nullable=False)
+        test_column = Column(incorrect_column_type, nullable=False)
 
     try:
         Base.metadata.drop_all(db_engine)
@@ -293,7 +294,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
         pass
 
     Base.metadata.create_all(db_engine, tables=[cast(Table, TestModel.__table__)])
-    # Change the type of the test_column to a different type
+    # Change the type of the test_column to the correct type
     with db_engine.begin() as connection:
         if db_engine.name == "sqlite":
             # SQLite does not support ALTER COLUMN, so we need to recreate the table
@@ -305,7 +306,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
             connection.execute(text(f"ALTER TABLE {TestModel.__tablename__} ALTER COLUMN test_column TYPE {db_type}"))
 
     assert is_sane_database(Base, db_session) is False, (
-        f"Database should not be considered sane with mismatched column types: {column_type} vs {db_type}"
+        f"Database should not be considered sane with mismatched column types: {incorrect_column_type} vs {db_type}"
     )
 
 
