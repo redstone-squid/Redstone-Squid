@@ -1,7 +1,7 @@
 """Tests for checking database sanity checks functions correctly."""
 
 import pytest
-from sqlalchemy import engine_from_config, Column, Integer, String, ForeignKey
+from sqlalchemy import Engine, engine_from_config, Column, Integer, String, ForeignKey, text
 import sqlalchemy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -19,6 +19,7 @@ def base_and_sane_model():
         """A sample SQLAlchemy model to demonstrate db conflicts."""
         __tablename__ = "sanity_check_test"
         id = Column(Integer, primary_key=True)
+        name = Column(String(50), nullable=False)
 
     return Base, SaneTestModel
 
@@ -118,7 +119,7 @@ def test_sanity_check_fails_with_missing_table(db_engine, db_session, base_and_s
 
 
 @pytest.mark.integration
-def test_sanity_check_fails_with_missing_column(db_engine, db_session, base_and_sane_model):
+def test_sanity_check_fails_with_missing_column(db_engine: Engine, db_session, base_and_sane_model):
     """Test that database sanity check fails when a required column is missing."""
     Base, SaneTestModel = base_and_sane_model
     
@@ -128,7 +129,8 @@ def test_sanity_check_fails_with_missing_column(db_engine, db_session, base_and_
         pass
     
     Base.metadata.create_all(db_engine, tables=[SaneTestModel.__table__])
-    db_engine.execute("ALTER TABLE sanity_check_test DROP COLUMN id")
+    with db_engine.connect() as connection:
+        connection.execute(text("ALTER TABLE sanity_check_test DROP COLUMN name"))
 
     assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing columns"
 
