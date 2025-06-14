@@ -65,7 +65,7 @@ def is_sane_database(base_cls: type[Base], session: Session) -> bool:
     tables = iengine.get_table_names()
 
     # Go through all SQLAlchemy models
-    for name, klass in base_cls._decl_class_registry.items():
+    for name, klass in base_cls.registry._class_registry.items():
 
         if isinstance(klass, _ModuleMarker):
             # Not a model
