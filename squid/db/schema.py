@@ -38,7 +38,7 @@ class Base(MappedAsDataclass, DeclarativeBase):
     pass
 
 
-def is_sane_database(base_cls: type[Base], session: Session) -> bool:
+def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
     """Check whether the current database matches the models declared in model base.
 
     Checks that:
