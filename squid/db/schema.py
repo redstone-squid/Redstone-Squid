@@ -459,7 +459,7 @@ class DeleteLogVoteSession(Base):
 
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False, primary_key=True
     )
     target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
