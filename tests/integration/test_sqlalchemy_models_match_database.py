@@ -245,16 +245,29 @@ def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list
     ]
 
 
-@pytest.mark.parametrize("column_type,db_type", [
-    (String(50), "VARCHAR(50)"),
-    (Integer, "INTEGER"),
-    (Boolean, "BOOLEAN"),
-    (Float, "FLOAT"),
-    (BigInteger, "BIGINT"),
-    (SmallInteger, "SMALLINT"),
-    (JSON, "JSON"),
-    (ARRAY(Integer), "INTEGER[]"),
-])
+@pytest.mark.parametrize(
+    "column_type,db_type",
+    [
+        (String(50), "VARCHAR(50)"),
+        (Integer, "INTEGER"),
+        (Boolean, "BOOLEAN"),
+        (Float, "FLOAT"),
+        (BigInteger, "BIGINT"),
+        (SmallInteger, "SMALLINT"),
+        (JSON, "JSON"),
+        (ARRAY(Integer), "INTEGER[]"),
+    ],
+    ids=[  # pytest can't generate good names for these probably because we pass in classes
+        "String(50)",
+        "Integer",
+        "Boolean",
+        "Float",
+        "BigInteger",
+        "SmallInteger",
+        "JSON",
+        "ARRAY(Integer)",
+    ],
+)
 def test_sanity_check_fails_with_column_type_mismatch(
     db_engine: Engine,
     db_session: Session,
