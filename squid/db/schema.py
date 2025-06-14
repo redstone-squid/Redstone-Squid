@@ -1,9 +1,9 @@
+import logging
 import os
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from enum import IntEnum, StrEnum
-import logging
 from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
@@ -11,6 +11,8 @@ from pydantic.types import Json
 from sqlalchemy import (
     ARRAY,
     JSON,
+    TIMESTAMP,
+    UUID,
     BigInteger,
     Boolean,
     Float,
@@ -20,15 +22,19 @@ from sqlalchemy import (
     String,
     inspect,
     text,
-    UUID,
-    TIMESTAMP,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, RelationshipProperty, Session, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    MappedAsDataclass,
+    RelationshipProperty,
+    Session,
+    mapped_column,
+    relationship,
+)
 from sqlalchemy.orm.clsregistry import _ModuleMarker
 from sqlalchemy.sql import func
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +72,6 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
 
     # Go through all SQLAlchemy models
     for name, klass in base_cls.registry._class_registry.items():
-
         if isinstance(klass, _ModuleMarker):
             # Not a model
             continue
@@ -84,7 +89,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
                     # Check relationships
                     if column_prop.secondary is not None:
                         # Many-to-many relationship
-                        if not column_prop.secondary.name in tables:
+                        if column_prop.secondary.name not in tables:
                             logger.error(
                                 "Model %s declares many-to-many relationship %s with secondary table %s which does not exist in database %s",
                                 klass,
@@ -96,7 +101,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
                     else:
                         # One-to-many or many-to-one relationship
                         target_table = column_prop.target.name
-                        if not target_table in tables:
+                        if target_table not in tables:
                             logger.error(
                                 "Model %s declares relationship %s to table %s which does not exist in database %s",
                                 klass,
@@ -108,8 +113,13 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
                 else:
                     for column in column_prop.columns:
                         # Check column exists
-                        if not column.key in columns:
-                            logger.error("Model %s declares column %s which does not exist in database %s", klass, column.key, engine)
+                        if column.key not in columns:
+                            logger.error(
+                                "Model %s declares column %s which does not exist in database %s",
+                                klass,
+                                column.key,
+                                engine,
+                            )
                             errors = True
                             continue
 
@@ -223,7 +233,9 @@ class Restriction(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     type: Mapped[str] = mapped_column(String, nullable=False)
 
-    build_restrictions: Mapped[list[BuildRestriction]] = relationship(back_populates="restriction", default_factory=list)
+    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
+        back_populates="restriction", default_factory=list
+    )
     builds: AssociationProxy[list[Build]] = association_proxy("build_restrictions", "build", default_factory=list)
 
     aliases: Mapped[list[RestrictionAlias]] = relationship(back_populates="restriction", default_factory=list)
@@ -265,7 +277,9 @@ class Build(Base):
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger)
     version_spec: Mapped[str] = mapped_column(String, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), nullable=True
+    )
     locked_at: Mapped[str | None] = mapped_column(String)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
     extra_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default_factory=dict)
@@ -277,10 +291,14 @@ class Build(Base):
     creators: AssociationProxy[list[User]] = association_proxy("build_creators", "user", default_factory=list)
 
     build_restrictions: Mapped[list[BuildRestriction]] = relationship(back_populates="build", default_factory=list)
-    restrictions: AssociationProxy[list[Restriction]] = association_proxy("build_restrictions", "restriction", default_factory=list)
+    restrictions: AssociationProxy[list[Restriction]] = association_proxy(
+        "build_restrictions", "restriction", default_factory=list
+    )
 
     build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(back_populates="build", default_factory=list)
-    vote_sessions: AssociationProxy[list[VoteSession]] = association_proxy("build_vote_sessions", "vote_session", default_factory=list)
+    vote_sessions: AssociationProxy[list[VoteSession]] = association_proxy(
+        "build_vote_sessions", "vote_session", default_factory=list
+    )
 
     links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list)
     messages: Mapped[list[Message]] = relationship(back_populates="build", default_factory=list)
@@ -428,12 +446,16 @@ class VoteSession(Base):
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
-    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(back_populates="vote_session", default_factory=list)
+    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(
+        back_populates="vote_session", default_factory=list
+    )
     builds: AssociationProxy[list[Build]] = association_proxy("build_vote_sessions", "build", default_factory=list)
 
     messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list)
     votes: Mapped[list[Vote]] = relationship(back_populates="vote_session", default_factory=list)
-    delete_log_vote_sessions: Mapped[list[DeleteLogVoteSession]] = relationship(back_populates="vote_session", default_factory=list)
+    delete_log_vote_sessions: Mapped[list[DeleteLogVoteSession]] = relationship(
+        back_populates="vote_session", default_factory=list
+    )
 
 
 class BuildVoteSession(Base):
@@ -457,7 +479,10 @@ class DeleteLogVoteSession(Base):
 
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False, primary_key=True
+        BigInteger,
+        ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
+        nullable=False,
+        primary_key=True,
     )
     target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
