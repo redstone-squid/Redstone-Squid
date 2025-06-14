@@ -41,18 +41,17 @@ class Base(MappedAsDataclass, DeclarativeBase):
 def is_sane_database(base_cls: type[Base], session: Session) -> bool:
     """Check whether the current database matches the models declared in model base.
 
-    Currently we check that all tables exist with all columns. What is not checked
-
-    * Column types are not verified
-
-    * Relationships are not verified at all (TODO)
+    Checks that:
+    * All tables exist with all columns
+    * Column types match between model and database
+    * All relationships exist and are properly configured
 
     Args:
         base_cls (type[Base]): The SQLAlchemy declarative base class containing the models to check.
         session: The SQLAlchemy session bound to the database engine.
 
     Returns:
-        bool: True if all declared models have corresponding tables and columns.
+        bool: True if all declared models have corresponding tables, columns, and relationships.
 
     References:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
@@ -72,23 +71,85 @@ def is_sane_database(base_cls: type[Base], session: Session) -> bool:
             # Not a model
             continue
 
-        table = klass.__tablename__
+        assert isinstance(klass, Base)
+
+        table: str = klass.__tablename__
         if table in tables:
             # Check all columns are found
             # Looks like [{'default': "nextval('sanity_check_test_id_seq'::regclass)", 'autoincrement': True, 'nullable': False, 'type': INTEGER(), 'name': 'id'}]
 
-            columns = [c["name"] for c in iengine.get_columns(table)]
+            columns = {c["name"]: c for c in iengine.get_columns(table)}
             mapper = inspect(klass)
 
             for column_prop in mapper.attrs:
                 if isinstance(column_prop, RelationshipProperty):
-                    # TODO: Add sanity checks for relations
-                    pass
+                    # Check relationships
+                    if column_prop.secondary is not None:
+                        # Many-to-many relationship
+                        if not column_prop.secondary.name in tables:
+                            logger.error(
+                                "Model %s declares many-to-many relationship %s with secondary table %s which does not exist in database %s",
+                                klass,
+                                column_prop.key,
+                                column_prop.secondary.name,
+                                engine,
+                            )
+                            errors = True
+                    else:
+                        # One-to-many or many-to-one relationship
+                        target_table = column_prop.target.name
+                        if not target_table in tables:
+                            logger.error(
+                                "Model %s declares relationship %s to table %s which does not exist in database %s",
+                                klass,
+                                column_prop.key,
+                                target_table,
+                                engine,
+                            )
+                            errors = True
                 else:
                     for column in column_prop.columns:
-                        # Assume normal flat column
+                        # Check column exists
                         if not column.key in columns:
                             logger.error("Model %s declares column %s which does not exist in database %s", klass, column.key, engine)
+                            errors = True
+                            continue
+
+                        # Check column type
+                        db_column = columns[column.key]
+                        model_type = column.type
+                        db_type = db_column["type"]
+
+                        # Compare type names, handling some common type variations
+                        model_type_name = str(model_type).lower()
+                        db_type_name = str(db_type).lower()
+
+                        # Handle some common type variations
+                        type_mapping = {
+                            "integer": ["int", "integer", "int4"],
+                            "bigint": ["bigint", "int8"],
+                            "smallint": ["smallint", "int2"],
+                            "string": ["string", "varchar", "text"],
+                            "boolean": ["boolean", "bool"],
+                            "float": ["float", "real", "float4"],
+                            "double": ["double", "float8"],
+                            "json": ["json", "jsonb"],
+                        }
+
+                        def normalize_type(type_name: str) -> str:
+                            for base_type, variants in type_mapping.items():
+                                if any(variant in type_name for variant in variants):
+                                    return base_type
+                            return type_name
+
+                        if normalize_type(model_type_name) != normalize_type(db_type_name):
+                            logger.error(
+                                "Model %s column %s has type %s but database has type %s",
+                                klass,
+                                column.key,
+                                model_type,
+                                db_type,
+                            )
                             errors = True
         else:
             logger.error("Model %s declares table %s which does not exist in database %s", klass, table, engine)
