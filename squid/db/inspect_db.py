@@ -219,8 +219,9 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
             # Not a model
             continue
         if not issubclass(klass, DeclarativeBase):
-            logger.debug("Skipping %s because it is not a subclass of DeclarativeBase", klass)
-            continue
+            logger.warning("Cannot determine whether %s is actually a model because it is not a subclass of DeclarativeBase. "
+                           "If you use the declarative_base(), it dynamically generates a new class that cannot be determined."
+                           "We are assuming it is a model, but this may not be the case.", klass)
 
         table: str = getattr(klass, "__tablename__")
         if not table:
@@ -230,6 +231,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
         if table not in schema.tables:
             logger.error("Model %s declares table %s which does not exist in database %s", klass, table, engine.url)
             errors = True
+            continue
 
         mapper = inspect(klass)
 
