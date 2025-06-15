@@ -25,7 +25,7 @@ from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
 from squid.db.inspect_db import is_sane_database
@@ -39,6 +39,7 @@ from squid.db.inspect_db import is_sane_database
 @pytest.fixture
 def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing a base class and a simple test model."""
+
     class Base(DeclarativeBase):
         pass
 
@@ -55,6 +56,7 @@ def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]
 @pytest.fixture
 def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and related test models."""
+
     class Base(DeclarativeBase):
         pass
 
@@ -74,6 +76,7 @@ def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeB
 @pytest.fixture
 def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and a model with declarative attributes."""
+
     class Base(DeclarativeBase):
         pass
 
@@ -148,7 +151,6 @@ def db_session(db_engine: Engine) -> Generator[Session, None, None]:
     session.close()
 
 
-@pytest.mark.integration
 def test_sanity_check_passes_with_valid_tables(
     db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
@@ -168,7 +170,6 @@ def test_sanity_check_passes_with_valid_tables(
         Base.metadata.drop_all(db_engine)
 
 
-@pytest.mark.integration
 def test_sanity_check_fails_with_missing_table(
     db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
@@ -183,7 +184,6 @@ def test_sanity_check_fails_with_missing_table(
     assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing tables"
 
 
-@pytest.mark.integration
 def test_sanity_check_fails_with_missing_column(
     db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
@@ -202,7 +202,6 @@ def test_sanity_check_fails_with_missing_column(
     assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing columns"
 
 
-@pytest.mark.integration
 def test_sanity_check_passes_with_relationships(
     db_engine: Engine,
     db_session: Session,
@@ -224,7 +223,6 @@ def test_sanity_check_passes_with_relationships(
         Base.metadata.drop_all(db_engine)
 
 
-@pytest.mark.integration
 def test_sanity_check_passes_with_declarative_attributes(
     db_engine: Engine, db_session: Session, base_and_declarative_model
 ):
@@ -322,7 +320,6 @@ def test_sanity_check_fails_with_column_type_mismatch(
     )
 
 
-@pytest.mark.integration
 def test_sanity_check_fails_with_missing_many_to_many_relationship(
     db_engine: Engine,
     db_session: Session,
@@ -349,7 +346,6 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
     )
 
 
-@pytest.mark.integration
 def test_sanity_check_fails_with_missing_one_to_many_relationship(
     db_engine: Engine,
     db_session: Session,
