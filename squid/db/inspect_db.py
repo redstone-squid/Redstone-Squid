@@ -225,6 +225,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     #
     # noinspection PyProtectedMember
     for name, klass in base_cls.registry._class_registry.items():
+        logger.info("Checking model %s (%s)", name, klass)
         if isinstance(klass, _ModuleMarker):
             logger.debug("Skipping module marker %s", name)
             # Not a model
