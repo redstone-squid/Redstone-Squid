@@ -15,17 +15,21 @@ from sqlalchemy import (
     UUID,
     BigInteger,
     Boolean,
+    Connection,
     Double,
+    Engine,
     ForeignKey,
     Integer,
     SmallInteger,
     String,
+    Table,
     inspect,
     text,
 )
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import (
+    ColumnProperty,
     DeclarativeBase,
     Mapped,
     MappedAsDataclass,
@@ -34,15 +38,151 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
+
+# noinspection PyProtectedMember
 from sqlalchemy.orm.clsregistry import _ModuleMarker
 from sqlalchemy.sql import func
 
 logger = logging.getLogger(__name__)
 
 
-# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(MappedAsDataclass, DeclarativeBase):
-    pass
+# Handle some common type variations
+type_mapping = {
+    "integer": ["int", "integer", "int4"],
+    "bigint": ["bigint", "int8"],
+    "smallint": ["smallint", "int2"],
+    "string": ["string", "varchar", "text"],
+    "boolean": ["boolean", "bool"],
+    "float": ["float", "real", "float4"],
+    "double": ["double", "float8"],
+    "json": ["json", "jsonb"],
+}
+
+
+def normalize_type(type_name: str) -> str:
+    for base_type, variants in type_mapping.items():
+        if any(variant in type_name for variant in variants):
+            return base_type
+    return type_name
+
+
+def check_relationship_property(
+    column_prop: RelationshipProperty, tables: list[str], klass: type[DeclarativeBase], engine: Engine | Connection
+) -> bool:
+    """Check if a relationship property is valid."""
+
+    errors = False
+
+    if column_prop.secondary is not None:
+        # Additional checks for many-to-many relationships
+        if not isinstance(column_prop.secondary, Table):
+            logger.info(
+                "Skipping relationship %s in model %s because secondary is not a Table object", column_prop.key, klass
+            )
+            return errors
+
+        # Check secondary table exists
+        if column_prop.secondary.name not in tables:
+            logger.error(
+                "Model %s declares many-to-many relationship %s with secondary table %s which does not exist in database %s",
+                klass,
+                column_prop.key,
+                column_prop.secondary.name,
+                engine,
+            )
+            errors = True
+
+    if not isinstance(column_prop.target, Table):
+        logger.info(
+            "Skipping relationship %s in model %s because target is not a Table object", column_prop.key, klass
+        )
+        return errors
+
+    target_table = column_prop.target.name
+    if target_table not in tables:
+        logger.error(
+            "Model %s declares relationship %s to table %s which does not exist in database %s",
+            klass,
+            column_prop.key,
+            target_table,
+            engine,
+        )
+        errors = True
+
+    return errors
+
+
+def check_column_property(
+    column_prop: ColumnProperty, columns: dict[str, Any], tables: list[str], klass: type[DeclarativeBase], engine: Engine | Connection
+) -> bool:
+    """Check if a column property is valid."""
+    errors = False
+    for column in column_prop.columns:
+        # Check column exists
+        if column.key not in columns:
+            logger.error(
+                "Model %s declares column %s which does not exist in database %s",
+                klass,
+                column.key,
+                engine,
+            )
+            errors = True
+            continue
+
+        # Check column type
+        db_column = columns[column.key]
+        model_type = column.type
+        db_type = db_column["type"]
+
+        # Compare type names, handling some common type variations
+        model_type_name = str(model_type).lower()
+        db_type_name = str(db_type).lower()
+
+        if normalize_type(model_type_name) != normalize_type(db_type_name):
+            logger.error(
+                "Model %s column %s has type %s but database has type %s",
+                klass,
+                column.key,
+                model_type,
+                db_type,
+            )
+            errors = True
+
+        # Check foreign key constraints
+        if column.foreign_keys:
+            for fk in column.foreign_keys:
+                if fk.column.table.name not in tables:
+                    breakpoint()
+                    logger.error(
+                        "Model %s declares foreign key %s to table %s which does not exist in database %s",
+                        klass,
+                        column.key,
+                        fk.column.table.name,
+                        engine,
+                    )
+                    errors = True
+                else:
+                    # Check if the foreign key column exists in the target table
+                    pass
+
+        # Check if the column is nullable
+        if not column.nullable and db_column["nullable"]:
+            logger.error(
+                "Model %s declares column %s as non-nullable but database has it as nullable",
+                klass,
+                column.key,
+            )
+            errors = True
+
+        if column.nullable and not db_column["nullable"]:
+            logger.error(
+                "Model %s declares column %s as nullable but database has it as non-nullable",
+                klass,
+                column.key,
+            )
+            errors = True
+
+    return errors
 
 
 def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
@@ -70,105 +210,72 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
     errors = False
 
     tables = iengine.get_table_names()
-
-    # Go through all SQLAlchemy models
+    # Go through all SQLAlchemy models and do the following checks:
+    # - Check if the table exists in the database
+    # For each attribute in the model:
+    #     If it is a relationship:
+    #         - Check if the secondary table exists (if applicable)
+    #         - Check if the target table exists
+    #     If it is a column:
+    #         - Check if the column exists in the table
+    #         - Check if the column type matches the model type
+    #         - Check if the foreign key constraints are valid
+    #         - Check if the column is nullable
+    #
+    # noinspection PyProtectedMember
     for name, klass in base_cls.registry._class_registry.items():
         if isinstance(klass, _ModuleMarker):
+            logger.debug("Skipping module marker %s", name)
             # Not a model
             continue
+        if not issubclass(klass, DeclarativeBase):
+            logger.debug("Skipping %s because it is not a subclass of DeclarativeBase", klass)
+            continue
 
-        table: str = klass.__tablename__
-        if table in tables:
-            # Check all columns are found
-            # Looks like [{'default': "nextval('sanity_check_test_id_seq'::regclass)", 'autoincrement': True, 'nullable': False, 'type': INTEGER(), 'name': 'id'}]
-
-            columns = {c["name"]: c for c in iengine.get_columns(table)}
-            mapper = inspect(klass)
-
-            try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
-                for column_prop in mapper.attrs:
-                    if isinstance(column_prop, RelationshipProperty):
-                        # Check relationships
-                        if column_prop.secondary is not None:
-                            # Many-to-many relationship
-                            if column_prop.secondary.name not in tables:
-                                logger.error(
-                                    "Model %s declares many-to-many relationship %s with secondary table %s which does not exist in database %s",
-                                    klass,
-                                    column_prop.key,
-                                    column_prop.secondary.name,
-                                    engine,
-                                )
-                                errors = True
-                        else:
-                            # One-to-many or many-to-one relationship
-                            target_table = column_prop.target.name
-                            if target_table not in tables:
-                                logger.error(
-                                    "Model %s declares relationship %s to table %s which does not exist in database %s",
-                                    klass,
-                                    column_prop.key,
-                                    target_table,
-                                    engine,
-                                )
-                                errors = True
-                    else:
-                        for column in column_prop.columns:
-                            # Check column exists
-                            if column.key not in columns:
-                                logger.error(
-                                    "Model %s declares column %s which does not exist in database %s",
-                                    klass,
-                                    column.key,
-                                    engine,
-                                )
-                                errors = True
-                                continue
-
-                            # Check column type
-                            db_column = columns[column.key]
-                            model_type = column.type
-                            db_type = db_column["type"]
-
-                            # Compare type names, handling some common type variations
-                            model_type_name = str(model_type).lower()
-                            db_type_name = str(db_type).lower()
-
-                            # Handle some common type variations
-                            type_mapping = {
-                                "integer": ["int", "integer", "int4"],
-                                "bigint": ["bigint", "int8"],
-                                "smallint": ["smallint", "int2"],
-                                "string": ["string", "varchar", "text"],
-                                "boolean": ["boolean", "bool"],
-                                "float": ["float", "real", "float4"],
-                                "double": ["double", "float8"],
-                                "json": ["json", "jsonb"],
-                            }
-
-                            def normalize_type(type_name: str) -> str:
-                                for base_type, variants in type_mapping.items():
-                                    if any(variant in type_name for variant in variants):
-                                        return base_type
-                                return type_name
-
-                            if normalize_type(model_type_name) != normalize_type(db_type_name):
-                                logger.error(
-                                    "Model %s column %s has type %s but database has type %s",
-                                    klass,
-                                    column.key,
-                                    model_type,
-                                    db_type,
-                                )
-                                errors = True
-            except SQLAlchemyError as e:
-                logger.error("Error inspecting model %s: %s", klass, e)
-                errors = True
-        else:
+        table: str = getattr(klass, "__tablename__")
+        if not table:
+            logger.error("Model %s does not have a __tablename__ attribute", klass)
+            errors = True
+            continue
+        if table not in tables:
             logger.error("Model %s declares table %s which does not exist in database %s", klass, table, engine)
             errors = True
 
+        mapper = inspect(klass)
+        columns = {c["name"]: c for c in iengine.get_columns(table)}
+
+        # Association proxies do not have to be checked, because their underlying relationships and columns are already checked.
+        # proxies: list[AssociationProxy[Any]] = [
+        #     desc
+        #     for desc in mapper.all_orm_descriptors
+        #     if desc.extension_type is AssociationProxyExtensionType.ASSOCIATION_PROXY
+        # ]
+        try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
+            for column_prop in mapper.attrs:
+                if isinstance(column_prop, RelationshipProperty):
+                    if check_relationship_property(column_prop, tables, klass, engine):
+                        errors = True
+                elif isinstance(column_prop, ColumnProperty):
+                    if check_column_property(column_prop, columns, klass, engine):
+                        errors = True
+                else:
+                    logging.info(
+                        "Encountered unexpected property %s in model %s with type %s",
+                        column_prop.key,
+                        klass.__name__,
+                        type(column_prop),
+                    )
+
+        except SQLAlchemyError as e:
+            logger.error("Error inspecting model %s: %s", klass.__name__, e)
+            errors = True
+
     return not errors
+
+
+# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
+class Base(MappedAsDataclass, DeclarativeBase):
+    pass
 
 
 class User(Base):
