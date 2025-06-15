@@ -30,7 +30,6 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
-
 from sqlalchemy.sql import func
 
 from squid.db.inspect_db import is_sane_database

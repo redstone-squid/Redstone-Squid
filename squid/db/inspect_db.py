@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import Inspector, Engine, Connection, Table, inspect
+from sqlalchemy import Connection, Engine, Inspector, Table, inspect
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import RelationshipProperty, DeclarativeBase, ColumnProperty, Session
+from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty, Session
+
 # noinspection PyProtectedMember
 from sqlalchemy.orm.clsregistry import _ModuleMarker
-
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +73,7 @@ def check_relationship_property(
             errors = True
 
     if not isinstance(column_prop.target, Table):
-        logger.info(
-            "Skipping relationship %s in model %s because target is not a Table object", column_prop.key, klass
-        )
+        logger.info("Skipping relationship %s in model %s because target is not a Table object", column_prop.key, klass)
         return errors
 
     target_table = column_prop.target.name
@@ -219,9 +217,12 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
             # Not a model
             continue
         if not issubclass(klass, DeclarativeBase):
-            logger.warning("Cannot determine whether %s is actually a model because it is not a subclass of DeclarativeBase. "
-                           "If you use the declarative_base(), it dynamically generates a new class that cannot be determined."
-                           "We are assuming it is a model, but this may not be the case.", klass)
+            logger.warning(
+                "Cannot determine whether %s is actually a model because it is not a subclass of DeclarativeBase. "
+                "If you use the declarative_base(), it dynamically generates a new class that cannot be determined."
+                "We are assuming it is a model, but this may not be the case.",
+                klass,
+            )
 
         table: str = getattr(klass, "__tablename__")
         if not table:
