@@ -39,7 +39,8 @@ from squid.db.inspect_db import is_sane_database
 @pytest.fixture
 def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing a base class and a simple test model."""
-    Base = declarative_base()
+    class Base(DeclarativeBase):
+        pass
 
     class SaneTestModel(Base):
         """A sample SQLAlchemy model to demonstrate db conflicts."""
@@ -54,7 +55,8 @@ def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]
 @pytest.fixture
 def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and related test models."""
-    Base = declarative_base()
+    class Base(DeclarativeBase):
+        pass
 
     class RelationTestModel(Base):
         __tablename__ = "sanity_check_test_2"
@@ -72,7 +74,8 @@ def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeB
 @pytest.fixture
 def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and a model with declarative attributes."""
-    Base = declarative_base()
+    class Base(DeclarativeBase):
+        pass
 
     class DeclarativeTestModel(Base):
         __tablename__ = "sanity_check_test_4"
@@ -153,11 +156,11 @@ def test_sanity_check_passes_with_valid_tables(
     Base, SaneTestModel = base_and_sane_model
 
     try:
-        Base.metadata.drop_all(db_engine, tables=[cast(Table, SaneTestModel.__table__)])
+        Base.metadata.drop_all(db_engine)
     except sqlalchemy.exc.NoSuchTableError:
         pass
 
-    Base.metadata.create_all(db_engine, tables=[cast(Table, SaneTestModel.__table__)])
+    Base.metadata.create_all(db_engine)
 
     try:
         assert is_sane_database(Base, db_session) is True, "Database should be considered sane with valid tables"
@@ -173,7 +176,7 @@ def test_sanity_check_fails_with_missing_table(
     Base, SaneTestModel = base_and_sane_model
 
     try:
-        Base.metadata.drop_all(db_engine, tables=[cast(Table, SaneTestModel.__table__)])
+        Base.metadata.drop_all(db_engine)
     except sqlalchemy.exc.NoSuchTableError:
         pass
 
@@ -188,11 +191,11 @@ def test_sanity_check_fails_with_missing_column(
     Base, SaneTestModel = base_and_sane_model
 
     try:
-        Base.metadata.drop_all(db_engine, tables=[cast(Table, SaneTestModel.__table__)])
+        Base.metadata.drop_all(db_engine)
     except sqlalchemy.exc.NoSuchTableError:
         pass
 
-    Base.metadata.create_all(db_engine, tables=[cast(Table, SaneTestModel.__table__)])
+    Base.metadata.create_all(db_engine)
     with db_engine.connect() as connection:
         connection.execute(text("ALTER TABLE sanity_check_test DROP COLUMN name"))
 
@@ -209,15 +212,11 @@ def test_sanity_check_passes_with_relationships(
     Base, RelationTestModel, RelationTestModel2 = base_and_relation_models
 
     try:
-        Base.metadata.drop_all(
-            db_engine, tables=[cast(Table, RelationTestModel.__table__), (Table, RelationTestModel2.__table__)]
-        )
+        Base.metadata.drop_all(db_engine)
     except sqlalchemy.exc.NoSuchTableError:
         pass
 
-    Base.metadata.create_all(
-        db_engine, tables=[cast(Table, RelationTestModel.__table__), cast(Table, RelationTestModel2.__table__)]
-    )
+    Base.metadata.create_all(db_engine)
 
     try:
         assert is_sane_database(Base, db_session) is True, "Database should be considered sane with valid relationships"
@@ -233,11 +232,11 @@ def test_sanity_check_passes_with_declarative_attributes(
     Base, DeclarativeTestModel = base_and_declarative_model
 
     try:
-        Base.metadata.drop_all(db_engine, tables=[cast(Table, DeclarativeTestModel.__table__)])
+        Base.metadata.drop_all(db_engine)
     except NoSuchTableError:
         pass
 
-    Base.metadata.create_all(db_engine, tables=[cast(Table, DeclarativeTestModel.__table__)])
+    Base.metadata.create_all(db_engine)
 
     try:
         assert is_sane_database(Base, db_session) is True, (
