@@ -32,8 +32,6 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.sql import func
 
-from squid.db.inspect_db import is_sane_database
-
 logger = logging.getLogger(__name__)
 
 
