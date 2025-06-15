@@ -85,7 +85,7 @@ class DatabaseManager(AsyncClient):
         """Fetches all restrictions from the database."""
         async with self.async_session() as session:
             result = await session.execute(select(Restriction))
-            rows = result.fetchall()
+            rows = result.scalars().all()
 
             # Convert SQLAlchemy rows to RestrictionRecord format
             return [
@@ -116,22 +116,21 @@ class DatabaseManager(AsyncClient):
                 )
             )
             result = await session.execute(stmt)
-            rows = result.fetchall()
+            rows = result.scalars().all()
 
-            # Convert SQLAlchemy rows to VersionRecord format
-            version_records = [
-                VersionRecord(
-                    id=row.id,
-                    edition=row.edition,
-                    major_version=row.major_version,
-                    minor_version=row.minor_version,
-                    patch_number=row.patch_number,
-                )
-                for row in rows
-            ]
+        # Convert SQLAlchemy rows to VersionRecord format
+        version_records = [
+            VersionRecord(
+                id=row.id,
+                edition=row.edition,
+                major_version=row.major_version,
+                minor_version=row.minor_version,
+                patch_number=row.patch_number,
+            )
+            for row in rows]
 
-            self.version_cache[edition] = version_records
-            return version_records
+        self.version_cache[edition] = version_records
+        return version_records
 
     async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
