@@ -103,7 +103,7 @@ class RedstoneSquid(Bot):
             "squid.bot.submission",
             "squid.bot.log",
             "squid.bot.help",
-            "squid.bot.voting.vote",
+            # "squid.bot.voting.vote",  # FIXME: This is clogging the event loop
             "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",
