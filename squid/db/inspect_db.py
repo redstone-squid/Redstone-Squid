@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import Connection, Engine, Inspector, Table, inspect
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty, Session
+from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
 
 # noinspection PyProtectedMember
 from sqlalchemy.orm.clsregistry import _ModuleMarker
@@ -173,7 +173,7 @@ def check_column_property(
     return errors
 
 
-def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
+def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     """Check whether the current database matches the models declared in model base.
 
     Checks that:
@@ -183,7 +183,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
 
     Args:
         base_cls (type[Base]): The SQLAlchemy declarative base class containing the models to check.
-        session: The SQLAlchemy session bound to the database engine.
+        engine: The SQLAlchemy engine or connection to the database.
 
     Returns:
         bool: True if all declared models have corresponding tables, columns, and relationships.
@@ -192,7 +192,6 @@ def is_sane_database(base_cls: type[DeclarativeBase], session: Session) -> bool:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
     """
 
-    engine = session.get_bind()
     inspector = inspect(engine)
     schema = DatabaseSchema(inspector)
 

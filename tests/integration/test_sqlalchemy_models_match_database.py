@@ -152,7 +152,7 @@ def db_session(db_engine: Engine) -> Generator[Session, None, None]:
 
 
 def test_sanity_check_passes_with_valid_tables(
-    db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
+    db_engine: Engine, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
     """Test that database sanity check passes when tables and columns are properly created."""
     Base, SaneTestModel = base_and_sane_model
@@ -165,13 +165,13 @@ def test_sanity_check_passes_with_valid_tables(
     Base.metadata.create_all(db_engine)
 
     try:
-        assert is_sane_database(Base, db_session) is True, "Database should be considered sane with valid tables"
+        assert is_sane_database(Base, db_engine) is True, "Database should be considered sane with valid tables"
     finally:
         Base.metadata.drop_all(db_engine)
 
 
 def test_sanity_check_fails_with_missing_table(
-    db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
+    db_engine: Engine, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
     """Test that database sanity check fails when a required table is missing."""
     Base, SaneTestModel = base_and_sane_model
@@ -181,11 +181,11 @@ def test_sanity_check_fails_with_missing_table(
     except sqlalchemy.exc.NoSuchTableError:
         pass
 
-    assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing tables"
+    assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing tables"
 
 
 def test_sanity_check_fails_with_missing_column(
-    db_engine: Engine, db_session: Session, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
+    db_engine: Engine, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
     """Test that database sanity check fails when a required column is missing."""
     Base, SaneTestModel = base_and_sane_model
@@ -199,12 +199,11 @@ def test_sanity_check_fails_with_missing_column(
     with db_engine.connect() as connection:
         connection.execute(text("ALTER TABLE sanity_check_test DROP COLUMN name"))
 
-    assert is_sane_database(Base, db_session) is False, "Database should not be considered sane with missing columns"
+    assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing columns"
 
 
 def test_sanity_check_passes_with_relationships(
     db_engine: Engine,
-    db_session: Session,
     base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
 ):
     """Test that database sanity check correctly handles relationship tables."""
@@ -218,13 +217,13 @@ def test_sanity_check_passes_with_relationships(
     Base.metadata.create_all(db_engine)
 
     try:
-        assert is_sane_database(Base, db_session) is True, "Database should be considered sane with valid relationships"
+        assert is_sane_database(Base, db_engine) is True, "Database should be considered sane with valid relationships"
     finally:
         Base.metadata.drop_all(db_engine)
 
 
 def test_sanity_check_passes_with_declarative_attributes(
-    db_engine: Engine, db_session: Session, base_and_declarative_model
+    db_engine: Engine, base_and_declarative_model
 ):
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_declarative_model
@@ -237,7 +236,7 @@ def test_sanity_check_passes_with_declarative_attributes(
     Base.metadata.create_all(db_engine)
 
     try:
-        assert is_sane_database(Base, db_session) is True, (
+        assert is_sane_database(Base, db_engine) is True, (
             "Database should be considered sane with declarative attributes"
         )
     finally:
@@ -279,7 +278,6 @@ def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list
 )
 def test_sanity_check_fails_with_column_type_mismatch(
     db_engine: Engine,
-    db_session: Session,
     base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]],
     supposed_column_type: TypeEngine,
     db_type: str,
@@ -315,14 +313,13 @@ def test_sanity_check_fails_with_column_type_mismatch(
             # For other databases, we can use ALTER TABLE directly
             connection.execute(text(f"ALTER TABLE {TestModel.__tablename__} ALTER COLUMN test_column TYPE {db_type}"))
 
-    assert is_sane_database(Base, db_session) is False, (
+    assert is_sane_database(Base, db_engine) is False, (
         f"Database should not be considered sane with mismatched column types: {incorrect_column_type} vs {db_type}"
     )
 
 
 def test_sanity_check_fails_with_missing_many_to_many_relationship(
     db_engine: Engine,
-    db_session: Session,
     base_and_many_to_many_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
 ):
     """Test that database sanity check fails when a many-to-many relationship is missing from the model."""
@@ -341,14 +338,13 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
         name = Column(String(50), nullable=False)
         # Intentionally missing the model2s relationship
 
-    assert is_sane_database(Base, db_session) is False, (
+    assert is_sane_database(Base, db_engine) is False, (
         "Database should not be considered sane with missing many-to-many relationship"
     )
 
 
 def test_sanity_check_fails_with_missing_one_to_many_relationship(
     db_engine: Engine,
-    db_session: Session,
     base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
 ):
     """Test that database sanity check fails when a one-to-many relationship is missing from the model."""
@@ -367,6 +363,6 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
         test_relationship_id = Column(ForeignKey("sanity_check_test_3.id"))
         # Intentionally missing the test_relationship relationship
 
-    assert is_sane_database(Base, db_session) is False, (
+    assert is_sane_database(Base, db_engine) is False, (
         "Database should not be considered sane with missing one-to-many relationship"
     )
