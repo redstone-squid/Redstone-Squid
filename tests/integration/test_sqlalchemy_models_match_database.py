@@ -28,7 +28,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, declarative_base, relationship, sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
-from squid.db.schema import is_sane_database
+from squid.db.inspect_db import is_sane_database
 
 
 # TODO: table names
