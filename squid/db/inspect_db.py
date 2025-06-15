@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Never, overload
 
 from sqlalchemy import Connection, Engine, Inspector, Table, inspect
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
 
 # noinspection PyProtectedMember
@@ -173,6 +174,14 @@ def check_column_property(
     return errors
 
 
+@overload
+def is_sane_database(base_cls: type[DeclarativeBase], engine: AsyncEngine) -> Never: ...
+
+
+@overload
+def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool: ...
+
+
 def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     """Check whether the current database matches the models declared in model base.
 
@@ -188,9 +197,14 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     Returns:
         bool: True if all declared models have corresponding tables, columns, and relationships.
 
+    Raises:
+        TypeError: If the provided engine is an AsyncEngine instead of a synchronous Engine or Connection.
+
     References:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
     """
+    if isinstance(engine, AsyncEngine):
+        raise TypeError("The engine must be a synchronous SQLAlchemy Engine or Connection, not an AsyncEngine.")
 
     inspector = inspect(engine)
     schema = DatabaseSchema(inspector)
