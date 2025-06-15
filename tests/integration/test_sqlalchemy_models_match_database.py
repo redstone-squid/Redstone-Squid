@@ -92,6 +92,7 @@ def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[Declarativ
 @pytest.fixture
 def base_and_many_to_many_models():
     """Fixture providing base class and many-to-many related test models."""
+
     class Base(DeclarativeBase):
         pass
 
@@ -337,6 +338,7 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
 
     # Re-create ManyToManyModel1 without the relationship to ManyToManyModel2
     Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+
     class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "many_to_many_test_1"
         id = Column(Integer, primary_key=True)
@@ -363,6 +365,7 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
 
     # Create a new model without the one-to-many relationship
     Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+
     class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "sanity_check_test_2"
         id = Column(Integer, primary_key=True)
