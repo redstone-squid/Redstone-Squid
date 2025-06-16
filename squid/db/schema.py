@@ -153,7 +153,8 @@ class Build(Base):
     completion_time: Mapped[str | None] = mapped_column(String)
     category: Mapped[str | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
+    original_message: Mapped[Message | None] = relationship(back_populates="build", uselist=False, default=None)
     version_spec: Mapped[str | None] = mapped_column(String)
     embedding: Mapped[list[float] | None] = mapped_column(
         VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), nullable=True
@@ -473,20 +474,6 @@ class BuildRecord(TypedDict):
     embedding: list[float] | None
     is_locked: bool
     locked_at: str | None  # timestamptz
-
-
-class MessageRecord(TypedDict):
-    """A record of a message in the database."""
-
-    id: int
-    updated_at: str
-    server_id: int
-    channel_id: int
-    author_id: int
-    purpose: MessagePurpose
-    build_id: int | None
-    vote_session_id: int | None
-    content: str | None
 
 
 class DoorRecord(TypedDict):

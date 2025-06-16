@@ -1,10 +1,10 @@
 """Some functions related to the message table, which stores message ids."""
 
 import discord
-from sqlalchemy import select, text, update
+from sqlalchemy import Result, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.schema import Message, MessagePurpose, MessageRecord
+from squid.db.schema import Message, MessagePurpose
 from squid.db.utils import utcnow
 
 
@@ -68,14 +68,14 @@ class MessageManager:
             await session.execute(stmt)
             await session.commit()
 
-    async def untrack_message(self, message: int | discord.Message) -> MessageRecord:
+    async def untrack_message(self, message: int | discord.Message) -> Message:
         """Untrack message from the database. The message is not deleted on discord.
 
         Args:
             message: The message to untrack. Either the message id or the message object.
 
         Returns:
-            A MessageRecord that is untracked.
+            A Message that is untracked.
 
         Raises:
             ValueError: If the message is not found.
@@ -85,27 +85,17 @@ class MessageManager:
             stmt = select(Message).where(Message.id == message_id)
             result = await session.execute(stmt)
             message_obj = result.scalar_one_or_none()
-            
+
             if message_obj is None:
                 raise ValueError(f"Message with id {message_id} not found.")
-            
-            # Convert to MessageRecord before deleting
-            record = MessageRecord(
-                id=message_obj.id,
-                server_id=message_obj.server_id,
-                channel_id=message_obj.channel_id,
-                build_id=message_obj.build_id,
-                author_id=message_obj.author_id,
-                vote_session_id=message_obj.vote_session_id,
-                purpose=message_obj.purpose,
-                edited_time=message_obj.edited_time,
-            )
-            
+
+
+
             await session.delete(message_obj)
             await session.commit()
-            return record
+            return message_obj
 
-    async def get_outdated_messages(self, server_id: int) -> list[MessageRecord] | None:
+    async def get_outdated_messages(self, server_id: int) -> list[Message] | None:
         """Returns a list of messages that are outdated.
 
         Args:
@@ -116,25 +106,13 @@ class MessageManager:
         """
         async with self.session() as session:
             stmt = text("SELECT * FROM get_outdated_messages(:server_id_input)")
-            result = await session.execute(stmt, {"server_id_input": server_id})
+            result: Result[Message] = await session.execute(stmt, {"server_id_input": server_id})
             rows = result.fetchall()
-            
+
             if not rows:
                 return None
-                
-            return [
-                MessageRecord(
-                    id=row.id,
-                    server_id=row.server_id,
-                    channel_id=row.channel_id,
-                    build_id=row.build_id,
-                    author_id=row.author_id,
-                    vote_session_id=row.vote_session_id,
-                    purpose=row.purpose,
-                    edited_time=row.edited_time,
-                )
-                for row in rows
-            ]
+
+            return rows
 
 
 async def main():

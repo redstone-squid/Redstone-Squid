@@ -40,7 +40,6 @@ from squid.db.schema import (
     Info,
     LinkRecord,
     Message,
-    MessageRecord,
     QuantifiedVersionRecord,
     RecordCategory,
     RestrictionRecord,
@@ -73,7 +72,7 @@ class JoinedBuildRecord(BuildRecord):
     extenders: ExtenderRecord | None
     utilities: UtilityRecord | None
     entrances: EntranceRecord | None
-    messages: MessageRecord | None  # Not actually all the associated messages, just the original message
+    messages: Message | None  # Not actually all the associated messages, just the original message
 
 
 class FrozenField[T]:
@@ -351,21 +350,7 @@ class Build:
                 )
                 if sql_build.entrance
                 else None,
-                "messages": MessageRecord(
-                    id=sql_build.messages[0].id,
-                    updated_at=sql_build.messages[0].updated_at.isoformat()
-                    if sql_build.messages[0].updated_at
-                    else None,
-                    server_id=sql_build.messages[0].server_id,
-                    channel_id=sql_build.messages[0].channel_id,
-                    author_id=sql_build.messages[0].author_id,
-                    purpose=sql_build.messages[0].purpose,
-                    build_id=sql_build.messages[0].build_id,
-                    vote_session_id=sql_build.messages[0].vote_session_id,
-                    content=sql_build.messages[0].content,
-                )
-                if sql_build.messages
-                else None,
+                "messages": sql_build.original_message,
             }
 
             return Build.from_json(joined_data)
@@ -472,16 +457,16 @@ class Build:
         completion_time = data["completion_time"]
         edited_time = data["edited_time"]
 
-        message_record: MessageRecord | None = data["messages"]
+        message_record: Message | None = data["messages"]
         if message_record is None:
             original_server_id = original_channel_id = original_message_id = original_message_author_id = None
             original_message = None
         else:
-            original_server_id = message_record["server_id"]
-            original_channel_id = message_record["channel_id"]
-            original_message_id = data["original_message_id"]
-            original_message_author_id = message_record["author_id"]
-            original_message = message_record["content"]
+            original_server_id = message_record.server_id
+            original_channel_id = message_record.channel_id
+            original_message_id = message_record.id
+            original_message_author_id = message_record.author_id
+            original_message = message_record.content
 
         ai_generated = data["ai_generated"]
         embedding = data["embedding"]
