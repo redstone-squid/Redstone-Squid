@@ -202,10 +202,8 @@ def setup_logging(dev_mode: bool = False):
     discord_logger.setLevel(logging.INFO)
 
     if dev_mode:
-        from sqlalchemy import log as sqlalchemy_log
-
-        # See https://stackoverflow.com/questions/60804288/pycharm-duplicated-log-for-sqlalchemy-echo-true
-        sqlalchemy_log._add_default_handler = lambda x: None  # Patch to avoid duplicate logging
+        # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
+        logging.getLogger("sqlalchemy.engine.Engine").handlers = [logging.NullHandler()]  # Avoid duplicate logging
 
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
         logging.getLogger("discord.gateway").setLevel(logging.ERROR)
