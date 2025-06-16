@@ -19,7 +19,10 @@ async def mock_env_vars() -> AsyncGenerator[None, None]:
     """
     Fixture that mocks required environment variables.
     """
-    with patch.dict("os.environ", {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_KEY": "test-key-123"}):
+    with patch.dict(
+        "os.environ",
+        {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_KEY": "test-key-123", "SYNERGY_SECRET": "test_secret"},
+    ):
         yield
 
 
@@ -37,6 +40,7 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
         table_instance.update.return_value = table_instance
         table_instance.delete.return_value = table_instance
         table_instance.eq.return_value = table_instance
+        table_instance.gt.return_value = table_instance
         table_instance.order.return_value = table_instance
         table_instance.execute = AsyncMock(return_value=APIResponse(data=[], count=0))
 
