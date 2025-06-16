@@ -66,6 +66,7 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
         raise ValueError("Invalid version string format.")
 
     edition, major, minor, patch = match.groups()
+    edition = edition.title() if edition else "Java"
     return edition or "Java", int(major), int(minor), int(patch)  # type: ignore
 
 
