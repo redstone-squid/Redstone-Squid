@@ -22,6 +22,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -58,7 +59,7 @@ assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do n
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(MappedAsDataclass, DeclarativeBase):
+class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
     pass
 
 
