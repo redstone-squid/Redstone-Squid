@@ -382,16 +382,15 @@ class Build:
             The Build object with the specified message id, or None if the build was not found.
         """
         db = DatabaseManager()
-response: SingleAPIResponse[MessageRecord] | None = (
-            await db.table("messages")
-            .select("build_id", count=CountMethod.exact)
-            .eq("id", message_id)
-            .maybe_single()
-            .execute()
-)
-        if response and response.data["build_id"]:
-            return await Build.from_id(response.data["build_id"])
-        return None
+
+        async with db.async_session() as session:
+            stmt = select(Message).where(Message.id == message_id)
+            result = await session.execute(stmt)
+            message = result.scalar_one_or_none()
+
+            if message and message.build_id:
+                return await Build.from_id(message.build_id)
+            return None
 
     @staticmethod
     def from_dict(submission: dict) -> "Build":
