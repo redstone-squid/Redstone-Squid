@@ -320,14 +320,14 @@ class VoteSession(Base):
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
     build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(
-        back_populates="vote_session", default_factory=list
+        back_populates="vote_session", default=None, uselist=False
     )
     builds: AssociationProxy[list[Build]] = association_proxy("build_vote_sessions", "build", default_factory=list)
 
     messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list)
     votes: Mapped[list[Vote]] = relationship(back_populates="vote_session", default_factory=list)
     delete_log_vote_sessions: Mapped[list[DeleteLogVoteSession]] = relationship(
-        back_populates="vote_session", default_factory=list
+        back_populates="vote_session", default=None, uselist=False
     )
 
 
