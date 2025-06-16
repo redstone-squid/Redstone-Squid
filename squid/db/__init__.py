@@ -16,6 +16,7 @@ from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
 from squid.db.server_settings import ServerSettingManager
 from squid.db.utils import get_version_string, parse_version_string
+from squid.db.voting import VotingRepository
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
@@ -48,6 +49,7 @@ class DatabaseManager(AsyncClient):
         super().__init__(supabase_url, supabase_key, options)
         self.server_setting = ServerSettingManager(self)
         self.message = MessageManager(self)
+        self.voting = VotingRepository(self)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
