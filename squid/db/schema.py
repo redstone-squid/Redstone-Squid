@@ -23,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(MappedAsDataclass, DeclarativeBase):
+class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
     pass
 
 
