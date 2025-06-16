@@ -10,8 +10,9 @@ from types import MethodType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
 
 import discord
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import ReturnMethod
+from sqlalchemy import insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -435,20 +436,36 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> BuildVoteSession | None:
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(VoteSession)
+                .options(
+                    selectinload(VoteSession.messages),
+                    selectinload(VoteSession.votes),
+                    selectinload(VoteSession.build_vote_sessions),
+                )
+                .where(VoteSession.id == vote_session_id, VoteSession.kind == cls.kind)
+            )
+            result = await session.execute(stmt)
+            record = result.first()
+            if record is None:
+                return None
 
-        vote_session_record = vote_session_response.data
-        return await cls._from_record(bot, vote_session_record)
+            vote_session_record = {
+                "id": record.id,
+                "author_id": record.author_id,
+                "pass_threshold": record.pass_threshold,
+                "fail_threshold": record.fail_threshold,
+                "status": record.status,
+                "messages": [{"id": msg.id} for msg in record.messages],
+                "votes": [{"user_id": vote.user_id, "weight": vote.weight} for vote in record.votes],
+                "build_vote_sessions": {
+                    "build_id": record.build_vote_sessions.build_id,
+                    "changes": record.build_vote_sessions.changes,
+                },
+            }
+            return await cls._from_record(bot, vote_session_record)
 
     @classmethod
     async def _from_record(cls, bot: "squid.bot.RedstoneSquid", record: dict[str, Any]) -> "BuildVoteSession":
@@ -520,15 +537,34 @@ class BuildVoteSession(AbstractVoteSession):
         cls: "type[BuildVoteSession]", bot: "squid.bot.RedstoneSquid"
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
-        records: list[dict[str, Any]] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(VoteSession)
+                .options(
+                    selectinload(VoteSession.messages),
+                    selectinload(VoteSession.votes),
+                    selectinload(VoteSession.build_vote_sessions),
+                )
+                .where(VoteSession.status == "open", VoteSession.kind == cls.kind)
+            )
+            result = await session.execute(stmt)
+            records = result.scalars().all()
 
-        return await asyncio.gather(*[cls._from_record(bot, record) for record in records])
+            vote_session_records = [
+                {
+                    "id": record.id,
+                    "author_id": record.author_id,
+                    "pass_threshold": record.pass_threshold,
+                    "fail_threshold": record.fail_threshold,
+                    "status": record.status,
+                    "messages": [{"id": msg.id} for msg in record.messages],
+                    "votes": [{"user_id": vote.user_id, "weight": vote.weight} for vote in record.votes],
+                    "build_vote_sessions": {"build_id": record.build_vote_sessions.build_id, "changes": record.build_vote_sessions.changes},
+                }
+                for record in records
+            ]
+
+            return await asyncio.gather(*(cls._from_record(bot, record) for record in vote_session_records))
 
 
 @final
@@ -605,27 +641,38 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
+    async def from_id(cls, bot: RedstoneSquid, vote_session_id: int) -> DeleteLogVoteSession | None:
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(VoteSession)
+                .options(
+                    selectinload(VoteSession.messages),
+                    selectinload(VoteSession.votes),
+                    selectinload(VoteSession.delete_log_vote_sessions),
+                )
+                .where(VoteSession.id == vote_session_id, VoteSession.kind == cls.kind)
+            )
+            result = await session.execute(stmt)
+            record = result.first()
+            if record is None:
+                return None
 
-        vote_session_record = vote_session_response.data
-        target_message = await bot.get_or_fetch_message(
-            vote_session_record["delete_log_vote_sessions"]["target_channel_id"],
-            vote_session_record["delete_log_vote_sessions"]["target_message_id"],
-        )
-        if target_message is None:
-            return None
+            vote_session_record = {
+                "id": record.id,
+                "author_id": record.author_id,
+                "pass_threshold": record.pass_threshold,
+                "fail_threshold": record.fail_threshold,
+                "status": record.status,
+                "messages": [{"id": msg.id} for msg in record.messages],
+                "votes": [{"user_id": vote.user_id, "weight": vote.weight} for vote in record.votes],
+                "delete_log_vote_sessions": {
+                    "target_message_id": record.delete_log_vote_sessions.target_message_id,
+                    "target_channel_id": record.delete_log_vote_sessions.target_channel_id,
+                    "target_server_id": record.delete_log_vote_sessions.target_server_id,
+                },
+            }
 
-        return await cls._from_record(bot, vote_session_record)
+            return await cls._from_record(bot, vote_session_record)
 
     @classmethod
     async def _from_record(
@@ -707,13 +754,36 @@ class DeleteLogVoteSession(AbstractVoteSession):
         cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
     ) -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
-        records: list[VoteSessionRecord] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(VoteSession)
+                .options(
+                    selectinload(VoteSession.messages),
+                    selectinload(VoteSession.votes),
+                    selectinload(VoteSession.delete_log_vote_sessions),
+                )
+                .where(VoteSession.status == "open", VoteSession.kind == cls.kind)
+            )
+            result = await session.execute(stmt)
+            records = result.all()
 
-        sessions = await asyncio.gather(*[cls._from_record(bot, record) for record in records])
-        return [session for session in sessions if session is not None]
+            vote_session_records = [
+                {
+                    "id": record.id,
+                    "author_id": record.author_id,
+                    "pass_threshold": record.pass_threshold,
+                    "fail_threshold": record.fail_threshold,
+                    "status": record.status,
+                    "messages": [{"id": msg.id} for msg in record.messages],
+                    "votes": [{"user_id": vote.user_id, "weight": vote.weight} for vote in record.votes],
+                    "delete_log_vote_sessions": {
+                        "target_message_id": record.delete_log_vote_sessions.target_message_id,
+                        "target_channel_id": record.delete_log_vote_sessions.target_channel_id,
+                        "target_server_id": record.delete_log_vote_sessions.target_server_id,
+                    },
+                }
+                for record in records
+            ]
+
+            sessions = await asyncio.gather(*[cls._from_record(bot, record) for record in vote_session_records])
+            return [session for session in sessions if session is not None]
