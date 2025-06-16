@@ -21,7 +21,8 @@ from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
-from squid.db.schema import Base, Build as BuildRecord
+from squid.db.schema import Base
+from squid.db.schema import Build as BuildRecord
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]

@@ -25,19 +25,17 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
+)
+from squid.db.schema import (
     BuildCreator,
-    BuildLink,
     BuildRecord,
     BuildRestriction,
     BuildType,
     BuildVersion,
     Category,
-    Door,
     DoorOrientationName,
     DoorRecord,
-    Entrance,
     EntranceRecord,
-    Extender,
     ExtenderRecord,
     Info,
     LinkRecord,
@@ -45,17 +43,12 @@ from squid.db.schema import (
     MessageRecord,
     QuantifiedVersionRecord,
     RecordCategory,
-    Restriction,
     RestrictionRecord,
     Status,
-    Type,
     TypeRecord,
     UnknownRestrictions,
-    User,
     UserRecord,
-    Utility,
     UtilityRecord,
-    Version,
     VersionRecord,
 )
 from squid.db.utils import get_version_string, utcnow
@@ -239,7 +232,7 @@ class Build:
             The Build object with the specified ID, or None if the build was not found.
         """
         db = DatabaseManager()
-        
+
         async with db.async_session() as session:
             stmt = (
                 select(SQLBuild)
@@ -259,10 +252,10 @@ class Build:
             )
             result = await session.execute(stmt)
             sql_build = result.scalar_one_or_none()
-            
+
             if not sql_build:
                 return None
-            
+
             # Convert SQLAlchemy models to the expected JoinedBuildRecord format
             joined_data: JoinedBuildRecord = {
                 "id": sql_build.id,
@@ -283,7 +276,6 @@ class Build:
                 "embedding": sql_build.embedding,
                 "is_locked": sql_build.is_locked,
                 "locked_at": sql_build.locked_at.isoformat() if sql_build.locked_at else None,
-                
                 # Related data
                 "versions": [
                     VersionRecord(
@@ -303,10 +295,7 @@ class Build:
                     )
                     for link in sql_build.links
                 ],
-                "build_creators": [
-                    {"build_id": bc.build_id, "user_id": bc.user_id}
-                    for bc in sql_build.build_creators
-                ],
+                "build_creators": [{"build_id": bc.build_id, "user_id": bc.user_id} for bc in sql_build.build_creators],
                 "users": [
                     UserRecord(
                         id=bc.user.id,
@@ -344,19 +333,29 @@ class Build:
                     normal_closing_time=sql_build.door.normal_closing_time,
                     visible_opening_time=sql_build.door.visible_opening_time,
                     visible_closing_time=sql_build.door.visible_closing_time,
-                ) if sql_build.door else None,
+                )
+                if sql_build.door
+                else None,
                 "extenders": ExtenderRecord(
                     build_id=sql_build.extender.build_id,
-                ) if sql_build.extender else None,
+                )
+                if sql_build.extender
+                else None,
                 "utilities": UtilityRecord(
                     build_id=sql_build.utility.build_id,
-                ) if sql_build.utility else None,
+                )
+                if sql_build.utility
+                else None,
                 "entrances": EntranceRecord(
                     build_id=sql_build.entrance.build_id,
-                ) if sql_build.entrance else None,
+                )
+                if sql_build.entrance
+                else None,
                 "messages": MessageRecord(
                     id=sql_build.messages[0].id,
-                    updated_at=sql_build.messages[0].updated_at.isoformat() if sql_build.messages[0].updated_at else None,
+                    updated_at=sql_build.messages[0].updated_at.isoformat()
+                    if sql_build.messages[0].updated_at
+                    else None,
                     server_id=sql_build.messages[0].server_id,
                     channel_id=sql_build.messages[0].channel_id,
                     author_id=sql_build.messages[0].author_id,
@@ -364,9 +363,11 @@ class Build:
                     build_id=sql_build.messages[0].build_id,
                     vote_session_id=sql_build.messages[0].vote_session_id,
                     content=sql_build.messages[0].content,
-                ) if sql_build.messages else None,
+                )
+                if sql_build.messages
+                else None,
             }
-            
+
             return Build.from_json(joined_data)
 
     @staticmethod
@@ -381,12 +382,12 @@ class Build:
             The Build object with the specified message id, or None if the build was not found.
         """
         db = DatabaseManager()
-        
+
         async with db.async_session() as session:
             stmt = select(Message).where(Message.id == message_id)
             result = await session.execute(stmt)
             message = result.scalar_one_or_none()
-            
+
             if message and message.build_id:
                 return await Build.from_id(message.build_id)
             return None

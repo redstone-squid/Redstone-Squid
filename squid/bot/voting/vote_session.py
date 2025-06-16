@@ -559,7 +559,10 @@ class BuildVoteSession(AbstractVoteSession):
                     "status": record.status,
                     "messages": [{"id": msg.id} for msg in record.messages],
                     "votes": [{"user_id": vote.user_id, "weight": vote.weight} for vote in record.votes],
-                    "build_vote_sessions": {"build_id": record.build_vote_sessions.build_id, "changes": record.build_vote_sessions.changes},
+                    "build_vote_sessions": {
+                        "build_id": record.build_vote_sessions.build_id,
+                        "changes": record.build_vote_sessions.changes,
+                    },
                 }
                 for record in records
             ]

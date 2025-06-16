@@ -8,10 +8,11 @@ import os
 from typing import ClassVar, Literal
 
 from async_lru import alru_cache
-from sqlalchemy import create_engine, select, make_url
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy import create_engine, make_url, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
 from squid.db.build_tags import BuildTagsManager
@@ -83,9 +84,7 @@ class DatabaseManager(AsyncClient):
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""
         if not is_sane_database(base_cls, self.sync_engine):
-            raise RuntimeError(
-                "The database schema is not consistent with the expected schema."
-            )
+            raise RuntimeError("The database schema is not consistent with the expected schema.")
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
@@ -135,7 +134,8 @@ class DatabaseManager(AsyncClient):
                 minor_version=row.minor_version,
                 patch_number=row.patch_number,
             )
-            for row in rows]
+            for row in rows
+        ]
 
         self.version_cache[edition] = version_records
         return version_records

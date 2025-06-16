@@ -222,9 +222,7 @@ def test_sanity_check_passes_with_relationships(
         Base.metadata.drop_all(db_engine)
 
 
-def test_sanity_check_passes_with_declarative_attributes(
-    db_engine: Engine, base_and_declarative_model
-):
+def test_sanity_check_passes_with_declarative_attributes(db_engine: Engine, base_and_declarative_model):
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_declarative_model
 
