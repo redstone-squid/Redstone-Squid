@@ -19,17 +19,27 @@ import vecs
 from openai import AsyncOpenAI, OpenAIError
 from postgrest.base_request_builder import APIResponse, SingleAPIResponse
 from postgrest.types import CountMethod, ReturnMethod
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.schema import (
+    Build as SQLBuild,
+)
+from squid.db.schema import (
     BuildCategory,
+    BuildCreator,
     BuildRecord,
+    BuildRestriction,
+    BuildType,
+    BuildVersion,
     DoorOrientationName,
     DoorRecord,
     EntranceRecord,
     ExtenderRecord,
     Info,
     LinkRecord,
+    Message,
     MessageRecord,
     QuantifiedVersionRecord,
     RecordCategory,
@@ -222,10 +232,143 @@ class Build:
             The Build object with the specified ID, or None if the build was not found.
         """
         db = DatabaseManager()
-        response = await db.table("builds").select(all_build_columns).eq("id", build_id).maybe_single().execute()
-        if not response:
-            return None
-        return Build.from_json(response.data)
+
+        async with db.async_session() as session:
+            stmt = (
+                select(SQLBuild)
+                .options(
+                    selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
+                    selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
+                    selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
+                    selectinload(SQLBuild.build_types).selectinload(BuildType.type),
+                    selectinload(SQLBuild.links),
+                    selectinload(SQLBuild.messages).where(Message.id == SQLBuild.original_message_id),
+                    selectinload(SQLBuild.door),
+                    selectinload(SQLBuild.extender),
+                    selectinload(SQLBuild.utility),
+                    selectinload(SQLBuild.entrance),
+                )
+                .where(SQLBuild.id == build_id)
+            )
+            result = await session.execute(stmt)
+            sql_build = result.scalar_one_or_none()
+
+            if not sql_build:
+                return None
+
+            # Convert SQLAlchemy models to the expected JoinedBuildRecord format
+            joined_data: JoinedBuildRecord = {
+                "id": sql_build.id,
+                "submission_status": sql_build.submission_status,
+                "record_category": sql_build.record_category,
+                "width": sql_build.width,
+                "height": sql_build.height,
+                "depth": sql_build.depth,
+                "completion_time": sql_build.completion_time,
+                "category": sql_build.category,
+                "submitter_id": sql_build.submitter_id,
+                "original_message_id": sql_build.original_message_id,
+                "version_spec": sql_build.version_spec,
+                "ai_generated": sql_build.ai_generated,
+                "extra_info": sql_build.extra_info,
+                "submission_time": sql_build.submission_time.isoformat() if sql_build.submission_time else None,
+                "edited_time": sql_build.edited_time.isoformat() if sql_build.edited_time else None,
+                "embedding": sql_build.embedding,
+                "is_locked": sql_build.is_locked,
+                "locked_at": sql_build.locked_at.isoformat() if sql_build.locked_at else None,
+                # Related data
+                "versions": [
+                    VersionRecord(
+                        id=v.id,
+                        edition=v.edition,
+                        major_version=v.major_version,
+                        minor_version=v.minor_version,
+                        patch_number=v.patch_number,
+                    )
+                    for v in sql_build.versions
+                ],
+                "build_links": [
+                    LinkRecord(
+                        build_id=link.build_id,
+                        url=link.url,
+                        media_type=link.media_type,
+                    )
+                    for link in sql_build.links
+                ],
+                "build_creators": [{"build_id": bc.build_id, "user_id": bc.user_id} for bc in sql_build.build_creators],
+                "users": [
+                    UserRecord(
+                        id=bc.user.id,
+                        discord_id=bc.user.discord_id,
+                        minecraft_uuid=str(bc.user.minecraft_uuid) if bc.user.minecraft_uuid else None,
+                        ign=bc.user.ign,
+                        created_at=bc.user.created_at.isoformat() if bc.user.created_at else None,
+                    )
+                    for bc in sql_build.build_creators
+                ],
+                "types": [
+                    TypeRecord(
+                        id=t.id,
+                        build_category=t.build_category,
+                        name=t.name,
+                    )
+                    for t in sql_build.types
+                ],
+                "restrictions": [
+                    RestrictionRecord(
+                        id=br.restriction.id,
+                        build_category=br.restriction.build_category,
+                        name=br.restriction.name,
+                        type=br.restriction.type,
+                    )
+                    for br in sql_build.build_restrictions
+                ],
+                "doors": DoorRecord(
+                    build_id=sql_build.door.build_id,
+                    orientation=sql_build.door.orientation,
+                    door_width=sql_build.door.door_width,
+                    door_height=sql_build.door.door_height,
+                    door_depth=sql_build.door.door_depth,
+                    normal_opening_time=sql_build.door.normal_opening_time,
+                    normal_closing_time=sql_build.door.normal_closing_time,
+                    visible_opening_time=sql_build.door.visible_opening_time,
+                    visible_closing_time=sql_build.door.visible_closing_time,
+                )
+                if sql_build.door
+                else None,
+                "extenders": ExtenderRecord(
+                    build_id=sql_build.extender.build_id,
+                )
+                if sql_build.extender
+                else None,
+                "utilities": UtilityRecord(
+                    build_id=sql_build.utility.build_id,
+                )
+                if sql_build.utility
+                else None,
+                "entrances": EntranceRecord(
+                    build_id=sql_build.entrance.build_id,
+                )
+                if sql_build.entrance
+                else None,
+                "messages": MessageRecord(
+                    id=sql_build.messages[0].id,
+                    updated_at=sql_build.messages[0].updated_at.isoformat()
+                    if sql_build.messages[0].updated_at
+                    else None,
+                    server_id=sql_build.messages[0].server_id,
+                    channel_id=sql_build.messages[0].channel_id,
+                    author_id=sql_build.messages[0].author_id,
+                    purpose=sql_build.messages[0].purpose,
+                    build_id=sql_build.messages[0].build_id,
+                    vote_session_id=sql_build.messages[0].vote_session_id,
+                    content=sql_build.messages[0].content,
+                )
+                if sql_build.messages
+                else None,
+            }
+
+            return Build.from_json(joined_data)
 
     @staticmethod
     async def from_message_id(message_id: int) -> "Build | None":
@@ -239,13 +382,13 @@ class Build:
             The Build object with the specified message id, or None if the build was not found.
         """
         db = DatabaseManager()
-        response: SingleAPIResponse[MessageRecord] | None = (
+response: SingleAPIResponse[MessageRecord] | None = (
             await db.table("messages")
             .select("build_id", count=CountMethod.exact)
             .eq("id", message_id)
             .maybe_single()
             .execute()
-        )
+)
         if response and response.data["build_id"]:
             return await Build.from_id(response.data["build_id"])
         return None
