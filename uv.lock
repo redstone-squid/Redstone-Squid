@@ -1473,6 +1473,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-beartype"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beartype" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/69/954ee438f1c72f4247b09381cd07a7d776ebdb4f6c0359b3b971676a2eef/pytest_beartype-0.2.0.tar.gz", hash = "sha256:9eeec379f812e0e5c9c1bb7e95d90a33a79c387034f2d735e03bc9aa0fd7cf3f", size = 5871, upload-time = "2024-10-31T17:52:35.974Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/69/87efc2482aab172a32e4147eb5666ebc2e4c875e17d3104878553720a83a/pytest_beartype-0.2.0-py3-none-any.whl", hash = "sha256:be6be04be4a143f965f21140d6661bab43dcd7c761d50cf6daa1b16848e5d2d0", size = 4940, upload-time = "2024-10-31T17:52:33.528Z" },
+]
+
+[[package]]
 name = "pytest-cov"
 version = "6.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1628,6 +1641,7 @@ dev = [
     { name = "pip-tools" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-beartype" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "ruff" },
@@ -1663,6 +1677,7 @@ dev = [
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
+    { name = "pytest-beartype", specifier = ">=0.2.0" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "ruff", specifier = ">=0.5.1" },

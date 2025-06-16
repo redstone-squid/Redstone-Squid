@@ -41,6 +41,7 @@ dev = [
     "pytest>=8.3.5",
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
+    "pytest-beartype>=0.2.0",
 ]
 
 [build-system]
@@ -118,6 +119,7 @@ addopts = [
     "--strict-config",
     "-ra",                 # short summary of skips/xfails
     "--cov=squid",
+    "--beartype-packages=squid",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
