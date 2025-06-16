@@ -63,7 +63,11 @@ class RedstoneSquid(Bot):
         db: DatabaseManager,
         config: BotConfig | None = None,
     ):
-        db.validate_database_consistency(Base)
+        # Run the synchronous db validation function in a thread to avoid blocking the event loop
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: db.validate_database_consistency(Base),
+        ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
         self.db = db
         if config is None:
             config = {}
