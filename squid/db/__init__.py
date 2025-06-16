@@ -69,8 +69,8 @@ class DatabaseManager(AsyncClient):
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
-        self.engine = create_async_engine(base.set(drivername=f"{base.drivername}+{driver_async}"), echo=debug)
-        self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.async_engine = create_async_engine(base.set(drivername=f"{base.drivername}+{driver_async}"), echo=debug)
+        self.async_session = async_sessionmaker(self.async_engine, expire_on_commit=False)
         self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
