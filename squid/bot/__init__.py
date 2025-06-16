@@ -63,11 +63,6 @@ class RedstoneSquid(Bot):
         db: DatabaseManager,
         config: BotConfig | None = None,
     ):
-        # Run the synchronous db validation function in a thread to avoid blocking the event loop
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: db.validate_database_consistency(Base),
-        ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
         self.db = db
         if config is None:
             config = {}
@@ -232,7 +227,15 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
     setup_logging(config.get("dev_mode", False))
-    async with RedstoneSquid(DatabaseManager(), config=config.get("bot_config")) as bot:
+
+    db = DatabaseManager()
+    # Run the synchronous db validation function in a thread to avoid blocking the event loop
+    asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: db.validate_database_consistency(Base),
+    ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
+
+    async with RedstoneSquid(db, config=config.get("bot_config")) as bot:
         token = os.environ.get("BOT_TOKEN")
         if not token:
             raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
