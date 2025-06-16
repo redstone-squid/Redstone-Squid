@@ -36,35 +36,6 @@ from sqlalchemy.sql import func
 logger = logging.getLogger(__name__)
 
 
-# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
-    pass
-
-
-class User(Base):
-    """A user in the system, which can be linked to both Discord and Minecraft accounts."""
-
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    discord_id: Mapped[int | None] = mapped_column(BigInteger)
-    minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    ign: Mapped[str | None] = mapped_column(String)
-    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
-
-    build_creators: Mapped[list[BuildCreator]] = relationship(back_populates="user", default_factory=list)
-    builds: AssociationProxy[list[Build]] = association_proxy("build_creators", "build", default_factory=list)
-
-
-class Version(Base):
-    """A version of Minecraft that a build is compatible with."""
-
-    __tablename__ = "versions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    edition: Mapped[str] = mapped_column(String, nullable=False)
-    major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
@@ -95,6 +66,39 @@ DbSettingKey = Literal[
 Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
+
+
+# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
+class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
+    pass
+
+
+class User(Base):
+    """A user in the system, which can be linked to both Discord and Minecraft accounts."""
+
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    discord_id: Mapped[int | None] = mapped_column(BigInteger)
+    minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    ign: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
+
+    build_creators: Mapped[list[BuildCreator]] = relationship(back_populates="user", default_factory=list)
+    builds: AssociationProxy[list[Build]] = association_proxy("build_creators", "build", default_factory=list)
+
+
+class Version(Base):
+    """A version of Minecraft that a build is compatible with."""
+
+    __tablename__ = "versions"
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    edition: Mapped[str] = mapped_column(String, nullable=False)
+    major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    build_versions: Mapped[list[BuildVersion]] = relationship(back_populates="version", default_factory=list)
+    builds: AssociationProxy[list[Build]] = association_proxy("build_versions", "build", default_factory=list)
 
 
 class Restriction(Base):
@@ -132,6 +136,9 @@ class Type(Base):
     build_category: Mapped[str | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String, unique=True)  # FIXME: This should be unique per build category
 
+    build_types: Mapped[list[BuildType]] = relationship(back_populates="type", default_factory=list)
+    builds: AssociationProxy[list[Build]] = association_proxy("build_types", "build", default_factory=list)
+
 
 class Build(Base):
     """A build submitted by a user."""
@@ -165,6 +172,12 @@ class Build(Base):
     restrictions: AssociationProxy[list[Restriction]] = association_proxy(
         "build_restrictions", "restriction", default_factory=list
     )
+
+    build_versions: Mapped[list[BuildVersion]] = relationship(back_populates="build", default_factory=list)
+    versions: AssociationProxy[list[Version]] = association_proxy("build_versions", "version", default_factory=list)
+
+    build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list)
+    types: AssociationProxy[list[Type]] = association_proxy("build_types", "type", default_factory=list)
 
     build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(back_populates="build", default_factory=list)
     vote_sessions: AssociationProxy[list[VoteSession]] = association_proxy(
@@ -261,6 +274,28 @@ class BuildRestriction(Base):
 
     build: Mapped[Build] = relationship(back_populates="build_restrictions")
     restriction: Mapped[Restriction] = relationship(back_populates="build_restrictions")
+
+
+class BuildVersion(Base):
+    """Association table between builds and their versions."""
+
+    __tablename__ = "build_versions"
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    version_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("versions.id"), primary_key=True)
+
+    build: Mapped[Build] = relationship(back_populates="build_versions")
+    version: Mapped[Version] = relationship(back_populates="build_versions")
+
+
+class BuildType(Base):
+    """Association table between builds and their types."""
+
+    __tablename__ = "build_types"
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("types.id"), primary_key=True)
+
+    build: Mapped[Build] = relationship(back_populates="build_types")
+    type: Mapped[Type] = relationship(back_populates="build_types")
 
 
 MediaType = Literal["image", "video", "world-download"]
