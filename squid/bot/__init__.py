@@ -199,6 +199,9 @@ def setup_logging(dev_mode: bool = False):
     discord_logger.setLevel(logging.INFO)
 
     if dev_mode:
+        # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
+        logging.getLogger("sqlalchemy.engine.Engine").handlers = [logging.NullHandler()]  # Avoid duplicate logging
+
         # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
         logging.getLogger("discord.gateway").setLevel(logging.ERROR)
 
