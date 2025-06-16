@@ -227,8 +227,9 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
-    setup_logging(config.get("dev_mode", False))
-    async with RedstoneSquid(DatabaseManager(), config=config.get("bot_config")) as bot:
+    dev_mode = config.get("dev_mode", False)
+    setup_logging(dev_mode)
+    async with RedstoneSquid(DatabaseManager(debug=dev_mode), config=config.get("bot_config")) as bot:
         token = os.environ.get("BOT_TOKEN")
         if not token:
             raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
