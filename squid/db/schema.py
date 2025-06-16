@@ -565,7 +565,7 @@ class RestrictionRecord(TypedDict):
     """A restriction on a build."""
 
     id: int
-    build_category: BuildType
+    build_category: BuildCategory
     name: str
     type: RestrictionType
 
