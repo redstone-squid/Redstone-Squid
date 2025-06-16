@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, override, Self, Any
+from typing import TYPE_CHECKING, Any, Self, override
 
 import discord
 from discord import Interaction
-from discord.ext import commands
 from discord.ext.commands import Cog
 from discord.ui import Item
 
@@ -20,6 +19,7 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: squid.bot.RedstoneSquid, V: disc
     discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner:(\d+)"
 ):
     """A button that allows users to remove their own redstoner role."""
+
     def __init__(self, user_id: int):
         self.user_id = user_id
         super().__init__(
@@ -89,7 +89,8 @@ class GiveRedstoner(Cog):
         view.add_item(DynamicRemoveOwnRedstonerRoleButton(member.id))
         await self.bot.get_channel(433643026204852224).send(
             f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 15 upvotes in {orig_message_link}.",
-            allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False), view=view
+            allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
+            view=view,
         )
 
 
