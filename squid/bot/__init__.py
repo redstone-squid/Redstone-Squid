@@ -21,7 +21,7 @@ from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
-from squid.db.schema import Base
+from squid.db.schema import Base, Build as BuildRecord
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -115,7 +115,10 @@ class RedstoneSquid(Bot):
     @tasks.loop(hours=24)
     async def call_supabase_to_prevent_deactivation(self):
         """Supabase deactivates a database in the free tier if it's not used for 7 days."""
-        await self.db.table("builds").select("id").limit(1).execute()
+        async with self.db.async_session() as session:
+            stmt = select(BuildRecord).limit(1)
+            await session.execute(stmt)
+            await session.commit()
 
     @tasks.loop(minutes=5)
     async def clean_dangling_build_locks(self):
