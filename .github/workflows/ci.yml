@@ -47,10 +47,10 @@ jobs:
           printf '%s\n' 'All files have a corresponding rule in .gitattributes'
         fi
 
-    - name: See if there are linting or formatting issues
+    - name: See if there are linting issues
       run: uv run ruff check --extend-select I
 
-    - name: See if there are linting or formatting issues
+    - name: See if there are formatting issues
       run: uv run ruff format --target-version py312 --check
 
     - name: See if there are type checking issues
