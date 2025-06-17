@@ -1,8 +1,6 @@
 # type: ignore
 """Magical stuff, don't worry about it."""
 
-from __future__ import annotations
-
 import re
 from typing import TYPE_CHECKING, Any, Self, override
 

@@ -1,7 +1,5 @@
 """Various admin commands for the bot."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -21,10 +19,10 @@ from squid.db.build_tags import (
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
-class Admin[BotT: RedstoneSquid](commands.Cog):
+class Admin[BotT: squid.bot.RedstoneSquid](commands.Cog):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):
@@ -184,6 +182,6 @@ class Admin[BotT: RedstoneSquid](commands.Cog):
             raise ValueError("This is a test error.")
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Admin(bot))

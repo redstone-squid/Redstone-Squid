@@ -1,7 +1,5 @@
 """Functions, UI components, and classes for handling submissions."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from squid.bot.submission.edit import BuildEditCog

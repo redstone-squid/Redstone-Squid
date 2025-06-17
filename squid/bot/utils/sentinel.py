@@ -1,7 +1,5 @@
 """Sentinel values and types for the bot."""
 
-from __future__ import annotations
-
 import sys
 from enum import Enum
 from typing import override

@@ -1,7 +1,5 @@
 """Handles reaction-based voting for various purposes."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -15,7 +13,7 @@ from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
 APPROVE_EMOJIS = ["👍", "✅"]
@@ -26,7 +24,7 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
 
 
-class VoteCog[BotT: RedstoneSquid](Cog):
+class VoteCog[BotT: squid.bot.RedstoneSquid](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
@@ -153,7 +151,7 @@ class VoteCog[BotT: RedstoneSquid](Cog):
             self._open_vote_sessions[message.id] = vote_session
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     cog = VoteCog(bot)
     # Load open vote sessions in the background because it can take a while

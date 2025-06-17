@@ -1,7 +1,5 @@
 """Handles the display of a build object."""
 
-from __future__ import annotations
-
 import asyncio
 import io
 import mimetypes
@@ -21,13 +19,13 @@ from squid.db.schema import MessageRecord, Status
 from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
 background_tasks: set[asyncio.Task[Any]] = set()
 
 
-class BuildHandler[BotT: RedstoneSquid]:
+class BuildHandler[BotT: squid.bot.RedstoneSquid]:
     """A class to handle the display of a build object."""
 
     def __init__(self, bot: BotT, build: Build):

@@ -1,7 +1,5 @@
 """A cog for miscellaneous commands."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 import discord
@@ -12,12 +10,12 @@ import squid.bot.utils as utils
 from squid.db import get_version_string
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
-class Miscellaneous[BotT: RedstoneSquid](Cog):
+class Miscellaneous[BotT: squid.bot.RedstoneSquid](Cog):
     def __init__(self, bot: BotT):
-        self.bot: RedstoneSquid = bot
+        self.bot: squid.bot.RedstoneSquid = bot
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
@@ -58,6 +56,6 @@ class Miscellaneous[BotT: RedstoneSquid](Cog):
         await ctx.send(", ".join(versions_human_readable))
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))
