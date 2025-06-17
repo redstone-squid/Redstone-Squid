@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squid.db import DatabaseManager
-from squid.db.builds import Build, JoinedBuildRecord
+from squid.db.builds import Build
 from squid.db.schema import Category, Restriction, Status, Version
 
 
@@ -52,8 +52,8 @@ def sample_build() -> Build:
 @pytest.fixture
 def sample_joined_build_record(
     sample_version_data: list[Version], sample_restriction_data: list[Restriction]
-) -> JoinedBuildRecord:
-    """Sample JoinedBuildRecord for testing."""
+) -> dict[str, Any]:
+    """Sample dict for testing."""
     return {
         "id": 1,
         "submission_status": Status.PENDING,
@@ -113,7 +113,7 @@ class TestBuildConstructors:
     """Tests for Build class constructors."""
 
     async def test_from_id_success(
-        self, mock_db_manager: DatabaseManager, sample_joined_build_record: JoinedBuildRecord
+        self, mock_db_manager: DatabaseManager, sample_joined_build_record: dict[str, Any]
     ):
         """Test successful build creation from ID."""
         # Setup mock response
@@ -132,8 +132,8 @@ class TestBuildConstructors:
         build = await Build.from_id(999)
         assert build is None
 
-    def test_from_json(self, sample_joined_build_record: JoinedBuildRecord):
-        """Test build creation from JoinedBuildRecord."""
+    def test_from_json(self, sample_joined_build_record: dict[str, Any]):
+        """Test build creation from dict."""
         build = Build.from_json(sample_joined_build_record)
         assert build is not None
 

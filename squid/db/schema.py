@@ -451,26 +451,3 @@ class Category(StrEnum):
     EXTENDER = "Extender"
     UTILITY = "Utility"
     ENTRANCE = "Entrance"
-
-
-class BuildRecord(TypedDict):
-    """A record of a build in the database."""
-
-    id: int
-    submission_status: Status
-    record_category: RecordCategory | None
-    extra_info: Info
-    submission_time: str
-    edited_time: str
-    width: int | None
-    height: int | None
-    depth: int | None
-    completion_time: str | None  # Given by user, not parsable as a datetime
-    category: Category
-    submitter_id: int
-    original_message_id: int | None
-    version_spec: str
-    ai_generated: bool
-    embedding: list[float] | None
-    is_locked: bool
-    locked_at: str | None  # timestamptz

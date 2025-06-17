@@ -29,7 +29,7 @@ from squid.db.schema import (
 )
 from squid.db.schema import (
     BuildCreator,
-    BuildRecord,
+    BuildLink,
     BuildRestriction,
     BuildType,
     BuildVersion,
@@ -56,23 +56,6 @@ logger = logging.getLogger(__name__)
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
-
-
-class JoinedBuildRecord(BuildRecord):
-    """Represents a build record with all the columns joined."""
-
-    versions: list[Version]
-    build_links: list[BuildLink]
-    build_creators: list[dict[str, Any]]  # You want to use users instead. This is just a join table.
-    users: list[User]
-    types: list[Type]
-    restrictions: list[Restriction]
-    doors: Door | None
-    extenders: Extender | None
-    utilities: Utility | None
-    entrances: Entrance | None
-    messages: Message | None  # Not actually all the associated messages, just the original message
-
 
 class FrozenField[T]:
     """A descriptor that makes an attribute immutable after it has been set."""
@@ -254,43 +237,9 @@ class Build:
             if not sql_build:
                 return None
 
-            # Convert SQLAlchemy models to the expected JoinedBuildRecord format
-            joined_data: JoinedBuildRecord = {
-                "id": sql_build.id,
-                "submission_status": sql_build.submission_status,
-                "record_category": sql_build.record_category,
-                "width": sql_build.width,
-                "height": sql_build.height,
-                "depth": sql_build.depth,
-                "completion_time": sql_build.completion_time,
-                "category": sql_build.category,
-                "submitter_id": sql_build.submitter_id,
-                "original_message_id": sql_build.original_message_id,
-                "version_spec": sql_build.version_spec,
-                "ai_generated": sql_build.ai_generated,
-                "extra_info": sql_build.extra_info,
-                "submission_time": sql_build.submission_time.isoformat() if sql_build.submission_time else None,
-                "edited_time": sql_build.edited_time.isoformat() if sql_build.edited_time else None,
-                "embedding": sql_build.embedding,
-                "is_locked": sql_build.is_locked,
-                "locked_at": sql_build.locked_at.isoformat() if sql_build.locked_at else None,
-                # Related data
-                "versions": sql_build.versions,
-                "build_links": sql_build.links,
-                "build_creators": [{"build_id": bc.build_id, "user_id": bc.user_id} for bc in sql_build.build_creators],
-                "users": sql_build.creators,
-                "types": sql_build.types,
-                "restrictions": [br.restriction for br in sql_build.build_restrictions],
-                "doors": sql_build.door,
-                "extenders":  sql_build.extender
-                ,
-                "utilities":  sql_build.utility
-                ,
-                "entrances": sql_build.entrance,
-                "messages": sql_build.original_message,
-            }
 
-            return Build.from_json(joined_data)
+
+            return Build.from_sql_build(sql_build)
 
     @staticmethod
     async def from_message_id(message_id: int) -> "Build | None":
@@ -325,7 +274,7 @@ class Build:
         return build
 
     @staticmethod
-    def from_json(data: JoinedBuildRecord) -> "Build":
+    def from_json(data: dict[str, Any]) -> "Build":
         """
         Converts a JSON object to a Build object.
 
@@ -446,6 +395,46 @@ class Build:
             original_message=original_message,
             ai_generated=ai_generated,
             embedding=embedding,
+        )
+
+    @staticmethod
+    def from_sql_build(sql_build: SQLBuild) -> Build:
+        """Converts a SQLBuild to a Build object."""
+        return Build(
+            id=sql_build.id,
+            submission_status=sql_build.submission_status,
+            category=sql_build.category,
+            record_category=sql_build.record_category,
+            width=sql_build.width,
+            height=sql_build.height,
+            depth=sql_build.depth,
+            door_width=sql_build.door_width,
+            door_height=sql_build.door_height,
+            door_depth=sql_build.door_depth,
+            door_type=sql_build.door_type,
+            door_orientation_type=sql_build.door_orientation_type,
+            wiring_placement_restrictions=sql_build.wiring_placement_restrictions,
+            component_restrictions=sql_build.component_restrictions,
+            miscellaneous_restrictions=sql_build.miscellaneous_restrictions,
+            normal_closing_time=sql_build.normal_closing_time,
+            normal_opening_time=sql_build.normal_opening_time,
+            visible_closing_time=sql_build.visible_closing_time,
+            visible_opening_time=sql_build.visible_opening_time,
+            extra_info=sql_build.extra_info,
+            creators_ign=sql_build.creators_ign,
+            image_urls=sql_build.image_urls,
+            video_urls=sql_build.video_urls,
+            world_download_urls=sql_build.world_download_urls,
+            submitter_id=sql_build.submitter_id,
+            completion_time=sql_build.completion_time,
+            edited_time=sql_build.edited_time,
+            original_server_id=sql_build.original_server_id,
+            original_channel_id=sql_build.original_channel_id,
+            original_message_id=sql_build.original_message_id,
+            original_message_author_id=sql_build.original_message_author_id,
+            original_message=sql_build.original_message,
+            ai_generated=sql_build.ai_generated,
+            embedding=sql_build.embedding,
         )
 
     @staticmethod
@@ -1473,46 +1462,6 @@ async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[st
     return valid_door_types, invalid_door_types
 
 
-def _sql_build_to_joined_record(sql_build: SQLBuild) -> JoinedBuildRecord:
-    """Helper function to convert SQLBuild to JoinedBuildRecord format."""
-    return JoinedBuildRecord(
-        id=sql_build.id,
-        submission_status=sql_build.submission_status,
-        record_category=sql_build.record_category,
-        width=sql_build.width,
-        height=sql_build.height,
-        depth=sql_build.depth,
-        completion_time=sql_build.completion_time,
-        category=sql_build.category,
-        submitter_id=sql_build.submitter_id,
-        original_message_id=sql_build.original_message_id,
-        version_spec=sql_build.version_spec,
-        ai_generated=sql_build.ai_generated,
-        extra_info=sql_build.extra_info,
-        submission_time=sql_build.submission_time.isoformat() if sql_build.submission_time else None,
-        edited_time=sql_build.edited_time.isoformat() if sql_build.edited_time else None,
-        embedding=sql_build.embedding,
-        is_locked=sql_build.is_locked,
-        locked_at=sql_build.locked_at.isoformat() if sql_build.locked_at else None,
-
-        # Related data
-        versions=sql_build.versions,
-        build_links=sql_build.links,
-        build_creators=[
-            {"build_id": bc.build_id, "user_id": bc.user_id}
-            for bc in sql_build.build_creators
-        ],
-        users=sql_build.creators,
-        types=sql_build.types,
-        restrictions=[br.restriction for br in sql_build.build_restrictions],
-        doors=sql_build.door,
-        extenders=sql_build.extender,
-        utilities=sql_build.utility,
-        entrances=sql_build.entrance,
-        messages=sql_build.original_message,
-    )
-
-
 async def get_builds_by_filter(*, filter: Mapping[str, Any] | None = None) -> list[Build]:
     """Fetches all builds from the database, optionally filtered by submission status.
 
@@ -1579,9 +1528,7 @@ async def get_builds_by_id(build_ids: list[int]) -> list[Build | None]:
         # Fill in the found builds at their correct positions
         for sql_build in sql_builds:
             idx = build_ids.index(sql_build.id)
-            joined_data = _sql_build_to_joined_record(sql_build)
-            builds[idx] = Build.from_json(joined_data)
-
+            builds[idx] = Build.from_sql_build(sql_build)
         return builds
 
 
