@@ -43,8 +43,8 @@ jobs:
       # and strip the first line (the uv export comment) before diffing them
       run: |
         tmpdir=$(mktemp -d)
-        uv export -o "$tmpdir/base.txt"
-        uv export --only-dev -o "$tmpdir/dev.txt"
+        uv export --output-file "$tmpdir/base.txt" --quiet
+        uv export --only-dev --output-file "$tmpdir/dev.txt" --quiet
 
         # Normalize the first line (the uv export comment) before diffing
         tail -n +2 "$tmpdir/base.txt" > "$tmpdir/base_stripped.txt"
