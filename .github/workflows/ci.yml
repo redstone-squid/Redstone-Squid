@@ -40,17 +40,17 @@ jobs:
 
     - name: Check that requirements are up to date
       # Basically, we generate the requirements files from the uv.lock file in CI
-      # and strip the first line (the uv export comment) before diffing them
+      # and strip the first 2 lines (the uv export comment) before diffing them
       run: |
         tmpdir=$(mktemp -d)
         uv export --output-file "$tmpdir/base.txt" --quiet
         uv export --only-dev --output-file "$tmpdir/dev.txt" --quiet
 
-        # Normalize the first line (the uv export comment) before diffing
-        tail -n +2 "$tmpdir/base.txt" > "$tmpdir/base_stripped.txt"
-        tail -n +2 "$tmpdir/dev.txt" > "$tmpdir/dev_stripped.txt"
-        tail -n +2 requirements/base.txt > "$tmpdir/base_expected_stripped.txt"
-        tail -n +2 requirements/dev.txt > "$tmpdir/dev_expected_stripped.txt"
+        # Normalize the first two lines (the uv export comment) before diffing
+        tail -n +3 "$tmpdir/base.txt" > "$tmpdir/base_stripped.txt"
+        tail -n +3 "$tmpdir/dev.txt" > "$tmpdir/dev_stripped.txt"
+        tail -n +3 requirements/base.txt > "$tmpdir/base_expected_stripped.txt"
+        tail -n +3 requirements/dev.txt > "$tmpdir/dev_expected_stripped.txt"
 
         diff_output=0
 
