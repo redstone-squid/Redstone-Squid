@@ -4,7 +4,7 @@ import pytest
 from postgrest.base_request_builder import APIResponse
 
 from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, VersionRecord
+from squid.db.schema import Restriction, Version
 
 
 @pytest.mark.unit
@@ -20,7 +20,7 @@ class TestDatabaseManager:
 
     @pytest.mark.skip(reason="Haven't mocked SQLAlchemy yet")
     async def test_version_caching(
-        self, mock_db_manager: DatabaseManager, sample_version_data: list[VersionRecord]
+        self, mock_db_manager: DatabaseManager, sample_version_data: list[Version]
     ) -> None:
         """Test that version list is properly cached."""
         mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
@@ -47,7 +47,7 @@ class TestDatabaseManager:
         ],
     )
     async def test_version_spec_parsing(
-        self, mock_db_manager: DatabaseManager, sample_version_data: list[VersionRecord], spec: str, expected: list[str]
+        self, mock_db_manager: DatabaseManager, sample_version_data: list[Version], spec: str, expected: list[str]
     ) -> None:
         """Test version specification parsing with different formats."""
         # Patch get_or_fetch_versions_list
@@ -57,7 +57,7 @@ class TestDatabaseManager:
 
     @pytest.mark.skip(reason="Haven't mocked SQLAlchemy yet")
     async def test_restriction_caching(
-        self, mock_db_manager: DatabaseManager, sample_restriction_data: list[RestrictionRecord]
+        self, mock_db_manager: DatabaseManager, sample_restriction_data: list[Restriction]
     ) -> None:
         """Test that restrictions are properly cached."""
         mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
@@ -74,3 +74,21 @@ class TestDatabaseManager:
 
         # Verify database was only queried once
         mock_db_manager.table().select().execute.assert_called_once()  # type: ignore
+
+    async def test_fetch_all_restrictions(
+        self, mock_db_manager: DatabaseManager, sample_restriction_data: list[Restriction]
+    ) -> None:
+        # Implementation of the new test function
+        pass
+
+    async def test_find_versions_from_spec_simple(
+        self, mock_db_manager: DatabaseManager, sample_version_data: list[Version], spec: str, expected: list[str]
+    ) -> None:
+        # Implementation of the new test function
+        pass
+
+    async def test_get_or_fetch_versions_list(
+        self, mock_db_manager: DatabaseManager, sample_restriction_data: list[Restriction]
+    ) -> None:
+        # Implementation of the new test function
+        pass

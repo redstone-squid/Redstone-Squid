@@ -33,6 +33,7 @@ from squid.db.schema import (
     BuildRestriction,
     BuildType,
     BuildVersion,
+    BuildVoteSession,
     Category,
     DoorOrientationName,
     DoorRecord,
@@ -42,14 +43,14 @@ from squid.db.schema import (
     Message,
     QuantifiedVersionRecord,
     RecordCategory,
-    RestrictionRecord,
+    Restriction,
     Status,
     Type,
     UnknownRestrictions,
     User,
     Utility,
     UtilityRecord,
-    VersionRecord,
+    Version,
 )
 from squid.db.utils import get_version_string, utcnow
 
@@ -63,12 +64,12 @@ all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*)
 class JoinedBuildRecord(BuildRecord):
     """Represents a build record with all the columns joined."""
 
-    versions: list[VersionRecord]
+    versions: list[Version]
     build_links: list[BuildLink]
     build_creators: list[dict[str, Any]]  # You want to use users instead. This is just a join table.
     users: list[User]
     types: list[Type]
-    restrictions: list[RestrictionRecord]
+    restrictions: list[Restriction]
     doors: DoorRecord | None
     extenders: ExtenderRecord | None
     utilities: UtilityRecord | None
@@ -277,29 +278,12 @@ class Build:
                 "is_locked": sql_build.is_locked,
                 "locked_at": sql_build.locked_at.isoformat() if sql_build.locked_at else None,
                 # Related data
-                "versions": [
-                    VersionRecord(
-                        id=v.id,
-                        edition=v.edition,
-                        major_version=v.major_version,
-                        minor_version=v.minor_version,
-                        patch_number=v.patch_number,
-                    )
-                    for v in sql_build.versions
-                ],
+                "versions": sql_build.versions,
                 "build_links": sql_build.links,
                 "build_creators": [{"build_id": bc.build_id, "user_id": bc.user_id} for bc in sql_build.build_creators],
                 "users": sql_build.creators,
                 "types": sql_build.types,
-                "restrictions": [
-                    RestrictionRecord(
-                        id=br.restriction.id,
-                        build_category=br.restriction.build_category,
-                        name=br.restriction.name,
-                        type=br.restriction.type,
-                    )
-                    for br in sql_build.build_restrictions
-                ],
+                "restrictions": [br.restriction for br in sql_build.build_restrictions],
                 "doors": DoorRecord(
                     build_id=sql_build.door.build_id,
                     orientation=sql_build.door.orientation,
@@ -412,10 +396,10 @@ class Build:
         else:
             door_type = ["Regular"]
 
-        restrictions: list[RestrictionRecord] = data.get("restrictions", [])
-        wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
-        component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
-        miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
+        restrictions: list[Restriction] = data.get("restrictions", [])
+        wiring_placement_restrictions = [r.name for r in restrictions if r.type == "wiring-placement"]
+        component_restrictions = [r.name for r in restrictions if r.type == "component"]
+        miscellaneous_restrictions = [r.name for r in restrictions if r.type == "miscellaneous"]
 
         extra_info = data["extra_info"]
 
@@ -423,7 +407,7 @@ class Build:
         creators_ign = [creator.ign for creator in creators]
 
         version_spec = data["version_spec"]
-        version_records: list[VersionRecord] = data.get("versions", [])
+        version_records: list[Version] = data.get("versions", [])
         versions = [get_version_string(v) for v in version_records]
 
         links: list[BuildLink] = data.get("build_links", [])
@@ -753,15 +737,15 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            for restriction in await DatabaseManager.fetch_all_restrictions():
+            for restriction in await DatabaseManager().fetch_all_restrictions():
                 for door_restriction in restrictions:
-                    if door_restriction.lower() == restriction["name"].lower():
-                        if restriction["type"] == "wiring-placement":
-                            self.wiring_placement_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "component":
-                            self.component_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "miscellaneous":
-                            self.miscellaneous_restrictions.append(restriction["name"])
+                    if door_restriction.lower() == restriction.name.lower():
+                        if restriction.type == "wiring-placement":
+                            self.wiring_placement_restrictions.append(restriction.name)
+                        elif restriction.type == "component":
+                            self.component_restrictions.append(restriction.name)
+                        elif restriction.type == "miscellaneous":
+                            self.miscellaneous_restrictions.append(restriction.name)
 
     def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""
@@ -1115,16 +1099,7 @@ class Build:
             result = await session.execute(stmt)
             restrictions = result.scalars().all()
 
-            restriction_records = [
-                RestrictionRecord(
-                    id=r.id,
-                    build_category=r.build_category,
-                    name=r.name,
-                    type=r.type,
-                )
-                for r in restrictions
-            ]
-
+            
             restriction_ids = [restriction.id for restriction in restrictions]
 
             # Clear existing build restrictions for this build
@@ -1150,17 +1125,17 @@ class Build:
 
         for wiring_restriction in self.wiring_placement_restrictions:
             if wiring_restriction not in [
-                restriction.name for restriction in restriction_records if restriction.type == "wiring-placement"
+                restriction.name for restriction in restrictions if restriction.type == "wiring-placement"
             ]:
                 unknown_wiring_restrictions.append(wiring_restriction)
         for component_restriction in self.component_restrictions:
             if component_restriction not in [
-                restriction.name for restriction in restriction_records if restriction.type == "component"
+                restriction.name for restriction in restrictions if restriction.type == "component"
             ]:
                 unknown_component_restrictions.append(component_restriction)
         for miscellaneous_restriction in self.miscellaneous_restrictions:
             if miscellaneous_restriction not in [
-                restriction.name for restriction in restriction_records if restriction.type == "miscellaneous"
+                restriction.name for restriction in restrictions if restriction.type == "miscellaneous"
             ]:
                 unknown_miscellaneous_restrictions.append(miscellaneous_restriction)
 
@@ -1545,16 +1520,7 @@ def _sql_build_to_joined_record(sql_build: SQLBuild) -> JoinedBuildRecord:
         locked_at=sql_build.locked_at.isoformat() if sql_build.locked_at else None,
 
         # Related data
-        versions=[
-            VersionRecord(
-                id=v.id,
-                edition=v.edition,
-                major_version=v.major_version,
-                minor_version=v.minor_version,
-                patch_number=v.patch_number,
-            )
-            for v in sql_build.versions
-        ],
+        versions=sql_build.versions,
         build_links=sql_build.links,
         build_creators=[
             {"build_id": bc.build_id, "user_id": bc.user_id}
@@ -1562,15 +1528,7 @@ def _sql_build_to_joined_record(sql_build: SQLBuild) -> JoinedBuildRecord:
         ],
         users=sql_build.creators,
         types=sql_build.types,
-        restrictions=[
-            RestrictionRecord(
-                id=br.restriction.id,
-                build_category=br.restriction.build_category,
-                name=br.restriction.name,
-                type=br.restriction.type,
-            )
-            for br in sql_build.build_restrictions
-        ],
+        restrictions=[br.restriction for br in sql_build.build_restrictions],
         doors=DoorRecord(
             build_id=sql_build.door.build_id,
             orientation=sql_build.door.orientation,

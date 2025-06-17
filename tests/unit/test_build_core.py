@@ -16,7 +16,7 @@ import pytest
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build, JoinedBuildRecord
-from squid.db.schema import Category, RestrictionRecord, Status, VersionRecord
+from squid.db.schema import Category, Restriction, Status, Version
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def sample_build() -> Build:
 
 @pytest.fixture
 def sample_joined_build_record(
-    sample_version_data: list[VersionRecord], sample_restriction_data: list[RestrictionRecord]
+    sample_version_data: list[Version], sample_restriction_data: list[Restriction]
 ) -> JoinedBuildRecord:
     """Sample JoinedBuildRecord for testing."""
     return {

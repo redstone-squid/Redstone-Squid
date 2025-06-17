@@ -521,40 +521,6 @@ class ServerSettingRecord(TypedDict):
     trusted_roles_ids: list[int] | None
     in_server: bool
 
-class TypeRecord(TypedDict):
-    """A record of a type in the database."""
-
-    id: int
-    build_category: Category
-    name: str
-
-
-class RestrictionRecord(TypedDict):
-    """A restriction on a build."""
-
-    id: int
-    build_category: BuildCategory
-    name: str
-    type: RestrictionType
-
-
-class RestrictionAliasRecord(TypedDict):
-    """An alias for a restriction on a build."""
-
-    restriction_id: int
-    alias: str
-    created_at: str
-
-
-class VersionRecord(TypedDict):
-    """A record of a version in the database"""
-
-    id: int
-    edition: str
-    major_version: int
-    minor_version: int
-    patch_number: int
-
 
 class QuantifiedVersionRecord(TypedDict):
     """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""
