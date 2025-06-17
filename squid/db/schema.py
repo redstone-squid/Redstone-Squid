@@ -521,25 +521,6 @@ class ServerSettingRecord(TypedDict):
     trusted_roles_ids: list[int] | None
     in_server: bool
 
-
-class LinkRecord(TypedDict):
-    """A record of a link in the database."""
-
-    build_id: int
-    url: str
-    media_type: Literal["image", "video", "world-download"]
-
-
-class UserRecord(TypedDict):
-    """A record of a user in the database."""
-
-    id: int
-    discord_id: int | None
-    minecraft_uuid: str | None
-    ign: str
-    created_at: str
-
-
 class TypeRecord(TypedDict):
     """A record of a type in the database."""
 
