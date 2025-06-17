@@ -83,8 +83,8 @@ class User(Base):
     ign: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
-    build_creators: Mapped[list[BuildCreator]] = relationship(back_populates="user", default_factory=list)
-    builds: AssociationProxy[list[Build]] = association_proxy("build_creators", "build", default_factory=list)
+    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy("build_creators", "build", default_factory=list)
 
 
 class Version(Base):
@@ -97,8 +97,8 @@ class Version(Base):
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
-    build_versions: Mapped[list[BuildVersion]] = relationship(back_populates="version", default_factory=list)
-    builds: AssociationProxy[list[Build]] = association_proxy("build_versions", "build", default_factory=list)
+    build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="version", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy("build_versions", "build", default_factory=list)
 
 
 class Restriction(Base):
@@ -110,12 +110,12 @@ class Restriction(Base):
     name: Mapped[str | None] = mapped_column(String, unique=True)
     type: Mapped[str | None] = mapped_column(String)
 
-    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
+    build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
         back_populates="restriction", default_factory=list
     )
-    builds: AssociationProxy[list[Build]] = association_proxy("build_restrictions", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy("build_restrictions", "build", default_factory=list)
 
-    aliases: Mapped[list[RestrictionAlias]] = relationship(back_populates="restriction", default_factory=list)
+    aliases: Mapped[list["RestrictionAlias"]] = relationship(back_populates="restriction", default_factory=list)
 
 
 class RestrictionAlias(Base):
@@ -137,7 +137,7 @@ class Type(Base):
     name: Mapped[str | None] = mapped_column(String, unique=True)  # FIXME: This should be unique per build category
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="type", default_factory=list)
-    builds: AssociationProxy[list[Build]] = association_proxy("build_types", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
 
 
 class Type(Base):
@@ -165,43 +165,43 @@ class Build(Base):
     category: Mapped[str | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
-    original_message: Mapped[Message | None] = relationship(back_populates="build", uselist=False, default=None)
-    version_spec: Mapped[str | None] = mapped_column(String)
+    original_message: Mapped["Message | None"] = relationship(back_populates="build", uselist=False, default=None)
+    version_spec: Mapped[str | None] = mapped_column(String, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), nullable=True
+        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), default=None
     )
-    locked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
-    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default_factory=dict)
     submission_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
     edited_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    build_creators: Mapped[list[BuildCreator]] = relationship(back_populates="build", default_factory=list)
+    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="build", default_factory=list)
     creators: AssociationProxy[list[User]] = association_proxy("build_creators", "user", default_factory=list)
 
-    build_restrictions: Mapped[list[BuildRestriction]] = relationship(back_populates="build", default_factory=list)
+    build_restrictions: Mapped[list["BuildRestriction"]] = relationship(back_populates="build", default_factory=list)
     restrictions: AssociationProxy[list[Restriction]] = association_proxy(
         "build_restrictions", "restriction", default_factory=list
     )
 
-    build_versions: Mapped[list[BuildVersion]] = relationship(back_populates="build", default_factory=list)
+    build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="build", default_factory=list)
     versions: AssociationProxy[list[Version]] = association_proxy("build_versions", "version", default_factory=list)
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list)
     types: AssociationProxy[list[Type]] = association_proxy("build_types", "type", default_factory=list)
 
-    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(back_populates="build", default_factory=list)
-    vote_sessions: AssociationProxy[list[VoteSession]] = association_proxy(
+    build_vote_sessions: Mapped[list["BuildVoteSession"]] = relationship(back_populates="build", default_factory=list)
+    vote_sessions: AssociationProxy[list["VoteSession"]] = association_proxy(
         "build_vote_sessions", "vote_session", default_factory=list
     )
 
-    links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list)
-    messages: Mapped[list[Message]] = relationship(back_populates="build", default_factory=list)
-    door: Mapped[Door | None] = relationship(back_populates="build", uselist=False, default=None)
-    extender: Mapped[Extender | None] = relationship(back_populates="build", uselist=False, default=None)
-    utility: Mapped[Utility | None] = relationship(back_populates="build", uselist=False, default=None)
-    entrance: Mapped[Entrance | None] = relationship(back_populates="build", uselist=False, default=None)
+    links: Mapped[list["BuildLink"]] = relationship(back_populates="build", default_factory=list)
+    messages: Mapped[list["Message"]] = relationship(back_populates="build", default_factory=list)
+    door: Mapped["Door | None"] = relationship(back_populates="build", uselist=False, default=None)
+    extender: Mapped["Extender | None"] = relationship(back_populates="build", uselist=False, default=None)
+    utility: Mapped["Utility | None"] = relationship(back_populates="build", uselist=False, default=None)
+    entrance: Mapped["Entrance | None"] = relationship(back_populates="build", uselist=False, default=None)
 
 
 class Message(Base):
@@ -219,7 +219,7 @@ class Message(Base):
     updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
 
     build: Mapped[Build | None] = relationship(back_populates="messages", default=None)
-    vote_session: Mapped[VoteSession | None] = relationship(back_populates="messages", default=None)
+    vote_session: Mapped["VoteSession | None"] = relationship(back_populates="messages", default=None)
 
 
 class Door(Base):
@@ -366,14 +366,14 @@ class VoteSession(Base):
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
-    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(
+    build_vote_sessions: Mapped["BuildVoteSession"] = relationship(
         back_populates="vote_session", default=None, uselist=False
     )
-    builds: AssociationProxy[list[Build]] = association_proxy("build_vote_sessions", "build", default_factory=list)
+    builds: AssociationProxy[Build] = association_proxy("build_vote_sessions", "build", default_factory=list)
 
     messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list)
-    votes: Mapped[list[Vote]] = relationship(back_populates="vote_session", default_factory=list)
-    delete_log_vote_sessions: Mapped[list[DeleteLogVoteSession]] = relationship(
+    votes: Mapped[list["Vote"]] = relationship(back_populates="vote_session", default_factory=list)
+    delete_log_vote_sessions: Mapped["DeleteLogVoteSession"] = relationship(
         back_populates="vote_session", default=None, uselist=False
     )
 
