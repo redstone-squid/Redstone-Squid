@@ -649,7 +649,7 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            for restriction in await DatabaseManager.fetch_all_restrictions():
+            for restriction in await DatabaseManager().fetch_all_restrictions():
                 for door_restriction in restrictions:
                     if door_restriction.lower() == restriction["name"].lower():
                         if restriction["type"] == "wiring-placement":
