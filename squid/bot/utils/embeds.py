@@ -1,7 +1,5 @@
 """Discord embed utilities and messaging helpers."""
 
-from __future__ import annotations
-
 from traceback import format_tb
 from types import TracebackType
 

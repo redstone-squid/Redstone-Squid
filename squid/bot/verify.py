@@ -1,7 +1,5 @@
 """A cog for verifying minecraft accounts."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from discord import app_commands
@@ -11,10 +9,10 @@ from squid.bot.submission.ui.views import ConfirmationView
 from squid.db.user import link_minecraft_account, unlink_minecraft_account
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
-class VerifyCog[BotT: RedstoneSquid](Cog, name="verify"):
+class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
     def __init__(self, bot: BotT):
         self.bot = bot
 
@@ -41,6 +39,6 @@ class VerifyCog[BotT: RedstoneSquid](Cog, name="verify"):
                 await ctx.send("An error occurred while unlinking your account. Please try again later.")
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))

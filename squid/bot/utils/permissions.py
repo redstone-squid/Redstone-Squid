@@ -1,7 +1,5 @@
 """Permission checking utilities for the bot."""
 
-from __future__ import annotations
-
 from functools import cache
 from typing import TYPE_CHECKING
 

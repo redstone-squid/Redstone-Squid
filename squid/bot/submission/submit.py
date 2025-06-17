@@ -1,7 +1,5 @@
 """A cog with commands to submit builds."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import TYPE_CHECKING, Literal
 
@@ -25,12 +23,12 @@ from squid.db.schema import Category, Status
 from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
+class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
     def __init__(self, bot: BotT):
@@ -251,7 +249,7 @@ class BuildSubmitCog[BotT: RedstoneSquid](Cog, name="Build"):
         await ctx.send("Build recalculated.", ephemeral=True)
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildSubmitCog(bot))

@@ -4,8 +4,6 @@ Converters are basically preprocessors for command arguments, allowing you to co
 or validate them before they are passed to the command function.
 """
 
-from __future__ import annotations
-
 import inspect
 from types import FrameType
 from typing import Any, override

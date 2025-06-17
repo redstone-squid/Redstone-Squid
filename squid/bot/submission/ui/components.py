@@ -1,7 +1,5 @@
 """Selects and buttons for discord interactions."""
 
-from __future__ import annotations
-
 import logging
 import os
 import re
@@ -18,10 +16,9 @@ from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
-    from discord.types.interactions import SelectMessageComponentInteractionData
+    import discord.types.interactions
 
-    from squid.bot import RedstoneSquid
-    from squid.bot.submission.ui.views import BuildEditView
+    import squid.bot
 
 
 class RecordCategorySelect(discord.ui.Select):
@@ -38,7 +35,7 @@ class RecordCategorySelect(discord.ui.Select):
 
     @override
     async def callback(self, interaction: discord.Interaction):
-        data = cast("SelectMessageComponentInteractionData", interaction.data)
+        data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
         self.build.record_category = data["values"][0]  # type: ignore
         await interaction.response.defer()  # type: ignore
 
@@ -57,7 +54,7 @@ class DoorTypeSelect(discord.ui.Select):
 
     @override
     async def callback(self, interaction: discord.Interaction):
-        data = cast("SelectMessageComponentInteractionData", interaction.data)
+        data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
         self.build.door_orientation_type = data["values"][0]  # type: ignore
         await interaction.response.defer()  # type: ignore
 
@@ -80,7 +77,7 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
 
     @override
     async def callback(self, interaction: discord.Interaction):
-        data = cast("SelectMessageComponentInteractionData", interaction.data)
+        data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
         self.build.miscellaneous_restrictions = data["values"]
         await interaction.response.defer()  # type: ignore
 
@@ -198,7 +195,7 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
+class DynamicBuildEditButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](
     discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"
 ):
     def __init__(self, build: Build):
@@ -222,14 +219,19 @@ class DynamicBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](
 
     @override
     async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]
+        # FIXME: circular import
+        from squid.bot.submission.ui.views import BuildEditView
+
         await BuildEditView(self.build).send(interaction)
 
 
-class EphemeralBuildEditButton[BotT: RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
+class EphemeralBuildEditButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)
 
     @override
     async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+        from squid.bot.submission.ui.views import BuildEditView
+
         await BuildEditView(self.build).send(interaction, ephemeral=True)

@@ -1,7 +1,5 @@
 """Main bot module, includes all the commands and listeners for the bot."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import os

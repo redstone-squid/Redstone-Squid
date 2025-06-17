@@ -1,7 +1,5 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Annotated, cast
 
 import discord
@@ -15,10 +13,10 @@ from squid.bot.utils import check_is_staff
 from squid.db.schema import SETTINGS, Setting
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
-class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
+class SettingsCog[BotT: squid.bot.RedstoneSquid](Cog, name="Settings"):
     def __init__(self, bot: BotT):
         self.bot = bot
 
@@ -183,6 +181,6 @@ class SettingsCog[BotT: RedstoneSquid](Cog, name="Settings"):
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

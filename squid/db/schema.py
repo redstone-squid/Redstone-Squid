@@ -1,16 +1,53 @@
-from __future__ import annotations
-
 from collections.abc import Sequence
 from enum import IntEnum, StrEnum
 from typing import Literal, TypeAlias, TypedDict, cast, get_args
 
 from pydantic.types import Json
 
+RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
+RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
+
+BuildType: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType))
+
+DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
+DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
+
+Restriction = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
+
+MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
+
+VoteKind = Literal["build", "delete_log"]
+
+# Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
+DbSettingKey = Literal[
+    "smallest_channel_id",
+    "fastest_channel_id",
+    "first_channel_id",
+    "builds_channel_id",
+    "voting_channel_id",
+    "staff_roles_ids",
+    "trusted_roles_ids",
+]
+
+Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+SETTINGS = cast(Sequence[Setting], get_args(Setting))
+assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
+
 
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
     component_restrictions: list[str]
     miscellaneous_restrictions: list[str]
+
+
+class ServerInfo(TypedDict, total=False):
+    """Various additional information about the server"""
+
+    server_ip: str
+    coordinates: str
+    command_to_build: str
 
 
 class Info(TypedDict, total=False):
@@ -20,14 +57,6 @@ class Info(TypedDict, total=False):
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
     server_info: ServerInfo
-
-
-class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server"""
-
-    server_ip: str
-    coordinates: str
-    command_to_build: str
 
 
 class Status(IntEnum):
@@ -129,22 +158,6 @@ class ServerSettingRecord(TypedDict):
     trusted_roles_ids: list[int] | None
 
 
-# Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
-DbSettingKey = Literal[
-    "smallest_channel_id",
-    "fastest_channel_id",
-    "first_channel_id",
-    "builds_channel_id",
-    "voting_channel_id",
-    "staff_roles_ids",
-    "trusted_roles_ids",
-]
-
-Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
-SETTINGS = cast(Sequence[Setting], get_args(Setting))
-assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
-
-
 class LinkRecord(TypedDict):
     """A record of a link in the database."""
 
@@ -232,20 +245,3 @@ class DeleteLogVoteSessionRecord(TypedDict):
     target_message_id: int
     target_channel_id: int
     target_server_id: int
-
-
-RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
-
-BuildType: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType))
-
-DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
-
-Restriction = Literal["wiring-placement", "component", "miscellaneous"]
-RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
-
-MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
-
-VoteKind = Literal["build", "delete_log"]

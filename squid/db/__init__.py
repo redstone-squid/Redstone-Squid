@@ -4,8 +4,6 @@ Handles database interactions for the bot.
 Essentially a wrapper around the Supabase client and python bindings so that the bot part of the code doesn't have to deal with the specifics of the database.
 """
 
-from __future__ import annotations
-
 import os
 from typing import ClassVar, Literal
 

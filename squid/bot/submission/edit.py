@@ -1,7 +1,5 @@
 """A cog with commands to editing builds."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import TYPE_CHECKING, Literal
 
@@ -26,10 +24,10 @@ from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, L
 from squid.db.builds import Build
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
+    import squid.bot
 
 
-class BuildEditCog[BotT: RedstoneSquid](Cog):
+class BuildEditCog[BotT: squid.bot.RedstoneSquid](Cog):
     """A cog with commands for editing builds."""
 
     def __init__(self, bot: BotT):
@@ -246,7 +244,7 @@ class BuildEditCog[BotT: RedstoneSquid](Cog):
         return None
 
 
-async def setup(bot: RedstoneSquid) -> None:
+async def setup(bot: squid.bot.RedstoneSquid) -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

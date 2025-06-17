@@ -1,7 +1,5 @@
 """Models and views for discord interactions."""
 
-from __future__ import annotations
-
 import asyncio
 import datetime
 import re
@@ -28,8 +26,8 @@ from squid.db.builds import Build
 from squid.db.schema import Category, Status
 
 if TYPE_CHECKING:
-    from squid.bot import RedstoneSquid
-    from squid.bot.submission.build_handler import BuildHandler
+    import squid.bot
+    import squid.bot.submission.build_handler
 
 
 class SubmissionModal(discord.ui.Modal):
@@ -105,7 +103,7 @@ class SubmissionModal(discord.ui.Modal):
             self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
-class EditModal[BotT: RedstoneSquid](discord.ui.Modal):
+class EditModal[BotT: squid.bot.RedstoneSquid](discord.ui.Modal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
@@ -173,7 +171,7 @@ class ConfirmationView(discord.ui.View):
         self.stop()
 
 
-class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
+class BuildEditView[BotT: squid.bot.RedstoneSquid](discord.ui.View):
     """A view that allows users to edit a build.
 
     This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.
@@ -191,7 +189,6 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
         Args:
             build: The build to edit.
             items: The items to display in the view.
-            parent: The parent view.
             timeout: The timeout for the view.
         """
         super().__init__(timeout=timeout)
@@ -269,7 +266,9 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
             content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction)
         )
 
-    def get_handler(self, interaction: discord.Interaction[BotT]) -> BuildHandler[BotT]:
+    def get_handler(
+        self, interaction: discord.Interaction[BotT]
+    ) -> "squid.bot.submission.build_handler.BuildHandler[BotT]":
         return interaction.client.for_build(self.build)
 
     async def get_embeds(self, interaction: discord.Interaction[BotT]) -> list[discord.Embed]:
@@ -307,7 +306,7 @@ class BuildEditView[BotT: RedstoneSquid](discord.ui.View):
         )
 
 
-class BuildInfoView[BotT: RedstoneSquid](BaseNavigableView[BotT]):
+class BuildInfoView[BotT: squid.bot.RedstoneSquid](BaseNavigableView[BotT]):
     def __init__(
         self,
         build: Build,

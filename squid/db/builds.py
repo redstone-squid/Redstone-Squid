@@ -1,7 +1,5 @@
 """Submitting and retrieving submissions to/from the database"""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import os
@@ -209,13 +207,13 @@ class Build:
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
 
-    lock: BuildLock = field(init=False, repr=False, compare=False)
+    lock: "BuildLock" = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
         self.lock = BuildLock(self.id)
 
     @staticmethod
-    async def from_id(build_id: int) -> Build | None:
+    async def from_id(build_id: int) -> "Build | None":
         """Creates a new Build object from a database ID.
 
         Args:
@@ -231,7 +229,7 @@ class Build:
         return Build.from_json(response.data)
 
     @staticmethod
-    async def from_message_id(message_id: int) -> Build | None:
+    async def from_message_id(message_id: int) -> "Build | None":
         """
         Get the build by a message id.
 
@@ -254,7 +252,7 @@ class Build:
         return None
 
     @staticmethod
-    def from_dict(submission: dict) -> Build:
+    def from_dict(submission: dict) -> "Build":
         """Creates a new Build object from a dictionary. No validation is done on the data."""
         build = Build()
         for attr in build:
@@ -264,7 +262,7 @@ class Build:
         return build
 
     @staticmethod
-    def from_json(data: JoinedBuildRecord) -> Build:
+    def from_json(data: JoinedBuildRecord) -> "Build":
         """
         Converts a JSON object to a Build object.
 
@@ -408,7 +406,7 @@ class Build:
     @staticmethod
     async def ai_generate_from_message(
         message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
-    ) -> Build | None:
+    ) -> "Build | None":
         """Parses a build from a message using AI.
 
         Args:
@@ -722,7 +720,7 @@ class Build:
 
         return title
 
-    async def get_persisted_copy(self) -> Build:
+    async def get_persisted_copy(self) -> "Build":
         """Get a persisted copy of the build."""
         if self.id is None:
             raise ValueError("Build id is None, there is no persisted copy.")
@@ -748,7 +746,7 @@ class Build:
             logger.debug(f"Failed to generate embedding for build {self.id}: {e}")
             return None
 
-    def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+    def diff[T: Any](self, other: "Build", *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
         Returns the differences between this build and another
 
@@ -1172,7 +1170,7 @@ class BuildLock:
         """Whether the build is locked."""
         return self._lock_count > 0
 
-    def __call__(self, *, blocking: bool = True, timeout: float = -1) -> LockContextManager:
+    def __call__(self, *, blocking: bool = True, timeout: float = -1) -> "LockContextManager":
         return LockContextManager(self, blocking=blocking, timeout=timeout)
 
     async def _try_lock(self) -> bool:

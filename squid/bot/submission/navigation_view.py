@@ -1,8 +1,6 @@
 """A module that contains the base view and buttons for the navigation UI."""
 # Code from https://gist.github.com/trevorflahardy/6910cd684be4d5c36a913dc954895842 with medium modifications.
 
-from __future__ import annotations
-
 import abc
 import functools
 from collections.abc import Awaitable
@@ -35,8 +33,8 @@ NON_MARKDOWN_INFORMATION_SOURCE: Final[str] = "\N{INFORMATION SOURCE}"
 
 
 async def resolve_parent[ClientT: discord.Client](
-    parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT],
-) -> BaseNavigableView[ClientT]:
+    parent: "BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]",
+) -> "BaseNavigableView[ClientT]":
     """Resolves the parent view."""
     if callable(parent):
         return await maybe_coroutine(parent)
@@ -56,7 +54,7 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
     def __init__(
         self,
         /,
-        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
+        parent: "BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None" = None,
         timeout: float | None = 180,
     ) -> None:
         """
@@ -69,7 +67,7 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
         self.parent: Final = parent
         super().__init__(timeout=timeout)
 
-    def __init_subclass__(cls: type[BaseNavigableView[Any]]) -> None:
+    def __init_subclass__(cls: "type[BaseNavigableView[Any]]") -> None:
         """Wrap the init method of the child view to add the "Stop", "Go Home", and "Go Back" buttons."""
         cls.__init__ = BaseNavigableView._wrap_init(cls.__init__)
         return super().__init_subclass__()
@@ -108,7 +106,7 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
             child = StopButton[Self, ClientT](self)
             super().add_item(child)
 
-    async def find_home(self) -> BaseNavigableView[ClientT] | None:
+    async def find_home(self) -> "BaseNavigableView[ClientT] | None":
         """Finds the home parent from a view."""
         if self.parent is None:
             return None
