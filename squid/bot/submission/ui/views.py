@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, cast, override
 import discord
 from discord import Interaction
 
-from squid.bot.submission import ui
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
@@ -103,11 +102,11 @@ class SubmissionModal(discord.ui.Modal):
             self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
-class EditModal[BotT: squid.bot.RedstoneSquid](discord.ui.Modal):
+class EditModal[BotT: "squid.bot.RedstoneSquid"](discord.ui.Modal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
-        self, parent: ui.views.BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
+        self, parent: "BuildEditView[BotT]", title: str, timeout: float | None = 60, custom_id: str | None = None
     ):
         self.parent = parent
         if custom_id:
@@ -171,7 +170,7 @@ class ConfirmationView(discord.ui.View):
         self.stop()
 
 
-class BuildEditView[BotT: squid.bot.RedstoneSquid](discord.ui.View):
+class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
     """A view that allows users to edit a build.
 
     This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.

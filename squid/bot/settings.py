@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class SettingsCog[BotT: squid.bot.RedstoneSquid](Cog, name="Settings"):
+class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
     def __init__(self, bot: BotT):
         self.bot = bot
 
@@ -181,6 +181,6 @@ class SettingsCog[BotT: squid.bot.RedstoneSquid](Cog, name="Settings"):
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

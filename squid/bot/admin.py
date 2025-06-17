@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class Admin[BotT: squid.bot.RedstoneSquid](commands.Cog):
+class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):
@@ -182,6 +182,6 @@ class Admin[BotT: squid.bot.RedstoneSquid](commands.Cog):
             raise ValueError("This is a test error.")
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Admin(bot))

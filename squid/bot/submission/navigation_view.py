@@ -5,7 +5,6 @@ import abc
 import functools
 from collections.abc import Awaitable
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Concatenate,
@@ -19,9 +18,7 @@ import discord
 from discord.ui import Item
 from discord.utils import maybe_coroutine
 
-if TYPE_CHECKING:
-    type BaseViewInit[**P, T] = Callable[Concatenate["BaseNavigableView[Any]", P], T]
-
+type BaseViewInit[**P, T] = Callable[Concatenate["BaseNavigableView[Any]", P], T]
 type MaybeAwaitable[T] = T | Awaitable[T]
 type MaybeAwaitableFunc[**P, T] = Callable[P, MaybeAwaitable[T]]
 type MaybeAwaitableBaseNavigableViewFunc[ClientT: discord.Client] = MaybeAwaitableFunc[[], BaseNavigableView[ClientT]]

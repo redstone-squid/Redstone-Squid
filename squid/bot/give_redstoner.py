@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class DynamicRemoveOwnRedstonerRoleButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](
+class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](
     discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner:(\d+)"
 ):
     """A button that allows users to remove their own redstoner role."""
@@ -55,7 +55,7 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: squid.bot.RedstoneSquid, V: disc
 
 
 class GiveRedstoner(Cog):
-    def __init__(self, bot: squid.bot.RedstoneSquid):
+    def __init__(self, bot: "squid.bot.RedstoneSquid"):
         self.bot = bot
         self.pattern = re.compile(r"https://discord\.com/channels/\d+/\d+/\d+")
 
@@ -92,6 +92,6 @@ class GiveRedstoner(Cog):
         )
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
     await bot.add_cog(GiveRedstoner(bot))

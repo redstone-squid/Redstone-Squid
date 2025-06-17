@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-async def setup(bot: squid.bot.RedstoneSquid) -> None:
+async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

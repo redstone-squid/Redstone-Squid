@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class Miscellaneous[BotT: squid.bot.RedstoneSquid](Cog):
+class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
-        self.bot: squid.bot.RedstoneSquid = bot
+        self.bot = bot
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
@@ -56,6 +56,6 @@ class Miscellaneous[BotT: squid.bot.RedstoneSquid](Cog):
         await ctx.send(", ".join(versions_human_readable))
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))
