@@ -476,52 +476,6 @@ class BuildRecord(TypedDict):
     locked_at: str | None  # timestamptz
 
 
-class DoorRecord(TypedDict):
-    """A record of a door in the database."""
-
-    build_id: int
-    orientation: DoorOrientationName
-    door_width: int | None
-    door_height: int | None
-    door_depth: int | None
-    normal_opening_time: int | None
-    normal_closing_time: int | None
-    visible_opening_time: int | None
-    visible_closing_time: int | None
-
-
-class ExtenderRecord(TypedDict):
-    """A record of an extender in the database."""
-
-    build_id: int
-
-
-class UtilityRecord(TypedDict):
-    """A record of a utility in the database."""
-
-    build_id: int
-
-
-class EntranceRecord(TypedDict):
-    """A record of an entrance in the database."""
-
-    build_id: int
-
-
-class ServerSettingRecord(TypedDict):
-    """A record of a server's setting in the database."""
-
-    server_id: int
-    smallest_channel_id: int | None
-    fastest_channel_id: int | None
-    first_channel_id: int | None
-    builds_channel_id: int | None
-    voting_channel_id: int | None
-    staff_roles_ids: list[int] | None
-    trusted_roles_ids: list[int] | None
-    in_server: bool
-
-
 class QuantifiedVersionRecord(TypedDict):
     """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""
 

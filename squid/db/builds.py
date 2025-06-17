@@ -35,10 +35,10 @@ from squid.db.schema import (
     BuildVersion,
     BuildVoteSession,
     Category,
+    Door,
     DoorOrientationName,
-    DoorRecord,
-    EntranceRecord,
-    ExtenderRecord,
+    Entrance,
+    Extender,
     Info,
     Message,
     QuantifiedVersionRecord,
@@ -49,7 +49,6 @@ from squid.db.schema import (
     UnknownRestrictions,
     User,
     Utility,
-    UtilityRecord,
     Version,
 )
 from squid.db.utils import get_version_string, utcnow
@@ -70,10 +69,10 @@ class JoinedBuildRecord(BuildRecord):
     users: list[User]
     types: list[Type]
     restrictions: list[Restriction]
-    doors: DoorRecord | None
-    extenders: ExtenderRecord | None
-    utilities: UtilityRecord | None
-    entrances: EntranceRecord | None
+    doors: Door | None
+    extenders: Extender | None
+    utilities: Utility | None
+    entrances: Entrance | None
     messages: Message | None  # Not actually all the associated messages, just the original message
 
 
@@ -284,34 +283,12 @@ class Build:
                 "users": sql_build.creators,
                 "types": sql_build.types,
                 "restrictions": [br.restriction for br in sql_build.build_restrictions],
-                "doors": DoorRecord(
-                    build_id=sql_build.door.build_id,
-                    orientation=sql_build.door.orientation,
-                    door_width=sql_build.door.door_width,
-                    door_height=sql_build.door.door_height,
-                    door_depth=sql_build.door.door_depth,
-                    normal_opening_time=sql_build.door.normal_opening_time,
-                    normal_closing_time=sql_build.door.normal_closing_time,
-                    visible_opening_time=sql_build.door.visible_opening_time,
-                    visible_closing_time=sql_build.door.visible_closing_time,
-                )
-                if sql_build.door
-                else None,
-                "extenders": ExtenderRecord(
-                    build_id=sql_build.extender.build_id,
-                )
-                if sql_build.extender
-                else None,
-                "utilities": UtilityRecord(
-                    build_id=sql_build.utility.build_id,
-                )
-                if sql_build.utility
-                else None,
-                "entrances": EntranceRecord(
-                    build_id=sql_build.entrance.build_id,
-                )
-                if sql_build.entrance
-                else None,
+                "doors": sql_build.door,
+                "extenders":  sql_build.extender
+                ,
+                "utilities":  sql_build.utility
+                ,
+                "entrances": sql_build.entrance,
                 "messages": sql_build.original_message,
             }
 
@@ -373,14 +350,15 @@ class Build:
         match data["category"]:
             case "Door":
                 assert "doors" in data and data["doors"] is not None
-                door_orientation_type = data["doors"]["orientation"]
-                door_width = data["doors"]["door_width"]
-                door_height = data["doors"]["door_height"]
-                door_depth = data["doors"]["door_depth"]
-                normal_closing_time = data["doors"]["normal_closing_time"]
-                normal_opening_time = data["doors"]["normal_opening_time"]
-                visible_closing_time = data["doors"]["visible_closing_time"]
-                visible_opening_time = data["doors"]["visible_opening_time"]
+                door_obj = data["doors"]
+                door_orientation_type = door_obj.orientation
+                door_width = door_obj.door_width
+                door_height = door_obj.door_height
+                door_depth = door_obj.door_depth
+                normal_closing_time = door_obj.normal_closing_time
+                normal_opening_time = door_obj.normal_opening_time
+                visible_closing_time = door_obj.visible_closing_time
+                visible_opening_time = door_obj.visible_opening_time
             case "Extender":
                 raise NotImplementedError
             case "Utility":
@@ -1099,7 +1077,7 @@ class Build:
             result = await session.execute(stmt)
             restrictions = result.scalars().all()
 
-            
+
             restriction_ids = [restriction.id for restriction in restrictions]
 
             # Clear existing build restrictions for this build
@@ -1529,26 +1507,10 @@ def _sql_build_to_joined_record(sql_build: SQLBuild) -> JoinedBuildRecord:
         users=sql_build.creators,
         types=sql_build.types,
         restrictions=[br.restriction for br in sql_build.build_restrictions],
-        doors=DoorRecord(
-            build_id=sql_build.door.build_id,
-            orientation=sql_build.door.orientation,
-            door_width=sql_build.door.door_width,
-            door_height=sql_build.door.door_height,
-            door_depth=sql_build.door.door_depth,
-            normal_opening_time=sql_build.door.normal_opening_time,
-            normal_closing_time=sql_build.door.normal_closing_time,
-            visible_opening_time=sql_build.door.visible_opening_time,
-            visible_closing_time=sql_build.door.visible_closing_time,
-        ) if sql_build.door else None,
-        extenders=ExtenderRecord(
-            build_id=sql_build.extender.build_id,
-        ) if sql_build.extender else None,
-        utilities=UtilityRecord(
-            build_id=sql_build.utility.build_id,
-        ) if sql_build.utility else None,
-        entrances=EntranceRecord(
-            build_id=sql_build.entrance.build_id,
-        ) if sql_build.entrance else None,
+        doors=sql_build.door,
+        extenders=sql_build.extender,
+        utilities=sql_build.utility,
+        entrances=sql_build.entrance,
         messages=sql_build.original_message,
     )
 
