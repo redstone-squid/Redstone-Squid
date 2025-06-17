@@ -7,7 +7,6 @@ from enum import IntEnum, StrEnum
 from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
-from pydantic.types import Json
 from sqlalchemy import (
     ARRAY,
     JSON,
@@ -138,17 +137,6 @@ class Type(Base):
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="type", default_factory=list)
     builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
-
-
-class Type(Base):
-    """A build pattern."""
-
-    __tablename__ = "types"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    build_category: Mapped[str] = mapped_column(String, nullable=False)
-    name: Mapped[str] = mapped_column(
-        String, nullable=False, unique=True
-    )  # FIXME: This should be unique per build category
 
 
 class Build(Base):

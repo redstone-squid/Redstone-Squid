@@ -15,8 +15,6 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
-from squid.db.build_tags import BuildTagsManager
-from squid.db.message import MessageManager
 from squid.db.schema import Restriction, Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager

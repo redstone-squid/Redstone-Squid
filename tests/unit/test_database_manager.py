@@ -19,9 +19,7 @@ class TestDatabaseManager:
     """
 
     @pytest.mark.skip(reason="Haven't mocked SQLAlchemy yet")
-    async def test_version_caching(
-        self, mock_db_manager: DatabaseManager, sample_version_data: list[Version]
-    ) -> None:
+    async def test_version_caching(self, mock_db_manager: DatabaseManager, sample_version_data: list[Version]) -> None:
         """Test that version list is properly cached."""
         mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
             data=sample_version_data, count=len(sample_version_data)

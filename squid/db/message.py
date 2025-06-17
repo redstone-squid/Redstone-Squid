@@ -85,7 +85,6 @@ class MessageManager:
             if message_obj is None:
                 raise ValueError(f"Message with id {message_id} not found.")
 
-
             await session.delete(message_obj)
             await session.commit()
             return message_obj

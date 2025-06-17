@@ -112,9 +112,7 @@ def assert_build_attributes(build: Build, expected: dict[str, Any]):
 class TestBuildConstructors:
     """Tests for Build class constructors."""
 
-    async def test_from_id_success(
-        self, mock_db_manager: DatabaseManager, sample_joined_build_record: dict[str, Any]
-    ):
+    async def test_from_id_success(self, mock_db_manager: DatabaseManager, sample_joined_build_record: dict[str, Any]):
         """Test successful build creation from ID."""
         # Setup mock response
         mock_db_manager.table().select().eq().maybe_single().execute = AsyncMock(  # type: ignore

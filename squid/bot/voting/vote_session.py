@@ -4,7 +4,7 @@ import asyncio
 import inspect
 from abc import ABC, abstractmethod
 from asyncio import Task
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from textwrap import dedent
 from types import MethodType
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, Self, cast, final, override
@@ -421,7 +421,7 @@ class BuildVoteSession(AbstractVoteSession):
             changes: list[tuple[str, Any, Any]] = original.diff(self.build)
 
         async with DatabaseManager().async_session() as session:
-            stmt = insert(BuildVoteSessionModel).values(
+            stmt = insert(SQLBuildVoteSession).values(
                 vote_session_id=self.id,
                 build_id=self.build.id,
                 changes=changes,
@@ -440,7 +440,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> BuildVoteSession | None:
+    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
         async with bot.db.async_session() as session:
             stmt = (
                 select(VoteSession)
@@ -593,14 +593,11 @@ class DeleteLogVoteSession(AbstractVoteSession):
             await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
         async with self.bot.db.async_session() as session:
-            stmt = (
-                insert(SQLDeleteLogVoteSession)
-                .values(
-                    vote_session_id=self.id,
-                    target_message_id=self.target_message.id,
-                    target_channel_id=self.target_message.channel.id,
-                    target_server_id=self.target_message.guild.id,  # type: ignore
-                )
+            stmt = insert(SQLDeleteLogVoteSession).values(
+                vote_session_id=self.id,
+                target_message_id=self.target_message.id,
+                target_channel_id=self.target_message.channel.id,
+                target_server_id=self.target_message.guild.id,  # type: ignore
             )
             await session.execute(stmt)
             await session.commit()
@@ -633,14 +630,10 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_domain(
-        cls, bot: "squid.bot.RedstoneSquid", record: VoteSession
-    ) -> "DeleteLogVoteSession | None":
+    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: VoteSession) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
         session_date = record.delete_log_vote_sessions
-        target_message = await bot.get_or_fetch_message(
-            session_date.target_channel_id, session_date.target_message_id
-        )
+        target_message = await bot.get_or_fetch_message(session_date.target_channel_id, session_date.target_message_id)
         if target_message is None:
             return None
 
@@ -654,7 +647,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
             record.pass_threshold,
             record.fail_threshold,
         )
-        self.id = record.id  # We can skip _async_init because we already have the id and everything has been tracked before
+        self.id = (
+            record.id
+        )  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote.user_id: vote.weight for vote in record.votes}
         self.is_closed = record.status == "closed"
         return self

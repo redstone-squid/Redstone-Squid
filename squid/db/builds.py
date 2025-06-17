@@ -17,9 +17,7 @@ from typing import Any, Callable, Final, Literal, Self, overload
 import discord
 import vecs
 from openai import AsyncOpenAI, OpenAIError
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod, ReturnMethod
-from sqlalchemy import Result, Row, func, select, insert, text, update, delete
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
@@ -56,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
 """All columns that needs to be joined in the build table to get all the information about a build."""
+
 
 class FrozenField[T]:
     """A descriptor that makes an attribute immutable after it has been set."""
@@ -237,8 +236,6 @@ class Build:
             if not sql_build:
                 return None
 
-
-
             return Build.from_sql_build(sql_build)
 
     @staticmethod
@@ -398,7 +395,7 @@ class Build:
         )
 
     @staticmethod
-    def from_sql_build(sql_build: SQLBuild) -> Build:
+    def from_sql_build(sql_build: SQLBuild) -> "Build":
         """Converts a SQLBuild to a Build object."""
         return Build(
             id=sql_build.id,
@@ -986,9 +983,10 @@ class Build:
 
             await message_insert_task
             async with db.async_session() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(
-                    extra_info=self.extra_info,
-                    original_message_id=self.original_message_id
+                stmt = (
+                    update(SQLBuild)
+                    .where(SQLBuild.id == self.id)
+                    .values(extra_info=self.extra_info, original_message_id=self.original_message_id)
                 )
                 await session.execute(stmt)
                 await session.commit()
@@ -1023,10 +1021,7 @@ class Build:
             }
             async with db.async_session() as session:
                 stmt = pg_insert(Door).values(**doors_data)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=['build_id'],
-                    set_=doors_data
-                )
+                stmt = stmt.on_conflict_do_update(index_elements=["build_id"], set_=doors_data)
                 await session.execute(stmt)
                 await session.commit()
         elif self.category == "Extender":
@@ -1064,7 +1059,6 @@ class Build:
             result = await session.execute(stmt)
             restrictions = result.scalars().all()
 
-
             restriction_ids = [restriction.id for restriction in restrictions]
 
             # Clear existing build restrictions for this build
@@ -1074,8 +1068,7 @@ class Build:
             # Insert new build restrictions
             if restriction_ids:
                 build_restrictions_data = [
-                    {"build_id": self.id, "restriction_id": restriction_id}
-                    for restriction_id in restriction_ids
+                    {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
                 ]
                 stmt = insert(BuildRestriction).values(build_restrictions_data)
                 await session.execute(stmt)
@@ -1126,11 +1119,7 @@ class Build:
             door_type = ["Regular"]
 
         async with db.async_session() as session:
-            stmt = (
-                select(Type)
-                .where(Type.build_category == self.category)
-                .where(Type.name.in_(door_type))
-            )
+            stmt = select(Type).where(Type.build_category == self.category).where(Type.name.in_(door_type))
             result = await session.execute(stmt)
             types = result.scalars().all()
             type_ids = [type_.id for type_ in types]
@@ -1141,10 +1130,7 @@ class Build:
 
             # Insert new build types
             if type_ids:
-                build_types_data = [
-                    {"build_id": self.id, "type_id": type_id}
-                    for type_id in type_ids
-                ]
+                build_types_data = [{"build_id": self.id, "type_id": type_id} for type_id in type_ids]
                 stmt = insert(BuildType).values(build_types_data)
                 await session.execute(stmt)
 
@@ -1257,16 +1243,16 @@ class Build:
                 author_id=self.original_message_author_id,
             )
             stmt = stmt.on_conflict_do_update(
-                index_elements=['id'],
+                index_elements=["id"],
                 set_={
-                    'server_id': stmt.excluded.server_id,
-                    'channel_id': stmt.excluded.channel_id,
-                    'build_id': stmt.excluded.build_id,
-                    'purpose': stmt.excluded.purpose,
-                    'content': stmt.excluded.content,
-                    'author_id': stmt.excluded.author_id,
-                    'updated_at': stmt.excluded.updated_at,
-                }
+                    "server_id": stmt.excluded.server_id,
+                    "channel_id": stmt.excluded.channel_id,
+                    "build_id": stmt.excluded.build_id,
+                    "purpose": stmt.excluded.purpose,
+                    "content": stmt.excluded.content,
+                    "author_id": stmt.excluded.author_id,
+                    "updated_at": stmt.excluded.updated_at,
+                },
             )
             await session.execute(stmt)
             await session.commit()
@@ -1301,7 +1287,7 @@ class BuildLock:
             stmt = (
                 update(SQLBuild)
                 .where(SQLBuild.id == self.build_id)
-                .where(SQLBuild.is_locked == False)
+                .where(SQLBuild.is_locked.is_(False))
                 .values(is_locked=True)
             )
             result = await session.execute(stmt)
