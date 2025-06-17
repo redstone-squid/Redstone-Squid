@@ -39,15 +39,23 @@ jobs:
       run: uv sync --all-extras --dev
 
     - name: Check that requirements are up to date
+      # Basically, we generate the requirements files from the uv.lock file in CI
+      # and strip the first line (the uv export comment) before diffing them
       run: |
         tmpdir=$(mktemp -d)
         uv export -o "$tmpdir/base.txt"
         uv export --only-dev -o "$tmpdir/dev.txt"
 
+        # Normalize the first line (the uv export comment) before diffing
+        tail -n +2 "$tmpdir/base.txt" > "$tmpdir/base_stripped.txt"
+        tail -n +2 "$tmpdir/dev.txt" > "$tmpdir/dev_stripped.txt"
+        tail -n +2 requirements/base.txt > "$tmpdir/base_expected_stripped.txt"
+        tail -n +2 requirements/dev.txt > "$tmpdir/dev_expected_stripped.txt"
+
         diff_output=0
 
-        diff -u "$tmpdir/base.txt" requirements/base.txt || diff_output=1
-        diff -u "$tmpdir/dev.txt" requirements/dev.txt || diff_output=1
+        diff -u "$tmpdir/base_stripped.txt" "$tmpdir/base_expected_stripped.txt" || diff_output=1
+        diff -u "$tmpdir/dev_stripped.txt" "$tmpdir/dev_expected_stripped.txt" || diff_output=1
 
         if [ $diff_output -ne 0 ]; then
           echo "requirements/*.txt files are not up to date with uv.lock."
