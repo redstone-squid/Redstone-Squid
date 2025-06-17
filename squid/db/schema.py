@@ -150,7 +150,7 @@ class Build(Base):
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
-    completion_time: Mapped[str | None] = mapped_column(String)
+    completion_time: Mapped[str | None] = mapped_column(String)  # Given by user, not parsable as a datetime
     category: Mapped[str | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
@@ -474,39 +474,3 @@ class BuildRecord(TypedDict):
     embedding: list[float] | None
     is_locked: bool
     locked_at: str | None  # timestamptz
-
-
-class QuantifiedVersionRecord(TypedDict):
-    """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""
-
-    id: int
-    quantified_name: str
-
-
-class VoteSessionRecord(TypedDict):
-    """A record of a vote session in the database."""
-
-    id: int
-    created_at: str
-    status: Literal["open", "closed"]
-    author_id: int
-    kind: str
-    pass_threshold: int
-    fail_threshold: int
-
-
-class BuildVoteSessionRecord(TypedDict):
-    """A record of a build vote session in the database."""
-
-    vote_session_id: int
-    build_id: int
-    changes: Json[list]
-
-
-class DeleteLogVoteSessionRecord(TypedDict):
-    """A record of a delete log vote session in the database."""
-
-    vote_session_id: int
-    target_message_id: int
-    target_channel_id: int
-    target_server_id: int
