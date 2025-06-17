@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class SearchCog[BotT: squid.bot.RedstoneSquid](Cog):
+class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
 
@@ -147,7 +147,7 @@ class SearchCog[BotT: squid.bot.RedstoneSquid](Cog):
         return None
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

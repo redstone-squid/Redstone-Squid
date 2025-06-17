@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 background_tasks: set[asyncio.Task[Any]] = set()
 
 
-class BuildHandler[BotT: squid.bot.RedstoneSquid]:
+class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
     """A class to handle the display of a build object."""
 
     def __init__(self, bot: BotT, build: Build):

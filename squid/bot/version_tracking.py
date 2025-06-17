@@ -1,6 +1,6 @@
 """A cog to manage new minecraft versions"""
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import discord
 import discord.ext.commands as commands
@@ -8,14 +8,16 @@ from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
 from postgrest.base_request_builder import APIResponse
 
-from squid.bot import RedstoneSquid
 from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db import DatabaseManager
 from squid.db.schema import VersionRecord
 from squid.db.utils import parse_version_string
 
+if TYPE_CHECKING:
+    import squid.bot
 
-class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
+
+class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"):
     def __init__(self, bot: BotT):
         self.bot = bot
 
@@ -60,6 +62,6 @@ class VersionTracker[BotT: RedstoneSquid](Cog, name="VersionTracker"):
         await self.bot.get_channel(channel_id).send(f"Version added successfully: {response.data}")  # type: ignore
 
 
-async def setup(bot: RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VersionTracker(bot))

@@ -39,6 +39,6 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
                 await ctx.send("An error occurred while unlinking your account. Please try again later.")
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     import squid.bot
 
 
-class BuildEditCog[BotT: squid.bot.RedstoneSquid](Cog):
+class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     """A cog with commands for editing builds."""
 
     def __init__(self, bot: BotT):
@@ -244,7 +244,7 @@ class BuildEditCog[BotT: squid.bot.RedstoneSquid](Cog):
         return None
 
 
-async def setup(bot: squid.bot.RedstoneSquid) -> None:
+async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

@@ -195,7 +195,7 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-class DynamicBuildEditButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](
+class DynamicBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](
     discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"
 ):
     def __init__(self, build: Build):
@@ -225,7 +225,7 @@ class DynamicBuildEditButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](
         await BuildEditView(self.build).send(interaction)
 
 
-class EphemeralBuildEditButton[BotT: squid.bot.RedstoneSquid, V: discord.ui.View](discord.ui.Button[V]):
+class EphemeralBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](discord.ui.Button[V]):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)
