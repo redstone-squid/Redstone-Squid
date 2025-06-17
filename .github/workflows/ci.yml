@@ -38,6 +38,25 @@ jobs:
     - name: Install the project
       run: uv sync --all-extras --dev
 
+    - name: Check that requirements are up to date
+      run: |
+        tmpdir=$(mktemp -d)
+        uv export -o "$tmpdir/base.txt"
+        uv export --only-dev -o "$tmpdir/dev.txt"
+
+        diff_output=0
+
+        diff -u "$tmpdir/base.txt" requirements/base.txt || diff_output=1
+        diff -u "$tmpdir/dev.txt" requirements/dev.txt || diff_output=1
+
+        if [ $diff_output -ne 0 ]; then
+          echo "requirements/*.txt files are not up to date with uv.lock."
+          echo "Run the following commands and commit the changes:"
+          echo "  uv export -o requirements/base.txt"
+          echo "  uv export --only-dev -o requirements/dev.txt"
+          exit 1
+        fi
+
     - name: Check all files have corresponding gitattributes
       run: |  # https://github.com/gitattributes/gitattributes
         missing_attributes=$(git ls-files | git check-attr -a --stdin | grep 'text: auto' || printf '\n')
