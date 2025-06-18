@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
+    BuildTypeStr,
 )
 from squid.db.schema import (
     BuildCreator,
@@ -150,7 +151,7 @@ class Build:
 
     id: int | None = None
     submission_status: Status | None = None
-    category: Category | None = None
+    category: BuildTypeStr | None = None
     record_category: RecordCategory | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
@@ -222,7 +223,7 @@ class Build:
                     selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
                     selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                     selectinload(SQLBuild.links),
-                    selectinload(SQLBuild.messages).where(Message.id == SQLBuild.original_message_id),
+                    selectinload(SQLBuild.messages),
                     selectinload(SQLBuild.door),
                     selectinload(SQLBuild.extender),
                     selectinload(SQLBuild.utility),
@@ -397,39 +398,41 @@ class Build:
     @staticmethod
     def from_sql_build(sql_build: SQLBuild) -> "Build":
         """Converts a SQLBuild to a Build object."""
+        if sql_build.door is None:
+            raise ValueError("SQLBuild does not have a door, cannot convert to Build.")
         return Build(
             id=sql_build.id,
-            submission_status=sql_build.submission_status,
+            submission_status=sql_build.submission_status,  # type: ignore
             category=sql_build.category,
             record_category=sql_build.record_category,
             width=sql_build.width,
             height=sql_build.height,
             depth=sql_build.depth,
-            door_width=sql_build.door_width,
-            door_height=sql_build.door_height,
-            door_depth=sql_build.door_depth,
-            door_type=sql_build.door_type,
-            door_orientation_type=sql_build.door_orientation_type,
-            wiring_placement_restrictions=sql_build.wiring_placement_restrictions,
-            component_restrictions=sql_build.component_restrictions,
-            miscellaneous_restrictions=sql_build.miscellaneous_restrictions,
-            normal_closing_time=sql_build.normal_closing_time,
-            normal_opening_time=sql_build.normal_opening_time,
-            visible_closing_time=sql_build.visible_closing_time,
-            visible_opening_time=sql_build.visible_opening_time,
-            extra_info=sql_build.extra_info,
-            creators_ign=sql_build.creators_ign,
-            image_urls=sql_build.image_urls,
-            video_urls=sql_build.video_urls,
-            world_download_urls=sql_build.world_download_urls,
+            door_width=sql_build.door.door_width,
+            door_height=sql_build.door.door_height,
+            door_depth=sql_build.door.door_depth,
+            door_type=[type.name for type in sql_build.types],
+            door_orientation_type=sql_build.door.orientation,
+            wiring_placement_restrictions=[r.name for r in sql_build.restrictions if r.type == "wiring-placement"],
+            component_restrictions= [r.name for r in sql_build.restrictions if r.type == "component"],
+            miscellaneous_restrictions= [r.name for r in sql_build.restrictions if r.type == "miscellaneous"],
+            normal_closing_time=sql_build.door.normal_closing_time,
+            normal_opening_time=sql_build.door.normal_opening_time,
+            visible_closing_time=sql_build.door.visible_closing_time,
+            visible_opening_time=sql_build.door.visible_opening_time,
+            extra_info=sql_build.extra_info,  # type: ignore
+            creators_ign=[creator.ign for creator in sql_build.creators],
+            image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
+            video_urls= [link.url for link in sql_build.links if link.media_type == "video"],
+            world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
             submitter_id=sql_build.submitter_id,
             completion_time=sql_build.completion_time,
             edited_time=sql_build.edited_time,
-            original_server_id=sql_build.original_server_id,
-            original_channel_id=sql_build.original_channel_id,
+            original_server_id=sql_build.original_message.server_id if sql_build.original_message else None,
+            original_channel_id=sql_build.original_message.channel_id if sql_build.original_message else None,
             original_message_id=sql_build.original_message_id,
-            original_message_author_id=sql_build.original_message_author_id,
-            original_message=sql_build.original_message,
+            original_message_author_id=sql_build.original_message.author_id if sql_build.original_message else None,
+            original_message=sql_build.original_message.content if sql_build.original_message else None,
             ai_generated=sql_build.ai_generated,
             embedding=sql_build.embedding,
         )
