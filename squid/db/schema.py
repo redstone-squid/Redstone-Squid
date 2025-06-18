@@ -153,7 +153,9 @@ class Build(Base):
     category: Mapped[BuildTypeStr | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
-    original_message: Mapped["Message | None"] = relationship(back_populates="build", foreign_keys="Build.original_message_id", uselist=False, default=None)
+    original_message: Mapped["Message | None"] = relationship(
+        back_populates="build", foreign_keys="Build.original_message_id", uselist=False, default=None
+    )
     version_spec: Mapped[str | None] = mapped_column(String, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
         VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), default=None
@@ -185,7 +187,9 @@ class Build(Base):
     )
 
     links: Mapped[list["BuildLink"]] = relationship(back_populates="build", default_factory=list)
-    messages: Mapped[list["Message"]] = relationship(back_populates="build", foreign_keys="Message.build_id", default_factory=list)
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="build", foreign_keys="Message.build_id", default_factory=list
+    )
     door: Mapped["Door | None"] = relationship(back_populates="build", uselist=False, default=None)
     extender: Mapped["Extender | None"] = relationship(back_populates="build", uselist=False, default=None)
     utility: Mapped["Utility | None"] = relationship(back_populates="build", uselist=False, default=None)

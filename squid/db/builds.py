@@ -24,13 +24,13 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
-    BuildTypeStr,
 )
 from squid.db.schema import (
     BuildCreator,
     BuildLink,
     BuildRestriction,
     BuildType,
+    BuildTypeStr,
     BuildVersion,
     Category,
     Door,
@@ -414,8 +414,8 @@ class Build:
             door_type=[type.name for type in sql_build.types],
             door_orientation_type=sql_build.door.orientation,
             wiring_placement_restrictions=[r.name for r in sql_build.restrictions if r.type == "wiring-placement"],
-            component_restrictions= [r.name for r in sql_build.restrictions if r.type == "component"],
-            miscellaneous_restrictions= [r.name for r in sql_build.restrictions if r.type == "miscellaneous"],
+            component_restrictions=[r.name for r in sql_build.restrictions if r.type == "component"],
+            miscellaneous_restrictions=[r.name for r in sql_build.restrictions if r.type == "miscellaneous"],
             normal_closing_time=sql_build.door.normal_closing_time,
             normal_opening_time=sql_build.door.normal_opening_time,
             visible_closing_time=sql_build.door.visible_closing_time,
@@ -423,7 +423,7 @@ class Build:
             extra_info=sql_build.extra_info,  # type: ignore
             creators_ign=[creator.ign for creator in sql_build.creators],
             image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
-            video_urls= [link.url for link in sql_build.links if link.media_type == "video"],
+            video_urls=[link.url for link in sql_build.links if link.media_type == "video"],
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
             submitter_id=sql_build.submitter_id,
             completion_time=sql_build.completion_time,
