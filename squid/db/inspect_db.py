@@ -6,10 +6,10 @@ from typing import Any, Never, overload
 from sqlalchemy import Connection, Engine, Inspector, Table, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
+from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty, Mapper
 
 # noinspection PyProtectedMember
-from sqlalchemy.orm.clsregistry import _ModuleMarker
+from sqlalchemy.orm.clsregistry import _ModuleMarker  # pyright: ignore[reportPrivateUsage]
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class DatabaseSchema:
 
 
 def check_relationship_property(
-    column_prop: RelationshipProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine | Connection
+    column_prop: RelationshipProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
     """Check if a relationship property is valid."""
 
@@ -92,9 +92,10 @@ def check_relationship_property(
 
 
 def check_column_property(
-    column_prop: ColumnProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine | Connection
+    column_prop: ColumnProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
     """Check if a column property is valid."""
+    # TODO: unique constraints
     errors = False
     table = klass.__tablename__
 
@@ -230,7 +231,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     #         - Check if the column is nullable
     #
     # noinspection PyProtectedMember
-    for name, klass in base_cls.registry._class_registry.items():
+    for name, klass in base_cls.registry._class_registry.items():  # pyright: ignore[reportPrivateUsage]
         logger.debug("Checking model %s (%s)", name, klass)
         if isinstance(klass, _ModuleMarker):
             logger.debug("Skipping module marker %s", name)
@@ -255,6 +256,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
             continue
 
         mapper = inspect(klass)
+        assert isinstance(mapper, Mapper), "Expected mapper to be an instance of Mapper (uncertain)"
 
         try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
             for column_prop in mapper.attrs:

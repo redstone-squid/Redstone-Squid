@@ -47,6 +47,7 @@ class MessageManager:
                 author_id=message.author.id,
                 vote_session_id=vote_session_id,
                 purpose=purpose,
+                content=message.content,
             )
             session.add(message_obj)
             await session.commit()
@@ -101,7 +102,7 @@ class MessageManager:
         async with self.session() as session:
             stmt = text("SELECT * FROM get_outdated_messages(:server_id_input)")
             result: Result[Message] = await session.execute(stmt, {"server_id_input": server_id})
-            rows = result.fetchall()
+            rows = result.scalars().fetchall()
 
             if not rows:
                 return None

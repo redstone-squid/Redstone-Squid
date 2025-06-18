@@ -287,6 +287,7 @@ class AbstractVoteSession(ABC):
                     self.bot.get_or_fetch_message(record.channel_id, record.id)
                     for record in messages_record
                     if record.id not in cached_ids
+                    and record.channel_id is not None
                 )
             )
             new_messages = (message for message in new_messages if message is not None)
@@ -463,7 +464,7 @@ class BuildVoteSession(AbstractVoteSession):
         if record.build_vote_sessions is None:
             raise ValueError(f"Found a build vote session with no associated build id. session_id={record.id}")
 
-        build = await Build.from_sql_build(record.build_vote_sessions.build)
+        build = Build.from_sql_build(record.build_vote_sessions.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True
@@ -472,7 +473,7 @@ class BuildVoteSession(AbstractVoteSession):
             messages=[msg.id for msg in record.messages],
             author_id=record.author_id,
             build=build,
-            type="add" if record.build_vote_sessions.changes is None else "update",
+            type="add",  # TODO: Handle update type properly
             pass_threshold=record.pass_threshold,
             fail_threshold=record.fail_threshold,
         )

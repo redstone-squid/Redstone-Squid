@@ -1,7 +1,7 @@
 """Tests for checking database sanity checks functions correctly."""
 
 from collections.abc import Generator
-from typing import cast
+from typing import cast, TYPE_CHECKING, Any
 
 import pytest
 import sqlalchemy
@@ -25,7 +25,7 @@ from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker, mapped_column
 from sqlalchemy.sql.type_api import TypeEngine
 
 from squid.db.inspect_db import is_sane_database
@@ -47,8 +47,8 @@ def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]
         """A sample SQLAlchemy model to demonstrate db conflicts."""
 
         __tablename__ = "sanity_check_test"
-        id = Column(Integer, primary_key=True)
-        name = Column(String(50), nullable=False)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        name: Mapped[str] = mapped_column(String(50), nullable=False)
 
     return Base, SaneTestModel
 
@@ -62,13 +62,13 @@ def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeB
 
     class RelationTestModel(Base):
         __tablename__ = "sanity_check_test_2"
-        id: Mapped[int] = Column(Integer, primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     class RelationTestModel2(Base):
         __tablename__ = "sanity_check_test_3"
-        id: Mapped[int] = Column(Integer, primary_key=True)
-        test_relationship_id: Mapped[int] = Column(ForeignKey("sanity_check_test_2.id"))
-        test_relationship = relationship(RelationTestModel, primaryjoin=test_relationship_id == RelationTestModel.id)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_2.id"))
+        test_relationship: Mapped[RelationTestModel] = relationship(RelationTestModel, primaryjoin=test_relationship_id == RelationTestModel.id)
 
     return Base, RelationTestModel, RelationTestModel2
 
@@ -82,10 +82,10 @@ def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[Declarativ
 
     class DeclarativeTestModel(Base):
         __tablename__ = "sanity_check_test_4"
-        id = Column(Integer, primary_key=True)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
         @declared_attr
-        def _password(self):
+        def _password(self):  # TODO: what is this?
             return Column("password", String(256), nullable=False)
 
         @hybrid_property
@@ -104,17 +104,17 @@ def base_and_many_to_many_models():
 
     class ManyToManyModel1(Base):
         __tablename__ = "many_to_many_test_1"
-        id = Column(Integer, primary_key=True)
-        name = Column(String(50), nullable=False)
-        model2s: AssociationProxy[list["ManyToManyModel2"]] = relationship(
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        name: Mapped[str] = mapped_column(String(50), nullable=False)
+        model2s: Mapped[list["ManyToManyModel2"]] = relationship(
             "ManyToManyModel2", secondary="many_to_many_association", back_populates="model1s"
         )
 
     class ManyToManyModel2(Base):
         __tablename__ = "many_to_many_test_2"
-        id = Column(Integer, primary_key=True)
-        name = Column(String(50), nullable=False)
-        model1s: AssociationProxy[list[ManyToManyModel1]] = relationship(
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        name: Mapped[str] = mapped_column(String(50), nullable=False)
+        model1s: Mapped[list[ManyToManyModel1]] = relationship(
             "ManyToManyModel1", secondary="many_to_many_association", back_populates="model2s"
         )
 
@@ -159,7 +159,7 @@ def test_sanity_check_passes_with_valid_tables(
 
     try:
         Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
+    except NoSuchTableError:
         pass
 
     Base.metadata.create_all(db_engine)
@@ -178,7 +178,7 @@ def test_sanity_check_fails_with_missing_table(
 
     try:
         Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
+    except NoSuchTableError:
         pass
 
     assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing tables"
@@ -192,7 +192,7 @@ def test_sanity_check_fails_with_missing_column(
 
     try:
         Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
+    except NoSuchTableError:
         pass
 
     Base.metadata.create_all(db_engine)
@@ -211,7 +211,7 @@ def test_sanity_check_passes_with_relationships(
 
     try:
         Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
+    except NoSuchTableError:
         pass
 
     Base.metadata.create_all(db_engine)
@@ -222,7 +222,7 @@ def test_sanity_check_passes_with_relationships(
         Base.metadata.drop_all(db_engine)
 
 
-def test_sanity_check_passes_with_declarative_attributes(db_engine: Engine, base_and_declarative_model):
+def test_sanity_check_passes_with_declarative_attributes(db_engine: Engine, base_and_declarative_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]):
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_declarative_model
 
@@ -291,12 +291,12 @@ def test_sanity_check_fails_with_column_type_mismatch(
 
     class TestModel(Base):
         __tablename__ = "sanity_check_test_mismatch_column"
-        id = Column(Integer, primary_key=True)
-        test_column = Column(incorrect_column_type, nullable=False)
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        test_column: Mapped[Any] = mapped_column(incorrect_column_type, nullable=False)
 
     try:
         Base.metadata.drop_all(db_engine)
-    except sqlalchemy.exc.NoSuchTableError:
+    except NoSuchTableError:
         pass
 
     Base.metadata.create_all(db_engine, tables=[cast(Table, TestModel.__table__)])
@@ -357,8 +357,8 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
 
     class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "sanity_check_test_2"
-        id = Column(Integer, primary_key=True)
-        test_relationship_id = Column(ForeignKey("sanity_check_test_3.id"))
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_3.id"))
         # Intentionally missing the test_relationship relationship
 
     assert is_sane_database(Base, db_engine) is False, (

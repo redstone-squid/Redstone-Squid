@@ -1403,7 +1403,7 @@ async def get_valid_restrictions(type: Literal["component", "wiring-placement", 
         return result.scalars().all()
 
 
-async def get_valid_door_types() -> list[str]:
+async def get_valid_door_types() -> Sequence[str]:
     """Gets a list of valid door types. The door types are returned in the original case.
 
     Returns:
@@ -1500,7 +1500,7 @@ async def get_builds_by_id(build_ids: list[int]) -> list[Build | None]:
                 selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
                 selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                 selectinload(SQLBuild.links),
-                selectinload(SQLBuild.messages).where(Message.id == SQLBuild.original_message_id),
+                selectinload(SQLBuild.messages),
                 selectinload(SQLBuild.door),
                 selectinload(SQLBuild.extender),
                 selectinload(SQLBuild.utility),

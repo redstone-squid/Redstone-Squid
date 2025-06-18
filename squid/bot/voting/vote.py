@@ -75,6 +75,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 return None
 
             vote_session_id = message.vote_session_id
+            assert vote_session_id is not None, "Vote session ID should not be None because we selected messages with the vote purpose."
             kind = message.vote_session.kind
 
             if kind == "build":

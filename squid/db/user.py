@@ -1,6 +1,7 @@
 """Handles user data and operations."""
 
 import random
+import uuid
 from uuid import UUID
 
 import aiohttp
@@ -31,7 +32,11 @@ class UserManager:
             raise ValueError("No user data provided.")
 
         async with self.session() as session:
-            user = User(discord_id=user_id, ign=ign)
+            user = User()
+            if user_id is not None:
+                user.discord_id = user_id
+            if ign is not None:
+                user.ign = ign
             session.add(user)
             await session.flush()
             return user.id
@@ -145,7 +150,7 @@ class UserManager:
             # Create new verification code
             code = random.randint(100000, 999999)
             verification_code = VerificationCode(
-                minecraft_uuid=str(user_uuid), code=str(code), username=minecraft_username
+                minecraft_uuid=uuid.UUID(user_uuid), code=str(code), username=minecraft_username
             )
             session.add(verification_code)
             await session.flush()

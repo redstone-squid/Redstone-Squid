@@ -76,10 +76,10 @@ class User(Base):
     """A user in the system, which can be linked to both Discord and Minecraft accounts."""
 
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    discord_id: Mapped[int | None] = mapped_column(BigInteger)
-    minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    ign: Mapped[str | None] = mapped_column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    ign: Mapped[str] = mapped_column(String)
+    discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
     build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", default_factory=list)
@@ -90,7 +90,7 @@ class Version(Base):
     """A version of Minecraft that a build is compatible with."""
 
     __tablename__ = "versions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     edition: Mapped[str] = mapped_column(String, nullable=False)
     major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -104,9 +104,9 @@ class Restriction(Base):
     """A restriction that can be applied to builds."""
 
     __tablename__ = "restrictions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
-    name: Mapped[str | None] = mapped_column(String, unique=True)
+    name: Mapped[str] = mapped_column(String, unique=True)  # FIXME: Shouldn't be nullable, note that to make type checkers happy I made this Mapped[str] instead of Mapped[str | None], even though it is nullable in the database
     type: Mapped[RestrictionStr | None] = mapped_column(String)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
@@ -131,7 +131,7 @@ class Type(Base):
     """A build pattern."""
 
     __tablename__ = "types"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String, unique=True)  # FIXME: This should be unique per build category
 
@@ -143,7 +143,7 @@ class Build(Base):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     submission_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     record_category: Mapped[RecordCategory | None] = mapped_column(String)
     width: Mapped[int | None] = mapped_column(Integer)
@@ -200,7 +200,7 @@ class Message(Base):
     """A message associated with a build or vote session."""
 
     __tablename__ = "messages"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)  # init=True because this is the message ID, which should be known when creating the object
     server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -321,22 +321,22 @@ class ServerSetting(Base):
 
     __tablename__ = "server_settings"
     server_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    smallest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
-    fastest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
-    first_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
-    builds_channel_id: Mapped[int | None] = mapped_column(BigInteger)
-    voting_channel_id: Mapped[int | None] = mapped_column(BigInteger)
-    staff_roles_ids: Mapped[list[int] | None] = mapped_column(ARRAY(BigInteger))
-    trusted_roles_ids: Mapped[list[int] | None] = mapped_column(ARRAY(BigInteger))
-    in_server: Mapped[bool] = mapped_column(Boolean)
+    smallest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
+    fastest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
+    first_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
+    builds_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    voting_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default_factory=list)
+    trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default_factory=list)
+    in_server: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class VerificationCode(Base):
     """A verification code for linking Minecraft accounts."""
 
     __tablename__ = "verification_codes"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    minecraft_uuid: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
+    minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False, default="")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -358,14 +358,14 @@ class VoteSession(Base):
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
-    build_vote_sessions: Mapped["BuildVoteSession"] = relationship(
+    build_vote_sessions: Mapped["BuildVoteSession | None"] = relationship(
         back_populates="vote_session", default=None, uselist=False
     )
     builds: AssociationProxy[Build] = association_proxy("build_vote_sessions", "build", default_factory=list)
 
     messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list)
     votes: Mapped[list["Vote"]] = relationship(back_populates="vote_session", default_factory=list)
-    delete_log_vote_sessions: Mapped["DeleteLogVoteSession"] = relationship(
+    delete_log_vote_sessions: Mapped["DeleteLogVoteSession | None"] = relationship(
         back_populates="vote_session", default=None, uselist=False
     )
 
