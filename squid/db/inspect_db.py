@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Never, overload
 
-from sqlalchemy import Connection, Engine, Inspector, Table, inspect
+from sqlalchemy import Connection, Engine, Inspector, Table, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
@@ -208,6 +208,11 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
 
     inspector = inspect(engine)
     schema = DatabaseSchema(inspector)
+
+    # Run an empty query to ensure the connection is valid and all the models are defined correctly.
+    # If this doesn't work, all queries will fail later anyway, so we don't suppress errors raised here.
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
     errors = False
 
