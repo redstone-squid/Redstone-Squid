@@ -395,8 +395,10 @@ class VoteSession(Base):
         back_populates="vote_session", default=None, uselist=False, lazy="joined"
     )
 
+    __mapper_args__ = {"polymorphic_on": kind}
 
-class BuildVoteSession(Base):
+
+class BuildVoteSession(VoteSession):
     """Association table between builds and vote sessions."""
 
     __tablename__ = "build_vote_sessions"
@@ -411,8 +413,10 @@ class BuildVoteSession(Base):
     vote_session: Mapped[VoteSession] = relationship(back_populates="build_vote_sessions", lazy="joined")
     build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
 
+    __mapper_args__ = {"polymorphic_identity": "build"}
 
-class DeleteLogVoteSession(Base):
+
+class DeleteLogVoteSession(VoteSession):
     """Association table between vote sessions and messages to be deleted."""
 
     __tablename__ = "delete_log_vote_sessions"
@@ -427,6 +431,8 @@ class DeleteLogVoteSession(Base):
     target_server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="delete_log_vote_sessions", lazy="joined")
+
+    __mapper_args__ = {"polymorphic_identity": "delete_log"}
 
 
 class Vote(Base):
