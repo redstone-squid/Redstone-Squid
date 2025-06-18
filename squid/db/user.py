@@ -133,6 +133,8 @@ class UserManager:
         Raises:
             ValueError: user_uuid does not match a valid Minecraft account.
         """
+        if isinstance(user_uuid, str):
+            user_uuid = uuid.UUID(user_uuid)
         minecraft_username = await self.get_minecraft_username(user_uuid)
         if minecraft_username is None:
             raise ValueError(f"User {user_uuid} does not match a valid Minecraft account.")
@@ -150,7 +152,7 @@ class UserManager:
             # Create new verification code
             code = random.randint(100000, 999999)
             verification_code = VerificationCode(
-                minecraft_uuid=uuid.UUID(user_uuid), code=str(code), username=minecraft_username
+                minecraft_uuid=user_uuid, code=str(code), username=minecraft_username
             )
             session.add(verification_code)
             await session.flush()

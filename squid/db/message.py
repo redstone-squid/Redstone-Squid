@@ -1,5 +1,6 @@
 """Some functions related to the message table, which stores message ids."""
 
+from collections.abc import Sequence
 import discord
 from sqlalchemy import Result, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -90,7 +91,7 @@ class MessageManager:
             await session.commit()
             return message_obj
 
-    async def get_outdated_messages(self, server_id: int) -> list[Message] | None:
+    async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
         """Returns a list of messages that are outdated.
 
         Args:
@@ -101,12 +102,8 @@ class MessageManager:
         """
         async with self.session() as session:
             stmt = text("SELECT * FROM get_outdated_messages(:server_id_input)")
-            result: Result[Message] = await session.execute(stmt, {"server_id_input": server_id})
+            result = await session.execute(stmt, {"server_id_input": server_id})
             rows = result.scalars().fetchall()
-
-            if not rows:
-                return None
-
             return rows
 
 

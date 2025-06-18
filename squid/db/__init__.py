@@ -90,7 +90,7 @@ class DatabaseManager(AsyncClient):
         """Fetches all restrictions from the database."""
         async with self.async_session() as session:
             result = await session.execute(select(Restriction))
-            return result.scalars().all()
+            return list(result.scalars().all())
 
     async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[Version]:
         """Returns a list of versions from the database, sorted from oldest to newest.
@@ -110,7 +110,7 @@ class DatabaseManager(AsyncClient):
                 )
             )
             result = await session.execute(stmt)
-            version_records = result.scalars().all()
+            version_records = list(result.scalars().all())
 
         self.version_cache[edition] = version_records
         return version_records
@@ -140,7 +140,7 @@ class DatabaseManager(AsyncClient):
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
         all_versions = await self.get_or_fetch_versions_list(edition)
-        all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
+        all_version_tuples = [(v.major_version, v.minor_version, v.patch_number) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
         parts = [part.strip() for part in version_spec.split(",")]

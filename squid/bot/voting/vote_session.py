@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, Self, cast, fin
 import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -524,18 +524,21 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: "type[BuildVoteSession]", bot: "squid.bot.RedstoneSquid"
+        cls: type["BuildVoteSession"], bot: "squid.bot.RedstoneSquid"
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
         async with bot.db.async_session() as session:
             stmt = (
-                select(VoteSession)
-                .options(
-                    selectinload(VoteSession.messages),
-                    selectinload(VoteSession.votes),
-                    selectinload(VoteSession.build_vote_sessions),
-                )
+                select(SQLBuildVoteSession)
+                .join(SQLBuildVoteSession.vote_session)
                 .where(VoteSession.status == "open", VoteSession.kind == cls.kind)
+                .options(
+                    joinedload(SQLBuildVoteSession.vote_session).options(
+                        selectinload(VoteSession.messages),
+                        selectinload(VoteSession.votes),
+                        selectinload(VoteSession.build_vote_sessions),
+                    )
+                )
             )
             result = await session.execute(stmt)
             records = result.scalars().all()
@@ -631,28 +634,26 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: VoteSession) -> "DeleteLogVoteSession | None":
+    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
-        session_date = record.delete_log_vote_sessions
-        target_message = await bot.get_or_fetch_message(session_date.target_channel_id, session_date.target_message_id)
+        target_message = await bot.get_or_fetch_message(record.target_channel_id, record.target_message_id)
         if target_message is None:
             return None
+        session = record.vote_session
 
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
             bot,
-            [msg.id for msg in record.messages],
-            record.author_id,
+            [msg.id for msg in session.messages],
+            session.author_id,
             target_message,
-            record.pass_threshold,
-            record.fail_threshold,
+            session.pass_threshold,
+            session.fail_threshold,
         )
-        self.id = (
-            record.id
-        )  # We can skip _async_init because we already have the id and everything has been tracked before
-        self._votes = {vote.user_id: vote.weight for vote in record.votes}
-        self.is_closed = record.status == "closed"
+        self.id = record.vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
+        self._votes = {vote.user_id: vote.weight for vote in session.votes}
+        self.is_closed = session.status == "closed"
         return self
 
     @override
@@ -708,7 +709,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         """Get all open vote sessions from the database."""
         async with bot.db.async_session() as session:
             stmt = (
-                select(VoteSession)
+                select(SQLDeleteLogVoteSession)
+                .join(VoteSession)
                 .options(
                     selectinload(VoteSession.messages),
                     selectinload(VoteSession.votes),

@@ -360,7 +360,7 @@ class Build:
             id=id,
             submission_status=Status(submission_status),
             record_category=record_category,
-            category=Category(category),
+            category=category,
             versions=versions,
             version_spec=version_spec,
             width=width,
@@ -427,7 +427,7 @@ class Build:
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
             submitter_id=sql_build.submitter_id,
             completion_time=sql_build.completion_time,
-            edited_time=sql_build.edited_time,
+            edited_time=sql_build.edited_time.strftime("%Y-%m-%d %H:%M:%S") if sql_build.edited_time else None,
             original_server_id=sql_build.original_message.server_id if sql_build.original_message else None,
             original_channel_id=sql_build.original_message.channel_id if sql_build.original_message else None,
             original_message_id=sql_build.original_message_id,
@@ -943,6 +943,7 @@ class Build:
                 stmt = insert(SQLBuild).values(**build_data)
                 result = await session.execute(stmt)
                 await session.commit()
+                assert result.inserted_primary_key is not None, "No primary key was inserted"
                 self.id = result.inserted_primary_key[0]
             self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
             delete_build_on_error = True
@@ -1387,7 +1388,7 @@ async def clean_locks() -> None:
         await session.commit()
 
 
-async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
+async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> Sequence[str]:
     """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
 
     Args:

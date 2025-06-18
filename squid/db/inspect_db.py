@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Never, overload
+from typing import Any, Never, overload, cast
 
 from sqlalchemy import Connection, Engine, Inspector, Table, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty, Mapper
 
 # noinspection PyProtectedMember
-from sqlalchemy.orm.clsregistry import _ModuleMarker  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm.clsregistry import _ModuleMarker, ClsRegistryToken  # pyright: ignore[reportPrivateUsage]
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,9 @@ class DatabaseSchema:
     def __init__(self, inspector: Inspector):
         self.tables = inspector.get_table_names()
         self.columns: dict[str, dict[str, Any]] = {}
-        self.foreign_keys: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
         for table in self.tables:
             self.columns[table] = {c["name"]: c for c in inspector.get_columns(table)}
-            self.foreign_keys[table] = inspector.get_foreign_keys(table)
 
 
 def check_relationship_property(
@@ -175,14 +173,6 @@ def check_column_property(
     return errors
 
 
-@overload
-def is_sane_database(base_cls: type[DeclarativeBase], engine: AsyncEngine) -> Never: ...
-
-
-@overload
-def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool: ...
-
-
 def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     """Check whether the current database matches the models declared in model base.
 
@@ -235,7 +225,9 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
         logger.debug("Checking model %s (%s)", name, klass)
         if isinstance(klass, _ModuleMarker):
             logger.debug("Skipping module marker %s", name)
-            # Not a model
+            continue
+        if isinstance(klass, ClsRegistryToken):
+            logger.debug("Skipping ClsRegistryToken %s", name)
             continue
         if not issubclass(klass, DeclarativeBase):
             logger.warning(
@@ -244,6 +236,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
                 "We are assuming it is a model, but this may not be the case.",
                 klass,
             )
+            klass = cast(type[DeclarativeBase], klass)
 
         table: str = getattr(klass, "__tablename__")
         if not table:

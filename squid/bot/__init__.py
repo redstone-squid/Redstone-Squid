@@ -126,7 +126,7 @@ class RedstoneSquid(Bot):
         """Clean up dangling build locks in case some functions failed to release them."""
         await clean_locks()
 
-    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
+    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
 

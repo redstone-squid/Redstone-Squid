@@ -1,6 +1,7 @@
 """Handles the display of a build object."""
 
 import asyncio
+from collections.abc import Sequence
 import io
 import mimetypes
 from select import select
@@ -111,12 +112,12 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         stmt = select(Message).where(Message.build_id == self.build.id, Message.author_id == self.bot.user.id)
         async with self.bot.db.async_session() as session:
             result = await session.execute(stmt)
-            messages = result.scalars().all()
+            messages: Sequence[Message] = result.scalars().all()
         maybe_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages)
+            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
         )
-        messages = [msg for msg in maybe_messages if msg is not None]
-        return messages
+        discord_messages = [msg for msg in maybe_messages if msg is not None]
+        return discord_messages
 
     async def update_messages(self) -> None:
         """Updates all messages which for this build."""
