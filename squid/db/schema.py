@@ -190,7 +190,7 @@ class Build(Base):
 
     links: Mapped[list["BuildLink"]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
     messages: Mapped[list["Message"]] = relationship(
-        back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="selectin"
+        back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="raise_on_sql"
     )
     door: Mapped["Door | None"] = relationship(back_populates="build", uselist=False, default=None, lazy="joined")
     extender: Mapped["Extender | None"] = relationship(back_populates="build", uselist=False, default=None, lazy="joined")
@@ -225,6 +225,7 @@ class Door(Build):
 
     __tablename__ = "doors"
     __mapper_args__ = {
+        "polymorphic_load": "inline",
         "polymorphic_identity": "Door",
     }
     
@@ -246,6 +247,7 @@ class Extender(Build):
 
     __tablename__ = "extenders"
     __mapper_args__ = {
+        "polymorphic_load": "inline",
         "polymorphic_identity": "Extender",
     }
     
@@ -259,6 +261,7 @@ class Utility(Build):
 
     __tablename__ = "utilities"
     __mapper_args__ = {
+        "polymorphic_load": "inline",
         "polymorphic_identity": "Utility",
     }
     
@@ -272,6 +275,7 @@ class Entrance(Build):
 
     __tablename__ = "entrances"
     __mapper_args__ = {
+        "polymorphic_load": "inline",
         "polymorphic_identity": "Entrance",
     }
     
