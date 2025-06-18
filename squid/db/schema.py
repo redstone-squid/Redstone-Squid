@@ -44,8 +44,8 @@ BUILD_TYPES: Sequence[BuildTypeStr] = cast(Sequence[BuildTypeStr], get_args(Buil
 DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
-Restriction = Literal["wiring-placement", "component", "miscellaneous"]
-RESTRICTIONS = cast(Sequence[Restriction], get_args(Restriction))
+RestrictionStr = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[RestrictionStr], get_args(RestrictionStr))
 
 MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
@@ -107,7 +107,7 @@ class Restriction(Base):
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String, unique=True)
-    type: Mapped[str | None] = mapped_column(String)
+    type: Mapped[RestrictionStr | None] = mapped_column(String)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
         back_populates="restriction", default_factory=list
@@ -145,7 +145,7 @@ class Build(Base):
     __tablename__ = "builds"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     submission_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    record_category: Mapped[str | None] = mapped_column(String)
+    record_category: Mapped[RecordCategory | None] = mapped_column(String)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
@@ -215,7 +215,7 @@ class Door(Base):
 
     __tablename__ = "doors"
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
-    orientation: Mapped[str] = mapped_column(String, nullable=False)
+    orientation: Mapped[DoorOrientationName] = mapped_column(String, nullable=False)
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
     door_depth: Mapped[int | None] = mapped_column(Integer)
