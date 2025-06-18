@@ -144,6 +144,7 @@ class Build(Base):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
+    
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     submission_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     record_category: Mapped[RecordCategory | None] = mapped_column(String)
@@ -196,6 +197,10 @@ class Build(Base):
     utility: Mapped["Utility | None"] = relationship(back_populates="build", uselist=False, default=None, lazy="joined")
     entrance: Mapped["Entrance | None"] = relationship(back_populates="build", uselist=False, default=None, lazy="joined")
 
+    __mapper_args__ = {
+        "polymorphic_on": category,
+    }
+
 
 class Message(Base):
     """A message associated with a build or vote session."""
@@ -215,10 +220,14 @@ class Message(Base):
     vote_session: Mapped["VoteSession | None"] = relationship(back_populates="messages", default=None, lazy="joined")
 
 
-class Door(Base):
+class Door(Build):
     """A door build with specific dimensions and timing information."""
 
     __tablename__ = "doors"
+    __mapper_args__ = {
+        "polymorphic_identity": "Door",
+    }
+    
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
     orientation: Mapped[DoorOrientationName] = mapped_column(String, nullable=False)
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -232,28 +241,40 @@ class Door(Base):
     build: Mapped[Build] = relationship(back_populates="door", lazy="joined")
 
 
-class Extender(Base):
+class Extender(Build):
     """An extender build."""
 
     __tablename__ = "extenders"
+    __mapper_args__ = {
+        "polymorphic_identity": "Extender",
+    }
+    
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
 
     build: Mapped[Build] = relationship(back_populates="extender", lazy="joined")
 
 
-class Utility(Base):
+class Utility(Build):
     """A utility build."""
 
     __tablename__ = "utilities"
+    __mapper_args__ = {
+        "polymorphic_identity": "Utility",
+    }
+    
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
 
     build: Mapped[Build] = relationship(back_populates="utility", lazy="joined")
 
 
-class Entrance(Base):
+class Entrance(Build):
     """An entrance build."""
 
     __tablename__ = "entrances"
+    __mapper_args__ = {
+        "polymorphic_identity": "Entrance",
+    }
+    
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
 
     build: Mapped[Build] = relationship(back_populates="entrance", lazy="joined")
