@@ -201,7 +201,7 @@ class Build:
     visible_closing_time: int | None = None
     visible_opening_time: int | None = None
 
-    extra_info: Info = field(default_factory=lambda: Info())
+    extra_info: Info = field(default_factory=Info)
     creators_ign: list[str] = field(default_factory=list)
 
     image_urls: list[str] = field(default_factory=list)
