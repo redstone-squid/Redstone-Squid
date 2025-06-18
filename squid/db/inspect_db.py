@@ -206,6 +206,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     if isinstance(engine, AsyncEngine):
         raise TypeError("The engine must be a synchronous SQLAlchemy Engine or Connection, not an AsyncEngine.")
 
+    logger.debug("starting validation")
     inspector = inspect(engine)
     schema = DatabaseSchema(inspector)
 
@@ -230,7 +231,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     #
     # noinspection PyProtectedMember
     for name, klass in base_cls.registry._class_registry.items():
-        logger.info("Checking model %s (%s)", name, klass)
+        logger.debug("Checking model %s (%s)", name, klass)
         if isinstance(klass, _ModuleMarker):
             logger.debug("Skipping module marker %s", name)
             # Not a model
