@@ -82,7 +82,7 @@ class User(Base):
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
-    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", default_factory=list)
+    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", default_factory=list, lazy="raise_on_sql")
     builds: AssociationProxy[list["Build"]] = association_proxy("build_creators", "build", default_factory=list)
 
 
@@ -96,7 +96,7 @@ class Version(Base):
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
-    build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="version", default_factory=list)
+    build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="version", default_factory=list, lazy="raise_on_sql")
     builds: AssociationProxy[list["Build"]] = association_proxy("build_versions", "build", default_factory=list)
 
 
@@ -110,11 +110,11 @@ class Restriction(Base):
     type: Mapped[RestrictionStr | None] = mapped_column(String)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
-        back_populates="restriction", default_factory=list
+        back_populates="restriction", default_factory=list, lazy="raise_on_sql"
     )
     builds: AssociationProxy[list["Build"]] = association_proxy("build_restrictions", "build", default_factory=list)
 
-    aliases: Mapped[list["RestrictionAlias"]] = relationship(back_populates="restriction", default_factory=list)
+    aliases: Mapped[list["RestrictionAlias"]] = relationship(back_populates="restriction", default_factory=list, lazy="selectin")
 
 
 class RestrictionAlias(Base):
@@ -125,7 +125,7 @@ class RestrictionAlias(Base):
     alias: Mapped[str] = mapped_column(String, nullable=False, unique=True, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
-    restriction: Mapped[Restriction] = relationship(back_populates="aliases", init=False)
+    restriction: Mapped[Restriction] = relationship(back_populates="aliases", init=False, lazy="joined")
 
 
 class Type(Base):
@@ -136,7 +136,7 @@ class Type(Base):
     build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String, unique=True)  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
 
-    build_types: Mapped[list["BuildType"]] = relationship(back_populates="type", default_factory=list)
+    build_types: Mapped[list["BuildType"]] = relationship(back_populates="type", default_factory=list, lazy="selectin")
     builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
 
 
@@ -155,7 +155,7 @@ class Build(Base):
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
     original_message: Mapped["Message | None"] = relationship(
-        back_populates="build", foreign_keys="Build.original_message_id", uselist=False, default=None
+        back_populates="build", foreign_keys="Build.original_message_id", uselist=False, default=None, lazy="joined"
     )
     version_spec: Mapped[str | None] = mapped_column(String, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
@@ -211,8 +211,8 @@ class Message(Base):
     content: Mapped[str | None] = mapped_column(String)
     updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
 
-    build: Mapped[Build | None] = relationship(back_populates="messages", foreign_keys="Message.build_id", default=None)
-    vote_session: Mapped["VoteSession | None"] = relationship(back_populates="messages", default=None)
+    build: Mapped[Build | None] = relationship(back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="joined")
+    vote_session: Mapped["VoteSession | None"] = relationship(back_populates="messages", default=None, lazy="joined")
 
 
 class Door(Base):
@@ -266,8 +266,8 @@ class BuildCreator(Base):
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
 
-    build: Mapped[Build] = relationship(back_populates="build_creators")
-    user: Mapped[User] = relationship(back_populates="build_creators")
+    build: Mapped[Build] = relationship(back_populates="build_creators", lazy="joined")
+    user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined")
 
 
 class BuildRestriction(Base):
@@ -277,8 +277,8 @@ class BuildRestriction(Base):
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
     restriction_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("restrictions.id"), primary_key=True)
 
-    build: Mapped[Build] = relationship(back_populates="build_restrictions")
-    restriction: Mapped[Restriction] = relationship(back_populates="build_restrictions")
+    build: Mapped[Build] = relationship(back_populates="build_restrictions", lazy="joined")
+    restriction: Mapped[Restriction] = relationship(back_populates="build_restrictions", lazy="joined")
 
 
 class BuildVersion(Base):
@@ -288,8 +288,8 @@ class BuildVersion(Base):
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
     version_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("versions.id"), primary_key=True)
 
-    build: Mapped[Build] = relationship(back_populates="build_versions")
-    version: Mapped[Version] = relationship(back_populates="build_versions")
+    build: Mapped[Build] = relationship(back_populates="build_versions", lazy="joined")
+    version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined")
 
 
 class BuildType(Base):
@@ -299,8 +299,8 @@ class BuildType(Base):
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
     type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("types.id"), primary_key=True)
 
-    build: Mapped[Build] = relationship(back_populates="build_types")
-    type: Mapped[Type] = relationship(back_populates="build_types")
+    build: Mapped[Build] = relationship(back_populates="build_types", lazy="joined")
+    type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined")
 
 
 MediaType = Literal["image", "video", "world-download"]
@@ -314,7 +314,7 @@ class BuildLink(Base):
     url: Mapped[str] = mapped_column(String, nullable=False, primary_key=True)
     media_type: Mapped[MediaType | None] = mapped_column(String)  # TODO: nullable)
 
-    build: Mapped[Build] = relationship(back_populates="links")
+    build: Mapped[Build] = relationship(back_populates="links", lazy="joined")
 
 
 class ServerSetting(Base):
@@ -364,8 +364,8 @@ class VoteSession(Base):
     )
     builds: AssociationProxy[Build] = association_proxy("build_vote_sessions", "build", default_factory=list)
 
-    messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list)
-    votes: Mapped[list["Vote"]] = relationship(back_populates="vote_session", default_factory=list)
+    messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list, lazy="selectin")
+    votes: Mapped[list["Vote"]] = relationship(back_populates="vote_session", default_factory=list, lazy="selectin")
     delete_log_vote_sessions: Mapped["DeleteLogVoteSession | None"] = relationship(
         back_populates="vote_session", default=None, uselist=False, lazy="joined"
     )
@@ -401,7 +401,7 @@ class DeleteLogVoteSession(Base):
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="delete_log_vote_sessions")
+    vote_session: Mapped[VoteSession] = relationship(back_populates="delete_log_vote_sessions", lazy="joined")
 
 
 class Vote(Base):
@@ -414,7 +414,7 @@ class Vote(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     weight: Mapped[float] = mapped_column(Double)  # FIXME: Shouldn't be nullable
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes")
+    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="joined")
 
 
 class UnknownRestrictions(TypedDict, total=False):
