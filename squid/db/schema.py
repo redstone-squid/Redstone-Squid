@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
-BuildType: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Sequence[BuildType] = cast(Sequence[BuildType], get_args(BuildType))
+BuildTypeStr: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BUILD_TYPES: Sequence[BuildTypeStr] = cast(Sequence[BuildTypeStr], get_args(BuildTypeStr))
 
 DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
@@ -105,7 +105,7 @@ class Restriction(Base):
 
     __tablename__ = "restrictions"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    build_category: Mapped[str | None] = mapped_column(String)
+    build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String, unique=True)
     type: Mapped[str | None] = mapped_column(String)
 
@@ -132,10 +132,10 @@ class Type(Base):
 
     __tablename__ = "types"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
-    build_category: Mapped[str | None] = mapped_column(String)
+    build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String, unique=True)  # FIXME: This should be unique per build category
 
-    build_types: Mapped[list[BuildType]] = relationship(back_populates="type", default_factory=list)
+    build_types: Mapped[list["BuildType"]] = relationship(back_populates="type", default_factory=list)
     builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
 
 
@@ -150,7 +150,7 @@ class Build(Base):
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
     completion_time: Mapped[str | None] = mapped_column(String)  # Given by user, not parsable as a datetime
-    category: Mapped[str | None] = mapped_column(String)
+    category: Mapped[BuildTypeStr | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
     original_message: Mapped["Message | None"] = relationship(back_populates="build", uselist=False, default=None)
@@ -176,7 +176,7 @@ class Build(Base):
     build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="build", default_factory=list)
     versions: AssociationProxy[list[Version]] = association_proxy("build_versions", "version", default_factory=list)
 
-    build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list)
+    build_types: Mapped[list["BuildType"]] = relationship(back_populates="build", default_factory=list)
     types: AssociationProxy[list[Type]] = association_proxy("build_types", "type", default_factory=list)
 
     build_vote_sessions: Mapped[list["BuildVoteSession"]] = relationship(back_populates="build", default_factory=list)
