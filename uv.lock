@@ -1626,7 +1626,6 @@ version = "1.5.7"
 source = { virtual = "." }
 dependencies = [
     { name = "async-lru" },
-    { name = "asyncpg" },
     { name = "beartype" },
     { name = "beautifulsoup4" },
     { name = "discord-ext-menus" },
@@ -1641,7 +1640,7 @@ dependencies = [
     { name = "postgrest" },
     { name = "python-dotenv" },
     { name = "rapidfuzz" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sqlalchemy", extra = ["postgresql-asyncpg"] },
     { name = "supabase" },
     { name = "uvicorn" },
     { name = "vecs" },
@@ -1663,7 +1662,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "async-lru", specifier = ">=2.0.4" },
-    { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "beartype", specifier = ">=0.19.0" },
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "discord-ext-menus", git = "https://github.com/Rapptz/discord-ext-menus" },
@@ -1678,7 +1676,7 @@ requires-dist = [
     { name = "postgrest", git = "https://github.com/redstone-squid/postgrest-py" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "rapidfuzz", specifier = ">=3.13.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.41" },
+    { name = "sqlalchemy", extras = ["postgresql-asyncpg"], specifier = ">=2.0.41" },
     { name = "supabase", specifier = ">=2.11.0" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "vecs", specifier = ">=0.4.5" },
@@ -1864,7 +1862,8 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-asyncio = [
+postgresql-asyncpg = [
+    { name = "asyncpg" },
     { name = "greenlet" },
 ]
 
