@@ -444,13 +444,8 @@ class BuildVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
         async with bot.db.async_session() as session:
             stmt = (
-                select(VoteSession)
-                .options(
-                    selectinload(VoteSession.messages),
-                    selectinload(VoteSession.votes),
-                    selectinload(VoteSession.build_vote_sessions),
-                )
-                .where(VoteSession.id == vote_session_id, VoteSession.kind == cls.kind)
+                select(SQLBuildVoteSession)
+                .where(SQLBuildVoteSession.id == vote_session_id)
             )
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
@@ -530,15 +525,7 @@ class BuildVoteSession(AbstractVoteSession):
         async with bot.db.async_session() as session:
             stmt = (
                 select(SQLBuildVoteSession)
-                .join(SQLBuildVoteSession.vote_session)
-                .where(VoteSession.status == "open", VoteSession.kind == cls.kind)
-                .options(
-                    joinedload(SQLBuildVoteSession.vote_session).options(
-                        selectinload(VoteSession.messages),
-                        selectinload(VoteSession.votes),
-                        selectinload(VoteSession.build_vote_sessions),
-                    )
-                )
+                .where(SQLBuildVoteSession.status == "open")
             )
             result = await session.execute(stmt)
             records = result.scalars().all()
@@ -618,13 +605,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
         async with bot.db.async_session() as session:
             stmt = (
-                select(VoteSession)
-                .options(
-                    selectinload(VoteSession.messages),
-                    selectinload(VoteSession.votes),
-                    selectinload(VoteSession.delete_log_vote_sessions),
-                )
-                .where(VoteSession.id == vote_session_id, VoteSession.kind == cls.kind)
+                select(SQLDeleteLogVoteSession)
+                .where(SQLDeleteLogVoteSession.id == vote_session_id)
             )
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
@@ -710,13 +692,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         async with bot.db.async_session() as session:
             stmt = (
                 select(SQLDeleteLogVoteSession)
-                .join(VoteSession)
-                .options(
-                    selectinload(VoteSession.messages),
-                    selectinload(VoteSession.votes),
-                    selectinload(VoteSession.delete_log_vote_sessions),
-                )
-                .where(VoteSession.status == "open", VoteSession.kind == cls.kind)
+                .where(SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind)
             )
             result = await session.execute(stmt)
             records = result.scalars().all()
