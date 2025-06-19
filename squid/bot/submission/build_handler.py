@@ -4,12 +4,11 @@ import asyncio
 from collections.abc import Sequence
 import io
 import mimetypes
-from select import select
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
