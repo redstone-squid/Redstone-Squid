@@ -75,35 +75,6 @@ async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[Databa
         yield DatabaseManager(supabase_url=envs["API_EXTERNAL_URL"], supabase_key=envs["SERVICE_ROLE_KEY"])
 
 
-def _wrap_with_original_signature_plus_id(
-    _original: Callable[P, T],
-) -> Callable[[Callable[..., Any]], Callable[Concatenate[int, P], T]]:
-    """Wraps a function to include an additional `id` parameter at the start of the signature."""
-
-    def _decorator(func: Callable[..., Any]) -> Callable[Concatenate[int, P], T]:
-        return func
-
-    return _decorator
-
-
-def _init_orm_with_id(cls: type[_BaseT], id: int, *args, **kwargs) -> _BaseT:
-    """Helper function to initialize an ORM model with a specific ID."""
-    instance = cls(*args, **kwargs)
-    instance.id = id
-    return instance
-
-
-@_wrap_with_original_signature_plus_id(Version)
-def _version_with_id(id: int, *args, **kwargs) -> Version:
-    """Helper function to create a Version instance with a specific ID."""
-    v = Version(*args, **kwargs)
-    v.id = id
-    return v
-
-
-_version_with_id()
-
-
 @pytest.fixture
 def sample_version_data() -> list[Version]:
     """Sample Minecraft version data for testing."""
