@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 from typing import Callable, Final, Self, TypedDict, override
 
 import discord
-from discord import Message, Webhook
+from discord import Webhook
 from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
