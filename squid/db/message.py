@@ -1,8 +1,9 @@
 """Some functions related to the message table, which stores message ids."""
 
 from collections.abc import Sequence
+
 import discord
-from sqlalchemy import Result, select, text, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Message, MessagePurpose

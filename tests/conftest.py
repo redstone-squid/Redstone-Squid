@@ -2,8 +2,8 @@
 Global pytest configuration and shared fixtures.
 """
 
-from collections.abc import AsyncGenerator, Callable
-from typing import TypeVar, ParamSpec, Concatenate, Any
+from collections.abc import AsyncGenerator
+from typing import ParamSpec, TypeVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
@@ -14,7 +14,6 @@ from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
 from squid.db.schema import Restriction, Version
-
 
 P = ParamSpec("P")
 T = TypeVar("T")

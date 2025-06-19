@@ -1,7 +1,7 @@
 """Tests for checking database sanity checks functions correctly."""
 
 from collections.abc import Generator
-from typing import cast, TYPE_CHECKING, Any
+from typing import Any, cast
 
 import pytest
 import sqlalchemy
@@ -22,10 +22,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import NoSuchTableError
-from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, relationship, sessionmaker, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
 from squid.db.inspect_db import is_sane_database
@@ -68,7 +67,9 @@ def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeB
         __tablename__ = "sanity_check_test_3"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
         test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_2.id"))
-        test_relationship: Mapped[RelationTestModel] = relationship(RelationTestModel, primaryjoin=test_relationship_id == RelationTestModel.id)
+        test_relationship: Mapped[RelationTestModel] = relationship(
+            RelationTestModel, primaryjoin=test_relationship_id == RelationTestModel.id
+        )
 
     return Base, RelationTestModel, RelationTestModel2
 
@@ -222,7 +223,9 @@ def test_sanity_check_passes_with_relationships(
         Base.metadata.drop_all(db_engine)
 
 
-def test_sanity_check_passes_with_declarative_attributes(db_engine: Engine, base_and_declarative_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]):
+def test_sanity_check_passes_with_declarative_attributes(
+    db_engine: Engine, base_and_declarative_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
+):
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_declarative_model
 

@@ -32,7 +32,6 @@ from squid.db.schema import (
     BuildType,
     BuildTypeStr,
     BuildVersion,
-    Category,
     Door,
     DoorOrientationName,
     Entrance,

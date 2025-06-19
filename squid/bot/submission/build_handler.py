@@ -1,9 +1,9 @@
 """Handles the display of a build object."""
 
 import asyncio
-from collections.abc import Sequence
 import io
 import mimetypes
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord

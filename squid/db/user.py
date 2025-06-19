@@ -151,9 +151,7 @@ class UserManager:
 
             # Create new verification code
             code = random.randint(100000, 999999)
-            verification_code = VerificationCode(
-                minecraft_uuid=user_uuid, code=str(code), username=minecraft_username
-            )
+            verification_code = VerificationCode(minecraft_uuid=user_uuid, code=str(code), username=minecraft_username)
             session.add(verification_code)
             await session.flush()
             return code

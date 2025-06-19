@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, Self, cast, fin
 import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import joinedload, selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -286,8 +285,7 @@ class AbstractVoteSession(ABC):
                 *(
                     self.bot.get_or_fetch_message(record.channel_id, record.id)
                     for record in messages_record
-                    if record.id not in cached_ids
-                    and record.channel_id is not None
+                    if record.id not in cached_ids and record.channel_id is not None
                 )
             )
             new_messages = (message for message in new_messages if message is not None)
@@ -443,10 +441,7 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
         async with bot.db.async_session() as session:
-            stmt = (
-                select(SQLBuildVoteSession)
-                .where(SQLBuildVoteSession.id == vote_session_id)
-            )
+            stmt = select(SQLBuildVoteSession).where(SQLBuildVoteSession.id == vote_session_id)
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
             if record is None:
@@ -523,10 +518,7 @@ class BuildVoteSession(AbstractVoteSession):
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
         async with bot.db.async_session() as session:
-            stmt = (
-                select(SQLBuildVoteSession)
-                .where(SQLBuildVoteSession.status == "open")
-            )
+            stmt = select(SQLBuildVoteSession).where(SQLBuildVoteSession.status == "open")
             result = await session.execute(stmt)
             records = result.scalars().all()
 
@@ -604,10 +596,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
         async with bot.db.async_session() as session:
-            stmt = (
-                select(SQLDeleteLogVoteSession)
-                .where(SQLDeleteLogVoteSession.id == vote_session_id)
-            )
+            stmt = select(SQLDeleteLogVoteSession).where(SQLDeleteLogVoteSession.id == vote_session_id)
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
             if record is None:
@@ -616,7 +605,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession) -> "DeleteLogVoteSession | None":
+    async def _from_domain(
+        cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession
+    ) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
         target_message = await bot.get_or_fetch_message(record.target_channel_id, record.target_message_id)
         if target_message is None:
@@ -633,7 +624,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
             session.pass_threshold,
             session.fail_threshold,
         )
-        self.id = record.vote_session_id  # We can skip _async_init because we already have the id and everything has been tracked before
+        self.id = (
+            record.vote_session_id
+        )  # We can skip _async_init because we already have the id and everything has been tracked before
         self._votes = {vote.user_id: vote.weight for vote in session.votes}
         self.is_closed = session.status == "closed"
         return self
@@ -690,9 +683,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
     ) -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
         async with bot.db.async_session() as session:
-            stmt = (
-                select(SQLDeleteLogVoteSession)
-                .where(SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind)
+            stmt = select(SQLDeleteLogVoteSession).where(
+                SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind
             )
             result = await session.execute(stmt)
             records = result.scalars().all()
