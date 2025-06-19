@@ -38,10 +38,12 @@ class DatabaseSchema:
     """A class to hold database schema information."""
 
     def __init__(self, inspector: Inspector):
+        logger.info("Getting table names from database %s", inspector.engine.url)
         self.tables = inspector.get_table_names()
         self.columns: dict[str, dict[str, Any]] = {}
 
         for table in self.tables:
+            logging.info("Loading information from table %s", table)
             self.columns[table] = {c["name"]: c for c in inspector.get_columns(table)}
 
 
@@ -95,9 +97,23 @@ def check_column_property(
     """Check if a column property is valid."""
     # TODO: unique constraints
     errors = False
-    table = klass.__tablename__
+
+    # We cannot assume that all columns of the model are actual from that model itself, because it may inherit from another model.
+    # So the following line is wrong. Instead, we need to get the table from the column itself.
+    # table = klass.__tablename__
 
     for column in column_prop.columns:
+        if not column.table._is_table:
+            logger.info(
+                "Skipping column %s in model %s because it does not originate from a Table object (%s)",
+                column.key,
+                klass,
+                column.table,
+            )
+            continue
+        else:
+            assert isinstance(column.table, Table), "Expected column.table to be a Table instance"
+            table = column.table.name
         # Check column exists
         if column.key not in schema.columns[table]:
             logger.error(
@@ -182,20 +198,20 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     * All relationships exist and are properly configured
 
     Args:
-        base_cls (type[Base]): The SQLAlchemy declarative base class containing the models to check.
+        base_cls (type[DeclarativeBase]): The SQLAlchemy declarative base class containing the models to check.
         engine: The SQLAlchemy engine or connection to the database.
 
     Returns:
         bool: True if all declared models have corresponding tables, columns, and relationships.
 
     Raises:
-        TypeError: If the provided engine is an AsyncEngine instead of a synchronous Engine or Connection.
+        TypeError: If the provided engine is an AsyncEngine instead of a synchronous Engine.
 
     References:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
     """
     if isinstance(engine, AsyncEngine):
-        raise TypeError("The engine must be a synchronous SQLAlchemy Engine or Connection, not an AsyncEngine.")
+        raise TypeError("The engine must be a synchronous SQLAlchemy Engine, not an AsyncEngine.")
 
     logger.debug("starting validation")
     inspector = inspect(engine)
