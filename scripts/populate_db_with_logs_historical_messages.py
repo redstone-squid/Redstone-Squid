@@ -23,9 +23,14 @@ async def main():
     record_logs_id = 667401499554611210
 
     async with RedstoneSquid() as bot:
-        await bot.start(os.getenv("BOT_TOKEN"))
+        token = os.getenv("BOT_TOKEN")
+        if not token:
+            raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
+        await bot.start(token)
         build_logs = bot.get_channel(build_logs_id)
         record_logs = bot.get_channel(record_logs_id)
+        assert isinstance(build_logs, TextChannel)
+        assert isinstance(record_logs, TextChannel)
 
         tasks = [
             process_channel(build_logs, model),
@@ -33,7 +38,6 @@ async def main():
         ]
 
         await asyncio.gather(*tasks)
-
 
 
 if __name__ == "__main__":
