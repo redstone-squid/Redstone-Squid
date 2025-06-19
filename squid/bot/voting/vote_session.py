@@ -536,7 +536,7 @@ class BuildVoteSession(AbstractVoteSession):
 class DeleteLogVoteSession(AbstractVoteSession):
     """A vote session for deleting a message from the log."""
 
-    kind: Final = "delete_log"
+    kind = "delete_log"
 
     def __init__(
         self,
