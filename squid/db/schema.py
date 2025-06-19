@@ -376,7 +376,7 @@ class VoteSession(Base):
     """A voting session for builds or log deletions."""
 
     __tablename__ = "vote_sessions"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
