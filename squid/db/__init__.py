@@ -5,7 +5,7 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 """
 
 import os
-from typing import ClassVar, Literal, Any
+from typing import Any, ClassVar, Literal
 
 from async_lru import alru_cache
 from sqlalchemy import create_engine, make_url, select

@@ -1,8 +1,7 @@
 """
 Global pytest configuration and shared fixtures.
 """
-
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
@@ -11,7 +10,7 @@ from postgrest.base_request_builder import APIResponse
 from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
-from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
+from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord, BuildCategory
 
 
 @pytest.fixture
@@ -51,7 +50,7 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
 
         table_mock.return_value = table_instance
 
-        DatabaseManager._instance = None
+        DatabaseManager._instance = None  # pyright: ignore[reportPrivateUsage]
         DatabaseManager.version_cache = {}
         yield DatabaseManager()
 
@@ -92,11 +91,11 @@ def sample_version_json_data() -> list[VersionRecord]:
 def sample_restriction_json_data() -> list[RestrictionRecord]:
     """Sample restriction data for testing."""
     return [
-        {"id": 1, "name": "No pistons", "type": "component", "build_category": "Door"},
-        {"id": 2, "name": "No observers", "type": "component", "build_category": "Door"},
-        {"id": 3, "name": "No redstone dust", "type": "component", "build_category": "Door"},
-        {"id": 4, "name": "1-wide", "type": "wiring-placement", "build_category": "Door"},
-        {"id": 5, "name": "2-wide", "type": "miscellaneous", "build_category": "Door"},
+        {"id": 1, "name": "No pistons", "type": "component", "build_category": BuildCategory.DOOR},
+        {"id": 2, "name": "No observers", "type": "component", "build_category": BuildCategory.DOOR},
+        {"id": 3, "name": "No redstone dust", "type": "component", "build_category": BuildCategory.DOOR},
+        {"id": 4, "name": "1-wide", "type": "wiring-placement", "build_category": BuildCategory.DOOR},
+        {"id": 5, "name": "2-wide", "type": "miscellaneous", "build_category": BuildCategory.DOOR},
     ]
 
 
