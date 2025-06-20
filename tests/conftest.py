@@ -23,7 +23,7 @@ async def mock_env_vars() -> AsyncGenerator[None, None]:
         {
             "SUPABASE_URL": "https://test.supabase.co",
             "SUPABASE_KEY": "test-key-123",
-            "DATABASE_URL": "postgresql+asyncpg://user:password@localhost:5432/test_db",
+            "DATABASE_URL": "postgresql://user:password@localhost:5432/test_db",
             "DB_DRIVER_SYNC": "psycopg2",
             "DB_DRIVER_ASYNC": "asyncpg",
         },
