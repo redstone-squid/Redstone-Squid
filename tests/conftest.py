@@ -51,6 +51,7 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
 
         table_mock.return_value = table_instance
 
+        DatabaseManager._instance = None
         DatabaseManager.version_cache = {}
         yield DatabaseManager()
 
