@@ -8,7 +8,7 @@ from typing import Literal
 
 import aiohttp
 
-from squid.db.schema import VersionRecord
+from squid.db.schema import Version
 
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
 
@@ -46,12 +46,12 @@ async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: st
             return response_text
 
 
-def get_version_string(version: VersionRecord, no_edition: bool = False) -> str:
+def get_version_string(version: Version, no_edition: bool = False) -> str:
     """Returns a formatted version string."""
     if no_edition:
-        return f"{version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+        return f"{version.major_version}.{version.minor_version}.{version.patch_number}"
     else:
-        return f"{version['edition']} {version['major_version']}.{version['minor_version']}.{version['patch_number']}"
+        return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
 
 
 def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"], int, int, int]:
