@@ -103,7 +103,14 @@ def check_column_property(
     # table = klass.__tablename__
 
     for column in column_prop.columns:
-        if not column.table._is_table:
+        if column.table is None:
+            logger.info(
+                "Skipping column %s in model %s because it does not have a table associated with it",
+                column.key,
+                klass,
+            )
+            continue
+        if not column.table._is_table:  # pyright: ignore[reportPrivateUsage]
             logger.info(
                 "Skipping column %s in model %s because it does not originate from a Table object (%s)",
                 column.key,

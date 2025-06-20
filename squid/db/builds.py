@@ -55,6 +55,7 @@ from squid.db.schema import (
     UserRecord,
     Utility,
     UtilityRecord,
+    Version,
     VersionRecord,
 )
 from squid.db.utils import get_version_string, utcnow
@@ -340,7 +341,10 @@ class Build:
 
         version_spec = data["version_spec"]
         version_records: list[VersionRecord] = data.get("versions", [])
-        versions = [get_version_string(v) for v in version_records]
+        versions = []
+        for r in version_records:
+            version = Version(r["edition"], r["major_version"], r["minor_version"], r["patch_number"])
+            versions.append(get_version_string(version))
 
         links: list[LinkRecord] = data.get("build_links", [])
         image_urls = [link["url"] for link in links if link["media_type"] == "image"]
@@ -413,7 +417,7 @@ class Build:
         return Build(
             id=door.id,
             submission_status=door.submission_status,  # type: ignore
-            category=door.category,
+            category=BuildCategory(door.category),
             record_category=door.record_category,
             width=door.width,
             height=door.height,

@@ -68,7 +68,7 @@ class User(Base):
 
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    ign: Mapped[str] = mapped_column(String)
+    ign: Mapped[str] = mapped_column(String, default=None)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())

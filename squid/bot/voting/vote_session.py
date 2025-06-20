@@ -449,12 +449,12 @@ class BuildVoteSession(AbstractVoteSession):
             return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: VoteSession) -> "BuildVoteSession":
+    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: SQLBuildVoteSession) -> "BuildVoteSession":
         """Create a vote session from a database record."""
-        if record.build_vote_sessions is None:
+        if record.build_id is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise ValueError(f"Found a build vote session with no associated build id. session_id={record.id}")
 
-        build = Build.from_sql_build(record.build_vote_sessions.build)
+        build = Build.from_sql_build(record.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True
@@ -612,23 +612,22 @@ class DeleteLogVoteSession(AbstractVoteSession):
         target_message = await bot.get_or_fetch_message(record.target_channel_id, record.target_message_id)
         if target_message is None:
             return None
-        session = record.vote_session
 
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
             bot,
-            [msg.id for msg in session.messages],
-            session.author_id,
+            [msg.id for msg in record.messages],
+            record.author_id,
             target_message,
-            session.pass_threshold,
-            session.fail_threshold,
+            record.pass_threshold,
+            record.fail_threshold,
         )
         self.id = (
             record.vote_session_id
         )  # We can skip _async_init because we already have the id and everything has been tracked before
-        self._votes = {vote.user_id: vote.weight for vote in session.votes}
-        self.is_closed = session.status == "closed"
+        self._votes = {vote.user_id: vote.weight for vote in record.votes}
+        self.is_closed = record.status == "closed"
         return self
 
     @override
