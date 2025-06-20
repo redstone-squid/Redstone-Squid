@@ -57,12 +57,12 @@ class ApplicationConfig(TypedDict, total=False):
 
 
 class RedstoneSquid(Bot):
-    db: DatabaseManager
-
     def __init__(
         self,
+        db: DatabaseManager,
         config: BotConfig | None = None,
     ):
+        self.db = db
         if config is None:
             config = {}
         description = ""
@@ -92,8 +92,6 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        self.db = DatabaseManager()
-
         # Load extensions in parallel to speed up bot startup
         extensions = [
             "squid.bot.misc_commands",
@@ -225,7 +223,7 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
     setup_logging(config.get("dev_mode", False))
-    async with RedstoneSquid(config=config.get("bot_config")) as bot:
+    async with RedstoneSquid(DatabaseManager(), config=config.get("bot_config")) as bot:
         token = os.environ.get("BOT_TOKEN")
         if not token:
             raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
