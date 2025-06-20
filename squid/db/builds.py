@@ -717,13 +717,13 @@ class Build:
 
             for restriction in await DatabaseManager().fetch_all_restrictions():
                 for door_restriction in restrictions:
-                    if door_restriction.lower() == restriction["name"].lower():
-                        if restriction["type"] == "wiring-placement":
-                            self.wiring_placement_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "component":
-                            self.component_restrictions.append(restriction["name"])
-                        elif restriction["type"] == "miscellaneous":
-                            self.miscellaneous_restrictions.append(restriction["name"])
+                    if door_restriction.lower() == restriction.name.lower():
+                        if restriction.type == "wiring-placement":
+                            self.wiring_placement_restrictions.append(restriction.name)
+                        elif restriction.type == "component":
+                            self.component_restrictions.append(restriction.name)
+                        elif restriction.type == "miscellaneous":
+                            self.miscellaneous_restrictions.append(restriction.name)
 
     def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""

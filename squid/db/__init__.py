@@ -15,7 +15,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
-from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
+from squid.db.schema import Restriction, Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
 from squid.db.utils import get_version_string, parse_version_string
@@ -26,7 +26,7 @@ from supabase.lib.client_options import AsyncClientOptions
 class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
-    version_cache: ClassVar[dict[str | None, list[VersionRecord]]] = {}
+    version_cache: ClassVar[dict[str | None, list[Version]]] = {}
 
     def __init__(
         self,
@@ -87,24 +87,13 @@ class DatabaseManager(AsyncClient):
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
-    async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
+    async def fetch_all_restrictions(self) -> list[Restriction]:
         """Fetches all restrictions from the database."""
         async with self.async_session() as session:
             result = await session.execute(select(Restriction))
-            rows = result.scalars().all()
+            return list(result.scalars().all())
 
-            # Convert SQLAlchemy rows to RestrictionRecord format
-            return [
-                RestrictionRecord(
-                    id=row.id,
-                    build_category=row.build_category,
-                    name=row.name,
-                    type=row.type,
-                )
-                for row in rows
-            ]
-
-    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
+    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[Version]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
         If edition is specified, only versions from that edition are returned. This method is cached."""
@@ -122,19 +111,7 @@ class DatabaseManager(AsyncClient):
                 )
             )
             result = await session.execute(stmt)
-            rows = result.scalars().all()
-
-        # Convert SQLAlchemy rows to VersionRecord format
-        version_records = [
-            VersionRecord(
-                id=row.id,
-                edition=row.edition,
-                major_version=row.major_version,
-                minor_version=row.minor_version,
-                patch_number=row.patch_number,
-            )
-            for row in rows
-        ]
+            version_records = list(result.scalars().all())
 
         self.version_cache[edition] = version_records
         return version_records
@@ -164,7 +141,7 @@ class DatabaseManager(AsyncClient):
         version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
 
         all_versions = await self.get_or_fetch_versions_list(edition)
-        all_version_tuples = [(v["major_version"], v["minor_version"], v["patch_number"]) for v in all_versions]
+        all_version_tuples = [(v.major_version, v.minor_version, v.patch_number) for v in all_versions]
 
         # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
         parts = [part.strip() for part in version_spec.split(",")]
