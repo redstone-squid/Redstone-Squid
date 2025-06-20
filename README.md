@@ -57,6 +57,12 @@ SUPABASE_KEY = <Replace this with your supabase api key>
 ```
 The schema for the database can be obtained by applying the SQL files in Database/migrations in order.
 
+To get the `DATABASE_URL`, click on the **Connect** button in the top of the Supabase dashboard and copy one of the connection strings (Direct connection, Transaction Pooler and Session Pooler all works, but for simplicity, use the Session pooler which supports IPv4 and overall just works nicely). The connection string should look like:
+```
+DATABASE_URL = postgresql://postgres.somerandomcharacters:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
+```
+`DB_DRIVER_SYNC` and `DB_DRIVER_ASYNC` is the name of the database driver to use for synchronous and asynchronous database access respectively. You can keep it as the default values if you are using Supabase, which is just a postgres db under the hood. If you are using a different database, you can change these values to match your database driver.
+
 Catbox is used as a free file hosting service.
 ```
 CATBOX_USERHASH = <Replace this with your catbox user hash>
