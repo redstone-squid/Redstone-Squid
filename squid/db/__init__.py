@@ -9,6 +9,7 @@ from typing import ClassVar, Literal
 
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from squid.db.message import MessageManager
 from squid.db.schema import RestrictionRecord, VersionRecord
@@ -28,10 +29,13 @@ class DatabaseManager(AsyncClient):
         supabase_url: str | None = None,
         supabase_key: str | None = None,
         options: AsyncClientOptions | None = None,
+        database_url: str | None = None,
     ):
         """Initializes the DatabaseManager."""
         supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
         supabase_key = supabase_key or os.environ.get("SUPABASE_KEY")
+        database_url = database_url or os.environ.get("DB_CONNECTION")
+
         if not supabase_url:
             raise RuntimeError(
                 "supabase_url not given and no SUPABASE_URL environmental variable found. "
@@ -42,10 +46,20 @@ class DatabaseManager(AsyncClient):
                 "supabase_key not given and no SUPABASE_KEY environmental variable found. "
                 "Specify SUPABASE_KEY either with a .env file or a SUPABASE_KEY environment variable."
             )
+        if not database_url:
+            raise RuntimeError(
+                "database_url not given and no DATABASE_URL environmental variable found. "
+                "Specify DATABASE_URL either with a .env file or a DATABASE_URL environment variable."
+            )
 
+        # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
         self.server_setting = ServerSettingManager(self)
         self.message = MessageManager(self)
+
+        # Initialize SQLAlchemy engine and session maker
+        self.async_engine: AsyncEngine = create_async_engine(database_url, echo=False)
+        self.async_session = async_sessionmaker(self.async_engine, expire_on_commit=False)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
