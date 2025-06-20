@@ -11,7 +11,7 @@ from postgrest.base_request_builder import APIResponse
 from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, VersionRecord
+from squid.db.schema import RestrictionRecord, VersionRecord, Version, Restriction
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[Databa
 
 
 @pytest.fixture
-def sample_version_data() -> list[VersionRecord]:
+def sample_version_json_data() -> list[VersionRecord]:
     """Sample Minecraft version data for testing."""
     return [
         {"id": 1, "edition": "Java", "major_version": 1, "minor_version": 14, "patch_number": 0},
@@ -88,7 +88,7 @@ def sample_version_data() -> list[VersionRecord]:
 
 
 @pytest.fixture
-def sample_restriction_data() -> list[RestrictionRecord]:
+def sample_restriction_json_data() -> list[RestrictionRecord]:
     """Sample restriction data for testing."""
     return [
         {"id": 1, "name": "No pistons", "type": "component", "build_category": "Door"},
@@ -97,3 +97,39 @@ def sample_restriction_data() -> list[RestrictionRecord]:
         {"id": 4, "name": "1-wide", "type": "wiring-placement", "build_category": "Door"},
         {"id": 5, "name": "2-wide", "type": "miscellaneous", "build_category": "Door"},
     ]
+
+
+@pytest.fixture
+def sample_version_data() -> list[Version]:
+    """Sample Minecraft version data for testing."""
+    versions = [
+        Version(edition="Java", major_version=1, minor_version=14, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=15, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=16, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=16, patch_number=1),
+        Version(edition="Java", major_version=1, minor_version=17, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=17, patch_number=1),
+        Version(edition="Java", major_version=1, minor_version=18, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=19, patch_number=0),
+        Version(edition="Java", major_version=1, minor_version=19, patch_number=1),
+        Version(edition="Java", major_version=1, minor_version=19, patch_number=2),
+        Version(edition="Java", major_version=1, minor_version=20, patch_number=0),
+    ]
+    for i, version in enumerate(versions):
+        version.id = i + 1
+    return versions
+
+
+@pytest.fixture
+def sample_restriction_data() -> list[Restriction]:
+    """Sample restriction data for testing."""
+    restrictions = [
+        Restriction(name="No pistons", type="component", build_category="Door"),
+        Restriction(name="No observers", type="component", build_category="Door"),
+        Restriction(name="No redstone dust", type="component", build_category="Door"),
+        Restriction(name="1-wide", type="wiring-placement", build_category="Door"),
+        Restriction(name="2-wide", type="miscellaneous", build_category="Door"),
+    ]
+    for i, restriction in enumerate(restrictions):
+        restriction.id = i + 1
+    return restrictions
