@@ -17,9 +17,8 @@ from typing import Any, Callable, Final, Literal, Self, overload
 import discord
 import vecs
 from openai import AsyncOpenAI, OpenAIError
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import CountMethod, ReturnMethod
-from sqlalchemy import select
+from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
@@ -29,25 +28,32 @@ from squid.db.schema import (
 from squid.db.schema import (
     BuildCategory,
     BuildCreator,
+    BuildLink,
     BuildRecord,
     BuildRestriction,
     BuildType,
     BuildVersion,
+    Door,
     DoorOrientationName,
     DoorRecord,
+    Entrance,
     EntranceRecord,
+    Extender,
     ExtenderRecord,
     Info,
     LinkRecord,
     Message,
     MessageRecord,
-    QuantifiedVersionRecord,
     RecordCategory,
+    Restriction,
     RestrictionRecord,
     Status,
+    Type,
     TypeRecord,
     UnknownRestrictions,
+    User,
     UserRecord,
+    Utility,
     UtilityRecord,
     VersionRecord,
 )
@@ -236,139 +242,15 @@ class Build:
         async with db.async_session() as session:
             stmt = (
                 select(SQLBuild)
-                .options(
-                    selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
-                    selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
-                    selectinload(SQLBuild.build_types).selectinload(BuildType.type),
-                    selectinload(SQLBuild.links),
-                    selectinload(SQLBuild.messages).where(Message.id == SQLBuild.original_message_id),
-                    selectinload(SQLBuild.door),
-                    selectinload(SQLBuild.extender),
-                    selectinload(SQLBuild.utility),
-                    selectinload(SQLBuild.entrance),
-                )
                 .where(SQLBuild.id == build_id)
             )
             result = await session.execute(stmt)
-            sql_build = result.scalar_one_or_none()
+            sql_build = result.unique().scalar_one_or_none()
 
             if not sql_build:
                 return None
 
-            # Convert SQLAlchemy models to the expected JoinedBuildRecord format
-            joined_data: JoinedBuildRecord = {
-                "id": sql_build.id,
-                "submission_status": sql_build.submission_status,
-                "record_category": sql_build.record_category,
-                "width": sql_build.width,
-                "height": sql_build.height,
-                "depth": sql_build.depth,
-                "completion_time": sql_build.completion_time,
-                "category": sql_build.category,
-                "submitter_id": sql_build.submitter_id,
-                "original_message_id": sql_build.original_message_id,
-                "version_spec": sql_build.version_spec,
-                "ai_generated": sql_build.ai_generated,
-                "extra_info": sql_build.extra_info,
-                "submission_time": sql_build.submission_time.isoformat() if sql_build.submission_time else None,
-                "edited_time": sql_build.edited_time.isoformat() if sql_build.edited_time else None,
-                "embedding": sql_build.embedding,
-                "is_locked": sql_build.is_locked,
-                "locked_at": sql_build.locked_at.isoformat() if sql_build.locked_at else None,
-                # Related data
-                "versions": [
-                    VersionRecord(
-                        id=v.id,
-                        edition=v.edition,
-                        major_version=v.major_version,
-                        minor_version=v.minor_version,
-                        patch_number=v.patch_number,
-                    )
-                    for v in sql_build.versions
-                ],
-                "build_links": [
-                    LinkRecord(
-                        build_id=link.build_id,
-                        url=link.url,
-                        media_type=link.media_type,
-                    )
-                    for link in sql_build.links
-                ],
-                "build_creators": [{"build_id": bc.build_id, "user_id": bc.user_id} for bc in sql_build.build_creators],
-                "users": [
-                    UserRecord(
-                        id=bc.user.id,
-                        discord_id=bc.user.discord_id,
-                        minecraft_uuid=str(bc.user.minecraft_uuid) if bc.user.minecraft_uuid else None,
-                        ign=bc.user.ign,
-                        created_at=bc.user.created_at.isoformat() if bc.user.created_at else None,
-                    )
-                    for bc in sql_build.build_creators
-                ],
-                "types": [
-                    TypeRecord(
-                        id=t.id,
-                        build_category=t.build_category,
-                        name=t.name,
-                    )
-                    for t in sql_build.types
-                ],
-                "restrictions": [
-                    RestrictionRecord(
-                        id=br.restriction.id,
-                        build_category=br.restriction.build_category,
-                        name=br.restriction.name,
-                        type=br.restriction.type,
-                    )
-                    for br in sql_build.build_restrictions
-                ],
-                "doors": DoorRecord(
-                    build_id=sql_build.door.build_id,
-                    orientation=sql_build.door.orientation,
-                    door_width=sql_build.door.door_width,
-                    door_height=sql_build.door.door_height,
-                    door_depth=sql_build.door.door_depth,
-                    normal_opening_time=sql_build.door.normal_opening_time,
-                    normal_closing_time=sql_build.door.normal_closing_time,
-                    visible_opening_time=sql_build.door.visible_opening_time,
-                    visible_closing_time=sql_build.door.visible_closing_time,
-                )
-                if sql_build.door
-                else None,
-                "extenders": ExtenderRecord(
-                    build_id=sql_build.extender.build_id,
-                )
-                if sql_build.extender
-                else None,
-                "utilities": UtilityRecord(
-                    build_id=sql_build.utility.build_id,
-                )
-                if sql_build.utility
-                else None,
-                "entrances": EntranceRecord(
-                    build_id=sql_build.entrance.build_id,
-                )
-                if sql_build.entrance
-                else None,
-                "messages": MessageRecord(
-                    id=sql_build.messages[0].id,
-                    updated_at=sql_build.messages[0].updated_at.isoformat()
-                    if sql_build.messages[0].updated_at
-                    else None,
-                    server_id=sql_build.messages[0].server_id,
-                    channel_id=sql_build.messages[0].channel_id,
-                    author_id=sql_build.messages[0].author_id,
-                    purpose=sql_build.messages[0].purpose,
-                    build_id=sql_build.messages[0].build_id,
-                    vote_session_id=sql_build.messages[0].vote_session_id,
-                    content=sql_build.messages[0].content,
-                )
-                if sql_build.messages
-                else None,
-            }
-
-            return Build.from_json(joined_data)
+            return Build.from_sql_build(sql_build)
 
     @staticmethod
     async def from_message_id(message_id: int) -> "Build | None":
@@ -523,6 +405,49 @@ class Build:
             original_message=original_message,
             ai_generated=ai_generated,
             embedding=embedding,
+        )
+
+    @staticmethod
+    def from_sql_build(sql_build: SQLBuild) -> "Build":
+        """Converts a SQLBuild to a Build object."""
+        if not isinstance(sql_build, Door):
+            raise ValueError("Can only handle doors right now.")
+        door = sql_build
+        return Build(
+            id=door.id,
+            submission_status=door.submission_status,  # type: ignore
+            category=door.category,
+            record_category=door.record_category,
+            width=door.width,
+            height=door.height,
+            depth=door.depth,
+            door_width=door.door_width,
+            door_height=door.door_height,
+            door_depth=door.door_depth,
+            door_type=[type.name for type in door.types],
+            door_orientation_type=door.orientation,
+            wiring_placement_restrictions=[r.name for r in door.restrictions if r.type == "wiring-placement"],
+            component_restrictions=[r.name for r in door.restrictions if r.type == "component"],
+            miscellaneous_restrictions=[r.name for r in door.restrictions if r.type == "miscellaneous"],
+            normal_closing_time=door.normal_closing_time,
+            normal_opening_time=door.normal_opening_time,
+            visible_closing_time=door.visible_closing_time,
+            visible_opening_time=door.visible_opening_time,
+            extra_info=door.extra_info,  # type: ignore
+            creators_ign=[creator.ign for creator in door.creators],
+            image_urls=[link.url for link in door.links if link.media_type == "image"],
+            video_urls=[link.url for link in door.links if link.media_type == "video"],
+            world_download_urls=[link.url for link in door.links if link.media_type == "world-download"],
+            submitter_id=door.submitter_id,
+            completion_time=door.completion_time,
+            edited_time=door.edited_time.strftime("%Y-%m-%d %H:%M:%S") if door.edited_time else None,
+            original_server_id=door.original_message.server_id if door.original_message else None,
+            original_channel_id=door.original_message.channel_id if door.original_message else None,
+            original_message_id=door.original_message_id,
+            original_message_author_id=door.original_message.author_id if door.original_message else None,
+            original_message=door.original_message.content if door.original_message else None,
+            ai_generated=door.ai_generated,
+            embedding=door.embedding,
         )
 
     @staticmethod
@@ -965,15 +890,13 @@ class Build:
 
         async with self.lock(timeout=30):
             self.submission_status = Status.CONFIRMED
-            response: APIResponse[BuildRecord] = (
-                await DatabaseManager()
-                .table("builds")
-                .update({"submission_status": Status.CONFIRMED}, count=CountMethod.exact)
-                .eq("id", self.id)
-                .execute()
-            )
-        if response.count != 1:
-            raise ValueError("Failed to confirm submission in the database.")
+            db = DatabaseManager()
+            async with db.async_session() as session:
+                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(submission_status=Status.CONFIRMED)
+                result = await session.execute(stmt)
+                await session.commit()
+                if result.rowcount != 1:
+                    raise ValueError("Failed to confirm submission in the database.")
 
     async def deny(self) -> None:
         """Marks the build as denied.
@@ -987,15 +910,13 @@ class Build:
 
         async with self.lock(timeout=30):
             self.submission_status = Status.DENIED
-            response: APIResponse[BuildRecord] = (
-                await DatabaseManager()
-                .table("builds")
-                .update({"submission_status": Status.DENIED}, count=CountMethod.exact)
-                .eq("id", self.id)
-                .execute()
-            )
-        if response.count != 1:
-            raise ValueError("Failed to deny submission in the database.")
+            db = DatabaseManager()
+            async with db.async_session() as session:
+                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(submission_status=Status.DENIED)
+                result = await session.execute(stmt)
+                await session.commit()
+                if result.rowcount != 1:
+                    raise ValueError("Failed to deny submission in the database.")
 
     async def save(self) -> None:
         """
@@ -1027,21 +948,25 @@ class Build:
         }
 
         db = DatabaseManager()
-        response: APIResponse[BuildRecord]
         if self.id is None:
             # Lock the build immediately on creation instead of calling self.lock.acquire_lock()
             # to avoid issues where another task modifies the build before it is locked
             build_data |= {"is_locked": True}
-            response = await db.table("builds").insert(build_data, count=CountMethod.exact).execute()
+            async with db.async_session() as session:
+                stmt = insert(SQLBuild).values(**build_data)
+                result = await session.execute(stmt)
+                await session.commit()
+                assert result.inserted_primary_key is not None, "No primary key was inserted"
+                self.id = result.inserted_primary_key[0]
             self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
-
-            assert response.count == 1
-            self.id = response.data[0]["id"]
             delete_build_on_error = True
         else:
             await self.lock.acquire(timeout=30)
-            response = await db.table("builds").update(build_data, count=CountMethod.exact).eq("id", self.id).execute()
-            assert response.count == 1
+            async with db.async_session() as session:
+                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(**build_data)
+                result = await session.execute(stmt)
+                await session.commit()
+                assert result.rowcount == 1
             delete_build_on_error = False
 
         message_insert_task = asyncio.create_task(self._update_messages_table())
@@ -1074,19 +999,21 @@ class Build:
                 )
 
             await message_insert_task
-            await (
-                db.table("builds")
-                .update(
-                    {"extra_info": self.extra_info, "original_message_id": self.original_message_id},
-                    returning=ReturnMethod.minimal,
+            async with db.async_session() as session:
+                stmt = (
+                    update(SQLBuild)
+                    .where(SQLBuild.id == self.id)
+                    .values(extra_info=self.extra_info, original_message_id=self.original_message_id)
                 )
-                .eq("id", self.id)
-                .execute()
-            )
+                await session.execute(stmt)
+                await session.commit()
         except:
             if delete_build_on_error:
                 logger.warning("Failed to save build %s, deleting it", repr(self))
-                await db.table("builds").delete(returning=ReturnMethod.minimal).eq("id", self.id).execute()
+                async with db.async_session() as session:
+                    stmt = delete(SQLBuild).where(SQLBuild.id == self.id)
+                    await session.execute(stmt)
+                    await session.commit()
             else:
                 logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(self))
             raise
@@ -1109,13 +1036,29 @@ class Build:
                 "visible_closing_time": self.visible_closing_time,
                 "visible_opening_time": self.visible_opening_time,
             }
-            await db.table("doors").upsert(doors_data, returning=ReturnMethod.minimal).execute()
+            async with db.async_session() as session:
+                stmt = pg_insert(Door).values(**doors_data)
+                stmt = stmt.on_conflict_do_update(index_elements=["build_id"], set_=doors_data)
+                await session.execute(stmt)
+                await session.commit()
         elif self.category == "Extender":
-            raise NotImplementedError
+            async with db.async_session() as session:
+                stmt = pg_insert(Extender).values(build_id=self.id)
+                stmt = stmt.on_conflict_do_nothing()
+                await session.execute(stmt)
+                await session.commit()
         elif self.category == "Utility":
-            raise NotImplementedError
+            async with db.async_session() as session:
+                stmt = pg_insert(Utility).values(build_id=self.id)
+                stmt = stmt.on_conflict_do_nothing()
+                await session.execute(stmt)
+                await session.commit()
         elif self.category == "Entrance":
-            raise NotImplementedError
+            async with db.async_session() as session:
+                stmt = pg_insert(Entrance).values(build_id=self.id)
+                stmt = stmt.on_conflict_do_nothing()
+                await session.execute(stmt)
+                await session.commit()
         else:
             raise ValueError("Build category must be set")
 
@@ -1126,37 +1069,51 @@ class Build:
             self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         build_restrictions = [restriction.title() for restriction in build_restrictions]
-        response: SingleAPIResponse[list[RestrictionRecord]] = (
-            await DatabaseManager().rpc("find_restriction_ids", {"search_terms": build_restrictions}).execute()
-        )
-        restriction_ids = [restriction["id"] for restriction in response.data]
-        build_restrictions_data = list(
-            {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
-        )
-        if build_restrictions_data:
-            await (
-                db.table("build_restrictions").upsert(build_restrictions_data, returning=ReturnMethod.minimal).execute()
-            )
 
+        # Get restriction IDs using SQLAlchemy
+        async with db.async_session() as session:
+            stmt = select(Restriction).where(Restriction.name.in_(build_restrictions))
+            result = await session.execute(stmt)
+            restrictions = result.scalars().all()
+
+            restriction_ids = [restriction.id for restriction in restrictions]
+
+            # Clear existing build restrictions for this build
+            delete_stmt = delete(BuildRestriction).where(BuildRestriction.build_id == self.id)
+            await session.execute(delete_stmt)
+
+            # Insert new build restrictions
+            if restriction_ids:
+                build_restrictions_data = [
+                    {"build_id": self.id, "restriction_id": restriction_id} for restriction_id in restriction_ids
+                ]
+                stmt = insert(BuildRestriction).values(build_restrictions_data)
+                await session.execute(stmt)
+
+            await session.commit()
+
+        # Identify unknown restrictions
         unknown_restrictions: UnknownRestrictions = {}
         unknown_wiring_restrictions = []
         unknown_component_restrictions = []
         unknown_miscellaneous_restrictions = []
+
         for wiring_restriction in self.wiring_placement_restrictions:
             if wiring_restriction not in [
-                restriction["name"] for restriction in response.data if restriction["type"] == "wiring-placement"
+                restriction.name for restriction in restrictions if restriction.type == "wiring-placement"
             ]:
                 unknown_wiring_restrictions.append(wiring_restriction)
         for component_restriction in self.component_restrictions:
             if component_restriction not in [
-                restriction["name"] for restriction in response.data if restriction["type"] == "component"
+                restriction.name for restriction in restrictions if restriction.type == "component"
             ]:
                 unknown_component_restrictions.append(component_restriction)
         for miscellaneous_restriction in self.miscellaneous_restrictions:
             if miscellaneous_restriction not in [
-                restriction["name"] for restriction in response.data if restriction["type"] == "miscellaneous"
+                restriction.name for restriction in restrictions if restriction.type == "miscellaneous"
             ]:
                 unknown_miscellaneous_restrictions.append(miscellaneous_restriction)
+
         if unknown_wiring_restrictions:
             unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring_restrictions
         if unknown_component_restrictions:
@@ -1177,18 +1134,30 @@ class Build:
             door_type = [type_.title() for type_ in self.door_type]
         else:
             door_type = ["Regular"]
-        response: APIResponse[TypeRecord] = (
-            await db.table("types").select("*").eq("build_category", self.category).in_("name", door_type).execute()
-        )
-        type_ids = [type_["id"] for type_ in response.data]
-        build_types_data = list({"build_id": self.id, "type_id": type_id} for type_id in type_ids)
-        if build_types_data:
-            await db.table("build_types").upsert(build_types_data, returning=ReturnMethod.minimal).execute()
-        unknown_types: list[str] = []
-        for door_type in self.door_type:
-            if door_type not in [type_["name"] for type_ in response.data]:
-                unknown_types.append(door_type)
-        return unknown_types
+
+        async with db.async_session() as session:
+            stmt = select(Type).where(Type.build_category == self.category).where(Type.name.in_(door_type))
+            result = await session.execute(stmt)
+            types = result.scalars().all()
+            type_ids = [type_.id for type_ in types]
+
+            # Clear existing build types for this build
+            delete_stmt = delete(BuildType).where(BuildType.build_id == self.id)
+            await session.execute(delete_stmt)
+
+            # Insert new build types
+            if type_ids:
+                build_types_data = [{"build_id": self.id, "type_id": type_id} for type_id in type_ids]
+                stmt = insert(BuildType).values(build_types_data)
+                await session.execute(stmt)
+
+            await session.commit()
+
+            unknown_types: list[str] = []
+            for door_type_name in self.door_type:
+                if door_type_name not in [type_.name for type_ in types]:
+                    unknown_types.append(door_type_name)
+            return unknown_types
 
     async def _update_build_links_table(self) -> None:
         """Updates the build_links table with the given data. This function assumes lock is acquired."""
@@ -1205,35 +1174,40 @@ class Build:
             build_links_data.extend(
                 {"build_id": self.id, "url": link, "media_type": "world_download"} for link in self.world_download_urls
             )
+
         if build_links_data:
-            await (
-                DatabaseManager()
-                .table("build_links")
-                .upsert(build_links_data, returning=ReturnMethod.minimal)
-                .execute()
-            )
+            db = DatabaseManager()
+            async with db.async_session() as session:
+                # Clear existing build links for this build
+                delete_stmt = delete(BuildLink).where(BuildLink.build_id == self.id)
+                await session.execute(delete_stmt)
+
+                # Insert new build links
+                stmt = insert(BuildLink).values(build_links_data)
+                await session.execute(stmt)
+                await session.commit()
 
     async def _update_build_creators_table(self) -> None:
         """Updates the build_creators table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
 
-        lookup_tasks = (
-            db.table("users").select("id").eq("ign", creator_ign).maybe_single().execute()
-            for creator_ign in self.creators_ign
-        )
-        responses = await asyncio.gather(*lookup_tasks)
-
+        # Look up existing users
         creator_ids: list[int | None] = []
         missing_creator_tasks: list[asyncio.Task[int]] = []
         missing_creator_indices: list[int] = []
 
-        for i, (creator_ign, response) in enumerate(zip(self.creators_ign, responses)):
-            if response:
-                creator_ids.append(response.data["id"])
-            else:
-                missing_creator_tasks.append(asyncio.create_task(db.user.add_user(ign=creator_ign)))
-                missing_creator_indices.append(len(creator_ids))
-                creator_ids.append(None)  # Placeholder
+        async with db.async_session() as session:
+            for i, creator_ign in enumerate(self.creators_ign):
+                stmt = select(User.id).where(User.ign == creator_ign)
+                result = await session.execute(stmt)
+                user_id = result.scalar_one_or_none()
+
+                if user_id is not None:
+                    creator_ids.append(user_id)
+                else:
+                    missing_creator_tasks.append(asyncio.create_task(db.user.add_user(ign=creator_ign)))
+                    missing_creator_indices.append(len(creator_ids))
+                    creator_ids.append(None)  # Placeholder
 
         # Add missing creators to the database
         missing_creator_ids = await asyncio.gather(*missing_creator_tasks)
@@ -1243,49 +1217,62 @@ class Build:
 
         build_creators_data = [{"build_id": self.id, "user_id": user_id} for user_id in creator_ids]
         if build_creators_data:
-            await (
-                DatabaseManager()
-                .table("build_creators")
-                .upsert(build_creators_data, returning=ReturnMethod.minimal)
-                .execute()
-            )
+            async with db.async_session() as session:
+                # Clear existing build creators for this build
+                delete_stmt = delete(BuildCreator).where(BuildCreator.build_id == self.id)
+                await session.execute(delete_stmt)
+
+                # Insert new build creators
+                stmt = insert(BuildCreator).values(build_creators_data)
+                await session.execute(stmt)
+                await session.commit()
 
     async def _update_build_versions_table(self) -> None:
         """Updates the build_versions table with the given data. This function assumes lock is acquired."""
         db = DatabaseManager()
-        functional_versions = self.versions or await db.get_or_fetch_newest_version(edition="Java")
+        functional_versions = self.versions or [await db.get_or_fetch_newest_version(edition="Java")]
 
         # TODO: raise an error if any versions are not found in the database
-        response: SingleAPIResponse[list[QuantifiedVersionRecord]] = (
-            await db.rpc("get_quantified_version_names", {}).in_("quantified_name", functional_versions).execute()
-        )
-        version_ids = [version["id"] for version in response.data]
-        build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
-        if build_versions_data:
-            await db.table("build_versions").upsert(build_versions_data, returning=ReturnMethod.minimal).execute()
+        async with db.async_session() as session:
+            stmt = select(func.get_quantified_version_ids(functional_versions))
+            result = await session.execute(stmt)  # rows of id, quantified_name
+            version_ids = [version_id for version_id, _ in result.all()]
+            build_versions_data = list({"build_id": self.id, "version_id": version_id} for version_id in version_ids)
+            if build_versions_data:
+                stmt = pg_insert(BuildVersion).values(build_versions_data)
+                await session.execute(stmt)
+                await session.commit()
 
     async def _update_messages_table(self) -> None:
         """Updates the messages table with the given data. This function assumes lock is acquired."""
         if self.original_message_id is None:
             return
 
-        await (
-            DatabaseManager()
-            .table("messages")
-            .insert(
-                {
-                    "server_id": self.original_server_id,
-                    "channel_id": self.original_channel_id,
-                    "id": self.original_message_id,
-                    "build_id": self.id,
-                    "purpose": "build_original_message",
-                    "content": self.original_message,
-                    "author_id": self.original_message_author_id,
-                },
-                returning=ReturnMethod.minimal,
+        db = DatabaseManager()
+        async with db.async_session() as session:
+            stmt = pg_insert(Message).values(
+                id=self.original_message_id,
+                server_id=self.original_server_id,
+                channel_id=self.original_channel_id,
+                build_id=self.id,
+                purpose="build_original_message",
+                content=self.original_message,
+                author_id=self.original_message_author_id,
             )
-            .execute()
-        )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "server_id": stmt.excluded.server_id,
+                    "channel_id": stmt.excluded.channel_id,
+                    "build_id": stmt.excluded.build_id,
+                    "purpose": stmt.excluded.purpose,
+                    "content": stmt.excluded.content,
+                    "author_id": stmt.excluded.author_id,
+                    "updated_at": stmt.excluded.updated_at,
+                },
+            )
+            await session.execute(stmt)
+            await session.commit()
 
 
 class BuildLock:
@@ -1312,18 +1299,20 @@ class BuildLock:
     async def _try_lock(self) -> bool:
         """Tries to acquire the lock."""
         assert self.build_id is not None
-        response = (
-            await DatabaseManager()
-            .table("builds")
-            .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.minimal)
-            .eq("id", self.build_id)
-            .eq("is_locked", False)
-            .execute()
-        )
-        if response.count == 1:
-            self._lock_count = 1
-            return True
-        return False
+        db = DatabaseManager()
+        async with db.async_session() as session:
+            stmt = (
+                update(SQLBuild)
+                .where(SQLBuild.id == self.build_id)
+                .where(SQLBuild.is_locked.is_(False))
+                .values(is_locked=True)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            if result.rowcount == 1:
+                self._lock_count = 1
+                return True
+            return False
 
     async def acquire(self, *, blocking: bool = True, timeout: float = -1) -> bool:
         """Acquires a lock on the build to prevent concurrent modifications.
@@ -1376,13 +1365,11 @@ class BuildLock:
             return
 
         if self._lock_count == 0:
-            await (
-                DatabaseManager()
-                .table("builds")
-                .update({"is_locked": False}, returning=ReturnMethod.minimal)
-                .eq("id", self.build_id)
-                .execute()
-            )
+            db = DatabaseManager()
+            async with db.async_session() as session:
+                stmt = update(SQLBuild).where(SQLBuild.id == self.build_id).values(is_locked=False)
+                await session.execute(stmt)
+                await session.commit()
 
 
 class LockContextManager:
@@ -1406,16 +1393,15 @@ class LockContextManager:
 
 async def clean_locks() -> None:
     """Cleans up locks that were not released properly."""
-    await (
-        DatabaseManager()
-        .table("builds")
-        .update({"is_locked": False}, returning=ReturnMethod.minimal)
-        .lt("locked_at", discord.utils.utcnow() - timedelta(minutes=5))
-        .execute()
-    )
+    db = DatabaseManager()
+    async with db.async_session() as session:
+        cutoff_time = discord.utils.utcnow() - timedelta(minutes=5)
+        stmt = update(SQLBuild).where(SQLBuild.locked_at < cutoff_time).values(is_locked=False)
+        await session.execute(stmt)
+        await session.commit()
 
 
-async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> list[str]:
+async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> Sequence[str]:
     """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
 
     Args:
@@ -1425,23 +1411,23 @@ async def get_valid_restrictions(type: Literal["component", "wiring-placement", 
         A list of valid restrictions for the given type.
     """
     db = DatabaseManager()
-    valid_restrictions_response: APIResponse[RestrictionRecord] = (
-        await db.table("restrictions").select("name").eq("type", type).execute()
-    )
-    return [restriction["name"] for restriction in valid_restrictions_response.data]
+    async with db.async_session() as session:
+        stmt = select(Restriction.name).where(Restriction.type == type)
+        result = await session.execute(stmt)
+        return result.scalars().all()
 
 
-async def get_valid_door_types() -> list[str]:
+async def get_valid_door_types() -> Sequence[str]:
     """Gets a list of valid door types. The door types are returned in the original case.
 
     Returns:
         A list of valid door types.
     """
     db = DatabaseManager()
-    valid_door_types_response: APIResponse[TypeRecord] = (
-        await db.table("types").select("name").eq("build_category", "Door").execute()
-    )
-    return [door_type["name"] for door_type in valid_door_types_response.data]
+    async with db.async_session() as session:
+        stmt = select(Type.name).where(Type.build_category == "Door")
+        result = await session.execute(stmt)
+        return result.scalars().all()
 
 
 async def validate_restrictions(
@@ -1498,6 +1484,7 @@ async def get_builds_by_filter(*, filter: Mapping[str, Any] | None = None) -> li
     Returns:
         A list of Build objects.
     """
+    # TODO: This is not trtivial in SQLAlchemy, so we keep the supabase client to do this.
     db = DatabaseManager()
     query = db.table("builds").select(all_build_columns)
 
@@ -1518,13 +1505,30 @@ async def get_builds_by_id(build_ids: list[int]) -> list[Build | None]:
         return []
 
     db = DatabaseManager()
-    response = await db.table("builds").select(all_build_columns).in_("id", build_ids).execute()
+    async with db.async_session() as session:
+        stmt = (
+            select(SQLBuild)
+            .options(
+                selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
+                selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
+                selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
+                selectinload(SQLBuild.build_types).selectinload(BuildType.type),
+                selectinload(SQLBuild.links),
+                selectinload(SQLBuild.messages),
+            )
+            .where(SQLBuild.id.in_(build_ids))
+        )
+        result = await session.execute(stmt)
+        sql_builds = result.scalars().all()
 
-    builds: list[Build | None] = [None] * len(build_ids)
-    for build_json in response.data:
-        idx = build_ids.index(build_json["id"])
-        builds[idx] = Build.from_json(build_json)
-    return builds
+        # Create result list with None placeholders
+        builds: list[Build | None] = [None] * len(build_ids)
+
+        # Fill in the found builds at their correct positions
+        for sql_build in sql_builds:
+            idx = build_ids.index(sql_build.id)
+            builds[idx] = Build.from_sql_build(sql_build)
+        return builds
 
 
 async def get_unsent_builds(server_id: int) -> list[Build] | None:
@@ -1535,26 +1539,3 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     response = await db.rpc("get_unsent_builds", {"server_id_input": server_id}).execute()
     server_unsent_builds = response.data
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
-
-
-async def main():
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    response = (
-        await DatabaseManager()
-        .table("builds")
-        .update({"is_locked": True}, count=CountMethod.exact, returning=ReturnMethod.representation)
-        .eq("id", 6)
-        .execute()
-    )
-    print(response)
-    build = await Build.from_id(43)
-    if build:
-        print(repr(build))
-        # await build.save()
-        # print(build.as_dict())
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
