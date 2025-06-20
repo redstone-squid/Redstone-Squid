@@ -51,7 +51,7 @@ def sample_build() -> Build:
 
 @pytest.fixture
 def sample_joined_build_record(
-    sample_version_data: list[VersionRecord], sample_restriction_data: list[RestrictionRecord]
+    sample_version_json_data: list[VersionRecord], sample_restriction_json_data: list[RestrictionRecord]
 ) -> JoinedBuildRecord:
     """Sample JoinedBuildRecord for testing."""
     return {
@@ -84,8 +84,8 @@ def sample_joined_build_record(
         "utilities": None,
         "entrances": None,
         "types": [{"id": 1, "name": "Regular", "build_category": BuildCategory.DOOR}],
-        "restrictions": sample_restriction_data,
-        "versions": sample_version_data,
+        "restrictions": sample_restriction_json_data,
+        "versions": sample_version_json_data,
         "build_links": [
             {"build_id": 1, "url": "https://example.com/image.png", "media_type": "image"},
             {"build_id": 1, "url": "https://example.com/video.mp4", "media_type": "video"},
