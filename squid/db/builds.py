@@ -22,8 +22,8 @@ from postgrest.types import CountMethod, ReturnMethod
 
 from squid.db import DatabaseManager
 from squid.db.schema import (
-    BuildRecord,
     BuildCategory,
+    BuildRecord,
     DoorOrientationName,
     DoorRecord,
     EntranceRecord,
@@ -41,7 +41,6 @@ from squid.db.schema import (
     UtilityRecord,
     VersionRecord,
 )
-from squid.db.user import add_user
 from squid.db.utils import get_version_string, utcnow
 
 logger = logging.getLogger(__name__)
@@ -1095,7 +1094,7 @@ class Build:
             if response:
                 creator_ids.append(response.data["id"])
             else:
-                missing_creator_tasks.append(asyncio.create_task(add_user(ign=creator_ign)))
+                missing_creator_tasks.append(asyncio.create_task(db.user.add_user(ign=creator_ign)))
                 missing_creator_indices.append(len(creator_ids))
                 creator_ids.append(None)  # Placeholder
 
