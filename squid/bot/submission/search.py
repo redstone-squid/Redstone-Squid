@@ -1,5 +1,7 @@
 """Everything related to querying the database for information."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 from typing import TYPE_CHECKING
@@ -10,14 +12,14 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 from discord.utils import escape_markdown
 from openai import AsyncOpenAI
-from postgrest.base_request_builder import APIResponse
+from sqlalchemy import select
 
 from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
 from squid.db.builds import Build, get_builds_by_filter
-from squid.db.schema import Status, TypeRecord
+from squid.db.schema import Restriction, RestrictionAlias, Status, Type
 
 if TYPE_CHECKING:
     import squid.bot
@@ -50,32 +52,37 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
-            restrictions_query = self.bot.db.table("restrictions").select("*")
-            restriction_aliases_query = self.bot.db.table("restriction_aliases").select("*")
-            if query:
-                restrictions_query = restrictions_query.ilike("name", f"%{query}%")
-                restriction_aliases_query = restriction_aliases_query.ilike("alias", f"%{query}%")
-            response_task = asyncio.create_task(restrictions_query.execute())
-            response_alias_task = asyncio.create_task(restriction_aliases_query.execute())
+            async with self.bot.db.async_session() as session:
+                stmt = select(Restriction)
+                alias_stmt = select(RestrictionAlias)
 
-            response, response_alias = await asyncio.gather(response_task, response_alias_task)
-            restrictions = response.data
-            aliases = response_alias.data
+                if query:
+                    stmt = stmt.where(Restriction.name.ilike(f"%{query}%"))
+                    alias_stmt = alias_stmt.where(RestrictionAlias.alias.ilike(f"%{query}%"))
 
-            description = "\n".join([f"{restriction['id']}: {restriction['name']}" for restriction in restrictions])
-            description += "\n"
-            description += "\n".join([f"{alias['restriction_id']}: {alias['alias']} (alias)" for alias in aliases])
-            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
+                restrictions_task = session.execute(stmt)
+                aliases_task = session.execute(alias_stmt)
+
+                restrictions, aliases = await asyncio.gather(restrictions_task, aliases_task)
+                restrictions = restrictions.scalars().all()
+                aliases = aliases.scalars().all()
+
+                description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
+                description += "\n"
+                description += "\n".join([f"{a.restriction_id}: {a.alias} (alias)" for a in aliases])
+                await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
-            patterns: APIResponse[TypeRecord] = await self.bot.db.table("types").select("*").execute()
-            names = [pattern["name"] for pattern in patterns.data]
-            await sent_message.edit(
-                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
-            )
+            async with self.bot.db.async_session() as session:
+                stmt = select(Type)
+                patterns = (await session.execute(stmt)).scalars().all()
+                names = [pattern.name for pattern in patterns]
+                await sent_message.edit(
+                    content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+                )
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):

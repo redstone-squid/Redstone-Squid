@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, Annotated, cast
 import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
-from postgrest.types import ReturnMethod
+from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import insert
 
 import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
-from squid.db.schema import SETTINGS, Setting
+from squid.db.schema import SETTINGS, ServerSetting, Setting
 
 if TYPE_CHECKING:
     import squid.bot
@@ -30,20 +31,19 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
         """When the bot joins a guild, add the guild to the database."""
-        await (
-            self.bot.db.table("server_settings")
-            .upsert({"server_id": guild.id}, returning=ReturnMethod.minimal)
-            .execute()
-        )
+        async with self.bot.db.async_session() as session:
+            stmt = insert(ServerSetting).values(server_id=guild.id)
+            stmt = stmt.on_conflict_do_update(index_elements=[ServerSetting.server_id], set_={"in_server": True})
+            await session.execute(stmt)
+            await session.commit()
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
         """When the bot leaves a guild, marks the guild as deleted in the database."""
-        await (
-            self.bot.db.table("server_settings")
-            .update({"server_id": guild.id, "in_server": False}, returning=ReturnMethod.minimal)
-            .execute()
-        )
+        async with self.bot.db.async_session() as session:
+            stmt = update(ServerSetting).where(ServerSetting.server_id == guild.id).values(in_server=False)
+            await session.execute(stmt)
+            await session.commit()
 
     @settings_hybrid_group.command(name="list")
     @check_is_staff()

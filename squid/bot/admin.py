@@ -96,11 +96,14 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         self, _interaction: discord.Interaction[BotT], current: str
     ) -> list[app_commands.Choice[str]]:
         """Provide autocomplete for restriction names."""
-        restriction_records = await self.bot.db.fetch_all_restrictions()
-        restrictions = [r["name"] for r in restriction_records]
+        if not current:
+            return []
+
+        restrictions = await self.bot.db.fetch_all_restrictions()
+        restriction_names = [r.name for r in restrictions]
         matches = process.extract(
             current,
-            restrictions,
+            restriction_names,
             limit=25,
             score_cutoff=30,
         )

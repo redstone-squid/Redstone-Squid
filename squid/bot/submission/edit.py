@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
-from postgrest.base_request_builder import SingleAPIResponse
+from sqlalchemy import select
 
 from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
@@ -22,6 +22,7 @@ from squid.bot.utils import (
 )
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
 from squid.db.builds import Build
+from squid.db.schema import Message
 
 if TYPE_CHECKING:
     import squid.bot
@@ -226,21 +227,18 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if message.author.id != self.bot.user.id:  # type: ignore
             return await interaction.followup.send("This does not look like a build.", ephemeral=True)
 
-        response: SingleAPIResponse[dict[str, int | None]] | None = (
-            await self.bot.db.table("messages").select("build_id").eq("id", message.id).maybe_single().execute()
-        )
-        if response is None:
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
-        else:
-            build_id = response.data["build_id"]
+        async with self.bot.db.async_session() as session:
+            stmt = select(Message).where(Message.id == message.id)
+            result = await session.execute(stmt)
+            message_record = result.scalar_one_or_none()
 
-        if build_id is None:
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+            if message_record is None or message_record.build_id is None:
+                return await interaction.followup.send("This does not look like a build.", ephemeral=True)
 
-        build = await Build.from_id(build_id)
-        assert build is not None
-        await BuildEditView(build).send(interaction, ephemeral=True)
-        return None
+            build = await Build.from_id(message_record.build_id)
+            assert build is not None
+            await BuildEditView(build).send(interaction, ephemeral=True)
+            return None
 
 
 async def setup(bot: "squid.bot.RedstoneSquid") -> None:
