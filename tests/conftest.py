@@ -11,7 +11,7 @@ from postgrest.base_request_builder import APIResponse
 from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, VersionRecord, Version, Restriction
+from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 
 
 @pytest.fixture

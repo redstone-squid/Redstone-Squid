@@ -3,19 +3,19 @@
 import asyncio
 import io
 import mimetypes
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from postgrest.base_request_builder import APIResponse
-from postgrest.types import ReturnMethod
+from sqlalchemy import insert, select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import MessageRecord, Status
+from squid.db.schema import BuildLink, Message, Status
 from squid.db.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
@@ -108,19 +108,15 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         This does not include messages from other users, only the bot's messages.
         """
         assert self.bot.user is not None, "Bot should be logged in"
-        response: APIResponse[MessageRecord] = (
-            await DatabaseManager()
-            .table("messages")
-            .select("*")
-            .eq("build_id", self.build.id)
-            .eq("author_id", self.bot.user.id)
-            .execute()
-        )
+        stmt = select(Message).where(Message.build_id == self.build.id, Message.author_id == self.bot.user.id)
+        async with self.bot.db.async_session() as session:
+            result = await session.execute(stmt)
+            messages: Sequence[Message] = result.scalars().all()
         maybe_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(row["channel_id"], row["id"]) for row in response.data)
+            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
         )
-        messages = [msg for msg in maybe_messages if msg is not None]
-        return messages
+        discord_messages = [msg for msg in maybe_messages if msg is not None]
+        return discord_messages
 
     async def update_messages(self) -> None:
         """Updates all messages which for this build."""
@@ -140,6 +136,13 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             await self.bot.db.message.update_message_edited_time(message)
 
         await asyncio.gather(*(_update_single_message(message) for message in messages))
+
+    async def _insert_video_preview(self, preview_url: str) -> None:
+        """Insert a video preview into the database."""
+        async with self.bot.db.async_session() as session:
+            stmt = insert(BuildLink).values(build_id=self.build.id, url=preview_url, media_type="image")
+            await session.execute(stmt)
+            await session.commit()
 
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
@@ -173,15 +176,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                         )
                         build.image_urls.append(preview_url)
                         if build.id is not None:
-                            task = asyncio.create_task(
-                                DatabaseManager()
-                                .table("build_links")
-                                .insert(
-                                    {"build_id": build.id, "url": preview_url, "media_type": "image"},
-                                    returning=ReturnMethod.minimal,
-                                )
-                                .execute()
-                            )
+                            task = asyncio.create_task(self._insert_video_preview(preview_url))
                             background_tasks.add(task)
                             task.add_done_callback(background_tasks.discard)
                         em.set_image(url=preview_url)

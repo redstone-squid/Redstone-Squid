@@ -4,18 +4,21 @@ import asyncio
 import inspect
 from abc import ABC, abstractmethod
 from asyncio import Task
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from textwrap import dedent
 from types import MethodType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, Self, cast, final, override
 
 import discord
-from postgrest.base_request_builder import APIResponse, SingleAPIResponse
-from postgrest.types import ReturnMethod
+from sqlalchemy import insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import joinedload, selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import MessageRecord, Status, VoteKind, VoteSessionRecord
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
+from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
+from squid.db.schema import Message, Status, Vote, VoteKind, VoteSession
 
 if TYPE_CHECKING:
     import squid.bot
@@ -49,25 +52,27 @@ async def track_vote_session(
         The id of the vote session.
     """
     db = DatabaseManager()
-    response: APIResponse[VoteSessionRecord] = (
-        await db.table("vote_sessions")
-        .insert(
-            {
-                "status": "open",
-                "author_id": author_id,
-                "kind": kind,
-                "pass_threshold": pass_threshold,
-                "fail_threshold": fail_threshold,
-            }
+    async with db.async_session() as session:
+        stmt = (
+            insert(VoteSession)
+            .values(
+                status="open",
+                author_id=author_id,
+                kind=kind,
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
+            )
+            .returning(VoteSession)
         )
-        .execute()
-    )
-    session_id = response.data[0]["id"]
-    coros = [
-        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
-    ]
-    await asyncio.gather(*coros)
-    return session_id
+        result = await session.execute(stmt)
+        await session.commit()
+        session_id = result.scalar_one().id
+        coros = [
+            db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id)
+            for message in messages
+        ]
+        await asyncio.gather(*coros)
+        return session_id
 
 
 async def close_vote_session(vote_session_id: int) -> None:
@@ -77,12 +82,10 @@ async def close_vote_session(vote_session_id: int) -> None:
         vote_session_id: The id of the vote session.
     """
     db = DatabaseManager()
-    await (
-        db.table("vote_sessions")
-        .update({"status": "closed"}, returning=ReturnMethod.minimal)
-        .eq("id", vote_session_id)
-        .execute()
-    )
+    async with db.async_session() as session:
+        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed")
+        await session.execute(stmt)
+        await session.commit()
 
 
 async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
@@ -94,13 +97,18 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
         weight: The weight of the vote. None to remove the vote.
     """
     db = DatabaseManager()
-    await (
-        db.table("votes")
-        .upsert(
-            {"vote_session_id": vote_session_id, "user_id": user_id, "weight": weight}, returning=ReturnMethod.minimal
+    async with db.async_session() as session:
+        stmt = (
+            pg_insert(Vote)
+            .values(
+                vote_session_id=vote_session_id,
+                user_id=user_id,
+                weight=weight,
+            )
+            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight))
         )
-        .execute()
-    )
+        await session.execute(stmt)
+        await session.commit()
 
 
 class AbstractVoteSession(ABC):
@@ -264,25 +272,27 @@ class AbstractVoteSession(ABC):
         return None
 
     async def fetch_messages(self) -> set[discord.Message]:
-        """Fetch the messages of the vote session"""
+        """Fetch all messages for this vote session."""
         if len(self.message_ids) == len(self._messages):
             return self._messages
 
-        messages_record: APIResponse[MessageRecord] = (
-            await DatabaseManager().table("messages").select("*").in_("id", self.message_ids).execute()
-        )
-        cached_ids = {message.id for message in self._messages}
-        new_messages = await asyncio.gather(
-            *(
-                self.bot.get_or_fetch_message(record["channel_id"], record["id"])
-                for record in messages_record.data
-                if record["id"] not in cached_ids
+        async with self.bot.db.async_session() as session:
+            stmt = select(Message).where(Message.id.in_(self.message_ids))
+            result = await session.execute(stmt)
+            messages_record = result.scalars().all()
+
+            cached_ids = {message.id for message in self._messages}
+            new_messages = await asyncio.gather(
+                *(
+                    self.bot.get_or_fetch_message(record.channel_id, record.id)
+                    for record in messages_record
+                    if record.id not in cached_ids and record.channel_id is not None
+                )
             )
-        )
-        new_messages = (message for message in new_messages if message is not None)
-        self._messages.update(new_messages)
-        assert len(self._messages) == len(self.message_ids)
-        return self._messages
+            new_messages = (message for message in new_messages if message is not None)
+            self._messages.update(new_messages)
+            assert len(self._messages) == len(self.message_ids)
+            return self._messages
 
     @abstractmethod
     async def update_messages(self) -> None:
@@ -410,19 +420,14 @@ class BuildVoteSession(AbstractVoteSession):
             assert original is not None
             changes: list[tuple[str, Any, Any]] = original.diff(self.build)
 
-        await (
-            DatabaseManager()
-            .table("build_vote_sessions")
-            .insert(
-                {
-                    "vote_session_id": self.id,
-                    "build_id": self.build.id,
-                    "changes": changes,
-                },
-                returning=ReturnMethod.minimal,
+        async with DatabaseManager().async_session() as session:
+            stmt = insert(SQLBuildVoteSession).values(
+                vote_session_id=self.id,
+                build_id=self.build.id,
+                changes=changes,
             )
-            .execute()
-        )
+            await session.execute(stmt)
+            await session.commit()
 
         await self.update_messages()
 
@@ -436,44 +441,40 @@ class BuildVoteSession(AbstractVoteSession):
     @classmethod
     @override
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
-
-        vote_session_record = vote_session_response.data
-        return await cls._from_record(bot, vote_session_record)
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(SQLBuildVoteSession)
+                .where(SQLBuildVoteSession.id == vote_session_id)
+            )
+            result = await session.execute(stmt)
+            record = result.scalar_one_or_none()
+            if record is None:
+                return None
+            return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_record(cls, bot: "squid.bot.RedstoneSquid", record: dict[str, Any]) -> "BuildVoteSession":
+    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: VoteSession) -> "BuildVoteSession":
         """Create a vote session from a database record."""
-        if record["build_vote_sessions"] is None:
-            raise ValueError(f"Found a build vote session with no associated build id. session_id={record['id']}")
-        build_id: int = record["build_vote_sessions"]["build_id"]
-        build = await Build.from_id(build_id)
+        if record.build_vote_sessions is None:
+            raise ValueError(f"Found a build vote session with no associated build id. session_id={record.id}")
 
+        build = Build.from_sql_build(record.build_vote_sessions.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
             bot=bot,
-            messages=[msg["id"] for msg in record["messages"]],
-            author_id=record["author_id"],
+            messages=[msg.id for msg in record.messages],
+            author_id=record.author_id,
             build=build,
-            type="add",
-            pass_threshold=record["pass_threshold"],
-            fail_threshold=record["fail_threshold"],
+            type="add",  # TODO: Handle update type properly
+            pass_threshold=record.pass_threshold,
+            fail_threshold=record.fail_threshold,
         )
         # We can skip _async_init because we already have the id and everything has been tracked before
-        self.id = record["id"]
-        self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-        self.is_closed = record["status"] == "closed"
+        self.id = record.id
+        self._votes = {vote.user_id: vote.weight for vote in record.votes}
+        self.is_closed = record.status == "closed"
 
         return self
 
@@ -517,25 +518,25 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: "type[BuildVoteSession]", bot: "squid.bot.RedstoneSquid"
+        cls: type["BuildVoteSession"], bot: "squid.bot.RedstoneSquid"
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
-        records: list[dict[str, Any]] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), build_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(SQLBuildVoteSession)
+                .where(SQLBuildVoteSession.status == "open")
+            )
+            result = await session.execute(stmt)
+            records = result.scalars().all()
 
-        return await asyncio.gather(*[cls._from_record(bot, record) for record in records])
+        return await asyncio.gather(*(cls._from_domain(bot, record) for record in records))
 
 
 @final
 class DeleteLogVoteSession(AbstractVoteSession):
     """A vote session for deleting a message from the log."""
 
-    kind = "delete_log"
+    kind: Final = "delete_log"
 
     def __init__(
         self,
@@ -581,20 +582,15 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self.id = await track_vote_session(
             await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
         )
-        await (
-            DatabaseManager()
-            .table("delete_log_vote_sessions")
-            .insert(
-                {
-                    "vote_session_id": self.id,
-                    "target_message_id": self.target_message.id,
-                    "target_channel_id": self.target_message.channel.id,
-                    "target_server_id": self.target_message.guild.id,  # type: ignore
-                },
-                returning=ReturnMethod.minimal,
+        async with self.bot.db.async_session() as session:
+            stmt = insert(SQLDeleteLogVoteSession).values(
+                vote_session_id=self.id,
+                target_message_id=self.target_message.id,
+                target_channel_id=self.target_message.channel.id,
+                target_server_id=self.target_message.guild.id,  # type: ignore
             )
-            .execute()
-        )
+            await session.execute(stmt)
+            await session.commit()
         await self.update_messages()
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
@@ -606,54 +602,43 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @classmethod
     @override
     async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
-        vote_session_response: SingleAPIResponse[dict[str, Any]] | None = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("id", vote_session_id)
-            .eq("kind", cls.kind)
-            .maybe_single()
-            .execute()
-        )
-        if vote_session_response is None:
-            return None
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(SQLDeleteLogVoteSession)
+                .where(SQLDeleteLogVoteSession.id == vote_session_id)
+            )
+            result = await session.execute(stmt)
+            record = result.scalar_one_or_none()
+            if record is None:
+                return None
 
-        vote_session_record = vote_session_response.data
-        target_message = await bot.get_or_fetch_message(
-            vote_session_record["delete_log_vote_sessions"]["target_channel_id"],
-            vote_session_record["delete_log_vote_sessions"]["target_message_id"],
-        )
-        if target_message is None:
-            return None
-
-        return await cls._from_record(bot, vote_session_record)
+        return await cls._from_domain(bot, record)
 
     @classmethod
-    async def _from_record(
-        cls, bot: "squid.bot.RedstoneSquid", record: Mapping[str, Any]
+    async def _from_domain(
+        cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession
     ) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
-        session_data = record["delete_log_vote_sessions"]
-        target_message = await bot.get_or_fetch_message(
-            session_data["target_channel_id"], session_data["target_message_id"]
-        )
+        target_message = await bot.get_or_fetch_message(record.target_channel_id, record.target_message_id)
         if target_message is None:
             return None
+        session = record.vote_session
 
         self = cls.__new__(cls)
         self._allow_init = True
         self.__init__(
             bot,
-            [msg["id"] for msg in record["messages"]],
-            record["author_id"],
+            [msg.id for msg in session.messages],
+            session.author_id,
             target_message,
-            record["pass_threshold"],
-            record["fail_threshold"],
+            session.pass_threshold,
+            session.fail_threshold,
         )
-        self.id = record[
-            "id"
-        ]  # We can skip _async_init because we already have the id and everything has been tracked before
-        self._votes = {vote["user_id"]: vote["weight"] for vote in record["votes"]}
-        self.is_closed = record["status"] == "closed"
+        self.id = (
+            record.vote_session_id
+        )  # We can skip _async_init because we already have the id and everything has been tracked before
+        self._votes = {vote.user_id: vote.weight for vote in session.votes}
+        self.is_closed = session.status == "closed"
         return self
 
     @override
@@ -707,13 +692,13 @@ class DeleteLogVoteSession(AbstractVoteSession):
         cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
     ) -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
-        records: list[VoteSessionRecord] = (
-            await bot.db.table("vote_sessions")
-            .select("*, messages(*), votes(*), delete_log_vote_sessions(*)")
-            .eq("status", "open")
-            .eq("kind", cls.kind)
-            .execute()
-        ).data
+        async with bot.db.async_session() as session:
+            stmt = (
+                select(SQLDeleteLogVoteSession)
+                .where(SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind)
+            )
+            result = await session.execute(stmt)
+            records = result.scalars().all()
 
-        sessions = await asyncio.gather(*[cls._from_record(bot, record) for record in records])
-        return [session for session in sessions if session is not None]
+            sessions = await asyncio.gather(*(cls._from_domain(bot, record) for record in records))
+            return [session for session in sessions if session is not None]
