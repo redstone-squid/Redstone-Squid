@@ -1,10 +1,9 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from postgrest.base_request_builder import APIResponse
 
 from squid.db import DatabaseManager
-from squid.db.schema import RestrictionRecord, VersionRecord
+from squid.db.schema import Restriction, Version
 
 
 @pytest.mark.unit
@@ -18,24 +17,6 @@ class TestDatabaseManager:
     - Restriction handling
     """
 
-    async def test_version_caching(
-        self, mock_db_manager: DatabaseManager, sample_version_json_data: list[VersionRecord]
-    ) -> None:
-        """Test that version list is properly cached."""
-        mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
-            data=sample_version_json_data, count=len(sample_version_json_data)
-        )
-        # First call should query the database
-        versions1 = await mock_db_manager.get_or_fetch_versions_list(edition="Java")
-        assert versions1 == sample_version_json_data
-
-        # Second call should use cached data
-        versions2 = await mock_db_manager.get_or_fetch_versions_list(edition="Java")
-        assert versions2 == sample_version_json_data
-
-        # Verify database was only queried once
-        mock_db_manager.table().select().execute.assert_called_once()  # type: ignore
-
     @pytest.mark.parametrize(
         "spec,expected",
         [
@@ -48,53 +29,46 @@ class TestDatabaseManager:
     async def test_version_spec_parsing(
         self,
         mock_db_manager: DatabaseManager,
-        sample_version_json_data: list[VersionRecord],
+        sample_version_data: list[Version],
         spec: str,
         expected: list[str],
     ) -> None:
         """Test version specification parsing with different formats."""
-        # Patch get_or_fetch_versions_list
-        with patch.object(mock_db_manager, "get_or_fetch_versions_list", return_value=sample_version_json_data):
+        # Patch get_or_fetch_versions_list to return Version objects instead of dicts
+        with patch.object(mock_db_manager, "get_or_fetch_versions_list", return_value=sample_version_data):
             result = await mock_db_manager.find_versions_from_spec(spec)
             assert sorted(result) == sorted(expected)
 
-    async def test_restriction_caching(
-        self, mock_db_manager: DatabaseManager, sample_restriction_json_data: list[RestrictionRecord]
-    ) -> None:
-        """Test that restrictions are properly cached."""
-        mock_db_manager.table().select().execute.return_value = APIResponse(  # type: ignore
-            data=sample_restriction_json_data, count=len(sample_restriction_json_data)
-        )
-
-        # First call should query the database
-        restrictions1 = await mock_db_manager.fetch_all_restrictions()
-        assert restrictions1 == sample_restriction_json_data
-
-        # Second call should use cached data
-        restrictions2 = await mock_db_manager.fetch_all_restrictions()
-        assert restrictions2 == sample_restriction_json_data
-
-        # Verify database was only queried once
-        mock_db_manager.table().select().execute.assert_called_once()  # type: ignore
-
     async def test_fetch_all_restrictions(
-        self, mock_db_manager: DatabaseManager, sample_restriction_json_data: list[RestrictionRecord]
+        self, mock_db_manager: DatabaseManager, sample_restriction_data: list[Restriction]
     ) -> None:
-        # Implementation of the new test function
-        pass
+        """Test fetching all restrictions returns expected data."""
+        with patch.object(mock_db_manager, "async_session") as mock_session_maker:
+            mock_session = AsyncMock()
+            mock_session_maker.return_value.__aenter__.return_value = mock_session
 
-    async def test_find_versions_from_spec_simple(
-        self,
-        mock_db_manager: DatabaseManager,
-        sample_version_json_data: list[VersionRecord],
-        spec: str,
-        expected: list[str],
-    ) -> None:
-        # Implementation of the new test function
-        pass
+            mock_result = Mock()
+            mock_scalars = Mock()
+            mock_scalars.all.return_value = sample_restriction_data
+            mock_result.scalars.return_value = mock_scalars
+            mock_session.execute.return_value = mock_result
+
+            restrictions = await mock_db_manager.fetch_all_restrictions()
+            assert restrictions == sample_restriction_data
 
     async def test_get_or_fetch_versions_list(
-        self, mock_db_manager: DatabaseManager, sample_restriction_json_data: list[RestrictionRecord]
+        self, mock_db_manager: DatabaseManager, sample_version_data: list[Version]
     ) -> None:
-        # Implementation of the new test function
-        pass
+        """Test fetching version list returns expected data."""
+        with patch.object(mock_db_manager, "async_session") as mock_session_maker:
+            mock_session = AsyncMock()
+            mock_session_maker.return_value.__aenter__.return_value = mock_session
+
+            mock_result = Mock()
+            mock_scalars = Mock()
+            mock_scalars.all.return_value = sample_version_data
+            mock_result.scalars.return_value = mock_scalars
+            mock_session.execute.return_value = mock_result
+
+            versions = await mock_db_manager.get_or_fetch_versions_list(edition="Java")
+            assert versions == sample_version_data

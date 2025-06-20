@@ -1,16 +1,17 @@
 """
 Global pytest configuration and shared fixtures.
 """
+
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
 import pytest
-from postgrest.base_request_builder import APIResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
 
 from squid.db import DatabaseManager
-from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord, BuildCategory
+from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, Version, VersionRecord
 
 
 @pytest.fixture
@@ -33,12 +34,23 @@ async def mock_env_vars() -> AsyncGenerator[None, None]:
 
 @pytest.fixture
 async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager, None]:
-    """Fixture that provides a DatabaseManager instance with mocked dependencies."""
+    """Fixture that provides a DatabaseManager instance with mocked SQLAlchemy dependencies."""
     with (
+        # Mock the SQLAlchemy engines and sessions
+        patch("squid.db.create_async_engine"),
+        patch("squid.db.create_engine"),
+        patch("squid.db.async_sessionmaker") as mock_async_sessionmaker,
+        patch("squid.db.sessionmaker"),
+        # Keep the Supabase client mocking for any legacy code
         patch("squid.db.AsyncClient.__init__", return_value=None),
         patch("squid.db.AsyncClient.table") as table_mock,
         patch("squid.db.AsyncClient.rpc", new_callable=AsyncMock),
     ):
+        # Mock SQLAlchemy session behavior
+        mock_session = AsyncMock(spec=AsyncSession)
+        mock_async_sessionmaker.return_value = lambda: mock_session
+
+        # Mock the table behavior (legacy Supabase code)
         table_instance = MagicMock()
         table_instance.select.return_value = table_instance
         table_instance.insert.return_value = table_instance
@@ -46,7 +58,7 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
         table_instance.delete.return_value = table_instance
         table_instance.eq.return_value = table_instance
         table_instance.order.return_value = table_instance
-        table_instance.execute = AsyncMock(return_value=APIResponse(data=[], count=0))
+        table_instance.execute = AsyncMock()
 
         table_mock.return_value = table_instance
 
