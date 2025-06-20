@@ -780,11 +780,6 @@ class Build:
         """
         if self.id is None:
             raise ValueError("Build ID is missing.")
-
-        db = DatabaseManager()
-        response = await db.table("builds").select(all_build_columns).eq("id", self.id).maybe_single().execute()
-        if not response:
-            raise ValueError("Build not found in the database.")
         raise NotImplementedError  # TODO
 
     def update_local(self, **data: Any) -> None:
