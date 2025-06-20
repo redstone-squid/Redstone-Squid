@@ -22,6 +22,7 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Formatting**: Ruff with 120-character lines and Python 3.12 target
 - **Testing**: pytest with asyncio support, markers for test categories (unit/integration/external)
 - **Documentation**: Google-style docstrings with type information
+- **Comments**: Do not add comments that purely describe the code.
 - **Type Safety**: Full type hints with BasedPyright for static analysis, types must be fully parameterized if it is not possible to be inferred from usage.
 
 ### Patterns to Follow
@@ -47,7 +48,8 @@ Add specially formatted comments throughout the codebase, where appropriate, for
 - Keep them concise (≤ 120 chars).  
 - **Important:** Before scanning files, always first try to **locate existing anchors** `AIDEV-*` in relevant subdirectories.  
 - **Update relevant anchors** when modifying associated code.  
-- **Do not remove `AIDEV-NOTE`s** without explicit human instruction.  
+- **Do not remove `AIDEV-NOTE`s** without explicit human instruction.
+
 Example:  
 # AIDEV-NOTE: perf-hot-path; avoid extra allocations (see ADR-24)  
 async def render_feed(...):  
