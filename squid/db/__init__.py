@@ -34,6 +34,8 @@ class DatabaseManager(AsyncClient):
         supabase_key: str | None = None,
         options: AsyncClientOptions | None = None,
         database_url: str | None = None,
+        *,
+        debug: bool = False,
     ):
         """Initializes the DatabaseManager."""
         supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
@@ -67,9 +69,9 @@ class DatabaseManager(AsyncClient):
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
-        self.async_engine = create_async_engine(base.set(drivername=f"{base.drivername}+{driver_async}"), echo=False)
+        self.async_engine = create_async_engine(base.set(drivername=f"{base.drivername}+{driver_async}"), echo=debug)
         self.async_session = async_sessionmaker(self.async_engine, expire_on_commit=False)
-        self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=False)
+        self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
         # Initialize managers
