@@ -8,9 +8,11 @@ import os
 from typing import ClassVar, Literal
 
 from async_lru import alru_cache
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy import create_engine, make_url, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
+from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
 from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 from squid.db.server_settings import ServerSettingManager
@@ -34,7 +36,9 @@ class DatabaseManager(AsyncClient):
         """Initializes the DatabaseManager."""
         supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
         supabase_key = supabase_key or os.environ.get("SUPABASE_KEY")
-        database_url = database_url or os.environ.get("DB_CONNECTION")
+        database_url = database_url or os.environ.get("DATABASE_URL")
+        driver_sync = os.environ.get("DB_DRIVER_SYNC")
+        driver_async = os.environ.get("DB_DRIVER_ASYNC")
 
         if not supabase_url:
             raise RuntimeError(
@@ -51,6 +55,10 @@ class DatabaseManager(AsyncClient):
                 "database_url not given and no DATABASE_URL environmental variable found. "
                 "Specify DATABASE_URL either with a .env file or a DATABASE_URL environment variable."
             )
+        if not driver_sync:
+            raise RuntimeError("No DB_DRIVER_SYNC environment variable found.")
+        if not driver_async:
+            raise RuntimeError("No DB_DRIVER_ASYNC environment variable found.")
 
         # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
@@ -58,8 +66,11 @@ class DatabaseManager(AsyncClient):
         self.message = MessageManager(self)
 
         # Initialize SQLAlchemy engine and session maker
-        self.async_engine: AsyncEngine = create_async_engine(database_url, echo=False)
+        base = make_url(database_url)
+        self.async_engine = create_async_engine(base.set(drivername=f"{base.drivername}+{driver_async}"), echo=False)
         self.async_session = async_sessionmaker(self.async_engine, expire_on_commit=False)
+        self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=False)
+        self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
     # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
     @alru_cache
