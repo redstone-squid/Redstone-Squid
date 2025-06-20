@@ -16,6 +16,7 @@ from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
 from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 from squid.db.server_settings import ServerSettingManager
+from squid.db.user import UserManager
 from squid.db.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
@@ -63,6 +64,7 @@ class DatabaseManager(AsyncClient):
         # Initialize Supabase client
         super().__init__(supabase_url, supabase_key, options)
         self.message = MessageManager(self)
+        self.user = UserManager(self)
 
         # Initialize SQLAlchemy engine and session maker
         base = make_url(database_url)
