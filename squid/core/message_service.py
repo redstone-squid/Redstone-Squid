@@ -1,4 +1,10 @@
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class Message:
+
 
 class MessageRepository:
     """Repository for Message persistence and queries."""
