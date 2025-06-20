@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 from typing import Callable, Final, Self, TypedDict, override
 
 import discord
-from discord import Message, Webhook
+from discord import Webhook
 from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
@@ -121,7 +121,7 @@ class RedstoneSquid(Bot):
         """Clean up dangling build locks in case some functions failed to release them."""
         await clean_locks()
 
-    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> Message | None:
+    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
 
