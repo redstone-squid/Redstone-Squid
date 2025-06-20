@@ -32,6 +32,7 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Don't bypass type hints**: Avoid `Any` types unless strictly necessary
 - **Don't skip error handling**: Always handle exceptions gracefully
 - **Don't block the event loop**: Use asyncio primitives for concurrent operations
+- **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 
 ## Anchor comments  
 
