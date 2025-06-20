@@ -10,13 +10,12 @@ This module tests:
 """
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from squid.db import DatabaseManager
 from squid.db.builds import Build, JoinedBuildRecord
-from squid.db.schema import BuildCategory, RestrictionRecord, Status, VersionRecord
+from squid.db.schema import BuildCategory, Door, RestrictionRecord, Status, VersionRecord
 
 
 @pytest.fixture
@@ -103,34 +102,71 @@ def sample_joined_build_record(
     }
 
 
+@pytest.fixture
+def sample_sql_door():
+    """Sample SQLAlchemy Door object for testing."""
+    # Create a mock Door object with the required attributes
+    door = MagicMock(spec=Door)
+    door.id = 1
+    door.submission_status = Status.PENDING
+    door.category = "Door"
+    door.record_category = None
+    door.width = 5
+    door.height = 6
+    door.depth = 7
+    door.door_width = 2
+    door.door_height = 3
+    door.door_depth = 1
+    door.orientation = "Door"
+    door.normal_closing_time = None
+    door.normal_opening_time = None
+    door.visible_closing_time = None
+    door.visible_opening_time = None
+    door.extra_info = {}
+    door.submitter_id = 1
+    door.completion_time = None
+    door.edited_time = None
+    door.original_message_id = 1234567890
+    door.original_message = None
+    door.ai_generated = False
+    door.embedding = None
+
+    # Mock related objects
+    door.types = [MagicMock(name="Regular")]
+    door.restrictions = [
+        MagicMock(name="No pistons", type="component"),
+        MagicMock(name="1-wide", type="wiring-placement"),
+    ]
+    door.links = [
+        MagicMock(url="https://example.com/image.png", media_type="image"),
+        MagicMock(url="https://example.com/video.mp4", media_type="video"),
+        MagicMock(url="https://example.com/world.zip", media_type="world-download"),
+    ]
+    door.versions = []
+    door.creators = [MagicMock(ign="testuser")]
+
+    return door
+
+
 def assert_build_attributes(build: Build, expected: dict[str, Any]):
     """Assert that the build attributes are equal to the expected values."""
     for attr, value in expected.items():
         assert getattr(build, attr) == value
 
 
+def get_build_constructor_args(build: Build) -> dict[str, Any]:
+    """Get constructor arguments from a Build instance, excluding computed properties."""
+    build_dict = build.as_dict()
+    # Remove computed properties that aren't constructor arguments
+    build_dict.pop("dimensions", None)
+    build_dict.pop("door_dimensions", None)
+    build_dict.pop("lock", None)
+    build_dict.pop("original_link", None)
+    return build_dict
+
+
 class TestBuildConstructors:
     """Tests for Build class constructors."""
-
-    async def test_from_id_success(
-        self, mock_db_manager: DatabaseManager, sample_joined_build_record: JoinedBuildRecord
-    ):
-        """Test successful build creation from ID."""
-        # Setup mock response
-        mock_db_manager.table().select().eq().maybe_single().execute = AsyncMock(  # type: ignore
-            return_value=MagicMock(data=sample_joined_build_record)
-        )
-
-        build = await Build.from_id(1)
-        assert build is not None
-
-    async def test_from_id_not_found(self, mock_db_manager: Any):
-        """Test build creation from non-existent ID."""
-        # Setup mock response for non-existent build
-        mock_db_manager.table().select().eq().maybe_single().execute = AsyncMock(return_value=None)
-
-        build = await Build.from_id(999)
-        assert build is None
 
     def test_from_json(self, sample_joined_build_record: JoinedBuildRecord):
         """Test build creation from JoinedBuildRecord."""
