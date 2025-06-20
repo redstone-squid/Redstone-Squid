@@ -1,4 +1,16 @@
-from typing import Any
+import uuid
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class User:
+    """A user in the system, which can be linked to both Discord and Minecraft accounts."""
+
+    id: int | None = None
+    ign: str | None = None
+    discord_id: int | None = None
+    minecraft_uuid: uuid.UUID | None = None
+
 
 class UserRepository:
     """Repository for User persistence and queries."""
@@ -9,6 +21,7 @@ class UserRepository:
     async def get_minecraft_username(self, user_uuid: str) -> str | None: ...
     async def generate_verification_code(self, user_uuid: str) -> int: ...
 
+
 class UserService:
     """Service for User domain logic and orchestration."""
 
@@ -16,4 +29,4 @@ class UserService:
     async def link_account(self, user_id: int, code: str) -> bool: ...
     async def unlink_account(self, user_id: int) -> bool: ...
     async def get_mc_username(self, user_uuid: str) -> str | None: ...
-    async def request_verification_code(self, user_uuid: str) -> int: ... 
+    async def request_verification_code(self, user_uuid: str) -> int: ...

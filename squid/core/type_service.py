@@ -1,4 +1,17 @@
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Any
+
+from squid.db.schema import BuildCategory
+
+
+@dataclass(slots=True)
+class Type:
+    """A build pattern/type (e.g., specific door mechanisms, utilities)."""
+
+    id: int | None = None
+    name: str
+    build_category: BuildCategory
+
 
 class TypeRepository:
     """Repository for Type (build pattern) persistence and queries."""
@@ -9,6 +22,7 @@ class TypeRepository:
     async def add_type(self, name: str, build_category: str | None = None) -> int: ...
     async def delete_type(self, type_id: int) -> None: ...
 
+
 class TypeService:
     """Service for Type (build pattern) domain logic and orchestration."""
 
@@ -16,4 +30,4 @@ class TypeService:
     async def find_type(self, name: str, build_category: str | None = None) -> Any: ...
     async def list_types(self, build_category: str | None = None) -> list[Any]: ...
     async def create_type(self, name: str, build_category: str | None = None) -> int: ...
-    async def remove_type(self, type_id: int) -> None: ... 
+    async def remove_type(self, type_id: int) -> None: ...

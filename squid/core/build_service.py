@@ -1,11 +1,21 @@
 from dataclasses import dataclass, field
-from typing import Any, Sequence, Mapping, Final
+from datetime import datetime
+from typing import Any, Mapping, Sequence
 
-from squid.db.builds import frozen_field
-from squid.db.schema import Status, BuildCategory, RecordCategory, DoorOrientationName, Info
+from pyparsing import Literal
+
+from squid.core.message_service import Message
+from squid.core.user_service import User
+from squid.db.schema import DoorOrientationName, Info, MediaType, RecordCategory, Status
 
 
-@dataclass(kw_only=True)
+@dataclass(slots=True)
+class Link:
+    url: str
+    media_type: MediaType
+
+
+@dataclass(kw_only=True, slots=True)
 class Build:
     id: int | None = None
     submission_status: Status | None = None
@@ -22,23 +32,21 @@ class Build:
     miscellaneous_restrictions: list[str] = field(default_factory=list)
 
     extra_info: Info = field(default_factory=Info)
-    creators_ign: list[str] = field(default_factory=list)
+    creators: list[User] = field(default_factory=list)
 
-    image_urls: list[str] = field(default_factory=list)
-    video_urls: list[str] = field(default_factory=list)
-    world_download_urls: list[str] = field(default_factory=list)
+    links: list[Link] = field(default_factory=list)
 
     submitter_id: int | None = None
     # TODO: save the submitted time too
-    completion_time: str | None = None
-    edited_time: str | None = None
+    completion_time: str | None = None  # Submission time is not a datetime
+    edited_time: datetime | None = None
 
     original_message: Message | None = None
-
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
 
-@dataclass(kw_only=True)
+
+@dataclass(kw_only=True, slots=True)
 class Door(Build):
     door_width: int | None = None
     door_height: int | None = None
@@ -52,15 +60,18 @@ class Door(Build):
     visible_closing_time: int | None = None
     visible_opening_time: int | None = None
 
-@dataclass(kw_only=True)
+
+@dataclass(kw_only=True, slots=True)
 class Extender(Build):
     pass
 
-@dataclass(kw_only=True)
+
+@dataclass(kw_only=True, slots=True)
 class Utility(Build):
     pass
 
-@dataclass(kw_only=True)
+
+@dataclass(kw_only=True, slots=True)
 class Entrance(Build):
     pass
 
@@ -76,6 +87,7 @@ class BuildRepository:
     async def delete(self, build_id: int) -> None: ...
     async def get_unsent_builds(self, server_id: int) -> list[Any] | None: ...
 
+
 class BuildService:
     """Service for Build domain logic and orchestration."""
 
@@ -84,6 +96,10 @@ class BuildService:
     async def confirm_build(self, build_id: int) -> None: ...
     async def deny_build(self, build_id: int) -> None: ...
     async def generate_embedding(self, build_id: int) -> list[float] | None: ...
-    async def set_restrictions(self, build_id: int, restrictions: Sequence[str] | Mapping[str, Sequence[str]]) -> None: ...
+    async def set_restrictions(
+        self, build_id: int, restrictions: Sequence[str] | Mapping[str, Sequence[str]]
+    ) -> None: ...
     async def get_title(self, build_id: int) -> str: ...
-    async def ai_generate_from_message(self, message: Any, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano") -> Any: ... 
+    async def ai_generate_from_message(
+        self, message: Any, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
+    ) -> Any: ...

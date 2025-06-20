@@ -2,22 +2,38 @@ from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass
+@dataclass(slots=True)
 class Message:
+    """A message associated with a build or vote session."""
+
+    id: int
+    server_id: int
+    channel_id: int | None = None
+    author_id: int
+    purpose: str
+    content: str | None = None
+
+    build_id: int | None = None
+    vote_session_id: int | None = None
 
 
 class MessageRepository:
     """Repository for Message persistence and queries."""
 
-    async def track_message(self, message: Any, purpose: str, *, build_id: int | None = None, vote_session_id: int | None = None) -> None: ...
+    async def track_message(
+        self, message: Any, purpose: str, *, build_id: int | None = None, vote_session_id: int | None = None
+    ) -> None: ...
     async def update_message_edited_time(self, message: int | Any) -> None: ...
     async def untrack_message(self, message: int | Any) -> Any: ...
     async def get_outdated_messages(self, server_id: int) -> list[Any] | None: ...
 
+
 class MessageService:
     """Service for Message domain logic and orchestration."""
 
-    async def create_message(self, message: Any, purpose: str, *, build_id: int | None = None, vote_session_id: int | None = None) -> None: ...
+    async def create_message(
+        self, message: Any, purpose: str, *, build_id: int | None = None, vote_session_id: int | None = None
+    ) -> None: ...
     async def edit_message_time(self, message: int | Any) -> None: ...
     async def remove_message(self, message: int | Any) -> Any: ...
-    async def find_outdated_messages(self, server_id: int) -> list[Any] | None: ... 
+    async def find_outdated_messages(self, server_id: int) -> list[Any] | None: ...
