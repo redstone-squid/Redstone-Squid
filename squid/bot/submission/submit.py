@@ -19,7 +19,7 @@ from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
-from squid.db.schema import Category, Status
+from squid.db.schema import BuildCategory, Status
 from squid.db.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                 build = await flags.to_build()
                 build.submitter_id = ctx.author.id
                 build.ai_generated = False
-                build.category = Category.DOOR
+                build.category = BuildCategory.DOOR
                 build.submission_status = Status.PENDING
 
                 build_handler = self.bot.for_build(build)
@@ -230,7 +230,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                 build.video_urls.append(url)
 
         build.submission_status = Status.PENDING
-        build.category = Category.DOOR
+        build.category = BuildCategory.DOOR
         build.submitter_id = message.author.id
         # Order is important here.
         await build.save()

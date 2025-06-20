@@ -16,7 +16,7 @@ import pytest
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build, JoinedBuildRecord
-from squid.db.schema import Category, RestrictionRecord, Status, VersionRecord
+from squid.db.schema import BuildCategory, RestrictionRecord, Status, VersionRecord
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def sample_build() -> Build:
     return Build(
         id=1,
         submission_status=Status.PENDING,
-        category=Category.DOOR,
+        category=BuildCategory.DOOR,
         record_category=None,
         width=5,
         height=6,
@@ -57,7 +57,7 @@ def sample_joined_build_record(
     return {
         "id": 1,
         "submission_status": Status.PENDING,
-        "category": Category.DOOR,
+        "category": BuildCategory.DOOR,
         "record_category": None,
         "width": 5,
         "height": 6,
@@ -83,7 +83,7 @@ def sample_joined_build_record(
         "extenders": None,
         "utilities": None,
         "entrances": None,
-        "types": [{"id": 1, "name": "Regular", "build_category": Category.DOOR}],
+        "types": [{"id": 1, "name": "Regular", "build_category": BuildCategory.DOOR}],
         "restrictions": sample_restriction_data,
         "versions": sample_version_data,
         "build_links": [
