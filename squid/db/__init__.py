@@ -5,7 +5,7 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 """
 
 import os
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Any
 
 from async_lru import alru_cache
 from sqlalchemy import create_engine, make_url, select
@@ -27,6 +27,13 @@ class DatabaseManager(AsyncClient):
     """Singleton class for the supabase client."""
 
     version_cache: ClassVar[dict[str | None, list[Version]]] = {}
+    _instance: ClassVar["DatabaseManager | None"] = None
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> "DatabaseManager":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(
         self,
@@ -38,6 +45,10 @@ class DatabaseManager(AsyncClient):
         debug: bool = False,
     ):
         """Initializes the DatabaseManager."""
+        if self._initialized:
+            return
+        self._initialized = True
+
         supabase_url = supabase_url or os.environ.get("SUPABASE_URL")
         supabase_key = supabase_key or os.environ.get("SUPABASE_KEY")
         database_url = database_url or os.environ.get("DATABASE_URL")
