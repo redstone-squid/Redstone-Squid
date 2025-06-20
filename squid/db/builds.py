@@ -240,10 +240,7 @@ class Build:
         db = DatabaseManager()
 
         async with db.async_session() as session:
-            stmt = (
-                select(SQLBuild)
-                .where(SQLBuild.id == build_id)
-            )
+            stmt = select(SQLBuild).where(SQLBuild.id == build_id)
             result = await session.execute(stmt)
             sql_build = result.unique().scalar_one_or_none()
 
