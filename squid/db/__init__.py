@@ -8,11 +8,11 @@ import os
 from typing import ClassVar, Literal
 
 from async_lru import alru_cache
-from postgrest.base_request_builder import APIResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from squid.db.message import MessageManager
-from squid.db.schema import RestrictionRecord, VersionRecord
+from squid.db.schema import Restriction, RestrictionRecord, Version, VersionRecord
 from squid.db.server_settings import ServerSettingManager
 from squid.db.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
@@ -65,8 +65,20 @@ class DatabaseManager(AsyncClient):
     @alru_cache
     async def fetch_all_restrictions(self) -> list[RestrictionRecord]:
         """Fetches all restrictions from the database."""
-        response: APIResponse[RestrictionRecord] = await self.table("restrictions").select("*").execute()
-        return response.data
+        async with self.async_session() as session:
+            result = await session.execute(select(Restriction))
+            rows = result.scalars().all()
+
+            # Convert SQLAlchemy rows to RestrictionRecord format
+            return [
+                RestrictionRecord(
+                    id=row.id,
+                    build_category=row.build_category,
+                    name=row.name,
+                    type=row.type,
+                )
+                for row in rows
+            ]
 
     async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[VersionRecord]:
         """Returns a list of versions from the database, sorted from oldest to newest.
@@ -75,17 +87,33 @@ class DatabaseManager(AsyncClient):
         if versions := self.version_cache.get(edition):
             return versions
 
-        versions_response: APIResponse[VersionRecord] = (
-            await self.table("versions")
-            .select("*")
-            .eq("edition", edition)
-            .order("major_version")
-            .order("minor_version")
-            .order("patch_number")
-            .execute()
-        )
-        self.version_cache[edition] = versions_response.data
-        return versions_response.data
+        async with self.async_session() as session:
+            stmt = (
+                select(Version)
+                .where(Version.edition == edition)
+                .order_by(
+                    Version.major_version,
+                    Version.minor_version,
+                    Version.patch_number,
+                )
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+
+        # Convert SQLAlchemy rows to VersionRecord format
+        version_records = [
+            VersionRecord(
+                id=row.id,
+                edition=row.edition,
+                major_version=row.major_version,
+                minor_version=row.minor_version,
+                patch_number=row.patch_number,
+            )
+            for row in rows
+        ]
+
+        self.version_cache[edition] = version_records
+        return version_records
 
     async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
         """Returns the newest version from the database. This method is cached."""
