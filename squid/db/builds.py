@@ -23,7 +23,7 @@ from postgrest.types import CountMethod, ReturnMethod
 from squid.db import DatabaseManager
 from squid.db.schema import (
     BuildRecord,
-    Category,
+    BuildCategory,
     DoorOrientationName,
     DoorRecord,
     EntranceRecord,
@@ -161,7 +161,7 @@ class Build:
 
     id: int | None = None
     submission_status: Status | None = None
-    category: Category | None = None
+    category: BuildCategory | None = None
     record_category: RecordCategory | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
@@ -349,7 +349,7 @@ class Build:
             id=id,
             submission_status=Status(submission_status),
             record_category=record_category,
-            category=Category(category),
+            category=BuildCategory(category),
             versions=versions,
             version_spec=version_spec,
             width=width,

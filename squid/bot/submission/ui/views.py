@@ -22,7 +22,7 @@ from squid.bot.submission.ui.components import (
 )
 from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
-from squid.db.schema import Category, Status
+from squid.db.schema import BuildCategory, Status
 
 if TYPE_CHECKING:
     import squid.bot
@@ -126,7 +126,7 @@ class BuildSubmissionForm(discord.ui.View):
         super().__init__(timeout=timeout)
         # Assumptions
         build.submission_status = Status.PENDING
-        build.category = Category.DOOR
+        build.category = BuildCategory.DOOR
 
         self.build = build
         self.value = None
