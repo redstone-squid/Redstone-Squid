@@ -73,7 +73,9 @@ class User(Base):
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
-    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", default_factory=list, lazy="raise_on_sql")
+    build_creators: Mapped[list["BuildCreator"]] = relationship(
+        back_populates="user", default_factory=list, lazy="raise_on_sql"
+    )
     builds: AssociationProxy[list["Build"]] = association_proxy("build_creators", "build", default_factory=list)
 
 
@@ -87,7 +89,9 @@ class Version(Base):
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
-    build_versions: Mapped[list["BuildVersion"]] = relationship(back_populates="version", default_factory=list, lazy="raise_on_sql")
+    build_versions: Mapped[list["BuildVersion"]] = relationship(
+        back_populates="version", default_factory=list, lazy="raise_on_sql"
+    )
     builds: AssociationProxy[list["Build"]] = association_proxy("build_versions", "build", default_factory=list)
 
 
@@ -107,7 +111,9 @@ class Restriction(Base):
     )
     builds: AssociationProxy[list["Build"]] = association_proxy("build_restrictions", "build", default_factory=list)
 
-    aliases: Mapped[list["RestrictionAlias"]] = relationship(back_populates="restriction", default_factory=list, lazy="selectin")
+    aliases: Mapped[list["RestrictionAlias"]] = relationship(
+        back_populates="restriction", default_factory=list, lazy="selectin"
+    )
 
 
 class RestrictionAlias(Base):
@@ -131,7 +137,9 @@ class Type(Base):
         String, unique=True
     )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
 
-    build_types: Mapped[list["BuildType"]] = relationship(back_populates="type", default_factory=list, lazy="raise_on_sql")
+    build_types: Mapped[list["BuildType"]] = relationship(
+        back_populates="type", default_factory=list, lazy="raise_on_sql"
+    )
     builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
 
 
@@ -151,8 +159,12 @@ class Message(Base):
     content: Mapped[str | None] = mapped_column(String)
     updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
 
-    build: Mapped["Build | None"] = relationship(back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="raise_on_sql")
-    vote_session: Mapped["VoteSession | None"] = relationship(back_populates="messages", default=None, lazy="raise_on_sql")
+    build: Mapped["Build | None"] = relationship(
+        back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="raise_on_sql"
+    )
+    vote_session: Mapped["VoteSession | None"] = relationship(
+        back_populates="messages", default=None, lazy="raise_on_sql"
+    )
 
 
 class Build(Base, kw_only=True):
@@ -251,6 +263,7 @@ class Extender(Build, kw_only=True):
     }
 
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+
 
 class Utility(Build, kw_only=True):
     """A utility build."""

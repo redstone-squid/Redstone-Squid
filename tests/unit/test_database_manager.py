@@ -46,7 +46,11 @@ class TestDatabaseManager:
         ],
     )
     async def test_version_spec_parsing(
-        self, mock_db_manager: DatabaseManager, sample_version_json_data: list[VersionRecord], spec: str, expected: list[str]
+        self,
+        mock_db_manager: DatabaseManager,
+        sample_version_json_data: list[VersionRecord],
+        spec: str,
+        expected: list[str],
     ) -> None:
         """Test version specification parsing with different formats."""
         # Patch get_or_fetch_versions_list
@@ -80,7 +84,11 @@ class TestDatabaseManager:
         pass
 
     async def test_find_versions_from_spec_simple(
-        self, mock_db_manager: DatabaseManager, sample_version_json_data: list[VersionRecord], spec: str, expected: list[str]
+        self,
+        mock_db_manager: DatabaseManager,
+        sample_version_json_data: list[VersionRecord],
+        spec: str,
+        expected: list[str],
     ) -> None:
         # Implementation of the new test function
         pass
