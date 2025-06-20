@@ -21,6 +21,7 @@ from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
+from squid.db.schema import Base
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -62,6 +63,7 @@ class RedstoneSquid(Bot):
         db: DatabaseManager,
         config: BotConfig | None = None,
     ):
+        db.validate_database_consistency(Base)
         self.db = db
         if config is None:
             config = {}
