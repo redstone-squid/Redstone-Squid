@@ -1,8 +1,11 @@
 [project]
 name = "redstone-squid"
+description = "A bot designed to manage redstone records"
 version = "1.5.7"
 requires-python = ">=3.12"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 # Whenever the dependencies change, run
 # 1. uv export -o requirements/base.txt
 # 2. uv export --only-dev -o requirements/dev.txt
@@ -28,6 +31,10 @@ dependencies = [
     "rapidfuzz>=3.13.0",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
 ]
+
+[project.urls]
+"Source Code" = "https://github.com/redstone-squid/Redstone-Squid"
+"Issue Tracker" = "https://github.com/redstone-squid/Redstone-Squid/issues"
 
 [dependency-groups]
 # Note: changes to this group has to be synced with requirements/dev.txt
