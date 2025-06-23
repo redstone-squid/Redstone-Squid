@@ -53,7 +53,9 @@ DbSettingKey = Literal[
     "trusted_roles_ids",
 ]
 
-Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+ListRoleSetting = Literal["Staff", "Trusted"]
+Setting = ScalarChannelSetting | ListRoleSetting
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
