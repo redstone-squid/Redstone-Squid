@@ -30,11 +30,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 from squid.db.inspect_db import is_sane_database
 
 
-# TODO: table names
-# TODO: move some fixtures to conftest.py
-# TODO: rename base_and_xxx_model
 # TODO: Think about what kind of tests are missing
-# TODO: See is_sane_database AI implementations
 @pytest.fixture
 def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing a base class and a simple test model."""
@@ -45,7 +41,7 @@ def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]
     class SaneTestModel(Base):
         """A sample SQLAlchemy model to demonstrate db conflicts."""
 
-        __tablename__ = "sanity_check_test"
+        __tablename__ = "sanity_check_test_1"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
         name: Mapped[str] = mapped_column(String(50), nullable=False)
 
@@ -53,18 +49,18 @@ def base_and_sane_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]
 
 
 @pytest.fixture
-def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]]:
+def base_and_sane_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and related test models."""
 
     class Base(DeclarativeBase):
         pass
 
     class RelationTestModel(Base):
-        __tablename__ = "sanity_check_test_2"
+        __tablename__ = "sanity_check_test_1"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     class RelationTestModel2(Base):
-        __tablename__ = "sanity_check_test_3"
+        __tablename__ = "sanity_check_test_2"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
         test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_2.id"))
         test_relationship: Mapped[RelationTestModel] = relationship(
@@ -75,14 +71,14 @@ def base_and_relation_models() -> tuple[type[DeclarativeBase], type[DeclarativeB
 
 
 @pytest.fixture
-def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
+def base_and_sane_declarative_model() -> tuple[type[DeclarativeBase], type[DeclarativeBase]]:
     """Fixture providing base class and a model with declarative attributes."""
 
     class Base(DeclarativeBase):
         pass
 
     class DeclarativeTestModel(Base):
-        __tablename__ = "sanity_check_test_4"
+        __tablename__ = "sanity_check_test_1"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
         @declared_attr
@@ -97,7 +93,7 @@ def base_and_declarative_model() -> tuple[type[DeclarativeBase], type[Declarativ
 
 
 @pytest.fixture
-def base_and_many_to_many_models():
+def base_and_sane_many_to_many_models():
     """Fixture providing base class and many-to-many related test models."""
 
     class Base(DeclarativeBase):
@@ -205,10 +201,10 @@ def test_sanity_check_fails_with_missing_column(
 
 def test_sanity_check_passes_with_relationships(
     db_engine: Engine,
-    base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
+        base_and_sane_relation_models,
 ):
     """Test that database sanity check correctly handles relationship tables."""
-    Base, RelationTestModel, RelationTestModel2 = base_and_relation_models
+    Base, RelationTestModel, RelationTestModel2 = base_and_sane_relation_models
 
     try:
         Base.metadata.drop_all(db_engine)
@@ -224,10 +220,10 @@ def test_sanity_check_passes_with_relationships(
 
 
 def test_sanity_check_passes_with_declarative_attributes(
-    db_engine: Engine, base_and_declarative_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
+    db_engine: Engine, base_and_sane_declarative_model
 ):
     """Test that database sanity check correctly handles models with declarative attributes."""
-    Base, DeclarativeTestModel = base_and_declarative_model
+    Base, DeclarativeTestModel = base_and_sane_declarative_model
 
     try:
         Base.metadata.drop_all(db_engine)
@@ -321,10 +317,10 @@ def test_sanity_check_fails_with_column_type_mismatch(
 
 def test_sanity_check_fails_with_missing_many_to_many_relationship(
     db_engine: Engine,
-    base_and_many_to_many_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
+        base_and_sane_many_to_many_models,
 ):
     """Test that database sanity check fails when a many-to-many relationship is missing from the model."""
-    Base, ManyToManyModel1, ManyToManyModel2 = base_and_many_to_many_models
+    Base, ManyToManyModel1, ManyToManyModel2 = base_and_sane_many_to_many_models
 
     # Create all tables including the association table
     Base.metadata.drop_all(db_engine)
@@ -346,10 +342,10 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
 
 def test_sanity_check_fails_with_missing_one_to_many_relationship(
     db_engine: Engine,
-    base_and_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
+        base_and_sane_relation_models,
 ):
     """Test that database sanity check fails when a one-to-many relationship is missing from the model."""
-    Base, ManyToManyModel1, ManyToManyModel2 = base_and_relation_models
+    Base, ManyToManyModel1, ManyToManyModel2 = base_and_sane_relation_models
 
     # Create all tables
     Base.metadata.drop_all(db_engine)
