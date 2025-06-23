@@ -1,7 +1,7 @@
 """Some functions related to storing and changing server ids for sending records."""
 
 from collections.abc import Iterable
-from typing import Literal, overload
+from typing import Literal, overload, TypedDict, Unpack
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -27,6 +27,18 @@ _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
 
 _DB_KEY_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in _SETTING_TO_DB_KEY.items()}
 assert set(_SETTING_TO_DB_KEY.keys()) == set(SETTINGS), "The mapping is not exhaustive!"
+
+
+class SettingOptions(TypedDict, total=False):
+    """A map of settings to their values."""
+
+    Smallest: int | None
+    Fastest: int | None
+    First: int | None
+    Builds: int | None
+    Vote: int | None
+    Staff: list[int]
+    Trusted: list[int]
 
 
 class ServerSettingManager:
@@ -91,32 +103,8 @@ class ServerSettingManager:
                 for setting_name in _DB_KEY_TO_SETTING.keys()
             }
 
-    @overload
-    async def set(
-        self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"], value: int | None
-    ) -> None: ...
-    @overload
-    async def set(self, server_id: int, setting: Literal["Staff", "Trusted"], value: list[int] | None) -> None: ...
-    @overload
-    async def set(self, server_id: int, setting: Setting, value: int | list[int] | None) -> None: ...
-
-    async def set(self, server_id: int, setting: Setting, value: int | list[int] | None) -> None:
-        """Updates a setting for a server."""
-        async with self.session() as session:
-            col_name = _SETTING_TO_DB_KEY[setting]
-            stmt = select(ServerSetting).where(ServerSetting.server_id == server_id)
-            result = await session.execute(stmt)
-            setting_obj = result.scalar_one_or_none()
-
-            if setting_obj is None:
-                setting_obj = ServerSetting(server_id=server_id)
-                session.add(setting_obj)
-
-            setattr(setting_obj, col_name, value)
-            await session.commit()
-
-    async def set_all(self, server_id: int, settings: dict[Setting, int | list[int] | None]) -> None:
-        """Updates a list of settings for a server."""
+    async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None:
+        """Updates settings for a server."""
         async with self.session() as session:
             stmt = select(ServerSetting).where(ServerSetting.server_id == server_id)
             result = await session.execute(stmt)
