@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.db.schema import (
     SETTINGS,
     DbSettingKey,
+    ListRoleSetting,
+    ScalarChannelSetting,
     ServerSetting,
     Setting,
 )
@@ -66,10 +68,10 @@ class ServerSettingManager:
 
     @overload
     async def get_single(
-        self, server_id: int, setting: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+        self, server_id: int, setting: ScalarChannelSetting
     ) -> int | None: ...
     @overload
-    async def get_single(self, server_id: int, setting: Literal["Staff", "Trusted"]) -> list[int]: ...
+    async def get_single(self, server_id: int, setting: ListRoleSetting) -> list[int]: ...
     @overload
     async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None: ...
 
@@ -89,7 +91,7 @@ class ServerSettingManager:
                 return None
             return getattr(setting_obj, col_name)
 
-    async def get_all(self, server_id: int) -> dict[Setting, int | list[int] | None]:
+    async def get_all(self, server_id: int) -> SettingOptions:
         """Gets the settings for a server."""
         async with self.session() as session:
             stmt = select(ServerSetting).where(ServerSetting.server_id == server_id)
@@ -98,10 +100,12 @@ class ServerSettingManager:
             if setting_obj is None:
                 return {}
 
-            return {
-                _DB_KEY_TO_SETTING[setting_name]: getattr(setting_obj, setting_name)
-                for setting_name in _DB_KEY_TO_SETTING.keys()
-            }
+            return SettingOptions(
+                **{
+                    _DB_KEY_TO_SETTING[setting_name]: getattr(setting_obj, setting_name)
+                    for setting_name in _DB_KEY_TO_SETTING.keys()
+                }
+            )
 
     async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None:
         """Updates settings for a server."""
