@@ -149,3 +149,24 @@ class BuildTagsManager:
             score_cutoff=30,
         )
         return matches
+
+    @alru_cache
+    async def search_patterns(self, query: str, limit: int = 25) -> list[tuple[Type, float, int]]:
+        """Search for patterns by a substring.
+
+        Args:
+            query (str): The substring to search for.
+            limit (int): The maximum number of results to return.
+
+        Returns:
+            A list of (pattern, score, index) tuples
+        """
+        patterns = await self.fetch_all_patterns()
+        matches = process.extract(
+            query,
+            patterns,
+            processor=lambda p: p.name,
+            limit=limit,
+            score_cutoff=30,
+        )
+        return matches

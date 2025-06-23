@@ -6,6 +6,7 @@ import asyncio
 import os
 from typing import TYPE_CHECKING
 
+import discord
 import vecs
 from discord import app_commands
 from discord.ext import commands
@@ -64,6 +65,26 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             await sent_message.edit(
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
+
+    @commands.hybrid_command()
+    async def search_patterns(self, ctx: Context[BotT], query: str):
+        """Searches for patterns by name."""
+        async with RunningMessage(ctx) as sent_message:
+            patterns = await self.bot.db.build_tags.search_patterns(query)
+            if not patterns:
+                await sent_message.edit(embed=utils.error_embed("Error", "No patterns found."))
+                return
+
+            description = "\n".join([f"{pattern.id}: {pattern.name}" for pattern in patterns])
+            await sent_message.edit(embed=utils.info_embed("Patterns", description))
+
+    @search_patterns.autocomplete("query")
+    async def search_patterns_autocomplete(
+        self, _interaction: discord.Interaction[BotT], current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Autocomplete for the search_patterns command."""
+        patterns = await self.bot.db.build_tags.search_patterns(current, limit=25)
+        return [app_commands.Choice(name=pattern[0].name, value=pattern[0].name) for pattern in patterns]
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):
