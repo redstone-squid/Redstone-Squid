@@ -18,7 +18,7 @@ from sqlalchemy import select
 from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
-from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
+from squid.bot.utils import RunningMessage
 from squid.db.builds import Build
 from squid.db.schema import Restriction, RestrictionAlias, Status, Type
 
@@ -91,8 +91,6 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             return None
 
     @commands.command("search_restrictions")
-    @check_is_staff()
-    @check_is_owner_server()
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message, self.bot.db.async_session() as session:
