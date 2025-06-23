@@ -9,6 +9,9 @@ from discord.ext.commands import Cog, CommandError, Context
 from squid.db.utils import utcnow
 
 
+logger = logging.getLogger(__name__)
+
+
 class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
     """Global listeners for the bot."""
 
@@ -36,7 +39,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
             timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
         if dm_owner and self.owner:
             await self.owner.send(timestamp_msg)
-        print(timestamp_msg)
+        logger.info(timestamp_msg)
 
     # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
     # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
@@ -83,8 +86,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
             return
 
         await ctx.send(f"An error occurred: {exception}")
-
-        logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
+        logger.error("Ignoring exception in command %s", command, exc_info=exception)
 
 
 async def setup(bot: commands.Bot):
