@@ -144,7 +144,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     return
 
                 # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
-                await self.bot.db.server_setting.set(ctx.guild.id, setting, channel.id)
+                await self.bot.db.server_setting.set(ctx.guild.id, **{setting: channel.id})
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
                 )
@@ -160,7 +160,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
                     return
 
-                await self.bot.db.server_setting.set(ctx.guild.id, setting, role_ids)
+                await self.bot.db.server_setting.set(ctx.guild.id, **{setting: role_ids})
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
                 )
@@ -177,7 +177,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
         assert ctx.guild is not None
 
         async with self.bot.get_running_message(ctx) as sent_message:
-            await self.bot.db.server_setting.set(ctx.guild.id, setting, None)
+            await self.bot.db.server_setting.set(ctx.guild.id, **{setting: None})
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 
