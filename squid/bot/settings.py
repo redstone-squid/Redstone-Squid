@@ -31,20 +31,13 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
 
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
-        """When the bot joins a guild, add the guild to the database."""
-        async with self.bot.db.async_session() as session:
-            stmt = insert(ServerSetting).values(server_id=guild.id)
-            stmt = stmt.on_conflict_do_update(index_elements=[ServerSetting.server_id], set_={"in_server": True})
-            await session.execute(stmt)
-            await session.commit()
+        """Let the db know that the bot has joined a new guild."""
+        await self.bot.db.server_setting.on_guild_join(guild.id)
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
-        """When the bot leaves a guild, marks the guild as deleted in the database."""
-        async with self.bot.db.async_session() as session:
-            stmt = update(ServerSetting).where(ServerSetting.server_id == guild.id).values(in_server=False)
-            await session.execute(stmt)
-            await session.commit()
+        """Let the db know that the bot has left a guild."""
+        await self.bot.db.server_setting.on_guild_remove(guild.id)
 
     @settings_hybrid_group.command(name="list")
     @check_is_staff()

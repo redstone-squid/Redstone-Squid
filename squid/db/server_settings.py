@@ -3,7 +3,8 @@
 from collections.abc import Iterable
 from typing import Literal, overload, TypedDict, Unpack
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import (
@@ -122,4 +123,19 @@ class ServerSettingManager:
                 col_name = _SETTING_TO_DB_KEY[setting]
                 setattr(setting_obj, col_name, value)
 
+            await session.commit()
+
+    async def on_guild_join(self, server_id: int) -> None:
+        """Called when a guild joins the bot."""
+        async with self.session() as session:
+            stmt = pg_insert(ServerSetting).values(server_id=server_id)
+            stmt = stmt.on_conflict_do_update(index_elements=[ServerSetting.server_id], set_={"in_server": True})
+            await session.execute(stmt)
+            await session.commit()
+
+    async def on_guild_remove(self, server_id: int) -> None:
+        """Called when a guild leaves the bot."""
+        async with self.session() as session:
+            stmt = update(ServerSetting).where(ServerSetting.server_id == server_id).values(in_server=False)
+            await session.execute(stmt)
             await session.commit()
