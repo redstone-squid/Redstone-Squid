@@ -99,7 +99,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         if not current:
             return []
 
-        restrictions = await self.bot.db.fetch_all_restrictions()
+        restrictions = await self.bot.db.build_tags.fetch_all_restrictions()
         restriction_names = [r.name for r in restrictions]
         matches = process.extract(
             current,

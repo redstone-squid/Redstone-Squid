@@ -96,14 +96,6 @@ class DatabaseManager(AsyncClient):
         if not is_sane_database(base_cls, self.sync_engine):
             raise RuntimeError("The database schema is not consistent with the expected schema.")
 
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @alru_cache
-    async def fetch_all_restrictions(self) -> list[Restriction]:
-        """Fetches all restrictions from the database."""
-        async with self.async_session() as session:
-            result = await session.execute(select(Restriction))
-            return list(result.scalars().all())
-
     async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[Version]:
         """Returns a list of versions from the database, sorted from oldest to newest.
 
