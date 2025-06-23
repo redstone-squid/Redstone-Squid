@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
+from typing import Any, Literal, TypedDict, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
 from pydantic.types import Json
@@ -26,13 +26,13 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
 
-RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
+RecordCategory = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
 
-BuildTypeStr: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BuildTypeStr = Literal["Door", "Extender", "Utility", "Entrance"]
 BUILD_TYPES: Sequence[BuildTypeStr] = cast(Sequence[BuildTypeStr], get_args(BuildTypeStr))
 
-DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
+DoorOrientationName = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
 
 RestrictionStr = Literal["wiring-placement", "component", "miscellaneous"]
@@ -53,7 +53,7 @@ DbSettingKey = Literal[
     "trusted_roles_ids",
 ]
 
-Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
