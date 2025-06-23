@@ -59,34 +59,24 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             message_id: The message ID of the vote session.
             status: The status of the vote session. If None, it will get any status.
         """
-        async with self.bot.db.async_session() as session:
-            stmt = (
-                select(Message)
-                .options(selectinload(Message.vote_session))
-                .where(Message.id == message_id, Message.purpose == "vote")
-            )
-            if status is not None:
-                stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
+        # Use the new VoteSessionManager instead of direct database operations
+        vote_session_record = await self.bot.db.vote_session.get_vote_session_by_message_id(
+            message_id, status=status
+        )
+        
+        if vote_session_record is None:
+            return None
 
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
+        vote_session_id = vote_session_record["id"]
+        kind = vote_session_record["kind"]
 
-            if message is None or message.vote_session is None:
-                return None
-
-            vote_session_id = message.vote_session_id
-            assert vote_session_id is not None, (
-                "Vote session ID should not be None because we selected messages with the vote purpose."
-            )
-            kind = message.vote_session.kind
-
-            if kind == "build":
-                return await BuildVoteSession.from_id(self.bot, vote_session_id)
-            elif kind == "delete_log":
-                return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
-            else:
-                logger.error(f"Unknown vote session kind: {kind}")
-                raise NotImplementedError(f"Unknown vote session kind: {kind}")
+        if kind == "build":
+            return await BuildVoteSession.from_id(self.bot, vote_session_id)
+        elif kind == "delete_log":
+            return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
+        else:
+            logger.error(f"Unknown vote session kind: {kind}")
+            raise NotImplementedError(f"Unknown vote session kind: {kind}")
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):

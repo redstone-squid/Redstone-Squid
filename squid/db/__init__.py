@@ -19,6 +19,7 @@ from squid.db.schema import Restriction, Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
 from squid.db.utils import get_version_string, parse_version_string
+from squid.db.vote_session import VoteSessionManager
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
@@ -90,6 +91,7 @@ class DatabaseManager(AsyncClient):
         self.server_setting = ServerSettingManager(self.async_session)
         self.user = UserManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
+        self.vote_session = VoteSessionManager(self.async_session)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""

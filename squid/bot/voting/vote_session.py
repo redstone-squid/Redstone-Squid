@@ -51,27 +51,22 @@ async def track_vote_session(
         The id of the vote session.
     """
     db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = (
-            insert(VoteSession)
-            .values(
-                status="open",
-                author_id=author_id,
-                kind=kind,
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
-            )
-            .returning(VoteSession)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
-        session_id = result.scalar_one().id
-        coros = [
-            db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id)
-            for message in messages
-        ]
-        await asyncio.gather(*coros)
-        return session_id
+    vote_session_id = await db.vote_session.create_vote_session(
+        author_id=author_id,
+        kind=kind,
+        pass_threshold=pass_threshold,
+        fail_threshold=fail_threshold,
+        build_id=build_id,
+    )
+    
+    message_ids = [message.id for message in messages]
+    await db.vote_session.track_vote_session_messages(
+        vote_session_id=vote_session_id,
+        message_ids=message_ids,
+        build_id=build_id,
+    )
+    
+    return vote_session_id
 
 
 async def close_vote_session(vote_session_id: int) -> None:
@@ -81,10 +76,7 @@ async def close_vote_session(vote_session_id: int) -> None:
         vote_session_id: The id of the vote session.
     """
     db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed")
-        await session.execute(stmt)
-        await session.commit()
+    await db.vote_session.close_vote_session(vote_session_id)
 
 
 async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
@@ -96,18 +88,7 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
         weight: The weight of the vote. None to remove the vote.
     """
     db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = (
-            pg_insert(Vote)
-            .values(
-                vote_session_id=vote_session_id,
-                user_id=user_id,
-                weight=weight,
-            )
-            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight))
-        )
-        await session.execute(stmt)
-        await session.commit()
+    await db.vote_session.upsert_vote(vote_session_id, user_id, weight)
 
 
 class AbstractVoteSession(ABC):
