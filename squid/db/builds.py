@@ -452,6 +452,19 @@ class Build:
         )
 
     @staticmethod
+    async def search_by_title(query: str, limit: int = 3) -> list[tuple["Build", float, int]]:
+        """Searches for builds by their title.
+
+        Args:
+            query: The query to search for.
+            limit: The maximum number of results to return, defaults to 3.
+
+        Returns:
+            A list of (Build, score, index) tuples.
+        """
+        raise NotImplementedError
+
+    @staticmethod
     def parse_time_string(time_string: str | None) -> int | None:
         """Parses a time string into an integer.
 

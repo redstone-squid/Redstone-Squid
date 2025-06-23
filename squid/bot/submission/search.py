@@ -141,6 +141,20 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 )
             return None
 
+    @build_hybrid_group.command(name="search")
+    async def search_builds_by_title(self, ctx: Context[BotT], query: str):
+        """Search for a build by its title"""
+        async with self.bot.get_running_message(ctx) as msg:
+            match = await Build.search_by_title(query, limit=1)
+            if not match:
+                error_embed = utils.error_embed("Error", "No build found with that title.")
+                return await msg.edit(embed=error_embed)
+            else:
+                build = match[0][0]
+                embed = await self.bot.for_build(build).generate_embed()
+                return await msg.edit(embed=embed)
+        return None
+
     @build_hybrid_group.command(name="debug")
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
     async def debug_build(self, ctx: Context[BotT], build_id: int):
