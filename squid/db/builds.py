@@ -179,6 +179,7 @@ class Build:
     submission_status: Status | None = None
     category: BuildCategory | None = None
     record_category: RecordCategory | None = None
+    _title: str | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
@@ -298,6 +299,7 @@ class Build:
         submission_status = data["submission_status"]
         record_category = data["record_category"]
         category = data["category"]
+        title = data.get("title")
 
         width = data["width"]
         height = data["height"]
@@ -374,6 +376,7 @@ class Build:
             submission_status=Status(submission_status),
             record_category=record_category,
             category=BuildCategory(category),
+            _title=title,
             versions=versions,
             version_spec=version_spec,
             width=width,
@@ -419,6 +422,7 @@ class Build:
             submission_status=door.submission_status,  # type: ignore
             category=BuildCategory(door.category),
             record_category=door.record_category,
+            _title=door.title,
             width=door.width,
             height=door.height,
             depth=door.depth,
@@ -739,6 +743,21 @@ class Build:
                         elif restriction.type == "miscellaneous":
                             self.miscellaneous_restrictions.append(restriction.name)
 
+    @property
+    def title(self) -> str:
+        """The title of the build. Returns the stored title if available, otherwise generates it."""
+        if self._title is not None:
+            return self._title
+        return self.get_title()
+
+    @title.setter
+    def title(self, value: str | None) -> None:
+        self._title = value
+
+    def refresh_title(self) -> None:
+        """Refreshes the title by regenerating it from the current build data."""
+        self._title = self.get_title()
+
     def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""
         title = ""
@@ -939,6 +958,9 @@ class Build:
         If the build does not exist in the database, it will be inserted instead.
         """
         self.edited_time = utcnow()
+        
+        # Refresh the title to ensure it's up to date with current build data
+        self.refresh_title()
 
         # Regarding the commented out fields:
         # They are added later in the process.
@@ -947,6 +969,7 @@ class Build:
         build_data = {
             "submission_status": self.submission_status,
             "record_category": self.record_category,
+            "title": self.title,
             # "extra_info": self.extra_info,
             "edited_time": self.edited_time,
             "width": self.width,
@@ -1017,7 +1040,7 @@ class Build:
                 stmt = (
                     update(SQLBuild)
                     .where(SQLBuild.id == self.id)
-                    .values(extra_info=self.extra_info, original_message_id=self.original_message_id)
+                    .values(extra_info=self.extra_info, original_message_id=self.original_message_id, title=self.title)
                 )
                 await session.execute(stmt)
                 await session.commit()

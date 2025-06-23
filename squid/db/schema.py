@@ -186,6 +186,7 @@ class Build(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     submission_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     record_category: Mapped[RecordCategory | None] = mapped_column(String)
+    title: Mapped[str | None] = mapped_column(String, default=None)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
@@ -488,6 +489,7 @@ class BuildRecord(TypedDict):
     id: int
     submission_status: Status
     record_category: RecordCategory | None
+    title: str | None
     extra_info: Info
     submission_time: str
     edited_time: str
