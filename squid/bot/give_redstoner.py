@@ -6,8 +6,11 @@ from typing import TYPE_CHECKING, Any, Self, override
 
 import discord
 from discord import Interaction
-from discord.ext.commands import Cog
+from discord.ext.commands import Cog, Context, hybrid_command
 from discord.ui import Item
+
+from squid.bot.utils import check_is_owner_server
+from squid.bot.utils.permissions import check_is_staff
 
 if TYPE_CHECKING:
     import squid.bot
@@ -54,13 +57,23 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: di
             await member.remove_roles(redstoner_role)
 
 
-class GiveRedstoner(Cog):
-    def __init__(self, bot: "squid.bot.RedstoneSquid"):
+class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
+    def __init__(self, bot: BotT):
         self.bot = bot
         self.pattern = re.compile(r"https://discord\.com/channels/\d+/\d+/\d+")
 
     @Cog.listener("on_message")
     async def give_redstoner(self, message: discord.Message):
+        await self.give_redstoner_from_message(message)
+
+    @hybrid_command(name="reload_redstoner")
+    @check_is_owner_server()
+    @check_is_staff()
+    async def force_reload_message(self, ctx: Context[BotT], message: discord.Message):
+        await self.give_redstoner_from_message(message)
+
+    async def give_redstoner_from_message(self, message: discord.Message) -> None:
+        """Give the redstoner role to a user based on a Starboard message."""
         if message.author.id != 700796664276844612:  # @Starboard
             return
 
