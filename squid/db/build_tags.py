@@ -3,6 +3,7 @@
 import asyncio
 
 from async_lru import alru_cache
+from rapidfuzz import process
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -115,3 +116,30 @@ class BuildTagsManager:
         async with self.session() as session:
             result = await session.execute(select(Restriction))
             return list(result.scalars().all())
+
+    @alru_cache
+    async def fetch_all_restriction_aliases(self) -> list[RestrictionAlias]:
+        """Fetches all restriction aliases from the database."""
+        async with self.session() as session:
+            result = await session.execute(select(RestrictionAlias))
+            return list(result.scalars().all())
+
+    async def search_restrictions(self, query: str, limit: int = 25) -> list[tuple[Restriction, float, int]]:
+        """Search for restrictions or aliases by a substring.
+
+        Args:
+            query (str): The substring to search for.
+            limit (int): The maximum number of results to return.
+
+        Returns:
+            A list of (restriction, score, index) tuples
+        """
+        restrictions = await self.fetch_all_restrictions()
+        matches = process.extract(
+            query,
+            restrictions,
+            processor=lambda r: r.name,
+            limit=limit,
+            score_cutoff=30,
+        )
+        return matches

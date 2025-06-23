@@ -47,28 +47,13 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
 
     @commands.command("search_restrictions")
-    async def search_restrictions(self, ctx: Context[BotT], query: str | None):
+    async def search_restrictions(self, ctx: Context[BotT], query: str):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
-            async with self.bot.db.async_session() as session:
-                stmt = select(Restriction)
-                alias_stmt = select(RestrictionAlias)
-
-                if query:
-                    stmt = stmt.where(Restriction.name.ilike(f"%{query}%"))
-                    alias_stmt = alias_stmt.where(RestrictionAlias.alias.ilike(f"%{query}%"))
-
-                restrictions_task = session.execute(stmt)
-                aliases_task = session.execute(alias_stmt)
-
-                restrictions, aliases = await asyncio.gather(restrictions_task, aliases_task)
-                restrictions = restrictions.scalars().all()
-                aliases = aliases.scalars().all()
-
-                description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
-                description += "\n"
-                description += "\n".join([f"{a.restriction_id}: {a.alias} (alias)" for a in aliases])
-                await sent_message.edit(embed=utils.info_embed("Restrictions", description))
+            matches = await self.bot.db.build_tags.search_restrictions(query)
+            restrictions = [match[0] for match in matches]
+            description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
+            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
@@ -81,8 +66,6 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 await sent_message.edit(
                     content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
                 )
-
-    @
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):
