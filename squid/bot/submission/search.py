@@ -47,8 +47,6 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
 
     @commands.command("search_restrictions")
-    @check_is_staff()
-    @check_is_owner_server()
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
         async with RunningMessage(ctx) as sent_message:
@@ -83,6 +81,8 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 await sent_message.edit(
                     content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
                 )
+
+    @
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):
