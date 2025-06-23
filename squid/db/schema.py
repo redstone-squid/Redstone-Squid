@@ -57,6 +57,15 @@ Setting: TypeAlias = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "
 SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
+MediaType = Literal["image", "video", "world-download"]
+
+class Status(IntEnum):
+    """The status of a submission."""
+
+    PENDING = 0
+    CONFIRMED = 1
+    DENIED = 2
+
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
 class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
@@ -333,9 +342,6 @@ class BuildType(Base):
     type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined")
 
 
-MediaType = Literal["image", "video", "world-download"]
-
-
 class BuildLink(Base):
     """A link associated with a build (image, video, world download)."""
 
@@ -463,14 +469,6 @@ class Info(TypedDict, total=False):
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
     server_info: ServerInfo
-
-
-class Status(IntEnum):
-    """The status of a submission."""
-
-    PENDING = 0
-    CONFIRMED = 1
-    DENIED = 2
 
 
 class BuildCategory(StrEnum):
