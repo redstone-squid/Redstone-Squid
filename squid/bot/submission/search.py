@@ -59,13 +59,11 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
-            async with self.bot.db.async_session() as session:
-                stmt = select(Type)
-                patterns = (await session.execute(stmt)).scalars().all()
-                names = [pattern.name for pattern in patterns]
-                await sent_message.edit(
-                    content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
-                )
+            patterns = await self.bot.db.build_tags.fetch_all_patterns()
+            names = [pattern.name for pattern in patterns]
+            await sent_message.edit(
+                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            )
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):

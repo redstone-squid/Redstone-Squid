@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.schema import Restriction, RestrictionAlias
+from squid.db.schema import Restriction, RestrictionAlias, Type
 
 
 class RestrictionError(Exception):
@@ -122,6 +122,12 @@ class BuildTagsManager:
         """Fetches all restriction aliases from the database."""
         async with self.session() as session:
             result = await session.execute(select(RestrictionAlias))
+            return list(result.scalars().all())
+
+    @alru_cache
+    async def fetch_all_patterns(self) -> list[Type]:
+        async with self.session() as session:
+            result = await session.execute(select(Type))
             return list(result.scalars().all())
 
     async def search_restrictions(self, query: str, limit: int = 25) -> list[tuple[Restriction, float, int]]:
