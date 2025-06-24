@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import dotenv
 import psycopg2
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
 from testcontainers.postgres import PostgresContainer
@@ -84,7 +85,7 @@ async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[Databa
         yield DatabaseManager(supabase_url=envs["API_EXTERNAL_URL"], supabase_key=envs["SERVICE_ROLE_KEY"])
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(loop_scope="session", scope="session")
 async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
     """Create a DatabaseManager instance using a Docker-backed PostgreSQL container.
 

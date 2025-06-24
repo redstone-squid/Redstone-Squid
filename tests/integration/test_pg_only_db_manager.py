@@ -6,6 +6,7 @@ from sqlalchemy import text
 from squid.db import DatabaseManager
 
 
+@pytest.mark.asyncio(loop_scope="session")
 async def test_pg_only_db_manager_connection(pg_only_db_manager: DatabaseManager):
     """Test that pg_only_db_manager fixture provides a working database connection."""
     # Test basic database connection with a simple query
@@ -41,6 +42,7 @@ async def test_pg_only_db_manager_connection(pg_only_db_manager: DatabaseManager
             assert col in columns, f"Column '{col}' should exist in builds table"
 
 
+@pytest.mark.asyncio(loop_scope="session")
 async def test_pg_only_db_manager_crud_operations(pg_only_db_manager: DatabaseManager):
     """Test basic CRUD operations work with pg_only_db_manager."""
     # Test inserting and querying data
