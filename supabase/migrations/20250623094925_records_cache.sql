@@ -8,8 +8,11 @@ SELECT
     COALESCE(d.door_depth, 1) AS door_depth,
 
     /* types: must be present; no COALESCE, no default */
-    ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-        FILTER (WHERE t.name IS NOT NULL)     AS types,
+    COALESCE(
+        ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
+            FILTER (WHERE t.name IS NOT NULL),
+        ARRAY []::text[]
+    ) AS types,
 
     /* restrictions: allow empty, but never [NULL] */
     COALESCE(
@@ -114,8 +117,11 @@ BEGIN
             d.door_width,
             d.door_height,
             COALESCE(d.door_depth, 1)               AS door_depth,
-            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                FILTER (WHERE t.name IS NOT NULL)     AS types,
+            COALESCE(
+                ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
+                    FILTER (WHERE t.name IS NOT NULL),
+                ARRAY []::text[]
+            ) AS types,
             COALESCE(
                 ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
                     FILTER (WHERE r.name IS NOT NULL),
@@ -227,8 +233,11 @@ base AS (
         d.door_width,
         d.door_height,
         COALESCE(d.door_depth, 1)                       AS door_depth,
-        ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-            FILTER (WHERE t.name IS NOT NULL)     AS types,
+        COALESCE(
+            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
+                FILTER (WHERE t.name IS NOT NULL),
+            ARRAY []::text[]
+        ) AS types,
         COALESCE(
             ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
                 FILTER (WHERE r.name IS NOT NULL),
@@ -293,8 +302,11 @@ WITH b AS (                               -- the changed build only
         d.door_width,
         d.door_height,
         COALESCE(d.door_depth, 1)               AS door_depth,
-        ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-            FILTER (WHERE t.name IS NOT NULL)     AS types,
+        COALESCE(
+            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
+                FILTER (WHERE t.name IS NOT NULL),
+            ARRAY []::text[]
+        ) AS types,
         COALESCE(
             ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
                 FILTER (WHERE r.name IS NOT NULL),
