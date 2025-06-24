@@ -3,9 +3,11 @@ Global pytest configuration and shared fixtures.
 """
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
+import psycopg2
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
@@ -92,6 +94,23 @@ async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
     """
     with PostgreSqlContainer("postgres:17") as postgres:
         database_url = postgres.get_connection_url()
+        
+        # Apply all migrations before yielding
+        migrations_dir = Path(__file__).parent.parent / "supabase" / "migrations"
+        migration_files = sorted(migrations_dir.glob("*.sql"))
+        
+        # Connect to the database and apply migrations
+        conn = psycopg2.connect(database_url)
+        conn.autocommit = True
+        
+        try:
+            with conn.cursor() as cursor:
+                for migration_file in migration_files:
+                    print(f"Applying migration: {migration_file.name}")
+                    migration_sql = migration_file.read_text(encoding="utf-8")
+                    cursor.execute(migration_sql)
+        finally:
+            conn.close()
         
         with (
             # Mock the AsyncClient components while keeping real database connections
