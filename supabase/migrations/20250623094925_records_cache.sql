@@ -377,14 +377,14 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER doors_refresh_smallest
+CREATE TRIGGER doors_refresh_smallest_door
 AFTER INSERT OR UPDATE OR DELETE ON public.doors
 FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
-CREATE TRIGGER build_types_refresh_door_smallest
+CREATE TRIGGER build_types_refresh_smallest_door
 AFTER INSERT OR UPDATE OR DELETE ON public.build_types
 FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
-CREATE TRIGGER build_restrictions_refresh_door_smallest
+CREATE TRIGGER build_restrictions_refresh_smallest_door
 AFTER INSERT OR UPDATE OR DELETE ON public.build_restrictions
 FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
