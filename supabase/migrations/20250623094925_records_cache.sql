@@ -189,7 +189,7 @@ BEGIN
 END $$;
 
 
-CREATE OR REPLACE PROCEDURE public.refresh_smallest_after_door_delete(p_build_id int)
+CREATE OR REPLACE PROCEDURE public.refresh_smallest_after_door_delete(p_build_id bigint)
 LANGUAGE sql
 AS $$
 --------------------------------------------------------------------
@@ -292,7 +292,7 @@ SELECT * FROM ranked;
 $$;
 
 
-CREATE OR REPLACE PROCEDURE public.refresh_smallest_for_door_insert(p_build_id int)
+CREATE OR REPLACE PROCEDURE public.refresh_smallest_for_door_insert(p_build_id bigint)
 LANGUAGE sql
 AS $$
 WITH b AS (                               -- the changed build only
