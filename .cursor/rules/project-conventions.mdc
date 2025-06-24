@@ -6,6 +6,8 @@ alwaysApply: true
 ## The Golden Rule  
 When unsure about implementation details, ALWAYS ask the developer.
 
+For code implementation requests, if you are even slightly unsure how to implement it, make sure to add a comment saying you are unsure.
+
 ## Project: Redstone Squid Discord Bot
 
 This is a Discord bot for managing Minecraft redstone build submissions, built with Python 3.12+ and discord.py. The bot manages a database of records, handles voting on submissions, and provides automated moderation features.
@@ -19,17 +21,18 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Just**: Task runner for development workflows (justfiles over Makefiles)
 
 ### Code Style
-- **Formatting**: Ruff with 120-character lines and Python 3.12 target
-- **Testing**: pytest with asyncio support, markers for test categories (unit/integration/external)
-- **Documentation**: Google-style docstrings with type information
-- **Type Safety**: Full type hints with BasedPyright for static analysis, types must be fully parameterized if it is not possible to be inferred from usage.
+- **Format**: Google-style docstrings, always include "Args" and "Returns" unless the values are simple to understand.
+- **Type Safety**: Full type hints on function signatures. Avoid `Any` types unless strictly necessary.
+    Inside functions, use `# type: ignore` only when absolutely necessary, and document the reason.
+    Use type hints on variables and class attributes that cannot be inferred by the type checker.
+    Type hints must Python 3.12 syntax. i.e. you should never use `from typing import List` as this is deprecated, directly use `list` instead.
+    Also you should never import `Generator`/`Iterator`/etc from `typing`, use `from collections.abc import Generator, Iterator`.
 
 ### Patterns to Follow
 - **Cog Architecture**: Organize bot commands into logical cogs/extensions
 - **Separation of Concerns**: Use `squid.bot` for frontend (bot) logic, `squid.db` for database operations.
 
 ### What NOT to Do
-- **Don't bypass type hints**: Avoid `Any` types unless strictly necessary
 - **Don't skip error handling**: Always handle exceptions gracefully
 - **Don't block the event loop**: Use asyncio primitives for concurrent operations
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
