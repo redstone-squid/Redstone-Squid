@@ -2,6 +2,7 @@
 Global pytest configuration and shared fixtures.
 """
 
+import subprocess
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,6 +15,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
 from testcontainers.postgres import PostgresContainer
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.waiting_utils import wait_for_logs
 
 from squid.db import DatabaseManager
 from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, Version, VersionRecord
@@ -94,7 +97,20 @@ async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
     components. Useful for tests that need real database operations but don't require
     Supabase-specific functionality.
     """
-    with PostgresContainer("postgres:17") as postgres:
+    # Use custom PostgreSQL image with extensions
+    postgres_dir = Path(__file__).parent / "postgres"
+    image_name = "pg-test-with-extensions:latest"
+    
+    # Build the custom image
+    subprocess.run(["docker", "build", "-t", image_name, str(postgres_dir)], check=True)
+    
+    # Create and start container using the custom image
+    postgres = PostgresContainer(image_name). \
+        with_env("POSTGRES_DB", "test"). \
+        with_env("POSTGRES_USER", "postgres"). \
+        with_env("POSTGRES_PASSWORD", "postgres")
+    
+    with postgres as container:
         database_url = postgres.get_connection_url()
         
         # Apply all migrations before yielding
