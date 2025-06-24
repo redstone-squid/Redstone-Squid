@@ -8,7 +8,7 @@ import time
 import typing
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
@@ -17,8 +17,7 @@ from typing import Any, Callable, Final, Literal, Self, overload
 import discord
 import vecs
 from openai import AsyncOpenAI, OpenAIError
-from sqlalchemy import delete, func, insert, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -213,7 +212,7 @@ class Build:
     submitter_id: int | None = None
     # TODO: save the submitted time too
     completion_time: str | None = None
-    edited_time: str | None = None
+    edited_time: datetime | None = None
 
     original_server_id: Final[int | None] = frozen_field(default=None)
     original_channel_id: Final[int | None] = frozen_field(default=None)
@@ -926,7 +925,7 @@ class Build:
 
         If the build does not exist in the database, it will be inserted instead.
         """
-        self.edited_time = utcnow()
+        self.edited_time = datetime.now(tz=timezone.utc)
 
         db = DatabaseManager()
 
@@ -1013,14 +1012,11 @@ class Build:
                 raise ValueError(f"Unknown build category: {self.category}")
 
             async with db.async_session() as session:
-                session.add(sql_build)
-                await session.flush()  # Get the ID
-                self.id = sql_build.id
-
-                # Set up relationships
                 await self._setup_relationships(session, sql_build)
+                session.add(sql_build)
+                print(sql_build)
                 await session.commit()
-
+                self.id = sql_build.id
             self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
         else:
             delete_build_on_error = False
@@ -1125,22 +1121,15 @@ class Build:
         # Handle creators
         if self.creators_ign:
             creators = await self._get_or_create_users(session, self.creators_ign)
-            for creator in creators:
-                build_creator = BuildCreator(user=creator)
-                sql_build.build_creators.append(build_creator)
+            sql_build.creators = creators
 
         # Handle restrictions
         all_restrictions = (
-            self.wiring_placement_restrictions +
-            self.component_restrictions +
-            self.miscellaneous_restrictions
+            self.wiring_placement_restrictions + self.component_restrictions + self.miscellaneous_restrictions
         )
         if all_restrictions:
             restriction_objects, unknown_restrictions = await self._get_restrictions(session, all_restrictions)
-            for restriction in restriction_objects:
-                build_restriction = BuildRestriction(restriction=restriction)
-                sql_build.build_restrictions.append(build_restriction)
-
+            sql_build.restrictions = restriction_objects
             # Update extra_info with unknown restrictions
             if unknown_restrictions:
                 self.extra_info["unknown_restrictions"] = (
@@ -1148,25 +1137,18 @@ class Build:
                 )
 
         # Handle types
-        if self.door_type:
-            type_objects, unknown_types = await self._get_types(session, self.door_type)
-            for type_obj in type_objects:
-                build_type = BuildType(type=type_obj)
-                sql_build.build_types.append(build_type)
-
-            # Update extra_info with unknown types
-            if unknown_types:
-                self.extra_info["unknown_patterns"] = (
-                    self.extra_info.get("unknown_patterns", []) + unknown_types
-                )
+        if not self.door_type:
+            self.door_type = ["Regular"]
+        type_objects, unknown_types = await self._get_types(session, self.door_type)
+        sql_build.types = type_objects
+        # Update extra_info with unknown types
+        if unknown_types:
+            self.extra_info["unknown_patterns"] = self.extra_info.get("unknown_patterns", []) + unknown_types
 
         # Handle versions
         functional_versions = self.versions or [await DatabaseManager().get_or_fetch_newest_version(edition="Java")]
-        if functional_versions:
-            version_objects = await self._get_versions(session, functional_versions)
-            for version in version_objects:
-                build_version = BuildVersion(version=version)
-                sql_build.build_versions.append(build_version)
+        version_objects = await self._get_versions(session, functional_versions)
+        sql_build.versions = version_objects
 
         # Handle links
         all_links = []
@@ -1198,7 +1180,9 @@ class Build:
 
         return users
 
-    async def _get_restrictions(self, session: AsyncSession, restrictions: list[str]) -> tuple[list[Restriction], UnknownRestrictions]:
+    async def _get_restrictions(
+        self, session: AsyncSession, restrictions: list[str]
+    ) -> tuple[list[Restriction], UnknownRestrictions]:
         """Get Restriction objects and identify unknown restrictions."""
         restrictions_titled = [r.title() for r in restrictions]
 
@@ -1238,9 +1222,11 @@ class Build:
 
     async def _get_versions(self, session: AsyncSession, version_strings: list[str]) -> list[Version]:
         """Get Version objects for the given version strings."""
-        stmt = select(func.get_quantified_version_ids(version_strings))
+        qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
+
+        stmt = select(qvn.c.id).where(qvn.c.quantified_name.in_(version_strings))
         result = await session.execute(stmt)
-        version_ids = [version_id for version_id, _ in result.all()]
+        version_ids = [tup[0] for tup in result.all()]  # result is a list of 1-tuples
 
         stmt = select(Version).where(Version.id.in_(version_ids))
         result = await session.execute(stmt)

@@ -58,6 +58,29 @@ SETTINGS = cast(Sequence[Setting], get_args(Setting))
 assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
 
+class UnknownRestrictions(TypedDict, total=False):
+    wiring_placement_restrictions: list[str]
+    component_restrictions: list[str]
+    miscellaneous_restrictions: list[str]
+
+
+class ServerInfo(TypedDict, total=False):
+    """Various additional information about the server"""
+
+    server_ip: str
+    coordinates: str
+    command_to_build: str
+
+
+class Info(TypedDict, total=False):
+    """A special JSON field in the database that stores various additional information about the build"""
+
+    user: str  # Provided by the submitter if they have any additional information to provide.
+    unknown_patterns: list[str]
+    unknown_restrictions: UnknownRestrictions
+    server_info: ServerInfo
+
+
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
 class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
     pass
@@ -74,9 +97,11 @@ class User(Base):
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
     build_creators: Mapped[list["BuildCreator"]] = relationship(
-        back_populates="user", default_factory=list, lazy="raise_on_sql"
+        back_populates="user", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy("build_creators", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy(
+        "build_creators", "build", default_factory=list, repr=False, creator=lambda b: BuildCreator(build=b, user=None)
+    )
 
 
 class Version(Base):
@@ -90,9 +115,15 @@ class Version(Base):
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     build_versions: Mapped[list["BuildVersion"]] = relationship(
-        back_populates="version", default_factory=list, lazy="raise_on_sql"
+        back_populates="version", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy("build_versions", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy(
+        "build_versions",
+        "build",
+        default_factory=list,
+        repr=False,
+        creator=lambda b: BuildVersion(build=b, version=None),
+    )
 
 
 class Restriction(Base):
@@ -107,9 +138,15 @@ class Restriction(Base):
     type: Mapped[RestrictionStr | None] = mapped_column(String)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
-        back_populates="restriction", default_factory=list, lazy="raise_on_sql"
+        back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy("build_restrictions", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy(
+        "build_restrictions",
+        "build",
+        default_factory=list,
+        repr=False,
+        creator=lambda b: BuildRestriction(build=b, restriction=None),
+    )
 
     aliases: Mapped[list["RestrictionAlias"]] = relationship(
         back_populates="restriction", default_factory=list, lazy="selectin"
@@ -138,9 +175,11 @@ class Type(Base):
     )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
 
     build_types: Mapped[list["BuildType"]] = relationship(
-        back_populates="type", default_factory=list, lazy="raise_on_sql"
+        back_populates="type", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy("build_types", "build", default_factory=list)
+    builds: AssociationProxy[list["Build"]] = association_proxy(
+        "build_types", "build", default_factory=list, creator=lambda b: BuildType(build=b, type=None), repr=False
+    )
 
 
 class Message(Base):
@@ -181,7 +220,7 @@ class Build(Base, kw_only=True):
     completion_time: Mapped[str | None] = mapped_column(String)  # Given by user, not parsable as a datetime
     category: Mapped[BuildTypeStr | None] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"))
+    original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"), default=None)
     original_message: Mapped[Message | None] = relationship(
         foreign_keys="Build.original_message_id", uselist=False, default=None, lazy="joined"
     )
@@ -191,7 +230,7 @@ class Build(Base, kw_only=True):
     )
     locked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    extra_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default_factory=dict)
+    extra_info: Mapped[Info] = mapped_column(JSON, nullable=False, default_factory=dict)
     submission_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
     edited_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -199,33 +238,39 @@ class Build(Base, kw_only=True):
     build_creators: Mapped[list["BuildCreator"]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    creators: AssociationProxy[list[User]] = association_proxy("build_creators", "user", default_factory=list)
+    creators: AssociationProxy[list[User]] = association_proxy(
+        "build_creators", "user", default_factory=list, creator=lambda u: BuildCreator(build=None, user=u)
+    )
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
     restrictions: AssociationProxy[list[Restriction]] = association_proxy(
-        "build_restrictions", "restriction", default_factory=list
+        "build_restrictions",
+        "restriction",
+        default_factory=list,
+        creator=lambda r: BuildRestriction(build=None, restriction=r),
     )
 
     build_versions: Mapped[list["BuildVersion"]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    versions: AssociationProxy[list[Version]] = association_proxy("build_versions", "version", default_factory=list)
+    versions: AssociationProxy[list[Version]] = association_proxy(
+        "build_versions", "version", default_factory=list, creator=lambda v: BuildVersion(build=None, version=v)
+    )
 
     build_types: Mapped[list["BuildType"]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
-    types: AssociationProxy[list[Type]] = association_proxy("build_types", "type", default_factory=list)
+    types: AssociationProxy[list[Type]] = association_proxy(
+        "build_types", "type", default_factory=list, creator=lambda t: BuildType(build=None, type=t)
+    )
 
     build_vote_sessions: Mapped[list["BuildVoteSession"]] = relationship(
-        back_populates="build", default_factory=list, lazy="raise_on_sql"
-    )
-    vote_sessions: AssociationProxy[list["VoteSession"]] = association_proxy(
-        "build_vote_sessions", "vote_session", default_factory=list
+        back_populates="build", default_factory=list, lazy="raise_on_sql", repr=False
     )
 
     links: Mapped[list["BuildLink"]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
     messages: Mapped[list[Message]] = relationship(
-        back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="raise_on_sql"
+        back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="raise_on_sql", repr=False
     )
 
     __mapper_args__ = {
@@ -242,7 +287,7 @@ class Door(Build, kw_only=True):
         "polymorphic_identity": "Door",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
     orientation: Mapped[DoorOrientationName] = mapped_column(String, nullable=False)
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -262,7 +307,7 @@ class Extender(Build, kw_only=True):
         "polymorphic_identity": "Extender",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
 
 
 class Utility(Build, kw_only=True):
@@ -274,7 +319,7 @@ class Utility(Build, kw_only=True):
         "polymorphic_identity": "Utility",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
 
 
 class Entrance(Build):
@@ -286,51 +331,53 @@ class Entrance(Build):
         "polymorphic_identity": "Entrance",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
 
 
 class BuildCreator(Base):
     """Association table between builds and their creators."""
 
     __tablename__ = "build_creators"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True, init=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql")
-    user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False)
+    user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined", repr=False)
 
 
 class BuildRestriction(Base):
     """Association table between builds and their restrictions."""
 
     __tablename__ = "build_restrictions"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
-    restriction_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("restrictions.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    restriction_id: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey("restrictions.id"), primary_key=True, init=False
+    )
 
-    build: Mapped[Build] = relationship(back_populates="build_restrictions", lazy="raise_on_sql")
-    restriction: Mapped[Restriction] = relationship(back_populates="build_restrictions", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_restrictions", lazy="raise_on_sql", repr=False)
+    restriction: Mapped[Restriction] = relationship(back_populates="build_restrictions", lazy="joined", repr=False)
 
 
 class BuildVersion(Base):
     """Association table between builds and their versions."""
 
     __tablename__ = "build_versions"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
-    version_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("versions.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    version_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("versions.id"), primary_key=True, init=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_versions", lazy="raise_on_sql")
-    version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_versions", lazy="raise_on_sql", repr=False)
+    version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined", repr=False)
 
 
 class BuildType(Base):
     """Association table between builds and their types."""
 
     __tablename__ = "build_types"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
-    type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("types.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("types.id"), primary_key=True, init=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_types", lazy="raise_on_sql")
-    type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_types", lazy="raise_on_sql", repr=False)
+    type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined", repr=False)
 
 
 MediaType = Literal["image", "video", "world-download"]
@@ -340,11 +387,11 @@ class BuildLink(Base):
     """A link associated with a build (image, video, world download)."""
 
     __tablename__ = "build_links"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
     url: Mapped[str] = mapped_column(String, nullable=False, primary_key=True)
-    media_type: Mapped[MediaType | None] = mapped_column(String)  # TODO: nullable)
+    media_type: Mapped[MediaType | None] = mapped_column(String)  # TODO: nullable
 
-    build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql")
+    build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
 
 
 class ServerSetting(Base):
@@ -389,8 +436,12 @@ class VoteSession(Base, kw_only=True):
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
-    messages: Mapped[list[Message]] = relationship(back_populates="vote_session", default_factory=list, lazy="selectin")
-    votes: Mapped[list["Vote"]] = relationship(back_populates="vote_session", default_factory=list, lazy="selectin")
+    messages: Mapped[list[Message]] = relationship(
+        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
+    )
+    votes: Mapped[list["Vote"]] = relationship(
+        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
+    )
 
     __mapper_args__ = {"polymorphic_on": kind}
 
@@ -439,30 +490,7 @@ class Vote(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql")
-
-
-class UnknownRestrictions(TypedDict, total=False):
-    wiring_placement_restrictions: list[str]
-    component_restrictions: list[str]
-    miscellaneous_restrictions: list[str]
-
-
-class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server"""
-
-    server_ip: str
-    coordinates: str
-    command_to_build: str
-
-
-class Info(TypedDict, total=False):
-    """A special JSON field in the database that stores various additional information about the build"""
-
-    user: str  # Provided by the submitter if they have any additional information to provide.
-    unknown_patterns: list[str]
-    unknown_restrictions: UnknownRestrictions
-    server_info: ServerInfo
+    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
 
 
 class Status(IntEnum):
