@@ -377,6 +377,10 @@ BEGIN
 END;
 $$;
 
+CREATE TRIGGER builds_refresh_smallest_door
+AFTER INSERT OR UPDATE OR DELETE ON public.doors
+FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
+
 CREATE TRIGGER doors_refresh_smallest_door
 AFTER INSERT OR UPDATE OR DELETE ON public.doors
 FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
