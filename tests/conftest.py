@@ -11,7 +11,7 @@ import psycopg2
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
-from testcontainers.postgres import PostgreSqlContainer
+from testcontainers.postgres import PostgresContainer
 
 from squid.db import DatabaseManager
 from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, Version, VersionRecord
@@ -92,7 +92,7 @@ async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
     components. Useful for tests that need real database operations but don't require
     Supabase-specific functionality.
     """
-    with PostgreSqlContainer("postgres:17") as postgres:
+    with PostgresContainer("postgres:17") as postgres:
         database_url = postgres.get_connection_url()
         
         # Apply all migrations before yielding
