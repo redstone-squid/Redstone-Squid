@@ -4,6 +4,7 @@ Global pytest configuration and shared fixtures.
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from urllib.parse import urlparse
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import dotenv
@@ -99,9 +100,15 @@ async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
         # Apply all migrations before yielding
         migrations_dir = Path(__file__).parent.parent / "supabase" / "migrations"
         migration_files = sorted(migrations_dir.glob("*.sql"))
-        
+
         # Connect to the database and apply migrations
-        conn = psycopg2.connect(database_url)
+        conn = psycopg2.connect(
+            dbname=postgres.dbname,
+            user=postgres.username,
+            password=postgres.password,
+            host=postgres.get_container_host_ip(),
+            port=postgres.port
+        )
         conn.autocommit = True
         
         try:
