@@ -65,6 +65,17 @@ class BuildTagsManager:
 
             return None
 
+    async def get_restrictions_by_names(self, name_or_alias: list[str]) -> list[Restriction]:
+        """Get restrictions by their names or aliases.
+
+        Args:
+            name_or_alias (list[str]): A list of restriction names or aliases.
+
+        Returns:
+            A list of Restriction objects.
+        """
+        raise NotImplementedError("This method is not implemented yet.")
+
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
         """Add an alias for a restriction by its ID.
 
