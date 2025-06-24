@@ -9,6 +9,7 @@ import dotenv
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.compose import DockerCompose
+from testcontainers.postgres import PostgreSqlContainer
 
 from squid.db import DatabaseManager
 from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, Version, VersionRecord
@@ -79,6 +80,42 @@ async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[Databa
     ) as compose:
         envs = dotenv.dotenv_values(compose.env_file)
         yield DatabaseManager(supabase_url=envs["API_EXTERNAL_URL"], supabase_key=envs["SERVICE_ROLE_KEY"])
+
+
+@pytest.fixture(scope="session")
+async def pg_only_db_manager() -> AsyncGenerator[DatabaseManager, None]:
+    """Create a DatabaseManager instance using a Docker-backed PostgreSQL container.
+
+    This fixture provides a real PostgreSQL database connection while mocking the AsyncClient
+    components. Useful for tests that need real database operations but don't require
+    Supabase-specific functionality.
+    """
+    with PostgreSqlContainer("postgres:17") as postgres:
+        database_url = postgres.get_connection_url()
+        
+        with (
+            # Mock the AsyncClient components while keeping real database connections
+            patch("squid.db.AsyncClient.__init__", return_value=None),
+            patch("squid.db.AsyncClient.table") as table_mock,
+            patch("squid.db.AsyncClient.rpc", new_callable=AsyncMock),
+        ):
+            # Mock the table behavior for legacy Supabase code
+            table_instance = MagicMock()
+            table_instance.select.return_value = table_instance
+            table_instance.insert.return_value = table_instance
+            table_instance.update.return_value = table_instance
+            table_instance.delete.return_value = table_instance
+            table_instance.eq.return_value = table_instance
+            table_instance.order.return_value = table_instance
+            table_instance.execute = AsyncMock()
+            
+            table_mock.return_value = table_instance
+            
+            # Reset singleton state
+            DatabaseManager._instance = None  # pyright: ignore[reportPrivateUsage]
+            DatabaseManager.version_cache = {}
+            
+            yield DatabaseManager(database_url=database_url)
 
 
 @pytest.fixture
