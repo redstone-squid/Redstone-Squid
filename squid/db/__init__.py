@@ -7,7 +7,6 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 import os
 from typing import Any, ClassVar, Literal
 
-from async_lru import alru_cache
 from sqlalchemy import create_engine, make_url, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -15,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageManager
-from squid.db.schema import Restriction, Version
+from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
 from squid.db.utils import get_version_string, parse_version_string
@@ -95,14 +94,6 @@ class DatabaseManager(AsyncClient):
         """Validates that the database schema is consistent with the expected schema."""
         if not is_sane_database(base_cls, self.sync_engine):
             raise RuntimeError("The database schema is not consistent with the expected schema.")
-
-    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
-    @alru_cache
-    async def fetch_all_restrictions(self) -> list[Restriction]:
-        """Fetches all restrictions from the database."""
-        async with self.async_session() as session:
-            result = await session.execute(select(Restriction))
-            return list(result.scalars().all())
 
     async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[Version]:
         """Returns a list of versions from the database, sorted from oldest to newest.

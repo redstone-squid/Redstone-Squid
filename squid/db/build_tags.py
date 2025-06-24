@@ -2,6 +2,7 @@
 
 import asyncio
 
+from async_lru import alru_cache
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -64,6 +65,14 @@ class BuildTagsManager:
                 return alias.restriction_id
 
             return None
+
+    # TODO: Invalidate cache every, say, 1 day (or make supabase callback whenever the table is updated)
+    @alru_cache
+    async def fetch_all_restrictions(self) -> list[Restriction]:
+        """Fetches all restrictions from the database."""
+        async with self.session() as session:
+            result = await session.execute(select(Restriction))
+            return list(result.scalars().all())
 
     async def get_restrictions_by_names(self, name_or_alias: list[str]) -> list[Restriction]:
         """Get restrictions by their names or aliases.

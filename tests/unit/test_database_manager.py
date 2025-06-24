@@ -53,7 +53,7 @@ class TestDatabaseManager:
             mock_result.scalars.return_value = mock_scalars
             mock_session.execute.return_value = mock_result
 
-            restrictions = await mock_db_manager.fetch_all_restrictions()
+            restrictions = await mock_db_manager.build_tags.fetch_all_restrictions()
             assert restrictions == sample_restriction_data
 
     async def test_get_or_fetch_versions_list(
