@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
+    SmallestDoor,
     RestrictionStr,
 )
 from squid.db.schema import (
@@ -1537,3 +1538,42 @@ async def get_unsent_builds(server_id: int) -> list[Build] | None:
     response = await db.rpc("get_unsent_builds", {"server_id_input": server_id}).execute()
     server_unsent_builds = response.data
     return [Build.from_json(unsent_sub) for unsent_sub in server_unsent_builds]
+
+
+async def _get_smallest_door_records_without_title_in_db() -> Sequence[SmallestDoor]:
+    """Get all the smallest door records that do not have a title in the database."""
+    db = DatabaseManager()
+    stmt = select(SmallestDoor).where(SmallestDoor.title.is_(None))
+    async with db.async_session() as session:
+        result = await session.execute(stmt)
+        smallest_doors = result.scalars().all()
+    return smallest_doors
+
+
+async def update_smallest_door_records_without_title() -> None:
+    """Update the titles of all records in the database."""
+    smallest_door_records_without_title = await _get_smallest_door_records_without_title_in_db()
+    db = DatabaseManager()
+    async with db.async_session() as session:
+        for door in smallest_door_records_without_title:
+            # Generate a title based on the door's attributes
+            build = Build(
+                id=door.id,
+                # These are invariants by the fact that they are in the smallest_door_records table
+                record_category="Smallest",
+                category=BuildCategory.DOOR,
+                submission_status=Status.CONFIRMED,
+                # We assume ai_generated is False to generate the simpler title
+                ai_generated=False,
+                # from the table
+                door_width=door.door_width,
+                door_height=door.door_height,
+                door_depth=door.door_depth,
+                door_type=door.types,
+                door_orientation_type=door.orientation,
+            )
+            await build.set_restrictions(door.restriction_subset)
+            title = build.get_title()
+            door.title = title
+            session.add(door)
+        await session.commit()
