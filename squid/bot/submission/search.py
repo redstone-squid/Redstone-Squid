@@ -19,7 +19,7 @@ from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
 from squid.db.builds import Build, get_builds_by_filter, search_smallest_door_records
-from squid.db.schema import Restriction, RestrictionAlias, Status, Type, SmallestDoor
+from squid.db.schema import Restriction, RestrictionAlias, Status, Type
 
 if TYPE_CHECKING:
     import squid.bot
@@ -53,7 +53,9 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         async with RunningMessage(ctx) as sent_message:
             matches = await search_smallest_door_records(query)
             if not matches:
-                return await sent_message.edit(embed=utils.error_embed("No results found", "No records match that query."))
+                return await sent_message.edit(
+                    embed=utils.error_embed("No results found", "No records match that query.")
+                )
 
             # Use the running message to display the top result
             top_door = matches[0][0]
@@ -69,8 +71,8 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             )
             other_results = matches[1:]
             await ctx.send(
-                f"Found {len(matches) - 1} other records matching your query.\n" +
-                "\n".join(f"{door.title} (ID: {door.id}) (score: {score})" for door, score, _ in other_results)
+                f"Found {len(matches) - 1} other records matching your query.\n"
+                + "\n".join(f"{door.title} (ID: {door.id}) (score: {score})" for door, score, _ in other_results)
             )
 
     @commands.command("search_restrictions")
