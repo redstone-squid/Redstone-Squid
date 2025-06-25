@@ -1114,6 +1114,7 @@ class Build:
                 logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(self))
             raise
         finally:
+            self.lock.build_id = self.id
             await self.lock.release()
 
     async def _setup_relationships(self, session: AsyncSession, sql_build: SQLBuild) -> None:
