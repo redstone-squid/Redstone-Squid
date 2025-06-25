@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord import Message, app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ext.commands import (
     Cog,
     Context,
@@ -18,7 +18,7 @@ from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
-from squid.db.builds import Build
+from squid.db.builds import Build, update_smallest_door_records_without_title
 from squid.db.schema import BuildCategory, Status
 from squid.db.utils import upload_to_catbox
 
@@ -33,6 +33,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
     def __init__(self, bot: BotT):
         self.bot = bot
+        self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
     async def submit_group(self, ctx: Context[BotT]):
@@ -244,6 +245,10 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
         await ctx.send("Build recalculated.", ephemeral=True)
+
+    @tasks.loop(minutes=5.0)
+    async def update_record_titles(self):
+        await update_smallest_door_records_without_title()
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
