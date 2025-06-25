@@ -14,7 +14,9 @@ from importlib import resources
 from types import TracebackType
 from typing import Any, Callable, Final, Literal, Self, overload
 
+from async_lru import alru_cache
 import discord
+from rapidfuzz import process
 import vecs
 from openai import AsyncOpenAI, OpenAIError
 from sqlalchemy import delete, func, select, update
@@ -1577,3 +1579,26 @@ async def update_smallest_door_records_without_title() -> None:
             door.title = title
             session.add(door)
         await session.commit()
+
+@alru_cache(ttl=3600)  # 1 hour
+async def fetch_all_smallest_door_records() -> Sequence[SmallestDoor]:
+    stmt = select(SmallestDoor)
+    db = DatabaseManager()
+    async with db.async_session() as session:
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+@alru_cache(ttl=3600)  # 1 hour
+async def search_smallest_door_records(
+    query: str, limit: int = 25
+) -> list[tuple[SmallestDoor, float, int]]:
+    """Search for smallest door records by title."""
+    records = await fetch_all_smallest_door_records()
+    records = [r for r in records if r.title is not None]  # Filter out records without titles
+
+    def processor(raw: str | SmallestDoor) -> str:
+        if isinstance(raw, SmallestDoor):
+            return raw.title  # type: ignore  # Title is never None here
+        return raw
+
+    return process.extract(query, records, limit=limit, processor=processor)
