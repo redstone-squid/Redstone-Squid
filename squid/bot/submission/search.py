@@ -18,8 +18,8 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
-from squid.db.builds import Build, get_builds_by_filter
-from squid.db.schema import Restriction, RestrictionAlias, Status, Type
+from squid.db.builds import Build, get_builds_by_filter, search_smallest_door_records
+from squid.db.schema import Restriction, RestrictionAlias, Status, Type, SmallestDoor
 
 if TYPE_CHECKING:
     import squid.bot
@@ -29,7 +29,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
 
-    @commands.hybrid_command("search")
+    @commands.hybrid_command("search_using_sucky_embeddings")
     @app_commands.describe(query="Whatever you want to search for.")
     async def search_builds(self, ctx: Context[BotT], query: str):
         """Searches for a build with natural language."""
@@ -45,6 +45,33 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         build = await Build.from_id(build_id)
         assert build is not None
         await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+
+    @commands.hybrid_command("search")
+    @app_commands.describe(query="The record's title.")
+    async def search_records(self, ctx: Context[BotT], query: str):
+        """Searches for a **record** by title."""
+        async with RunningMessage(ctx) as sent_message:
+            matches = await search_smallest_door_records(query)
+            if not matches:
+                return await sent_message.edit(embed=utils.error_embed("No results found", "No records match that query."))
+
+            # Use the running message to display the top result
+            top_door = matches[0][0]
+            build = await Build.from_id(top_door.id)
+            assert build is not None, "A record must have a build."
+            embed = await self.bot.for_build(build).generate_embed()
+            content = f"Top match: {top_door.title} (score: {matches[0][1]})"
+            if build.original_link:
+                content += f"\n{build.original_link}"
+            await sent_message.edit(
+                content=content,
+                embed=embed,
+            )
+            other_results = matches[1:]
+            await ctx.send(
+                f"Found {len(matches) - 1} other records matching your query.\n" +
+                "\n".join(f"{door.title} (ID: {door.id}) (score: {score})" for door, score, _ in other_results)
+            )
 
     @commands.command("search_restrictions")
     @check_is_staff()
