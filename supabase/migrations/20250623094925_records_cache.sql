@@ -48,7 +48,7 @@ CREATE TABLE public.smallest_door_records (
     door_depth        int NOT NULL DEFAULT 1,
     types             text[] NOT NULL, -- must be present
     restrictions      text[] NOT NULL DEFAULT '{}', -- can be empty
-    volume            bigint NOT NULL, -- pre-computed volume
+    volume            int NOT NULL, -- pre-computed volume
     restriction_subset text[] NOT NULL, -- subset of restrictions
     PRIMARY KEY (orientation, door_width, door_height, door_depth, types, restriction_subset)
 );
