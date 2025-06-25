@@ -90,6 +90,9 @@ BEGIN
         LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
         WHERE  b.submission_status = 1
           AND  b.category = 'Door'
+          AND  b.width IS NOT NULL
+          AND  b.height IS NOT NULL
+          AND  b.depth IS NOT NULL
         GROUP  BY b.id, d.orientation, d.door_width, d.door_height, d.door_depth
     ), exploded AS (
         SELECT  b.*,
@@ -197,7 +200,7 @@ base AS (
                 FILTER (WHERE r.name IS NOT NULL),
             ARRAY[]::text[]
         ) AS restrictions,
-        b.width * b.height * COALESCE(b.depth, 1) AS volume
+        b.width * b.height * b.depth AS volume
     FROM   public.builds             b
     JOIN   public.doors              d  ON d.build_id = b.id
     LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
@@ -206,6 +209,9 @@ base AS (
     LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
     WHERE  b.submission_status = 1
       AND  b.category          = 'Door'
+      AND  b.width IS NOT NULL
+      AND  b.height IS NOT NULL
+      AND  b.depth IS NOT NULL
       AND  b.id <> p_build_id                         -- <-- removed build
     GROUP  BY b.id, d.orientation, d.door_width,
               d.door_height, d.door_depth
@@ -265,7 +271,7 @@ WITH b AS (                               -- the changed build only
                 FILTER (WHERE r.name IS NOT NULL),
             ARRAY[]::text[]
         ) AS restrictions,
-        b.width * b.height * COALESCE(b.depth, 1) AS volume
+        b.width * b.height * b.depth AS volume
     FROM   public.builds             b
     JOIN   public.doors              d  ON d.build_id = b.id
     LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
@@ -273,6 +279,11 @@ WITH b AS (                               -- the changed build only
     LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
     LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
     WHERE  b.id = p_build_id
+        AND  b.submission_status = 1
+        AND  b.category          = 'Door'
+        AND  b.width IS NOT NULL
+        AND  b.height IS NOT NULL
+        AND  b.depth IS NOT NULL
     GROUP  BY b.id, d.orientation, d.door_width,
               d.door_height, d.door_depth
 ), subset AS (
