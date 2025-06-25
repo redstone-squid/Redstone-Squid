@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
+    RestrictionStr,
 )
 from squid.db.schema import (
     BuildCategory,
@@ -716,15 +717,20 @@ class Build:
             self.component_restrictions = []
             self.miscellaneous_restrictions = []
 
-            for restriction in await DatabaseManager().build_tags.fetch_all_restrictions():
-                for door_restriction in restrictions:
-                    if door_restriction.lower() == restriction.name.lower():
-                        if restriction.type == "wiring-placement":
-                            self.wiring_placement_restrictions.append(restriction.name)
-                        elif restriction.type == "component":
-                            self.component_restrictions.append(restriction.name)
-                        elif restriction.type == "miscellaneous":
-                            self.miscellaneous_restrictions.append(restriction.name)
+            db_restrictions = await DatabaseManager().build_tags.fetch_all_restrictions()
+            name_to_row = {r.name.lower(): r for r in db_restrictions}
+            bucket: dict[RestrictionStr, list[str]] = {
+                "wiring-placement": self.wiring_placement_restrictions,
+                "component": self.component_restrictions,
+                "miscellaneous": self.miscellaneous_restrictions,
+            }
+
+            for r in restrictions:  # O(M)
+                row = name_to_row.get(r.lower())
+                if row:
+                    if row.type is None:
+                        raise RuntimeError("The type is supposed to never be None, this is a bug in the database.")
+                    bucket[row.type].append(row.name)
 
     def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""
