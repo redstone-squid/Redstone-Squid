@@ -11,7 +11,7 @@ SELECT
     COALESCE(
         ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
             FILTER (WHERE t.name IS NOT NULL),
-        ARRAY []::text[]
+        ARRAY[]::text[]
     ) AS types,
 
     /* restrictions: allow empty, but never [NULL] */
@@ -120,7 +120,7 @@ BEGIN
             COALESCE(
                 ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
                     FILTER (WHERE t.name IS NOT NULL),
-                ARRAY []::text[]
+                ARRAY[]::text[]
             ) AS types,
             COALESCE(
                 ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
@@ -236,7 +236,7 @@ base AS (
         COALESCE(
             ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
                 FILTER (WHERE t.name IS NOT NULL),
-            ARRAY []::text[]
+            ARRAY[]::text[]
         ) AS types,
         COALESCE(
             ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
@@ -304,7 +304,7 @@ WITH b AS (                               -- the changed build only
         COALESCE(
             ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
                 FILTER (WHERE t.name IS NOT NULL),
-            ARRAY []::text[]
+            ARRAY[]::text[]
         ) AS types,
         COALESCE(
             ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
