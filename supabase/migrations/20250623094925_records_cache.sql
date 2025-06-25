@@ -127,7 +127,7 @@ BEGIN
                     FILTER (WHERE r.name IS NOT NULL),
                 ARRAY[]::text[]
             ) AS restrictions,
-            d.door_width * d.door_height * COALESCE(d.door_depth, 1) AS volume
+            b.width * b.height * COALESCE(b.depth, 1) AS volume
         FROM   public.builds             b
         JOIN   public.doors              d  ON d.build_id = b.id
         LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
@@ -243,8 +243,7 @@ base AS (
                 FILTER (WHERE r.name IS NOT NULL),
             ARRAY[]::text[]
         ) AS restrictions,
-        d.door_width * d.door_height *
-        COALESCE(d.door_depth, 1)                       AS volume
+        b.width * b.height * COALESCE(b.depth, 1) AS volume
     FROM   public.builds             b
     JOIN   public.doors              d  ON d.build_id = b.id
     LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
@@ -312,8 +311,7 @@ WITH b AS (                               -- the changed build only
                 FILTER (WHERE r.name IS NOT NULL),
             ARRAY[]::text[]
         ) AS restrictions,
-        d.door_width * d.door_height *
-        COALESCE(d.door_depth, 1)               AS volume
+        b.width * b.height * COALESCE(b.depth, 1) AS volume
     FROM   public.builds             b
     JOIN   public.doors              d  ON d.build_id = b.id
     LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
