@@ -38,7 +38,7 @@ END;
 $$;
 
 CREATE TABLE public.smallest_door_records (
-    id                int NOT NULL REFERENCES public.builds (id) ON DELETE CASCADE,
+    id                bigint NOT NULL REFERENCES public.builds (id) ON DELETE CASCADE,
     -- title of the build, cannot be populated easily by the db itself because it is a computed field
     -- so we leave it as NULL for now, and possibly run a cron job to fill it in later
     title             text DEFAULT NULL,
