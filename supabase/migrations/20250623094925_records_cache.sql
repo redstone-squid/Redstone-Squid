@@ -38,6 +38,7 @@ END;
 $$;
 
 CREATE TABLE public.smallest_door_records (
+    record_id         BIGSERIAL PRIMARY KEY, -- unique identifier for the record
     id                bigint NOT NULL REFERENCES public.builds (id) ON DELETE CASCADE,
     -- title of the build, cannot be populated easily by the db itself because it is a computed field
     -- so we leave it as NULL for now, and possibly run a cron job to fill it in later
@@ -50,7 +51,7 @@ CREATE TABLE public.smallest_door_records (
     restrictions      text[] NOT NULL DEFAULT '{}', -- can be empty
     volume            int NOT NULL, -- pre-computed volume
     restriction_subset text[] NOT NULL, -- subset of restrictions
-    PRIMARY KEY (orientation, door_width, door_height, door_depth, types, restriction_subset)
+    UNIQUE (orientation, door_width, door_height, door_depth, types, restriction_subset)
 );
 
 CREATE OR REPLACE PROCEDURE public.rebuild_smallest_door_records()
