@@ -298,6 +298,27 @@ class Door(Build, kw_only=True):
     visible_closing_time: Mapped[int | None] = mapped_column(BigInteger)
 
 
+class SmallestDoor(Base):
+    """A door that is the smallest in a specific category.
+
+    This table is a cache for the smallest doors in each category up to 8 restrictions, built by using database triggers
+    """
+
+    __tablename__ = "smallest_door_records"
+
+    record_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), init=False)
+    door_width: Mapped[int] = mapped_column(Integer, nullable=False)
+    door_height: Mapped[int] = mapped_column(Integer, nullable=False)
+    door_depth: Mapped[int] = mapped_column(Integer, nullable=True)
+    orientation: Mapped[DoorOrientationName] = mapped_column(String)
+    types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
+    restrictions: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
+    restriction_subset: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
+    volume: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str | None] = mapped_column(String)
+
+
 class Extender(Build, kw_only=True):
     """An extender build."""
 
