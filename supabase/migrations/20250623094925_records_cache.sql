@@ -320,6 +320,22 @@ DO UPDATE
 $$;
 
 
+CREATE OR REPLACE FUNCTION public.trg_refresh_smallest_door_from_builds()
+RETURNS trigger
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        CALL public.refresh_smallest_after_door_delete(OLD.id);
+    ELSE                               -- INSERT or UPDATE
+        CALL public.refresh_smallest_after_door_delete(OLD.id);
+        CALL public.refresh_smallest_for_door_insert(NEW.id);
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
 CREATE OR REPLACE FUNCTION public.trg_refresh_smallest_door()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -341,8 +357,8 @@ END;
 $$;
 
 CREATE TRIGGER builds_refresh_smallest_door
-AFTER INSERT OR UPDATE OR DELETE ON public.doors
-FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
+AFTER INSERT OR UPDATE OR DELETE ON public.builds
+FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door_from_builds();
 
 CREATE TRIGGER doors_refresh_smallest_door
 AFTER INSERT OR UPDATE OR DELETE ON public.doors
