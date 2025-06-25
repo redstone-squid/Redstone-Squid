@@ -14,11 +14,11 @@ from importlib import resources
 from types import TracebackType
 from typing import Any, Callable, Final, Literal, Self, overload
 
-from async_lru import alru_cache
 import discord
-from rapidfuzz import process
 import vecs
+from async_lru import alru_cache
 from openai import AsyncOpenAI, OpenAIError
+from rapidfuzz import process
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,8 +26,6 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
-    SmallestDoor,
-    RestrictionStr,
 )
 from squid.db.schema import (
     BuildCategory,
@@ -51,6 +49,8 @@ from squid.db.schema import (
     RecordCategory,
     Restriction,
     RestrictionRecord,
+    RestrictionStr,
+    SmallestDoor,
     Status,
     Type,
     TypeRecord,
@@ -1580,6 +1580,7 @@ async def update_smallest_door_records_without_title() -> None:
             session.add(door)
         await session.commit()
 
+
 @alru_cache(ttl=3600)  # 1 hour
 async def fetch_all_smallest_door_records() -> Sequence[SmallestDoor]:
     stmt = select(SmallestDoor)
@@ -1588,10 +1589,9 @@ async def fetch_all_smallest_door_records() -> Sequence[SmallestDoor]:
         result = await session.execute(stmt)
         return result.scalars().all()
 
+
 @alru_cache(ttl=3600)  # 1 hour
-async def search_smallest_door_records(
-    query: str, limit: int = 25
-) -> list[tuple[SmallestDoor, float, int]]:
+async def search_smallest_door_records(query: str, limit: int = 25) -> list[tuple[SmallestDoor, float, int]]:
     """Search for smallest door records by title."""
     records = await fetch_all_smallest_door_records()
     records = [r for r in records if r.title is not None]  # Filter out records without titles
