@@ -4,7 +4,8 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable
-from logging.handlers import RotatingFileHandler
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from queue import Queue
 from typing import Callable, Final, Self, TypedDict, override
 
 import discord
@@ -185,28 +186,11 @@ def setup_logging(dev_mode: bool = False):
     dt_fmt = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
 
-    root = logging.getLogger()
-    root.setLevel(logging.INFO if dev_mode else logging.WARNING)
-
-    if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
-        sh = logging.StreamHandler()
-        sh.setFormatter(formatter)
-        sh.setLevel(logging.INFO)
-        root.addHandler(sh)
-
+    # Create a queue for async logging
+    log_queue = Queue(-1)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
-    logging.root.addHandler(stream_handler)
-
-    logging.getLogger("squid").setLevel(logging.INFO)
-    logging.getLogger("discord").setLevel(logging.INFO)
-
-    if dev_mode:
-        # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
-        logging.getLogger("sqlalchemy.engine.Engine").handlers = [logging.NullHandler()]  # Avoid duplicate logging
-
-        # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
-        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
+    stream_handler.setLevel(logging.INFO)
 
     # Create logs directory if it doesn't exist
     logs_dir = "logs"
@@ -218,9 +202,42 @@ def setup_logging(dev_mode: bool = False):
         maxBytes=32 * 1024 * 1024,  # 32 MiB
         backupCount=5,  # Rotate through 5 files
     )
-
     file_handler.setFormatter(formatter)
-    root.addHandler(file_handler)
+
+    # Create queue listener that will process logs in a separate thread
+    queue_listener = QueueListener(log_queue, stream_handler, file_handler, respect_handler_level=True)
+    queue_listener.start()
+
+    # Create queue handler for the root logger
+    queue_handler = QueueHandler(log_queue)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO if dev_mode else logging.WARNING)
+
+    # Clear existing handlers and add the queue handler
+    root.handlers.clear()
+    root.addHandler(queue_handler)
+
+    logging.getLogger("squid").setLevel(logging.INFO)
+    logging.getLogger("discord").setLevel(logging.INFO)
+
+    if dev_mode:
+        # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
+        logging.getLogger("sqlalchemy.engine.Engine").handlers = [logging.NullHandler()]  # Avoid duplicate logging
+
+        # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
+        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
+
+    # Store the queue listener globally so it can be stopped later
+    if not hasattr(setup_logging, "_queue_listener"):
+        setup_logging._queue_listener = queue_listener
+
+
+def shutdown_logging():
+    """Shutdown the async logging system."""
+    if hasattr(setup_logging, "_queue_listener"):
+        setup_logging._queue_listener.stop()
+        delattr(setup_logging, "_queue_listener")
 
 
 DEFAULT_CONFIG: Final[ApplicationConfig] = {
@@ -236,18 +253,21 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
     setup_logging(config.get("dev_mode", False))
 
-    db = DatabaseManager()
-    # Run the synchronous db validation function in a thread to avoid blocking the event loop
-    asyncio.get_event_loop().run_in_executor(
-        None,
-        lambda: db.validate_database_consistency(Base),
-    ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
+    try:
+        db = DatabaseManager()
+        # Run the synchronous db validation function in a thread to avoid blocking the event loop
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: db.validate_database_consistency(Base),
+        ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
 
-    async with RedstoneSquid(db, config=config.get("bot_config")) as bot:
-        token = os.environ.get("BOT_TOKEN")
-        if not token:
-            raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
-        await bot.start(token)
+        async with RedstoneSquid(db, config=config.get("bot_config")) as bot:
+            token = os.environ.get("BOT_TOKEN")
+            if not token:
+                raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
+            await bot.start(token)
+    finally:
+        shutdown_logging()
 
 
 if __name__ == "__main__":
