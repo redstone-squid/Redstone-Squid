@@ -185,13 +185,21 @@ def setup_logging(dev_mode: bool = False):
     dt_fmt = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
 
-    logging.root.setLevel(logging.INFO)
+    root = logging.getLogger()
+    root.setLevel(logging.INFO if dev_mode else logging.WARNING)
+
+    if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+        sh = logging.StreamHandler()
+        sh.setFormatter(formatter)
+        sh.setLevel(logging.INFO)
+        root.addHandler(sh)
+
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logging.root.addHandler(stream_handler)
 
-    discord_logger = logging.getLogger("discord")
-    discord_logger.setLevel(logging.INFO)
+    logging.getLogger("squid").setLevel(logging.INFO)
+    logging.getLogger("discord").setLevel(logging.INFO)
 
     if dev_mode:
         # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
@@ -212,7 +220,7 @@ def setup_logging(dev_mode: bool = False):
     )
 
     file_handler.setFormatter(formatter)
-    discord_logger.addHandler(file_handler)
+    root.addHandler(file_handler)
 
 
 DEFAULT_CONFIG: Final[ApplicationConfig] = {
