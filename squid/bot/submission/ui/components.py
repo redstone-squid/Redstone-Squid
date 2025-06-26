@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     import squid.bot
 
 
+logger = logging.getLogger(__name__)
+
+
 class RecordCategorySelect(discord.ui.Select):
     def __init__(self, build: Build):
         self.build = build
@@ -124,7 +127,7 @@ class BuildField[T](discord.ui.TextInput):
         except AttributeError:
             raise ValueError(f"Invalid attribute {attribute}")
         if not is_bearable(value, attr_type):
-            logging.error(f"Invalid hint for {attribute}: {attr_type}")
+            logger.error("Invalid hint for %s: %s", attribute, attr_type)
 
         if required is None:
             required = is_bearable(None, attr_type)
@@ -169,7 +172,7 @@ class BuildField[T](discord.ui.TextInput):
             return
 
         try:
-            logging.info(f"Trying to set {self.attribute} to {value}")
+            logger.info("Trying to set %s to %s", self.attribute, value)
             setattr(self.build, self.attribute, value)
         except (AttributeError, ValueError):
             pass
