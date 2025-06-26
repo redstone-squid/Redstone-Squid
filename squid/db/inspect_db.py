@@ -43,7 +43,7 @@ class DatabaseSchema:
         self.columns: dict[str, dict[str, Any]] = {}
 
         for table in self.tables:
-            logging.info("Loading information from table %s", table)
+            logger.info("Loading information from table %s", table)
             self.columns[table] = {c["name"]: c for c in inspector.get_columns(table)}
 
 
@@ -283,7 +283,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
                     if check_column_property(column_prop, schema, klass, engine):
                         errors = True
                 else:
-                    logging.info(
+                    logger.info(
                         "Encountered unexpected property %s in model %s with type %s",
                         column_prop.key,
                         klass.__name__,

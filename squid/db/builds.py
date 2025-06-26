@@ -581,7 +581,7 @@ class Build:
 
         # All keys must be present
         if not all(key in variables for key in acceptable_keys):
-            logging.debug("Missing keys in AI output variables")
+            logger.debug("Missing keys in AI output variables")
             return None
 
         build = Build(
@@ -842,7 +842,7 @@ class Build:
             response = await client.embeddings.create(input=str(self), model=model)
             return response.data[0].embedding
         except OpenAIError as e:
-            logger.debug(f"Failed to generate embedding for build {self.id}: {e}")
+            logger.debug("Failed to generate embedding for build %s: %s", self.id, e)
             return None
 
     def diff[T: Any](self, other: "Build", *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:

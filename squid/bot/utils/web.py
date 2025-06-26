@@ -57,7 +57,7 @@ async def get_website_preview(url: str) -> Preview:
 
                 # If we can't find a content type, assume it's a webpage
                 if not content_type:
-                    logger.warning(f"Could not determine content type for URL '{url}'")
+                    logger.warning("Could not determine content type for URL '%s'", url)
                     content_type = "text/html"
 
                 # If it's a video, extract first frame
@@ -68,7 +68,7 @@ async def get_website_preview(url: str) -> Preview:
 
                 page_text = await response.text()
     except aiohttp.ClientError as e:
-        logger.debug(f"Failed to retrieve URL '{url}': {e}")
+        logger.debug("Failed to retrieve URL '%s': %s", url, e)
         return preview
 
     soup = bs4.BeautifulSoup(page_text, "html.parser")

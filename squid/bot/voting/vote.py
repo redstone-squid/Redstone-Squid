@@ -42,7 +42,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 for message_id in session.message_ids:
                     self._open_vote_sessions[message_id] = session
         except Exception as e:
-            logger.error(f"Failed to load open vote sessions: {e}")
+            logger.error("Failed to load open vote sessions: %s", e)
 
     async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
         """Get the voting weight of a user."""
@@ -63,7 +63,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         vote_session_record = await self.bot.db.vote_session.get_vote_session_by_message_id(
             message_id, status=status
         )
-        
+
         if vote_session_record is None:
             return None
 
