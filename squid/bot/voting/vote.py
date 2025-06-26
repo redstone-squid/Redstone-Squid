@@ -42,7 +42,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 for message_id in session.message_ids:
                     self._open_vote_sessions[message_id] = session
         except Exception as e:
-            logger.error(f"Failed to load open vote sessions: {e}")
+            logger.error("Failed to load open vote sessions: %s", e)
 
     async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
         """Get the voting weight of a user."""
@@ -85,7 +85,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             elif kind == "delete_log":
                 return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
             else:
-                logger.error(f"Unknown vote session kind: {kind}")
+                logger.error("Unknown vote session kind: %s", kind)
                 raise NotImplementedError(f"Unknown vote session kind: {kind}")
 
     @Cog.listener(name="on_raw_reaction_add")
