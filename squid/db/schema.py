@@ -42,6 +42,8 @@ MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "
 
 VoteKind = Literal["build", "delete_log"]
 
+MediaType = Literal["image", "video", "world-download"]
+
 # Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
 DbSettingKey = Literal[
     "smallest_channel_id",
@@ -79,6 +81,24 @@ class Info(TypedDict, total=False):
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
     server_info: ServerInfo
+
+
+class Status(IntEnum):
+    """The status of a submission."""
+
+    PENDING = 0
+    CONFIRMED = 1
+    DENIED = 2
+
+
+class BuildCategory(StrEnum):
+    """The categories of the builds."""
+
+    DOOR = "Door"
+    EXTENDER = "Extender"
+    UTILITY = "Utility"
+    ENTRANCE = "Entrance"
+
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
@@ -405,9 +425,6 @@ class BuildType(Base):
     type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined", repr=False, default=None)
 
 
-MediaType = Literal["image", "video", "world-download"]
-
-
 class BuildLink(Base):
     """A link associated with a build (image, video, world download)."""
 
@@ -516,23 +533,6 @@ class Vote(Base):
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
-
-
-class Status(IntEnum):
-    """The status of a submission."""
-
-    PENDING = 0
-    CONFIRMED = 1
-    DENIED = 2
-
-
-class BuildCategory(StrEnum):
-    """The categories of the builds."""
-
-    DOOR = "Door"
-    EXTENDER = "Extender"
-    UTILITY = "Utility"
-    ENTRANCE = "Entrance"
 
 
 class BuildRecord(TypedDict):
