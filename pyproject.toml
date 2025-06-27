@@ -31,6 +31,7 @@ dependencies = [
     "rapidfuzz>=3.13.0",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
+    "tenacity>=9.1.2",
 ]
 
 [project.urls]
