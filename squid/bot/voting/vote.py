@@ -59,8 +59,13 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             return
 
         # Remove the user's reaction to keep votes anonymous
-        channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
-        message = await channel.fetch_message(payload.message_id)
+        message = await self.bot.get_or_fetch_message(payload.message_id, channel_id=payload.channel_id)
+        if message is None:
+            logger.warning(
+                f"Message with ID {payload.message_id} not found in channel {payload.channel_id}. "
+                "This could be a case where the message is quickly deleted after the reaction was added."
+            )
+            return
         user = self.bot.get_user(payload.user_id)
         assert user is not None
         remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
