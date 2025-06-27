@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from squid.db import DatabaseManager, BuildTagsManager
+from squid.db import BuildTagsManager, DatabaseManager
 from squid.db.schema import Restriction, Version
 
 
