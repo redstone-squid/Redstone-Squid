@@ -199,8 +199,8 @@ class Message(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
-    server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    channel_id: Mapped[int | None] = mapped_column(BigInteger)
+    server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # FIXME: server ID should be nullable
+    channel_id: Mapped[int | None] = mapped_column(BigInteger)  # FIXME: Channel ID should not be nullable
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     purpose: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str | None] = mapped_column(String)
