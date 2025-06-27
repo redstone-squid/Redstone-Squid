@@ -54,6 +54,28 @@ class MessageManager:
             await session.execute(stmt)
             await session.commit()
 
+    async def get_message_by_id(self, message_id: int) -> Message | None:
+        """Get a message from the database.
+
+        Returns:
+            The Message object if found, otherwise None.
+        """
+        async with self.session() as session:
+            stmt = select(Message).where(Message.id == message_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_messages_by_id(self, message_ids: Sequence[int]) -> Sequence[Message]:
+        """Get multiple messages from the database.
+
+        Returns:
+            A list of Message objects.
+        """
+        async with self.session() as session:
+            stmt = select(Message).where(Message.id.in_(message_ids))
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
     async def update_message_edited_time(self, message: int | discord.Message) -> None:
         """
         Update the edited time of a message.
