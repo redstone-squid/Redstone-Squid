@@ -7,7 +7,7 @@ from collections.abc import Awaitable
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
-from typing import Callable, Final, Self, TypedDict, override
+from typing import Any, Callable, Final, Self, TypedDict, override
 
 import discord
 from discord import Webhook
@@ -202,8 +202,6 @@ def start_logging(dev_mode: bool = False):
     dt_fmt = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
 
-    # Create a queue for async logging
-    log_queue = Queue(-1)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     stream_handler.setLevel(logging.INFO)
@@ -221,6 +219,7 @@ def start_logging(dev_mode: bool = False):
     file_handler.setFormatter(formatter)
 
     # Create queue handler that will process logs in a separate thread
+    log_queue: Queue[Any] = Queue(-1)
     queue_listener = QueueListener(log_queue, stream_handler, file_handler, respect_handler_level=True)
     queue_listener.start()
     queue_handler = QueueHandler(log_queue)
