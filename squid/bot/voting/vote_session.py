@@ -327,7 +327,7 @@ class AbstractVoteSession(ABC):
             cached_ids = {message.id for message in self._messages}
             new_messages = await asyncio.gather(
                 *(
-                    self.bot.get_or_fetch_message(record.channel_id, record.id)
+                    self.bot.get_or_fetch_message(record.id, channel_id=record.channel_id)
                     for record in messages_record
                     if record.id not in cached_ids and record.channel_id is not None
                 )
@@ -653,7 +653,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession
     ) -> "DeleteLogVoteSession | None":
         """Create a DeleteLogVoteSession from a database record."""
-        target_message = await bot.get_or_fetch_message(record.target_channel_id, record.target_message_id)
+        target_message = await bot.get_or_fetch_message(record.target_message_id, channel_id=record.target_channel_id)
         if target_message is None:
             return None
 
