@@ -6,7 +6,7 @@ import discord
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.schema import Message, MessagePurpose
+from squid.db.schema import Message, MessagePurposeLiteral
 from squid.db.utils import utcnow
 
 
@@ -19,7 +19,7 @@ class MessageManager:
     async def track_message(
         self,
         message: discord.Message,
-        purpose: MessagePurpose,
+        purpose: MessagePurposeLiteral,
         *,
         build_id: int | None = None,
         vote_session_id: int | None = None,

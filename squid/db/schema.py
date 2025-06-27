@@ -26,23 +26,25 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
 
-RecordCategory: TypeAlias = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: Sequence[RecordCategory] = cast(Sequence[RecordCategory], get_args(RecordCategory))
+RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
+RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
+    Sequence[RecordCategoryLiteral], get_args(RecordCategoryLiteral)
+)
 
-BuildTypeStr: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Sequence[BuildTypeStr] = cast(Sequence[BuildTypeStr], get_args(BuildTypeStr))
+BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
 
-DoorOrientationName: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationName], get_args(DoorOrientationName))
+DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
+DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
 
-RestrictionStr = Literal["wiring-placement", "component", "miscellaneous"]
-RESTRICTIONS = cast(Sequence[RestrictionStr], get_args(RestrictionStr))
+RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
 
-MessagePurpose = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
+MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
-VoteKind = Literal["build", "delete_log"]
+VoteKindLiteral = Literal["build", "delete_log"]
 
-MediaType = Literal["image", "video", "world-download"]
+MediaTypeLiteral = Literal["image", "video", "world-download"]
 
 # Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
 DbSettingKey = Literal[
@@ -100,7 +102,6 @@ class BuildCategory(StrEnum):
     ENTRANCE = "Entrance"
 
 
-
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
 class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
     pass
@@ -151,11 +152,11 @@ class Restriction(Base):
 
     __tablename__ = "restrictions"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
+    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(
         String, unique=True
     )  # FIXME: Shouldn't be nullable, note that to make type checkers happy I made this Mapped[str] instead of Mapped[str | None], even though it is nullable in the database
-    type: Mapped[RestrictionStr | None] = mapped_column(String)
+    type: Mapped[RestrictionTypeLiteral | None] = mapped_column(String)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
         back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
@@ -189,7 +190,7 @@ class Type(Base):
 
     __tablename__ = "types"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildTypeStr | None] = mapped_column(String)
+    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(
         String, unique=True
     )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
@@ -233,7 +234,7 @@ class Build(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     submission_status: Mapped["Status"] = mapped_column(SmallInteger, nullable=False)
-    record_category: Mapped[RecordCategory | None] = mapped_column(String)
+    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(String)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
@@ -308,7 +309,7 @@ class Door(Build, kw_only=True):
     }
 
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    orientation: Mapped[DoorOrientationName] = mapped_column(String, nullable=False)
+    orientation: Mapped[DoorOrientationLiteral] = mapped_column(String, nullable=False)
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
     door_depth: Mapped[int | None] = mapped_column(Integer)
@@ -331,7 +332,7 @@ class SmallestDoor(Base):
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
     door_depth: Mapped[int] = mapped_column(Integer, nullable=True)
-    orientation: Mapped[DoorOrientationName] = mapped_column(String)
+    orientation: Mapped[DoorOrientationLiteral] = mapped_column(String)
     types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     restrictions: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     restriction_subset: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
@@ -431,7 +432,7 @@ class BuildLink(Base):
     __tablename__ = "build_links"
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
     url: Mapped[str] = mapped_column(String, nullable=False, primary_key=True)
-    media_type: Mapped[MediaType | None] = mapped_column(String)  # TODO: nullable
+    media_type: Mapped[MediaTypeLiteral | None] = mapped_column(String)  # TODO: nullable
 
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
 
@@ -540,7 +541,7 @@ class BuildRecord(TypedDict):
 
     id: int
     submission_status: Status
-    record_category: RecordCategory | None
+    record_category: RecordCategoryLiteral | None
     extra_info: Info
     submission_time: str
     edited_time: str
@@ -566,7 +567,7 @@ class MessageRecord(TypedDict):
     server_id: int
     channel_id: int
     author_id: int
-    purpose: MessagePurpose
+    purpose: MessagePurposeLiteral
     build_id: int | None
     vote_session_id: int | None
     content: str | None
@@ -576,7 +577,7 @@ class DoorRecord(TypedDict):
     """A record of a door in the database."""
 
     build_id: int
-    orientation: DoorOrientationName
+    orientation: DoorOrientationLiteral
     door_width: int | None
     door_height: int | None
     door_depth: int | None
@@ -650,7 +651,7 @@ class RestrictionRecord(TypedDict):
     id: int
     build_category: BuildCategory
     name: str
-    type: RestrictionStr
+    type: RestrictionTypeLiteral
 
 
 class RestrictionAliasRecord(TypedDict):

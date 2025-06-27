@@ -17,7 +17,7 @@ from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Status, Vote, VoteKind, VoteSession
+from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession
 
 if TYPE_CHECKING:
     import squid.bot
@@ -31,7 +31,7 @@ DENY_EMOJIS = ["👎", "❌"]
 async def track_vote_session(
     messages: Iterable[discord.Message],
     author_id: int,
-    kind: VoteKind,
+    kind: VoteKindLiteral,
     pass_threshold: int,
     fail_threshold: int,
     *,
@@ -124,7 +124,7 @@ class AbstractVoteSession(ABC):
     Subclasses must also set the kind attribute to a VoteKind.
     """
 
-    kind: ClassVar[VoteKind]
+    kind: ClassVar[VoteKindLiteral]
 
     def __init__(
         self,
