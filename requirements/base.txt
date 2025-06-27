@@ -777,12 +777,6 @@ propcache==0.3.1 \
     # via
     #   aiohttp
     #   yarl
-psycopg2==2.9.10 \
-    --hash=sha256:12ec0b40b0273f95296233e8750441339298e6a572f7039da5b260e3c8b60e11 \
-    --hash=sha256:4a579d6243da40a7b3182e0430493dbd55950c493d8c68f4eec0b302f6bbf20e \
-    --hash=sha256:65a63d7ab0e067e2cdb3cf266de39663203d38d6a8ed97f5ca0cb315c73fe067 \
-    --hash=sha256:91fd603a2155da8d0cfcdbf8ab24a2d54bca72795b90d2a3ed2b6da8d979dee2
-    # via sqlalchemy
 psycopg2-binary==2.9.10 \
     --hash=sha256:155e69561d54d02b3c3209545fb08938e27889ff5a10c19de8d23eb5a41be8a5 \
     --hash=sha256:18c5ee682b9c6dd3696dad6e54cc7ff3a1a9020df6a5c0f861ef8bfd338c3ca0 \
