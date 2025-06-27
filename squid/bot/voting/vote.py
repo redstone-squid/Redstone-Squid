@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, cast
 
 import discord
@@ -33,6 +34,18 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if await is_staff(self.bot, server_id, user_id):
             return 3
         return 1
+
+    async def get_vote_session_messages(self, vote_session: AbstractVoteSession) -> AsyncGenerator[discord.Message, None]:
+        """Get the messages associated with a vote session."""
+        messages = await self.bot.db.message.get_messages_by_id(vote_session.message_ids)
+        discord_message_tasks = [
+            asyncio.create_task(self.bot.get_or_fetch_message(message.id, channel_id=message.channel_id))
+            for message in messages
+        ]
+        for task in asyncio.as_completed(discord_message_tasks):
+            msg = await task
+            if msg is not None:
+                yield msg
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
