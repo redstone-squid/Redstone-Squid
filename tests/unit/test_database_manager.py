@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from squid.db import DatabaseManager
+from squid.db import DatabaseManager, BuildTagsManager
 from squid.db.schema import Restriction, Version
 
 
@@ -48,10 +48,14 @@ class TestDatabaseManager:
             mock_session_maker.return_value.__aenter__.return_value = mock_session
 
             mock_result = Mock()
-            mock_scalars = Mock()
-            mock_scalars.all.return_value = sample_restriction_data
-            mock_result.scalars.return_value = mock_scalars
             mock_session.execute.return_value = mock_result
+
+            mock_scalars = Mock()
+            mock_result.scalars.return_value = mock_scalars
+
+            mock_scalars.all.return_value = sample_restriction_data
+
+            mock_db_manager.build_tags = BuildTagsManager(mock_session_maker)
 
             restrictions = await mock_db_manager.build_tags.fetch_all_restrictions()
             assert restrictions == sample_restriction_data

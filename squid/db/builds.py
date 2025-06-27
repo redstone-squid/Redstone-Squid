@@ -403,7 +403,7 @@ class Build:
             world_download_urls=world_download_urls,
             submitter_id=submitter_id,
             completion_time=completion_time,
-            edited_time=datetime.strptime(edited_time, "%Y-%m-%dT%H:%M:%S"),
+            edited_time=datetime.strptime(edited_time, "%Y-%m-%dT%H:%M:%S%z"),
             original_server_id=original_server_id,
             original_channel_id=original_channel_id,
             original_message_id=original_message_id,
