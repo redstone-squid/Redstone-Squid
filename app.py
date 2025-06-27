@@ -4,8 +4,8 @@ Entry point of the bot and the API.
 https://github.com/redstone-squid/Redstone-Squid
 """
 
-import asyncio
 import multiprocessing
+import sys
 
 from dotenv import load_dotenv
 
@@ -32,4 +32,12 @@ if __name__ == "__main__":
     if config.get("dotenv_path"):
         load_dotenv(config.get("dotenv_path"))
     multiprocessing.Process(target=api_main).start()
-    asyncio.run(bot_main(config=config), debug=config.get("dev_mode", False))
+
+    if sys.platform == "win32":
+        import asyncio
+
+        asyncio.run(bot_main(config=config), debug=config.get("dev_mode", False))
+    else:
+        import uvloop
+
+        uvloop.run(bot_main(config=config), debug=config.get("dev_mode", False))
