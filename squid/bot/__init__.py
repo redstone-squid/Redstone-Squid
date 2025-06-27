@@ -3,11 +3,11 @@
 import asyncio
 import logging
 import os
-from collections.abc import Awaitable
+from collections.abc import AsyncGenerator, Awaitable
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
-from typing import Any, Callable, Final, Self, TypedDict, override
+from typing import Any, Callable, Final, Self, Sequence, TypedDict, override
 
 import discord
 from discord import Webhook
@@ -158,6 +158,33 @@ class RedstoneSquid(Bot):
             return None
         except discord.Forbidden:
             return None
+
+    async def get_or_fetch_messages(
+        self, message_ids: Sequence[int], *, channel_ids: Sequence[int] | None = None
+    ) -> AsyncGenerator[discord.Message | None, None]:
+        """
+        Fetches multiple messages from the cache or the API.
+
+        Args:
+            message_ids (Sequence[int]): The IDs of the messages to fetch.
+            channel_ids (Sequence[int] | None): The IDs of the channels where the messages are located. If not provided, the bot will try to fetch the channels from the database cache.
+
+        Yields:
+            discord.Message | None: The fetched messages, or None if a message could not be found.
+
+        Raises:
+            ValueError: If the length of `message_ids` and `channel_ids` do not match.
+        """
+        if channel_ids is None:
+            channel_ids = [None] * len(message_ids)
+
+        tasks: list[asyncio.Task[discord.Message | None]] = []
+        for message_id, channel_id in zip(message_ids, channel_ids, strict=True):
+            tasks.append(asyncio.create_task(self.get_or_fetch_message(message_id, channel_id=channel_id)))
+
+        for task in asyncio.as_completed(tasks):
+            message = await task
+            yield message
 
     def get_running_message(
         self,
