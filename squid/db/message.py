@@ -102,16 +102,3 @@ class MessageService:
             A list of messages.
         """
         return await self._message_repo.get_outdated_messages(server_id)
-
-
-async def main():
-    from squid.db import DatabaseManager
-
-    # print(get_outdated_message(433618741528625152, 30))
-    print(await DatabaseManager().message.get_outdated_messages(433618741528625153))
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
