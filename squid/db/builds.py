@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
+    MediaType,
 )
 from squid.db.schema import (
     BuildCategory,
@@ -402,7 +403,7 @@ class Build:
             world_download_urls=world_download_urls,
             submitter_id=submitter_id,
             completion_time=completion_time,
-            edited_time=edited_time,
+            edited_time=datetime.strptime(edited_time, "%Y-%m-%dT%H:%M:%S"),
             original_server_id=original_server_id,
             original_channel_id=original_channel_id,
             original_message_id=original_message_id,
@@ -445,7 +446,7 @@ class Build:
             world_download_urls=[link.url for link in door.links if link.media_type == "world-download"],
             submitter_id=door.submitter_id,
             completion_time=door.completion_time,
-            edited_time=door.edited_time.strftime("%Y-%m-%d %H:%M:%S") if door.edited_time else None,
+            edited_time=door.edited_time,
             original_server_id=door.original_message.server_id if door.original_message else None,
             original_channel_id=door.original_message.channel_id if door.original_message else None,
             original_message_id=door.original_message_id,
@@ -940,10 +941,13 @@ class Build:
 
         if self.id is None:
             delete_build_on_error = True
+            if self.submitter_id is None:
+                raise ValueError("Submitter ID must be set for new builds.")
+
             # Create new build - determine the right subclass
-            if self.category == "Door":
+            if self.category == BuildCategory.DOOR:
                 sql_build = Door(
-                    submission_status=self.submission_status,
+                    submission_status=self.submission_status or Status.PENDING,
                     record_category=self.record_category,
                     width=self.width,
                     height=self.height,
@@ -952,7 +956,7 @@ class Build:
                     category=self.category,
                     submitter_id=self.submitter_id,
                     version_spec=self.version_spec,
-                    ai_generated=self.ai_generated,
+                    ai_generated=self.ai_generated or False,
                     embedding=self.embedding,
                     extra_info=self.extra_info,
                     edited_time=self.edited_time,
@@ -966,9 +970,9 @@ class Build:
                     visible_opening_time=self.visible_opening_time,
                     visible_closing_time=self.visible_closing_time,
                 )
-            elif self.category == "Extender":
+            elif self.category == BuildCategory.EXTENDER:
                 sql_build = Extender(
-                    submission_status=self.submission_status,
+                    submission_status=self.submission_status or Status.PENDING,
                     record_category=self.record_category,
                     width=self.width,
                     height=self.height,
@@ -977,15 +981,15 @@ class Build:
                     category=self.category,
                     submitter_id=self.submitter_id,
                     version_spec=self.version_spec,
-                    ai_generated=self.ai_generated,
+                    ai_generated=self.ai_generated or False,
                     embedding=self.embedding,
                     extra_info=self.extra_info,
                     edited_time=self.edited_time,
                     is_locked=True,
                 )
-            elif self.category == "Utility":
+            elif self.category == BuildCategory.UTILITY:
                 sql_build = Utility(
-                    submission_status=self.submission_status,
+                    submission_status=self.submission_status or Status.PENDING,
                     record_category=self.record_category,
                     width=self.width,
                     height=self.height,
@@ -994,15 +998,15 @@ class Build:
                     category=self.category,
                     submitter_id=self.submitter_id,
                     version_spec=self.version_spec,
-                    ai_generated=self.ai_generated,
+                    ai_generated=self.ai_generated or False,
                     embedding=self.embedding,
                     extra_info=self.extra_info,
                     edited_time=self.edited_time,
                     is_locked=True,
                 )
-            elif self.category == "Entrance":
+            elif self.category == BuildCategory.ENTRANCE:
                 sql_build = Entrance(
-                    submission_status=self.submission_status,
+                    submission_status=self.submission_status or Status.PENDING,
                     record_category=self.record_category,
                     width=self.width,
                     height=self.height,
@@ -1011,7 +1015,7 @@ class Build:
                     category=self.category,
                     submitter_id=self.submitter_id,
                     version_spec=self.version_spec,
-                    ai_generated=self.ai_generated,
+                    ai_generated=self.ai_generated or False,
                     embedding=self.embedding,
                     extra_info=self.extra_info,
                     edited_time=self.edited_time,
@@ -1049,6 +1053,10 @@ class Build:
                 sql_build = result.scalar_one()
 
                 # Update basic attributes
+                if self.submission_status is None:
+                    raise ValueError("Submission status must be set for existing builds.")
+                if self.submitter_id is None:
+                    raise ValueError("Submitter ID must be set for existing builds.")
                 sql_build.submission_status = self.submission_status
                 sql_build.record_category = self.record_category
                 sql_build.width = self.width
@@ -1057,7 +1065,7 @@ class Build:
                 sql_build.completion_time = self.completion_time
                 sql_build.submitter_id = self.submitter_id
                 sql_build.version_spec = self.version_spec
-                sql_build.ai_generated = self.ai_generated
+                sql_build.ai_generated = self.ai_generated or False
                 sql_build.embedding = self.embedding
                 sql_build.edited_time = self.edited_time
 
@@ -1161,7 +1169,7 @@ class Build:
         sql_build.versions = version_objects
 
         # Handle links
-        all_links = []
+        all_links: list[tuple[str, MediaType]] = []
         if self.image_urls:
             all_links.extend([(url, "image") for url in self.image_urls])
         if self.video_urls:
@@ -1175,7 +1183,7 @@ class Build:
 
     async def _get_or_create_users(self, session: AsyncSession, igns: list[str]) -> list[User]:
         """Get or create User objects for the given IGNs."""
-        users = []
+        users: list[User] = []
         for ign in igns:
             stmt = select(User).where(User.ign == ign)
             result = await session.execute(stmt)
@@ -1246,6 +1254,11 @@ class Build:
         """Create or update the original message record."""
         if self.original_message_id is None:
             return
+        assert self.original_server_id is not None, "Original server ID must be set for original message."
+        # Channel ID may be None if the message is from DMs
+        assert self.original_message_author_id is not None, (
+            "Original message author ID must be set for original message."
+        )
 
         db = DatabaseManager()
         async with db.async_session() as session:
@@ -1271,7 +1284,7 @@ class Build:
                 message.purpose = "build_original_message"
                 message.content = self.original_message
                 message.build_id = self.id
-                message.updated_at = utcnow()
+                message.updated_at = datetime.now(tz=timezone.utc)
 
             await session.commit()
 
