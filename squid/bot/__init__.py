@@ -123,9 +123,13 @@ class RedstoneSquid(Bot):
         """Clean up dangling build locks in case some functions failed to release them."""
         await clean_locks()
 
-    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
+    async def get_or_fetch_message(self, message_id: int, *, channel_id: int | None = None) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
+
+        Args:
+            message_id (int): The ID of the message to fetch.
+            channel_id (int | None): The ID of the channel where the message is located. If not provided, the bot will try to fetch the channel from the database cache.
 
         Raises:
             ValueError: The channel is not a MessageableChannel and thus no message can exist in it.
@@ -133,6 +137,14 @@ class RedstoneSquid(Bot):
             discord.Forbidden: The bot does not have permission to fetch the channel or message.
             discord.NotFound: The channel or message was not found.
         """
+        # No channel ID given, try to fetch the message from the database cache
+        if channel_id is None:
+            message = await self.db.message.get_message_by_id(message_id)
+            if message is None:
+                logger.debug("Message %s not found in database cache.", message_id)
+                return None
+            channel_id = message.channel_id
+
         channel = self.get_channel(channel_id)
         if channel is None:
             channel = await self.fetch_channel(channel_id)
@@ -143,9 +155,9 @@ class RedstoneSquid(Bot):
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
             await DatabaseManager().message.untrack_message(message_id)
+            return None
         except discord.Forbidden:
-            pass
-        return None
+            return None
 
     def get_running_message(
         self,

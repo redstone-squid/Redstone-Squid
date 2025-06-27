@@ -99,7 +99,10 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
 
         if self.build.original_channel_id:
             assert self.build.original_message_id is not None
-            return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
+            return await self.bot.get_or_fetch_message(
+                self.build.original_message_id,
+                channel_id=self.build.original_channel_id,
+            )
         return None
 
     async def get_display_messages(self) -> list[discord.Message]:
@@ -113,7 +116,11 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             result = await session.execute(stmt)
             messages: Sequence[Message] = result.scalars().all()
         maybe_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
+            *(
+                self.bot.get_or_fetch_message(row.id, channel_id=row.channel_id)
+                for row in messages
+                if row.channel_id is not None
+            )
         )
         discord_messages = [msg for msg in maybe_messages if msg is not None]
         return discord_messages
