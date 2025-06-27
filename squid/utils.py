@@ -1,6 +1,7 @@
 import io
 import os
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -8,7 +9,18 @@ import aiohttp
 
 from squid.db.schema import Version
 
+
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
+
+
+# https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
+def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Copies the signature of a function to another function."""
+
+    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
+        return func
+
+    return _decorator
 
 
 def utcnow() -> str:
