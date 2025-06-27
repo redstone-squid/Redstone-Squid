@@ -2,17 +2,14 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 from discord.ext.commands import Cog, Context, hybrid_command
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
-from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.db.schema import Message, VoteSession
+from squid.bot.voting.vote_session import AbstractVoteSession, DeleteLogVoteSession, get_vote_session
 
 if TYPE_CHECKING:
     import squid.bot
@@ -37,44 +34,6 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             return 3
         return 1
 
-    async def get_vote_session(
-        self, message_id: int, *, status: Literal["open", "closed"] | None = None
-    ) -> AbstractVoteSession | None:
-        """Gets a vote session from the database.
-
-        Args:
-            message_id: The message ID of the vote session.
-            status: The status of the vote session. If None, it will get any status.
-        """
-        async with self.bot.db.async_session() as session:
-            stmt = (
-                select(Message)
-                .options(selectinload(Message.vote_session))
-                .where(Message.id == message_id, Message.purpose == "vote")
-            )
-            if status is not None:
-                stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
-
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
-
-            if message is None or message.vote_session is None:
-                return None
-
-            vote_session_id = message.vote_session_id
-            assert vote_session_id is not None, (
-                "Vote session ID should not be None because we selected messages with the vote purpose."
-            )
-            kind = message.vote_session.kind
-
-            if kind == "build":
-                return await BuildVoteSession.from_id(self.bot, vote_session_id)
-            elif kind == "delete_log":
-                return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
-            else:
-                logger.error("Unknown vote session kind: %s", kind)
-                raise NotImplementedError(f"Unknown vote session kind: {kind}")
-
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
         """Handles reactions to update vote counts anonymously."""
@@ -82,7 +41,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        vote_session = await self.get_vote_session(payload.message_id, status="open")
+        vote_session = await get_vote_session(payload.message_id, status="open")
         if vote_session is None:
             return
 
