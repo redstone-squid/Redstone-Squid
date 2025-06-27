@@ -26,7 +26,6 @@ from sqlalchemy.orm import selectinload
 from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
-    MediaType,
 )
 from squid.db.schema import (
     BuildCategory,
@@ -37,7 +36,7 @@ from squid.db.schema import (
     BuildType,
     BuildVersion,
     Door,
-    DoorOrientationName,
+    DoorOrientationLiteral,
     DoorRecord,
     Entrance,
     EntranceRecord,
@@ -45,12 +44,13 @@ from squid.db.schema import (
     ExtenderRecord,
     Info,
     LinkRecord,
+    MediaTypeLiteral,
     Message,
     MessageRecord,
-    RecordCategory,
+    RecordCategoryLiteral,
     Restriction,
     RestrictionRecord,
-    RestrictionStr,
+    RestrictionTypeLiteral,
     SmallestDoor,
     Status,
     Type,
@@ -63,7 +63,7 @@ from squid.db.schema import (
     Version,
     VersionRecord,
 )
-from squid.db.utils import get_version_string, utcnow
+from squid.db.utils import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class Build:
     id: int | None = None
     submission_status: Status | None = None
     category: BuildCategory | None = None
-    record_category: RecordCategory | None = None
+    record_category: RecordCategoryLiteral | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
@@ -196,7 +196,7 @@ class Build:
     door_depth: int | None = None
 
     door_type: list[str] = field(default_factory=list)
-    door_orientation_type: DoorOrientationName | None = None
+    door_orientation_type: DoorOrientationLiteral | None = None
 
     wiring_placement_restrictions: list[str] = field(default_factory=list)
     component_restrictions: list[str] = field(default_factory=list)
@@ -723,7 +723,7 @@ class Build:
 
             db_restrictions = await DatabaseManager().build_tags.fetch_all_restrictions()
             name_to_row = {r.name.lower(): r for r in db_restrictions}
-            bucket: dict[RestrictionStr, list[str]] = {
+            bucket: dict[RestrictionTypeLiteral, list[str]] = {
                 "wiring-placement": self.wiring_placement_restrictions,
                 "component": self.component_restrictions,
                 "miscellaneous": self.miscellaneous_restrictions,
@@ -1169,7 +1169,7 @@ class Build:
         sql_build.versions = version_objects
 
         # Handle links
-        all_links: list[tuple[str, MediaType]] = []
+        all_links: list[tuple[str, MediaTypeLiteral]] = []
         if self.image_urls:
             all_links.extend([(url, "image") for url in self.image_urls])
         if self.video_urls:
