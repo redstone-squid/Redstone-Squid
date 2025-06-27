@@ -53,7 +53,7 @@ def sample_joined_build_record(
     sample_version_json_data: list[VersionRecord], sample_restriction_json_data: list[RestrictionRecord]
 ) -> JoinedBuildRecord:
     """Sample JoinedBuildRecord for testing."""
-    return {
+    return {  # type: ignore  # This is real data, JoinedBuildRecord uses enums which causes type checking issues
         "id": 172,
         "submission_status": 1,
         "edited_time": "2025-06-09T12:58:32+00:00",

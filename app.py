@@ -38,6 +38,6 @@ if __name__ == "__main__":
 
         asyncio.run(bot_main(config=config), debug=config.get("dev_mode", False))
     else:
-        import uvloop
+        import uvloop  # pyright: ignore[reportMissingImports]
 
         uvloop.run(bot_main(config=config), debug=config.get("dev_mode", False))
