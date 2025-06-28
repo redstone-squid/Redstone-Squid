@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
@@ -523,6 +524,19 @@ class Vote(Base):
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+
+
+class Event(Base):
+    """An event that can be logged in the database."""
+
+    __tablename__ = "event_outbox"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    aggregate: Mapped[str] = mapped_column(String, nullable=False)
+    aggregate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[Json[Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True, default=None)
 
 
 class BuildRecord(TypedDict):
