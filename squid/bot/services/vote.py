@@ -18,7 +18,7 @@ from discord.utils import classproperty
 from sqlalchemy import insert, select
 
 from squid.bot.utils import is_staff, is_trusted_or_staff
-from squid.bot.voting.vote_session import (
+from squid.db.vote_session import (
     AbstractVoteSession,
     BuildVoteSession,
     DeleteLogVoteSession,
