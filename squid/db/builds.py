@@ -1027,7 +1027,6 @@ class Build:
             async with db.async_session() as session:
                 await self._setup_relationships(session, sql_build)
                 session.add(sql_build)
-                print(sql_build)
                 await session.commit()
                 self.id = sql_build.id
             self.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
