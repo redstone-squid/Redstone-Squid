@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
@@ -164,7 +164,7 @@ class RedstoneSquid(Bot):
 
     async def get_or_fetch_messages(
         self, message_ids: Sequence[int], *, channel_ids: Sequence[int] | None = None
-    ) -> AsyncGenerator[discord.Message | None, None]:
+    ) -> AsyncIterator[discord.Message | None]:
         """
         Fetches multiple messages from the cache or the API.
 
