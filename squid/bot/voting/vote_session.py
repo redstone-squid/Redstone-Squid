@@ -7,28 +7,26 @@ import logging
 from abc import ABC, abstractmethod
 from asyncio import Task
 from collections.abc import Iterable
-from textwrap import dedent
-from types import MethodType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, final, override
 
 import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
+from squid.bot.services.vote_service import (
+    AbstractDiscordVoteSession,
+    DiscordBuildVoteSession,
+    DiscordDeleteLogVoteSession,
+)
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession
+from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession
 
 if TYPE_CHECKING:
     import squid.bot
-
-
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-# TODO: Unhardcode these emojis
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +38,8 @@ async def track_vote_session(
     kind: VoteKindLiteral,
     pass_threshold: int,
     fail_threshold: int,
+    approve_emojis: list[str],
+    deny_emojis: list[str],
     *,
     build_id: int | None = None,
 ) -> int:
@@ -51,6 +51,8 @@ async def track_vote_session(
         kind: The type of vote session.
         pass_threshold: The number of votes required to pass the vote.
         fail_threshold: The number of votes required to fail the vote.
+        approve_emojis: The emojis to use for approving the vote.
+        deny_emojis: The emojis to use for denying the vote.
         build_id: The id of the build to vote on. None if the vote is not about a build.
 
     Returns:
@@ -117,7 +119,7 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
 
 async def get_vote_session(
     bot: "squid.bot.RedstoneSquid", message_id: int, *, status: Literal["open", "closed"] | None = None
-) -> "AbstractVoteSession | None":
+) -> "AbstractDiscordVoteSession[Any] | None":
     """Gets a vote session from the database.
 
     Args:
@@ -146,9 +148,11 @@ async def get_vote_session(
         kind = message.vote_session.kind
 
         if kind == "build":
-            return await BuildVoteSession.from_id(bot, vote_session_id)
+            _vs = await BuildVoteSession.from_id(vote_session_id)
+            return DiscordBuildVoteSession(bot, _vs)
         if kind == "delete_log":
-            return await DeleteLogVoteSession.from_id(bot, vote_session_id)
+            _vs = await DeleteLogVoteSession.from_id(vote_session_id)
+            return DiscordDeleteLogVoteSession(bot, _vs)
         logger.error("Unknown vote session kind: %s", kind)
         msg = f"Unknown vote session kind: {kind}"
         raise NotImplementedError(msg)
@@ -172,11 +176,12 @@ class AbstractVoteSession(ABC):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
-        messages: Iterable[discord.Message] | Iterable[int],
+        message_ids: Iterable[int],
         author_id: int,
         pass_threshold: int,
         fail_threshold: int,
+        approve_emojis: list[str],
+        deny_emojis: list[str],
     ):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
@@ -184,11 +189,12 @@ class AbstractVoteSession(ABC):
         If you use this constructor directly, you must call _async_init() afterwards, or else the vote session will not be tracked.
 
         Args:
-            bot: The bot for fetching messages.
-            messages: The messages (or their ids) belonging to the vote session.
+            message_ids: The messages (or their ids) belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
+            approve_emojis: The emojis to use for approving the vote.
+            deny_emojis: The emojis to use for denying the vote.
         """
         self._allow_init: bool
         """A flag to allow direct initialization."""
@@ -198,189 +204,75 @@ class AbstractVoteSession(ABC):
 
         super().__init__()
         self.id: int | None = None
-        """The id of the vote session in the database. If None, we are not tracking the vote session and thus no async operations are performed."""
+        """The id of the vote session in the database."""
         self.is_closed = False
-        self.bot = bot
-        self._messages: set[discord.Message]
-        self.message_ids: set[int]
-        if all(isinstance(message, int) for message in messages):
-            messages = cast(list[int], messages)
-            self._messages = set()
-            self.message_ids = set(messages)
-        else:
-            messages = cast(list[discord.Message], messages)
-            self._messages = set(messages)
-            self.message_ids = set(message.id for message in messages)
-        if len(messages) >= 10:
-            msg = "Found a vote session with more than 10 messages, we need to change the update_message logic."
-            raise ValueError(msg)
+        self.message_ids = message_ids
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
+        self.approve_emojis = approve_emojis
+        self.deny_emojis = deny_emojis
         self._votes: dict[int, float] = {}  # Dict of user_id: weight
         self._tasks: set[Task[Any]] = set()
 
     @classmethod
     @abstractmethod
-    async def create(cls: type[Self], *args: Any, **kwargs: Any) -> Self:
-        """
-        Create and initialize a vote session. It should have the same signature as __init__.
-        """
-        self = cls.__new__(cls)
-        self._allow_init = True
-        self.__init__(*args, **kwargs)
-        await self._async_init()
-        return self
-
-    @abstractmethod
-    async def _async_init(self) -> None:
-        """Perform async initialization. Called by create()."""
-        self.id = await track_vote_session(
-            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
-        )
-        await self.update_messages()
-
-    def __init_subclass__(cls, **kwargs: Any):
-        """Check that the 'create' method signature matches the '__init__' method signature."""
-        super().__init_subclass__(**kwargs)
-
-        if inspect.isabstract(cls):
-            return  # Skip abstract classes as their implementations are not yet fixed
-
-        # Retrieve the __init__ method signature, excluding 'self'
-        init_method = cls.__init__
-        init_sig = inspect.signature(init_method)
-        init_params = list(init_sig.parameters.values())[1:]  # Skip 'self'
-        init_signature = inspect.Signature(parameters=init_params)
-
-        # Retrieve the 'create' method
-        create_method = getattr(cls, "create", None)
-        if create_method is None:
-            msg = f"Class '{cls.__name__}' must implement a 'create' method."
-            raise TypeError(msg)
-
-        # Retrieve the underlying function from the classmethod
-        assert isinstance(create_method, MethodType)  # For type checker
-        create_func = create_method.__func__
-        create_sig = inspect.signature(create_func)
-
-        # Retrieve the 'create' method signature, excluding 'cls'
-        create_params = list(create_sig.parameters.values())[1:]  # Skip 'cls'
-        create_signature = inspect.Signature(parameters=create_params)
-
-        # Compare signatures
-        if init_signature != create_signature:
-            msg = (
-                f"In class '{cls.__name__}', the 'create' method signature must match '__init__'.\n"
-                f"__init__ signature: {init_signature}\n"
-                f"create signature: {create_signature}"
-            )
-            raise TypeError(msg)
-
-    @classmethod
-    @abstractmethod
-    async def from_id(cls: type[Self], bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> Self | None:
-        """
-        Create a vote session from an id.
-
-        Args:
-            bot: Required to fetch the actual message.
-            vote_session_id: The id of the vote session.
+    async def from_id(cls: type[Self], vote_session_id: int) -> Self | None:
+        """Fetch a vote session from its id.
 
         Returns:
             The vote session if it exists, otherwise None.
         """
+        raise NotImplementedError
 
+    @final
     @property
     def upvotes(self) -> float:
-        """Calculate the upvotes"""
+        """Total score of upvotes"""
         return sum(vote for vote in self._votes.values() if vote > 0)
 
+    @final
     @property
     def downvotes(self) -> float:
-        """Calculate the downvotes"""
+        """Total score of downvotes"""
         return -sum(vote for vote in self._votes.values() if vote < 0)
 
+    @final
     @property
     def net_votes(self) -> float:
-        """Calculate the net votes"""
+        """Net vote score"""
         return sum(self._votes.values())
 
-    @abstractmethod
-    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        """Send a vote session message to a channel"""
+    @final
+    @property
+    def status(self) -> Literal["open", "passed", "failed", "closed"]:
+        """Get the status of the vote session.
 
-    async def get_messages(self) -> set[discord.Message] | None:
-        """Get the messages of the vote session if they exist in the cache"""
-        if len(self.message_ids) == len(self._messages):
-            return self._messages
-        return None
+        Returns:
+            "open" if the vote session is still open,
+            "passed" if the vote session has passed,
+            "failed" if the vote session has failed,
+            "closed" if the vote session is closed but neither passed nor failed.
+        """
+        if self.is_closed:
+            if self.net_votes >= self.pass_threshold:
+                return "passed"
+            elif self.net_votes <= self.fail_threshold:
+                return "failed"
+            else:
+                return "closed"
+        return "open"
 
-    async def fetch_messages(self) -> set[discord.Message]:
-        """Fetch all messages for this vote session."""
-        if len(self.message_ids) == len(self._messages):
-            return self._messages
-
-        async with self.bot.db.async_session() as session:
-            stmt = select(Message).where(Message.id.in_(self.message_ids))
-            result = await session.execute(stmt)
-            messages_record = result.scalars().all()
-
-            cached_ids = {message.id for message in self._messages}
-            new_messages = await asyncio.gather(
-                *(
-                    self.bot.get_or_fetch_message(record.id, channel_id=record.channel_id)
-                    for record in messages_record
-                    if record.id not in cached_ids and record.channel_id is not None
-                )
-            )
-            new_messages = (message for message in new_messages if message is not None)
-            self._messages.update(new_messages)
-            assert len(self._messages) == len(self.message_ids)
-            return self._messages
-
-    @abstractmethod
-    async def update_messages(self) -> None:
-        """Update the messages with an embed of new vote counts"""
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Close the vote session"""
-        self.is_closed = True
-        # Wait for any pending vote operations
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=False)
-        await self.update_messages()
-        assert self.id is not None
-        await close_vote_session(self.id)
-
+    @final
     def __getitem__(self, user_id: int) -> float | None:
         return self._votes.get(user_id)
 
-    def __setitem__(self, user_id: int, weight: float | None) -> None:
-        """
-        Set a vote synchronously, creating background tasks for updates.
-        For direct async access, use set_vote() instead.
-        """
-        if self.is_closed:
-            return
+    @final
+    def __contains__(self, user_id: int) -> bool:
+        """Check if a user has voted in this session."""
+        return user_id in self._votes
 
-        if weight is None:
-            self._votes.pop(user_id, None)
-        else:
-            self._votes[user_id] = weight
-
-        if not self.fail_threshold < self.net_votes < self.pass_threshold:
-            task = asyncio.create_task(self.close())
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
-
-        # Create tasks for the updates
-        if self.id is not None:
-            db_task = asyncio.create_task(upsert_vote(self.id, user_id, weight))
-            self._tasks.add(db_task)
-            db_task.add_done_callback(self._tasks.discard)
-
+    @final
     async def set_vote(self, user_id: int, weight: int | None) -> None:
         """Set a vote for a user with proper database tracking."""
         if self.is_closed:
@@ -397,74 +289,61 @@ class AbstractVoteSession(ABC):
         if self.id is not None:
             await upsert_vote(self.id, user_id, weight)
 
+    @abstractmethod
+    async def close(self) -> None:
+        """Close the vote session"""
+        self.is_closed = True
+        # Wait for any pending vote operations
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=False)
+        assert self.id is not None
+        await close_vote_session(self.id)
+
+    @classmethod
+    @abstractmethod
+    async def get_open_sessions(cls: type[Self]) -> "list[Self]":
+        """Get all open vote sessions from the database."""
+        raise NotImplementedError
+
 
 @final
 class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
-    kind = "build"
+    kind: ClassVar[Literal["build"]] = "build"
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
-        messages: Iterable[discord.Message] | Iterable[int],
+        message_ids: Iterable[int],
         author_id: int,
         build: Build,
-        type: Literal["add", "update"],
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
+        diff: list[tuple[str, Any, Any]],
+        pass_threshold: int,
+        fail_threshold: int,
+        approve_emojis: list[str],
+        deny_emojis: list[str],
     ):
         """
         Initialize the vote session.
 
         Args:
-            bot: The discord bot.
-            messages: The messages belonging to the vote session.
+            message_ids: The message ids belonging to the vote session.
             author_id: The discord id of the author of the vote session.
             build: The build which the vote session is for. If type is "update", this is the updated build.
-            type: Whether to add or update the build.
+            diff: The differences between the original and updated build, if applicable.
+                If you are trying to add a new build, it is modelled as the build already existing with a pending status. So you should pass a diff with the status changed from PENDING to CONFIRMED.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
+            approve_emojis: The emojis to use for approving the vote.
+            deny_emojis: The emojis to use for denying the vote.
         """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
+        super().__init__(message_ids, author_id, pass_threshold, fail_threshold, approve_emojis, deny_emojis)
         self.build = build
-        self.type = type
+        self.diff = diff
 
     @classmethod
     @override
-    async def create(
-        cls,
-        bot: "squid.bot.RedstoneSquid",
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        build: Build,
-        type: Literal["add", "update"],
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
-        assert isinstance(self, BuildVoteSession)
-        return self
-
-    @override
-    async def _async_init(self) -> None:
-        """Track the vote session in the database."""
-        self.id = await track_vote_session(
-            await self.fetch_messages(),
-            self.author_id,
-            self.kind,
-            self.pass_threshold,
-            self.fail_threshold,
-            build_id=self.build.id,
-        )
-        assert self.build.id is not None
-        if self.type == "add":
-            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
-        else:
-            original = await Build.from_id(self.build.id)
-            assert original is not None
-            changes: list[tuple[str, Any, Any]] = original.diff(self.build)
-
+    async def from_id(cls, vote_session_id: int) -> "BuildVoteSession | None":
         async with DatabaseManager().async_session() as session:
             stmt = insert(SQLBuildVoteSession).values(
                 vote_session_id=self.id,
@@ -490,10 +369,10 @@ class BuildVoteSession(AbstractVoteSession):
             record = result.scalar_one_or_none()
             if record is None:
                 return None
-            return await cls._from_domain(bot, record)
+            return await cls._from_domain(record)
 
     @classmethod
-    async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: SQLBuildVoteSession) -> "BuildVoteSession":
+    async def _from_domain(cls, record: SQLBuildVoteSession) -> "BuildVoteSession":
         """Create a vote session from a database record."""
         if record.build_id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = f"Found a build vote session with no associated build id. session_id={record.id}"
@@ -501,44 +380,21 @@ class BuildVoteSession(AbstractVoteSession):
 
         build = DatabaseManager().build.from_sql_build(record.build)
         assert build is not None
-        self = cls.__new__(cls)
-        self._allow_init = True
-        self.__init__(
-            bot=bot,
-            messages=[msg.id for msg in record.messages],
+        self = BuildVoteSession(
+            message_ids=[msg.id for msg in record.messages],
             author_id=record.author_id,
             build=build,
-            type="add",  # TODO: Handle update type properly
+            diff=record.changes,
             pass_threshold=record.pass_threshold,
             fail_threshold=record.fail_threshold,
+            approve_emojis=[j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier >= 0],
+            deny_emojis=[j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier < 0],
         )
         # We can skip _async_init because we already have the id and everything has been tracked before
         self.id = record.id
         self._votes = {vote.user_id: vote.weight for vote in record.votes}
         self.is_closed = record.status == "closed"
-
         return self
-
-    @override
-    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        message = await channel.send(
-            content=self.build.original_link, embed=await self.bot.for_build(self.build).generate_embed()
-        )
-        await self.bot.db.message.track_message(
-            message, purpose="vote", build_id=self.build.id, vote_session_id=self.id
-        )
-        self._messages.add(message)
-        return message
-
-    @override
-    async def update_messages(self):
-        embed = await self.bot.for_build(self.build).generate_embed()
-        embed.add_field(name="", value="", inline=False)  # Add a blank field to separate the vote count
-        embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
-        embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
-        await asyncio.gather(
-            *[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()]
-        )
 
     @override
     async def close(self) -> None:
@@ -550,160 +406,87 @@ class BuildVoteSession(AbstractVoteSession):
             await self.build.deny()
         else:
             await self.build.confirm()
-        # TODO: decide whether to delete the messages or not
-
-        await self.update_messages()
 
         if self.id is not None:
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(
-        cls: type["BuildVoteSession"], bot: "squid.bot.RedstoneSquid"
-    ) -> "list[BuildVoteSession]":
+    @override
+    async def get_open_sessions(cls: type["BuildVoteSession"]) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
-        async with bot.db.async_session() as session:
-            stmt = select(SQLBuildVoteSession).where(SQLBuildVoteSession.status == "open")
+        stmt = select(SQLBuildVoteSession).where(SQLBuildVoteSession.status == "open")
+        async with DatabaseManager().async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
 
-        return await asyncio.gather(*(cls._from_domain(bot, record) for record in records))
+        vote_sessions = await asyncio.gather(*(cls._from_domain(record) for record in records))
+        assert all(vs.status == "open" for vs in vote_sessions)
+        return vote_sessions
 
 
 @final
 class DeleteLogVoteSession(AbstractVoteSession):
     """A vote session for deleting a message from the log."""
 
-    kind = "delete_log"
+    kind: ClassVar[Literal["delete_log"]] = "delete_log"
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
-        messages: Iterable[discord.Message] | Iterable[int],
+        message_ids: Iterable[int],
         author_id: int,
-        target_message: discord.Message,
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
+        target_message_id: int,
+        target_channel_id: int,
+        target_server_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        approve_emojis: list[str],
+        deny_emojis: list[str],
     ):
         """
         Initialize the delete log vote session.
 
         Args:
-            bot: The discord client.
-            messages: The messages (or their ids) belonging to the vote session.
+            message_ids: The messages ids belonging to the vote session.
             author_id: The discord id of the author of the vote session.
-            target_message: The message to delete if the vote passes.
+            target_message_id: The message id to delete if the vote passes.
+            target_channel_id: The channel id of the message to delete.
+            target_server_id: The server id of the message to delete.
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
+            approve_emojis: The emojis to use for approving the vote.
+            deny_emojis: The emojis to use for denying the vote.
         """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
-        self.target_message = target_message
+        super().__init__(message_ids, author_id, pass_threshold, fail_threshold, approve_emojis, deny_emojis)
+        self.target_message_id = target_message_id
+        self.target_channel_id = target_channel_id
+        self.target_server_id = target_server_id
 
     @classmethod
     @override
-    async def create(
-        cls,
-        bot: "squid.bot.RedstoneSquid",
-        messages: Iterable[discord.Message] | Iterable[int],
-        author_id: int,
-        target_message: discord.Message,
-        pass_threshold: int = 3,
-        fail_threshold: int = -3,
-    ) -> "DeleteLogVoteSession":
-        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold)
-        assert isinstance(self, DeleteLogVoteSession)
-        return self
-
-    @override
-    async def _async_init(self) -> None:
-        """Track the vote session in the database."""
-        self.id = await track_vote_session(
-            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
-        )
-        async with self.bot.db.async_session() as session:
-            stmt = insert(SQLDeleteLogVoteSession).values(
-                vote_session_id=self.id,
-                target_message_id=self.target_message.id,
-                target_channel_id=self.target_message.channel.id,
-                target_server_id=self.target_message.guild.id,  # type: ignore
-            )
-            await session.execute(stmt)
-            await session.commit()
-        await self.update_messages()
-        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
-        reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
-        with contextlib.suppress(discord.Forbidden):
-            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
-
-    @classmethod
-    @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
-        async with bot.db.async_session() as session:
-            stmt = select(SQLDeleteLogVoteSession).where(SQLDeleteLogVoteSession.id == vote_session_id)
+    async def from_id(cls, vote_session_id: int) -> "DeleteLogVoteSession | None":
+        stmt = select(SQLDeleteLogVoteSession).where(SQLDeleteLogVoteSession.id == vote_session_id)
+        async with DatabaseManager().async_session() as session:
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
-            if record is None:
-                return None
 
-        return await cls._from_domain(bot, record)
-
-    @classmethod
-    async def _from_domain(
-        cls, bot: "squid.bot.RedstoneSquid", record: SQLDeleteLogVoteSession
-    ) -> "DeleteLogVoteSession | None":
-        """Create a DeleteLogVoteSession from a database record."""
-        target_message = await bot.get_or_fetch_message(record.target_message_id, channel_id=record.target_channel_id)
-        if target_message is None:
+        if record is None:
             return None
+        return await cls._from_domain(record)
 
-        self = cls.__new__(cls)
-        self._allow_init = True
-        self.__init__(
-            bot,
+    @staticmethod
+    async def _from_domain(record: SQLDeleteLogVoteSession) -> "DeleteLogVoteSession":
+        """Create a DeleteLogVoteSession from a database record."""
+        self = DeleteLogVoteSession(
             [msg.id for msg in record.messages],
             record.author_id,
-            target_message,
+            record.target_message_id,
             record.pass_threshold,
             record.fail_threshold,
         )
-        self.id = (
-            record.vote_session_id
-        )  # We can skip _async_init because we already have the id and everything has been tracked before
+        self.id = record.vote_session_id
         self._votes = {vote.user_id: vote.weight for vote in record.votes}
         self.is_closed = record.status == "closed"
         return self
-
-    @override
-    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
-        """Send the initial message to the channel."""
-        embed = discord.Embed(
-            title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
-            ),
-        )
-        return await channel.send(embed=embed)
-
-    @override
-    async def update_messages(self) -> None:
-        """Updates the message with the current vote count."""
-        embed = discord.Embed(
-            title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
-            ),
-        )
-        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @override
     async def close(self) -> None:
@@ -711,25 +494,20 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return
 
         self.is_closed = True
-        if self.net_votes <= self.pass_threshold:
-            await asyncio.gather(*[message.channel.send("Vote failed") for message in await self.fetch_messages()])
-        else:
-            await self.target_message.delete()
-
         if self.id is not None:
             await close_vote_session(self.id)
 
     @classmethod
-    async def get_open_vote_sessions(
-        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
-    ) -> "list[DeleteLogVoteSession]":
+    @override
+    async def get_open_sessions(cls: "type[DeleteLogVoteSession]") -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
-        async with bot.db.async_session() as session:
-            stmt = select(SQLDeleteLogVoteSession).where(
-                SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind
-            )
+        stmt = select(SQLDeleteLogVoteSession).where(
+            SQLDeleteLogVoteSession.status == "open", VoteSession.kind == cls.kind
+        )
+        async with DatabaseManager().async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
 
-            sessions = await asyncio.gather(*(cls._from_domain(bot, record) for record in records))
-            return [session for session in sessions if session is not None]
+        vote_sessions = await asyncio.gather(*(cls._from_domain(record) for record in records))
+        assert all(vs.status == "open" for vs in vote_sessions)
+        return vote_sessions
