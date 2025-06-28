@@ -475,7 +475,7 @@ class VoteSession(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    kind: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[VoteKindLiteral] = mapped_column(String, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
@@ -485,6 +485,16 @@ class VoteSession(Base, kw_only=True):
     )
     votes: Mapped[list["Vote"]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
+    )
+    vote_session_emojis: Mapped[list["VoteSessionEmoji"]] = relationship(
+        default_factory=list, lazy="selectin", init=False, repr=False
+    )
+    emojis: AssociationProxy[list["Emoji"]] = association_proxy(
+        "vote_session_emojis",
+        "emoji",
+        default_factory=list,
+        repr=False,
+        creator=lambda e: VoteSessionEmoji(emoji=e),
     )
 
     __mapper_args__ = {"polymorphic_on": kind}
@@ -524,6 +534,16 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
     __mapper_args__ = {"polymorphic_identity": "delete_log"}
 
 
+class Emoji(Base):
+    """An emoji"""
+
+    __tablename__ = "emojis"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
+    symbol: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    """A unicode emoji symbol or the discord ID in the form `<:name:id>` for custom emojis."""
+
+
 class Vote(Base):
     """A vote cast in a vote session."""
 
@@ -533,8 +553,16 @@ class Vote(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
+    emoji_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("emojis.id", ondelete="SET NULL", onupdate="CASCADE"), nullable=True, default=None
+    )
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+    vote_session: Mapped[VoteSession] = relationship(
+        back_populates="votes", lazy="raise_on_sql", repr=False, default=None
+    )
+    emoji: Mapped[Emoji | None] = relationship(
+        lazy="joined", default=None, init=False, repr=False
+    )
 
 
 class Event(Base):
@@ -548,6 +576,25 @@ class Event(Base):
     payload: Mapped[Json[Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True, default=None)
+
+
+class VoteSessionEmoji(Base):
+    """An emoji associated with a vote session."""
+
+    __tablename__ = "vote_session_emojis"
+
+    vote_session_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+    )
+    emoji_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("emojis.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+    )
+    default_multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+
+    vote_session: Mapped[VoteSession] = relationship(
+        back_populates="vote_session_emojis", lazy="raise_on_sql", default=None
+    )
+    emoji: Mapped[Emoji] = relationship(lazy="joined", default=None)
 
 
 class BuildRecord(TypedDict):
