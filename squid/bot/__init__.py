@@ -91,6 +91,10 @@ class RedstoneSquid(Bot):
         self.owner_server_id = config.get("owner_server_id")
         self.source_code_url = config.get("source_code_url")
         self.print_tracebacks = config.get("print_tracebacks", False)
+        self.default_approve_emojis = ["👍", "✅"]
+        self.default_deny_emojis = ["👎", "❌"]
+        self.new_build_pass_threshold = 3
+        self.new_build_fail_threshold = -3
 
     @override
     async def setup_hook(self) -> None:
