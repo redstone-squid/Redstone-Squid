@@ -106,7 +106,7 @@ class RedstoneSquid(Bot):
             "squid.bot.submission",
             "squid.bot.log",
             "squid.bot.help",
-            "squid.bot.voting.vote",
+            "squid.bot.vote",
             "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",
