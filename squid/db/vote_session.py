@@ -14,7 +14,7 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
-from squid.bot.services.vote_service import (
+from squid.bot.services.vote import (
     AbstractDiscordVoteSession,
     DiscordBuildVoteSession,
     DiscordDeleteLogVoteSession,

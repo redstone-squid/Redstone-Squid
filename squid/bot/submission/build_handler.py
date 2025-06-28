@@ -12,7 +12,7 @@ from sqlalchemy import insert, select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
-from squid.bot.services.vote_service import DiscordBuildVoteSession
+from squid.bot.services.vote import DiscordBuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildLink, Message, Status
@@ -104,7 +104,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             approve_emojis=self.bot.default_approve_emojis,
             deny_emojis=self.bot.default_deny_emojis,
             pass_threshold=self.bot.new_build_pass_threshold,
-            fail_threshold= self.bot.new_build_fail_threshold,
+            fail_threshold=self.bot.new_build_fail_threshold,
         )
 
     async def get_original_message(self) -> discord.Message | None:
