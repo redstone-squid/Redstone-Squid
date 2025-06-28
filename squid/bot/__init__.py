@@ -25,6 +25,16 @@ from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 from squid.db.schema import Base
 
+__all__ = [
+    "RedstoneSquid",
+    "BotConfig",
+    "ApplicationConfig",
+    "setup_logging",
+    "start_logging",
+    "main",
+]
+
+
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 
