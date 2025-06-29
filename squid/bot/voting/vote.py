@@ -29,20 +29,7 @@ _background_tasks: set[asyncio.Task[Any]] = set()
 class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
-        self._open_vote_sessions: dict[int, AbstractVoteSession] = {}
         self._background_tasks: set[asyncio.Task[Any]] = set()
-
-    async def load_vote_sessions(self):
-        """Load open vote sessions from the database."""
-        try:
-            open_vote_sessions = await BuildVoteSession.get_open_vote_sessions(
-                self.bot
-            ) + await DeleteLogVoteSession.get_open_vote_sessions(self.bot)
-            for session in open_vote_sessions:
-                for message_id in session.message_ids:
-                    self._open_vote_sessions[message_id] = session
-        except Exception as e:
-            logger.error("Failed to load open vote sessions: %s", e)
 
     async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
         """Get the voting weight of a user."""
@@ -95,14 +82,9 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        if (vote_session := self._open_vote_sessions.get(payload.message_id)) is None:
-            vote_session = await self.get_vote_session(payload.message_id, status="open")
-            if vote_session is None:
-                return
-
-        if vote_session.is_closed:
-            for message_id in vote_session.message_ids:
-                self._open_vote_sessions.pop(message_id, None)
+        vote_session = await self.get_vote_session(payload.message_id, status="open")
+        if vote_session is None:
+            return
 
         # Remove the user's reaction to keep votes anonymous
         channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
@@ -151,18 +133,11 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             return
 
         async with self.bot.get_running_message(ctx) as message:
-            vote_session = await DeleteLogVoteSession.create(
+            await DeleteLogVoteSession.create(
                 self.bot, [message], author_id=ctx.author.id, target_message=target_message
             )
-            self._open_vote_sessions[message.id] = vote_session
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    cog = VoteCog(bot)
-    # Load open vote sessions in the background because it can take a while
-    # and this cog does not need to wait for it to finish
-    load_task = asyncio.create_task(cog.load_vote_sessions())
-    _background_tasks.add(load_task)
-    load_task.add_done_callback(_background_tasks.discard)
-    await bot.add_cog(cog)
+    await bot.add_cog(VoteCog(bot))
