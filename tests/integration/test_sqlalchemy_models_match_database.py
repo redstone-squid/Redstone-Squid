@@ -201,7 +201,7 @@ def test_sanity_check_fails_with_missing_column(
 
 def test_sanity_check_passes_with_relationships(
     db_engine: Engine,
-        base_and_sane_relation_models,
+    base_and_sane_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
 ):
     """Test that database sanity check correctly handles relationship tables."""
     Base, RelationTestModel, RelationTestModel2 = base_and_sane_relation_models
@@ -219,9 +219,7 @@ def test_sanity_check_passes_with_relationships(
         Base.metadata.drop_all(db_engine)
 
 
-def test_sanity_check_passes_with_declarative_attributes(
-    db_engine: Engine, base_and_sane_declarative_model
-):
+def test_sanity_check_passes_with_declarative_attributes(db_engine: Engine, base_and_sane_declarative_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]):
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_sane_declarative_model
 
@@ -317,7 +315,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
 
 def test_sanity_check_fails_with_missing_many_to_many_relationship(
     db_engine: Engine,
-        base_and_sane_many_to_many_models,
+    base_and_sane_many_to_many_models: tuple[type[DeclarativeBase], type[DeclarativeBase],  type[DeclarativeBase]],
 ):
     """Test that database sanity check fails when a many-to-many relationship is missing from the model."""
     Base, ManyToManyModel1, ManyToManyModel2 = base_and_sane_many_to_many_models
@@ -342,7 +340,7 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
 
 def test_sanity_check_fails_with_missing_one_to_many_relationship(
     db_engine: Engine,
-        base_and_sane_relation_models,
+    base_and_sane_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase],  type[DeclarativeBase]],
 ):
     """Test that database sanity check fails when a one-to-many relationship is missing from the model."""
     Base, ManyToManyModel1, ManyToManyModel2 = base_and_sane_relation_models
