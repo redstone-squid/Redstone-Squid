@@ -11,7 +11,7 @@ from sqlalchemy import insert
 from squid.bot.utils import check_is_owner_server, check_is_staff
 from squid.db import DatabaseManager
 from squid.db.schema import Version
-from squid.db.utils import parse_version_string
+from squid.utils import parse_version_string
 
 if TYPE_CHECKING:
     import squid.bot

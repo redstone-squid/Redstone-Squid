@@ -63,7 +63,7 @@ from squid.db.schema import (
     Version,
     VersionRecord,
 )
-from squid.db.utils import get_version_string
+from squid.utils import get_version_string
 
 logger = logging.getLogger(__name__)
 

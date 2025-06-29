@@ -1,5 +1,3 @@
-"""Utility functions for the database module."""
-
 import io
 import os
 import re
@@ -8,7 +6,7 @@ from typing import Literal
 
 import aiohttp
 
-from squid.db.schema import Version
+from squid.db import Version
 
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
 

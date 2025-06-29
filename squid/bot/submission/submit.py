@@ -20,7 +20,7 @@ from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trus
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build, update_smallest_door_records_without_title
 from squid.db.schema import BuildCategory, Status
-from squid.db.utils import upload_to_catbox
+from squid.utils import upload_to_catbox
 
 if TYPE_CHECKING:
     import squid.bot

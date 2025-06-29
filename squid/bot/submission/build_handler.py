@@ -16,7 +16,7 @@ from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildLink, Message, Status
-from squid.db.utils import upload_to_catbox, utcnow
+from squid.utils import upload_to_catbox, utcnow
 
 if TYPE_CHECKING:
     import squid.bot

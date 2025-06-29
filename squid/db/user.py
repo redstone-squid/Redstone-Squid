@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import User, VerificationCode
-from squid.db.utils import utcnow
+from squid.utils import utcnow
 
 
 class UserManager:

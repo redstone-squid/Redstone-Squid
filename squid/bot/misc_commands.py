@@ -7,7 +7,7 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
-from squid.db import get_version_string
+from squid.utils import get_version_string
 
 if TYPE_CHECKING:
     import squid.bot
