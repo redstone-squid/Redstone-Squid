@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 import discord
-from sqlalchemy import insert, select, text, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Message, MessagePurposeLiteral
@@ -101,11 +101,16 @@ class MessageManager:
         Returns:
             A list of messages.
         """
+        # Call the PostgreSQL function that returns SETOF messages
+        # Since the function returns records matching the messages table,
+        # we can select from it and map to Message objects
+        stmt = select(Message).from_statement(
+            select(func.get_outdated_messages(server_id))
+        )
         async with self.session() as session:
-            stmt = text("SELECT * FROM get_outdated_messages(:server_id_input)")
-            result = await session.execute(stmt, {"server_id_input": server_id})
-            rows = result.scalars().fetchall()
-            return rows
+            result = await session.execute(stmt)
+            messages = result.scalars().all()
+            return messages
 
 
 async def main():
