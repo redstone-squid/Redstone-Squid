@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 import discord
-from sqlalchemy import select, text, update
+from sqlalchemy import insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Message, MessagePurposeLiteral
@@ -41,7 +41,7 @@ class MessageManager:
             raise ValueError("vote_session_id cannot be None for this purpose.")
 
         async with self.session() as session:
-            message_obj = Message(
+            stmt = insert(Message).values(
                 server_id=message.guild.id,
                 channel_id=message.channel.id,
                 id=message.id,
@@ -51,7 +51,7 @@ class MessageManager:
                 purpose=purpose,
                 content=message.content,
             )
-            session.add(message_obj)
+            await session.execute(stmt)
             await session.commit()
 
     async def update_message_edited_time(self, message: int | discord.Message) -> None:

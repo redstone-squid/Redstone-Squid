@@ -61,17 +61,16 @@ async def track_vote_session(
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
             )
-            .returning(VoteSession)
+            .returning(VoteSession.id)
         )
         result = await session.execute(stmt)
         await session.commit()
-        session_id = result.scalar_one().id
-        coros = [
-            db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id)
-            for message in messages
-        ]
-        await asyncio.gather(*coros)
-        return session_id
+        session_id = result.scalar_one()
+    coros = [
+        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
+    ]
+    await asyncio.gather(*coros)
+    return session_id
 
 
 async def close_vote_session(vote_session_id: int) -> None:
