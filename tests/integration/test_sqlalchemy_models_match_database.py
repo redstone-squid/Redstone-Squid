@@ -62,7 +62,7 @@ def base_and_sane_relation_models() -> tuple[type[DeclarativeBase], type[Declara
     class RelationTestModel2(Base):
         __tablename__ = "sanity_check_test_2"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
-        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_2.id"))
+        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_1.id"))
         test_relationship: Mapped[RelationTestModel] = relationship(
             RelationTestModel, primaryjoin=test_relationship_id == RelationTestModel.id
         )
@@ -194,7 +194,7 @@ def test_sanity_check_fails_with_missing_column(
 
     Base.metadata.create_all(db_engine)
     with db_engine.connect() as connection:
-        connection.execute(text("ALTER TABLE sanity_check_test DROP COLUMN name"))
+        connection.execute(text("ALTER TABLE sanity_check_test_1 DROP COLUMN name"))
 
     assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing columns"
 
@@ -355,9 +355,10 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
     Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
 
     class ManyToManyModel1_MissingRelationship(Base):
-        __tablename__ = "sanity_check_test_2"
+        __tablename__ = ManyToManyModel1.__tablename__  # Use the same table name
+
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
-        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_3.id"))
+        test_relationship_id: Mapped[int] = mapped_column(ForeignKey("sanity_check_test_2.id"))
         # Intentionally missing the test_relationship relationship
 
     assert is_sane_database(Base, db_engine) is False, (

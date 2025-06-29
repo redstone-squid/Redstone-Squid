@@ -6,7 +6,7 @@ from typing import Literal
 
 import aiohttp
 
-from squid.db import Version
+from squid.db.schema import Version
 
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
 

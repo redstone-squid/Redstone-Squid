@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import discord
 
-from squid.db import MessageRepository
+from squid.db.repos.message_repository import MessageRepository
 from squid.db.schema import Message, MessagePurposeLiteral
 
 
