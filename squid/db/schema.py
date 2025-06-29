@@ -46,22 +46,9 @@ VoteKindLiteral = Literal["build", "delete_log"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 
-# Make sure you also update _SETTING_TO_DB_KEY in database/server_settings.py
-DbSettingKey = Literal[
-    "smallest_channel_id",
-    "fastest_channel_id",
-    "first_channel_id",
-    "builds_channel_id",
-    "voting_channel_id",
-    "staff_roles_ids",
-    "trusted_roles_ids",
-]
-
 ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 ListRoleSetting = Literal["Staff", "Trusted"]
 Setting = ScalarChannelSetting | ListRoleSetting
-SETTINGS = cast(Sequence[Setting], get_args(Setting))
-assert len(SETTINGS) == len(get_args(DbSettingKey)), "DbSetting and Setting do not have the same number of elements."
 
 
 class UnknownRestrictions(TypedDict, total=False):

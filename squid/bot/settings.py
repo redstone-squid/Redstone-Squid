@@ -10,7 +10,7 @@ from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
-from squid.db.schema import SETTINGS, ListRoleSetting, ScalarChannelSetting, Setting
+from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
 
 if TYPE_CHECKING:
     import squid.bot
@@ -66,7 +66,6 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
             await sent_message.edit(embed=utils.info_embed(title="Current Settings", description=desc))
 
     @settings_hybrid_group.command(name="search")
-    @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
     @check_is_staff()
     async def search_setting(self, ctx: Context[BotT], setting: Setting):
@@ -100,7 +99,6 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="set")
     @app_commands.describe(
-        setting=", ".join(SETTINGS),
         channel="The channel to send this type of message to",
         roles="The roles which will have this permission",
     )
@@ -160,7 +158,6 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                 assert False
 
     @settings_hybrid_group.command(name="clear")
-    @app_commands.describe(setting=", ".join(SETTINGS))
     @app_commands.rename(setting="type")
     @check_is_staff()
     async def clear_setting(self, ctx: Context[BotT], setting: Setting):
