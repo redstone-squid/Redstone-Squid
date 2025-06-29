@@ -22,7 +22,6 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from squid.db import DatabaseManager
 from squid.db.schema import (
     Build as SQLBuild,
 )
@@ -241,6 +240,8 @@ class Build:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
+        from squid.db import DatabaseManager
+
         warnings.warn("Build.from_id is deprecated; use BuildManager.get_by_id", DeprecationWarning, stacklevel=2)
         return await DatabaseManager().build.get_by_id(build_id)
 
@@ -255,6 +256,8 @@ class Build:
         Returns:
             The Build object with the specified message id, or None if the build was not found.
         """
+        from squid.db import DatabaseManager
+
         warnings.warn(
             "Build.from_message_id is deprecated; use BuildManager.get_by_message_id", DeprecationWarning, stacklevel=2
         )
@@ -271,6 +274,8 @@ class Build:
             prompt_path: Relative path to the prompt file, defaults to "prompt.txt" in the squid.db package.
             model: The LLM model to use for the AI generation, defaults to "gpt-4.1-nano".
         """
+        from squid.db import DatabaseManager
+
         base_url = os.getenv("OPENAI_BASE_URL")
         if not base_url:
             logger.warning("No OpenAI base URL found, defaulting to https://api.openai.com/v1.")
@@ -508,6 +513,8 @@ class Build:
 
         This method would fetch the restrictions from the database and categorize them into the appropriate lists based on their type.
         """
+        from squid.db import DatabaseManager
+
         self.wiring_placement_restrictions = []
         self.component_restrictions = []
         self.miscellaneous_restrictions = []
@@ -657,6 +664,8 @@ class Build:
         Raises:
             ValueError: If the build could not be confirmed.
         """
+        from squid.db import DatabaseManager
+
         warnings.warn("Build.confirm is deprecated; use BuildManager.confirm", DeprecationWarning, stacklevel=2)
         await DatabaseManager().build.confirm(self)
 
@@ -666,6 +675,8 @@ class Build:
         Raises:
             ValueError: If the build could not be denied.
         """
+        from squid.db import DatabaseManager
+
         warnings.warn("Build.deny is deprecated; use BuildManager.deny", DeprecationWarning, stacklevel=2)
         await DatabaseManager().build.deny(self)
 
@@ -675,6 +686,8 @@ class Build:
 
         If the build does not exist in the database, it will be inserted instead.
         """
+        from squid.db import DatabaseManager
+
         warnings.warn("Build.save is deprecated; use BuildManager.save", DeprecationWarning, stacklevel=2)
         await DatabaseManager().build.save(self)
 
@@ -702,6 +715,8 @@ class BuildLock:
     async def _try_lock(self) -> bool:
         """Tries to acquire the lock."""
         assert self.build_id is not None
+        from squid.db import DatabaseManager
+
         db = DatabaseManager()
         async with db.async_session() as session:
             stmt = (
@@ -760,6 +775,8 @@ class BuildLock:
 
         If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
         """
+        from squid.db import DatabaseManager
+
         if self._lock_count <= 0:
             return
         self._lock_count -= 1
@@ -796,6 +813,8 @@ class LockContextManager:
 
 async def clean_locks() -> None:
     """Cleans up locks that were not released properly."""
+    from squid.db import DatabaseManager
+
     db = DatabaseManager()
     async with db.async_session() as session:
         cutoff_time = discord.utils.utcnow() - timedelta(minutes=5)

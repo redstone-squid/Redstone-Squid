@@ -624,6 +624,7 @@ class BuildManager:
         Returns:
             A list of Build objects.
         """
+        from squid.db import DatabaseManager  # FIXME
         # TODO: This is not trtivial in SQLAlchemy, so we keep the supabase client to do this.
         db = DatabaseManager()
         query = db.table("builds").select(all_build_columns)
@@ -643,8 +644,7 @@ class BuildManager:
         if len(build_ids) == 0:
             return []
 
-        db = DatabaseManager()
-        async with db.async_session() as session:
+        async with self.session() as session:
             stmt = (
                 select(SQLBuild)
                 .options(
