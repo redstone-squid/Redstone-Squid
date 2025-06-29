@@ -13,11 +13,12 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
-from squid.db.message import MessageManager
+from squid.db.message import MessageService
+from squid.db.repos.message_repository import MessageRepository
 from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.user import UserManager
-from squid.db.utils import get_version_string, parse_version_string
+from squid.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
 
@@ -87,7 +88,7 @@ class DatabaseManager(AsyncClient):
         # Initialize repositories and services
         self.message_repo = MessageRepository(self.async_session)
         self.message = MessageService(self.message_repo)
-        
+
         # Initialize managers
         self.server_setting = ServerSettingManager(self.async_session)
         self.user = UserManager(self.async_session)

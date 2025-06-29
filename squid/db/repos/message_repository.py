@@ -6,7 +6,7 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Message, MessagePurposeLiteral
-from squid.db.utils import utcnow
+from squid.utils import utcnow
 
 
 class MessageRepository:
@@ -114,10 +114,8 @@ class MessageRepository:
         # Call the PostgreSQL function that returns SETOF messages
         # Since the function returns records matching the messages table,
         # we can select from it and map to Message objects
-        stmt = select(Message).from_statement(
-            select(func.get_outdated_messages(server_id))
-        )
+        stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
         async with self._session() as session:
             result = await session.execute(stmt)
             rows = result.scalars().all()
-            return rows 
+            return rows

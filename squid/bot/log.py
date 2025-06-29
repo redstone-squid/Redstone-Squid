@@ -6,7 +6,7 @@ from discord import User
 from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
-from squid.db.utils import utcnow
+from squid.utils import utcnow
 
 
 class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
