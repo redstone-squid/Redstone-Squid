@@ -67,6 +67,3 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
 
     edition, major, minor, patch = match.groups()
     return edition or "Java", int(major), int(minor), int(patch)  # type: ignore
-
-
-SENTINEL = object()
