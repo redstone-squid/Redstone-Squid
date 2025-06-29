@@ -1,13 +1,14 @@
 """Functions for build types and restrictions."""
 
 import asyncio
+from typing import Literal, Sequence
 
 from async_lru import alru_cache
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.schema import Restriction, RestrictionAlias
+from squid.db.schema import Restriction, RestrictionAlias, Type
 
 
 class RestrictionError(Exception):
@@ -126,3 +127,63 @@ class BuildTagsManager:
             raise AliasTakenByOther(alias, alias_rid)
 
         await self.add_restriction_alias_by_id(rid, alias)
+
+    async def get_valid_restrictions(
+        self, type: Literal["component", "wiring-placement", "miscellaneous"]
+    ) -> Sequence[str]:
+        """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
+
+        Args:
+            type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+        Returns:
+            A list of valid restrictions for the given type.
+        """
+        async with self.session() as session:
+            stmt = select(Restriction.name).where(Restriction.type == type)
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    async def get_valid_door_types(self) -> Sequence[str]:
+        """Gets a list of valid door types. The door types are returned in the original case.
+
+        Returns:
+            A list of valid door types.
+        """
+        async with self.session() as session:
+            stmt = select(Type.name).where(Type.build_category == "Door")
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    async def validate_restrictions(
+        self, restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
+    ) -> tuple[list[str], list[str]]:
+        """Validates a list of restrictions for a given type.
+
+        Args:
+            restrictions: The list of restrictions to validate
+            type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
+
+        Returns:
+            (valid_restrictions, invalid_restrictions)
+        """
+        all_valid_restrictions = [r.lower() for r in await self.get_valid_restrictions(type)]
+
+        valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
+        invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
+        return valid_restrictions, invalid_restrictions
+
+    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
+        """Validates a list of door types.
+
+        Args:
+            door_types: The list of door types to validate
+
+        Returns:
+            (valid_door_types, invalid_door_types)
+        """
+        all_valid_door_types = [t.lower() for t in await self.get_valid_door_types()]
+
+        valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
+        invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
+        return valid_door_types, invalid_door_types

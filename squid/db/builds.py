@@ -570,12 +570,13 @@ class Build:
         build.extra_info["unknown_restrictions"] = UnknownRestrictions()
 
         validation_tasks: list[tuple[str, Awaitable[tuple[list[str], list[str]]]]] = []
+        build_tags = DatabaseManager().build_tags
         if variables["component_restriction"] is not None:
             validation_tasks.append(
                 (
                     "component",
                     asyncio.create_task(
-                        validate_restrictions(variables["component_restriction"].split(", "), "component")
+                        build_tags.validate_restrictions(variables["component_restriction"].split(", "), "component")
                     ),
                 )
             )
@@ -584,7 +585,7 @@ class Build:
                 (
                     "wiring",
                     asyncio.create_task(
-                        validate_restrictions(
+                        build_tags.validate_restrictions(
                             variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
                         )
                     ),
@@ -595,13 +596,18 @@ class Build:
                 (
                     "misc",
                     asyncio.create_task(
-                        validate_restrictions(variables["miscellaneous_restrictions"].split(", "), "miscellaneous")
+                        build_tags.validate_restrictions(
+                            variables["miscellaneous_restrictions"].split(", "), "miscellaneous"
+                        )
                     ),
                 )
             )
         if variables["piston_door_type"] is not None:
             validation_tasks.append(
-                ("door_types", asyncio.create_task(validate_door_types(variables["piston_door_type"].split(", "))))
+                (
+                    "door_types",
+                    asyncio.create_task(build_tags.validate_door_types(variables["piston_door_type"].split(", "))),
+                )
             )
 
         results = await asyncio.gather(*(task for _, task in validation_tasks))
@@ -1376,70 +1382,6 @@ async def clean_locks() -> None:
         stmt = update(SQLBuild).where(SQLBuild.locked_at < cutoff_time).values(is_locked=False)
         await session.execute(stmt)
         await session.commit()
-
-
-async def get_valid_restrictions(type: Literal["component", "wiring-placement", "miscellaneous"]) -> Sequence[str]:
-    """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
-
-    Args:
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        A list of valid restrictions for the given type.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = select(Restriction.name).where(Restriction.type == type)
-        result = await session.execute(stmt)
-        return result.scalars().all()
-
-
-async def get_valid_door_types() -> Sequence[str]:
-    """Gets a list of valid door types. The door types are returned in the original case.
-
-    Returns:
-        A list of valid door types.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = select(Type.name).where(Type.build_category == "Door")
-        result = await session.execute(stmt)
-        return result.scalars().all()
-
-
-async def validate_restrictions(
-    restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
-) -> tuple[list[str], list[str]]:
-    """Validates a list of restrictions for a given type.
-
-    Args:
-        restrictions: The list of restrictions to validate
-        type: The type of restriction. Either "component", "wiring_placement" or "miscellaneous"
-
-    Returns:
-        (valid_restrictions, invalid_restrictions)
-    """
-    all_valid_restrictions = [r.lower() for r in await get_valid_restrictions(type)]
-
-    valid_restrictions = [r for r in restrictions if r.lower() in all_valid_restrictions]
-    invalid_restrictions = [r for r in restrictions if r not in all_valid_restrictions]
-    return valid_restrictions, invalid_restrictions
-
-
-async def validate_door_types(door_types: list[str]) -> tuple[list[str], list[str]]:
-    """Validates a list of door types.
-
-    Args:
-        door_types: The list of door types to validate
-
-    Returns:
-        (valid_door_types, invalid_door_types)
-    """
-    all_valid_door_types = [t.lower() for t in await get_valid_door_types()]
-
-    valid_door_types = [t for t in door_types if t.lower() in all_valid_door_types]
-    invalid_door_types = [t for t in door_types if t.lower() not in all_valid_door_types]
-    return valid_door_types, invalid_door_types
 
 
 async def get_builds_by_filter(*, filter: Mapping[str, Any] | None = None) -> list[Build]:
