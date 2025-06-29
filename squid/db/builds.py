@@ -261,49 +261,6 @@ class Build:
         return await DatabaseManager().build.get_by_message_id(message_id)
 
     @staticmethod
-    def from_sql_build(sql_build: SQLBuild) -> "Build":
-        """Converts a SQLBuild to a Build object."""
-        if not isinstance(sql_build, Door):
-            raise ValueError("Can only handle doors right now.")
-        door = sql_build
-        return Build(
-            id=door.id,
-            submission_status=door.submission_status,  # type: ignore
-            category=BuildCategory(door.category),
-            record_category=door.record_category,
-            width=door.width,
-            height=door.height,
-            depth=door.depth,
-            door_width=door.door_width,
-            door_height=door.door_height,
-            door_depth=door.door_depth,
-            door_type=[type.name for type in door.types],
-            door_orientation_type=door.orientation,
-            wiring_placement_restrictions=[r.name for r in door.restrictions if r.type == "wiring-placement"],
-            component_restrictions=[r.name for r in door.restrictions if r.type == "component"],
-            miscellaneous_restrictions=[r.name for r in door.restrictions if r.type == "miscellaneous"],
-            normal_closing_time=door.normal_closing_time,
-            normal_opening_time=door.normal_opening_time,
-            visible_closing_time=door.visible_closing_time,
-            visible_opening_time=door.visible_opening_time,
-            extra_info=door.extra_info,  # type: ignore
-            creators_ign=[creator.ign for creator in door.creators],
-            image_urls=[link.url for link in door.links if link.media_type == "image"],
-            video_urls=[link.url for link in door.links if link.media_type == "video"],
-            world_download_urls=[link.url for link in door.links if link.media_type == "world-download"],
-            submitter_id=door.submitter_id,
-            completion_time=door.completion_time,
-            edited_time=door.edited_time,
-            original_server_id=door.original_message.server_id if door.original_message else None,
-            original_channel_id=door.original_message.channel_id if door.original_message else None,
-            original_message_id=door.original_message_id,
-            original_message_author_id=door.original_message.author_id if door.original_message else None,
-            original_message=door.original_message.content if door.original_message else None,
-            ai_generated=door.ai_generated,
-            embedding=door.embedding,
-        )
-
-    @staticmethod
     def parse_time_string(time_string: str | None) -> int | None:
         """Parses a time string into an integer.
 
