@@ -84,8 +84,11 @@ class DatabaseManager(AsyncClient):
         self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
+        # Initialize repositories and services
+        self.message_repo = MessageRepository(self.async_session)
+        self.message = MessageService(self.message_repo)
+        
         # Initialize managers
-        self.message = MessageManager(self.async_session)
         self.server_setting = ServerSettingManager(self.async_session)
         self.user = UserManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
