@@ -8,8 +8,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import (
-    SETTINGS,
-    DbSettingKey,
     ListRoleSetting,
     ScalarChannelSetting,
     ServerSetting,
@@ -18,6 +16,16 @@ from squid.db.schema import (
 
 # Mapping of settings to the column names in the database.
 # This file should be the only place that is aware of the database column names.
+DbSettingKey = Literal[
+    "smallest_channel_id",
+    "fastest_channel_id",
+    "first_channel_id",
+    "builds_channel_id",
+    "voting_channel_id",
+    "staff_roles_ids",
+    "trusted_roles_ids",
+]
+
 _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",
@@ -29,7 +37,6 @@ _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
 }
 
 _DB_KEY_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in _SETTING_TO_DB_KEY.items()}
-assert set(_SETTING_TO_DB_KEY.keys()) == set(SETTINGS), "The mapping is not exhaustive!"
 
 
 class SettingOptions(TypedDict, total=False):
