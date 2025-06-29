@@ -73,7 +73,7 @@ class SubmissionModal(discord.ui.Modal):
         self.build.door_dimensions = parse_hallway_dimensions(self.door_size.value)
         self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
         self.build.dimensions = parse_dimensions(self.dimensions.value)
-        await self.build.set_restrictions(self.restrictions.value.split(", "))
+        await self.build.set_restrictions_auto(self.restrictions.value.split(", "))
 
         # Extract IGN
         ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
