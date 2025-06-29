@@ -476,7 +476,8 @@ class Build:
     def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.door_width, self.door_height, self.door_depth = dimensions
 
-    def get_restrictions(
+    @property
+    def restrictions(
         self,
     ) -> dict[
         Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
@@ -489,7 +490,8 @@ class Build:
             "miscellaneous_restrictions": self.miscellaneous_restrictions,
         }
 
-    async def set_restrictions(
+    @restrictions.setter
+    async def restrictions(
         self,
         restrictions: Mapping[
             Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
