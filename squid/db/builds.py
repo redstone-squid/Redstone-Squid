@@ -261,16 +261,6 @@ class Build:
         return await DatabaseManager().build.get_by_message_id(message_id)
 
     @staticmethod
-    def from_dict(submission: dict) -> "Build":
-        """Creates a new Build object from a dictionary. No validation is done on the data."""
-        build = Build()
-        for attr in build:
-            if attr in submission:
-                setattr(build, attr, submission[attr])
-
-        return build
-
-    @staticmethod
     def from_json(data: JoinedBuildRecord) -> "Build":
         """
         Converts a JSON object to a Build object.
@@ -830,30 +820,6 @@ class Build:
                 differences.append((attr, getattr(self, attr), getattr(other, attr)))
 
         return differences
-
-    async def reload(self) -> None:
-        """
-        Overwrite the current build with the data from the database.
-
-        Raises:
-            ValueError: If the build was not found or build.id is not set.
-        """
-        if self.id is None:
-            raise ValueError("Build ID is missing.")
-        raise NotImplementedError  # TODO
-
-    def update_local(self, **data: Any) -> None:
-        """Updates the build locally with the given data. No validation is done on the data."""
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-    def as_dict(self) -> dict[str, Any]:
-        """Converts the build to a dictionary."""
-        build: dict[str, Any] = {}
-        for attr in self:
-            build[attr] = getattr(self, attr)
-        return build
 
     @staticmethod
     def get_attr_type(attribute: str) -> type:

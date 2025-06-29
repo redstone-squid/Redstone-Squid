@@ -188,17 +188,6 @@ def assert_build_attributes(build: Build, expected: dict[str, Any]):
         assert getattr(build, attr) == value
 
 
-def get_build_constructor_args(build: Build) -> dict[str, Any]:
-    """Get constructor arguments from a Build instance, excluding computed properties."""
-    build_dict = build.as_dict()
-    # Remove computed properties that aren't constructor arguments
-    build_dict.pop("dimensions", None)
-    build_dict.pop("door_dimensions", None)
-    build_dict.pop("lock", None)
-    build_dict.pop("original_link", None)
-    return build_dict
-
-
 class TestBuildConstructors:
     """Tests for Build class constructors."""
 
