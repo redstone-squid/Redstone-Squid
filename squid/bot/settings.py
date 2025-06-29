@@ -6,13 +6,11 @@ import discord
 from beartype.door import is_bearable
 from discord import app_commands
 from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
-from sqlalchemy import update
-from sqlalchemy.dialects.postgresql import insert
 
 import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
-from squid.db.schema import SETTINGS, ScalarChannelSetting, ServerSetting, Setting, ListRoleSetting
+from squid.db.schema import SETTINGS, ListRoleSetting, ScalarChannelSetting, Setting
 
 if TYPE_CHECKING:
     import squid.bot

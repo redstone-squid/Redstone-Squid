@@ -1,7 +1,7 @@
 """Some functions related to storing and changing server ids for sending records."""
 
 from collections.abc import Iterable
-from typing import Literal, overload, TypedDict, Unpack
+from typing import Literal, TypedDict, Unpack, overload
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -68,9 +68,7 @@ class ServerSettingManager:
             return {setting.server_id: getattr(setting, col_name) for setting in settings}
 
     @overload
-    async def get_single(
-        self, server_id: int, setting: ScalarChannelSetting
-    ) -> int | None: ...
+    async def get_single(self, server_id: int, setting: ScalarChannelSetting) -> int | None: ...
     @overload
     async def get_single(self, server_id: int, setting: ListRoleSetting) -> list[int]: ...
     @overload
