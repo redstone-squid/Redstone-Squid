@@ -120,6 +120,8 @@ reportImplicitOverride = "error"
 reportShadowedImports = "error"
 reportAny = false
 
+enableExperimentalFeatures = true  # For `TypeForm` support
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"] 
