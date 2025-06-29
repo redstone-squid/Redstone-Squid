@@ -527,8 +527,9 @@ class Build:
                     raise RuntimeError("The type is supposed to never be None, this is a bug in the database.")
                 bucket[row.type].append(row.name)
 
-    def get_title(self) -> str:
-        """Generates the official Redstone Squid defined title for the build."""
+    @property
+    def title(self) -> str:
+        """The official Redstone Squid defined title for the build."""
         title = ""
 
         if self.category != "Door":

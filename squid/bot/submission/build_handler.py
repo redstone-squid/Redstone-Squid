@@ -147,7 +147,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         build = self.build
-        em = bot_utils.info_embed(title=self.build.get_title(), description=await self.get_description())
+        em = bot_utils.info_embed(title=self.build.title, description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
