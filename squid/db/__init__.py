@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, make_url, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+from squid.db.build_manager import BuildManager
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageService
@@ -95,6 +96,7 @@ class DatabaseManager(AsyncClient):
         # Initialize managers
         self.server_setting = ServerSettingManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
+        self.build = BuildManager(self.async_session)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""

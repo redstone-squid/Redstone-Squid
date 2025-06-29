@@ -6,6 +6,7 @@ import os
 import re
 import time
 import typing
+import warnings
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta, timezone
@@ -243,17 +244,8 @@ class Build:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
-        db = DatabaseManager()
-
-        async with db.async_session() as session:
-            stmt = select(SQLBuild).where(SQLBuild.id == build_id)
-            result = await session.execute(stmt)
-            sql_build = result.unique().scalar_one_or_none()
-
-            if not sql_build:
-                return None
-
-            return Build.from_sql_build(sql_build)
+        warnings.warn("Build.from_id is deprecated; use BuildManager.get_by_id", DeprecationWarning, stacklevel=2)
+        return await DatabaseManager().build.get_by_id(build_id)
 
     @staticmethod
     async def from_message_id(message_id: int) -> "Build | None":
@@ -266,16 +258,10 @@ class Build:
         Returns:
             The Build object with the specified message id, or None if the build was not found.
         """
-        db = DatabaseManager()
-
-        async with db.async_session() as session:
-            stmt = select(Message).where(Message.id == message_id)
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
-
-            if message and message.build_id:
-                return await Build.from_id(message.build_id)
-            return None
+        warnings.warn(
+            "Build.from_message_id is deprecated; use BuildManager.get_by_message_id", DeprecationWarning, stacklevel=2
+        )
+        return await DatabaseManager().build.get_by_message_id(message_id)
 
     @staticmethod
     def from_dict(submission: dict) -> "Build":
@@ -895,19 +881,8 @@ class Build:
         Raises:
             ValueError: If the build could not be confirmed.
         """
-        if self.id is None:
-            raise ValueError("Build ID is missing.")
-        assert self.lock is not None
-
-        async with self.lock(timeout=30):
-            self.submission_status = Status.CONFIRMED
-            db = DatabaseManager()
-            async with db.async_session() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(submission_status=Status.CONFIRMED)
-                result = await session.execute(stmt)
-                await session.commit()
-                if result.rowcount != 1:
-                    raise ValueError("Failed to confirm submission in the database.")
+        warnings.warn("Build.confirm is deprecated; use BuildManager.confirm", DeprecationWarning, stacklevel=2)
+        await DatabaseManager().build.confirm(self)
 
     async def deny(self) -> None:
         """Marks the build as denied.
@@ -915,19 +890,8 @@ class Build:
         Raises:
             ValueError: If the build could not be denied.
         """
-        if self.id is None:
-            raise ValueError("Build ID is missing.")
-        assert self.lock is not None
-
-        async with self.lock(timeout=30):
-            self.submission_status = Status.DENIED
-            db = DatabaseManager()
-            async with db.async_session() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == self.id).values(submission_status=Status.DENIED)
-                result = await session.execute(stmt)
-                await session.commit()
-                if result.rowcount != 1:
-                    raise ValueError("Failed to deny submission in the database.")
+        warnings.warn("Build.deny is deprecated; use BuildManager.deny", DeprecationWarning, stacklevel=2)
+        await DatabaseManager().build.deny(self)
 
     async def save(self) -> None:
         """
