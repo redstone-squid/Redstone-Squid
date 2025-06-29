@@ -15,9 +15,9 @@ from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.message import MessageService
 from squid.db.repos.message_repository import MessageRepository
+from squid.db.repos.user_repository import UserRepository
 from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
-from squid.db.repos.user_repository import UserRepository
 from squid.db.services.user_service import UserService
 from squid.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient

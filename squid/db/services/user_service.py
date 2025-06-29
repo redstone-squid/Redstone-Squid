@@ -1,12 +1,11 @@
 """High-level operations for users"""
 
 import random
+from uuid import UUID
 
 import aiohttp
 
 from squid.db.repos.user_repository import UserRepository
-from uuid import UUID
-
 from squid.db.schema import User
 
 
@@ -20,7 +19,9 @@ class UserService:
     def __init__(self, user_repo: UserRepository):
         self._user_repo = user_repo
 
-    async def add_user(self, *, discord_id: int | None = None, minecraft_uuid: UUID | None = None, ign: str | None = None) -> User:
+    async def add_user(
+        self, *, discord_id: int | None = None, minecraft_uuid: UUID | None = None, ign: str | None = None
+    ) -> User:
         """Add a new user.
 
         Raises:
