@@ -15,7 +15,9 @@ class UserRepository:
     def __init__(self, session: async_sessionmaker[AsyncSession]):
         self._session = session
 
-    async def add(self, *, discord_id: int | None = None, minecraft_uuid: uuid.UUID | None = None, ign: str | None = None) -> User:
+    async def add(
+        self, *, discord_id: int | None = None, minecraft_uuid: uuid.UUID | None = None, ign: str | None = None
+    ) -> User:
         """Insert a new user and return its primary key."""
         async with self._session() as session:
             user = User(discord_id=discord_id, ign=ign, minecraft_uuid=minecraft_uuid)
@@ -87,9 +89,7 @@ class UserRepository:
         """Insert a new verification code for the given Minecraft UUID and username."""
         code = self.hash_verification_code(code)
         async with self._session() as session:
-            verification_code = VerificationCode(
-                minecraft_uuid=minecraft_uuid, code=code, username=username
-            )
+            verification_code = VerificationCode(minecraft_uuid=minecraft_uuid, code=code, username=username)
             session.add(verification_code)
             await session.flush()
             await session.commit()
