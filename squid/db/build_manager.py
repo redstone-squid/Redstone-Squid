@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime
+import os
+from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
+import vecs
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
 from rapidfuzz import process
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from squid.db import DatabaseManager
-from squid.db.builds import Build, Status, all_build_columns, JoinedBuildRecord
+from squid.db.builds import Build, all_build_columns, JoinedBuildRecord
 from squid.db.schema import (
     Build as SQLBuild,
     RestrictionRecord,
@@ -21,6 +23,12 @@ from squid.db.schema import (
     LinkRecord,
     MessageRecord,
     Door,
+    Type,
+    Restriction,
+    UnknownRestrictions,
+    User,
+    BuildLink,
+    MediaTypeLiteral,
 )
 from squid.db.schema import (
     BuildCategory,
@@ -249,6 +257,317 @@ class BuildManager:
             ai_generated=door.ai_generated,
             embedding=door.embedding,
         )
+
+    async def save(self, build: Build) -> None:
+        """
+        Updates the build in the database with the given data.
+
+        If the build does not exist in the database, it will be inserted instead.
+        """
+        build.edited_time = datetime.now(tz=timezone.utc)
+
+        if build.id is None:
+            delete_build_on_error = True
+            if build.submitter_id is None:
+                raise ValueError("Submitter ID must be set for new builds.")
+
+            # Create new build - determine the right subclass
+            if build.category == BuildCategory.DOOR:
+                sql_build = Door(
+                    submission_status=build.submission_status or Status.PENDING,
+                    record_category=build.record_category,
+                    width=build.width,
+                    height=build.height,
+                    depth=build.depth,
+                    completion_time=build.completion_time,
+                    category=build.category,
+                    submitter_id=build.submitter_id,
+                    version_spec=build.version_spec,
+                    ai_generated=build.ai_generated or False,
+                    embedding=build.embedding,
+                    extra_info=build.extra_info,
+                    edited_time=build.edited_time,
+                    is_locked=True,  # Lock immediately on creation
+                    orientation=build.door_orientation_type or "Door",
+                    door_width=build.door_width or 1,
+                    door_height=build.door_height or 2,
+                    door_depth=build.door_depth,
+                    normal_opening_time=build.normal_opening_time,
+                    normal_closing_time=build.normal_closing_time,
+                    visible_opening_time=build.visible_opening_time,
+                    visible_closing_time=build.visible_closing_time,
+                )
+            else:
+                raise ValueError(f"Only doors are supported for now, got {build.category}.")
+
+            async with self.session() as session:
+                await self._setup_relationships(session, sql_build)
+                session.add(sql_build)
+                await session.commit()
+                build.id = sql_build.id
+            build.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
+        else:
+            delete_build_on_error = False
+            await build.lock.acquire(timeout=30)
+
+            async with self.session() as session:
+                # Load existing build with all relationships
+                stmt = (
+                    select(SQLBuild)
+                    .where(SQLBuild.id == build.id)
+                    .options(
+                        selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
+                        selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
+                        selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
+                        selectinload(SQLBuild.build_types).selectinload(BuildType.type),
+                        selectinload(SQLBuild.links),
+                        selectinload(SQLBuild.messages),
+                    )
+                )
+                result = await session.execute(stmt)
+                sql_build = result.scalar_one()
+
+                # Update basic attributes
+                if build.submission_status is None:
+                    raise ValueError("Submission status must be set for existing builds.")
+                if build.submitter_id is None:
+                    raise ValueError("Submitter ID must be set for existing builds.")
+                sql_build.submission_status = build.submission_status
+                sql_build.record_category = build.record_category
+                sql_build.width = build.width
+                sql_build.height = build.height
+                sql_build.depth = build.depth
+                sql_build.completion_time = build.completion_time
+                sql_build.submitter_id = build.submitter_id
+                sql_build.version_spec = build.version_spec
+                sql_build.ai_generated = build.ai_generated or False
+                sql_build.embedding = build.embedding
+                sql_build.edited_time = build.edited_time
+
+                # Update category-specific attributes
+                if isinstance(sql_build, Door):
+                    sql_build.orientation = build.door_orientation_type or "Door"
+                    sql_build.door_width = build.door_width or 1
+                    sql_build.door_height = build.door_height or 2
+                    sql_build.door_depth = build.door_depth
+                    sql_build.normal_opening_time = build.normal_opening_time
+                    sql_build.normal_closing_time = build.normal_closing_time
+                    sql_build.visible_opening_time = build.visible_opening_time
+                    sql_build.visible_closing_time = build.visible_closing_time
+                else:
+                    raise ValueError(f"Only doors are supported for now, got {sql_build.category}.")
+
+                # Clear existing relationships and set up new ones
+                sql_build.build_creators.clear()
+                sql_build.build_restrictions.clear()
+                sql_build.build_versions.clear()
+                sql_build.build_types.clear()
+                sql_build.links.clear()
+
+                await self._setup_relationships(session, sql_build)
+                await session.commit()
+
+        # Handle embedding and vector storage
+        try:
+            embedding_task = asyncio.create_task(build.generate_embedding())
+
+            # Handle message separately since it might update extra_info
+            if build.original_message_id is not None:
+                async with self.session() as session:
+                    await self._create_or_update_message(build, session)
+
+            # Update embedding
+            build.embedding = await embedding_task
+            if build.embedding is not None:
+                vx = vecs.create_client(os.environ["DB_CONNECTION"])
+                try:
+                    build_vecs = vx.get_or_create_collection(
+                        name="builds", dimension=int(os.getenv("EMBEDDING_DIMENSION", "1536"))
+                    )
+                    build_vecs.upsert(records=[(str(build.id), build.embedding, {})])
+                finally:
+                    vx.disconnect()
+
+                # Update embedding in database
+                async with self.session() as session:
+                    stmt = (
+                        update(SQLBuild)
+                        .where(SQLBuild.id == build.id)
+                        .values(embedding=build.embedding, extra_info=build.extra_info)
+                    )
+                    await session.execute(stmt)
+                    await session.commit()
+
+        except Exception:
+            if delete_build_on_error:
+                logger.warning("Failed to save build %s, deleting it", repr(build))
+                async with self.session() as session:
+                    stmt = delete(SQLBuild).where(SQLBuild.id == build.id)
+                    await session.execute(stmt)
+                    await session.commit()
+            else:
+                logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(build))
+            raise
+        finally:
+            build.lock.build_id = build.id
+            await build.lock.release()
+
+    async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
+        """Set up all relationships for the build using SQLAlchemy's relationship handling."""
+        # Handle creators
+        if build.creators_ign:
+            creators = await self._get_or_create_users(session, build.creators_ign)
+            sql_build.creators = creators
+
+        # Handle restrictions
+        all_restrictions = (
+            build.wiring_placement_restrictions + build.component_restrictions + build.miscellaneous_restrictions
+        )
+        if all_restrictions:
+            restriction_objects, unknown_restrictions = await self._get_restrictions(session, all_restrictions)
+            sql_build.restrictions = restriction_objects
+            # Update extra_info with unknown restrictions
+            if unknown_restrictions:
+                build.extra_info["unknown_restrictions"] = (
+                    build.extra_info.get("unknown_restrictions", {}) | unknown_restrictions
+                )
+
+        # Handle types
+        if not build.door_type:
+            build.door_type = ["Regular"]
+        type_objects, unknown_types = await self._get_types(session, build.door_type)
+        sql_build.types = type_objects
+        # Update extra_info with unknown types
+        if unknown_types:
+            build.extra_info["unknown_patterns"] = build.extra_info.get("unknown_patterns", []) + unknown_types
+
+        # Handle versions
+        from squid.db import DatabaseManager  # FIXME
+        functional_versions = build.versions or [await DatabaseManager().get_or_fetch_newest_version(edition="Java")]
+        version_objects = await self._get_versions(session, functional_versions)
+        sql_build.versions = version_objects
+
+        # Handle links
+        all_links: list[tuple[str, MediaTypeLiteral]] = []
+        if build.image_urls:
+            all_links.extend([(url, "image") for url in build.image_urls])
+        if build.video_urls:
+            all_links.extend([(url, "video") for url in build.video_urls])
+        if build.world_download_urls:
+            all_links.extend([(url, "world-download") for url in build.world_download_urls])
+
+        for url, media_type in all_links:
+            build_link = BuildLink(url=url, media_type=media_type)
+            sql_build.links.append(build_link)
+
+    @staticmethod
+    async def _get_or_create_users(session: AsyncSession, igns: list[str]) -> list[User]:
+        """Get or create User objects for the given IGNs."""
+        users: list[User] = []
+        for ign in igns:
+            stmt = select(User).where(User.ign == ign)
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if user is None:
+                user = User(ign=ign)
+                session.add(user)
+                await session.flush()  # Get the ID
+
+            users.append(user)
+
+        return users
+
+    @staticmethod
+    async def _get_restrictions(
+        build, session: AsyncSession, restrictions: list[str]
+    ) -> tuple[list[Restriction], UnknownRestrictions]:
+        """Get Restriction objects and identify unknown restrictions."""
+        restrictions_titled = [r.title() for r in restrictions]
+
+        stmt = select(Restriction).where(Restriction.name.in_(restrictions_titled))
+        result = await session.execute(stmt)
+        found_restrictions = result.scalars().all()
+
+        # Identify unknown restrictions by type
+        unknown_restrictions: UnknownRestrictions = {}
+        found_names = {r.name for r in found_restrictions}
+
+        unknown_wiring = [r for r in build.wiring_placement_restrictions if r.title() not in found_names]
+        unknown_component = [r for r in build.component_restrictions if r.title() not in found_names]
+        unknown_misc = [r for r in build.miscellaneous_restrictions if r.title() not in found_names]
+
+        if unknown_wiring:
+            unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring
+        if unknown_component:
+            unknown_restrictions["component_restrictions"] = unknown_component
+        if unknown_misc:
+            unknown_restrictions["miscellaneous_restrictions"] = unknown_misc
+
+        return list(found_restrictions), unknown_restrictions
+
+    @staticmethod
+    async def _get_types(build: Build, session: AsyncSession, type_names: list[str]) -> tuple[list[Type], list[str]]:
+        """Get Type objects and identify unknown types."""
+        type_names_titled = [t.title() for t in type_names]
+
+        stmt = select(Type).where(Type.build_category == build.category).where(Type.name.in_(type_names_titled))
+        result = await session.execute(stmt)
+        found_types = result.scalars().all()
+
+        found_names = {t.name for t in found_types}
+        unknown_types = [t for t in type_names if t.title() not in found_names]
+
+        return list(found_types), unknown_types
+
+    @staticmethod
+    async def _get_versions(session: AsyncSession, version_strings: list[str]) -> list[Version]:
+        """Get Version objects for the given version strings."""
+        qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
+
+        stmt = select(qvn.c.id).where(qvn.c.quantified_name.in_(version_strings))
+        result = await session.execute(stmt)
+        version_ids = [tup[0] for tup in result.all()]  # result is a list of 1-tuples
+
+        stmt = select(Version).where(Version.id.in_(version_ids))
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def _create_or_update_message(build: Build, session: AsyncSession) -> None:
+        """Create or update the original message record."""
+        if build.original_message_id is None:
+            return
+        assert build.original_server_id is not None, "Original server ID must be set for original message."
+        # Channel ID may be None if the message is from DMs
+        assert build.original_message_author_id is not None, (
+            "Original message author ID must be set for original message."
+        )
+
+        stmt = select(Message).where(Message.id == build.original_message_id)
+        result = await session.execute(stmt)
+        message = result.scalar_one_or_none()
+
+        if message is None:
+            message = Message(
+                id=build.original_message_id,
+                server_id=build.original_server_id,
+                channel_id=build.original_channel_id,
+                author_id=build.original_message_author_id,
+                purpose="build_original_message",
+                content=build.original_message,
+                build_id=build.id,
+            )
+            session.add(message)
+        else:
+            message.server_id = build.original_server_id
+            message.channel_id = build.original_channel_id
+            message.author_id = build.original_message_author_id
+            message.purpose = "build_original_message"
+            message.content = build.original_message
+            message.build_id = build.id
+            message.updated_at = datetime.now(tz=timezone.utc)
+        await session.flush()
 
     async def confirm(self, build: Build) -> None:
         """Marks the build as confirmed.
