@@ -786,13 +786,6 @@ class Build:
 
         return title
 
-    async def get_persisted_copy(self) -> "Build":
-        """Get a persisted copy of the build."""
-        if self.id is None:
-            raise ValueError("Build id is None, there is no persisted copy.")
-
-        return await Build.from_id(self.id)  # type: ignore
-
     async def generate_embedding(self) -> list[float] | None:
         """
         Generates embedding for the build using OpenAI's API.
@@ -1379,5 +1372,3 @@ async def clean_locks() -> None:
         stmt = update(SQLBuild).where(SQLBuild.locked_at < cutoff_time).values(is_locked=False)
         await session.execute(stmt)
         await session.commit()
-
-
