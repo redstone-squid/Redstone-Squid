@@ -449,11 +449,6 @@ class Build:
             build.extra_info["user"] = variables["author_note"].replace("\\n", "\n")
         return build
 
-    def __iter__(self):
-        """Iterates over the *attributes* of the Build object."""
-        for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
-            yield attr
-
     @cached_property
     def original_link(self) -> str | None:
         """The link to the original message of the build."""
@@ -625,7 +620,8 @@ class Build:
             raise ValueError("The IDs of the builds are different.")
 
         differences: list[tuple[str, T, T]] = []
-        for attr in self:
+        # TODO: too much magic, try using __dataclass_fields__ or just listing the fields manually
+        for attr in [a for a in dir(self) if not a.startswith("__") and not callable(getattr(self, a))]:
             if attr == "id":
                 continue
             if getattr(self, attr) != getattr(other, attr):
