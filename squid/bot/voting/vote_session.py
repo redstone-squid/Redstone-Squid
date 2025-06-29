@@ -453,7 +453,7 @@ class BuildVoteSession(AbstractVoteSession):
         if record.build_id is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise ValueError(f"Found a build vote session with no associated build id. session_id={record.id}")
 
-        build = Build.from_sql_build(record.build)
+        build = DatabaseManager().build.from_sql_build(record.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True
