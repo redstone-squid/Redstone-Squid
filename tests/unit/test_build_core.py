@@ -276,14 +276,13 @@ class TestBuildTitle:
         sample_build.wiring_placement_restrictions = ["1-wide"]
         sample_build.component_restrictions = ["No pistons"]
         sample_build.ai_generated = False
-        title = sample_build.get_title()
-        assert title == "Pending: No pistons 2x3 1-wide Door"
+        assert sample_build.title == "Pending: No pistons 2x3 1-wide Door"
 
     def test_get_title_missing_orientation(self, sample_build: Build):
         """Test title generation fails with missing orientation."""
         sample_build.door_orientation_type = None
         with pytest.raises(ValueError, match="Door orientation type"):
-            sample_build.get_title()
+            _ = sample_build.title
 
 
 class TestBuildComparison:
