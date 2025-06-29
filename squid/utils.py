@@ -65,3 +65,22 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
 
     edition, major, minor, patch = match.groups()
     return edition or "Java", int(major), int(minor), int(patch)  # type: ignore
+
+
+def parse_time_string(time_string: str | None) -> int | None:
+    """Parses a time string into an integer.
+
+    Args:
+        time_string: The time string to parse.
+
+    Returns:
+        The time in ticks.
+    """
+    # TODO: parse "ticks"
+    if time_string is None:
+        return None
+    time_string = time_string.replace("s", "").replace("~", "").strip()
+    try:
+        return int(float(time_string) * 20)
+    except ValueError:
+        return None
