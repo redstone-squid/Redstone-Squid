@@ -3,18 +3,16 @@
 from collections.abc import Sequence
 
 import discord
-from sqlalchemy import func, insert, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.db import MessageRepository
 from squid.db.schema import Message, MessagePurposeLiteral
-from squid.db.utils import utcnow
 
 
-class MessageManager:
-    """A class for managing messages in the database."""
+class MessageService:
+    """Service for managing messages in the database."""
 
-    def __init__(self, session: async_sessionmaker[AsyncSession]):
-        self.session = session
+    def __init__(self, message_repo: MessageRepository):
+        self._message_repo = message_repo
 
     async def track_message(
         self,
@@ -28,9 +26,13 @@ class MessageManager:
 
         Args:
             message: The message to track.
-            build_id: The associated build id, can be None.
             purpose: The purpose of the message.
+            build_id: The associated build id, can be None.
             vote_session_id: The vote session id of the message.
+
+        Raises:
+            NotImplementedError: If trying to track messages in DMs.
+            ValueError: If required parameters are missing for specific purposes.
         """
         if message.guild is None:
             raise NotImplementedError("Cannot track messages in DMs.")  # TODO
@@ -40,32 +42,25 @@ class MessageManager:
         elif purpose == "vote" and vote_session_id is None:
             raise ValueError("vote_session_id cannot be None for this purpose.")
 
-        async with self.session() as session:
-            stmt = insert(Message).values(
-                server_id=message.guild.id,
-                channel_id=message.channel.id,
-                id=message.id,
-                build_id=build_id,
-                author_id=message.author.id,
-                vote_session_id=vote_session_id,
-                purpose=purpose,
-                content=message.content,
-            )
-            await session.execute(stmt)
-            await session.commit()
+        await self._message_repo.insert(
+            message_id=message.id,
+            server_id=message.guild.id,
+            channel_id=message.channel.id,
+            author_id=message.author.id,
+            purpose=purpose,
+            content=message.content,
+            build_id=build_id,
+            vote_session_id=vote_session_id,
+        )
 
     async def update_message_edited_time(self, message: int | discord.Message) -> None:
-        """
-        Update the edited time of a message.
+        """Update the edited time of a message.
 
         Args:
             message: The message to update. Either the message id or the message object.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
-        async with self.session() as session:
-            stmt = update(Message).where(Message.id == message_id).values(edited_time=utcnow())
-            await session.execute(stmt)
-            await session.commit()
+        await self._message_repo.update_edited_time(message_id)
 
     async def untrack_message(self, message: int | discord.Message) -> Message:
         """Untrack message from the database. The message is not deleted on discord.
@@ -77,20 +72,21 @@ class MessageManager:
             A Message that is untracked.
 
         Raises:
-            ValueError: If the message is not found.
+            ValueError: If the message is not found in the database.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
-        async with self.session() as session:
-            stmt = select(Message).where(Message.id == message_id)
-            result = await session.execute(stmt)
-            message_obj = result.scalar_one_or_none()
+        return await self._message_repo.delete_by_id(message_id)
 
-            if message_obj is None:
-                raise ValueError(f"Message with id {message_id} not found.")
+    async def get_by_id(self, message_id: int) -> Message | None:
+        """Get a message by its ID.
 
-            await session.delete(message_obj)
-            await session.commit()
-            return message_obj
+        Args:
+            message_id: The message ID to retrieve.
+
+        Returns:
+            The Message object if found, otherwise None.
+        """
+        return await self._message_repo.get_by_id(message_id)
 
     async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
         """Returns a list of messages that are outdated.
@@ -101,16 +97,7 @@ class MessageManager:
         Returns:
             A list of messages.
         """
-        # Call the PostgreSQL function that returns SETOF messages
-        # Since the function returns records matching the messages table,
-        # we can select from it and map to Message objects
-        stmt = select(Message).from_statement(
-            select(func.get_outdated_messages(server_id))
-        )
-        async with self.session() as session:
-            result = await session.execute(stmt)
-            messages = result.scalars().all()
-            return messages
+        return await self._message_repo.get_outdated_messages(server_id)
 
 
 async def main():
