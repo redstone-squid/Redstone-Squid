@@ -7,6 +7,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.db import DatabaseManager
+from squid.db.services.user_service import VerificationError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -21,10 +22,12 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
         db = DatabaseManager()
-        if await db.user.link_minecraft_account(ctx.author.id, code):
-            await ctx.send("Your discord account has been linked with your minecraft account.")
-        else:
-            await ctx.send("Invalid code. Please generate a new code and try again.")
+        try:
+            await db.user.link_minecraft_account(ctx.author.id, code)
+        except VerificationError as e:
+            await ctx.send(str(e))
+
+        await ctx.send("Your discord account has been linked with your minecraft account.")
 
     @hybrid_command()
     async def unlink(self, ctx: Context[BotT]):
@@ -38,7 +41,7 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
             if await db.user.unlink_minecraft_account(ctx.author.id):
                 await ctx.send("Your discord account has been unlinked from your minecraft account.")
             else:
-                await ctx.send("An error occurred while unlinking your account. Please try again later.")
+                await ctx.send("You don't have a minecraft account linked to your discord account, or the unlinking failed.")
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):

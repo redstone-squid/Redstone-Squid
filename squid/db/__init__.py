@@ -17,7 +17,8 @@ from squid.db.message import MessageService
 from squid.db.repos.message_repository import MessageRepository
 from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
-from squid.db.user import UserManager
+from squid.db.repos.user_repository import UserRepository
+from squid.db.services.user_service import UserService
 from squid.utils import get_version_string, parse_version_string
 from supabase._async.client import AsyncClient
 from supabase.lib.client_options import AsyncClientOptions
@@ -88,10 +89,11 @@ class DatabaseManager(AsyncClient):
         # Initialize repositories and services
         self.message_repo = MessageRepository(self.async_session)
         self.message = MessageService(self.message_repo)
+        self.user_repo = UserRepository(self.async_session)
+        self.user = UserService(self.user_repo)
 
         # Initialize managers
         self.server_setting = ServerSettingManager(self.async_session)
-        self.user = UserManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
