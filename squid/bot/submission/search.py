@@ -19,7 +19,7 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_staff
-from squid.db.builds import Build, get_builds_by_filter, search_smallest_door_records
+from squid.db.builds import Build
 from squid.db.schema import Restriction, RestrictionAlias, Status, Type
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def search_records(self, ctx: Context[BotT], query: str):
         """Searches for a **record** by title."""
         async with RunningMessage(ctx) as sent_message:
-            matches = await search_smallest_door_records(query, limit=11)
+            matches = await self.bot.db.build.search_smallest_door_records(query, limit=11)
             if not matches:
                 return await sent_message.edit(
                     embed=utils.error_embed("No results found", "No records match that query.")
@@ -136,7 +136,9 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            pending_submissions = await get_builds_by_filter(filter={"submission_status": Status.PENDING})
+            pending_submissions = await self.bot.db.build.get_builds_by_filter(
+                filter={"submission_status": Status.PENDING}
+            )
 
             if len(pending_submissions) == 0:
                 desc = "No open submissions."

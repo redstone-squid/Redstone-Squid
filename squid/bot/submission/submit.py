@@ -18,7 +18,7 @@ from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
-from squid.db.builds import Build, update_smallest_door_records_without_title
+from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
 from squid.utils import upload_to_catbox
 
@@ -248,7 +248,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
     @tasks.loop(minutes=5.0)
     async def update_record_titles(self):
-        await update_smallest_door_records_without_title()
+        await self.bot.db.build.update_smallest_door_records_without_title()
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
