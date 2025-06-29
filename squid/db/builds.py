@@ -491,36 +491,39 @@ class Build:
 
     async def set_restrictions(
         self,
-        restrictions: Sequence[str]
-        | Mapping[
+        restrictions: Mapping[
             Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
             Sequence[str],
         ],
     ) -> None:
         """Sets the restrictions of the build."""
-        if isinstance(restrictions, Mapping):
-            self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
-            self.component_restrictions = list(restrictions.get("component_restrictions", []))
-            self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
-        else:
-            self.wiring_placement_restrictions = []
-            self.component_restrictions = []
-            self.miscellaneous_restrictions = []
+        self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
+        self.component_restrictions = list(restrictions.get("component_restrictions", []))
+        self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
 
-            db_restrictions = await DatabaseManager().build_tags.fetch_all_restrictions()
-            name_to_row = {r.name.lower(): r for r in db_restrictions}
-            bucket: dict[RestrictionTypeLiteral, list[str]] = {
-                "wiring-placement": self.wiring_placement_restrictions,
-                "component": self.component_restrictions,
-                "miscellaneous": self.miscellaneous_restrictions,
-            }
+    async def set_restrictions_auto(self, restrictions: Sequence[str]) -> None:
+        """Sets the restrictions of the build automatically based on the given list of restriction names.
 
-            for r in restrictions:  # O(M)
-                row = name_to_row.get(r.lower())
-                if row:
-                    if row.type is None:
-                        raise RuntimeError("The type is supposed to never be None, this is a bug in the database.")
-                    bucket[row.type].append(row.name)
+        This method would fetch the restrictions from the database and categorize them into the appropriate lists based on their type.
+        """
+        self.wiring_placement_restrictions = []
+        self.component_restrictions = []
+        self.miscellaneous_restrictions = []
+
+        db_restrictions = await DatabaseManager().build_tags.fetch_all_restrictions()
+        name_to_row = {r.name.lower(): r for r in db_restrictions}
+        bucket: dict[RestrictionTypeLiteral, list[str]] = {
+            "wiring-placement": self.wiring_placement_restrictions,
+            "component": self.component_restrictions,
+            "miscellaneous": self.miscellaneous_restrictions,
+        }
+
+        for r in restrictions:  # O(M)
+            row = name_to_row.get(r.lower())
+            if row:
+                if row.type is None:
+                    raise RuntimeError("The type is supposed to never be None, this is a bug in the database.")
+                bucket[row.type].append(row.name)
 
     def get_title(self) -> str:
         """Generates the official Redstone Squid defined title for the build."""

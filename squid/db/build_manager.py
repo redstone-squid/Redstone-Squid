@@ -391,7 +391,7 @@ class BuildManager:
                     door_type=door.types,
                     door_orientation_type=door.orientation,
                 )
-                await build.set_restrictions(door.restriction_subset)
+                await build.set_restrictions_auto(door.restriction_subset)
                 title = build.get_title()
                 door.title = title
                 session.add(door)

@@ -53,7 +53,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             build.door_width, build.door_height, build.door_depth = self.door_size
             build.door_type = self.pattern
             build.door_orientation_type = self.door_type
-            await build.set_restrictions(self.restrictions)
+            await build.set_restrictions_auto(self.restrictions)
 
             if (locationality := self.locationality) is not None and locationality != "Not locational":
                 build.miscellaneous_restrictions.append(locationality)
