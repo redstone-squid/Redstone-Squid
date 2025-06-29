@@ -61,7 +61,7 @@ from squid.db.schema import (
     Version,
     VersionRecord,
 )
-from squid.utils import get_version_string
+from squid.utils import get_version_string, parse_time_string
 
 logger = logging.getLogger(__name__)
 
@@ -261,25 +261,6 @@ class Build:
         return await DatabaseManager().build.get_by_message_id(message_id)
 
     @staticmethod
-    def parse_time_string(time_string: str | None) -> int | None:
-        """Parses a time string into an integer.
-
-        Args:
-            time_string: The time string to parse.
-
-        Returns:
-            The time in ticks.
-        """
-        # TODO: parse "ticks"
-        if time_string is None:
-            return None
-        time_string = time_string.replace("s", "").replace("~", "").strip()
-        try:
-            return int(float(time_string) * 20)
-        except ValueError:
-            return None
-
-    @staticmethod
     async def ai_generate_from_message(
         message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
     ) -> "Build | None":
@@ -458,8 +439,8 @@ class Build:
         build.width = int(variables["build_width"]) if variables["build_width"] else None
         build.height = int(variables["build_height"]) if variables["build_height"] else None
         build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
-        build.normal_opening_time = Build.parse_time_string(variables["opening_time"])
-        build.normal_closing_time = Build.parse_time_string(variables["closing_time"])
+        build.normal_opening_time = parse_time_string(variables["opening_time"])
+        build.normal_closing_time = parse_time_string(variables["closing_time"])
         build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
         build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
         build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
