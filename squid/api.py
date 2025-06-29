@@ -1,15 +1,31 @@
 """Simple FastAPI server to generate verification codes for users."""
 
 import os
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
 
-app = FastAPI()
+_db: DatabaseManager | None = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global _db
+    _db = DatabaseManager()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+async def get_db():
+    assert _db is not None, "DatabaseManager should be initialized at app startup"
+    return _db
 
 
 class User(BaseModel):
@@ -19,12 +35,13 @@ class User(BaseModel):
 
 
 @app.post("/verify", status_code=201)
-async def get_verification_code(user: User, authorization: Annotated[str, Header()]) -> int:
+async def get_verification_code(
+    user: User, authorization: Annotated[str, Header()], db: Annotated[DatabaseManager, Depends(get_db)]
+) -> int:
     """Generate a verification code for a user."""
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    db = DatabaseManager()
     try:
         return await db.user.generate_verification_code(user.uuid)
     except ValueError as e:
