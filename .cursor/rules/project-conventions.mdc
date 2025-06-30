@@ -28,6 +28,9 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Cog Architecture**: Organize bot commands into logical cogs/extensions
 - **Separation of Concerns**: Use `squid.bot` for frontend (bot) logic, `squid.db` for database operations.
 
+### Comments
+Add code comments sparingly. Focus on why something is done, especially for complex logic, rather than what is done. Only add high-value comments if necessary for clarity or if requested by the user. Do not edit comments that are separate from the code you are changing. NEVER talk to the user or describe your changes through comments.
+
 ### What NOT to Do
 - **Don't bypass type hints**: Avoid `Any` types unless strictly necessary
 - **Don't skip error handling**: Always handle exceptions gracefully
