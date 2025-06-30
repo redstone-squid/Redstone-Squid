@@ -105,5 +105,4 @@ venv.bak/
 
 # custom
 *.ini
-*.json
 .idea/
