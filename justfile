@@ -64,3 +64,9 @@ docker-run: build
 
 generate-schema:
     pg_dump -h aws-0-us-west-1.pooler.supabase.com -U postgres.jnushtruzgnnmmxabsxi -d postgres -f schema_dump.sql --encoding=UTF8 --schema-only --no-owner --no-privileges
+
+# Using https://github.com/seveibar/pgstrap, which dumps the schema per table for better readability, but this requires npm
+# Does not work on Windows: https://github.com/seveibar/pgstrap/issues/8
+[unix]
+generate-schema-alt:
+    npm run db:generate

@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "pgstrap": "^1.0.6"
+  },
+  "scripts": {
+    "db:migrate": "pgstrap migrate",
+    "db:reset": "pgstrap reset",
+    "db:generate": "pgstrap generate",
+    "db:create-migration": "pgstrap create-migration"
+  }
+}

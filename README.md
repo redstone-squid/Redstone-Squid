@@ -24,6 +24,9 @@ cd Redstone-Squid
 
 ### Virtual Environment
 
+> [!NOTE]  
+> Node.js is not required even for development, it is only used in an experimental and optional tool [pgstrap](https://github.com/seveibar/pgstrap) to dump the database schema.
+
 There are a list of required python packages in requirements.txt. You can install them onto your machine directly or into a virtual environment (recommended)
 
 If you want to use a virtual environment, first create the environment in the root directory and activate it.
