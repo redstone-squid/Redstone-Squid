@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
+from squid.services.user_service import UserRepository, UserService
 
 _db: DatabaseManager | None = None
 
@@ -33,6 +34,12 @@ async def get_db():
     return _db
 
 
+# AIDEV-NOTE: Create user service once to avoid repeated initialization
+db = DatabaseManager()
+user_repository = UserRepository(db.async_session)
+user_service = UserService(user_repository)
+
+
 class User(BaseModel):
     """A user model."""
 
@@ -48,7 +55,7 @@ async def get_verification_code(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        return await db.user.generate_verification_code(user.uuid)
+        return await user_service.request_verification_code(str(user.uuid))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

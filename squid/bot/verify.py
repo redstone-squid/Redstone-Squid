@@ -7,7 +7,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.db import DatabaseManager
-from squid.db.services.user_service import VerificationError
+from squid.services.user_service import UserRepository, UserService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -16,18 +16,18 @@ if TYPE_CHECKING:
 class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
     def __init__(self, bot: BotT):
         self.bot = bot
+        db = DatabaseManager()
+        self.user_repository = UserRepository(db.async_session)
+        self.user_service = UserService(self.user_repository)
 
     @hybrid_command()
     @app_commands.describe(code="The code you received by running /link in the game.")
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
-        db = DatabaseManager()
-        try:
-            await db.user.link_minecraft_account(ctx.author.id, code)
-        except VerificationError as e:
-            await ctx.send(str(e))
-
-        await ctx.send("Your discord account has been linked with your minecraft account.")
+        if await self.user_service.link_account(ctx.author.id, code):
+            await ctx.send("Your discord account has been linked with your minecraft account.")
+        else:
+            await ctx.send("Invalid code. Please generate a new code and try again.")
 
     @hybrid_command()
     async def unlink(self, ctx: Context[BotT]):
@@ -37,8 +37,7 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
 
         await view.wait()
         if view.value:
-            db = DatabaseManager()
-            if await db.user.unlink_minecraft_account(ctx.author.id):
+            if await self.user_service.unlink_account(ctx.author.id):
                 await ctx.send("Your discord account has been unlinked from your minecraft account.")
             else:
                 await ctx.send(
