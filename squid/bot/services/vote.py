@@ -18,17 +18,18 @@ from discord.utils import classproperty
 from sqlalchemy import insert, select
 
 from squid.bot.utils import is_staff, is_trusted_or_staff
-from squid.db.vote_session import (
-    AbstractVoteSession,
-    BuildVoteSession,
-    DeleteLogVoteSession,
-    track_vote_session,
-)
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status
+from squid.db.vote_session import (
+    AbstractVoteSession,
+    BuildVoteSession,
+    DeleteLogVoteSession,
+    track_vote_session,
+    get_vote_session_from_message_id,
+)
 
 if TYPE_CHECKING:
     import squid.bot
@@ -59,6 +60,33 @@ async def add_reactions_to_messages(
         await asyncio.gather(*tasks)
     except discord.Forbidden:
         pass  # Bot doesn't have permission to add reactions
+
+
+async def get_vote_session(
+    bot: "squid.bot.RedstoneSquid", message_id: int, *, status: Literal["open", "closed"] | None = None
+) -> "AbstractDiscordVoteSession[Any] | None":
+    """Gets a vote session from the database.
+
+    Args:
+        bot: The bot instance to fetch messages from.
+        message_id: The message ID of the vote session.
+        status: The status of the vote session. If None, it will get any status.
+
+    Returns:
+        An instance of `AbstractDiscordVoteSession` if a vote session is found, otherwise None.
+
+    Raises:
+        NotImplementedError: If the vote session type is unknown.
+    """
+    vs = get_vote_session_from_message_id(message_id, status=status)
+
+    if isinstance(vs, BuildVoteSession):
+        return DiscordBuildVoteSession(bot, vs)
+    elif isinstance(vs, DeleteLogVoteSession):
+        return DiscordDeleteLogVoteSession(bot, vs)
+    else:
+        logger.error(f"Unknown vote session type: {type(vs)}")
+        raise NotImplementedError(f"Unknown vote session type: {type(vs)}")
 
 
 class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):

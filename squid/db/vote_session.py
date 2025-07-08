@@ -5,26 +5,18 @@ import logging
 from abc import ABC, abstractmethod
 from asyncio import Task
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, final, override
+from typing import Any, ClassVar, Literal, Self, final, override
 
 import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
-from squid.bot.services.vote import (
-    AbstractDiscordVoteSession,
-    DiscordBuildVoteSession,
-    DiscordDeleteLogVoteSession,
-)
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, Message
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession
-
-if TYPE_CHECKING:
-    import squid.bot
+from squid.db.schema import Vote, VoteKindLiteral, VoteSession
 
 
 logger = logging.getLogger(__name__)
@@ -115,46 +107,48 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
         await session.commit()
 
 
-async def get_vote_session(
-    bot: "squid.bot.RedstoneSquid", message_id: int, *, status: Literal["open", "closed"] | None = None
-) -> "AbstractDiscordVoteSession[Any] | None":
+async def get_vote_session_from_message_id(
+    message_id: int, *, status: Literal["open", "closed"] | None = None
+) -> "AbstractVoteSession[Any] | None":
     """Gets a vote session from the database.
 
     Args:
-        bot: The bot instance to fetch messages from.
         message_id: The message ID of the vote session.
         status: The status of the vote session. If None, it will get any status.
-    """
-    async with bot.db.async_session() as session:
-        stmt = (
-            select(Message)
-            .options(selectinload(Message.vote_session))
-            .where(Message.id == message_id, Message.purpose == "vote")
-        )
-        if status is not None:
-            stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
 
+    Returns:
+        The vote session if it exists, otherwise None.
+
+    Raises:
+        NotImplementedError: If the message corresponds to an unknown vote session kind.
+    """
+    stmt = (
+        select(Message)
+        .options(selectinload(Message.vote_session))
+        .where(Message.id == message_id, Message.purpose == "vote")
+    )
+    if status is not None:
+        stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
+
+    async with DatabaseManager().async_session() as session:
         result = await session.execute(stmt)
         message = result.scalar_one_or_none()
 
-        if message is None or message.vote_session is None:
-            return None
+    if message is None or message.vote_session is None:
+        return None
 
-        vote_session_id = message.vote_session_id
-        assert vote_session_id is not None, (
-            "Vote session ID should not be None because we selected messages with the vote purpose."
-        )
-        kind = message.vote_session.kind
-
-        if kind == "build":
-            _vs = await BuildVoteSession.from_id(vote_session_id)
-            return DiscordBuildVoteSession(bot, _vs)
-        elif kind == "delete_log":
-            _vs = await DeleteLogVoteSession.from_id(vote_session_id)
-            return DiscordDeleteLogVoteSession(bot, _vs)
-        else:
-            logger.error("Unknown vote session kind: %s", kind)
-            raise NotImplementedError(f"Unknown vote session kind: {kind}")
+    vote_session_id = message.vote_session_id
+    assert vote_session_id is not None, (
+        "Vote session ID should not be None because we selected messages with the vote purpose."
+    )
+    kind = message.vote_session.kind
+    if kind == "build":
+        return BuildVoteSession.from_id(vote_session_id)
+    elif kind == "delete_log":
+        return DeleteLogVoteSession.from_id(vote_session_id)
+    else:
+        logger.error("Unknown vote session kind: %s", kind)
+        raise NotImplementedError(f"Unknown vote session kind: {kind}")
 
 
 class AbstractVoteSession(ABC):

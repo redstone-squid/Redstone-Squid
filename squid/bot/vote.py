@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 
-from squid.bot.services.vote import DiscordDeleteLogVoteSession
-from squid.db.vote_session import get_vote_session
-
+from squid.bot.services.vote import DiscordDeleteLogVoteSession, get_vote_session
 if TYPE_CHECKING:
     import squid.bot
 
