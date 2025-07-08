@@ -476,7 +476,7 @@ class VoteSession(Base, kw_only=True):
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
     vote_session_emojis: Mapped[list["VoteSessionEmoji"]] = relationship(
-        default_factory=list, lazy="selectin", init=False, repr=False
+        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
     emojis: AssociationProxy[list["Emoji"]] = association_proxy(
         "vote_session_emojis",
