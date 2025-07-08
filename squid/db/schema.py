@@ -505,7 +505,7 @@ class BuildVoteSession(VoteSession, kw_only=True):
 
     __tablename__ = "build_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True, init=False
     )
     build_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("builds.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
@@ -526,6 +526,7 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
         ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
         primary_key=True,
+        init=False,
     )
     target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
