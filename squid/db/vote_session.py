@@ -424,6 +424,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             [msg.id for msg in record.messages],
             record.author_id,
             record.target_message_id,
+            record.target_channel_id,
+            record.target_server_id,
             record.pass_threshold,
             record.fail_threshold,
             [j.emoji for j in record.vote_session_emojis if j.default_multiplier >= 0],
