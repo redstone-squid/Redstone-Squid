@@ -13,21 +13,20 @@ from textwrap import dedent
 from typing import TYPE_CHECKING, Any, Literal, Self, final, override
 
 import discord
-from discord import Emoji, PartialEmoji, Reaction
+from discord import PartialEmoji, Reaction
 from discord.utils import classproperty
-from sqlalchemy import insert, select
+from sqlalchemy import select
 
 from squid.bot.utils import is_staff, is_trusted_or_staff
-from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionEmoji, Emoji
+from squid.db.emoji import EmojiRepository
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status
 from squid.db.vote_session import (
     AbstractVoteSession,
     BuildVoteSession,
     DeleteLogVoteSession,
-    track_vote_session,
     get_vote_session_from_message_id,
 )
 
@@ -266,22 +265,38 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
         vote_session = BuildVoteSession(
             message_ids, author_id, build, diff, pass_threshold, fail_threshold, approve_emojis, deny_emojis
         )
-        await track_vote_session(
-            message_ids, author_id, vote_session.kind, pass_threshold, fail_threshold, approve_emojis, deny_emojis
-        )
-
         instance = cls(bot, vote_session)
-        async with DatabaseManager().async_session() as session:
-            stmt = insert(SQLBuildVoteSession).values(
-                vote_session_id=vote_session.id,
+        async with bot.db.async_session() as session:
+            emoji_repo = EmojiRepository(session)
+            sql_vote_session = SQLBuildVoteSession(
+                status="open",
+                author_id=author_id,
+                kind=vote_session.kind,
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
                 build_id=vote_session.build.id,
                 changes=vote_session.diff,
             )
-            await session.execute(stmt)
+            session.add(sql_vote_session)
+            await session.flush()
+            for emoji in emoji_repo.get_emojis_by_symbols(approve_emojis):
+                sql_vote_session.vote_session_emojis.append(
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
+                )
+            for emoji in emoji_repo.get_emojis_by_symbols(deny_emojis):
+                sql_vote_session.vote_session_emojis.append(
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
+                )
             await session.commit()
 
-        await instance.update_messages()
-        await add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]])
+        await asyncio.gather(
+            *(
+                bot.db.message.track_message(message, "vote", build_id=build.id, vote_session_id=sql_vote_session.id)
+                for message in messages
+            ),
+            instance.update_messages(),
+            add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]]),
+        )
 
         return instance
 
@@ -397,19 +412,39 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
             approve_emojis,
             deny_emojis,
         )
-        await track_vote_session(messages, author_id, vote_session.kind, pass_threshold, fail_threshold)
+        instance = cls(bot, vote_session)
         async with bot.db.async_session() as session:
-            stmt = insert(SQLDeleteLogVoteSession).values(
-                vote_session_id=vote_session.id,
+            emoji_repo = EmojiRepository(session)
+            sql_vote_session = SQLDeleteLogVoteSession(
+                status="open",
+                author_id=author_id,
+                kind=vote_session.kind,
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
                 target_message_id=target_message.id,
                 target_channel_id=target_message.channel.id,
                 target_server_id=target_message.guild.id,  # type: ignore
             )
-            await session.execute(stmt)
+            session.add(sql_vote_session)
+            await session.flush()
+            for emoji in emoji_repo.get_emojis_by_symbols(approve_emojis):
+                sql_vote_session.vote_session_emojis.append(
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
+                )
+            for emoji in emoji_repo.get_emojis_by_symbols(deny_emojis):
+                sql_vote_session.vote_session_emojis.append(
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
+                )
             await session.commit()
-        instance = cls(bot, vote_session)
-        await instance.update_messages()
-        await add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]])
+
+        await asyncio.gather(
+            *(
+                bot.db.message.track_message(message, "vote", vote_session_id=sql_vote_session.id)
+                for message in messages
+            ),
+            instance.update_messages(),
+            add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]]),
+        )
         return instance
 
     async def get_target_message(self) -> discord.Message | None:
