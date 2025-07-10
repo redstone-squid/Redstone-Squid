@@ -13,14 +13,13 @@ from textwrap import dedent
 from typing import TYPE_CHECKING, Any, Literal, Self, final, override
 
 import discord
-from discord import PartialEmoji, Reaction
+from discord import PartialEmoji, Reaction, Emoji
 from discord.utils import classproperty
 from sqlalchemy import select
 
 from squid.bot.utils import is_staff, is_trusted_or_staff
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionEmoji, Emoji
-from squid.db.emoji import EmojiRepository
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionEmoji
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status
 from squid.db.vote_session import (
@@ -151,14 +150,29 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
         return user_id in self.vote_session
 
     @final
-    async def set_vote(self, user_id: int, weight: int | None) -> None:
-        await self.vote_session.set_vote(user_id, weight)
+    async def set_vote(self, user_id: int, weight: int | None, emoji: str | None = None) -> None:
+        await self.vote_session.set_vote(user_id, weight, emoji)
 
-    async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
+    async def get_voting_weight(self, server_id: int | None, user_id: int, emoji: str) -> float:
         """Get the voting weight of a user."""
         if await is_staff(self.bot, server_id, user_id):
             return 3
         return 1
+
+    async def override_vote(self, user_id: int, guild_id: int, emoji: str) -> None:
+        """Override the user's vote based on the emoji reaction.
+
+        Raises:
+            ValueError: If the emoji is not recognized as an approve or deny emoji.
+        """
+        original_vote = self[user_id]
+        weight = await self.get_voting_weight(guild_id, user_id, emoji)
+        if emoji in APPROVE_EMOJIS:
+            await self.set_vote(user_id, weight if original_vote != weight else 0, emoji)
+        elif emoji in DENY_EMOJIS:
+            await self.set_vote(user_id, -weight if original_vote != -weight else 0, emoji)
+        else:
+            raise ValueError(f"Unknown emoji: {emoji}. Must be one of {APPROVE_EMOJIS + DENY_EMOJIS}.")
 
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
@@ -268,7 +282,6 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
         )
         instance = cls(bot, vote_session)
         async with bot.db.async_session() as session:
-            emoji_repo = EmojiRepository(session)
             sql_vote_session = SQLBuildVoteSession(
                 status="open",
                 author_id=author_id,
@@ -280,13 +293,13 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
             )
             session.add(sql_vote_session)
             await session.flush()
-            for emoji in await emoji_repo.get_emojis_by_symbols(approve_emojis):
+            for emoji in approve_emojis:
                 sql_vote_session.vote_session_emojis.append(
-                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji=emoji)
                 )
-            for emoji in await emoji_repo.get_emojis_by_symbols(deny_emojis):
+            for emoji in deny_emojis:
                 sql_vote_session.vote_session_emojis.append(
-                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji=emoji, default_multiplier=-1)
                 )
             await session.commit()
 
@@ -348,19 +361,12 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
             return  # Ignore bot reactions
 
         # Update votes based on the reaction
-        emoji_name = str(payload.emoji)
-        user_id = payload.user_id
-
+        emoji_name = payload.emoji.name
+        assert emoji_name is not None, "Found a deleted discord emoji on reaction add???"
         # The vote session will handle the closing of the vote session
-        original_vote = self[user_id]
-        weight = await self.get_voting_weight(payload.guild_id, user_id)
-        if emoji_name in APPROVE_EMOJIS:
-            await self.set_vote(user_id, weight if original_vote != weight else 0)
-        elif emoji_name in DENY_EMOJIS:
-            await self.set_vote(user_id, -weight if original_vote != -weight else 0)
-        else:
-            return
-        await self.update_messages()
+        if emoji_name in (APPROVE_EMOJIS + DENY_EMOJIS):
+            await self.override_vote(payload.user_id, payload.guild_id, emoji_name)
+            await self.update_messages()
 
     @override
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent) -> None:
@@ -411,7 +417,6 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         )
         instance = cls(bot, vote_session)
         async with bot.db.async_session() as session:
-            emoji_repo = EmojiRepository(session)
             sql_vote_session = SQLDeleteLogVoteSession(
                 status="open",
                 author_id=author_id,
@@ -424,13 +429,13 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
             )
             session.add(sql_vote_session)
             await session.flush()
-            for emoji in await emoji_repo.get_emojis_by_symbols(approve_emojis):
+            for emoji in approve_emojis:
                 sql_vote_session.vote_session_emojis.append(
-                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji=emoji)
                 )
-            for emoji in await emoji_repo.get_emojis_by_symbols(deny_emojis):
+            for emoji in deny_emojis:
                 sql_vote_session.vote_session_emojis.append(
-                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
+                    VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji=emoji, default_multiplier=-1)
                 )
             await session.commit()
 
@@ -540,29 +545,23 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
             return  # Ignore bot reactions
 
         # Update votes based on the reaction
-        emoji_name = str(payload.emoji)
-        user_id = payload.user_id
+        emoji_name = payload.emoji.name
+        assert emoji_name is not None, "Found a deleted discord emoji on reaction add???"
 
         # Check if the user has a trusted role
         if payload.guild_id is None:
             raise NotImplementedError("Cannot vote in DMs.")
 
-        if await is_trusted_or_staff(self.bot, payload.guild_id, user_id):
+        if await is_trusted_or_staff(self.bot, payload.guild_id, payload.user_id):
             pass
         else:
             await message.channel.send("You do not have a trusted role.")
             return
 
-        # The vote session will handle the closing of the vote session
-        original_vote = self[user_id]
-        weight = await self.get_voting_weight(payload.guild_id, user_id)
-        if emoji_name in APPROVE_EMOJIS:
-            await self.set_vote(user_id, weight if original_vote != weight else 0)
-        elif emoji_name in DENY_EMOJIS:
-            await self.set_vote(user_id, -weight if original_vote != -weight else 0)
-        else:
-            return
-        await self.update_messages()
+        # The vote session will handle the closing of the itself
+        if emoji_name in (APPROVE_EMOJIS + DENY_EMOJIS):
+            await self.override_vote(payload.user_id, payload.guild_id, emoji_name)
+            await self.update_messages()
 
     @override
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent) -> None:
