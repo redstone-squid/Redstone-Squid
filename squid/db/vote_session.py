@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, Message
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, Message, VoteSessionEmoji
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Vote, VoteKindLiteral, VoteSession
 
@@ -104,6 +104,23 @@ async def get_vote_session_from_message_id(
     logger.error("Unknown vote session kind: %s", kind)
     msg = f"Unknown vote session kind: {kind}"
     raise NotImplementedError(msg)
+
+
+async def get_emoji_multiplier(vote_session_id: int, emoji: str) -> float | None:
+    """Gets the multiplier for an emoji in a vote session.
+
+    Args:
+        vote_session_id: The id of the vote session.
+        emoji: The emoji to get the multiplier for.
+
+    Returns:
+        The multiplier (float) if the emoji is associated with the vote session, otherwise None.
+    """
+    stmt = select(VoteSessionEmoji.default_multiplier).where(VoteSessionEmoji.vote_session_id == vote_session_id, VoteSessionEmoji.emoji == emoji)
+    async with DatabaseManager().async_session() as session:
+        result = await session.execute(stmt)
+        multiplier = result.scalar_one_or_none()
+    return multiplier
 
 
 class AbstractVoteSession(ABC):
@@ -236,6 +253,13 @@ class AbstractVoteSession(ABC):
 
         if self.id is not None:
             await upsert_vote(self.id, user_id, weight, emoji)
+
+    @final
+    async def get_emoji_multiplier(self, emoji: str) -> float:
+        """Get the multiplier for an emoji in this vote session."""
+        if self.id is not None:
+            return await get_emoji_multiplier(self.id, emoji)
+        raise NotImplementedError("The data in AbstractVoteSession is not enough to get emoji multipliers.")
 
     @abstractmethod
     async def close(self) -> None:
