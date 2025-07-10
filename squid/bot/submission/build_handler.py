@@ -4,7 +4,7 @@ import asyncio
 import io
 import mimetypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
@@ -125,10 +125,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             result = await session.execute(stmt)
             messages: Sequence[Message] = result.scalars().all()
         maybe_messages = await asyncio.gather(
-            *(
-                self.bot.get_or_fetch_message(row.id, channel_id=row.channel_id)
-                for row in messages
-            )
+            *(self.bot.get_or_fetch_message(row.id, channel_id=row.channel_id) for row in messages)
         )
         discord_messages = [msg for msg in maybe_messages if msg is not None]
         return discord_messages

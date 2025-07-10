@@ -1,8 +1,7 @@
 """Handles reaction-based voting for various purposes."""
 
-import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import discord
 from discord.ext.commands import Cog, Context, hybrid_command

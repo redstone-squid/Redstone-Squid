@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, override
 import asyncpg
 from discord.ext import tasks
 from discord.ext.commands import Cog
-from sqlalchemy import func, select, update, PoolProxiedConnection
+from sqlalchemy import PoolProxiedConnection, func, select, update
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from squid.db.schema import Event

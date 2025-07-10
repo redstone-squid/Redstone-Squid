@@ -1,7 +1,7 @@
 """Utility functions."""
 
 import asyncio
-from collections.abc import Callable, Coroutine, AsyncIterator, AsyncIterable, Iterable
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Coroutine, Iterable
 from typing import Any
 
 
@@ -16,7 +16,11 @@ def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T
 
 
 _background_tasks: set[asyncio.Task[Any]] = set()
-def fire_and_forget(coro: Coroutine[None, None, Any], *, bg_set: set[asyncio.Task[Any] | Any] = _background_tasks) -> None:
+
+
+def fire_and_forget(
+    coro: Coroutine[None, None, Any], *, bg_set: set[asyncio.Task[Any] | Any] = _background_tasks
+) -> None:
     """Runs a coroutine in the background without waiting for it to finish."""
     task = asyncio.create_task(coro)
     bg_set.add(task)
