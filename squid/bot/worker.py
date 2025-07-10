@@ -12,6 +12,7 @@ from sqlalchemy import func, select, update, PoolProxiedConnection
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from squid.db.schema import Event
+from squid.utils import fire_and_forget
 
 if TYPE_CHECKING:
     import squid.bot
@@ -39,7 +40,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         self.bot = bot
         self.channel_name = config.channel_name
         self.max_concurrent_events = config.max_concurrent_events
-        # Keep a reference to background tasks, this cannot be fire and forget because we have to do a clean shutdown when this cog is unloaded.
+        # Keep a reference to background tasks, this has to be kept local because we have to do a clean shutdown when this cog is unloaded.
         self._tasks: set[asyncio.Task[Any]] = set()
         self.processing_semaphore = asyncio.Semaphore(config.max_concurrent_events)
         self.queue_size = config.queue_size
@@ -135,9 +136,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
             while True:
                 event_id = await queue.get()
-                task = asyncio.create_task(self._process_event_with_semaphore(event_id))
-                self._tasks.add(task)
-                task.add_done_callback(self._tasks.discard)
+                fire_and_forget(self._process_event_with_semaphore(event_id), bg_set=self._tasks)
 
         finally:  # clean shutdown on cog unload
             if driver is not None:
