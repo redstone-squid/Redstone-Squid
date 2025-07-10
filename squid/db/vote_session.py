@@ -5,25 +5,24 @@ import logging
 from abc import ABC, abstractmethod
 from asyncio import Task
 from collections.abc import Iterable
-from typing import Any, ClassVar, Literal, Self, final, override, TypeVar
+from typing import Any, ClassVar, Literal, Self, TypeVar, final, override
 
-import discord
-from sqlalchemy import insert, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
-from typing_extensions import ReadOnly
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, Message, VoteSessionEmoji
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Vote, VoteKindLiteral, VoteSession
-
+from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession, VoteSessionEmoji
 
 logger = logging.getLogger(__name__)
 
 
-_SelfT = TypeVar("_SelfT")  # There is no parallel construct to typing.Self for class methods, so we have to make a workaround
+_SelfT = TypeVar(
+    "_SelfT"
+)  # There is no parallel construct to typing.Self for class methods, so we have to make a workaround
 
 
 async def close_vote_session(vote_session_id: int) -> None:
@@ -52,13 +51,10 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None, 
     async with db.async_session() as session:
         stmt = (
             pg_insert(Vote)
-            .values(
-                vote_session_id=vote_session_id,
-                user_id=user_id,
-                weight=weight,
-                emoji=emoji
+            .values(vote_session_id=vote_session_id, user_id=user_id, weight=weight, emoji=emoji)
+            .on_conflict_do_update(
+                index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight, emoji=emoji)
             )
-            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight, emoji=emoji))
         )
         await session.execute(stmt)
         await session.commit()
@@ -118,7 +114,9 @@ async def get_emoji_multiplier(vote_session_id: int, emoji: str) -> float | None
     Returns:
         The multiplier (float) if the emoji is associated with the vote session, otherwise None.
     """
-    stmt = select(VoteSessionEmoji.default_multiplier).where(VoteSessionEmoji.vote_session_id == vote_session_id, VoteSessionEmoji.emoji == emoji)
+    stmt = select(VoteSessionEmoji.default_multiplier).where(
+        VoteSessionEmoji.vote_session_id == vote_session_id, VoteSessionEmoji.emoji == emoji
+    )
     async with DatabaseManager().async_session() as session:
         result = await session.execute(stmt)
         multiplier = result.scalar_one_or_none()
