@@ -8,27 +8,26 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable, AsyncIterator, Iterable
-from functools import wraps
 from textwrap import dedent
 from typing import TYPE_CHECKING, Any, Literal, Self, final, override
 
 import discord
-from discord import PartialEmoji, Reaction, Emoji
+from discord import Emoji, PartialEmoji, Reaction
 from discord.utils import classproperty
 from sqlalchemy import select
 
 from squid.bot.utils import is_staff, is_trusted_or_staff
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionEmoji
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Status
+from squid.db.schema import Message, Status, VoteSessionEmoji
 from squid.db.vote_session import (
     AbstractVoteSession,
     BuildVoteSession,
     DeleteLogVoteSession,
     get_vote_session_from_message_id,
 )
-from squid.utils import fire_and_forget, async_iterator
+from squid.utils import async_iterator, fire_and_forget
 
 if TYPE_CHECKING:
     import squid.bot
@@ -167,7 +166,9 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
             assert weight is not None
             await self.set_vote(user_id, -weight if original_vote != -weight else 0, emoji)
         else:
-            raise ValueError(f"Unknown emoji: {emoji}. Must be one of {self.vote_session.approve_emojis + self.vote_session.deny_emojis}.")
+            raise ValueError(
+                f"Unknown emoji: {emoji}. Must be one of {self.vote_session.approve_emojis + self.vote_session.deny_emojis}."
+            )
 
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
