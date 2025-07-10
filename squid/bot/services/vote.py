@@ -155,9 +155,12 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
 
     async def get_voting_weight(self, server_id: int | None, user_id: int, emoji: str) -> float:
         """Get the voting weight of a user."""
+        base_multiplier = await self.vote_session.get_emoji_multiplier(emoji)
         if await is_staff(self.bot, server_id, user_id):
-            return 3
-        return 1
+            user_multiplier = 3
+        else:
+            user_multiplier = 1
+        return user_multiplier * base_multiplier
 
     async def override_vote(self, user_id: int, guild_id: int, emoji: str) -> None:
         """Override the user's vote based on the emoji reaction.
