@@ -512,7 +512,7 @@ class BuildVoteSession(VoteSession, kw_only=True):
     )
     changes: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined", init=False, repr=False)
 
     __mapper_args__ = {"polymorphic_identity": "build"}
 
@@ -561,9 +561,7 @@ class Vote(Base):
     vote_session: Mapped[VoteSession] = relationship(
         back_populates="votes", lazy="raise_on_sql", repr=False, default=None
     )
-    emoji: Mapped[Emoji | None] = relationship(
-        lazy="joined", default=None, init=False, repr=False
-    )
+    emoji: Mapped[Emoji | None] = relationship(lazy="joined", default=None, init=False, repr=False)
 
 
 class Event(Base):
