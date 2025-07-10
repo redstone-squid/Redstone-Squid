@@ -449,6 +449,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             record.target_message_id,
             record.pass_threshold,
             record.fail_threshold,
+            [j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier >= 0],
+            [j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier < 0],
         )
         self.id = record.vote_session_id
         self._votes = {vote.user_id: vote.weight for vote in record.votes}
