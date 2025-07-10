@@ -3,11 +3,11 @@
 import asyncio
 import logging
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
-from typing import Any, Final, Self, Sequence, TypedDict, override
+from typing import Any, Final, Self, TypedDict, override
 
 import discord
 from discord import Webhook
@@ -177,7 +177,7 @@ class RedstoneSquid(Bot):
             return None
 
     async def get_or_fetch_messages(
-        self, message_ids: Sequence[int], *, channel_ids: Sequence[int] | None = None
+        self, message_ids: Sequence[int], *, channel_ids: Sequence[int | None] | None = None
     ) -> AsyncIterator[discord.Message | None]:
         """
         Fetches multiple messages from the cache or the API.

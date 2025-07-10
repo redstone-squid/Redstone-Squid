@@ -4,7 +4,7 @@ import asyncio
 import io
 import os
 import re
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, AsyncIterator, AsyncIterable, Iterable
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -32,6 +32,24 @@ def fire_and_forget(coro: Coroutine[None, None, Any]) -> None:
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+async def _aiterator[T](it: Iterable[T]) -> AsyncIterator[T]:
+    for item in it:
+        yield item
+
+
+def async_iterator[T](it: Iterable[T] | AsyncIterable[T]) -> AsyncIterator[T]:
+    """Wraps an Iterable or AsyncIterable into an AsyncIterator."""
+    try:
+        iterator = iter(it)  # pyright: ignore
+        return _aiterator(iterator)
+    except TypeError:
+        # If it is an AsyncIterable, we can directly use it
+        if isinstance(it, AsyncIterable):
+            return it.__aiter__()
+        else:
+            raise TypeError(f"Expected Iterable or AsyncIterable, got {type(it)}")
 
 
 def utcnow() -> str:
