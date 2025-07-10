@@ -35,13 +35,14 @@ async def close_vote_session(vote_session_id: int) -> None:
         await session.commit()
 
 
-async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
+async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None, emoji: str | None = None) -> None:
     """Upsert a vote in the database.
 
     Args:
         vote_session_id: The id of the vote session.
         user_id: The id of the user voting.
         weight: The weight of the vote. None to remove the vote.
+        emoji: The emoji used for the vote.
     """
     db = DatabaseManager()
     async with db.async_session() as session:
@@ -51,8 +52,9 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
                 vote_session_id=vote_session_id,
                 user_id=user_id,
                 weight=weight,
+                emoji=emoji
             )
-            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight))
+            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight, emoji=emoji))
         )
         await session.execute(stmt)
         await session.commit()
@@ -211,7 +213,7 @@ class AbstractVoteSession(ABC):
         return user_id in self._votes
 
     @final
-    async def set_vote(self, user_id: int, weight: int | None) -> None:
+    async def set_vote(self, user_id: int, weight: int | None, emoji: str | None = None) -> None:
         """Set a vote for a user with proper database tracking."""
         if self.is_closed:
             return
@@ -225,7 +227,7 @@ class AbstractVoteSession(ABC):
             await self.close()
 
         if self.id is not None:
-            await upsert_vote(self.id, user_id, weight)
+            await upsert_vote(self.id, user_id, weight, emoji)
 
     @abstractmethod
     async def close(self) -> None:
@@ -305,8 +307,8 @@ class BuildVoteSession(AbstractVoteSession):
             diff=record.changes,
             pass_threshold=record.pass_threshold,
             fail_threshold=record.fail_threshold,
-            approve_emojis=[j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier >= 0],
-            deny_emojis=[j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier < 0],
+            approve_emojis=[j.emoji for j in record.vote_session_emojis if j.default_multiplier >= 0],
+            deny_emojis=[j.emoji for j in record.vote_session_emojis if j.default_multiplier < 0],
         )
         # We can skip _async_init because we already have the id and everything has been tracked before
         self.id = record.id
@@ -400,8 +402,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
             record.target_message_id,
             record.pass_threshold,
             record.fail_threshold,
-            [j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier >= 0],
-            [j.emoji.symbol for j in record.vote_session_emojis if j.default_multiplier < 0],
+            [j.emoji for j in record.vote_session_emojis if j.default_multiplier >= 0],
+            [j.emoji for j in record.vote_session_emojis if j.default_multiplier < 0],
         )
         self.id = record.vote_session_id
         self._votes = {vote.user_id: vote.weight for vote in record.votes}

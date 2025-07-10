@@ -535,16 +535,6 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
     __mapper_args__ = {"polymorphic_identity": "delete_log"}
 
 
-class Emoji(Base):
-    """An emoji"""
-
-    __tablename__ = "emojis"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, init=False)
-    symbol: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    """A unicode emoji symbol or the discord ID in the form `<:name:id>` for custom emojis."""
-
-
 class Vote(Base):
     """A vote cast in a vote session."""
 
@@ -554,14 +544,11 @@ class Vote(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
-    emoji_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("emojis.id", ondelete="SET NULL", onupdate="CASCADE"), nullable=True, default=None
-    )
+    emoji: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
     vote_session: Mapped[VoteSession] = relationship(
         back_populates="votes", lazy="raise_on_sql", repr=False, default=None
     )
-    emoji: Mapped[Emoji | None] = relationship(lazy="joined", default=None, init=False, repr=False)
 
 
 class Event(Base):
@@ -585,15 +572,12 @@ class VoteSessionEmoji(Base):
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
     )
-    emoji_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("emojis.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
-    )
+    emoji: Mapped[str] = mapped_column(String, primary_key=True)
     default_multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
 
     vote_session: Mapped[VoteSession] = relationship(
         back_populates="vote_session_emojis", lazy="raise_on_sql", default=None
     )
-    emoji: Mapped[Emoji] = relationship(lazy="joined", default=None)
 
 
 class BuildRecord(TypedDict):
