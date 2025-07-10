@@ -5,12 +5,13 @@ import logging
 from abc import ABC, abstractmethod
 from asyncio import Task
 from collections.abc import Iterable
-from typing import Any, ClassVar, Literal, Self, final, override
+from typing import Any, ClassVar, Literal, Self, final, override, TypeVar
 
 import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
+from typing_extensions import ReadOnly
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
@@ -20,6 +21,9 @@ from squid.db.schema import Vote, VoteKindLiteral, VoteSession
 
 
 logger = logging.getLogger(__name__)
+
+
+_SelfT = TypeVar("_SelfT")  # There is no parallel construct to typing.Self for class methods, so we have to make a workaround
 
 
 async def close_vote_session(vote_session_id: int) -> None:
@@ -230,7 +234,7 @@ class AbstractVoteSession(ABC):
         return user_id in self._votes
 
     @final
-    async def set_vote(self, user_id: int, weight: int | None, emoji: str | None = None) -> None:
+    async def set_vote(self, user_id: int, weight: float | None, emoji: str | None = None) -> None:
         """Set a vote for a user with proper database tracking."""
         if self.is_closed:
             return
@@ -247,7 +251,7 @@ class AbstractVoteSession(ABC):
             await upsert_vote(self.id, user_id, weight, emoji)
 
     @final
-    async def get_emoji_multiplier(self, emoji: str) -> float:
+    async def get_emoji_multiplier(self, emoji: str) -> float | None:
         """Get the multiplier for an emoji in this vote session."""
         if self.id is not None:
             return await get_emoji_multiplier(self.id, emoji)
@@ -265,7 +269,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def get_open_sessions(cls: type[Self]) -> "list[Self]":
+    async def get_open_sessions(cls: type[_SelfT]) -> "list[_SelfT]":
         """Get all open vote sessions from the database."""
         raise NotImplementedError
 
@@ -274,7 +278,7 @@ class AbstractVoteSession(ABC):
 class BuildVoteSession(AbstractVoteSession):
     """A vote session for a confirming or denying a build."""
 
-    kind: ClassVar[Literal["build"]] = "build"
+    kind: ClassVar[Literal["build"]] = "build"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def __init__(
         self,
@@ -372,7 +376,7 @@ class BuildVoteSession(AbstractVoteSession):
 class DeleteLogVoteSession(AbstractVoteSession):
     """A vote session for deleting a message from the log."""
 
-    kind: ClassVar[Literal["delete_log"]] = "delete_log"
+    kind: ClassVar[Literal["delete_log"]] = "delete_log"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     def __init__(
         self,

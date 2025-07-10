@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, override
 import asyncpg
 from discord.ext import tasks
 from discord.ext.commands import Cog
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, update, PoolProxiedConnection
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from squid.db.schema import Event
@@ -39,7 +39,8 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         self.bot = bot
         self.channel_name = config.channel_name
         self.max_concurrent_events = config.max_concurrent_events
-        self._tasks: set[asyncio.Task[Any]] = set()  # Keep a reference to background tasks
+        # Keep a reference to background tasks, this cannot be fire and forget because we have to do a clean shutdown when this cog is unloaded.
+        self._tasks: set[asyncio.Task[Any]] = set()
         self.processing_semaphore = asyncio.Semaphore(config.max_concurrent_events)
         self.queue_size = config.queue_size
         self.queue_timeout = config.queue_timeout
@@ -116,6 +117,8 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                     event_id,
                 )
 
+        raw: PoolProxiedConnection | None = None
+        driver: Any = None
         try:
             # keep one raw DBAPI connection out of the pool for LISTEN/NOTIFY
             raw = await self.bot.db.async_engine.raw_connection()
@@ -137,8 +140,13 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 task.add_done_callback(self._tasks.discard)
 
         finally:  # clean shutdown on cog unload
-            await driver.remove_listener(self.channel_name, _on_notify)
-            await raw.close()
+            if driver is not None:
+                try:
+                    await driver.remove_listener(self.channel_name, _on_notify)
+                except Exception as e:
+                    logger.error("Failed to remove listener: %s", e, exc_info=True)
+            if raw is not None:
+                raw.close()
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):

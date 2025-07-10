@@ -1245,7 +1245,7 @@ class Build:
         if self.original_message_id is None:
             return
         assert self.original_server_id is not None, "Original server ID must be set for original message."
-        # Channel ID may be None if the message is from DMs
+        assert self.original_channel_id is not None
         assert self.original_message_author_id is not None, (
             "Original message author ID must be set for original message."
         )
