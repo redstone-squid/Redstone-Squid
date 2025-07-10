@@ -212,7 +212,7 @@ class Message(Base):
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
     server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # FIXME: server ID should be nullable
-    channel_id: Mapped[int | None] = mapped_column(BigInteger)  # FIXME: Channel ID should not be nullable
+    channel_id: Mapped[int] = mapped_column(BigInteger)  # FIXME: Channel ID should not be nullable
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     purpose: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str | None] = mapped_column(String)
@@ -488,13 +488,6 @@ class VoteSession(Base, kw_only=True):
     )
     vote_session_emojis: Mapped[list["VoteSessionEmoji"]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
-    )
-    emojis: AssociationProxy[list["Emoji"]] = association_proxy(
-        "vote_session_emojis",
-        "emoji",
-        default_factory=list,
-        repr=False,
-        creator=lambda e: VoteSessionEmoji(emoji=e),
     )
 
     __mapper_args__ = {"polymorphic_on": kind}

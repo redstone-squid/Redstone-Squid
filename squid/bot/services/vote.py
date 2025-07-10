@@ -28,7 +28,7 @@ from squid.db.vote_session import (
     DeleteLogVoteSession,
     get_vote_session_from_message_id,
 )
-from squid.utils import fire_and_forget
+from squid.utils import fire_and_forget, async_iterator
 
 if TYPE_CHECKING:
     import squid.bot
@@ -37,24 +37,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-
-
 async def add_reactions_to_messages(
     messages: AsyncIterable[discord.Message] | Iterable[discord.Message],
     reactions: Iterable[Emoji | PartialEmoji | str | Reaction],
 ) -> None:
     """Add reactions to a list of messages."""
     tasks = []
-    if isinstance(messages, AsyncIterator):
-        async for message in messages:
-            for reaction in reactions:
-                tasks.append(asyncio.create_task(message.add_reaction(reaction)))
-    else:
-        for message in messages:
-            for reaction in reactions:
-                tasks.append(asyncio.create_task(message.add_reaction(reaction)))
+    async for message in async_iterator(messages):
+        for reaction in reactions:
+            tasks.append(asyncio.create_task(message.add_reaction(reaction)))
+
     try:
         await asyncio.gather(*tasks)
     except discord.Forbidden:
@@ -106,32 +98,28 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
 
     @classproperty
     @abstractmethod
-    def vote_session_cls(cls: type[Self]) -> type[V]:
+    def vote_session_cls(cls) -> type[V]:
         """The class of the vote session this Discord session manages."""
         raise NotImplementedError("Subclasses must implement the vote_session_cls property.")
 
     # A list of proxy properties that forward to the underlying vote session.
     @final
     @property
-    @wraps(AbstractVoteSession.status.fget)
     def status(self):
         return self.vote_session.status
 
     @final
     @property
-    @wraps(AbstractVoteSession.upvotes.fget)
     def upvotes(self):
         return self.vote_session.upvotes
 
     @final
     @property
-    @wraps(AbstractVoteSession.downvotes.fget)
     def downvotes(self):
         return self.vote_session.downvotes
 
     @final
     @property
-    @wraps(AbstractVoteSession.net_votes.fget)
     def net_votes(self):
         return self.vote_session.net_votes
 
@@ -142,7 +130,7 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
         return self.vote_session.is_closed
 
     @final
-    def __getitem__(self, user_id: int) -> int | None:
+    def __getitem__(self, user_id: int) -> float | None:
         return self.vote_session[user_id]
 
     @final
@@ -150,19 +138,21 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
         return user_id in self.vote_session
 
     @final
-    async def set_vote(self, user_id: int, weight: int | None, emoji: str | None = None) -> None:
+    async def set_vote(self, user_id: int, weight: float | None, emoji: str | None = None) -> None:
         await self.vote_session.set_vote(user_id, weight, emoji)
 
-    async def get_voting_weight(self, server_id: int | None, user_id: int, emoji: str) -> float:
-        """Get the voting weight of a user."""
+    async def get_voting_weight(self, server_id: int | None, user_id: int, emoji: str) -> float | None:
+        """Get the voting weight of a user using this emoji."""
         base_multiplier = await self.vote_session.get_emoji_multiplier(emoji)
+        if base_multiplier is None:
+            return None
         if await is_staff(self.bot, server_id, user_id):
             user_multiplier = 3
         else:
             user_multiplier = 1
         return user_multiplier * base_multiplier
 
-    async def override_vote(self, user_id: int, guild_id: int, emoji: str) -> None:
+    async def override_vote(self, user_id: int, guild_id: int | None, emoji: str) -> None:
         """Override the user's vote based on the emoji reaction.
 
         Raises:
@@ -170,12 +160,14 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
         """
         original_vote = self[user_id]
         weight = await self.get_voting_weight(guild_id, user_id, emoji)
-        if emoji in APPROVE_EMOJIS:
+        if emoji in self.vote_session.approve_emojis:
+            assert weight is not None
             await self.set_vote(user_id, weight if original_vote != weight else 0, emoji)
-        elif emoji in DENY_EMOJIS:
+        elif emoji in self.vote_session.deny_emojis:
+            assert weight is not None
             await self.set_vote(user_id, -weight if original_vote != -weight else 0, emoji)
         else:
-            raise ValueError(f"Unknown emoji: {emoji}. Must be one of {APPROVE_EMOJIS + DENY_EMOJIS}.")
+            raise ValueError(f"Unknown emoji: {emoji}. Must be one of {self.vote_session.approve_emojis + self.vote_session.deny_emojis}.")
 
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
@@ -197,7 +189,8 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
             channel_ids = [record.channel_id for record in message_record]
 
             async for message in self.bot.get_or_fetch_messages(message_ids, channel_ids=channel_ids):
-                yield message
+                if message is not None:
+                    yield message
 
     @classmethod
     async def get_open_sessions(cls: type[Self], bot: "squid.bot.RedstoneSquid") -> list[Self]:
@@ -266,7 +259,8 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
         fail_threshold: int,
     ) -> Self:
         """Create a new instance of the vote session."""
-        message_ids = [msg.id if isinstance(msg, discord.Message) else msg for msg in messages]
+        messages = [msg async for msg in async_iterator(messages)]
+        message_ids = [msg.id for msg in messages]
         if type == "add":
             diff = [("submission_status", Status.PENDING, Status.CONFIRMED)]
         elif type == "update":
@@ -275,16 +269,12 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
             assert original is not None
             diff = original.diff(build)
 
-        if approve_emojis is None:
-            approve_emojis = APPROVE_EMOJIS
-        if deny_emojis is None:
-            deny_emojis = DENY_EMOJIS
-
         vote_session = BuildVoteSession(
             message_ids, author_id, build, diff, pass_threshold, fail_threshold, approve_emojis, deny_emojis
         )
         instance = cls(bot, vote_session)
         async with bot.db.async_session() as session:
+            assert vote_session.build.id is not None
             sql_vote_session = SQLBuildVoteSession(
                 status="open",
                 author_id=author_id,
@@ -312,7 +302,7 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
                 for message in messages
             ),
             instance.update_messages(),
-            add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]]),
+            add_reactions_to_messages(messages, [approve_emojis[0], deny_emojis[0]]),
         )
 
         return instance
@@ -367,7 +357,7 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
         emoji_name = payload.emoji.name
         assert emoji_name is not None, "Found a deleted discord emoji on reaction add???"
         # The vote session will handle the closing of the vote session
-        if emoji_name in (APPROVE_EMOJIS + DENY_EMOJIS):
+        if emoji_name in (self.vote_session.approve_emojis + self.vote_session.deny_emojis):
             await self.override_vote(payload.user_id, payload.guild_id, emoji_name)
             await self.update_messages()
 
@@ -389,14 +379,14 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
 
     @classproperty
     @override
-    def vote_session_cls(cls: type["DiscordDeleteLogVoteSession"]) -> type[DeleteLogVoteSession]:
+    def vote_session_cls(cls) -> type[DeleteLogVoteSession]:
         return DeleteLogVoteSession
 
     @classmethod
     async def create(
         cls: type[Self],
         bot: "squid.bot.RedstoneSquid",
-        messages: AsyncIterable[discord.Message] | Iterable[discord.Message],
+        messages: Iterable[discord.Message],
         author_id: int,
         target_message: discord.Message,
         pass_threshold: int,
@@ -404,9 +394,15 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         approve_emojis: list[str],
         deny_emojis: list[str],
     ) -> Self:
-        """Create a new instance of the vote session."""
-        # Sample implementation of create method
-        message_ids = [msg.id if isinstance(msg, discord.Message) else msg for msg in messages]
+        """Create a new instance of the vote session.
+
+        Raises:
+            NotImplementedError: If target_message is not in a guild.
+        """
+        if target_message.guild is None:
+            raise NotImplementedError("Target message must be in a guild.")
+        messages = [msg async for msg in async_iterator(messages)]
+        message_ids = [msg.id for msg in messages]
         vote_session = DeleteLogVoteSession(
             message_ids,
             author_id,
@@ -448,7 +444,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                 for message in messages
             ),
             instance.update_messages(),
-            add_reactions_to_messages(messages, [APPROVE_EMOJIS[0], DENY_EMOJIS[0]]),
+            add_reactions_to_messages(messages, [approve_emojis[0], deny_emojis[0]]),
         )
         return instance
 
@@ -461,12 +457,13 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         """Send the initial message to the channel."""
         vs = self.vote_session
         target = await self.get_target_message()
+        log_content = target.content if target is not None else "Message not found or deleted."
         embed = discord.Embed(
             title="Vote to Delete Log",
             description=(
                 dedent(f"""
-                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
-                **Log Content:**\n{target.content}\n\n
+                React with {vs.approve_emojis[0]} to upvote or {vs.deny_emojis[0]} to downvote.\n\n
+                **Log Content:**\n{log_content}\n\n
                 **Upvotes:** {vs.upvotes}
                 **Downvotes:** {vs.downvotes}
                 **Net Votes:** {vs.net_votes}""")
@@ -485,7 +482,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                 title="Vote to Delete Log",
                 description=(
                     dedent(f"""
-                    React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
+                    React with {vs.approve_emojis[0]} to upvote or {vs.deny_emojis[0]} to downvote.\n\n
                     **Log Content:**\n{log_content}\n\n
                     **Upvotes:** {vs.upvotes}
                     **Downvotes:** {vs.downvotes}
@@ -562,7 +559,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
             return
 
         # The vote session will handle the closing of the itself
-        if emoji_name in (APPROVE_EMOJIS + DENY_EMOJIS):
+        if emoji_name in (self.vote_session.approve_emojis + self.vote_session.deny_emojis):
             await self.override_vote(payload.user_id, payload.guild_id, emoji_name)
             await self.update_messages()
 

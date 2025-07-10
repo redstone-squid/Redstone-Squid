@@ -128,7 +128,6 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             *(
                 self.bot.get_or_fetch_message(row.id, channel_id=row.channel_id)
                 for row in messages
-                if row.channel_id is not None
             )
         )
         discord_messages = [msg for msg in maybe_messages if msg is not None]
