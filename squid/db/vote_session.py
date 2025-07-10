@@ -62,7 +62,7 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) 
 
 async def get_vote_session_from_message_id(
     message_id: int, *, status: Literal["open", "closed"] | None = None
-) -> "AbstractVoteSession[Any] | None":
+) -> "AbstractVoteSession | None":
     """Gets a vote session from the database.
 
     Args:
@@ -96,9 +96,9 @@ async def get_vote_session_from_message_id(
     )
     kind = message.vote_session.kind
     if kind == "build":
-        return BuildVoteSession.from_id(vote_session_id)
+        return await BuildVoteSession.from_id(vote_session_id)
     if kind == "delete_log":
-        return DeleteLogVoteSession.from_id(vote_session_id)
+        return await DeleteLogVoteSession.from_id(vote_session_id)
     logger.error("Unknown vote session kind: %s", kind)
     msg = f"Unknown vote session kind: {kind}"
     raise NotImplementedError(msg)
