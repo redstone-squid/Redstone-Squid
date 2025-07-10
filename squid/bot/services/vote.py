@@ -77,7 +77,7 @@ async def get_vote_session(
     Raises:
         NotImplementedError: If the vote session type is unknown.
     """
-    vs = get_vote_session_from_message_id(message_id, status=status)
+    vs = await get_vote_session_from_message_id(message_id, status=status)
 
     if isinstance(vs, BuildVoteSession):
         return DiscordBuildVoteSession(bot, vs)
@@ -279,11 +279,11 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
             )
             session.add(sql_vote_session)
             await session.flush()
-            for emoji in emoji_repo.get_emojis_by_symbols(approve_emojis):
+            for emoji in await emoji_repo.get_emojis_by_symbols(approve_emojis):
                 sql_vote_session.vote_session_emojis.append(
                     VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
                 )
-            for emoji in emoji_repo.get_emojis_by_symbols(deny_emojis):
+            for emoji in await emoji_repo.get_emojis_by_symbols(deny_emojis):
                 sql_vote_session.vote_session_emojis.append(
                     VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
                 )
@@ -319,10 +319,10 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
         embed.add_field(name="Accept", value=f"{vs.upvotes}/{vs.pass_threshold}", inline=True)
         embed.add_field(name="Deny", value=f"{vs.downvotes}/{-vs.fail_threshold}", inline=True)
         await asyncio.gather(
-            *(
+            *[  # Has to unpack a list here because () is interpreted as a generator
                 asyncio.create_task(message.edit(content=vs.build.original_link, embed=embed))
                 async for message in self.fetch_messages()
-            )
+            ]
         )
 
     @override
@@ -427,11 +427,11 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
             )
             session.add(sql_vote_session)
             await session.flush()
-            for emoji in emoji_repo.get_emojis_by_symbols(approve_emojis):
+            for emoji in await emoji_repo.get_emojis_by_symbols(approve_emojis):
                 sql_vote_session.vote_session_emojis.append(
                     VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id)
                 )
-            for emoji in emoji_repo.get_emojis_by_symbols(deny_emojis):
+            for emoji in await emoji_repo.get_emojis_by_symbols(deny_emojis):
                 sql_vote_session.vote_session_emojis.append(
                     VoteSessionEmoji(vote_session_id=sql_vote_session.id, emoji_id=emoji.id, default_multiplier=-1)
                 )
@@ -520,8 +520,8 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                     **Net Votes:** {vs.net_votes}""")
                 ),
             )
-        await asyncio.gather(
-            *(asyncio.create_task(message.edit(embed=embed)) async for message in self.fetch_messages())
+        await asyncio.gather(  # Has to unpack a list here because () is interpreted as a generator
+            *[asyncio.create_task(message.edit(embed=embed)) async for message in self.fetch_messages()]
         )
 
     @override
