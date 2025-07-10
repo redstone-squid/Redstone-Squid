@@ -78,6 +78,8 @@ async def get_vote_session(
         NotImplementedError: If the vote session type is unknown.
     """
     vs = await get_vote_session_from_message_id(message_id, status=status)
+    if vs is None:
+        return None
 
     if isinstance(vs, BuildVoteSession):
         return DiscordBuildVoteSession(bot, vs)
