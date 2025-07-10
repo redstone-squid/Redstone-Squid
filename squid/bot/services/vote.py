@@ -29,6 +29,7 @@ from squid.db.vote_session import (
     DeleteLogVoteSession,
     get_vote_session_from_message_id,
 )
+from squid.utils import fire_and_forget
 
 if TYPE_CHECKING:
     import squid.bot
@@ -227,8 +228,6 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
 class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
     """A Discord vote session for a build."""
 
-    _background_tasks: set[asyncio.Task[Any]] = set()
-
     @classproperty
     @override
     def vote_session_cls(cls) -> type[BuildVoteSession]:
@@ -343,9 +342,7 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
             return
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
-        self._background_tasks.add(remove_reaction_task)
-        remove_reaction_task.add_done_callback(self._background_tasks.discard)
+        fire_and_forget(message.remove_reaction(payload.emoji, user))
 
         if user.bot:
             return  # Ignore bot reactions
@@ -380,8 +377,6 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
 @final
 class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSession]):
     """A Discord vote session for deleting a log message."""
-
-    _background_tasks: set[asyncio.Task[Any]] = set()
 
     @classproperty
     @override
@@ -539,9 +534,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
 
         user = self.bot.get_user(payload.user_id)
         assert user is not None
-        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
-        self._background_tasks.add(remove_reaction_task)
-        remove_reaction_task.add_done_callback(self._background_tasks.discard)
+        fire_and_forget(message.remove_reaction(payload.emoji, user))
 
         if user.bot:
             return  # Ignore bot reactions

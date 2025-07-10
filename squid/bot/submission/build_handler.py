@@ -17,12 +17,10 @@ from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildLink, Message, Status
 from squid.db.utils import upload_to_catbox, utcnow
+from squid.utils import fire_and_forget
 
 if TYPE_CHECKING:
     import squid.bot
-
-
-background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
@@ -194,9 +192,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                         )
                         build.image_urls.append(preview_url)
                         if build.id is not None:
-                            task = asyncio.create_task(self._insert_video_preview(preview_url))
-                            background_tasks.add(task)
-                            task.add_done_callback(background_tasks.discard)
+                            fire_and_forget(self._insert_video_preview(preview_url))
                         em.set_image(url=preview_url)
                     break
 
