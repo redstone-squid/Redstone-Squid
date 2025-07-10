@@ -24,55 +24,6 @@ from squid.db.schema import Vote, VoteKindLiteral, VoteSession
 logger = logging.getLogger(__name__)
 
 
-async def track_vote_session(
-    messages: Iterable[discord.Message],
-    author_id: int,
-    kind: VoteKindLiteral,
-    pass_threshold: int,
-    fail_threshold: int,
-    approve_emojis: list[str],
-    deny_emojis: list[str],
-    *,
-    build_id: int | None = None,
-) -> int:
-    """Track a vote session in the database.
-
-    Args:
-        messages: The messages belonging to the vote session.
-        author_id: The discord id of the author of the vote session.
-        kind: The type of vote session.
-        pass_threshold: The number of votes required to pass the vote.
-        fail_threshold: The number of votes required to fail the vote.
-        approve_emojis: The emojis to use for approving the vote.
-        deny_emojis: The emojis to use for denying the vote.
-        build_id: The id of the build to vote on. None if the vote is not about a build.
-
-    Returns:
-        The id of the vote session.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = (
-            insert(VoteSession)
-            .values(
-                status="open",
-                author_id=author_id,
-                kind=kind,
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
-            )
-            .returning(VoteSession.id)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
-        session_id = result.scalar_one()
-    coros = [
-        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
-    ]
-    await asyncio.gather(*coros)
-    return session_id
-
-
 async def close_vote_session(vote_session_id: int) -> None:
     """Close a vote session in the database.
 
