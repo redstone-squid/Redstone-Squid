@@ -8,6 +8,7 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.services.vote import DiscordDeleteLogVoteSession, get_vote_session
+
 if TYPE_CHECKING:
     import squid.bot
 
