@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
-        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):

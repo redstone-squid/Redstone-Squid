@@ -1,15 +1,19 @@
+"""Utility functions."""
+
+import asyncio
 import io
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import aiohttp
 
 from squid.db.schema import Version
 
 
+_background_tasks: set[asyncio.Task] = set()
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
 
 
@@ -21,6 +25,13 @@ def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T
         return func
 
     return _decorator
+
+
+def fire_and_forget(coro: Coroutine[None, None, Any]) -> None:
+    """Runs a coroutine in the background without waiting for it to finish."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def utcnow() -> str:
