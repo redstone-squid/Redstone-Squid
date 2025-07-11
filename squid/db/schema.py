@@ -474,8 +474,8 @@ class VoteSession(Base, kw_only=True):
 
     __tablename__ = "vote_sessions"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    result: Mapped[VoteSessionResultLiteral] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    result: Mapped[VoteSessionResultLiteral] = mapped_column(String, nullable=False, default="pending")
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     kind: Mapped[VoteKindLiteral] = mapped_column(String, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
