@@ -7,6 +7,7 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.services.vote import DiscordDeleteLogVoteSession, get_vote_session
+from squid.db.models import VoteSessionClosed
 
 if TYPE_CHECKING:
     import squid.bot
@@ -42,6 +43,22 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if vote_session is None:
             return
         await vote_session.on_raw_reaction_remove(payload)
+
+    @Cog.listener(name="on_squid_vote_session_closed")
+    async def on_vote_session_closed(self, event: VoteSessionClosed):
+        """Handles the event when a vote session is closed."""
+        logger.info(
+            "Vote session %d closed with result %s at %s",
+            event.aggregate_id,
+            event.payload.result,
+            event.payload.closed_at,
+        )
+
+        vs = await get_vote_session(self.bot, event.aggregate_id)
+        if vs is None:
+            logger.warning("Vote session %d not found in the database.", event.aggregate_id)
+            return
+        await vs.on_close()
 
     @hybrid_command(name="start_vote")
     async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
