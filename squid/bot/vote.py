@@ -27,7 +27,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        vote_session = await get_vote_session(self.bot, payload.message_id, status="open")
+        vote_session = await get_vote_session(self.bot, message_id=payload.message_id, status="open")
         if vote_session is None:
             return
         await vote_session.on_raw_reaction_add(payload)
@@ -39,7 +39,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        vote_session = await get_vote_session(self.bot, payload.message_id, status="open")
+        vote_session = await get_vote_session(self.bot, message_id=payload.message_id, status="open")
         if vote_session is None:
             return
         await vote_session.on_raw_reaction_remove(payload)
@@ -48,13 +48,13 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def on_vote_session_closed(self, event: VoteSessionClosed):
         """Handles the event when a vote session is closed."""
         logger.info(
-            "Vote session %d closed with result %s at %s",
+            "Vote session %d closed with result '%s' at %s",
             event.aggregate_id,
             event.payload.result,
             event.payload.closed_at,
         )
 
-        vs = await get_vote_session(self.bot, event.aggregate_id)
+        vs = await get_vote_session(self.bot, id=event.aggregate_id)
         if vs is None:
             logger.warning("Vote session %d not found in the database.", event.aggregate_id)
             return
