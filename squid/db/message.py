@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import cast
 
 import discord
+from sqlalchemy import select
 
 from squid.db.repos.message_repository import MessageRepository
 from squid.db.schema import Message, MessagePurposeLiteral
@@ -88,17 +89,14 @@ class MessageService:
         message_id = message.id if isinstance(message, discord.Message) else cast(int, message)
         await self._message_repo.update_edited_time(message_id)
 
-    async def untrack_message(self, message: int | discord.Message) -> Message:
+    async def untrack_message(self, message: int | discord.Message) -> Message | None:
         """Untrack message from the database. The message is not deleted on discord.
 
         Args:
             message: The message to untrack. Either the message id or the message object.
 
         Returns:
-            A Message that is untracked.
-
-        Raises:
-            ValueError: If the message is not found in the database.
+            A Message that is untracked, or None if the message was not found in the database.
         """
         message_id = message.id if isinstance(message, discord.Message) else cast(int, message)
         return await self._message_repo.delete_by_id(message_id)

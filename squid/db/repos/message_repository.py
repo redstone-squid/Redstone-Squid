@@ -78,7 +78,7 @@ class MessageRepository:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def delete_by_id(self, message_id: int) -> Message:
+    async def delete_by_id(self, message_id: int) -> Message | None:
         """Delete a message from the database by ID.
 
         Args:
@@ -86,9 +86,6 @@ class MessageRepository:
 
         Returns:
             The deleted Message object.
-
-        Raises:
-            ValueError: If the message is not found.
         """
         async with self._session() as session:
             stmt = select(Message).where(Message.id == message_id)
@@ -96,8 +93,7 @@ class MessageRepository:
             message_obj = result.scalar_one_or_none()
 
             if message_obj is None:
-                msg = f"Message with id {message_id} not found."
-                raise ValueError(msg)
+                return None
 
             await session.delete(message_obj)
             await session.commit()
