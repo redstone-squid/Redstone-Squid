@@ -11,13 +11,12 @@ from typing import Any, ClassVar, Literal, Self, TypeVar, final, override
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionResultLiteral
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession, VoteSessionEmoji
+from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession, VoteSessionEmoji, VoteSessionResultLiteral
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +101,7 @@ async def get_vote_session_from_message_id(
     Raises:
         NotImplementedError: If the message corresponds to an unknown vote session kind.
     """
-    stmt = (
-        select(Message.vote_session_id)
-        .where(Message.id == message_id, Message.purpose == "vote")
-    )
+    stmt = select(Message.vote_session_id).where(Message.id == message_id, Message.purpose == "vote")
 
     async with DatabaseManager().async_session() as session:
         result = await session.execute(stmt)
@@ -114,6 +110,7 @@ async def get_vote_session_from_message_id(
     if vote_session_id is None:
         return None
     return await get_vote_session_by_id(vote_session_id, status=status)
+
 
 async def get_emoji_multiplier(vote_session_id: int, emoji: str) -> float | None:
     """Gets the multiplier for an emoji in a vote session.

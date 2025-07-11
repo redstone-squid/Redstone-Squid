@@ -54,7 +54,11 @@ async def add_reactions_to_messages(
 
 
 async def get_vote_session(
-    bot: "squid.bot.RedstoneSquid", *, id: int | None = None, message_id: int | None = None, status: Literal["open", "closed"] | None = None
+    bot: "squid.bot.RedstoneSquid",
+    *,
+    id: int | None = None,
+    message_id: int | None = None,
+    status: Literal["open", "closed"] | None = None,
 ) -> "AbstractDiscordVoteSession[Any] | None":
     """Gets a vote session from the database.
 
@@ -472,7 +476,9 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
 
     async def get_target_message(self) -> discord.Message | None:
         """Fetch the target message for the vote session."""
-        return await self.bot.get_or_fetch_message(self.vote_session.target_message_id, channel_id=self.vote_session.target_channel_id)
+        return await self.bot.get_or_fetch_message(
+            self.vote_session.target_message_id, channel_id=self.vote_session.target_channel_id
+        )
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
