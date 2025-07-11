@@ -50,7 +50,11 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     @override
     async def cog_unload(self) -> None:
         self.pg_listener.stop()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        results = await asyncio.gather(*self._tasks, return_exceptions=True)
+        if __debug__:
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error("Background task raised an exception: %s", result, exc_info=True)
 
     async def _process_event(self, event_id: int) -> None:
         """Atomically process an event."""
