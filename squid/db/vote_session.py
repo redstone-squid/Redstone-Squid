@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
+from squid.db.schema import BuildVoteSession as SQLBuildVoteSession, VoteSessionResultLiteral
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Vote, VoteKindLiteral, VoteSession, VoteSessionEmoji
 
@@ -204,23 +204,24 @@ class AbstractVoteSession(ABC):
 
     @final
     @property
-    def status(self) -> Literal["open", "passed", "failed", "closed"]:
-        """Get the status of the vote session.
+    def status(self) -> Literal["open", "closed"]:
+        """The current status, "open" means the vote session is still accepting votes, "closed" means it has been finalized."""
+        if self.is_closed:
+            return "closed"
+        return "open"
 
-        Returns:
-            "open" if the vote session is still open,
-            "passed" if the vote session has passed,
-            "failed" if the vote session has failed,
-            "closed" if the vote session is closed but neither passed nor failed.
-        """
+    @final
+    @property
+    def result(self) -> VoteSessionResultLiteral:
+        """The result of the vote session. If the session is closed, it will return "approved" if the vote passed, "denied" if it failed, or "cancelled" if it was closed without a decision. If the session is still open, it will return "pending"."""
         if self.is_closed:
             if self.net_votes >= self.pass_threshold:
-                return "passed"
+                return "approved"
             elif self.net_votes <= self.fail_threshold:
-                return "failed"
+                return "denied"
             else:
-                return "closed"
-        return "open"
+                return "cancelled"
+        return "pending"
 
     @final
     def __getitem__(self, user_id: int) -> float | None:
