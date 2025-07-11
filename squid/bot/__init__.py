@@ -122,7 +122,7 @@ class RedstoneSquid(Bot):
             "squid.bot.admin",
             "squid.bot.give_redstoner",
             "squid.bot.version_tracking",
-            "squid.bot.worker",
+            "squid.bot.events_dispatcher",
         ]
 
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
