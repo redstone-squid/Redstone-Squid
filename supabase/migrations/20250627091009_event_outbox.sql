@@ -6,8 +6,11 @@ CREATE TABLE event_outbox (
     type          TEXT        NOT NULL,      -- e.g. 'order.created'
     payload       JSONB       NOT NULL,      -- full details
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    processed     BOOLEAN     NOT NULL DEFAULT false,  -- true if the bot has handled it
     processed_at  TIMESTAMPTZ                  -- filled after the bot handles it
 );
+
+CREATE INDEX idx_outbox_unprocessed ON event_outbox (processed, created_at);
 
 -- 2. AFTER-INSERT trigger that nudges the bot
 CREATE FUNCTION notify_event() RETURNS trigger

@@ -63,7 +63,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 async with session.begin():
                     result = await session.execute(
                         select(Event)
-                        .where(Event.id == event_id, Event.processed_at.is_(None))
+                        .where(Event.id == event_id, Event.processed.is_(False))
                         .with_for_update(skip_locked=True)
                     )
                     event = result.scalar_one_or_none()
@@ -73,7 +73,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                         # So this is a best-effort approach, if it fails then it fails.
                         self.bot.dispatch("squid_" + event.type, event)
 
-                    await session.execute(update(Event).where(Event.id == event_id).values(processed_at=func.now()))
+                    await session.execute(update(Event).where(Event.id == event_id).values(processed=True, processed_at=func.now()))
         except Exception as e:
             logger.error("Failed to process event %s: %s", event_id, e, exc_info=True)
 
@@ -85,7 +85,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def _replay_backlog(self) -> None:
         """Handle every un-processed row before we begin LISTEN/NOTIFY."""
         async with self.bot.db.async_session() as session:
-            result = await session.execute(select(Event).where(Event.processed_at.is_(None)).order_by(Event.id))
+            result = await session.execute(select(Event).where(Event.processed.is_(False)).order_by(Event.id))
             events = result.scalars().all()
 
         logger.info("Replaying %s events from backlog", len(events))
