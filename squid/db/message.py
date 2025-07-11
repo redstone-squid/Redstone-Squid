@@ -89,17 +89,14 @@ class MessageManager:
             await session.execute(stmt)
             await session.commit()
 
-    async def untrack_message(self, message: int | discord.Message) -> Message:
+    async def untrack_message(self, message: int | discord.Message) -> Message | None:
         """Untrack message from the database. The message is not deleted on discord.
 
         Args:
             message: The message to untrack. Either the message id or the message object.
 
         Returns:
-            A Message that is untracked.
-
-        Raises:
-            ValueError: If the message is not found.
+            A Message that is untracked, or None if the message was not found.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
         async with self.session() as session:
@@ -108,7 +105,7 @@ class MessageManager:
             message_obj = result.scalar_one_or_none()
 
             if message_obj is None:
-                raise ValueError(f"Message with id {message_id} not found.")
+                return None
 
             await session.delete(message_obj)
             await session.commit()
