@@ -109,6 +109,11 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
 
     @final
     @property
+    def result(self):
+        return self.vote_session.result
+
+    @final
+    @property
     def upvotes(self):
         return self.vote_session.upvotes
 
@@ -280,6 +285,7 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
                 status="open",
                 author_id=author_id,
                 kind=vote_session.kind,
+                result=vote_session.result,
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
                 build_id=vote_session.build.id,
@@ -369,7 +375,7 @@ class DiscordBuildVoteSession(AbstractDiscordVoteSession[BuildVoteSession]):
     @override
     async def on_close(self) -> None:
         """Handle the event when the vote session passes."""
-        if self.vote_session.status == "passed":
+        if self.vote_session.result == "approved":
             self.bot.dispatch("build_confirmed", self.vote_session.build)
         await self.update_messages()
 
@@ -478,7 +484,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         vs = self.vote_session
         target = await self.get_target_message()
         log_content = target.content if target is not None else "Message not found or deleted."
-        if vs.status == "open":
+        if vs.result == "pending":
             embed = discord.Embed(
                 title="Vote to Delete Log",
                 description=(
@@ -490,7 +496,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                     **Net Votes:** {vs.net_votes}""")
                 ),
             )
-        elif vs.status == "passed":
+        elif vs.result == "approved":
             embed = discord.Embed(
                 title="Vote to Delete Log: Passed",
                 description=(
@@ -501,7 +507,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                     **Net Votes:** {vs.net_votes}""")
                 ),
             )
-        elif vs.status == "failed":
+        elif vs.result == "denied":
             embed = discord.Embed(
                 title="Vote to Delete Log: Failed",
                 description=(
@@ -512,7 +518,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
                     **Net Votes:** {vs.net_votes}""")
                 ),
             )
-        else:
+        else:  # cancelled
             embed = discord.Embed(
                 title="Vote to Delete Log: Closed",
                 description=(
@@ -573,6 +579,6 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         """Handle the event when the vote session passes."""
         vs = self.vote_session
         target = await self.get_target_message()
-        if vs.status == "passed" and target is not None:
+        if vs.result == "approved" and target is not None:
             await target.delete()
         await self.update_messages()
