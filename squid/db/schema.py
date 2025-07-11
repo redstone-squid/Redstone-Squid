@@ -556,6 +556,7 @@ class Event(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)
     payload: Mapped[Json[Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    processed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     processed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True, default=None)
 
 
