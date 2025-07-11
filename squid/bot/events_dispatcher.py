@@ -74,6 +74,8 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                         # So this is a best-effort approach, if it fails then it fails.
                         self.bot.dispatch("squid_" + event.type, event_from_sa_event(event))
 
+                    # TODO: This is actually the wrong place to update the event as processed, the ideal way is to do it
+                    #   outside of the bot, in a event broker, but we don't have one yet.
                     await session.execute(update(Event).where(Event.id == event_id).values(processed=True, processed_at=func.now()))
         except Exception as e:
             logger.error("Failed to process event %s: %s", event_id, e, exc_info=True)
