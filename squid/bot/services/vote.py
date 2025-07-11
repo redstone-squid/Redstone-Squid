@@ -458,7 +458,7 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
 
     async def get_target_message(self) -> discord.Message | None:
         """Fetch the target message for the vote session."""
-        return await self.bot.get_or_fetch_message(self.vote_session.target_message_id)
+        return await self.bot.get_or_fetch_message(self.vote_session.target_message_id, channel_id=self.vote_session.target_channel_id)
 
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
@@ -580,6 +580,8 @@ class DiscordDeleteLogVoteSession(AbstractDiscordVoteSession[DeleteLogVoteSessio
         """Handle the event when the vote session passes."""
         vs = self.vote_session
         target = await self.get_target_message()
+        if target is None:
+            logger.warning("Target message not found or deleted.")
         if vs.result == "approved" and target is not None:
             await target.delete()
         await self.update_messages()
