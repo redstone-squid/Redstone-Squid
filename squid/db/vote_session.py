@@ -25,19 +25,6 @@ _SelfT = TypeVar(
 )  # There is no parallel construct to typing.Self for class methods, so we have to make a workaround
 
 
-async def close_vote_session(vote_session_id: int) -> None:
-    """Close a vote session in the database.
-
-    Args:
-        vote_session_id: The id of the vote session.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed")
-        await session.execute(stmt)
-        await session.commit()
-
-
 async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None, emoji: str | None = None) -> None:
     """Upsert a vote in the database.
 
@@ -264,7 +251,15 @@ class AbstractVoteSession(ABC):
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=False)
         assert self.id is not None
-        await close_vote_session(self.id)
+        await self._close_vote_session()
+
+    async def _close_vote_session(self) -> None:
+        """Close a vote session in the database."""
+        db = DatabaseManager()
+        async with db.async_session() as session:
+            stmt = update(VoteSession).where(VoteSession.id == self.id).values(status="closed", result=self.result)
+            await session.execute(stmt)
+            await session.commit()
 
     @classmethod
     @abstractmethod
@@ -355,7 +350,7 @@ class BuildVoteSession(AbstractVoteSession):
             await self.build.confirm()
 
         if self.id is not None:
-            await close_vote_session(self.id)
+            await self._close_vote_session()
 
     @classmethod
     @override
@@ -446,7 +441,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
         self.is_closed = True
         if self.id is not None:
-            await close_vote_session(self.id)
+            await self._close_vote_session()
 
     @classmethod
     @override
