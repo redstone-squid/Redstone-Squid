@@ -233,9 +233,10 @@ class AbstractDiscordVoteSession[V: AbstractVoteSession](ABC):
 
     @abstractmethod
     async def on_close(self) -> None:
-        """Handle the event when the vote session passes.
+        """Handles discord-specific logic when the vote session is closed. Do NOT interact with the database here.
 
-        This is automatically called when the vote session is closed, via the underlying vote session's close method -> db -> bot -> this method. By default, it does nothing.
+        This is automatically called when the vote session is closed, via the underlying vote session's close
+        method -> db trigger -> db event_outbox -> bot event_dispatcher -> cogs handling the event -> this method.
         """
         raise NotImplementedError("Subclasses must implement the on_close method.")
 
