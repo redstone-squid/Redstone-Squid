@@ -60,6 +60,8 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     def _dispatch_and_mark_processed(self, session: AsyncSession, event: Event) -> None:
         """Atomically process an event."""
+        logger.debug("Processing event %s of type %s", event.id, event.type)
+        logger.debug("Event payload: %s", event.payload)
         try:
             # The dispatching is asynchronous, so there is no guarantee we actually successfully processed the event.
             # So this is a best-effort approach, if it fails then it fails.
