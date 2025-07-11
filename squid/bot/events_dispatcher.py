@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True, frozen=True)
 class EventConfig:
     channel_name: str = "domain_events"
-    max_concurrent_events: int = 10
+    max_concurrent_events: int = 1
     queue_size: int = 1000
     queue_timeout: float = 5.0
 
@@ -80,7 +80,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     async def _process_event_with_semaphore(self, event_id: int) -> None:
         """Process an event with a semaphore to limit concurrency."""
-        async with self.processing_semaphore:
+        async with self.processing_semaphore:  # TODO: we have to keep per-aggregate semaphores, this is a global one.
             await self._process_event(event_id)
 
     async def _replay_backlog(self) -> None:
