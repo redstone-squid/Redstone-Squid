@@ -11,6 +11,7 @@ from discord.ext.commands import Cog
 from sqlalchemy import PoolProxiedConnection, func, select, update
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
+from squid.db.models import event_from_sa_event
 from squid.db.schema import Event
 from squid.utils import fire_and_forget
 
@@ -71,7 +72,7 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                     if event:
                         # The dispatching is asynchronous, so there is no guarantee we actually successfully processed the event.
                         # So this is a best-effort approach, if it fails then it fails.
-                        self.bot.dispatch("squid_" + event.type, event)
+                        self.bot.dispatch("squid_" + event.type, event_from_sa_event(event))
 
                     await session.execute(update(Event).where(Event.id == event_id).values(processed=True, processed_at=func.now()))
         except Exception as e:
