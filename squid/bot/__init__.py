@@ -122,10 +122,12 @@ class RedstoneSquid(Bot):
             "squid.bot.admin",
             "squid.bot.give_redstoner",
             "squid.bot.version_tracking",
-            "squid.bot.events_dispatcher",
         ]
 
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
+        # Special handling for events_dispatcher, which has to be loaded last to ensure all event handlers are registered
+        # before it starts listening to events.
+        await self.load_extension("squid.bot.events_dispatcher")
         self.call_supabase_to_prevent_deactivation.start()
 
     @tasks.loop(hours=24)
