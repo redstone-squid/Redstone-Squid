@@ -3,14 +3,13 @@
 import abc
 import builtins
 import inspect
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, TypeVar, final, TypedDict, override, ClassVar
+from typing import Any, ClassVar, final, override
 
 from pydantic import BaseModel
 
 from squid.db import schema
-
 
 _event_cls_registry: dict[str, type["Event"]] = {}
 
