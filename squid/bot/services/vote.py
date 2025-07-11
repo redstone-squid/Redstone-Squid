@@ -25,6 +25,7 @@ from squid.db.vote_session import (
     AbstractVoteSession,
     BuildVoteSession,
     DeleteLogVoteSession,
+    get_vote_session_by_id,
     get_vote_session_from_message_id,
 )
 from squid.utils import async_iterator, fire_and_forget
@@ -53,22 +54,35 @@ async def add_reactions_to_messages(
 
 
 async def get_vote_session(
-    bot: "squid.bot.RedstoneSquid", message_id: int, *, status: Literal["open", "closed"] | None = None
+    bot: "squid.bot.RedstoneSquid", *, id: int | None = None, message_id: int | None = None, status: Literal["open", "closed"] | None = None
 ) -> "AbstractDiscordVoteSession[Any] | None":
     """Gets a vote session from the database.
 
     Args:
         bot: The bot instance to fetch messages from.
-        message_id: The message ID of the vote session.
+        id: The ID of the vote session to fetch.
+        message_id: The ID of a message associated with the vote session.
         status: The status of the vote session. If None, it will get any status.
 
     Returns:
         An instance of `AbstractDiscordVoteSession` if a vote session is found, otherwise None.
 
     Raises:
+        ValueError: If neither `id` nor `message_id` is provided.
         NotImplementedError: If the vote session type is unknown.
     """
-    vs = await get_vote_session_from_message_id(message_id, status=status)
+    if id is None and message_id is None:
+        raise ValueError("Either 'id' or 'message_id' must be provided to get a vote session.")
+    if id is not None and message_id is not None:
+        raise ValueError("Only one of 'id' or 'message_id' can be provided to get a vote session.")
+
+    if id:
+        vs = await get_vote_session_by_id(id, status=status)
+    elif message_id:
+        vs = await get_vote_session_from_message_id(message_id, status=status)
+    else:
+        assert False
+
     if vs is None:
         return None
 

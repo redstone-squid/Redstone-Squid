@@ -49,6 +49,44 @@ async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None, 
         await session.commit()
 
 
+async def get_vote_session_by_id(
+    vote_session_id: int, *, status: Literal["open", "closed"] | None = None, kind: VoteKindLiteral | None = None
+) -> "AbstractVoteSession | None":
+    """Gets a vote session from the database.
+
+    Args:
+        vote_session_id: The id of the vote session.
+        status: The status of the vote session. If None, it will get any status.
+        kind: The kind of the vote session. If None, it will get any kind.
+
+    Returns:
+        The vote session if it exists, otherwise None.
+
+    Raises:
+        NotImplementedError: If the vote session kind is unknown.
+    """
+    stmt = select(VoteSession.id, VoteSession.kind).where(VoteSession.id == vote_session_id)
+    if status is not None:
+        stmt = stmt.where(VoteSession.status == status)
+    if kind is not None:
+        stmt = stmt.where(VoteSession.kind == kind)
+
+    async with DatabaseManager().async_session() as session:
+        result = await session.execute(stmt)
+        result_tup = result.one_or_none()
+        if result_tup is None:
+            return None
+        vote_session_id, kind = result_tup
+
+    if kind == "build":
+        return await BuildVoteSession.from_id(vote_session_id)
+    if kind == "delete_log":
+        return await DeleteLogVoteSession.from_id(vote_session_id)
+    logger.error("Unknown vote session kind: %s", kind)
+    msg = f"Unknown vote session kind: {kind}"
+    raise NotImplementedError(msg)
+
+
 async def get_vote_session_from_message_id(
     message_id: int, *, status: Literal["open", "closed"] | None = None
 ) -> "AbstractVoteSession | None":
@@ -65,33 +103,17 @@ async def get_vote_session_from_message_id(
         NotImplementedError: If the message corresponds to an unknown vote session kind.
     """
     stmt = (
-        select(Message)
-        .options(selectinload(Message.vote_session))
+        select(Message.vote_session_id)
         .where(Message.id == message_id, Message.purpose == "vote")
     )
-    if status is not None:
-        stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
 
     async with DatabaseManager().async_session() as session:
         result = await session.execute(stmt)
-        message = result.scalar_one_or_none()
+        vote_session_id = result.scalar_one_or_none()
 
-    if message is None or message.vote_session is None:
+    if vote_session_id is None:
         return None
-
-    vote_session_id = message.vote_session_id
-    assert vote_session_id is not None, (
-        "Vote session ID should not be None because we selected messages with the vote purpose."
-    )
-    kind = message.vote_session.kind
-    if kind == "build":
-        return await BuildVoteSession.from_id(vote_session_id)
-    if kind == "delete_log":
-        return await DeleteLogVoteSession.from_id(vote_session_id)
-    logger.error("Unknown vote session kind: %s", kind)
-    msg = f"Unknown vote session kind: {kind}"
-    raise NotImplementedError(msg)
-
+    return await get_vote_session_by_id(vote_session_id, status=status)
 
 async def get_emoji_multiplier(vote_session_id: int, emoji: str) -> float | None:
     """Gets the multiplier for an emoji in a vote session.
