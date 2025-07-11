@@ -9,6 +9,7 @@ import asyncpg
 from discord.ext import tasks
 from discord.ext.commands import Cog
 from sqlalchemy import PoolProxiedConnection, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 from squid.db.models import event_from_sa_event
@@ -57,33 +58,36 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 if isinstance(result, Exception):
                     logger.error("Background task raised an exception: %s", result, exc_info=True)
 
-    async def _process_event(self, event_id: int) -> None:
+    def _dispatch_and_mark_processed(self, session: AsyncSession, event: Event) -> None:
         """Atomically process an event."""
         try:
-            async with self.bot.db.async_session() as session:
-                async with session.begin():
-                    result = await session.execute(
-                        select(Event)
-                        .where(Event.id == event_id, Event.processed.is_(False))
-                        .with_for_update(skip_locked=True)
-                    )
-                    event = result.scalar_one_or_none()
+            # The dispatching is asynchronous, so there is no guarantee we actually successfully processed the event.
+            # So this is a best-effort approach, if it fails then it fails.
+            self.bot.dispatch("squid_" + event.type, event_from_sa_event(event))
 
-                    if event:
-                        # The dispatching is asynchronous, so there is no guarantee we actually successfully processed the event.
-                        # So this is a best-effort approach, if it fails then it fails.
-                        self.bot.dispatch("squid_" + event.type, event_from_sa_event(event))
-
-                    # TODO: This is actually the wrong place to update the event as processed, the ideal way is to do it
-                    #   outside of the bot, in a event broker, but we don't have one yet.
-                    await session.execute(update(Event).where(Event.id == event_id).values(processed=True, processed_at=func.now()))
+            # TODO: This is actually the wrong place to update the event as processed, the ideal way is to do it
+            #   outside of the bot, in a event broker, but we don't have one yet.
+            event.processed = True
+            event.processed_at = func.now()
+            session.add(event)
         except Exception as e:
-            logger.error("Failed to process event %s: %s", event_id, e, exc_info=True)
+            logger.error("Failed to process event %s: %s", event.id, e, exc_info=True)
 
     async def _process_event_with_semaphore(self, event_id: int) -> None:
         """Process an event with a semaphore to limit concurrency."""
         async with self.processing_semaphore:  # TODO: we have to keep per-aggregate semaphores, this is a global one.
-            await self._process_event(event_id)
+            async with self.bot.db.async_session() as session:
+                result = await session.execute(
+                    select(Event)
+                    .where(Event.id == event_id, Event.processed.is_(False))
+                    .with_for_update(skip_locked=True)
+                )
+                event = result.scalar_one_or_none()
+                if event is None:
+                    logger.info("Event %s already processed or does not exist", event_id)
+                    return
+                self._dispatch_and_mark_processed(session, event)
+                await session.commit()
 
     async def _replay_backlog(self) -> None:
         """Handle every un-processed row before we begin LISTEN/NOTIFY."""
@@ -91,14 +95,15 @@ class CustomEventCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             result = await session.execute(select(Event).where(Event.processed.is_(False)).order_by(Event.id))
             events = result.scalars().all()
 
-        logger.info("Replaying %s events from backlog", len(events))
+            logger.info("Replaying %s events from backlog", len(events))
 
-        for event in events:
-            try:
-                await self._process_event(event.id)
-            except Exception as e:
-                logger.error("Failed to replay event %s: %s", event.id, e, exc_info=True)
-                continue
+            for event in events:
+                try:
+                    self._dispatch_and_mark_processed(session, event)
+                    await session.commit()
+                except Exception as e:
+                    logger.error("Failed to replay event %s: %s", event.id, e, exc_info=True)
+                    continue
 
     @tasks.loop(count=1)  # run once; the inner loop lives forever
     @retry(wait=wait_exponential_jitter(max=60), stop=stop_after_attempt(20))
