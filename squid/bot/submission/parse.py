@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+from types import NoneType
 import typing
 from collections.abc import Callable, Iterator, MutableMapping
 from io import StringIO
@@ -196,7 +197,7 @@ def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
     return _format, _parse
 
 
-def handle_optional[T](outer_type: type[T | type[None]]) -> DispatchTuple[T | None]:
+def handle_optional[T](outer_type: type[T | NoneType]) -> DispatchTuple[T | NoneType]:
     """Generate a formatter and parser for an Optional type."""
     args = typing.get_args(outer_type)
     if len(args) != 2 or type(None) not in args:
