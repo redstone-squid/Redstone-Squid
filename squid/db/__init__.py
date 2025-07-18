@@ -131,6 +131,7 @@ class DatabaseManager(AsyncClient):
         # See if the spec specifies no edition (default to Java), one edition, or both
         bedrock = version_spec.find("Bedrock") != -1
         java = version_spec.find("Java") != -1
+        edition: Literal["Java", "Bedrock"]
         if not bedrock and not java:
             edition = "Java"  # Default to Java if no edition specified
         elif bedrock and not java:
