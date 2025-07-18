@@ -23,6 +23,11 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 async def get_db():
     assert _db is not None, "DatabaseManager should be initialized at app startup"
     return _db
