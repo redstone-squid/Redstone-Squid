@@ -177,6 +177,8 @@ class DatabaseManager(AsyncClient):
                     for v_tuple in all_version_tuples:
                         if v_tuple[0] == major and v_tuple[1] == minor:
                             max_patch = max(max_patch, v_tuple[2])
+                    # Note: the "Java" edition here is just a placeholder for the tuple structure, it is immediately
+                    # discarded below in end_tuple[1:]
                     end_tuple = ("Java", major, minor, max_patch)
 
                 for v_tuple in all_version_tuples:
