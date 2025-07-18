@@ -150,6 +150,7 @@ class DatabaseManager(AsyncClient):
 
         valid_tuples: list[tuple[int, int, int]] = []
         v_tuple: tuple[int, int, int]
+        end_tuple: tuple[Literal["Java", "Bedrock"], int, int, int]
 
         for part in parts:
             # Case 1: range like "1.14 - 1.16.1"
@@ -175,7 +176,7 @@ class DatabaseManager(AsyncClient):
                     for v_tuple in all_version_tuples:
                         if v_tuple[0] == major and v_tuple[1] == minor:
                             max_patch = max(max_patch, v_tuple[2])
-                    end_tuple = (major, minor, max_patch)
+                    end_tuple = ("Java", major, minor, max_patch)
 
                 for v_tuple in all_version_tuples:
                     if start_tuple[1:] <= v_tuple <= end_tuple[1:]:
