@@ -94,11 +94,11 @@ class BuildCategory(StrEnum):
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
+class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
-class User(Base):
+class User(MappedAsDataclass, Base):
     """A user in the system, which can be linked to both Discord and Minecraft accounts."""
 
     __tablename__ = "users"
@@ -116,7 +116,7 @@ class User(Base):
     )
 
 
-class Version(Base):
+class Version(MappedAsDataclass, Base):
     """A version of Minecraft that a build is compatible with."""
 
     __tablename__ = "versions"
@@ -138,7 +138,7 @@ class Version(Base):
     )
 
 
-class Restriction(Base):
+class Restriction(MappedAsDataclass, Base):
     """A restriction that can be applied to builds."""
 
     __tablename__ = "restrictions"
@@ -165,7 +165,7 @@ class Restriction(Base):
     )
 
 
-class RestrictionAlias(Base):
+class RestrictionAlias(MappedAsDataclass, Base):
     """An alias for a restriction, allowing for alternative names."""
 
     __tablename__ = "restriction_aliases"
@@ -176,7 +176,7 @@ class RestrictionAlias(Base):
     restriction: Mapped[Restriction] = relationship(back_populates="aliases", init=False, lazy="joined")
 
 
-class Type(Base):
+class Type(MappedAsDataclass, Base):
     """A build pattern."""
 
     __tablename__ = "types"
@@ -194,7 +194,7 @@ class Type(Base):
     )
 
 
-class Message(Base):
+class Message(MappedAsDataclass, Base):
     """A message associated with a build or vote session."""
 
     __tablename__ = "messages"
@@ -218,7 +218,7 @@ class Message(Base):
     )
 
 
-class Build(Base, kw_only=True):
+class Build(MappedAsDataclass, Base, kw_only=True):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
@@ -310,7 +310,7 @@ class Door(Build, kw_only=True):
     visible_closing_time: Mapped[int | None] = mapped_column(BigInteger)
 
 
-class SmallestDoor(Base):
+class SmallestDoor(MappedAsDataclass, Base):
     """A door that is the smallest in a specific category.
 
     This table is a cache for the smallest doors in each category up to 8 restrictions, built by using database triggers
@@ -367,7 +367,7 @@ class Entrance(Build):
     build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
 
 
-class BuildCreator(Base):
+class BuildCreator(MappedAsDataclass, Base):
     """Association table between builds and their creators."""
 
     __tablename__ = "build_creators"
@@ -378,7 +378,7 @@ class BuildCreator(Base):
     user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined", repr=False, default=None)
 
 
-class BuildRestriction(Base):
+class BuildRestriction(MappedAsDataclass, Base):
     """Association table between builds and their restrictions."""
 
     __tablename__ = "build_restrictions"
@@ -395,7 +395,7 @@ class BuildRestriction(Base):
     )
 
 
-class BuildVersion(Base):
+class BuildVersion(MappedAsDataclass, Base):
     """Association table between builds and their versions."""
 
     __tablename__ = "build_versions"
@@ -406,7 +406,7 @@ class BuildVersion(Base):
     version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined", repr=False, default=None)
 
 
-class BuildType(Base):
+class BuildType(MappedAsDataclass, Base):
     """Association table between builds and their types."""
 
     __tablename__ = "build_types"
@@ -417,7 +417,7 @@ class BuildType(Base):
     type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined", repr=False, default=None)
 
 
-class BuildLink(Base):
+class BuildLink(MappedAsDataclass, Base):
     """A link associated with a build (image, video, world download)."""
 
     __tablename__ = "build_links"
@@ -428,7 +428,7 @@ class BuildLink(Base):
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
 
 
-class ServerSetting(Base):
+class ServerSetting(MappedAsDataclass, Base):
     """Settings for a Discord server."""
 
     __tablename__ = "server_settings"
@@ -443,7 +443,7 @@ class ServerSetting(Base):
     in_server: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-class VerificationCode(Base):
+class VerificationCode(MappedAsDataclass, Base):
     """A verification code for linking Minecraft accounts."""
 
     __tablename__ = "verification_codes"
@@ -458,7 +458,7 @@ class VerificationCode(Base):
     )
 
 
-class VoteSession(Base, kw_only=True):
+class VoteSession(MappedAsDataclass, Base, kw_only=True):
     """A voting session for builds or log deletions."""
 
     __tablename__ = "vote_sessions"
@@ -519,7 +519,7 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
     __mapper_args__ = {"polymorphic_identity": "delete_log"}
 
 
-class Vote(Base):
+class Vote(MappedAsDataclass, Base):
     """A vote cast in a vote session."""
 
     __tablename__ = "votes"
@@ -535,7 +535,7 @@ class Vote(Base):
     )
 
 
-class Event(Base):
+class Event(MappedAsDataclass, Base):
     """An event that can be logged in the database."""
 
     __tablename__ = "event_outbox"
@@ -549,7 +549,7 @@ class Event(Base):
     processed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True, default=None)
 
 
-class VoteSessionEmoji(Base):
+class VoteSessionEmoji(MappedAsDataclass, Base):
     """An emoji associated with a vote session."""
 
     __tablename__ = "vote_session_emojis"
