@@ -6,7 +6,8 @@ import os
 import re
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Coroutine, Iterable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from dataclasses import field, fields
+from typing import Any, Literal, overload, Self
 
 import aiohttp
 
@@ -54,6 +55,71 @@ def async_iterator[T](it: Iterable[T] | AsyncIterable[T]) -> AsyncIterator[T]:
             return it.__aiter__()
         else:
             raise TypeError(f"Expected Iterable or AsyncIterable, got {type(it)}")
+
+
+class FrozenField[T]:
+    """A descriptor that makes an attribute immutable after it has been set."""
+
+    __slots__ = ("_private_name",)
+
+    def __init__(self, name: str) -> None:
+        self._private_name = "__frozen_" + name
+
+    @overload
+    def __get__(self, instance: None, owner: type[object]) -> Self: ...
+
+    @overload
+    def __get__(self, instance: object, owner: type[object]) -> T: ...
+
+    def __get__(self, instance: object | None, owner: type[object] | None = None) -> T | Self:
+        if instance is None:
+            return self
+        value = getattr(instance, self._private_name)
+        return value
+
+    def __set__(self, instance: object, value: T) -> None:
+        if hasattr(instance, self._private_name):
+            msg = f"Attribute `{self._private_name[1:]}` is immutable!"
+            raise TypeError(msg) from None
+
+        setattr(instance, self._private_name, value)
+
+
+@signature_from(field)
+def frozen_field(**kwargs: Any):
+    """A field that is immutable after it has been set. See `dataclasses.field` for more information."""
+    metadata = kwargs.pop("metadata", {}) | {"frozen": True}
+    return field(**kwargs, metadata=metadata)
+
+
+def freeze_fields[T](cls: type[T]) -> type[T]:
+    """
+    A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
+
+    This is done by replacing the fields with FrozenField descriptors.
+
+    Args:
+        cls: The class to make immutable, must be a dataclass.
+
+    Raises:
+        TypeError: If cls is not a dataclass
+    """
+
+    cls_fields = getattr(cls, "__dataclass_fields__", None)
+    if cls_fields is None:
+        raise TypeError(f"{cls} is not a dataclass")
+
+    params = getattr(cls, "__dataclass_params__")
+    # _DataclassParams(init=True,repr=True,eq=True,order=True,unsafe_hash=False,
+    #                   frozen=True,match_args=True,kw_only=False,slots=False,
+    #                   weakref_slot=False)
+    if params.frozen:
+        return cls
+
+    for f in fields(cls):  # type: ignore
+        if "frozen" in f.metadata:
+            setattr(cls, f.name, FrozenField(f.name))
+    return cls
 
 
 def utcnow() -> str:

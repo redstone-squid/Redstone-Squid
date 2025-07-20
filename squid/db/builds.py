@@ -8,12 +8,12 @@ import time
 import typing
 import warnings
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
-from typing import Any, Final, Literal, Self, overload
+from typing import Any, Final, Literal
 
 import discord
 from openai import AsyncOpenAI, OpenAIError
@@ -38,11 +38,12 @@ from squid.db.schema import (
     Status,
     TypeRecord,
     UnknownRestrictions,
+    OrmUser,
     UserRecord,
     UtilityRecord,
     VersionRecord,
 )
-from squid.utils import signature_from, parse_time_string
+from squid.utils import frozen_field, freeze_fields, parse_time_string
 
 logger = logging.getLogger(__name__)
 
@@ -65,71 +66,6 @@ class JoinedBuildRecord(BuildRecord):
     utilities: UtilityRecord | None
     entrances: EntranceRecord | None
     messages: MessageRecord | None  # Not actually all the associated messages, just the original message
-
-
-class FrozenField[T]:
-    """A descriptor that makes an attribute immutable after it has been set."""
-
-    __slots__ = ("_private_name",)
-
-    def __init__(self, name: str) -> None:
-        self._private_name = "__frozen_" + name
-
-    @overload
-    def __get__(self, instance: None, owner: type[object]) -> Self: ...
-
-    @overload
-    def __get__(self, instance: object, owner: type[object]) -> T: ...
-
-    def __get__(self, instance: object | None, owner: type[object] | None = None) -> T | Self:
-        if instance is None:
-            return self
-        return getattr(instance, self._private_name)
-
-    def __set__(self, instance: object, value: T) -> None:
-        if hasattr(instance, self._private_name):
-            msg = f"Attribute `{self._private_name[1:]}` is immutable!"
-            raise TypeError(msg) from None
-
-        setattr(instance, self._private_name, value)
-
-
-@signature_from(field)
-def frozen_field(**kwargs: Any):
-    """A field that is immutable after it has been set. See `dataclasses.field` for more information."""
-    metadata = kwargs.pop("metadata", {}) | {"frozen": True}
-    return field(**kwargs, metadata=metadata)
-
-
-def freeze_fields[T](cls: type[T]) -> type[T]:
-    """
-    A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
-
-    This is done by replacing the fields with FrozenField descriptors.
-
-    Args:
-        cls: The class to make immutable, must be a dataclass.
-
-    Raises:
-        TypeError: If cls is not a dataclass
-    """
-
-    cls_fields = getattr(cls, "__dataclass_fields__", None)
-    if cls_fields is None:
-        msg = f"{cls} is not a dataclass"
-        raise TypeError(msg)
-
-    params = cls.__dataclass_params__  # type: ignore
-    # _DataclassParams(init=True,repr=True,eq=True,order=True,unsafe_hash=False,
-    #                   frozen=True,match_args=True,kw_only=False,slots=False,
-    #                   weakref_slot=False)
-    if params.frozen:
-        return cls
-
-    for f in fields(cls):  # type: ignore
-        if "frozen" in f.metadata:
-            setattr(cls, f.name, FrozenField(f.name))
-    return cls
 
 
 @freeze_fields
