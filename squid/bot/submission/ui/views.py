@@ -20,7 +20,7 @@ from squid.bot.submission.ui.components import (
     RecordCategorySelect,
     get_text_input,
 )
-from squid.bot.utils import DEFAULT, DefaultType
+from squid.sentinel import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
 

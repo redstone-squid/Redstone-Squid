@@ -25,7 +25,6 @@ from .permissions import (
     is_staff,
     is_trusted_or_staff,
 )
-from .sentinel import DEFAULT, MISSING, DefaultType, MissingType, Sentinel
 from .web import Preview, extract_first_frame, get_website_preview
 
 __all__ = [

@@ -14,8 +14,6 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils import (
-    MISSING,
-    MissingType,
     RunningMessage,
     check_is_owner_server,
     check_is_trusted_or_staff,
@@ -24,6 +22,7 @@ from squid.bot.utils import (
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
 from squid.db.builds import Build
 from squid.db.schema import Message
+from squid.sentinel import MISSING, MissingType
 
 if TYPE_CHECKING:
     import squid.bot
