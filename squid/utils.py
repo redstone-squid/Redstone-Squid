@@ -18,10 +18,12 @@ VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re
 
 
 # https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
-def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
+# Note: This is actually less accurate of a typing than Callable[P, T], but see
+# https://github.com/microsoft/pyright/discussions/10727, pyright could not resolve overloads properly
+def signature_from[Fn: Callable](_original: Fn) -> Callable[[Fn], Fn]:
     """Copies the signature of a function to another function."""
 
-    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
+    def _decorator(func: Fn) -> Fn:
         return func
 
     return _decorator
