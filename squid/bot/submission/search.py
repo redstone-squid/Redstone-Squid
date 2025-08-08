@@ -51,7 +51,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def search_records(self, ctx: Context[BotT], query: str):
         """Searches for a **record** by title."""
         async with RunningMessage(ctx) as sent_message:
-            matches = await search_smallest_door_records(query)
+            matches = await search_smallest_door_records(query, limit=11)
             if not matches:
                 return await sent_message.edit(
                     embed=utils.error_embed("No results found", "No records match that query.")
@@ -65,15 +65,32 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             content = f"Top match: {top_door.title} (score: {matches[0][1]})"
             if build.original_link:
                 content += f"\n{build.original_link}"
+            content += (
+                "\n/search is in early testing, results are likely inaccurate. "
+                "Please use discord's built-in search function if you cannot find "
+                "what you want in the first try"
+            )
             await sent_message.edit(
                 content=content,
                 embed=embed,
             )
-            other_results = matches[1:]
-            await ctx.send(
-                f"Found {len(matches) - 1} other records matching your query.\n"
-                + "\n".join(f"{door.title} (ID: {door.id}) (score: {score})" for door, score, _ in other_results)
-            )
+            other_results = [
+                (door, score, idx)
+                for door, score, idx in matches[1:]
+                if score >= 50
+            ][:10]
+            if other_results:
+                await ctx.send(
+                    f"Found {len(other_results)} other records matching your query.\n"
+                    + "\n".join(
+                        f"{door.title} (ID: {door.id}) (score: {score})"
+                        for door, score, _ in other_results
+                    )
+                )
+            else:
+                await ctx.send(
+                    "No other results met the score threshold."
+                )
 
     @commands.command("search_restrictions")
     @check_is_staff()
