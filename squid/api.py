@@ -42,13 +42,13 @@ class User(BaseModel):
 @app.post("/verify", status_code=201)
 async def get_verification_code(
     user: User, authorization: Annotated[str, Header()], db: Annotated[DatabaseManager, Depends(get_db)]
-) -> int:
+) -> str:
     """Generate a verification code for a user."""
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        return await db.user.generate_verification_code(user.uuid)
+        return await db.user.request_verification_code(user.uuid)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

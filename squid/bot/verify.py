@@ -37,8 +37,7 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
 
         await view.wait()
         if view.value:
-            db = DatabaseManager()
-            if await db.user.unlink_minecraft_account(ctx.author.id):
+            if await self.bot.db.user.unlink_account(ctx.author.id):
                 await ctx.send("Your discord account has been unlinked from your minecraft account.")
             else:
                 await ctx.send(

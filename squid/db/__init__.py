@@ -22,6 +22,7 @@ from squid.db.repos.user_repository import UserRepository
 from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
 from squid.db.services.user_service import UserService
+from squid.db.services.user import UserRepository
 from squid.utils import get_version_string, parse_version_string
 
 
@@ -102,6 +103,15 @@ class DatabaseManager(AsyncClient):
         self.server_setting = ServerSettingManager(self.async_session)
         self.build_tags = BuildTagsManager(self.async_session)
         self.build = BuildManager(self.async_session)
+
+    # For services, we currently can only use properties to access them, to create a new service instance each time
+    # inside the singleton DatabaseManager.
+    @property
+    def user(self):
+        """The user service manager."""
+        session = self.async_session()
+        user_repository = UserRepository(session)
+        return UserService(session, user_repository)
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""

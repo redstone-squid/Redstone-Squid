@@ -3,7 +3,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
 from pydantic.types import Json
@@ -26,6 +26,9 @@ from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
+
+if TYPE_CHECKING:
+    import squid.db.domain
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
@@ -98,22 +101,29 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
-class User(MappedAsDataclass, Base):
+class OrmUser(Base):
     """A user in the system, which can be linked to both Discord and Minecraft accounts."""
 
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
     ign: Mapped[str] = mapped_column(String, default=None)
     discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
 
-    build_creators: Mapped[list["BuildCreator"]] = relationship(
-        back_populates="user", default_factory=list, lazy="raise_on_sql", repr=False
-    )
+    build_creators: Mapped[list["BuildCreator"]] = relationship(back_populates="user", lazy="raise_on_sql")
     builds: AssociationProxy[list["Build"]] = association_proxy(
-        "build_creators", "build", default_factory=list, repr=False, creator=lambda b: BuildCreator(build=b)
+        "build_creators", "build", creator=lambda b: BuildCreator(build=b)
     )
+
+    @classmethod
+    def from_domain(cls, user: "squid.db.domain.User") -> "OrmUser":
+        return cls(id=user.id, ign=user.ign, discord_id=user.discord_id, minecraft_uuid=user.minecraft_uuid)
+
+    def to_domain(self) -> "squid.db.domain.User":
+        from squid.db.domain import User
+
+        return User(id=self.id, ign=self.ign, discord_id=self.discord_id, minecraft_uuid=self.minecraft_uuid)
 
 
 class Version(MappedAsDataclass, Base):
@@ -250,7 +260,7 @@ class Build(MappedAsDataclass, Base, kw_only=True):
     build_creators: Mapped[list["BuildCreator"]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    creators: AssociationProxy[list[User]] = association_proxy(
+    creators: AssociationProxy[list[OrmUser]] = association_proxy(
         "build_creators", "user", default_factory=list, creator=lambda u: BuildCreator(user=u)
     )
 
@@ -375,7 +385,7 @@ class BuildCreator(MappedAsDataclass, Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True, init=False)
 
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
-    user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined", repr=False, default=None)
+    user: Mapped[OrmUser] = relationship(back_populates="build_creators", lazy="joined", repr=False, default=None)
 
 
 class BuildRestriction(MappedAsDataclass, Base):
@@ -443,11 +453,11 @@ class ServerSetting(MappedAsDataclass, Base):
     in_server: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-class VerificationCode(MappedAsDataclass, Base):
+class OrmVerificationCode(Base):
     """A verification code for linking Minecraft accounts."""
 
     __tablename__ = "verification_codes"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False, default="")
@@ -456,6 +466,29 @@ class VerificationCode(MappedAsDataclass, Base):
     expires: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=False), nullable=False, default=func.now() + text("INTERVAL '10 minutes'")
     )
+
+    @classmethod
+    def from_domain(cls, code: "squid.db.domain.VerificationCode") -> "OrmVerificationCode":
+        return cls(
+            minecraft_uuid=code.minecraft_uuid,
+            code=code.hashed_code,
+            username=code.minecraft_username,
+            valid=code.valid,
+            create=code.created,
+            expires=code.expires,
+        )
+
+    def to_domain(self) -> "squid.db.domain.VerificationCode":
+        from squid.db.domain import VerificationCode
+
+        return VerificationCode(
+            minecraft_uuid=self.minecraft_uuid,
+            hashed_code=self.code,
+            minecraft_username=self.username,
+            valid=self.valid,
+            created=self.created,
+            expires=self.expires,
+        )
 
 
 class VoteSession(MappedAsDataclass, Base, kw_only=True):
