@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from typing import TYPE_CHECKING
 
 import vecs
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, hybrid_group
+from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
 from openai import AsyncOpenAI
 from sqlalchemy import select
@@ -23,6 +24,9 @@ from squid.db.schema import Restriction, RestrictionAlias, Status, Type
 
 if TYPE_CHECKING:
     import squid.bot
+
+
+logger = logging.getLogger(__name__)
 
 
 class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
@@ -189,6 +193,43 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
             await sent_message.edit(content=escape_markdown(str(build.__dict__)), embed=None)
         return None
+
+    @Cog.listener("on_command_error")
+    async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
+        """Fallback search when the bot is mentioned and no command is found."""
+
+        assert ctx.command is None, "This listener should only handle non-commands."
+
+        # Only handle CommandNotFound exceptions
+        if not isinstance(exception, commands.CommandNotFound):
+            return
+
+        # Only handle messages that mention the bot
+        content = ctx.message.content
+        mention_variants = when_mentioned(ctx.bot, ctx.message)
+        for mention in mention_variants:
+            if content.startswith(mention):
+                trimmed_content = content[len(mention) :].strip()
+                break
+        else:
+            return  # Bot was not mentioned
+
+        print(trimmed_content)
+
+        # This should never happen, but just in case
+        if ctx.invoked_parents or ctx.invoked_subcommand:  # pragma: no cover
+            logger.warning("A CommandNotFound is being raised despite a subcommand being invoked.")
+            return  # don't interfere with other commands
+
+        # For some reason, empty messages are not caught by CommandNotFound
+        assert trimmed_content != "", "Trimmed content should not be empty."
+
+        try:
+            build_id = int(trimmed_content)
+        except ValueError:
+            await ctx.invoke(self.search_records, query=trimmed_content)
+            return
+        await ctx.invoke(self.view_build, build_id=build_id)
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
