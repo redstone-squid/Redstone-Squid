@@ -82,7 +82,9 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             if other_results:
                 await ctx.send(
                     f"Found {len(other_results)} other records matching your query.\n"
-                    + "\n".join(f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results)
+                    + "\n".join(
+                        f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
+                    )
                 )
             else:
                 await ctx.send("No other results met the score threshold.")
