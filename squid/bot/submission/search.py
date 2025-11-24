@@ -66,7 +66,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             build = await Build.from_id(top_door.id)
             assert build is not None, "A record must have a build."
             embed = await self.bot.for_build(build).generate_embed()
-            content = f"Top match: {top_door.title} (score: {matches[0][1]})"
+            content = f"Top match: {top_door.title} (score: {matches[0][1]:.1f})"
             if build.original_link:
                 content += f"\n{build.original_link}"
             content += (
@@ -82,7 +82,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             if other_results:
                 await ctx.send(
                     f"Found {len(other_results)} other records matching your query.\n"
-                    + "\n".join(f"{door.title} (ID: {door.id}) (score: {score})" for door, score, _ in other_results)
+                    + "\n".join(f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results)
                 )
             else:
                 await ctx.send("No other results met the score threshold.")
