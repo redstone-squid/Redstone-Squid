@@ -1,3 +1,4 @@
+If you want to contribute to this bot PLEASE contact papetoast on discord. I will be happy to onboard you.
 
 # Redstone Squid
 
