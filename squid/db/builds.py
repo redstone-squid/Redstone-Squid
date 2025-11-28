@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
-from typing import Any, Callable, Final, Literal, Self, overload
+from typing import Any, Final, Literal, Self, overload
 
 import discord
 import vecs
@@ -64,6 +64,7 @@ from squid.db.schema import (
     VersionRecord,
 )
 from squid.db.utils import get_version_string
+from squid.utils import signature_from
 
 logger = logging.getLogger(__name__)
 
@@ -114,16 +115,6 @@ class FrozenField[T]:
             raise TypeError(msg) from None
 
         setattr(instance, self._private_name, value)
-
-
-# https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
-def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Copies the signature of a function to another function."""
-
-    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
-        return func
-
-    return _decorator
 
 
 @signature_from(field)
@@ -1254,7 +1245,7 @@ class Build:
         if self.original_message_id is None:
             return
         assert self.original_server_id is not None, "Original server ID must be set for original message."
-        # Channel ID may be None if the message is from DMs
+        assert self.original_channel_id is not None
         assert self.original_message_author_id is not None, (
             "Original message author ID must be set for original message."
         )

@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
@@ -43,6 +44,7 @@ RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLi
 MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
 VoteKindLiteral = Literal["build", "delete_log"]
+VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 
@@ -210,8 +212,8 @@ class Message(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
-    server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    channel_id: Mapped[int | None] = mapped_column(BigInteger)
+    server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # FIXME: server ID should be nullable
+    channel_id: Mapped[int] = mapped_column(BigInteger)  # FIXME: Channel ID should not be nullable
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     purpose: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str | None] = mapped_column(String)
@@ -472,9 +474,10 @@ class VoteSession(Base, kw_only=True):
 
     __tablename__ = "vote_sessions"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    result: Mapped[VoteSessionResultLiteral] = mapped_column(String, nullable=False, default="pending")
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    kind: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[VoteKindLiteral] = mapped_column(String, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
@@ -483,6 +486,9 @@ class VoteSession(Base, kw_only=True):
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
     votes: Mapped[list["Vote"]] = relationship(
+        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
+    )
+    vote_session_emojis: Mapped[list["VoteSessionEmoji"]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
 
@@ -494,14 +500,14 @@ class BuildVoteSession(VoteSession, kw_only=True):
 
     __tablename__ = "build_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True, init=False
     )
     build_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("builds.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
     )
     changes: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
+    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined", init=False, repr=False)
 
     __mapper_args__ = {"polymorphic_identity": "build"}
 
@@ -515,6 +521,7 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
         ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
         primary_key=True,
+        init=False,
     )
     target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -532,8 +539,41 @@ class Vote(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
+    emoji: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+    vote_session: Mapped[VoteSession] = relationship(
+        back_populates="votes", lazy="raise_on_sql", repr=False, default=None
+    )
+
+
+class Event(Base):
+    """An event that can be logged in the database."""
+
+    __tablename__ = "event_outbox"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    aggregate: Mapped[str] = mapped_column(String, nullable=False)
+    aggregate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[Json[Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    processed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    processed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True, default=None)
+
+
+class VoteSessionEmoji(Base):
+    """An emoji associated with a vote session."""
+
+    __tablename__ = "vote_session_emojis"
+
+    vote_session_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+    )
+    emoji: Mapped[str] = mapped_column(String, primary_key=True)
+    default_multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+
+    vote_session: Mapped[VoteSession] = relationship(
+        back_populates="vote_session_emojis", lazy="raise_on_sql", default=None
+    )
 
 
 class BuildRecord(TypedDict):
