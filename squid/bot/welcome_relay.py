@@ -1,4 +1,5 @@
 """Relay select welcome messages to a general discussion channel."""
+
 import asyncio
 import logging
 import random
