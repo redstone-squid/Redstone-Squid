@@ -22,7 +22,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     welcome_channel_id: Final[int] = 1356094722531393680
     general_channel_id: Final[int] = 433618741528625155
-    forward_chance: Final[float] = 1 / 7
+    forward_chance: Final[float] = 1 / 10
 
     def __init__(self, bot: BotT):
         self.bot = bot
