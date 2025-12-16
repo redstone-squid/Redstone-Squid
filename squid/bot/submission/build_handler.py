@@ -4,7 +4,7 @@ import asyncio
 import io
 import mimetypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
@@ -12,17 +12,15 @@ from sqlalchemy import insert, select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
-from squid.bot.voting.vote_session import BuildVoteSession
+from squid.bot.services.vote import DiscordBuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildLink, Message, Status
 from squid.db.utils import upload_to_catbox, utcnow
+from squid.utils import fire_and_forget
 
 if TYPE_CHECKING:
     import squid.bot
-
-
-background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
@@ -90,7 +88,18 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         )
 
         assert build.submitter_id is not None
-        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
+        await DiscordBuildVoteSession.create(
+            self.bot,
+            messages=messages,
+            type="add",
+            diff=None,
+            build=build,
+            author_id=build.submitter_id,
+            approve_emojis=self.bot.default_approve_emojis,
+            deny_emojis=self.bot.default_deny_emojis,
+            pass_threshold=self.bot.new_build_pass_threshold,
+            fail_threshold=self.bot.new_build_fail_threshold,
+        )
 
     async def get_original_message(self) -> discord.Message | None:
         """Gets the original message of the build."""
@@ -99,7 +108,10 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
 
         if self.build.original_channel_id:
             assert self.build.original_message_id is not None
-            return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
+            return await self.bot.get_or_fetch_message(
+                self.build.original_message_id,
+                channel_id=self.build.original_channel_id,
+            )
         return None
 
     async def get_display_messages(self) -> list[discord.Message]:
@@ -113,7 +125,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             result = await session.execute(stmt)
             messages: Sequence[Message] = result.scalars().all()
         maybe_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
+            *(self.bot.get_or_fetch_message(row.id, channel_id=row.channel_id) for row in messages)
         )
         discord_messages = [msg for msg in maybe_messages if msg is not None]
         return discord_messages
@@ -176,9 +188,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                         )
                         build.image_urls.append(preview_url)
                         if build.id is not None:
-                            task = asyncio.create_task(self._insert_video_preview(preview_url))
-                            background_tasks.add(task)
-                            task.add_done_callback(background_tasks.discard)
+                            fire_and_forget(self._insert_video_preview(preview_url))
                         em.set_image(url=preview_url)
                     break
 

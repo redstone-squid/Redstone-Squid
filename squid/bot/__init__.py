@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable, Sequence
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
@@ -24,6 +24,16 @@ from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 from squid.db.schema import Base
+
+__all__ = [
+    "RedstoneSquid",
+    "BotConfig",
+    "ApplicationConfig",
+    "setup_logging",
+    "start_logging",
+    "main",
+]
+
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -91,6 +101,10 @@ class RedstoneSquid(Bot):
         self.owner_server_id = config.get("owner_server_id")
         self.source_code_url = config.get("source_code_url")
         self.print_tracebacks = config.get("print_tracebacks", False)
+        self.default_approve_emojis = ["👍", "✅"]
+        self.default_deny_emojis = ["👎", "❌"]
+        self.new_build_pass_threshold = 3
+        self.new_build_fail_threshold = -3
 
     @override
     async def setup_hook(self) -> None:
@@ -102,7 +116,7 @@ class RedstoneSquid(Bot):
             "squid.bot.submission",
             "squid.bot.log",
             "squid.bot.help",
-            "squid.bot.voting.vote",
+            "squid.bot.vote",
             "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",
@@ -112,6 +126,9 @@ class RedstoneSquid(Bot):
         ]
 
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
+        # Special handling for events_dispatcher, which has to be loaded last to ensure all event handlers are registered
+        # before it starts listening to events.
+        await self.load_extension("squid.bot.events_dispatcher")
         self.call_supabase_to_prevent_deactivation.start()
 
     @tasks.loop(hours=24)
@@ -124,9 +141,13 @@ class RedstoneSquid(Bot):
         """Clean up dangling build locks in case some functions failed to release them."""
         await clean_locks()
 
-    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
+    async def get_or_fetch_message(self, message_id: int, *, channel_id: int | None = None) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
+
+        Args:
+            message_id (int): The ID of the message to fetch.
+            channel_id (int | None): The ID of the channel where the message is located. If not provided, the bot will try to fetch the channel from the database cache.
 
         Raises:
             ValueError: The channel is not a MessageableChannel and thus no message can exist in it.
@@ -134,6 +155,14 @@ class RedstoneSquid(Bot):
             discord.Forbidden: The bot does not have permission to fetch the channel or message.
             discord.NotFound: The channel or message was not found.
         """
+        # No channel ID given, try to fetch the message from the database cache
+        if channel_id is None:
+            message = await self.db.message.get_message_by_id(message_id)
+            if message is None:
+                logger.debug("Message %s not found in database cache.", message_id)
+                return None
+            channel_id = message.channel_id
+
         channel = self.get_channel(channel_id)
         if channel is None:
             channel = await self.fetch_channel(channel_id)
@@ -144,9 +173,36 @@ class RedstoneSquid(Bot):
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
             await DatabaseManager().message.untrack_message(message_id)
+            return None
         except discord.Forbidden:
-            pass
-        return None
+            return None
+
+    async def get_or_fetch_messages(
+        self, message_ids: Sequence[int], *, channel_ids: Sequence[int | None] | None = None
+    ) -> AsyncIterator[discord.Message | None]:
+        """
+        Fetches multiple messages from the cache or the API.
+
+        Args:
+            message_ids (Sequence[int]): The IDs of the messages to fetch.
+            channel_ids (Sequence[int] | None): The IDs of the channels where the messages are located. If not provided, the bot will try to fetch the channels from the database cache.
+
+        Yields:
+            discord.Message | None: The fetched messages, or None if a message could not be found.
+
+        Raises:
+            ValueError: If the length of `message_ids` and `channel_ids` do not match.
+        """
+        if channel_ids is None:
+            channel_ids = [None] * len(message_ids)
+
+        tasks: list[asyncio.Task[discord.Message | None]] = []
+        for message_id, channel_id in zip(message_ids, channel_ids, strict=True):
+            tasks.append(asyncio.create_task(self.get_or_fetch_message(message_id, channel_id=channel_id)))
+
+        for task in asyncio.as_completed(tasks):
+            message = await task
+            yield message
 
     def get_running_message(
         self,

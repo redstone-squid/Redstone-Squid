@@ -54,6 +54,28 @@ class MessageManager:
             await session.execute(stmt)
             await session.commit()
 
+    async def get_message_by_id(self, message_id: int) -> Message | None:
+        """Get a message from the database.
+
+        Returns:
+            The Message object if found, otherwise None.
+        """
+        async with self.session() as session:
+            stmt = select(Message).where(Message.id == message_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_messages_by_id(self, message_ids: Sequence[int]) -> Sequence[Message]:
+        """Get multiple messages from the database.
+
+        Returns:
+            A list of Message objects.
+        """
+        async with self.session() as session:
+            stmt = select(Message).where(Message.id.in_(message_ids))
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
     async def update_message_edited_time(self, message: int | discord.Message) -> None:
         """
         Update the edited time of a message.
@@ -67,17 +89,14 @@ class MessageManager:
             await session.execute(stmt)
             await session.commit()
 
-    async def untrack_message(self, message: int | discord.Message) -> Message:
+    async def untrack_message(self, message: int | discord.Message) -> Message | None:
         """Untrack message from the database. The message is not deleted on discord.
 
         Args:
             message: The message to untrack. Either the message id or the message object.
 
         Returns:
-            A Message that is untracked.
-
-        Raises:
-            ValueError: If the message is not found.
+            A Message that is untracked, or None if the message was not found.
         """
         message_id = message.id if isinstance(message, discord.Message) else message
         async with self.session() as session:
@@ -86,7 +105,7 @@ class MessageManager:
             message_obj = result.scalar_one_or_none()
 
             if message_obj is None:
-                raise ValueError(f"Message with id {message_id} not found.")
+                return None
 
             await session.delete(message_obj)
             await session.commit()
@@ -106,16 +125,3 @@ class MessageManager:
             result = await session.execute(stmt, {"server_id_input": server_id})
             rows = result.scalars().fetchall()
             return rows
-
-
-async def main():
-    from squid.db import DatabaseManager
-
-    # print(get_outdated_message(433618741528625152, 30))
-    print(await DatabaseManager().message.get_outdated_messages(433618741528625153))
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
