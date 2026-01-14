@@ -124,7 +124,9 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
             stickers=message.stickers,
-            allowed_mentions=discord.AllowedMentions.none(),
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False, users=(message.author,), roles=False, replied_user=False
+            ),
         )
         if delete_original:
             await message.delete()
