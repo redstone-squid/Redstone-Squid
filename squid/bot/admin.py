@@ -111,7 +111,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
-    async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = False):
+    async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
         """Makes a copy of the message in the current channel."""
         if isinstance(message.author, discord.User):
             user = message.author
