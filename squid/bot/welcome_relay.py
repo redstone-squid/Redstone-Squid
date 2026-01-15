@@ -55,7 +55,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
             return
 
         await asyncio.sleep(5)  # Wait a bit to ensure the member is already cached from on_member_join
-        for member_name, member in self.pending_members.items():
+        for member_name, member in self.pending_members.items():  # noqa: B007
             if member_name in message.system_content:
                 break
         else:

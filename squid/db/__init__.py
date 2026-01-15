@@ -217,9 +217,7 @@ class DatabaseManager(AsyncClient):
                 if len(subparts) == 2:
                     major, minor = map(int, subparts)
                     valid_tuples.extend(
-                        v_tuple
-                        for v_tuple in all_version_tuples
-                        if v_tuple[0] == major and v_tuple[1] == minor
+                        v_tuple for v_tuple in all_version_tuples if v_tuple[0] == major and v_tuple[1] == minor
                     )
                 # If a full version specified (like "1.17.1"), match exactly that version
                 elif len(subparts) == 3:

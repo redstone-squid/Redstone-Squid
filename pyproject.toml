@@ -104,6 +104,8 @@ ignore = [
     "TRY003",  # Avoid specifying long messages outside the exception class
     "RUF009",
     "RUF012",  # TODO
+    "FBT001",
+    "FBT002",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -113,6 +115,7 @@ ignore = [
 
 "alembic/**.py" = ["INP"]
 "alembic/versions/*.py" = ["D"]
+"scripts/**.py" = ["INP"]
 
 "!tests/**.py" = ["PT"]
 "tests/**.py" = [

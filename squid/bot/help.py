@@ -132,9 +132,7 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        details: list[str] = [
-            f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}" for cog in cogs
-        ]
+        details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}" for cog in cogs]
         if return_as_list:
             return details
         return "".join(details)
