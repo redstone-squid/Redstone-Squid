@@ -7,13 +7,13 @@ import re
 import time
 import typing
 import warnings
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
-from typing import Any, Callable, Final, Literal, Self, overload
+from typing import Any, Final, Literal, Self, overload
 
 import discord
 from openai import AsyncOpenAI, OpenAIError
@@ -129,7 +129,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
     if cls_fields is None:
         raise TypeError(f"{cls} is not a dataclass")
 
-    params = getattr(cls, "__dataclass_params__")
+    params = cls.__dataclass_params__
     # _DataclassParams(init=True,repr=True,eq=True,order=True,unsafe_hash=False,
     #                   frozen=True,match_args=True,kw_only=False,slots=False,
     #                   weakref_slot=False)
@@ -535,9 +535,7 @@ class Build:
 
         # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
         for restriction in self.extra_info.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
-            if re.match(r"\d+\.\d+\s*s", restriction):
-                title += f"{restriction} "
-            elif re.match(r"\d+\s*[Bb]locks", restriction):
+            if re.match(r"\d+\.\d+\s*s", restriction) or re.match(r"\d+\s*[Bb]locks", restriction):
                 title += f"{restriction} "
 
         # FIXME: This is included in the title for now to match people's expectations
@@ -786,7 +784,7 @@ class LockContextManager:
     async def __aenter__(self):
         if await self.lock.acquire(blocking=self.blocking, timeout=self.timeout):
             return self.lock
-        raise asyncio.TimeoutError("Timed out waiting for lock")
+        raise TimeoutError("Timed out waiting for lock")
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None

@@ -3,11 +3,11 @@
 import asyncio
 import logging
 import os
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
-from typing import Any, Callable, Final, Self, TypedDict, override
+from typing import Any, Final, Self, TypedDict, override
 
 import discord
 from discord import Webhook

@@ -72,7 +72,7 @@ class RunningMessage:
     ) -> bool:
         # Handle exceptions
         if exc_type is not None:
-            description = f"{str(exc_val)}"
+            description = f"{exc_val!s}"
             if self.print_tracebacks:
                 description += f"\n\n```{''.join(format_tb(exc_tb))}```"
             await self.sent_message.edit(

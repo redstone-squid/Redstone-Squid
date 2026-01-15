@@ -115,7 +115,7 @@ def base_and_sane_many_to_many_models():
             "ManyToManyModel1", secondary="many_to_many_association", back_populates="model2s"
         )
 
-    association_table = sqlalchemy.Table(  # noqa: F841
+    association_table = sqlalchemy.Table(
         "many_to_many_association",
         Base.metadata,
         Column("model1_id", Integer, ForeignKey("many_to_many_test_1.id")),

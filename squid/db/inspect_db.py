@@ -118,9 +118,8 @@ def check_column_property(
                 column.table,
             )
             continue
-        else:
-            assert isinstance(column.table, Table), "Expected column.table to be a Table instance"
-            table = column.table.name
+        assert isinstance(column.table, Table), "Expected column.table to be a Table instance"
+        table = column.table.name
         # Check column exists
         if column.key not in schema.columns[table]:
             logger.error(
@@ -261,7 +260,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
             )
             klass = cast(type[DeclarativeBase], klass)
 
-        table: str = getattr(klass, "__tablename__")
+        table: str = klass.__tablename__
         if not table:
             logger.error("Model %s does not have a __tablename__ attribute", klass)
             errors = True

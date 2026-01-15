@@ -3,7 +3,8 @@
 import logging
 import os
 import re
-from typing import TYPE_CHECKING, Any, Callable, Self, cast, override
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Self, cast, override
 
 import discord
 from beartype.door import is_bearable

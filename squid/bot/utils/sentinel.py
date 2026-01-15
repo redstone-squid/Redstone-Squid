@@ -26,7 +26,7 @@ class Sentinel:
 
         registry_key = f"{module_name}-{name}"
 
-        sentinel = _registry.get(registry_key, None)
+        sentinel = _registry.get(registry_key)
         if sentinel is not None:
             return sentinel
 

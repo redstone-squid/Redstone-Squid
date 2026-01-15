@@ -61,9 +61,9 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         if ctx.kwargs:
             command += f" {' '.join(f'{k}:{v}' for k, v in ctx.kwargs.items())}"
         if ctx.guild is not None:
-            log_message = f'{str(ctx.author)} ran: "{command}" in server: {ctx.guild.name}.'
+            log_message = f'{ctx.author!s} ran: "{command}" in server: {ctx.guild.name}.'
         else:
-            log_message = f'{str(ctx.author)} ran: "{command}" in a private message.'
+            log_message = f'{ctx.author!s} ran: "{command}" in a private message.'
 
         owner_dmed_bot = (ctx.guild is None) and await ctx.bot.is_owner(ctx.message.author)
         await self.log(log_message, dm_owner=(not owner_dmed_bot))

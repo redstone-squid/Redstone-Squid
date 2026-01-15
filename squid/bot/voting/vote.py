@@ -69,11 +69,10 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
             if kind == "build":
                 return await BuildVoteSession.from_id(self.bot, vote_session_id)
-            elif kind == "delete_log":
+            if kind == "delete_log":
                 return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
-            else:
-                logger.error("Unknown vote session kind: %s", kind)
-                raise NotImplementedError(f"Unknown vote session kind: {kind}")
+            logger.error("Unknown vote session kind: %s", kind)
+            raise NotImplementedError(f"Unknown vote session kind: {kind}")
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
