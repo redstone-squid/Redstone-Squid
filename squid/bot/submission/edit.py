@@ -1,6 +1,7 @@
 """A cog with commands to editing builds."""
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -74,26 +75,18 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             if self.component_restrictions is not MISSING:
                 build.component_restrictions = self.component_restrictions
             if self.locationality is not MISSING:
-                try:
+                with contextlib.suppress(ValueError):
                     build.miscellaneous_restrictions.remove("Locational")
-                except ValueError:
-                    pass
-                try:
+                with contextlib.suppress(ValueError):
                     build.miscellaneous_restrictions.remove("Locational with fixes")
-                except ValueError:
-                    pass
                 if self.locationality != "Not locational":
                     build.miscellaneous_restrictions.append(self.locationality)
 
             if self.directionality is not MISSING:
-                try:
+                with contextlib.suppress(ValueError):
                     build.miscellaneous_restrictions.remove("Directional")
-                except ValueError:
-                    pass
-                try:
+                with contextlib.suppress(ValueError):
                     build.miscellaneous_restrictions.remove("Directional with fixes")
-                except ValueError:
-                    pass
                 if self.directionality != "Not directional":
                     build.miscellaneous_restrictions.append(self.directionality)
 

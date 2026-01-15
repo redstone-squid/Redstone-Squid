@@ -93,9 +93,8 @@ async def get_website_preview(url: str) -> Preview:
 
     # Fallbacks if OG/Twitter meta not found:
     # title: <title> tag
-    if not preview["title"]:
-        if soup.title and soup.title.string:
-            preview["title"] = soup.title.string.strip()
+    if not preview["title"] and soup.title and soup.title.string:
+        preview["title"] = soup.title.string.strip()
     # description: <meta name="description" content="..." />
     if not preview["description"]:
         preview["description"] = get_meta_content("description", "name")
@@ -139,6 +138,7 @@ async def extract_first_frame(video_url: str) -> io.BytesIO:
     out, err = await process.communicate()
 
     if process.returncode != 0:
-        raise RuntimeError(f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}")
+        msg = f"ffmpeg process failed. stderr: {err.decode('utf-8', errors='ignore')}"
+        raise RuntimeError(msg)
 
     return io.BytesIO(out)

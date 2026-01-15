@@ -29,7 +29,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
         self.random = random.Random()
         self.pending_members: dict[str, discord.Member] = {}
         """Maps user names(!) to members who recently joined.
-        
+
         This is because the discord welcome message only contains the user name, not the full member object.
         """
 

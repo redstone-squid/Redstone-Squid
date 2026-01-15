@@ -85,7 +85,8 @@ class BuildTagsManager:
         Returns:
             A list of Restriction objects.
         """
-        raise NotImplementedError("This method is not implemented yet.")
+        msg = "This method is not implemented yet."
+        raise NotImplementedError(msg)
 
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
         """Add an alias for a restriction by its ID.

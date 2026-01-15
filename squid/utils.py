@@ -14,8 +14,7 @@ VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re
 def utcnow() -> str:
     """Returns the current time in UTC in the format of a string."""
     current_utc = datetime.now(tz=UTC)
-    formatted_time = current_utc.strftime("%Y-%m-%dT%H:%M:%S")
-    return formatted_time
+    return current_utc.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: str) -> str:
@@ -39,8 +38,7 @@ async def upload_to_catbox(filename: str, file: bytes | io.BytesIO, mimetype: st
     data.add_field("fileToUpload", file, filename=filename, content_type=mimetype)
 
     async with aiohttp.ClientSession(trust_env=True) as session, session.post(catbox_url, data=data) as response:
-        response_text = await response.text()
-        return response_text
+        return await response.text()
 
 
 def get_version_string(version: Version, no_edition: bool = False) -> str:
@@ -59,7 +57,8 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
 
     match = VERSION_PATTERN.match(version_string)
     if not match:
-        raise ValueError("Invalid version string format.")
+        msg = "Invalid version string format."
+        raise ValueError(msg)
 
     edition, major, minor, patch = match.groups()
     return edition or "Java", int(major), int(minor), int(patch)  # type: ignore

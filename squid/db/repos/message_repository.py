@@ -96,7 +96,8 @@ class MessageRepository:
             message_obj = result.scalar_one_or_none()
 
             if message_obj is None:
-                raise ValueError(f"Message with id {message_id} not found.")
+                msg = f"Message with id {message_id} not found."
+                raise ValueError(msg)
 
             await session.delete(message_obj)
             await session.commit()
@@ -117,5 +118,4 @@ class MessageRepository:
         stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
         async with self._session() as session:
             result = await session.execute(stmt)
-            rows = result.scalars().all()
-            return rows
+            return result.scalars().all()

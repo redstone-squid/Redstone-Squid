@@ -15,7 +15,8 @@ def connect():
 
         # Checking environment variables exist
         if not credentials:
-            raise RuntimeError("Specify google credentials with a client_secret.json or environment variables.")
+            msg = "Specify google credentials with a client_secret.json or environment variables."
+            raise RuntimeError(msg)
 
         # Formatting credentials
         credentials = json.loads(credentials)

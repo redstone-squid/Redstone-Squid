@@ -7,9 +7,9 @@ import os
 
 from discord.ext import commands
 from dotenv import load_dotenv
+from squid.config import DEV_MODE
 
 from squid.bot import RedstoneSquid, setup_logging
-from squid.config import DEV_MODE
 from squid.db import DatabaseManager
 
 
@@ -34,7 +34,8 @@ async def main():
         load_dotenv()
         token = os.environ.get("BOT_TOKEN")
         if not token:
-            raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
+            msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
+            raise RuntimeError(msg)
         await bot.login(token)
         await migrate(bot)
 

@@ -28,7 +28,8 @@ class UserService:
             ValueError: If all parameters are None.
         """
         if discord_id is None and minecraft_uuid is None and ign is None:
-            raise ValueError("At least one of discord_id, minecraft_uuid, or ign must be provided.")
+            msg = "At least one of discord_id, minecraft_uuid, or ign must be provided."
+            raise ValueError(msg)
         return await self._user_repo.add(discord_id=discord_id, minecraft_uuid=minecraft_uuid, ign=ign)
 
     async def link_minecraft_account(self, discord_id: int, code: str) -> None:
@@ -43,7 +44,8 @@ class UserService:
         """
         verification_code = await self._user_repo.get_valid_verification_code(code)
         if verification_code is None:
-            raise VerificationError(f"Invalid or expired verification code: {code}. Please generate a new code.")
+            msg = f"Invalid or expired verification code: {code}. Please generate a new code."
+            raise VerificationError(msg)
 
         user = await self._user_repo.get_by_discord_id(discord_id)
         if user is None:
@@ -55,10 +57,11 @@ class UserService:
             return
 
         if user.minecraft_uuid is not None and user.minecraft_uuid != verification_code.minecraft_uuid:
-            raise VerificationError(
+            msg = (
                 f"User {discord_id} already has a Minecraft account linked: {user.minecraft_uuid}. "
                 "Please unlink it before linking a new one."
             )
+            raise VerificationError(msg)
         user.minecraft_uuid = verification_code.minecraft_uuid
         user.ign = verification_code.username
         await self._user_repo.update(user)
@@ -85,18 +88,17 @@ class UserService:
             The user's Minecraft username. None if the UUID is invalid.
         """
         # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"https://sessionserver.mojang.com/session/minecraft/profile/{minecraft_uuid!s}"
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data["name"]
-                if response.status == 204:  # No content
-                    return None
-                raise ValueError(
-                    f"Failed to get username for UUID {minecraft_uuid}. The Mojang API returned status code {response.status}."
-                )
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{minecraft_uuid!s}") as response,
+        ):
+            if response.status == 200:
+                data = await response.json()
+                return data["name"]
+            if response.status == 204:  # No content
+                return None
+            msg = f"Failed to get username for UUID {minecraft_uuid}. The Mojang API returned status code {response.status}."
+            raise ValueError(msg)
 
     async def generate_verification_code(self, minecraft_uuid: UUID):
         """Generate a new verification code for a user and invalidate any existing ones.
@@ -112,7 +114,8 @@ class UserService:
         """
         minecraft_username = await self.get_minecraft_username(minecraft_uuid)
         if minecraft_username is None:
-            raise ValueError(f"User {minecraft_uuid} does not match a valid Minecraft account.")
+            msg = f"User {minecraft_uuid} does not match a valid Minecraft account."
+            raise ValueError(msg)
 
         await self._user_repo.invalidate_codes(minecraft_uuid)
 

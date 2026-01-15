@@ -129,7 +129,8 @@ class BuildManager:
             case "Entrance":
                 raise NotImplementedError
             case _:
-                raise ValueError("Invalid category")
+                msg = "Invalid category"
+                raise ValueError(msg)
 
         # FIXME: This is hardcoded for now
         if types := data.get("types"):
@@ -220,7 +221,8 @@ class BuildManager:
     def from_sql_build(sql_build: SQLBuild) -> Build:
         """Converts a SQLBuild to a Build object."""
         if not isinstance(sql_build, Door):
-            raise ValueError("Can only handle doors right now.")
+            msg = "Can only handle doors right now."
+            raise ValueError(msg)
         door = sql_build
         return Build(
             id=door.id,
@@ -270,7 +272,8 @@ class BuildManager:
         if build.id is None:
             delete_build_on_error = True
             if build.submitter_id is None:
-                raise ValueError("Submitter ID must be set for new builds.")
+                msg = "Submitter ID must be set for new builds."
+                raise ValueError(msg)
 
             # Create new build - determine the right subclass
             if build.category == BuildCategory.DOOR:
@@ -299,7 +302,8 @@ class BuildManager:
                     visible_closing_time=build.visible_closing_time,
                 )
             else:
-                raise ValueError(f"Only doors are supported for now, got {build.category}.")
+                msg = f"Only doors are supported for now, got {build.category}."
+                raise ValueError(msg)
 
             async with self.session() as session:
                 await self._setup_relationships(build, session, sql_build)
@@ -330,9 +334,11 @@ class BuildManager:
 
                 # Update basic attributes
                 if build.submission_status is None:
-                    raise ValueError("Submission status must be set for existing builds.")
+                    msg = "Submission status must be set for existing builds."
+                    raise ValueError(msg)
                 if build.submitter_id is None:
-                    raise ValueError("Submitter ID must be set for existing builds.")
+                    msg = "Submitter ID must be set for existing builds."
+                    raise ValueError(msg)
                 sql_build.submission_status = build.submission_status
                 sql_build.record_category = build.record_category
                 sql_build.width = build.width
@@ -356,7 +362,8 @@ class BuildManager:
                     sql_build.visible_opening_time = build.visible_opening_time
                     sql_build.visible_closing_time = build.visible_closing_time
                 else:
-                    raise ValueError(f"Only doors are supported for now, got {sql_build.category}.")
+                    msg = f"Only doors are supported for now, got {sql_build.category}."
+                    raise ValueError(msg)
 
                 # Clear existing relationships and set up new ones
                 sql_build.build_creators.clear()
@@ -407,7 +414,7 @@ class BuildManager:
                     await session.execute(stmt)
                     await session.commit()
             else:
-                logger.error(
+                logger.exception(
                     "Failed to update build %s. This means the build is in an inconsistent state.", repr(build)
                 )
             raise
@@ -580,7 +587,8 @@ class BuildManager:
             ValueError: If the build could not be confirmed.
         """
         if build.id is None:
-            raise ValueError("Build ID is missing.")
+            msg = "Build ID is missing."
+            raise ValueError(msg)
 
         async with build.lock(timeout=30):
             build.submission_status = Status.CONFIRMED
@@ -589,7 +597,8 @@ class BuildManager:
                 result = await session.execute(stmt)
                 await session.commit()
                 if result.rowcount != 1:
-                    raise ValueError("Failed to confirm submission in the database.")
+                    msg = "Failed to confirm submission in the database."
+                    raise ValueError(msg)
 
     async def deny(self, build: Build) -> None:
         """Marks the build as denied.
@@ -598,7 +607,8 @@ class BuildManager:
             ValueError: If the build could not be denied.
         """
         if build.id is None:
-            raise ValueError("Build ID is missing.")
+            msg = "Build ID is missing."
+            raise ValueError(msg)
 
         async with build.lock(timeout=30):
             build.submission_status = Status.DENIED
@@ -607,7 +617,8 @@ class BuildManager:
                 result = await session.execute(stmt)
                 await session.commit()
                 if result.rowcount != 1:
-                    raise ValueError("Failed to deny submission in the database.")
+                    msg = "Failed to deny submission in the database."
+                    raise ValueError(msg)
 
     async def get_builds_by_filter(self, *, filter: Mapping[str, Any] | None = None) -> list[Build]:
         """Fetches all builds from the database, optionally filtered by submission status.
@@ -690,8 +701,7 @@ class BuildManager:
         stmt = select(SmallestDoor).where(SmallestDoor.title.is_(None))
         async with self.session() as session:
             result = await session.execute(stmt)
-            smallest_doors = result.scalars().all()
-        return smallest_doors
+            return result.scalars().all()
 
     async def update_smallest_door_records_without_title(self) -> None:
         """Update the titles of all records in the database."""

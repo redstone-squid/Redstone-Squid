@@ -1,5 +1,6 @@
 """Tests for checking database sanity checks functions correctly."""
 
+import contextlib
 from collections.abc import Generator
 from typing import Any, cast
 
@@ -154,10 +155,8 @@ def test_sanity_check_passes_with_valid_tables(
     """Test that database sanity check passes when tables and columns are properly created."""
     Base, SaneTestModel = base_and_sane_model
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     Base.metadata.create_all(db_engine)
 
@@ -173,10 +172,8 @@ def test_sanity_check_fails_with_missing_table(
     """Test that database sanity check fails when a required table is missing."""
     Base, SaneTestModel = base_and_sane_model
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing tables"
 
@@ -187,10 +184,8 @@ def test_sanity_check_fails_with_missing_column(
     """Test that database sanity check fails when a required column is missing."""
     Base, SaneTestModel = base_and_sane_model
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     Base.metadata.create_all(db_engine)
     with db_engine.connect() as connection:
@@ -206,10 +201,8 @@ def test_sanity_check_passes_with_relationships(
     """Test that database sanity check correctly handles relationship tables."""
     Base, RelationTestModel, RelationTestModel2 = base_and_sane_relation_models
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     Base.metadata.create_all(db_engine)
 
@@ -225,10 +218,8 @@ def test_sanity_check_passes_with_declarative_attributes(
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_sane_declarative_model
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     Base.metadata.create_all(db_engine)
 
@@ -251,7 +242,7 @@ def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list
 
 
 @pytest.mark.parametrize(
-    "supposed_column_type,db_type",
+    ("supposed_column_type", "db_type"),
     [
         (String(50), "VARCHAR(50)"),
         (Integer, "INTEGER"),
@@ -293,10 +284,8 @@ def test_sanity_check_fails_with_column_type_mismatch(
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
         test_column: Mapped[Any] = mapped_column(incorrect_column_type, nullable=False)
 
-    try:
+    with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
-    except NoSuchTableError:
-        pass
 
     Base.metadata.create_all(db_engine, tables=[cast(Table, TestModel.__table__)])
     # Change the type of the test_column to the correct type

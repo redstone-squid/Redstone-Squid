@@ -86,8 +86,9 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                         f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
                     )
                 )
-            else:
-                await ctx.send("No other results met the score threshold.")
+                return None
+            await ctx.send("No other results met the score threshold.")
+            return None
 
     @commands.command("search_restrictions")
     @check_is_staff()

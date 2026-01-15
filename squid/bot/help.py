@@ -84,9 +84,9 @@ class Help(commands.MinimalHelpCommand):
         desc = dedent(
             f"""\
             {self.context.bot.description}
-    
+
             Commands:{self.get_commands_brief_details(commands_)}
-    
+
             {MORE_INFORMATION}
             """
         )

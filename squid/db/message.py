@@ -36,12 +36,15 @@ class MessageService:
             ValueError: If required parameters are missing for specific purposes.
         """
         if message.guild is None:
-            raise NotImplementedError("Cannot track messages in DMs.")  # TODO
+            msg = "Cannot track messages in DMs."
+            raise NotImplementedError(msg)  # TODO
 
         if purpose in ["view_pending_build", "confirm_pending_build"] and build_id is None:
-            raise ValueError("build_id cannot be None for this purpose.")
+            msg = "build_id cannot be None for this purpose."
+            raise ValueError(msg)
         if purpose == "vote" and vote_session_id is None:
-            raise ValueError("vote_session_id cannot be None for this purpose.")
+            msg = "vote_session_id cannot be None for this purpose."
+            raise ValueError(msg)
 
         await self._message_repo.insert(
             message_id=message.id,

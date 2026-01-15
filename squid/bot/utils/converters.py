@@ -40,7 +40,8 @@ class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int |
         try:
             dims = parse_dimensions(argument)
         except ValueError:
-            raise commands.BadArgument("Invalid dimensions")
+            msg = "Invalid dimensions"
+            raise commands.BadArgument(msg)
         else:
             return dims
 
@@ -95,7 +96,8 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
         try:
             return int(argument)
         except ValueError:
-            raise commands.BadArgument("Invalid integer")
+            msg = "Invalid integer"
+            raise commands.BadArgument(msg)
 
     @override
     async def transform(self, interaction: Interaction[ClientT], value: Any, /) -> Any:
@@ -104,4 +106,5 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
         try:
             return int(value)
         except ValueError:
-            raise ValueError("Invalid integer")
+            msg = "Invalid integer"
+            raise ValueError(msg)

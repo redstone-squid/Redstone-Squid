@@ -126,7 +126,8 @@ class BuildField[T](discord.ui.TextInput):
         try:
             value: T = getattr(build, attribute)
         except AttributeError:
-            raise ValueError(f"Invalid attribute {attribute}")
+            msg = f"Invalid attribute {attribute}"
+            raise ValueError(msg)
         if not is_bearable(value, attr_type):
             logger.error("Invalid hint for %s: %s", attribute, attr_type)
 

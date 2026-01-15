@@ -183,7 +183,8 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     async def error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
         async with self.bot.get_running_message(ctx, delete_on_exit=True):
-            raise ValueError("This is a test error.")
+            msg = "This is a test error."
+            raise ValueError(msg)
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
