@@ -20,7 +20,7 @@ class UserRepository:
     ) -> User:
         """Insert a new user and return its primary key."""
         async with self._session() as session:
-            user = User(discord_id=discord_id, ign=ign, minecraft_uuid=minecraft_uuid)
+            user = User(discord_id=discord_id, ign=ign or "", minecraft_uuid=minecraft_uuid)  # FIXME: Allow empty IGN
             session.add(user)
             await session.flush()
             await session.commit()

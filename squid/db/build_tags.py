@@ -1,7 +1,8 @@
 """Functions for build types and restrictions."""
 
 import asyncio
-from typing import Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 from async_lru import alru_cache
 from sqlalchemy import select

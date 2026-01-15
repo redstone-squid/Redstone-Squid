@@ -3,42 +3,43 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import vecs
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
 from rapidfuzz import process
-from sqlalchemy import select, update, func, delete
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from squid.db.builds import Build, all_build_columns, JoinedBuildRecord
+from squid.db.builds import Build, JoinedBuildRecord, all_build_columns
 from squid.db.schema import (
     Build as SQLBuild,
-    RestrictionRecord,
-    VersionRecord,
-    Version,
-    LinkRecord,
-    MessageRecord,
-    Door,
-    Type,
-    Restriction,
-    UnknownRestrictions,
-    User,
-    BuildLink,
-    MediaTypeLiteral,
 )
 from squid.db.schema import (
     BuildCategory,
     BuildCreator,
+    BuildLink,
     BuildRestriction,
     BuildType,
     BuildVersion,
+    Door,
+    LinkRecord,
+    MediaTypeLiteral,
     Message,
+    MessageRecord,
+    Restriction,
+    RestrictionRecord,
     SmallestDoor,
     Status,
+    Type,
+    UnknownRestrictions,
+    User,
+    Version,
+    VersionRecord,
 )
 from squid.utils import get_version_string
 
@@ -301,7 +302,7 @@ class BuildManager:
                 raise ValueError(f"Only doors are supported for now, got {build.category}.")
 
             async with self.session() as session:
-                await self._setup_relationships(session, sql_build)
+                await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
                 await session.commit()
                 build.id = sql_build.id
@@ -364,7 +365,7 @@ class BuildManager:
                 sql_build.build_types.clear()
                 sql_build.links.clear()
 
-                await self._setup_relationships(session, sql_build)
+                await self._setup_relationships(build, session, sql_build)
                 await session.commit()
 
         # Handle embedding and vector storage
@@ -406,7 +407,9 @@ class BuildManager:
                     await session.execute(stmt)
                     await session.commit()
             else:
-                logger.error("Failed to update build %s. This means the build is in an inconsistent state.", repr(build))
+                logger.error(
+                    "Failed to update build %s. This means the build is in an inconsistent state.", repr(build)
+                )
             raise
         finally:
             build.lock.build_id = build.id
@@ -424,7 +427,7 @@ class BuildManager:
             build.wiring_placement_restrictions + build.component_restrictions + build.miscellaneous_restrictions
         )
         if all_restrictions:
-            restriction_objects, unknown_restrictions = await self._get_restrictions(session, all_restrictions)
+            restriction_objects, unknown_restrictions = await self._get_restrictions(build, session, all_restrictions)
             sql_build.restrictions = restriction_objects
             # Update extra_info with unknown restrictions
             if unknown_restrictions:
@@ -435,7 +438,7 @@ class BuildManager:
         # Handle types
         if not build.door_type:
             build.door_type = ["Regular"]
-        type_objects, unknown_types = await self._get_types(session, build.door_type)
+        type_objects, unknown_types = await self._get_types(build, session, build.door_type)
         sql_build.types = type_objects
         # Update extra_info with unknown types
         if unknown_types:
@@ -443,6 +446,7 @@ class BuildManager:
 
         # Handle versions
         from squid.db import DatabaseManager  # FIXME
+
         functional_versions = build.versions or [await DatabaseManager().get_or_fetch_newest_version(edition="Java")]
         version_objects = await self._get_versions(session, functional_versions)
         sql_build.versions = version_objects
@@ -480,7 +484,7 @@ class BuildManager:
 
     @staticmethod
     async def _get_restrictions(
-        build, session: AsyncSession, restrictions: list[str]
+        build: Build, session: AsyncSession, restrictions: list[str]
     ) -> tuple[list[Restriction], UnknownRestrictions]:
         """Get Restriction objects and identify unknown restrictions."""
         restrictions_titled = [r.title() for r in restrictions]
@@ -625,6 +629,7 @@ class BuildManager:
             A list of Build objects.
         """
         from squid.db import DatabaseManager  # FIXME
+
         # TODO: This is not trtivial in SQLAlchemy, so we keep the supabase client to do this.
         db = DatabaseManager()
         query = db.table("builds").select(all_build_columns)

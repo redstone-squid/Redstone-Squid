@@ -7,60 +7,42 @@ import re
 import time
 import typing
 import warnings
-from collections.abc import Awaitable, Mapping, Sequence
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass, field, fields
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import cached_property
 from importlib import resources
 from types import TracebackType
 from typing import Any, Callable, Final, Literal, Self, overload
 
 import discord
-import vecs
 from openai import AsyncOpenAI, OpenAIError
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy import update
 
 from squid.db.schema import (
     Build as SQLBuild,
 )
 from squid.db.schema import (
     BuildCategory,
-    BuildCreator,
-    BuildLink,
     BuildRecord,
-    BuildRestriction,
-    BuildType,
-    BuildVersion,
-    Door,
     DoorOrientationLiteral,
     DoorRecord,
-    Entrance,
     EntranceRecord,
-    Extender,
     ExtenderRecord,
     Info,
     LinkRecord,
-    MediaTypeLiteral,
-    Message,
     MessageRecord,
     RecordCategoryLiteral,
-    Restriction,
     RestrictionRecord,
     RestrictionTypeLiteral,
     Status,
-    Type,
     TypeRecord,
     UnknownRestrictions,
-    User,
     UserRecord,
-    Utility,
     UtilityRecord,
-    Version,
     VersionRecord,
 )
-from squid.utils import get_version_string, parse_time_string
+from squid.utils import parse_time_string
 
 logger = logging.getLogger(__name__)
 
@@ -498,15 +480,15 @@ class Build:
     @restrictions.setter
     async def restrictions(
         self,
-        restrictions: Mapping[
+        restrictions: dict[
             Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
-            Sequence[str],
+            Sequence[str] | None,
         ],
     ) -> None:
         """Sets the restrictions of the build."""
-        self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions", []))
-        self.component_restrictions = list(restrictions.get("component_restrictions", []))
-        self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions", []))
+        self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions") or [])
+        self.component_restrictions = list(restrictions.get("component_restrictions") or [])
+        self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions") or [])
 
     async def set_restrictions_auto(self, restrictions: Sequence[str]) -> None:
         """Sets the restrictions of the build automatically based on the given list of restriction names.
@@ -690,6 +672,7 @@ class Build:
 
         warnings.warn("Build.save is deprecated; use BuildManager.save", DeprecationWarning, stacklevel=2)
         await DatabaseManager().build.save(self)
+
 
 class BuildLock:
     """A reentrant lock to prevent concurrent modifications to a build."""
