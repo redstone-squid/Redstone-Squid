@@ -13,13 +13,13 @@ from discord.ext.commands import (
 )
 
 from squid.bot import utils
-from squid.bot._types import GuildMessageable
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
+from squid.services import BuildCommandService
 from squid.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -33,6 +33,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
     def __init__(self, bot: BotT):
         self.bot = bot
+        self.build_service = BuildCommandService(bot)
         self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
@@ -106,17 +107,19 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
             async with RunningMessage(followup) as message:
                 build = await flags.to_build()
-                build.submitter_id = ctx.author.id
-                build.ai_generated = False
-                build.category = BuildCategory.DOOR
-                build.submission_status = Status.PENDING
+                self.build_service.apply_submission_metadata(
+                    build,
+                    submitter_id=ctx.author.id,
+                    category=BuildCategory.DOOR,
+                    ai_generated=False,
+                    submission_status=Status.PENDING,
+                )
 
-                build_handler = self.bot.for_build(build)
                 await asyncio.gather(
-                    build.save(),
+                    self.build_service.save_build(build),
                     followup.send(
                         "Here is a preview of the submission. Use /edit if you have made a mistake",
-                        embed=await build_handler.generate_embed(),
+                        embed=await self.build_service.generate_embed(build),
                         ephemeral=True,
                     ),
                 )
@@ -127,7 +130,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                 )
                 await asyncio.gather(
                     message.edit(embed=success_embed),
-                    build_handler.post_for_voting(),
+                    self.build_service.post_for_voting(build),
                 )
         else:
             msg = "This command is only available as a slash command for now."
@@ -176,14 +179,21 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         if view.value is False:
             await followup.send("Submission canceled by user", ephemeral=True)
             return
-        await build.save()
+        self.build_service.apply_submission_metadata(
+            build,
+            submitter_id=interaction.user.id,
+            category=BuildCategory.DOOR,
+            ai_generated=False,
+            submission_status=Status.PENDING,
+        )
+        await self.build_service.save_build(build)
         await asyncio.gather(
             followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await self.bot.for_build(build).generate_embed(),
+                embed=await self.build_service.generate_embed(build),
                 ephemeral=True,
             ),
-            self.bot.for_build(build).post_for_voting(),
+            self.build_service.post_for_voting(build),
         )
 
     @commands.Cog.listener("on_build_confirmed")
@@ -198,14 +208,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             msg = "The build must be confirmed to post it."
             raise ValueError(msg)
 
-        build_handler = self.bot.for_build(build)
-        em = await build_handler.generate_embed()
-
-        async def _send_msg(channel: GuildMessageable):
-            message = await channel.send(content=build.original_link, embed=em)
-            await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
-
-        await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
+        await self.build_service.post_confirmed_build(build)
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
@@ -232,12 +235,16 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             elif attachment.content_type.startswith("video"):
                 build.video_urls.append(url)
 
-        build.submission_status = Status.PENDING
-        build.category = BuildCategory.DOOR
-        build.submitter_id = message.author.id
+        self.build_service.apply_submission_metadata(
+            build,
+            submitter_id=message.author.id,
+            category=BuildCategory.DOOR,
+            ai_generated=None,
+            submission_status=Status.PENDING,
+        )
         # Order is important here.
-        await build.save()
-        await self.bot.for_build(build).post_for_voting(type="add")
+        await self.build_service.save_build(build)
+        await self.build_service.post_for_voting(build, vote_type="add")
 
     @commands.hybrid_command("recalc")
     @check_is_trusted_or_staff()

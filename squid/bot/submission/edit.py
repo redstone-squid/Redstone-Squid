@@ -24,6 +24,7 @@ from squid.bot.utils import (
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
 from squid.db.builds import Build
 from squid.db.schema import Message
+from squid.services import BuildCommandService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -34,6 +35,7 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
+        self.build_service = BuildCommandService(bot)
         # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
         self.edit_ctx_menu = app_commands.ContextMenu(
             name="Edit Build",
@@ -204,11 +206,10 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                     return
 
             await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-            await build.save()
             # Parallelize lock release and message updates since they don't depend on each other
             await asyncio.gather(
+                self.build_service.update_build_and_messages(build),
                 build.lock.release(),
-                self.bot.for_build(build).update_messages(),
                 sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully")),
             )
             return
