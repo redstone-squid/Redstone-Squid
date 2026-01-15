@@ -123,7 +123,8 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"] 
+testpaths = ["tests"]
+xfail_strict = true
 addopts = [
     "--strict-markers",
     "--strict-config",
