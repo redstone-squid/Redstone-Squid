@@ -133,7 +133,16 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     return
 
                 # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
-                await self.bot.db.server_setting.set(ctx.guild.id, **{setting: channel.id})
+                if setting == "Smallest":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Smallest=channel.id)
+                elif setting == "Fastest":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Fastest=channel.id)
+                elif setting == "First":
+                    await self.bot.db.server_setting.set(ctx.guild.id, First=channel.id)
+                elif setting == "Builds":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Builds=channel.id)
+                elif setting == "Vote":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Vote=channel.id)
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
                 )
@@ -149,7 +158,10 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
                     return
 
-                await self.bot.db.server_setting.set(ctx.guild.id, **{setting: role_ids})
+                if setting == "Staff":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Staff=role_ids)
+                elif setting == "Trusted":
+                    await self.bot.db.server_setting.set(ctx.guild.id, Trusted=role_ids)
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
                 )
@@ -165,7 +177,20 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
         assert ctx.guild is not None
 
         async with self.bot.get_running_message(ctx) as sent_message:
-            await self.bot.db.server_setting.set(ctx.guild.id, **{setting: None})
+            if setting == "Smallest":
+                await self.bot.db.server_setting.set(ctx.guild.id, Smallest=None)
+            elif setting == "Fastest":
+                await self.bot.db.server_setting.set(ctx.guild.id, Fastest=None)
+            elif setting == "First":
+                await self.bot.db.server_setting.set(ctx.guild.id, First=None)
+            elif setting == "Builds":
+                await self.bot.db.server_setting.set(ctx.guild.id, Builds=None)
+            elif setting == "Vote":
+                await self.bot.db.server_setting.set(ctx.guild.id, Vote=None)
+            elif setting == "Staff":
+                await self.bot.db.server_setting.set(ctx.guild.id, Staff=[])
+            elif setting == "Trusted":
+                await self.bot.db.server_setting.set(ctx.guild.id, Trusted=[])
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 

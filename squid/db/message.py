@@ -1,6 +1,7 @@
 """Some functions related to the message table, which stores message ids."""
 
 from collections.abc import Sequence
+from typing import cast
 
 import discord
 
@@ -59,7 +60,7 @@ class MessageService:
         Args:
             message: The message to update. Either the message id or the message object.
         """
-        message_id = message.id if isinstance(message, discord.Message) else message
+        message_id = message.id if isinstance(message, discord.Message) else cast(int, message)
         await self._message_repo.update_edited_time(message_id)
 
     async def untrack_message(self, message: int | discord.Message) -> Message:
@@ -74,7 +75,7 @@ class MessageService:
         Raises:
             ValueError: If the message is not found in the database.
         """
-        message_id = message.id if isinstance(message, discord.Message) else message
+        message_id = message.id if isinstance(message, discord.Message) else cast(int, message)
         return await self._message_repo.delete_by_id(message_id)
 
     async def get_by_id(self, message_id: int) -> Message | None:

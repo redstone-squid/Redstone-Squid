@@ -1,7 +1,7 @@
 """Some functions related to storing and changing server ids for sending records."""
 
 from collections.abc import Iterable
-from typing import Literal, TypedDict, Unpack, overload
+from typing import Literal, TypedDict, Unpack, cast, overload
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -124,7 +124,8 @@ class ServerSettingManager:
                 setting_obj = ServerSetting(server_id=server_id)
                 session.add(setting_obj)
 
-            for setting, value in settings.items():
+            for setting_key, value in settings.items():
+                setting = cast(Setting, setting_key)
                 col_name = _SETTING_TO_DB_KEY[setting]
                 setattr(setting_obj, col_name, value)
 
