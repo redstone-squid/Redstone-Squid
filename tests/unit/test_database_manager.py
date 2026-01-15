@@ -18,7 +18,7 @@ class TestDatabaseManager:
     """
 
     @pytest.mark.parametrize(
-        "spec,expected",
+        ("spec", "expected"),
         [
             ("1.14 - 1.16.1", ["Java 1.14.0", "Java 1.15.0", "Java 1.16.0", "Java 1.16.1"]),
             ("1.19+", ["Java 1.19.0", "Java 1.19.1", "Java 1.19.2", "Java 1.20.0"]),

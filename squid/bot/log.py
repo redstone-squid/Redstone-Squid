@@ -16,7 +16,8 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         self.bot = bot
 
         if not self.bot.owner_id:
-            raise RuntimeError("Owner ID not set.")
+            msg = "Owner ID not set."
+            raise RuntimeError(msg)
         self.owner: User | None = self.bot.get_user(self.bot.owner_id)
 
     async def log(self, msg: str, first_log: bool = False, dm_owner: bool = True) -> None:

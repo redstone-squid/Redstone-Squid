@@ -17,7 +17,7 @@ from discord.ext.commands import Context, FlagConverter
 from squid.bot.submission.parse import parse_dimensions
 
 
-def fix_converter_annotations[_FlagConverter: type[FlagConverter]](cls: _FlagConverter) -> _FlagConverter:
+def fix_converter_annotations[F: type[FlagConverter]](cls: F) -> F:
     """
     Fixes discord.py being unable to evaluate annotations if `from __future__ import annotations` is used AND the `FlagConverter` is a nested class.
 
@@ -39,8 +39,9 @@ class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int |
 
         try:
             dims = parse_dimensions(argument)
-        except ValueError:
-            raise commands.BadArgument("Invalid dimensions")
+        except ValueError as err:
+            msg = "Invalid dimensions"
+            raise commands.BadArgument(msg) from err
         else:
             return dims
 
@@ -94,8 +95,9 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
             return None
         try:
             return int(argument)
-        except ValueError:
-            raise commands.BadArgument("Invalid integer")
+        except ValueError as err:
+            msg = "Invalid integer"
+            raise commands.BadArgument(msg) from err
 
     @override
     async def transform(self, interaction: Interaction[ClientT], value: Any, /) -> Any:
@@ -103,5 +105,6 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
             return None
         try:
             return int(value)
-        except ValueError:
-            raise ValueError("Invalid integer")
+        except ValueError as err:
+            msg = "Invalid integer"
+            raise ValueError(msg) from err

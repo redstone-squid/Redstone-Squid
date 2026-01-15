@@ -82,7 +82,8 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
         ValueError: If the number of dimensions is not between `min_dim` and `max_dim`, or the string is not parsable.
     """
     if min_dim > max_dim:
-        raise ValueError(f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}.")
+        msg = f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}."
+        raise ValueError(msg)
 
     inputs_cross = dim_str.split("x")
     inputs_star = dim_str.split("*")
@@ -91,9 +92,8 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
     elif min_dim <= len(inputs_star) <= max_dim:
         inputs = inputs_star
     else:
-        raise ValueError(
-            f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs_cross)} in {dim_str=} splitting by 'x', and {len(inputs_star)} splitting by '*'."
-        )
+        msg = f"Invalid number of dimensions. Expected {min_dim} to {max_dim} dimensions, found {len(inputs_cross)} in {dim_str=} splitting by 'x', and {len(inputs_star)} splitting by '*'."
+        raise ValueError(msg)
 
     dimensions: list[int | None] = []
     for dim in inputs:
@@ -103,10 +103,9 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
         else:
             try:
                 dimensions.append(int(dim))
-            except ValueError:
-                raise ValueError(
-                    f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
-                )
+            except ValueError as err:
+                msg = f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
+                raise ValueError(msg) from err
 
     # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
@@ -143,10 +142,9 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
 
     try:
         return parse_dimensions(dim_str)
-    except ValueError:
-        raise ValueError(
-            "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
-        )
+    except ValueError as err:
+        msg = "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
+        raise ValueError(msg) from err
 
 
 # Everything is extremely cursed below this line, only read if you dare
@@ -176,7 +174,8 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
             elif is_bearable(None, attr_type):
                 formatter, parser = handle_optional(attr_type)  # type: ignore
     if formatter is None or parser is None:
-        raise RuntimeError(f"No dispatch found for {attr_type}")
+        msg = f"No dispatch found for {attr_type}"
+        raise RuntimeError(msg)
 
     dispatcher[attr_type] = formatter, parser
     return formatter, parser
@@ -200,7 +199,8 @@ def handle_optional[T](outer_type: type[T | type[None]]) -> DispatchTuple[T | No
     """Generate a formatter and parser for an Optional type."""
     args = typing.get_args(outer_type)
     if len(args) != 2 or type(None) not in args:
-        raise ValueError(f"Invalid Optional type: {outer_type}")
+        msg = f"Invalid Optional type: {outer_type}"
+        raise ValueError(msg)
     inner_type: type[T] = args[0] if args[0] is not type(None) else args[1]
     inner_fmt, inner_parser = get_formatter_and_parser_for_type(inner_type)
 

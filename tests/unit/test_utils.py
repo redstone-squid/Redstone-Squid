@@ -4,7 +4,7 @@ from squid.utils import parse_time_string
 
 
 @pytest.mark.parametrize(
-    "time_string, expected",
+    ("time_string", "expected"),
     [
         ("1.5s", 30),  # 1.5 seconds = 30 ticks
         ("30", 600),  # 30 is assumed to be seconds

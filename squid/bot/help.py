@@ -84,9 +84,9 @@ class Help(commands.MinimalHelpCommand):
         desc = dedent(
             f"""\
             {self.context.bot.description}
-    
+
             Commands:{self.get_commands_brief_details(commands_)}
-    
+
             {MORE_INFORMATION}
             """
         )
@@ -132,9 +132,7 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        details: list[str] = []
-        for cog in cogs:
-            details.append(f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}")
+        details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}" for cog in cogs]
         if return_as_list:
             return details
         return "".join(details)

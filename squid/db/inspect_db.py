@@ -217,7 +217,8 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
     """
     if isinstance(engine, AsyncEngine):
-        raise TypeError("The engine must be a synchronous SQLAlchemy Engine, not an AsyncEngine.")
+        msg = "The engine must be a synchronous SQLAlchemy Engine, not an AsyncEngine."
+        raise TypeError(msg)
 
     logger.debug("starting validation")
     inspector = inspect(engine)
@@ -289,8 +290,8 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
                         type(column_prop),
                     )
 
-        except SQLAlchemyError as e:
-            logger.error("Error inspecting model %s: %s", klass.__name__, e)
+        except SQLAlchemyError:
+            logger.exception("Error inspecting model %s", klass.__name__)
             errors = True
 
     return not errors

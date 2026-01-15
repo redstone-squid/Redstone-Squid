@@ -130,7 +130,8 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                     build_handler.post_for_voting(),
                 )
         else:
-            raise NotImplementedError("This command is only available as a slash command for now.")
+            msg = "This command is only available as a slash command for now."
+            raise NotImplementedError(msg)
 
     @app_commands.command(name="submit_form")
     async def submit_form(
@@ -153,7 +154,8 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                 return
             assert attachment.content_type is not None
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
-                raise ValueError(f"Unsupported content type: {attachment.content_type}")
+                msg = f"Unsupported content type: {attachment.content_type}"
+                raise ValueError(msg)
 
             url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
             if attachment.content_type.startswith("image"):
@@ -193,7 +195,8 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         """
         assert build.id is not None
         if build.submission_status != Status.CONFIRMED:
-            raise ValueError("The build must be confirmed to post it.")
+            msg = "The build must be confirmed to post it."
+            raise ValueError(msg)
 
         build_handler = self.bot.for_build(build)
         em = await build_handler.generate_embed()

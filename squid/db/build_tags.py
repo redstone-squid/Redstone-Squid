@@ -85,7 +85,8 @@ class BuildTagsManager:
         Returns:
             A list of Restriction objects.
         """
-        raise NotImplementedError("This method is not implemented yet.")
+        msg = "This method is not implemented yet."
+        raise NotImplementedError(msg)
 
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
         """Add an alias for a restriction by its ID.
@@ -104,7 +105,7 @@ class BuildTagsManager:
                 await session.rollback()
                 alias_rid = await self.get_restriction_id(alias)
                 assert alias_rid is not None
-                raise AliasAlreadyAdded(alias, alias_rid)
+                raise AliasAlreadyAdded(alias, alias_rid) from None
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
         """Add an alias for a restriction by its name or alias.

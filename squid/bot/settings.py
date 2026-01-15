@@ -167,7 +167,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                 )
             else:  # Should not happen, but may happen if the schema is updated and this code is not
                 await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
-                assert False
+                raise AssertionError()
 
     @settings_hybrid_group.command(name="clear")
     @app_commands.rename(setting="type")

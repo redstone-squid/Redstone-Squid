@@ -60,9 +60,8 @@ class RunningMessage:
     async def __aenter__(self) -> Message:
         sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
         if sent_message is None:
-            raise ValueError(
-                "Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)"
-            )
+            msg = "Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)"
+            raise ValueError(msg)
 
         self.sent_message = sent_message
         return sent_message

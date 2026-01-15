@@ -1,6 +1,7 @@
 """A vote session that represents a change to something."""
 
 import asyncio
+import contextlib
 import inspect
 from abc import ABC, abstractmethod
 from asyncio import Task
@@ -148,7 +149,8 @@ class AbstractVoteSession(ABC):
         self._allow_init: bool
         """A flag to allow direct initialization."""
         if getattr(self, "_allow_init", False) is not True:
-            raise ValueError("Do not use __init__ directly, use create() instead.")
+            msg = "Do not use __init__ directly, use create() instead."
+            raise ValueError(msg)
 
         super().__init__()
         self.id: int | None = None
@@ -166,9 +168,8 @@ class AbstractVoteSession(ABC):
             self._messages = set(messages)
             self.message_ids = set(message.id for message in messages)
         if len(messages) >= 10:
-            raise ValueError(
-                "Found a vote session with more than 10 messages, we need to change the update_message logic."
-            )
+            msg = "Found a vote session with more than 10 messages, we need to change the update_message logic."
+            raise ValueError(msg)
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
@@ -211,7 +212,8 @@ class AbstractVoteSession(ABC):
         # Retrieve the 'create' method
         create_method = getattr(cls, "create", None)
         if create_method is None:
-            raise TypeError(f"Class '{cls.__name__}' must implement a 'create' method.")
+            msg = f"Class '{cls.__name__}' must implement a 'create' method."
+            raise TypeError(msg)
 
         # Retrieve the underlying function from the classmethod
         assert isinstance(create_method, MethodType)  # For type checker
@@ -224,11 +226,12 @@ class AbstractVoteSession(ABC):
 
         # Compare signatures
         if init_signature != create_signature:
-            raise TypeError(
+            msg = (
                 f"In class '{cls.__name__}', the 'create' method signature must match '__init__'.\n"
                 f"__init__ signature: {init_signature}\n"
                 f"create signature: {create_signature}"
             )
+            raise TypeError(msg)
 
     @classmethod
     @abstractmethod
@@ -431,10 +434,8 @@ class BuildVoteSession(AbstractVoteSession):
 
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self._messages])
-        try:
-            await asyncio.gather(*reaction_tasks)
-        except discord.Forbidden:
-            pass  # Bot doesn't have permission to add reactions
+        with contextlib.suppress(discord.Forbidden):
+            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
     @classmethod
     @override
@@ -451,7 +452,8 @@ class BuildVoteSession(AbstractVoteSession):
     async def _from_domain(cls, bot: "squid.bot.RedstoneSquid", record: SQLBuildVoteSession) -> "BuildVoteSession":
         """Create a vote session from a database record."""
         if record.build_id is None:  # pyright: ignore[reportUnnecessaryComparison]
-            raise ValueError(f"Found a build vote session with no associated build id. session_id={record.id}")
+            msg = f"Found a build vote session with no associated build id. session_id={record.id}"
+            raise ValueError(msg)
 
         build = DatabaseManager().build.from_sql_build(record.build)
         assert build is not None
@@ -586,10 +588,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         await self.update_messages()
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
-        try:
-            await asyncio.gather(*reaction_tasks)
-        except discord.Forbidden:
-            pass  # Bot doesn't have permission to add reactions
+        with contextlib.suppress(discord.Forbidden):
+            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
     @classmethod
     @override

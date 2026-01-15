@@ -22,7 +22,8 @@ def check_is_owner_server():
             raise NoPrivateMessage()
         if ctx.guild.id == ctx.bot.owner_server_id:
             return True
-        raise CheckFailure("This command can only be executed on certain servers.")
+        msg = "This command can only be executed on certain servers."
+        raise CheckFailure(msg)
 
     return check(predicate)
 
@@ -64,9 +65,7 @@ async def is_staff(bot: "squid.bot.RedstoneSquid", server_id: int | None, user_i
     if member is None:
         return False
 
-    if set(staff_role_ids) & set(role.id for role in member.roles):
-        return True
-    return False
+    return bool(set(staff_role_ids) & set(role.id for role in member.roles))
 
 
 @cache
@@ -105,7 +104,4 @@ async def is_trusted_or_staff(bot: "squid.bot.RedstoneSquid", server_id: int, us
     if member is None:
         return False
 
-    for role in member.roles:
-        if role.id in allowed_role_ids:
-            return True
-    return False
+    return any(role.id in allowed_role_ids for role in member.roles)

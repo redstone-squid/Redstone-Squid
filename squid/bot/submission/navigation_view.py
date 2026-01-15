@@ -127,7 +127,8 @@ class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
     @override
     def add_item(self, item: Item[Any]) -> Self:
         if item.row == 4:
-            raise ValueError("Row 4 is reserved for the navigation buttons.")
+            msg = "Row 4 is reserved for the navigation buttons."
+            raise ValueError(msg)
         return super().add_item(item)
 
     @abc.abstractmethod

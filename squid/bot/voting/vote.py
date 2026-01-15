@@ -72,7 +72,8 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             if kind == "delete_log":
                 return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
             logger.error("Unknown vote session kind: %s", kind)
-            raise NotImplementedError(f"Unknown vote session kind: {kind}")
+            msg = f"Unknown vote session kind: {kind}"
+            raise NotImplementedError(msg)
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
@@ -104,7 +105,8 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if isinstance(vote_session, DeleteLogVoteSession):
             # Check if the user has a trusted role
             if payload.guild_id is None:
-                raise NotImplementedError("Cannot vote in DMs.")
+                msg = "Cannot vote in DMs."
+                raise NotImplementedError(msg)
 
             if await is_trusted_or_staff(self.bot, payload.guild_id, user_id):
                 pass

@@ -138,7 +138,8 @@ class RedstoneSquid(Bot):
         if channel is None:
             channel = await self.fetch_channel(channel_id)
         if not isinstance(channel, MessageableChannel):
-            raise ValueError("Channel is not a messageable channel.")
+            msg = "Channel is not a messageable channel."
+            raise TypeError(msg)
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:
@@ -269,7 +270,8 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
         async with RedstoneSquid(db, config=config.get("bot_config")) as bot:
             token = os.environ.get("BOT_TOKEN")
             if not token:
-                raise RuntimeError("Specify discord token either with .env file or a BOT_TOKEN environment variable.")
+                msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
+                raise RuntimeError(msg)
             await bot.start(token)
 
 

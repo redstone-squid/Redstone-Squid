@@ -29,7 +29,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
         self.random = random.Random()
         self.pending_members: dict[str, discord.Member] = {}
         """Maps user names(!) to members who recently joined.
-        
+
         This is because the discord welcome message only contains the user name, not the full member object.
         """
 
@@ -55,7 +55,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
             return
 
         await asyncio.sleep(5)  # Wait a bit to ensure the member is already cached from on_member_join
-        for member_name, member in self.pending_members.items():
+        for member_name, member in self.pending_members.items():  # noqa: B007
             if member_name in message.system_content:
                 break
         else:

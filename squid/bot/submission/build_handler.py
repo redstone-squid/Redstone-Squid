@@ -47,7 +47,8 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             case (Status.PENDING, _):
                 target = "Vote"
             case (Status.DENIED, _):
-                raise ValueError("Denied submissions should not be posted.")
+                msg = "Denied submissions should not be posted."
+                raise ValueError(msg)
             case (Status.CONFIRMED, None):
                 target = "Builds"
             case (Status.CONFIRMED, "Smallest"):
@@ -57,7 +58,8 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             case (Status.CONFIRMED, "First"):
                 target = "First"
             case _:
-                raise ValueError("Invalid status or record category")
+                msg = "Invalid status or record category"
+                raise ValueError(msg)
 
         guild_channels = await self.bot.db.server_setting.get((guild.id for guild in self.bot.guilds), target)
         maybe_channels = [
@@ -76,10 +78,12 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         """
         build = self.build
         if type == "update":
-            raise NotImplementedError("Updating builds is not yet implemented.")
+            msg = "Updating builds is not yet implemented."
+            raise NotImplementedError(msg)
 
         if build.submission_status != Status.PENDING:
-            raise ValueError("The build must be pending to post it.")
+            msg = "The build must be pending to post it."
+            raise ValueError(msg)
 
         em = await self.generate_embed()
         messages = await asyncio.gather(
@@ -115,13 +119,13 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         maybe_messages = await asyncio.gather(
             *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
         )
-        discord_messages = [msg for msg in maybe_messages if msg is not None]
-        return discord_messages
+        return [msg for msg in maybe_messages if msg is not None]
 
     async def update_messages(self) -> None:
         """Updates all messages which for this build."""
         if self.build.id is None:
-            raise ValueError("Build id is None.")
+            msg = "Build id is None."
+            raise ValueError(msg)
 
         # Get all messages for a build
         async with asyncio.TaskGroup() as tg:
@@ -161,7 +165,8 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                     break
                 preview = await bot_utils.get_website_preview(url)
                 if isinstance(preview["image"], io.BytesIO):
-                    raise RuntimeError("Got a BytesIO object instead of a URL.")
+                    msg = "Got a BytesIO object instead of a URL."
+                    raise TypeError(msg)
                 em.set_image(url=preview["image"])
         elif build.video_urls:
             for url in build.video_urls:

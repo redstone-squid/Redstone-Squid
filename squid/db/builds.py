@@ -84,8 +84,7 @@ class FrozenField[T]:
     def __get__(self, instance: object | None, owner: type[object] | None = None) -> T | Self:
         if instance is None:
             return self
-        value = getattr(instance, self._private_name)
-        return value
+        return getattr(instance, self._private_name)
 
     def __set__(self, instance: object, value: T) -> None:
         if hasattr(instance, self._private_name):
@@ -127,9 +126,10 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
-        raise TypeError(f"{cls} is not a dataclass")
+        msg = f"{cls} is not a dataclass"
+        raise TypeError(msg)
 
-    params = cls.__dataclass_params__
+    params = cls.__dataclass_params__  # type: ignore
     # _DataclassParams(init=True,repr=True,eq=True,order=True,unsafe_hash=False,
     #                   frozen=True,match_args=True,kw_only=False,slots=False,
     #                   weakref_slot=False)
@@ -441,7 +441,8 @@ class Build:
         """The link to the original message of the build."""
         if self.original_message_id and self.original_channel_id:
             if self.original_server_id is None:
-                raise NotImplementedError("This message is from DMs.")
+                msg = "This message is from DMs."
+                raise NotImplementedError(msg)
             return f"https://discord.com/channels/{self.original_server_id}/{self.original_channel_id}/{self.original_message_id}"
         return None
 
@@ -513,7 +514,8 @@ class Build:
             row = name_to_row.get(r.lower())
             if row:
                 if row.type is None:
-                    raise RuntimeError("The type is supposed to never be None, this is a bug in the database.")
+                    msg = "The type is supposed to never be None, this is a bug in the database."
+                    raise RuntimeError(msg)
                 bucket[row.type].append(row.name)
 
     @property
@@ -522,7 +524,8 @@ class Build:
         title = ""
 
         if self.category != "Door":
-            raise NotImplementedError("Only doors are supported for now.")
+            msg = "Only doors are supported for now."
+            raise NotImplementedError(msg)
 
         if self.submission_status == Status.PENDING:
             title += "Pending: "
@@ -571,7 +574,8 @@ class Build:
 
         # Door type
         if self.door_orientation_type is None:
-            raise ValueError("Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing.")
+            msg = "Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing."
+            raise ValueError(msg)
         title += self.door_orientation_type
 
         return title
@@ -610,7 +614,8 @@ class Build:
             ValueError: If the IDs of the builds are different and allow_different_id is False.
         """
         if self.id != other.id and not allow_different_id:
-            raise ValueError("The IDs of the builds are different.")
+            msg = "The IDs of the builds are different."
+            raise ValueError(msg)
 
         differences: list[tuple[str, T, T]] = []
         # TODO: too much magic, try using __dataclass_fields__ or just listing the fields manually
@@ -633,9 +638,11 @@ class Build:
                 if isinstance(cls_attr, property):
                     attr_type = typing.get_type_hints(cls_attr.fget)["return"]
                 else:
-                    raise NotImplementedError("Not sure how to automatically get the type of this attribute.")
-            except AttributeError:
-                raise ValueError(f"Attribute {attribute} is not in the Build class.")
+                    msg = "Not sure how to automatically get the type of this attribute."
+                    raise NotImplementedError(msg)
+            except AttributeError as err:
+                msg = f"Attribute {attribute} is not in the Build class."
+                raise ValueError(msg) from err
         return attr_type
 
     async def confirm(self) -> None:
@@ -729,9 +736,7 @@ class BuildLock:
             return True
 
         if not blocking:
-            if not await self._try_lock():
-                return False
-            return True
+            return await self._try_lock()
 
         # Exponential backoff for acquiring the lock
         sleep_time = 0.01
@@ -784,7 +789,8 @@ class LockContextManager:
     async def __aenter__(self):
         if await self.lock.acquire(blocking=self.blocking, timeout=self.timeout):
             return self.lock
-        raise TimeoutError("Timed out waiting for lock")
+        msg = "Timed out waiting for lock"
+        raise TimeoutError(msg)
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None

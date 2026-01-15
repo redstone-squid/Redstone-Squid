@@ -202,7 +202,7 @@ class TestBuildValidation:
     """Tests for Build data validation methods."""
 
     @pytest.mark.parametrize(
-        "width, height, depth",
+        ("width", "height", "depth"),
         [
             (2, 3, 1),  # Valid dimensions
             (None, 3, 1),  # Width None
@@ -232,7 +232,7 @@ class TestBuildValidation:
         assert sample_build.depth == depth
 
     @pytest.mark.parametrize(
-        "width, height, depth",
+        ("width", "height", "depth"),
         [
             (2, 3, 1),  # Valid dimensions
             (None, 3, 1),  # Width None
