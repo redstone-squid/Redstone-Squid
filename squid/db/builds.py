@@ -640,9 +640,9 @@ class Build:
                 else:
                     msg = "Not sure how to automatically get the type of this attribute."
                     raise NotImplementedError(msg)
-            except AttributeError:
+            except AttributeError as err:
                 msg = f"Attribute {attribute} is not in the Build class."
-                raise ValueError(msg)
+                raise ValueError(msg) from err
         return attr_type
 
     async def confirm(self) -> None:

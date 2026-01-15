@@ -222,7 +222,7 @@ class BuildManager:
         """Converts a SQLBuild to a Build object."""
         if not isinstance(sql_build, Door):
             msg = "Can only handle doors right now."
-            raise ValueError(msg)
+            raise TypeError(msg)
         door = sql_build
         return Build(
             id=door.id,
@@ -363,7 +363,7 @@ class BuildManager:
                     sql_build.visible_closing_time = build.visible_closing_time
                 else:
                     msg = f"Only doors are supported for now, got {sql_build.category}."
-                    raise ValueError(msg)
+                    raise TypeError(msg)
 
                 # Clear existing relationships and set up new ones
                 sql_build.build_creators.clear()

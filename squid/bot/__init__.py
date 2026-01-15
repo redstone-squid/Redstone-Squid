@@ -139,7 +139,7 @@ class RedstoneSquid(Bot):
             channel = await self.fetch_channel(channel_id)
         if not isinstance(channel, MessageableChannel):
             msg = "Channel is not a messageable channel."
-            raise ValueError(msg)
+            raise TypeError(msg)
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:

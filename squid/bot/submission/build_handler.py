@@ -166,7 +166,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                 preview = await bot_utils.get_website_preview(url)
                 if isinstance(preview["image"], io.BytesIO):
                     msg = "Got a BytesIO object instead of a URL."
-                    raise RuntimeError(msg)
+                    raise TypeError(msg)
                 em.set_image(url=preview["image"])
         elif build.video_urls:
             for url in build.video_urls:

@@ -196,9 +196,9 @@ class DatabaseManager(AsyncClient):
                     # discarded below in end_tuple[1:]
                     end_tuple = ("Java", major, minor, max_patch)
 
-                for v_tuple in all_version_tuples:
-                    if start_tuple[1:] <= v_tuple <= end_tuple[1:]:
-                        valid_tuples.append(v_tuple)
+                valid_tuples.extend(
+                    v_tuple for v_tuple in all_version_tuples if start_tuple[1:] <= v_tuple <= end_tuple[1:]
+                )
 
             # Case 2: trailing plus like "1.19+"
             elif part.endswith("+"):
@@ -208,9 +208,7 @@ class DatabaseManager(AsyncClient):
                     base_str += ".0"
                 base_tuple = parse_version_string(base_str)
 
-                for v_tuple in all_version_tuples:
-                    if v_tuple >= base_tuple[1:]:
-                        valid_tuples.append(v_tuple)
+                valid_tuples.extend(v_tuple for v_tuple in all_version_tuples if v_tuple >= base_tuple[1:])
 
             # Case 3: exact version or prefix, e.g. "1.17" or "1.17.1"
             else:
@@ -218,9 +216,11 @@ class DatabaseManager(AsyncClient):
                 # If only major.minor specified (like "1.17"), match all "1.17.x"
                 if len(subparts) == 2:
                     major, minor = map(int, subparts)
-                    for v_tuple in all_version_tuples:
-                        if v_tuple[0] == major and v_tuple[1] == minor:
-                            valid_tuples.append(v_tuple)
+                    valid_tuples.extend(
+                        v_tuple
+                        for v_tuple in all_version_tuples
+                        if v_tuple[0] == major and v_tuple[1] == minor
+                    )
                 # If a full version specified (like "1.17.1"), match exactly that version
                 elif len(subparts) == 3:
                     v_tuple = tuple(map(int, subparts))  # pyright: ignore[reportAssignmentType]

@@ -102,6 +102,8 @@ ignore = [
     "SIM108",  # Use ternary operator {contents} instead of if-else-block
     # This is too rigid
     "TRY003",  # Avoid specifying long messages outside the exception class
+    "RUF009",
+    "RUF012",  # TODO
 ]
 
 [tool.ruff.lint.per-file-ignores]

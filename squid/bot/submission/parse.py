@@ -103,9 +103,9 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
         else:
             try:
                 dimensions.append(int(dim))
-            except ValueError:
+            except ValueError as err:
                 msg = f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
-                raise ValueError(msg)
+                raise ValueError(msg) from err
 
     # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
@@ -142,9 +142,9 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
 
     try:
         return parse_dimensions(dim_str)
-    except ValueError:
+    except ValueError as err:
         msg = "Invalid hallway size. Must be in the format 'width x height [x depth]' or '<width> wide' or '<height> high'"
-        raise ValueError(msg)
+        raise ValueError(msg) from err
 
 
 # Everything is extremely cursed below this line, only read if you dare

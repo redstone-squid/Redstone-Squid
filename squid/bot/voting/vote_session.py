@@ -1,6 +1,7 @@
 """A vote session that represents a change to something."""
 
 import asyncio
+import contextlib
 import inspect
 from abc import ABC, abstractmethod
 from asyncio import Task
@@ -433,10 +434,8 @@ class BuildVoteSession(AbstractVoteSession):
 
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self._messages])
-        try:
-            await asyncio.gather(*reaction_tasks)
-        except discord.Forbidden:
-            pass  # Bot doesn't have permission to add reactions
+        with contextlib.suppress(discord.Forbidden):
+            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
     @classmethod
     @override
@@ -589,10 +588,8 @@ class DeleteLogVoteSession(AbstractVoteSession):
         await self.update_messages()
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
-        try:
-            await asyncio.gather(*reaction_tasks)
-        except discord.Forbidden:
-            pass  # Bot doesn't have permission to add reactions
+        with contextlib.suppress(discord.Forbidden):
+            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
     @classmethod
     @override

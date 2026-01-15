@@ -105,7 +105,7 @@ class BuildTagsManager:
                 await session.rollback()
                 alias_rid = await self.get_restriction_id(alias)
                 assert alias_rid is not None
-                raise AliasAlreadyAdded(alias, alias_rid)
+                raise AliasAlreadyAdded(alias, alias_rid) from None
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
         """Add an alias for a restriction by its name or alias.

@@ -48,25 +48,27 @@ async def get_website_preview(url: str) -> Preview:
 
     try:
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(url, headers={"User-Agent": user_agent}) as response:
-                response.raise_for_status()
-                content_type = response.headers.get("Content-Type")
-                if not content_type:
-                    content_type, _ = mimetypes.guess_type(url, strict=False)
+        async with (
+            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
+            session.get(url, headers={"User-Agent": user_agent}) as response,
+        ):
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type")
+            if not content_type:
+                content_type, _ = mimetypes.guess_type(url, strict=False)
 
-                # If we can't find a content type, assume it's a webpage
-                if not content_type:
-                    logger.warning("Could not determine content type for URL '%s'", url)
-                    content_type = "text/html"
+            # If we can't find a content type, assume it's a webpage
+            if not content_type:
+                logger.warning("Could not determine content type for URL '%s'", url)
+                content_type = "text/html"
 
-                # If it's a video, extract first frame
-                if content_type.startswith("video/"):
-                    preview["image"] = await extract_first_frame(url)
-                    preview["url"] = url
-                    return preview
+            # If it's a video, extract first frame
+            if content_type.startswith("video/"):
+                preview["image"] = await extract_first_frame(url)
+                preview["url"] = url
+                return preview
 
-                page_text = await response.text()
+            page_text = await response.text()
     except aiohttp.ClientError as e:
         logger.debug("Failed to retrieve URL '%s': %s", url, e)
         return preview

@@ -50,7 +50,7 @@ async def get_verification_code(
     try:
         return await db.user.generate_verification_code(user.uuid)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def main() -> None:

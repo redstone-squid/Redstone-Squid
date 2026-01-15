@@ -290,8 +290,8 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
                         type(column_prop),
                     )
 
-        except SQLAlchemyError as e:
-            logger.exception("Error inspecting model %s: %s", klass.__name__, e)
+        except SQLAlchemyError:
+            logger.exception("Error inspecting model %s", klass.__name__)
             errors = True
 
     return not errors
