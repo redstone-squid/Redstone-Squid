@@ -3,10 +3,9 @@
 
 import abc
 import functools
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from typing import (
     Any,
-    Callable,
     Concatenate,
     Final,
     Self,

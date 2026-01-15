@@ -72,7 +72,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             build.completion_time = self.date_of_creation
             return build
 
-        _list_default = lambda ctx: []  # noqa: E731  # type: ignore
+        _list_default = lambda ctx: []  # type: ignore
 
         # fmt: off
         # Intentionally moved closer to the submit command
@@ -171,19 +171,18 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         if view.value is None:
             await followup.send("Submission canceled due to inactivity", ephemeral=True)
             return
-        elif view.value is False:
+        if view.value is False:
             await followup.send("Submission canceled by user", ephemeral=True)
             return
-        else:
-            await build.save()
-            await asyncio.gather(
-                followup.send(
-                    "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await self.bot.for_build(build).generate_embed(),
-                    ephemeral=True,
-                ),
-                self.bot.for_build(build).post_for_voting(),
-            )
+        await build.save()
+        await asyncio.gather(
+            followup.send(
+                "Here is a preview of the submission. Use /edit if you have made a mistake",
+                embed=await self.bot.for_build(build).generate_embed(),
+                ephemeral=True,
+            ),
+            self.bot.for_build(build).post_for_voting(),
+        )
 
     @commands.Cog.listener("on_build_confirmed")
     async def post_confirmed_build(self, build: Build) -> None:

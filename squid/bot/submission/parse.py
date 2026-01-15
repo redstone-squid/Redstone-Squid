@@ -138,8 +138,8 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
         size, direction = match.groups()
         if direction == "wide":
             return int(size), -1, -1
-        else:  # direction == "high"
-            return -1, int(size), -1
+        # direction == "high"
+        return -1, int(size), -1
 
     try:
         return parse_dimensions(dim_str)

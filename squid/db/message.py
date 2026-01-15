@@ -40,7 +40,7 @@ class MessageService:
 
         if purpose in ["view_pending_build", "confirm_pending_build"] and build_id is None:
             raise ValueError("build_id cannot be None for this purpose.")
-        elif purpose == "vote" and vote_session_id is None:
+        if purpose == "vote" and vote_session_id is None:
             raise ValueError("vote_session_id cannot be None for this purpose.")
 
         await self._message_repo.insert(

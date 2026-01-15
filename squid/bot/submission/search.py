@@ -94,38 +94,36 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     @check_is_owner_server()
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
-        async with RunningMessage(ctx) as sent_message:
-            async with self.bot.db.async_session() as session:
-                stmt = select(Restriction)
-                alias_stmt = select(RestrictionAlias)
+        async with RunningMessage(ctx) as sent_message, self.bot.db.async_session() as session:
+            stmt = select(Restriction)
+            alias_stmt = select(RestrictionAlias)
 
-                if query:
-                    stmt = stmt.where(Restriction.name.ilike(f"%{query}%"))
-                    alias_stmt = alias_stmt.where(RestrictionAlias.alias.ilike(f"%{query}%"))
+            if query:
+                stmt = stmt.where(Restriction.name.ilike(f"%{query}%"))
+                alias_stmt = alias_stmt.where(RestrictionAlias.alias.ilike(f"%{query}%"))
 
-                restrictions_task = session.execute(stmt)
-                aliases_task = session.execute(alias_stmt)
+            restrictions_task = session.execute(stmt)
+            aliases_task = session.execute(alias_stmt)
 
-                restrictions, aliases = await asyncio.gather(restrictions_task, aliases_task)
-                restrictions = restrictions.scalars().all()
-                aliases = aliases.scalars().all()
+            restrictions, aliases = await asyncio.gather(restrictions_task, aliases_task)
+            restrictions = restrictions.scalars().all()
+            aliases = aliases.scalars().all()
 
-                description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
-                description += "\n"
-                description += "\n".join([f"{a.restriction_id}: {a.alias} (alias)" for a in aliases])
-                await sent_message.edit(embed=utils.info_embed("Restrictions", description))
+            description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
+            description += "\n"
+            description += "\n".join([f"{a.restriction_id}: {a.alias} (alias)" for a in aliases])
+            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
-        async with RunningMessage(ctx) as sent_message:
-            async with self.bot.db.async_session() as session:
-                stmt = select(Type)
-                patterns = (await session.execute(stmt)).scalars().all()
-                names = [pattern.name for pattern in patterns]
-                await sent_message.edit(
-                    content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
-                )
+        async with RunningMessage(ctx) as sent_message, self.bot.db.async_session() as session:
+            stmt = select(Type)
+            patterns = (await session.execute(stmt)).scalars().all()
+            names = [pattern.name for pattern in patterns]
+            await sent_message.edit(
+                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            )
 
     @hybrid_group(name="build", invoke_without_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):
@@ -171,18 +169,15 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             view = BuildInfoView[BotT](build)
             await view.send(interaction)
             return None
-        else:
-            async with self.bot.get_running_message(ctx) as sent_message:
-                build = await Build.from_id(build_id)
+        async with self.bot.get_running_message(ctx) as sent_message:
+            build = await Build.from_id(build_id)
 
-                if build is None:
-                    error_embed = utils.error_embed("Error", "No build with that ID.")
-                    return await sent_message.edit(embed=error_embed)
+            if build is None:
+                error_embed = utils.error_embed("Error", "No build with that ID.")
+                return await sent_message.edit(embed=error_embed)
 
-                await sent_message.edit(
-                    content=build.original_link, embed=await self.bot.for_build(build).generate_embed()
-                )
-            return None
+            await sent_message.edit(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+        return None
 
     @build_hybrid_group.command(name="debug")
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
@@ -236,7 +231,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.invoke(self.view_build, build_id=build_id)
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

@@ -40,10 +40,10 @@ def _patch_environment(monkeypatch: pytest.MonkeyPatch, mock_db_manager: Databas
     mock_db_manager.user = MockUserManager()  # pyright: ignore[reportAttributeAccessIssue]
     monkeypatch.setattr(api_module, "_db", mock_db_manager)
 
-    yield
+    return
 
 
-@pytest.fixture()
+@pytest.fixture
 def client():
     with TestClient(api_module.app) as c:
         yield c

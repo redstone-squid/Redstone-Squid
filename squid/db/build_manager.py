@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import vecs
@@ -91,7 +91,7 @@ class BuildManager:
             return None
 
     @staticmethod
-    def _from_json(data: JoinedBuildRecord) -> "Build":
+    def _from_json(data: JoinedBuildRecord) -> Build:
         """
         Converts a JSON object to a Build object.
 
@@ -217,7 +217,7 @@ class BuildManager:
         )
 
     @staticmethod
-    def from_sql_build(sql_build: SQLBuild) -> "Build":
+    def from_sql_build(sql_build: SQLBuild) -> Build:
         """Converts a SQLBuild to a Build object."""
         if not isinstance(sql_build, Door):
             raise ValueError("Can only handle doors right now.")
@@ -265,7 +265,7 @@ class BuildManager:
 
         If the build does not exist in the database, it will be inserted instead.
         """
-        build.edited_time = datetime.now(tz=timezone.utc)
+        build.edited_time = datetime.now(tz=UTC)
 
         if build.id is None:
             delete_build_on_error = True
@@ -570,7 +570,7 @@ class BuildManager:
             message.purpose = "build_original_message"
             message.content = build.original_message
             message.build_id = build.id
-            message.updated_at = datetime.now(tz=timezone.utc)
+            message.updated_at = datetime.now(tz=UTC)
         await session.flush()
 
     async def confirm(self, build: Build) -> None:
@@ -641,8 +641,7 @@ class BuildManager:
         response: APIResponse[JoinedBuildRecord] = await query.execute()
         if not response:
             return []
-        else:
-            return [self._from_json(build_json) for build_json in response.data]
+        return [self._from_json(build_json) for build_json in response.data]
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
         """Fetches builds from the database with the given IDs."""

@@ -159,11 +159,10 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                 if mimetype is not None and mimetype.startswith("image"):
                     em.set_image(url=url)
                     break
-                else:
-                    preview = await bot_utils.get_website_preview(url)
-                    if isinstance(preview["image"], io.BytesIO):
-                        raise RuntimeError("Got a BytesIO object instead of a URL.")
-                    em.set_image(url=preview["image"])
+                preview = await bot_utils.get_website_preview(url)
+                if isinstance(preview["image"], io.BytesIO):
+                    raise RuntimeError("Got a BytesIO object instead of a URL.")
+                em.set_image(url=preview["image"])
         elif build.video_urls:
             for url in build.video_urls:
                 preview = await bot_utils.get_website_preview(url)

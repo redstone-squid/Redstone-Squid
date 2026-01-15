@@ -173,13 +173,13 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 await sent_message.edit(embed=error_embed)
-                return None
+                return
 
             if not await build.lock.acquire(blocking=False):
                 await sent_message.edit(
                     embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
                 )
-                return None
+                return
 
             # If in a slash command, we show a preview and ask for confirmation, otherwise we just edit the build
             if ctx.interaction:
@@ -202,13 +202,13 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                             embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
                         ),
                     )
-                    return None
-                elif view.value is False:
+                    return
+                if view.value is False:
                     await asyncio.gather(
                         build.lock.release(),
                         sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user")),
                     )
-                    return None
+                    return
 
             await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
             await build.save()
@@ -218,8 +218,8 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 self.bot.for_build(build).update_messages(),
                 sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully")),
             )
-            return None
-        return None
+            return
+        return
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""

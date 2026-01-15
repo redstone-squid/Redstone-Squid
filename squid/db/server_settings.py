@@ -109,7 +109,7 @@ class ServerSettingManager:
             return SettingOptions(
                 **{
                     _DB_KEY_TO_SETTING[setting_name]: getattr(setting_obj, setting_name)
-                    for setting_name in _DB_KEY_TO_SETTING.keys()
+                    for setting_name in _DB_KEY_TO_SETTING
                 }
             )
 

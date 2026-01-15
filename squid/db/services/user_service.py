@@ -87,7 +87,7 @@ class UserService:
         # https://wiki.vg/Mojang_API#UUID_to_Profile_and_Skin.2FCape
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"https://sessionserver.mojang.com/session/minecraft/profile/{str(minecraft_uuid)}"
+                f"https://sessionserver.mojang.com/session/minecraft/profile/{minecraft_uuid!s}"
             ) as response:
                 if response.status == 200:
                     data = await response.json()
