@@ -68,7 +68,63 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-ignore = ["E731"]
+select = [
+    # Defaults
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    # Extended
+    "B",
+    "I",
+    "TID251",
+    "UP",
+    "RUF",
+    "TRY",
+#    "D",
+    "W293",  # Other W rules are covered already
+    "FBT",
+    "DTZ",
+    "EM",
+    "PT",
+    "INP",
+    "RET",
+    "SIM",
+#    "N",
+    "PERF",
+    "G",
+]
+ignore = [
+    "UP040",  # Type alias {name} uses {type_alias_method} instead of the type keyword
+    "UP046",  # Generic class {name} uses Generic subclass instead of type parameters
+    "UP047",  # Generic function {name} should use type parameters
+    "E731",  # Lambda assignment
+    "SIM108",  # Use ternary operator {contents} instead of if-else-block
+    # This is too rigid
+    "TRY003",  # Avoid specifying long messages outside the exception class
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore `E402` (import violations) in all `__init__.py` files.
+"__init__.py" = ["E402"]
+"env.py" = ["E402"]
+
+"alembic/**.py" = ["INP"]
+"alembic/versions/*.py" = ["D"]
+
+"!tests/**.py" = ["PT"]
+"tests/**.py" = [
+    "F841",
+    "TID251",
+    "EM",
+    "RUF059",
+    "D101",
+    "D102",
+    "D103"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 docstring-code-format = true
