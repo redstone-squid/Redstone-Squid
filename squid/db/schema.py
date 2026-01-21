@@ -48,7 +48,7 @@ MediaTypeLiteral = Literal["image", "video", "world-download"]
 
 ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 ListRoleSetting = Literal["Staff", "Trusted"]
-Setting = ScalarChannelSetting | ListRoleSetting
+Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
 
 
 class UnknownRestrictions(TypedDict, total=False):
