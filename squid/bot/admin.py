@@ -1,5 +1,6 @@
 """Various admin commands for the bot."""
 
+import re
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -26,6 +27,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
+        self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @commands.hybrid_command(name="confirm")
     @app_commands.describe(build_id="The ID of the build you want to confirm.")
@@ -120,11 +122,12 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         username_description = f" (username: {user.name})" if user else ""
         reaction_count = sum(reaction.count for reaction in message.reactions)
 
-        await ctx.send(
+        sent_message = await ctx.send(
             content=(
                 f"{message.author.mention}{username_description} wrote:"
                 f"\nReactions: {reaction_count}"
                 f"\n```\n{message.clean_content}```"
+                "\nIf you are the author of this message, react with ❌ to delete this archived copy."
             ),
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
@@ -133,8 +136,33 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
                 everyone=False, users=(message.author,), roles=False, replied_user=False
             ),
         )
+        await sent_message.add_reaction("❌")
         if delete_original:
             await message.delete()
+
+    @commands.Cog.listener(name="on_raw_reaction_add")
+    async def remove_archived_message(self, payload: discord.RawReactionActionEvent):
+        if payload.emoji.name != "❌":
+            return
+        assert self.bot.user is not None
+        if payload.user_id == self.bot.user.id:
+            return
+        channel = self.bot.get_channel(payload.channel_id)
+        if channel is None:
+            return
+        if not isinstance(channel, discord.abc.Messageable):
+            return
+        message = await channel.fetch_message(payload.message_id)
+        if message.author.id != self.bot.user.id:
+            return
+        header = message.content.splitlines()[0] if message.content else ""
+        match = self._archive_header_pattern.match(header)
+        if not match:
+            return
+        author_id = int(match.group(1))
+        if author_id != payload.user_id:
+            return
+        await message.delete()
 
     @commands.command(name="s", hidden=True)
     @commands.is_owner()
