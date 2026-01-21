@@ -118,9 +118,14 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         else:
             user = self.bot.get_user(message.author.id)
         username_description = f" (username: {user.name})" if user else ""
+        reaction_count = sum(reaction.count for reaction in message.reactions)
 
         await ctx.send(
-            content=f"{message.author.mention}{username_description} wrote:\n```\n{message.clean_content}```",
+            content=(
+                f"{message.author.mention}{username_description} wrote:"
+                f"\nReactions: {reaction_count}"
+                f"\n```\n{message.clean_content}```"
+            ),
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
             stickers=message.stickers,
