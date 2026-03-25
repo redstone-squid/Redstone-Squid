@@ -291,6 +291,7 @@ class BuildManager:
                     embedding=build.embedding,
                     extra_info=build.extra_info,
                     edited_time=build.edited_time,
+                    original_message_id=build.original_message_id,
                     is_locked=True,  # Lock immediately on creation
                     orientation=build.door_orientation_type or "Door",
                     door_width=build.door_width or 1,
@@ -350,6 +351,7 @@ class BuildManager:
                 sql_build.ai_generated = build.ai_generated or False
                 sql_build.embedding = build.embedding
                 sql_build.edited_time = build.edited_time
+                sql_build.original_message_id = build.original_message_id
 
                 # Update category-specific attributes
                 if isinstance(sql_build, Door):
