@@ -291,7 +291,6 @@ class BuildManager:
                     embedding=build.embedding,
                     extra_info=build.extra_info,
                     edited_time=build.edited_time,
-                    original_message_id=build.original_message_id,
                     is_locked=True,  # Lock immediately on creation
                     orientation=build.door_orientation_type or "Door",
                     door_width=build.door_width or 1,
@@ -309,8 +308,12 @@ class BuildManager:
             async with self.session() as session:
                 await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
-                await session.commit()
+                await session.flush()
                 build.id = sql_build.id
+                if build.original_message_id is not None:
+                    await self._create_or_update_message(build, session)
+                sql_build.original_message_id = build.original_message_id
+                await session.commit()
             build.lock._lock_count = 1  # pyright: ignore[reportPrivateUsage]
         else:
             delete_build_on_error = False
@@ -351,7 +354,6 @@ class BuildManager:
                 sql_build.ai_generated = build.ai_generated or False
                 sql_build.embedding = build.embedding
                 sql_build.edited_time = build.edited_time
-                sql_build.original_message_id = build.original_message_id
 
                 # Update category-specific attributes
                 if isinstance(sql_build, Door):
@@ -375,16 +377,14 @@ class BuildManager:
                 sql_build.links.clear()
 
                 await self._setup_relationships(build, session, sql_build)
+                if build.original_message_id is not None:
+                    await self._create_or_update_message(build, session)
+                sql_build.original_message_id = build.original_message_id
                 await session.commit()
 
         # Handle embedding and vector storage
         try:
             embedding_task = asyncio.create_task(build.generate_embedding())
-
-            # Handle message separately since it might update extra_info
-            if build.original_message_id is not None:
-                async with self.session() as session:
-                    await self._create_or_update_message(build, session)
 
             # Update embedding
             build.embedding = await embedding_task
