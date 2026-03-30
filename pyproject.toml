@@ -6,7 +6,8 @@ requires-python = ">=3.12"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-# Whenever the dependencies change, run
+# GitHub Actions keeps requirements/base.txt and requirements/dev.txt in sync.
+# To reproduce the export locally, run:
 # 1. uv export -o requirements/base.txt
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
@@ -38,8 +39,8 @@ dependencies = [
 "Issue Tracker" = "https://github.com/redstone-squid/Redstone-Squid/issues"
 
 [dependency-groups]
-# Note: changes to this group has to be synced with requirements/dev.txt
-# uv export --only-dev -o requirements/dev.txt
+# Note: GitHub Actions regenerates requirements/dev.txt when this group changes.
+# Local reproduction: uv export --only-dev -o requirements/dev.txt
 dev = [
     "pip-tools>=7.4.1",
     "ruff>=0.5.1",
@@ -62,6 +63,7 @@ packages = []
 
 [tool.uv]
 package = false
+exclude-newer = "7 days"
 
 [tool.ruff]
 line-length = 120
