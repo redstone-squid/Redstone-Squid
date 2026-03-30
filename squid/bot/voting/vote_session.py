@@ -18,7 +18,7 @@ from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession
+from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
 
 if TYPE_CHECKING:
     import squid.bot
@@ -57,6 +57,7 @@ async def track_vote_session(
             insert(VoteSession)
             .values(
                 status="open",
+                result="pending",
                 author_id=author_id,
                 kind=kind,
                 pass_threshold=pass_threshold,
@@ -74,15 +75,16 @@ async def track_vote_session(
     return session_id
 
 
-async def close_vote_session(vote_session_id: int) -> None:
+async def close_vote_session(vote_session_id: int, result: VoteSessionResultLiteral) -> None:
     """Close a vote session in the database.
 
     Args:
         vote_session_id: The id of the vote session.
+        result: The finalized result of the vote session.
     """
     db = DatabaseManager()
     async with db.async_session() as session:
-        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed")
+        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed", result=result)
         await session.execute(stmt)
         await session.commit()
 
@@ -262,6 +264,26 @@ class AbstractVoteSession(ABC):
         """Calculate the net votes"""
         return sum(self._votes.values())
 
+    @final
+    @property
+    def status(self) -> Literal["open", "closed"]:
+        """The current status of the vote session."""
+        if self.is_closed:
+            return "closed"
+        return "open"
+
+    @final
+    @property
+    def result(self) -> VoteSessionResultLiteral:
+        """The current result of the vote session."""
+        if self.is_closed:
+            if self.net_votes >= self.pass_threshold:
+                return "approved"
+            if self.net_votes <= self.fail_threshold:
+                return "denied"
+            return "cancelled"
+        return "pending"
+
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send a vote session message to a channel"""
@@ -308,7 +330,7 @@ class AbstractVoteSession(ABC):
             await asyncio.gather(*self._tasks, return_exceptions=False)
         await self.update_messages()
         assert self.id is not None
-        await close_vote_session(self.id)
+        await close_vote_session(self.id, self.result)
 
     def __getitem__(self, user_id: int) -> float | None:
         return self._votes.get(user_id)
@@ -502,16 +524,16 @@ class BuildVoteSession(AbstractVoteSession):
             return
 
         self.is_closed = True
-        if self.net_votes < self.pass_threshold:
-            await self.build.deny()
-        else:
+        if self.result == "approved":
             await self.build.confirm()
+        else:
+            await self.build.deny()
         # TODO: decide whether to delete the messages or not
 
         await self.update_messages()
 
         if self.id is not None:
-            await close_vote_session(self.id)
+            await close_vote_session(self.id, self.result)
 
     @classmethod
     async def get_open_vote_sessions(
@@ -648,12 +670,25 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def update_messages(self) -> None:
         """Updates the message with the current vote count."""
+        match self.result:
+            case "pending":
+                title = "Vote to Delete Log"
+                action = f"React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n"
+            case "approved":
+                title = "Vote to Delete Log: Passed"
+                action = ""
+            case "denied":
+                title = "Vote to Delete Log: Failed"
+                action = ""
+            case _:
+                title = "Vote to Delete Log: Closed"
+                action = ""
+
         embed = discord.Embed(
-            title="Vote to Delete Log",
+            title=title,
             description=(
                 dedent(f"""
-                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
+                {action}**Log Content:**\n{self.target_message.content}\n\n
                 **Upvotes:** {self.upvotes}
                 **Downvotes:** {self.downvotes}
                 **Net Votes:** {self.net_votes}""")
@@ -667,13 +702,12 @@ class DeleteLogVoteSession(AbstractVoteSession):
             return
 
         self.is_closed = True
-        if self.net_votes <= self.pass_threshold:
-            await asyncio.gather(*[message.channel.send("Vote failed") for message in await self.fetch_messages()])
-        else:
+        if self.result == "approved":
             await self.target_message.delete()
+        await self.update_messages()
 
         if self.id is not None:
-            await close_vote_session(self.id)
+            await close_vote_session(self.id, self.result)
 
     @classmethod
     async def get_open_vote_sessions(

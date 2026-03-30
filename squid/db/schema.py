@@ -43,6 +43,7 @@ RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLi
 MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
 VoteKindLiteral = Literal["build", "delete_log"]
+VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 
@@ -462,6 +463,7 @@ class VoteSession(Base, kw_only=True):
     __tablename__ = "vote_sessions"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
+    result: Mapped[VoteSessionResultLiteral] = mapped_column(String, nullable=False)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -674,6 +676,7 @@ class VoteSessionRecord(TypedDict):
     id: int
     created_at: str
     status: Literal["open", "closed"]
+    result: VoteSessionResultLiteral
     author_id: int
     kind: str
     pass_threshold: int
