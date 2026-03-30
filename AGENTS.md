@@ -1,11 +1,3 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-## The Golden Rule  
-When unsure about implementation details, ALWAYS ask the developer.
-
 ## Project: Redstone Squid Discord Bot
 
 This is a Discord bot for managing Minecraft redstone build submissions, built with Python 3.12+ and discord.py. The bot manages a database of records, handles voting on submissions, and provides automated moderation features.
@@ -37,22 +29,10 @@ Add code comments sparingly. Focus on why something is done, especially for comp
 - **Don't block the event loop**: Use asyncio primitives for concurrent operations
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 
-## Anchor comments  
-
-Add specially formatted comments throughout the codebase, where appropriate, for yourself as inline knowledge that can be easily `grep`ped for.  
-
-### Guidelines:  
-
-- Use `AIDEV-NOTE:`, `AIDEV-TODO:`, or `AIDEV-QUESTION:` (all-caps prefix) for comments aimed at AI and developers.  
-- Keep them concise (≤ 120 chars).  
-- **Important:** Before scanning files, always first try to **locate existing anchors** `AIDEV-*` in relevant subdirectories.  
-- **Update relevant anchors** when modifying associated code.  
-- **Do not remove `AIDEV-NOTE`s** without explicit human instruction.  
-Example:  
-# AIDEV-NOTE: perf-hot-path; avoid extra allocations (see ADR-24)  
-async def render_feed(...):  
-    ...  
-
 ## Extra Information
 
 - The current database schema is in `schema_dump.sql` in the root directory.
+
+## GitHub Actions & CI/CD
+
+- When adding or changing GitHub Actions, always search online for the newest version and use the commit hash instead of version tags for security and immutability. (Use `gh` CLI to find the commit hash, searching won't give you helpful results.)
