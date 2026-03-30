@@ -1,0 +1,70 @@
+name: Requirements Sync
+
+permissions:
+  contents: write
+
+on:
+  push:
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - requirements/**
+      - .github/workflows/requirements-sync.yml
+  pull_request:
+    paths:
+      - pyproject.toml
+      - uv.lock
+      - requirements/**
+      - .github/workflows/requirements-sync.yml
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+      with:
+        version: "0.11.2"
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Regenerate exported requirements
+      run: |
+        uv export -o requirements/base.txt --quiet
+        uv export --only-dev -o requirements/dev.txt --quiet
+
+    - name: Detect regenerated changes
+      id: diff
+      shell: bash
+      run: |
+        if git diff --quiet -- requirements/base.txt requirements/dev.txt; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Commit regenerated requirements
+      if: github.event_name == 'push' && steps.diff.outputs.changed == 'true'
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add requirements/base.txt requirements/dev.txt
+        git commit -m "Sync exported requirements"
+        git push || {
+          echo "Unable to push regenerated requirements. Commit the updated files manually."
+          exit 1
+        }
+
+    - name: Fail when regenerated files differ
+      if: github.event_name != 'push' && steps.diff.outputs.changed == 'true'
+      shell: bash
+      run: |
+        echo "requirements/*.txt do not match the current uv export output."
+        echo "Push the branch again or commit the regenerated files manually if the sync workflow cannot write to it."
+        git diff -- requirements/base.txt requirements/dev.txt
+        exit 1
