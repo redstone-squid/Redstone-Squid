@@ -192,6 +192,15 @@ addopts = [
     "-ra",                 # short summary of skips/xfails
     "--cov=squid",
 ]
+# https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
+# When a warning matches more than one option in the list, the action for the last matching option is performed.
+filterwarnings = [
+    # Implicitly coerce all non-fatal warnings into fatal exceptions.
+    "error",
+    # Allow DeprecationWarnings to surface once per location without failing the suite, excluding the ones
+    # explicitly ignored below
+    "once::DeprecationWarning",
+]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
