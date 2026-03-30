@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from squid.db import DatabaseManager
+from squid.logging_config import configure_api_logging
 
 _db: DatabaseManager | None = None
 
@@ -57,7 +58,8 @@ def main() -> None:
     """Run the FastAPI server."""
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("API_PORT", 8000)), log_level="info")
+    configure_api_logging()
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("API_PORT", 8000)), log_config=None)
 
 
 if __name__ == "__main__":

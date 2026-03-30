@@ -4,8 +4,8 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from contextlib import contextmanager
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from pathlib import Path
 from queue import Queue
 from typing import Any, Final, Self, TypedDict, override
 
@@ -24,6 +24,13 @@ from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
 from squid.db.builds import Build, clean_locks
 from squid.db.schema import Base
+from squid.logging_config import (
+    DEFAULT_BACKUP_COUNT,
+    DEFAULT_DISCORD_LOG_FILE,
+    DEFAULT_LOG_DIR_NAME,
+    DEFAULT_MAX_BYTES,
+    prepare_log_path,
+)
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -183,22 +190,7 @@ class RedstoneSquid(Bot):
         return BuildHandler(self, build)
 
 
-@contextmanager
-def setup_logging(dev_mode: bool = False):
-    """
-    Context manager to set up logging for the bot process.
-
-    This will set up a queue listener that processes logs in a separate thread.
-    It should be used at the start of the main function to ensure logging is set up before any other code runs.
-    """
-    queue_listener = start_logging(dev_mode)
-    try:
-        yield
-    finally:
-        queue_listener.stop()
-
-
-def start_logging(dev_mode: bool = False):
+def start_logging(dev_mode: bool = False) -> QueueListener:
     """Set up logging for the bot process."""
     # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
     dt_fmt = "%Y-%m-%d %H:%M:%S"
@@ -209,20 +201,24 @@ def start_logging(dev_mode: bool = False):
     stream_handler.setLevel(logging.INFO)
 
     # Create logs directory if it doesn't exist
-    logs_dir = "logs"
-    os.makedirs(logs_dir, exist_ok=True)
+    log_dir_env = os.environ.get("LOG_DIR")
+    logs_dir = Path(log_dir_env) if log_dir_env else Path.cwd() / DEFAULT_LOG_DIR_NAME
+    log_file_path = prepare_log_path(logs_dir, os.environ.get("LOG_FILE", DEFAULT_DISCORD_LOG_FILE))
 
-    file_handler = RotatingFileHandler(
-        filename=os.path.join(logs_dir, "discord.log"),
-        encoding="utf-8",
-        maxBytes=32 * 1024 * 1024,  # 32 MiB
-        backupCount=5,  # Rotate through 5 files
-    )
-    file_handler.setFormatter(formatter)
+    handlers: list[logging.Handler] = [stream_handler]
+    if log_file_path is not None:
+        file_handler = RotatingFileHandler(
+            filename=log_file_path,
+            encoding="utf-8",
+            maxBytes=DEFAULT_MAX_BYTES,  # 32 MiB
+            backupCount=DEFAULT_BACKUP_COUNT,  # Rotate through 5 files
+        )
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
 
     # Create queue handler that will process logs in a separate thread
     log_queue: Queue[Any] = Queue(-1)
-    queue_listener = QueueListener(log_queue, stream_handler, file_handler, respect_handler_level=True)
+    queue_listener = QueueListener(log_queue, *handlers, respect_handler_level=True)
     queue_listener.start()
     queue_handler = QueueHandler(log_queue)
 
@@ -258,8 +254,9 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
+    queue_listener = start_logging(config.get("dev_mode", False))
 
-    with setup_logging(config.get("dev_mode", False)):
+    try:
         db = DatabaseManager()
         # Run the synchronous db validation function in a thread to avoid blocking the event loop
         asyncio.get_event_loop().run_in_executor(
@@ -273,6 +270,8 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
                 msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
                 raise RuntimeError(msg)
             await bot.start(token)
+    finally:
+        queue_listener.stop()
 
 
 if __name__ == "__main__":
