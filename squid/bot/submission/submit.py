@@ -219,7 +219,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         if message.channel.id not in [build_logs, record_logs]:
             return
 
-        build = await Build.ai_generate_from_message(message, model="deepseek/deepseek-chat")
+        build = await Build.ai_generate_from_message(message, model="deepseek/deepseek-v3.2")
         if build is None:
             return
 
