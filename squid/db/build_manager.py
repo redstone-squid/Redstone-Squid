@@ -5,13 +5,14 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import vecs
 from async_lru import alru_cache
 from postgrest.base_request_builder import APIResponse
 from rapidfuzz import process
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -596,7 +597,7 @@ class BuildManager:
             build.submission_status = Status.CONFIRMED
             async with self.session() as session:
                 stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.CONFIRMED)
-                result = await session.execute(stmt)
+                result = cast(CursorResult[Any], await session.execute(stmt))
                 await session.commit()
                 if result.rowcount != 1:
                     msg = "Failed to confirm submission in the database."
@@ -616,7 +617,7 @@ class BuildManager:
             build.submission_status = Status.DENIED
             async with self.session() as session:
                 stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.DENIED)
-                result = await session.execute(stmt)
+                result = cast(CursorResult[Any], await session.execute(stmt))
                 await session.commit()
                 if result.rowcount != 1:
                     msg = "Failed to deny submission in the database."

@@ -10,7 +10,7 @@ from io import StringIO
 from typing import Any, Literal, Protocol, cast, overload
 from xml.etree.ElementTree import Element
 
-from beartype.door import is_bearable, is_subhint  # type: ignore [reportUnknownVariableType]
+from beartype.door import is_subhint  # type: ignore [reportUnknownVariableType]
 from markdown import Markdown
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
         else:
             if is_subhint(attr_type, list):
                 formatter, parser = handle_list(attr_type)  # type: ignore
-            elif is_bearable(None, attr_type):
+            elif _is_optional_type(attr_type):
                 formatter, parser = handle_optional(attr_type)  # type: ignore
     if formatter is None or parser is None:
         msg = f"No dispatch found for {attr_type}"
@@ -179,6 +179,11 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
 
     dispatcher[attr_type] = formatter, parser
     return formatter, parser
+
+
+def _is_optional_type(hint: type[Any]) -> bool:
+    args = typing.get_args(hint)
+    return len(args) == 2 and type(None) in args
 
 
 def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:

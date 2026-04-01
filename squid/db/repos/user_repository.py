@@ -1,8 +1,10 @@
 """Repository for managing users and verification codes in the database."""
 
 import uuid
+from typing import cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import User, VerificationCode
@@ -50,7 +52,7 @@ class UserRepository:
         """
         async with self._session() as session:
             stmt = update(User).where(User.discord_id == discord_id).values(minecraft_uuid=None)
-            result = await session.execute(stmt)
+            result = cast(CursorResult[tuple[User]], await session.execute(stmt))
             if result.rowcount == 0:
                 return False
             await session.commit()

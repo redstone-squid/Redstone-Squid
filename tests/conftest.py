@@ -77,7 +77,8 @@ async def docker_backed_db_manager(mock_env_vars: None) -> AsyncGenerator[Databa
     with DockerCompose(
         "supabase/docker/", compose_file_name=["docker-compose.yml"], pull=True, env_file=".env"
     ) as compose:
-        envs = dotenv.dotenv_values(compose.env_file)
+        env_file = compose.env_file[0] if isinstance(compose.env_file, list) else compose.env_file
+        envs = dotenv.dotenv_values(env_file)
         yield DatabaseManager(supabase_url=envs["API_EXTERNAL_URL"], supabase_key=envs["SERVICE_ROLE_KEY"])
 
 

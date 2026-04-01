@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import vecs
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
+from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 from openai import AsyncOpenAI
 from sqlalchemy import select
@@ -124,7 +124,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
 
-    @hybrid_group(name="build", invoke_without_command=True)
+    @commands.hybrid_group(name="build", with_app_command=True)
     async def build_hybrid_group(self, ctx: Context[BotT]):
         """Submit, view, confirm and deny submissions."""
         await ctx.send_help("build")

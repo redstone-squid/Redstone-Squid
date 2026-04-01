@@ -3,14 +3,14 @@
 from typing import TYPE_CHECKING, Annotated, cast
 
 import discord
-from beartype.door import is_bearable
 from discord import app_commands
-from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
+from discord.ext import commands
+from discord.ext.commands import Cog, Context, Greedy, guild_only
 
 import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
-from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
+from squid.db.schema import Setting
 
 if TYPE_CHECKING:
     import squid.bot
@@ -20,7 +20,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
     def __init__(self, bot: BotT):
         self.bot = bot
 
-    @hybrid_group(name="settings", invoke_without_command=True)
+    @commands.hybrid_group(name="settings", with_app_command=True)
     @check_is_staff()
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context[BotT]):
@@ -46,7 +46,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
             settings = await self.bot.db.server_setting.get_all(ctx.guild.id)
             desc = ""
             for setting, value in settings.items():
-                if is_bearable(setting, ScalarChannelSetting):
+                if setting in ("Smallest", "Fastest", "First", "Builds", "Vote"):
                     value = cast(int | None, value)
                     if value is None:
                         desc += f"{setting} channel: _Not set_\n"
@@ -55,7 +55,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     channel = cast(GuildMessageable | None, ctx.guild.get_channel(value))
                     display_value = channel.name if channel is not None else "_Not found_"
                     desc += f"{setting} channel: {display_value}\n"
-                elif is_bearable(setting, ListRoleSetting):
+                elif setting in ("Staff", "Trusted"):
                     value = cast(list[int], value)
                     roles = [role for role in ctx.guild.roles if role.id in value]
                     display_value = ", ".join(role.name for role in roles) or "_Not set_"
@@ -121,7 +121,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
             return
 
         async with self.bot.get_running_message(ctx) as sent_message:
-            if is_bearable(setting, ScalarChannelSetting):
+            if setting in ("Smallest", "Fastest", "First", "Builds", "Vote"):
                 if channel is None:
                     await sent_message.edit(
                         embed=utils.error_embed("Error", "You must provide a channel for this setting.")
@@ -146,7 +146,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
                 )
-            elif is_bearable(setting, ListRoleSetting):
+            elif setting in ("Staff", "Trusted"):
                 if roles is None:
                     await sent_message.edit(
                         embed=utils.error_embed("Error", "You must provide a list of roles for this setting.")

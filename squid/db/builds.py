@@ -18,6 +18,7 @@ from typing import Any, Final, Literal, Self, overload
 import discord
 from openai import AsyncOpenAI, OpenAIError
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 
 from squid.db.schema import (
     Build as SQLBuild,
@@ -713,7 +714,7 @@ class BuildLock:
                 .where(SQLBuild.is_locked.is_(False))
                 .values(is_locked=True)
             )
-            result = await session.execute(stmt)
+            result = typing.cast(CursorResult[Any], await session.execute(stmt))
             await session.commit()
             if result.rowcount == 1:
                 self._lock_count = 1
