@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Self, cast, override
+from typing import TYPE_CHECKING, Any, Self, cast, get_args, override
 
 import discord
 from beartype.door import is_bearable
@@ -128,11 +128,11 @@ class BuildField[T](discord.ui.TextInput):
         except AttributeError as err:
             msg = f"Invalid attribute {attribute}"
             raise ValueError(msg) from err
-        if not is_bearable(value, attr_type):
+        if not is_bearable(value, cast(Any, attr_type)):
             logger.error("Invalid hint for %s: %s", attribute, attr_type)
 
         if required is None:
-            required = is_bearable(None, attr_type)
+            required = type(None) not in get_args(attr_type)
 
         if value is None:
             string_value = ""
