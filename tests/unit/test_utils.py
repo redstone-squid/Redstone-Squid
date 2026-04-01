@@ -1,6 +1,6 @@
 import pytest
 
-from squid.utils import parse_time_string
+from squid.utils import parse_time_string, parse_version_string
 
 
 @pytest.mark.parametrize(
@@ -18,4 +18,18 @@ from squid.utils import parse_time_string
 def test_parse_time_string(time_string: str | None, expected: int | None):
     """Test time string parsing with various formats."""
     result = parse_time_string(time_string)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("version_string", "expected"),
+    [
+        ("Java 26.0", ("Java", 26, 0, 0)),
+        ("Bedrock 26.1", ("Bedrock", 26, 1, 0)),
+        ("26.1.3", ("Java", 26, 1, 3)),
+    ],
+)
+def test_parse_version_string(version_string: str, expected: tuple[str, int, int, int]):
+    """Test version string parsing supports both year and patch release formats."""
+    result = parse_version_string(version_string)
     assert result == expected

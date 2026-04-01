@@ -8,7 +8,7 @@ import aiohttp
 
 from squid.db.schema import Version
 
-VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)\.(\d+)\W*$", re.IGNORECASE)
+VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$", re.IGNORECASE)
 
 
 def utcnow() -> str:
@@ -52,7 +52,7 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
     """Parses a version string into its components. Defaults to Java edition if no edition is specified in the string.
 
     A version string is formatted as follows:
-    ["Java" | "Bedrock"] major_version.minor_version.patch_number
+    ["Java" | "Bedrock"] major_version.minor_version[.patch_number]
     """
 
     match = VERSION_PATTERN.match(version_string)
@@ -61,7 +61,7 @@ def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"
         raise ValueError(msg)
 
     edition, major, minor, patch = match.groups()
-    return edition or "Java", int(major), int(minor), int(patch)  # type: ignore
+    return edition or "Java", int(major), int(minor), int(patch or 0)  # type: ignore
 
 
 def parse_time_string(time_string: str | None) -> int | None:
