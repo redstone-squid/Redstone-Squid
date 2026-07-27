@@ -13,6 +13,7 @@ from discord.ui import Item
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_owner_server
 from squid.bot.utils.permissions import check_is_staff
+from squid.services.community import RedstonerDecisionKind, RedstonerService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -64,9 +65,9 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: di
 
 
 class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, service: RedstonerService):
         self.bot = bot
-        self.pattern = re.compile(r"https://discord\.com/channels/\d+/\d+/\d+")
+        self.service = service
 
     @Cog.listener("on_message")
     async def give_redstoner(self, message: discord.Message):
@@ -88,23 +89,27 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""
-        if message.author.id != 700796664276844612:  # @Starboard
+        decision = self.service.evaluate(
+            author_id=message.author.id,
+            channel_id=message.channel.id,
+            mentioned_user_ids=[mention.id for mention in message.mentions],
+            content=message.content,
+        )
+        if decision.kind is RedstonerDecisionKind.IGNORE:
             return
 
-        if message.channel.id != 1332630008270684241:  # Thread for listening to starboard messages
+        if decision.kind is RedstonerDecisionKind.MALFORMED:
+            await message.channel.send(f"{decision.reason} in {message.jump_url}")
             return
 
-        mentions = message.mentions
-        if len(mentions) != 1:
-            await self.bot.get_channel(1332630008270684241).send(
-                f"Expected 1 mention from starboard in {message.jump_url}, got {', '.join(mention.name for mention in mentions)}"
-            )
-            return
-
-        orig_message_link = self.pattern.search(message.content).group(0)
-
+        assert decision.member_id is not None
+        assert decision.source_message_url is not None
+        member = next(mention for mention in message.mentions if mention.id == decision.member_id)
+        assert message.guild is not None
         redstoner_role = message.guild.get_role(433670432420397060)
-        member: discord.Member = mentions[0]
+        if redstoner_role is None:
+            await message.channel.send("Could not find the redstoner role.")
+            return
         await member.add_roles(redstoner_role)
         await message.channel.send(
             f"Gave {member.mention} the redstoner role.", allowed_mentions=discord.AllowedMentions.none()
@@ -113,7 +118,7 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
         view = discord.ui.View()
         view.add_item(DynamicRemoveOwnRedstonerRoleButton())
         await self.bot.get_channel(433643026204852224).send(
-            f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 15 upvotes in {orig_message_link}.",
+            f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 15 upvotes in {decision.source_message_url}.",
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
             view=view,
         )
@@ -121,4 +126,4 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
-    await bot.add_cog(GiveRedstoner(bot))
+    await bot.add_cog(GiveRedstoner(bot, bot.services.redstoner))
