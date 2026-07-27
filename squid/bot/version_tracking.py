@@ -6,20 +6,18 @@ import discord
 import discord.ext.commands as commands
 from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
-from sqlalchemy import insert
 
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.db import DatabaseManager
-from squid.db.schema import Version
-from squid.utils import parse_version_string
+from squid.services.versions import VersionService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, version_service: VersionService):
         self.bot = bot
+        self.version_service = version_service
 
     @commands.hybrid_command()
     @check_is_staff()
@@ -27,20 +25,8 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
     @app_commands.rename(version_string="version")
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a new version to the database"""
-        db = DatabaseManager()
-        _, major, minor, patch = parse_version_string(version_string)
-        version_record = {
-            "edition": edition,
-            "major_version": major,
-            "minor_version": minor,
-            "patch_number": patch,
-        }
-        async with db.async_session() as session:
-            stmt = insert(Version).values(**version_record).returning(Version)
-            result = await session.execute(stmt)
-            await session.commit()
-            version = result.scalar_one()
-            await ctx.send(f"Version added successfully: {version}")
+        version = await self.version_service.add(version_string, edition=edition)
+        await ctx.send(f"Version added successfully: {version}")
 
     @Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message):
@@ -52,24 +38,10 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
             return
 
         first_line = message.content.split("\n", 1)[0]
-        edition, major_version, minor_version, patch = parse_version_string(first_line)
-        db = DatabaseManager()
-
-        version_record = {
-            "edition": edition,
-            "major_version": major_version,
-            "minor_version": minor_version,
-            "patch_number": patch,
-        }
-
-        async with db.async_session() as session:
-            stmt = insert(Version).values(**version_record).returning(Version)
-            result = await session.execute(stmt)
-            await session.commit()
-            version = result.scalar_one()
-            await self.bot.get_channel(channel_id).send(f"Version added successfully: {version}")  # type: ignore
+        version = await self.version_service.add(first_line)
+        await self.bot.get_channel(channel_id).send(f"Version added successfully: {version}")  # type: ignore
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VersionTracker(bot))
+    await bot.add_cog(VersionTracker(bot, bot.services.versions))

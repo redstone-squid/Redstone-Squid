@@ -6,27 +6,25 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui.views import ConfirmationView
-from squid.db import DatabaseManager
-from squid.services.user_service import UserRepository, UserService
+from squid.services.users import UserService, VerificationError
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, user_service: UserService):
         self.bot = bot
-        db = DatabaseManager()
-        self.user_repository = UserRepository(db.async_session)
-        self.user_service = UserService(self.user_repository)
+        self.user_service = user_service
 
     @hybrid_command()
     @app_commands.describe(code="The code you received by running /link in the game.")
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
-        if await self.user_service.link_account(ctx.author.id, code):
+        try:
+            await self.user_service.link_minecraft_account(ctx.author.id, code)
             await ctx.send("Your discord account has been linked with your minecraft account.")
-        else:
+        except VerificationError:
             await ctx.send("Invalid code. Please generate a new code and try again.")
 
     @hybrid_command()
@@ -37,7 +35,7 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
 
         await view.wait()
         if view.value:
-            if await self.user_service.unlink_account(ctx.author.id):
+            if await self.user_service.unlink_minecraft_account(ctx.author.id):
                 await ctx.send("Your discord account has been unlinked from your minecraft account.")
             else:
                 await ctx.send(
@@ -47,4 +45,4 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VerifyCog(bot))
+    await bot.add_cog(VerifyCog(bot, bot.services.users))

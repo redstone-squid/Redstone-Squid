@@ -7,15 +7,16 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
-from squid.utils import get_version_string
+from squid.services.versions import VersionService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, version_service: VersionService):
         self.bot = bot
+        self.version_service = version_service
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
@@ -51,11 +52,10 @@ class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
     @commands.hybrid_command(name="versions")
     async def versions(self, ctx: Context[BotT]):
         """Shows a list of versions the bot recognizes."""
-        versions = await self.bot.db.get_or_fetch_versions_list(edition="Java")
-        versions_human_readable = [get_version_string(version) for version in versions[:20]]  # TODO: pagination
+        versions_human_readable = await self.version_service.list_display("Java", limit=20)  # TODO: pagination
         await ctx.send(", ".join(versions_human_readable))
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(Miscellaneous(bot))
+    await bot.add_cog(Miscellaneous(bot, bot.services.versions))

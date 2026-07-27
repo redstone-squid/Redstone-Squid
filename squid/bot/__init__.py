@@ -31,6 +31,7 @@ from squid.logging_config import (
     DEFAULT_MAX_BYTES,
     prepare_log_path,
 )
+from squid.services.container import ApplicationServices
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -70,9 +71,11 @@ class RedstoneSquid(Bot):
     def __init__(
         self,
         db: DatabaseManager,
+        services: ApplicationServices,
         config: BotConfig | None = None,
     ):
         self.db = db
+        self.services = services
         if config is None:
             config = {}
         description = ""
@@ -151,7 +154,7 @@ class RedstoneSquid(Bot):
             return await channel.fetch_message(message_id)
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
-            await DatabaseManager().message.untrack_message(message_id)
+            await self.services.messages.untrack(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -258,13 +261,16 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
 
     try:
         db = DatabaseManager()
+        from squid.bootstrap import create_application_services
+
+        services = create_application_services(db)
         # Run the synchronous db validation function in a thread to avoid blocking the event loop
         asyncio.get_event_loop().run_in_executor(
             None,
             lambda: db.validate_database_consistency(Base),
         ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
 
-        async with RedstoneSquid(db, config=config.get("bot_config")) as bot:
+        async with RedstoneSquid(db, services, config=config.get("bot_config")) as bot:
             token = os.environ.get("BOT_TOKEN")
             if not token:
                 msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."

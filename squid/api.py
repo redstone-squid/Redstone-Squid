@@ -8,16 +8,20 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
+from squid.bootstrap import create_application_services
 from squid.db import DatabaseManager
 from squid.logging_config import configure_api_logging
+from squid.services.container import ApplicationServices
 
 _db: DatabaseManager | None = None
+_services: ApplicationServices | None = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _db
+    global _db, _services
     _db = DatabaseManager()
+    _services = create_application_services(_db)
     yield
 
 
@@ -34,6 +38,12 @@ async def get_db():
     return _db
 
 
+async def get_services() -> ApplicationServices:
+    """Return application services initialized during API startup."""
+    assert _services is not None, "Application services should be initialized at app startup"
+    return _services
+
+
 class User(BaseModel):
     """A user model."""
 
@@ -42,14 +52,16 @@ class User(BaseModel):
 
 @app.post("/verify", status_code=201)
 async def get_verification_code(
-    user: User, authorization: Annotated[str, Header()], db: Annotated[DatabaseManager, Depends(get_db)]
+    user: User,
+    authorization: Annotated[str, Header()],
+    services: Annotated[ApplicationServices, Depends(get_services)],
 ) -> int:
     """Generate a verification code for a user."""
     if authorization != os.environ["SYNERGY_SECRET"]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        return await db.user.generate_verification_code(user.uuid)
+        return await services.users.generate_verification_code(user.uuid)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

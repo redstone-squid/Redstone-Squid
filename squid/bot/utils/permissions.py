@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING
 
 from discord.ext.commands import CheckFailure, Context, MissingAnyRole, NoPrivateMessage, check
 
-from squid.db import DatabaseManager
-
 if TYPE_CHECKING:
     import squid.bot
 
@@ -42,7 +40,7 @@ def check_is_staff():
             raise NoPrivateMessage()
 
         server_id = ctx.guild.id
-        staff_role_ids = await ctx.bot.db.server_setting.get_single(server_id=server_id, setting="Staff")
+        staff_role_ids = await ctx.bot.services.settings.get(server_id, "Staff")
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         if any(ctx.author.get_role(item) is not None for item in staff_role_ids):  # type: ignore
@@ -57,7 +55,7 @@ async def is_staff(bot: "squid.bot.RedstoneSquid", server_id: int | None, user_i
     if server_id is None:
         return False  # TODO: global staff role
 
-    staff_role_ids = await bot.db.server_setting.get_single(server_id=server_id, setting="Staff")
+    staff_role_ids = await bot.services.settings.get(server_id, "Staff")
     server = bot.get_guild(server_id)
     if server is None:
         return False
@@ -75,10 +73,9 @@ def check_is_trusted_or_staff():
     async def predicate(ctx: Context["squid.bot.RedstoneSquid"]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
-        db = DatabaseManager()
         server_id = ctx.guild.id
-        staff_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Staff")
-        trusted_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Trusted")
+        staff_role_ids = await ctx.bot.services.settings.get(server_id, "Staff")
+        trusted_role_ids = await ctx.bot.services.settings.get(server_id, "Trusted")
         allowed_role_ids = staff_role_ids + trusted_role_ids
 
         # ctx.guild is None doesn't narrow ctx.author to Member
@@ -95,9 +92,8 @@ async def is_trusted_or_staff(bot: "squid.bot.RedstoneSquid", server_id: int, us
     if server is None:
         return False
 
-    db = DatabaseManager()
-    staff_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Staff")
-    trusted_role_ids = await db.server_setting.get_single(server_id=server_id, setting="Trusted")
+    staff_role_ids = await bot.services.settings.get(server_id, "Staff")
+    trusted_role_ids = await bot.services.settings.get(server_id, "Trusted")
     allowed_role_ids = staff_role_ids + trusted_role_ids
 
     member = server.get_member(user_id)

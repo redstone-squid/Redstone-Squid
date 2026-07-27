@@ -21,7 +21,6 @@ from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.user_repository import UserRepository
 from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
-from squid.db.services.user_service import UserService
 from squid.utils import get_version_string, parse_version_string
 
 
@@ -92,11 +91,10 @@ class DatabaseManager(AsyncClient):
         self.sync_engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
         self.sync_session = sessionmaker(self.sync_engine, expire_on_commit=False)
 
-        # Initialize repositories and services
+        # Initialize repositories
         self.message_repo = MessageRepository(self.async_session)
         self.message = MessageService(self.message_repo)
         self.user_repo = UserRepository(self.async_session)
-        self.user = UserService(self.user_repo)
 
         # Initialize managers
         self.server_setting = ServerSettingManager(self.async_session)

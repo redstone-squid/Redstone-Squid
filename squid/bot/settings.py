@@ -11,14 +11,16 @@ import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
 from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
+from squid.services.settings import SettingsService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, settings_service: SettingsService):
         self.bot = bot
+        self.settings_service = settings_service
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @check_is_staff()
@@ -30,12 +32,12 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild):
         """Let the db know that the bot has joined a new guild."""
-        await self.bot.db.server_setting.on_guild_join(guild.id)
+        await self.settings_service.guild_joined(guild.id)
 
     @Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild):
         """Let the db know that the bot has left a guild."""
-        await self.bot.db.server_setting.on_guild_remove(guild.id)
+        await self.settings_service.guild_removed(guild.id)
 
     @settings_hybrid_group.command(name="list")
     @check_is_staff()
@@ -43,7 +45,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
         """Show all settings for this server."""
         assert ctx.guild is not None
         async with self.bot.get_running_message(ctx) as sent_message:
-            settings = await self.bot.db.server_setting.get_all(ctx.guild.id)
+            settings = await self.settings_service.get_all(ctx.guild.id)
             desc = ""
             for setting, value in settings.items():
                 if is_bearable(setting, ScalarChannelSetting):
@@ -78,7 +80,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
             match setting:
                 case "Smallest" | "Fastest" | "First" | "Builds" | "Vote":
                     title = f"{setting} Channel Info"
-                    value = await self.bot.db.server_setting.get_single(ctx.guild.id, setting)
+                    value = await self.settings_service.get(ctx.guild.id, setting)
                     if value is None:
                         description = "_Not set_"
                     else:
@@ -88,12 +90,12 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                         )
                 case "Staff" | "Trusted":
                     title = f"{setting} Roles Info"
-                    value = await self.bot.db.server_setting.get_single(ctx.guild.id, setting)
+                    value = await self.settings_service.get(ctx.guild.id, setting)
                     roles = [role for role in ctx.guild.roles if role.id in value]
                     description = ", ".join(role.name for role in roles) or "_Not set_"
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     title = setting
-                    description = str(self.bot.db.server_setting.get_single(ctx.guild.id, setting))
+                    description = str(await self.settings_service.get(ctx.guild.id, setting))
 
             await sent_message.edit(embed=utils.info_embed(title=title, description=description))
 
@@ -133,16 +135,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     return
 
                 # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
-                if setting == "Smallest":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Smallest=channel.id)
-                elif setting == "Fastest":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Fastest=channel.id)
-                elif setting == "First":
-                    await self.bot.db.server_setting.set(ctx.guild.id, First=channel.id)
-                elif setting == "Builds":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Builds=channel.id)
-                elif setting == "Vote":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Vote=channel.id)
+                await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
                 )
@@ -158,10 +151,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
                     return
 
-                if setting == "Staff":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Staff=role_ids)
-                elif setting == "Trusted":
-                    await self.bot.db.server_setting.set(ctx.guild.id, Trusted=role_ids)
+                await self.settings_service.set_roles(ctx.guild.id, setting, role_ids)
                 await sent_message.edit(
                     embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
                 )
@@ -177,23 +167,10 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
         assert ctx.guild is not None
 
         async with self.bot.get_running_message(ctx) as sent_message:
-            if setting == "Smallest":
-                await self.bot.db.server_setting.set(ctx.guild.id, Smallest=None)
-            elif setting == "Fastest":
-                await self.bot.db.server_setting.set(ctx.guild.id, Fastest=None)
-            elif setting == "First":
-                await self.bot.db.server_setting.set(ctx.guild.id, First=None)
-            elif setting == "Builds":
-                await self.bot.db.server_setting.set(ctx.guild.id, Builds=None)
-            elif setting == "Vote":
-                await self.bot.db.server_setting.set(ctx.guild.id, Vote=None)
-            elif setting == "Staff":
-                await self.bot.db.server_setting.set(ctx.guild.id, Staff=[])
-            elif setting == "Trusted":
-                await self.bot.db.server_setting.set(ctx.guild.id, Trusted=[])
+            await self.settings_service.clear(ctx.guild.id, setting)
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(SettingsCog(bot))
+    await bot.add_cog(SettingsCog(bot, bot.services.settings))

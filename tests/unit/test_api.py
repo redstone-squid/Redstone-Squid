@@ -1,4 +1,5 @@
 import uuid
+from types import SimpleNamespace
 from uuid import UUID
 
 import httpx
@@ -36,11 +37,12 @@ def _patch_environment(monkeypatch: pytest.MonkeyPatch, mock_db_manager: Databas
     # Provide the secret expected by the endpoint
     monkeypatch.setenv("SYNERGY_SECRET", TEST_SYNERGY_SECRET)
 
-    # Swap the global `_db` used in the FastAPI router for a dummy
-    mock_db_manager.user = MockUserManager()  # pyright: ignore[reportAttributeAccessIssue]
+    # Swap process infrastructure and the endpoint's service dependency for test doubles.
     monkeypatch.setattr(api_module, "_db", mock_db_manager)
+    api_module.app.dependency_overrides[api_module.get_services] = lambda: SimpleNamespace(users=MockUserManager())
 
-    return
+    yield
+    api_module.app.dependency_overrides.clear()
 
 
 @pytest.fixture
