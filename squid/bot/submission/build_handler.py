@@ -4,25 +4,22 @@ import asyncio
 import io
 import mimetypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from sqlalchemy import insert, select
+from sqlalchemy import select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.db import DatabaseManager
 from squid.db.builds import Build
-from squid.db.schema import BuildLink, Message, Status
-from squid.utils import upload_to_catbox, utcnow
+from squid.db.schema import Message, Status
+from squid.utils import utcnow
 
 if TYPE_CHECKING:
     import squid.bot
-
-
-background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
@@ -137,16 +134,9 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
 
         async def _update_single_message(message: discord.Message):
             await message.edit(content=self.build.original_link, embed=em)
-            await self.bot.db.message.update_message_edited_time(message)
+            await self.bot.services.messages.update_edited_time(message.id)
 
         await asyncio.gather(*(_update_single_message(message) for message in messages))
-
-    async def _insert_video_preview(self, preview_url: str) -> None:
-        """Insert a video preview into the database."""
-        async with self.bot.db.async_session() as session:
-            stmt = insert(BuildLink).values(build_id=self.build.id, url=preview_url, media_type="image")
-            await session.execute(stmt)
-            await session.commit()
 
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
@@ -174,16 +164,6 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                 if image := preview["image"]:
                     if isinstance(image, str):
                         em.set_image(url=image)
-                    else:  # isinstance(image, io.BytesIO)
-                        preview_url = await upload_to_catbox(
-                            filename="video_preview.png", file=image, mimetype="image/png"
-                        )
-                        build.image_urls.append(preview_url)
-                        if build.id is not None:
-                            task = asyncio.create_task(self._insert_video_preview(preview_url))
-                            background_tasks.add(task)
-                            task.add_done_callback(background_tasks.discard)
-                        em.set_image(url=preview_url)
                     break
 
         em.set_footer(text=f"Submission ID: {build.id} • Last Update {utcnow()}")
