@@ -14,11 +14,14 @@ import discord
 from sqlalchemy import insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from squid.bot.message_adapter import to_tracked_message
 from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
+from squid.services.messages import MessageService
+from squid.services.votes import VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot
@@ -31,6 +34,7 @@ DENY_EMOJIS = ["👎", "❌"]
 
 async def track_vote_session(
     messages: Iterable[discord.Message],
+    message_service: MessageService,
     author_id: int,
     kind: VoteKindLiteral,
     pass_threshold: int,
@@ -69,7 +73,13 @@ async def track_vote_session(
         await session.commit()
         session_id = result.scalar_one()
     coros = [
-        db.message.track_message(message, "vote", build_id=build_id, vote_session_id=session_id) for message in messages
+        message_service.track(
+            to_tracked_message(message),
+            "vote",
+            build_id=build_id,
+            vote_session_id=session_id,
+        )
+        for message in messages
     ]
     await asyncio.gather(*coros)
     return session_id
@@ -194,7 +204,12 @@ class AbstractVoteSession(ABC):
     async def _async_init(self) -> None:
         """Perform async initialization. Called by create()."""
         self.id = await track_vote_session(
-            self._messages, self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+            self._messages,
+            self.bot.services.messages,
+            self.author_id,
+            self.kind,
+            self.pass_threshold,
+            self.fail_threshold,
         )
         await self.update_messages()
 
@@ -335,6 +350,14 @@ class AbstractVoteSession(ABC):
     def __getitem__(self, user_id: int) -> float | None:
         return self._votes.get(user_id)
 
+    def apply_persisted_state(self, snapshot: VoteSessionSnapshot) -> None:
+        """Apply state returned by the atomic voting service before rendering."""
+        if self.id != snapshot.id:
+            msg = f"Cannot apply vote session {snapshot.id} to session {self.id}."
+            raise ValueError(msg)
+        self._votes = dict(snapshot.votes)
+        self.is_closed = snapshot.status == "closed"
+
     def __setitem__(self, user_id: int, weight: float | None) -> None:
         """
         Set a vote synchronously, creating background tasks for updates.
@@ -429,6 +452,7 @@ class BuildVoteSession(AbstractVoteSession):
         """Track the vote session in the database."""
         self.id = await track_vote_session(
             await self.fetch_messages(),
+            self.bot.services.messages,
             self.author_id,
             self.kind,
             self.pass_threshold,
@@ -502,8 +526,11 @@ class BuildVoteSession(AbstractVoteSession):
         message = await channel.send(
             content=self.build.original_link, embed=await self.bot.for_build(self.build).generate_embed()
         )
-        await self.bot.db.message.track_message(
-            message, purpose="vote", build_id=self.build.id, vote_session_id=self.id
+        await self.bot.services.messages.track(
+            to_tracked_message(message),
+            purpose="vote",
+            build_id=self.build.id,
+            vote_session_id=self.id,
         )
         self._messages.add(message)
         return message
@@ -596,7 +623,12 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         self.id = await track_vote_session(
-            await self.fetch_messages(), self.author_id, self.kind, self.pass_threshold, self.fail_threshold
+            await self.fetch_messages(),
+            self.bot.services.messages,
+            self.author_id,
+            self.kind,
+            self.pass_threshold,
+            self.fail_threshold,
         )
         async with self.bot.db.async_session() as session:
             stmt = insert(SQLDeleteLogVoteSession).values(

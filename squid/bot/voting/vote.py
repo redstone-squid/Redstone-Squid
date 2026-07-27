@@ -1,18 +1,17 @@
 """Handles reaction-based voting for various purposes."""
 
 import asyncio
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import discord
 from discord.ext.commands import Cog, Context, hybrid_command
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.db.schema import Message, VoteSession
+from squid.services.votes import VoteActor, VoteChoice, VoteService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -27,15 +26,10 @@ _background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, vote_service: VoteService):
         self.bot = bot
+        self.vote_service = vote_service
         self._background_tasks: set[asyncio.Task[Any]] = set()
-
-    async def get_voting_weight(self, server_id: int | None, user_id: int) -> float:
-        """Get the voting weight of a user."""
-        if await is_staff(self.bot, server_id, user_id):
-            return 3
-        return 1
 
     async def get_vote_session(
         self, message_id: int, *, status: Literal["open", "closed"] | None = None
@@ -46,34 +40,16 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             message_id: The message ID of the vote session.
             status: The status of the vote session. If None, it will get any status.
         """
-        async with self.bot.db.async_session() as session:
-            stmt = (
-                select(Message)
-                .options(selectinload(Message.vote_session))
-                .where(Message.id == message_id, Message.purpose == "vote")
-            )
-            if status is not None:
-                stmt = stmt.where(Message.vote_session.has(VoteSession.status == status))
-
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
-
-            if message is None or message.vote_session is None:
-                return None
-
-            vote_session_id = message.vote_session_id
-            assert vote_session_id is not None, (
-                "Vote session ID should not be None because we selected messages with the vote purpose."
-            )
-            kind = message.vote_session.kind
-
-            if kind == "build":
-                return await BuildVoteSession.from_id(self.bot, vote_session_id)
-            if kind == "delete_log":
-                return await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
-            logger.error("Unknown vote session kind: %s", kind)
-            msg = f"Unknown vote session kind: {kind}"
-            raise NotImplementedError(msg)
+        snapshot = await self.vote_service.get_session(message_id)
+        if snapshot is None or (status is not None and snapshot.status != status):
+            return None
+        if snapshot.kind == "build":
+            return await BuildVoteSession.from_id(self.bot, snapshot.id)
+        if snapshot.kind == "delete_log":
+            return await DeleteLogVoteSession.from_id(self.bot, snapshot.id)
+        logger.error("Unknown vote session kind: %s", snapshot.kind)
+        msg = f"Unknown vote session kind: {snapshot.kind}"
+        raise NotImplementedError(msg)
 
     @Cog.listener(name="on_raw_reaction_add")
     async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
@@ -98,31 +74,46 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if user.bot:
             return  # Ignore bot reactions
 
-        # Update votes based on the reaction
         emoji_name = str(payload.emoji)
         user_id = payload.user_id
-
-        if isinstance(vote_session, DeleteLogVoteSession):
-            # Check if the user has a trusted role
-            if payload.guild_id is None:
-                msg = "Cannot vote in DMs."
-                raise NotImplementedError(msg)
-
-            if await is_trusted_or_staff(self.bot, payload.guild_id, user_id):
-                pass
-            else:
-                await channel.send("You do not have a trusted role.")
-                return
-
-        # The vote session will handle the closing of the vote session
-        original_vote = vote_session[user_id]
-        weight = await self.get_voting_weight(payload.guild_id, user_id)
         if emoji_name in APPROVE_EMOJIS:
-            vote_session[user_id] = weight if original_vote != weight else 0
+            choice = VoteChoice.APPROVE
         elif emoji_name in DENY_EMOJIS:
-            vote_session[user_id] = -weight if original_vote != -weight else 0
+            choice = VoteChoice.DENY
         else:
             return
+
+        staff = await is_staff(self.bot, payload.guild_id, user_id)
+        trusted = False
+        if isinstance(vote_session, DeleteLogVoteSession):
+            if payload.guild_id is None:
+                # Voting in DMs is not implemented
+                return
+            trusted = await is_trusted_or_staff(self.bot, payload.guild_id, user_id)
+
+        result = await self.vote_service.cast_vote(
+            payload.message_id,
+            VoteActor(user_id=user_id, is_staff=staff, is_trusted=trusted),
+            choice,
+        )
+        if result.rejection == "not_eligible":
+            await channel.send("You do not have a trusted role.")
+            return
+        if not result.accepted or result.session is None:
+            return
+
+        vote_session.apply_persisted_state(result.session)
+        if result.just_closed:
+            if isinstance(vote_session, BuildVoteSession):
+                build_id = result.session.target.build_id
+                assert build_id is not None
+                if result.session.result == "approved":
+                    vote_session.build = await self.bot.services.builds.confirm(build_id)
+                else:
+                    vote_session.build = await self.bot.services.builds.deny(build_id)
+            elif isinstance(vote_session, DeleteLogVoteSession) and result.session.result == "approved":
+                with contextlib.suppress(discord.NotFound):
+                    await vote_session.target_message.delete()
         await vote_session.update_messages()
 
     @hybrid_command(name="start_vote")
@@ -141,4 +132,4 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VoteCog(bot))
+    await bot.add_cog(VoteCog(bot, bot.services.votes))
