@@ -16,7 +16,6 @@ from supabase.lib.client_options import AsyncClientOptions
 from squid.db.build_manager import BuildManager
 from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
-from squid.db.message import MessageService
 from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.user_repository import UserRepository
 from squid.db.schema import Version
@@ -93,7 +92,6 @@ class DatabaseManager(AsyncClient):
 
         # Initialize repositories
         self.message_repo = MessageRepository(self.async_session)
-        self.message = MessageService(self.message_repo)
         self.user_repo = UserRepository(self.async_session)
 
         # Initialize managers
