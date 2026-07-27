@@ -14,12 +14,14 @@ from discord.ext.commands import (
 
 from squid.bot import utils
 from squid.bot._types import GuildMessageable
+from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
-from squid.db.schema import BuildCategory, Status
+from squid.db.schema import Status
+from squid.services.builds import BuildService, DoorSubmissionInput
 from squid.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -31,8 +33,9 @@ if TYPE_CHECKING:
 class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, builds: BuildService):
         self.bot = bot
+        self.builds = builds
         self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
@@ -44,33 +47,28 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     class SubmitDoorFlags(commands.FlagConverter):
         """Parameters information for the /submit door command."""
 
-        async def to_build(self) -> Build:
-            """Convert the flags to a build object."""
-            build = Build()
-            build.record_category = self.record_category
-            build.version_spec = self.works_in
-            build.width, build.height, build.depth = self.build_size
-            build.door_width, build.door_height, build.door_depth = self.door_size
-            build.door_type = self.pattern
-            build.door_orientation_type = self.door_type
-            await build.set_restrictions_auto(self.restrictions)
-
-            if (locationality := self.locationality) is not None and locationality != "Not locational":
-                build.miscellaneous_restrictions.append(locationality)
-            if (directionality := self.directionality) is not None and directionality != "Not directional":
-                build.miscellaneous_restrictions.append(directionality)
-
-            build.normal_closing_time = self.normal_closing_time
-            build.normal_opening_time = self.normal_opening_time
-
-            if self.information_about_build is not None:
-                build.extra_info["user"] = self.information_about_build
-            build.creators_ign = self.creators
-            build.image_urls = self.image_urls
-            build.video_urls = self.video_urls
-            build.world_download_urls = self.world_download_urls
-            build.completion_time = self.date_of_creation
-            return build
+        def to_submission(self, submitter_id: int) -> DoorSubmissionInput:
+            """Convert Discord flags to framework-neutral submission input."""
+            return DoorSubmissionInput(
+                submitter_id=submitter_id,
+                door_size=self.door_size,
+                record_category=self.record_category,
+                pattern=tuple(self.pattern),
+                door_type=self.door_type,
+                build_size=self.build_size,
+                works_in=self.works_in,
+                restrictions=tuple(self.restrictions),
+                information_about_build=self.information_about_build,
+                normal_closing_time=self.normal_closing_time,
+                normal_opening_time=self.normal_opening_time,
+                date_of_creation=self.date_of_creation,
+                creators=tuple(self.creators),
+                locationality=self.locationality,
+                directionality=self.directionality,
+                image_urls=tuple(self.image_urls),
+                video_urls=tuple(self.video_urls),
+                world_download_urls=tuple(self.world_download_urls),
+            )
 
         _list_default = lambda ctx: []  # type: ignore
 
@@ -105,20 +103,12 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             followup = interaction.followup
 
             async with RunningMessage(followup) as message:
-                build = await flags.to_build()
-                build.submitter_id = ctx.author.id
-                build.ai_generated = False
-                build.category = BuildCategory.DOOR
-                build.submission_status = Status.PENDING
-
+                build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
                 build_handler = self.bot.for_build(build)
-                await asyncio.gather(
-                    build.save(),
-                    followup.send(
-                        "Here is a preview of the submission. Use /edit if you have made a mistake",
-                        embed=await build_handler.generate_embed(),
-                        ephemeral=True,
-                    ),
+                await followup.send(
+                    "Here is a preview of the submission. Use /edit if you have made a mistake",
+                    embed=await build_handler.generate_embed(),
+                    ephemeral=True,
                 )
 
                 success_embed = utils.info_embed(
@@ -149,9 +139,9 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         build = Build(ai_generated=False)
         attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
 
-        async def _handle_attachment(attachment: discord.Attachment | None):
+        async def _handle_attachment(attachment: discord.Attachment | None) -> tuple[str, str] | None:
             if attachment is None:
-                return
+                return None
             assert attachment.content_type is not None
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
                 msg = f"Unsupported content type: {attachment.content_type}"
@@ -159,11 +149,18 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
             url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
             if attachment.content_type.startswith("image"):
-                build.image_urls.append(url)
-            elif attachment.content_type.startswith("video"):
-                build.video_urls.append(url)
+                return "image", url
+            return "video", url
 
-        await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
+        uploaded_media = await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
+        for uploaded in uploaded_media:
+            if uploaded is None:
+                continue
+            kind, url = uploaded
+            if kind == "image":
+                build.image_urls.append(url)
+            else:
+                build.video_urls.append(url)
 
         view = BuildSubmissionForm(build)
         followup = interaction.followup
@@ -176,7 +173,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         if view.value is False:
             await followup.send("Submission canceled by user", ephemeral=True)
             return
-        await build.save()
+        await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
         await asyncio.gather(
             followup.send(
                 "Here is a preview of the submission. Use /edit if you have made a mistake",
@@ -203,7 +200,11 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
         async def _send_msg(channel: GuildMessageable):
             message = await channel.send(content=build.original_link, embed=em)
-            await self.bot.db.message.track_message(message, purpose="view_confirmed_build", build_id=build.id)
+            await self.bot.services.messages.track(
+                to_tracked_message(message),
+                purpose="view_confirmed_build",
+                build_id=build.id,
+            )
 
         await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
 
@@ -232,11 +233,8 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             elif attachment.content_type.startswith("video"):
                 build.video_urls.append(url)
 
-        build.submission_status = Status.PENDING
-        build.category = BuildCategory.DOOR
-        build.submitter_id = message.author.id
         # Order is important here.
-        await build.save()
+        await self.builds.submit(build, submitter_id=message.author.id, ai_generated=True)
         await self.bot.for_build(build).post_for_voting(type="add")
 
     @commands.hybrid_command("recalc")
@@ -250,10 +248,10 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
     @tasks.loop(minutes=5.0)
     async def update_record_titles(self):
-        await self.bot.db.build.update_smallest_door_records_without_title()
+        await self.builds.refresh_record_titles()
 
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildSubmitCog(bot))
+    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds))

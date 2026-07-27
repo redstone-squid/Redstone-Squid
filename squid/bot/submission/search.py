@@ -2,25 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
 from typing import TYPE_CHECKING
 
-import vecs
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
-from openai import AsyncOpenAI
-from sqlalchemy import select
 
 from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage
-from squid.db.builds import Build
-from squid.db.schema import Restriction, RestrictionAlias, Status, Type
+from squid.services.build_queries import BuildQueryService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -30,24 +24,19 @@ logger = logging.getLogger(__name__)
 
 
 class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, queries: BuildQueryService):
         self.bot = bot
+        self.queries = queries
 
     @commands.hybrid_command("search_using_sucky_embeddings")
     @app_commands.describe(query="Whatever you want to search for.")
     async def search_builds(self, ctx: Context[BotT], query: str):
         """Searches for a build with natural language."""
         await ctx.defer()
-        client = AsyncOpenAI()
-        response = await client.embeddings.create(input=query, model="text-embedding-3-small")
-        query_vec = response.data[0].embedding
-        vx = vecs.create_client(os.environ["DB_CONNECTION"])
-        build_vecs = vx.get_or_create_collection(name="builds", dimension=1536)
-        result: list[str] = build_vecs.query(query_vec, limit=1)  # type: ignore
-        assert len(result) == 1
-        build_id = int(result[0])
-        build = await Build.from_id(build_id)
-        assert build is not None
+        build = await self.queries.semantic(query)
+        if build is None:
+            await ctx.send(embed=utils.error_embed("No results found", "No builds match that query."))
+            return
         await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
 
     @commands.hybrid_command("search")
@@ -55,7 +44,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def search_records(self, ctx: Context[BotT], query: str):
         """Searches for a **record** by title."""
         async with RunningMessage(ctx) as sent_message:
-            matches = await self.bot.db.build.search_smallest_door_records(query, limit=11)
+            matches = await self.queries.search_records(query)
             if not matches:
                 return await sent_message.edit(
                     embed=utils.error_embed("No results found", "No records match that query.")
@@ -63,7 +52,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
             # Use the running message to display the top result
             top_door = matches[0][0]
-            build = await Build.from_id(top_door.id)
+            build = await self.queries.get(top_door.id)
             assert build is not None, "A record must have a build."
             embed = await self.bot.for_build(build).generate_embed()
             content = f"Top match: {top_door.title} (score: {matches[0][1]:.1f})"
@@ -93,33 +82,18 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     @commands.command("search_restrictions")
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
         """This runs a substring search on the restriction names."""
-        async with RunningMessage(ctx) as sent_message, self.bot.db.async_session() as session:
-            stmt = select(Restriction)
-            alias_stmt = select(RestrictionAlias)
-
-            if query:
-                stmt = stmt.where(Restriction.name.ilike(f"%{query}%"))
-                alias_stmt = alias_stmt.where(RestrictionAlias.alias.ilike(f"%{query}%"))
-
-            restrictions_task = session.execute(stmt)
-            aliases_task = session.execute(alias_stmt)
-
-            restrictions, aliases = await asyncio.gather(restrictions_task, aliases_task)
-            restrictions = restrictions.scalars().all()
-            aliases = aliases.scalars().all()
-
-            description = "\n".join([f"{r.id}: {r.name}" for r in restrictions])
-            description += "\n"
-            description += "\n".join([f"{a.restriction_id}: {a.alias} (alias)" for a in aliases])
+        async with RunningMessage(ctx) as sent_message:
+            matches = await self.queries.restrictions(query)
+            description = "\n".join(
+                f"{item.restriction_id}: {item.name}{' (alias)' if item.is_alias else ''}" for item in matches
+            )
             await sent_message.edit(embed=utils.info_embed("Restrictions", description))
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
-        async with RunningMessage(ctx) as sent_message, self.bot.db.async_session() as session:
-            stmt = select(Type)
-            patterns = (await session.execute(stmt)).scalars().all()
-            names = [pattern.name for pattern in patterns]
+        async with RunningMessage(ctx) as sent_message:
+            names = await self.queries.patterns()
             await sent_message.edit(
                 content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
             )
@@ -133,9 +107,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            pending_submissions = await self.bot.db.build.get_builds_by_filter(
-                filter={"submission_status": Status.PENDING}
-            )
+            pending_submissions = await self.queries.pending()
 
             if len(pending_submissions) == 0:
                 desc = "No open submissions."
@@ -159,7 +131,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if ctx.interaction:
             interaction = ctx.interaction
             await interaction.response.defer()
-            build = await Build.from_id(build_id)
+            build = await self.queries.get(build_id)
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 await interaction.followup.send(embed=error_embed, ephemeral=True)
@@ -169,7 +141,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             await view.send(interaction)
             return None
         async with self.bot.get_running_message(ctx) as sent_message:
-            build = await Build.from_id(build_id)
+            build = await self.queries.get(build_id)
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
@@ -183,7 +155,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission's debug info."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            build = await Build.from_id(build_id)
+            build = await self.queries.get(build_id)
 
             if build is None:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
@@ -233,4 +205,4 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(SearchCog(bot))
+    await bot.add_cog(SearchCog(bot, bot.services.build_queries))

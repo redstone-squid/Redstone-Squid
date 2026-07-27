@@ -1,14 +1,12 @@
 """A cog with commands to editing builds."""
 
 import asyncio
-import contextlib
 from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
-from sqlalchemy import select
 
 from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
@@ -22,8 +20,7 @@ from squid.bot.utils import (
     fix_converter_annotations,
 )
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
-from squid.db.builds import Build
-from squid.db.schema import Message
+from squid.services.builds import BuildBusyError, BuildEditPatch, BuildNotFoundError, BuildService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -32,8 +29,9 @@ if TYPE_CHECKING:
 class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     """A cog with commands for editing builds."""
 
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, builds: BuildService):
         self.bot = bot
+        self.builds = builds
         # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
         self.edit_ctx_menu = app_commands.ContextMenu(
             name="Edit Build",
@@ -52,86 +50,31 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     class EditDoorFlags(commands.FlagConverter):
         """Parameters information for the `/edit door` command."""
 
-        async def to_build(self) -> Build | None:
-            """Convert the flags to a build object, returns None if the build_id is invalid."""
-            build = await Build.from_id(self.build_id)
-            if build is None:
-                return None
-
-            # Technically we can match both the variable names and the attribute names and use setattr
-            # to set the values in a loop, but this explicitness helps with refactoring and readability.
-            if self.works_in is not MISSING:
-                build.version_spec = self.works_in
-            if self.build_size is not MISSING:
-                build.width, build.height, build.depth = self.build_size
-            if self.door_size is not MISSING:
-                build.door_width, build.door_height, build.door_depth = self.door_size
-            if self.pattern is not MISSING:
-                build.door_type = self.pattern
-            if self.door_type is not MISSING:
-                build.door_orientation_type = self.door_type
-            if self.wiring_placement_restrictions is not MISSING:
-                build.wiring_placement_restrictions = self.wiring_placement_restrictions
-            if self.component_restrictions is not MISSING:
-                build.component_restrictions = self.component_restrictions
-            if self.locationality is not MISSING:
-                with contextlib.suppress(ValueError):
-                    build.miscellaneous_restrictions.remove("Locational")
-                with contextlib.suppress(ValueError):
-                    build.miscellaneous_restrictions.remove("Locational with fixes")
-                if self.locationality != "Not locational":
-                    build.miscellaneous_restrictions.append(self.locationality)
-
-            if self.directionality is not MISSING:
-                with contextlib.suppress(ValueError):
-                    build.miscellaneous_restrictions.remove("Directional")
-                with contextlib.suppress(ValueError):
-                    build.miscellaneous_restrictions.remove("Directional with fixes")
-                if self.directionality != "Not directional":
-                    build.miscellaneous_restrictions.append(self.directionality)
-
-            if self.normal_closing_time is not MISSING:
-                build.normal_closing_time = self.normal_closing_time
-            if self.normal_opening_time is not MISSING:
-                build.normal_opening_time = self.normal_opening_time
-            if (user_info := self.extra_user_info) is not MISSING:
-                if user_info is not None:
-                    build.extra_info["user"] = user_info
-                else:
-                    build.extra_info.pop("user", None)
-            if self.creators is not MISSING:
-                build.creators_ign = self.creators
-            if self.image_urls is not MISSING:
-                build.image_urls = self.image_urls
-            if self.video_urls is not MISSING:
-                build.video_urls = self.video_urls
-            if self.world_download_urls is not MISSING:
-                build.world_download_urls = self.world_download_urls
-
-            server_info = build.extra_info.get("server_info", {})
-            if (server_ip := self.server_ip) is not MISSING:
-                if server_ip is not None:
-                    server_info["server_ip"] = server_ip
-                else:
-                    server_info.pop("server_ip", None)
-
-            if (coordinates := self.coordinates) is not MISSING:
-                if coordinates is not None:
-                    server_info["coordinates"] = coordinates
-                else:
-                    server_info.pop("coordinates", None)
-
-            if (command_to_get_to_build := self.command_to_get_to_build) is not MISSING:
-                if command_to_get_to_build is not None:
-                    server_info["command_to_build"] = command_to_get_to_build
-                else:
-                    server_info.pop("command_to_build", None)
-            if server_info:
-                build.extra_info["server_info"] = server_info
-
-            if self.date_of_creation is not MISSING:
-                build.completion_time = self.date_of_creation
-            return build
+        def to_patch(self) -> BuildEditPatch:
+            """Convert command flags without mutating a live build."""
+            values = {
+                "version_spec": self.works_in,
+                "dimensions": self.build_size,
+                "door_dimensions": self.door_size,
+                "door_type": self.pattern,
+                "door_orientation_type": self.door_type,
+                "wiring_placement_restrictions": self.wiring_placement_restrictions,
+                "component_restrictions": self.component_restrictions,
+                "locationality": self.locationality,
+                "directionality": self.directionality,
+                "normal_closing_time": self.normal_closing_time,
+                "normal_opening_time": self.normal_opening_time,
+                "extra_user_info": self.extra_user_info,
+                "creators_ign": self.creators,
+                "image_urls": self.image_urls,
+                "video_urls": self.video_urls,
+                "world_download_urls": self.world_download_urls,
+                "server_ip": self.server_ip,
+                "coordinates": self.coordinates,
+                "command_to_get_to_build": self.command_to_get_to_build,
+                "completion_time": self.date_of_creation,
+            }
+            return BuildEditPatch.from_attributes({key: value for key, value in values.items() if value is not MISSING})
 
         # fmt: off
         build_id: int = flag(description='The ID of the submission.')
@@ -162,52 +105,43 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         """Edits a door record in the database directly."""
         await ctx.defer()
         async with RunningMessage(ctx) as sent_message:
-            build = await flags.to_build()
-            if build is None:
+            try:
+                async with self.builds.edit(flags.build_id, flags.to_patch()) as edit:
+                    build = edit.build
+                    if ctx.interaction:
+                        await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
+                        view = ConfirmationView()
+                        preview = await ctx.interaction.followup.send(
+                            "Here is a preview of the changes. Use the buttons to confirm or cancel.",
+                            embed=await self.bot.for_build(build).generate_embed(),
+                            view=view,
+                            ephemeral=True,
+                            wait=True,
+                        )
+                        await view.wait()
+                        await preview.delete()
+                        if view.value is None:
+                            await sent_message.edit(
+                                embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                            )
+                            return
+                        if view.value is False:
+                            await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+                            return
+
+                    await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+                    await edit.commit()
+            except BuildNotFoundError:
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 await sent_message.edit(embed=error_embed)
                 return
-
-            if not await build.lock.acquire(blocking=False):
+            except BuildBusyError:
                 await sent_message.edit(
                     embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
                 )
                 return
 
-            # If in a slash command, we show a preview and ask for confirmation, otherwise we just edit the build
-            if ctx.interaction:
-                # Show a preview of the changes and ask for confirmation
-                await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-                view = ConfirmationView()
-                preview = await ctx.interaction.followup.send(
-                    "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                    embed=await self.bot.for_build(build).generate_embed(),
-                    view=view,
-                    ephemeral=True,
-                    wait=True,
-                )
-                await view.wait()
-                await preview.delete()
-                if view.value is None:
-                    await asyncio.gather(
-                        build.lock.release(),
-                        sent_message.edit(
-                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
-                        ),
-                    )
-                    return
-                if view.value is False:
-                    await asyncio.gather(
-                        build.lock.release(),
-                        sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user")),
-                    )
-                    return
-
-            await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-            await build.save()
-            # Parallelize lock release and message updates since they don't depend on each other
             await asyncio.gather(
-                build.lock.release(),
                 self.bot.for_build(build).update_messages(),
                 sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully")),
             )
@@ -220,21 +154,17 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         if message.author.id != self.bot.user.id:  # type: ignore
             return await interaction.followup.send("This does not look like a build.", ephemeral=True)
 
-        async with self.bot.db.async_session() as session:
-            stmt = select(Message).where(Message.id == message.id)
-            result = await session.execute(stmt)
-            message_record = result.scalar_one_or_none()
+        message_record = await self.bot.services.messages.get(message.id)
+        if message_record is None or message_record.build_id is None:
+            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
 
-            if message_record is None or message_record.build_id is None:
-                return await interaction.followup.send("This does not look like a build.", ephemeral=True)
-
-            build = await Build.from_id(message_record.build_id)
-            assert build is not None
-            await BuildEditView(build).send(interaction, ephemeral=True)
-            return None
+        build = await self.builds.get(message_record.build_id)
+        assert build is not None
+        await BuildEditView(build, self.builds).send(interaction, ephemeral=True)
+        return None
 
 
 async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildEditCog(bot))
+    await bot.add_cog(BuildEditCog(bot, bot.services.builds))

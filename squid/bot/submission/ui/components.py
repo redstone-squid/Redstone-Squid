@@ -161,7 +161,7 @@ class BuildField[T](discord.ui.TextInput):
         )
 
     async def on_modal_submit(self) -> None:
-        # If the value hasn't changed, don't bother trying to set it
+        """Parse and retain the proposed value without mutating the build."""
         if self.value == self.current_string_value:
             return
 
@@ -173,11 +173,7 @@ class BuildField[T](discord.ui.TextInput):
         except Exception:
             return
 
-        try:
-            logger.info("Trying to set %s to %s", self.attribute, value)
-            setattr(self.build, self.attribute, value)
-        except (AttributeError, ValueError):
-            pass
+        self.actual_value = value
 
     @property
     def summary(self) -> str:
@@ -218,7 +214,7 @@ class DynamicBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View
     async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]
         cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: re.Match[str], /
     ) -> Self:
-        build = await Build.from_id(int(match.group(1)))
+        build = await interaction.client.services.builds.get(int(match.group(1)))
         assert build is not None
         return cls(build)
 
@@ -227,7 +223,7 @@ class DynamicBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View
         # FIXME: circular import
         from squid.bot.submission.ui.views import BuildEditView
 
-        await BuildEditView(self.build).send(interaction)
+        await BuildEditView(self.build, interaction.client.services.builds).send(interaction)
 
 
 class EphemeralBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](discord.ui.Button[V]):
@@ -239,4 +235,4 @@ class EphemeralBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.Vi
     async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         from squid.bot.submission.ui.views import BuildEditView
 
-        await BuildEditView(self.build).send(interaction, ephemeral=True)
+        await BuildEditView(self.build, interaction.client.services.builds).send(interaction, ephemeral=True)

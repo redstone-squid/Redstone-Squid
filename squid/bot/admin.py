@@ -16,7 +16,7 @@ from squid.db.build_tags import (
     AliasTakenByOther,
     RestrictionNotFound,
 )
-from squid.db.builds import Build
+from squid.services.builds import BuildNotFoundError, BuildService, RestrictionService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -25,8 +25,10 @@ if TYPE_CHECKING:
 class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     """Cog for admin commands."""
 
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, builds: BuildService, restrictions: RestrictionService):
         self.bot = bot
+        self.builds = builds
+        self.restrictions = restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @commands.hybrid_command(name="confirm")
@@ -38,14 +40,13 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
         This posts the submission to all the servers which configured the bot."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            build = await Build.from_id(build_id)
-
-            if build is None:
+            try:
+                build = await self.builds.confirm(build_id)
+            except BuildNotFoundError:
                 error_embed = utils.error_embed("Error", "No pending build with that ID.")
                 await sent_message.edit(embed=error_embed)
                 return
 
-            await build.confirm()
             self.bot.dispatch("build_confirmed", build)
 
             success_embed = utils.info_embed("Success", "Submission has been confirmed.")
@@ -58,14 +59,13 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as denied."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            build = await Build.from_id(build_id)
-
-            if build is None:
+            try:
+                build = await self.builds.deny(build_id)
+            except BuildNotFoundError:
                 error_embed = utils.error_embed("Error", "No pending submission with that ID.")
                 await sent_message.edit(embed=error_embed)
                 return
 
-            await build.deny()
             await self.bot.for_build(build).update_messages()
 
             success_embed = utils.info_embed("Success", "Submission has been denied.")
@@ -78,7 +78,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         """Add an alias for a restriction."""
         async with self.bot.get_running_message(ctx) as sent_message:
             try:
-                await self.bot.db.build_tags.add_restriction_alias(restriction, alias)
+                await self.restrictions.add_alias(restriction, alias)
             except RestrictionNotFound:
                 await sent_message.edit(embed=utils.error_embed("Error", f"No restriction named '{restriction}'."))
             except AliasAlreadyAdded:
@@ -101,8 +101,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         if not current:
             return []
 
-        restrictions = await self.bot.db.build_tags.fetch_all_restrictions()
-        restriction_names = [r.name for r in restrictions]
+        restriction_names = await self.restrictions.names()
         matches = process.extract(
             current,
             restriction_names,
@@ -222,4 +221,4 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(Admin(bot))
+    await bot.add_cog(Admin(bot, bot.services.builds, bot.services.restrictions))

@@ -23,6 +23,7 @@ from squid.bot.submission.ui.components import (
 from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
+from squid.services.builds import BuildBusyError, BuildEditPatch, BuildService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -173,12 +174,13 @@ class ConfirmationView(discord.ui.View):
 class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
     """A view that allows users to edit a build.
 
-    This view has no locking guarantees and may fail if the user submits a build that has been locked by another task/thread/process.
+    Changes are accumulated locally and applied under a service-managed lock on submit.
     """
 
     def __init__(
         self,
         build: Build,
+        builds: BuildService,
         items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
         *,
         timeout: float = 300,
@@ -193,6 +195,7 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
         super().__init__(timeout=timeout)
         self.timeout = cast(float, self.timeout)
         self.build = build
+        self.builds = builds
         if items is DEFAULT:
             items = [
                 get_text_input(build, "dimensions", placeholder="Width x Height x Depth", required=True),
@@ -299,7 +302,22 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
     @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await interaction.response.defer()
-        await self.build.save()
+        patch = BuildEditPatch.from_attributes(
+            {item.attribute: item.actual_value for item in self.items if item.modified}
+        )
+        if self.build.id is None:
+            patch.apply(self.build)
+            await self.builds.save(self.build)
+        else:
+            try:
+                async with self.builds.edit(self.build.id, patch) as edit:
+                    self.build = await edit.commit()
+            except BuildBusyError:
+                await interaction.followup.send(
+                    content="This build is currently being edited by someone else.",
+                    ephemeral=True,
+                )
+                return
         await interaction.followup.send(
             content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True
         )
