@@ -6,6 +6,7 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.db.repos._base import BaseAsyncRepository
 from squid.db.schema import (
     BuildVoteSession,
     DeleteLogVoteSession,
@@ -16,6 +17,18 @@ from squid.db.schema import (
     VoteSessionResultLiteral,
 )
 from squid.services.votes import StoredVoteMutation, VoteChange, VoteSessionSnapshot, VoteTarget
+
+
+class _MessageModelRepository(BaseAsyncRepository[Message]):
+    model_type = Message
+
+
+class _VoteModelRepository(BaseAsyncRepository[Vote]):
+    model_type = Vote
+
+
+class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
+    model_type = VoteSession
 
 
 class SQLAlchemyVoteRepository:
@@ -178,13 +191,14 @@ class SQLAlchemyVoteRepository:
         )
         if for_update:
             stmt = stmt.with_for_update(of=VoteSession)
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
+        repository = _VoteSessionModelRepository(session=session)
+        return await repository.get_one_or_none(statement=stmt)
 
     @staticmethod
     async def _get_votes(session: AsyncSession, vote_session_id: int) -> dict[int, float]:
-        result = await session.execute(select(Vote.user_id, Vote.weight).where(Vote.vote_session_id == vote_session_id))
-        return dict(result.tuples().all())
+        repository = _VoteModelRepository(session=session)
+        votes = await repository.get_many(Vote.vote_session_id == vote_session_id)
+        return {vote.user_id: vote.weight for vote in votes}
 
     @staticmethod
     async def _to_snapshot(
@@ -192,10 +206,12 @@ class SQLAlchemyVoteRepository:
         row: VoteSession,
         votes: Mapping[int, float],
     ) -> VoteSessionSnapshot:
-        message_result = await session.execute(
-            select(Message.id).where(Message.vote_session_id == row.id).order_by(Message.id)
+        message_repository = _MessageModelRepository(session=session)
+        messages = await message_repository.get_many(
+            Message.vote_session_id == row.id,
+            order_by=(Message.id, False),
         )
-        message_ids = tuple(message_result.scalars().all())
+        message_ids = tuple(message.id for message in messages)
         target = VoteTarget()
         kind = row.kind
         if kind == "build":
