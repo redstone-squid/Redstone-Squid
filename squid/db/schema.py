@@ -11,7 +11,6 @@ from pgvector.sqlalchemy import VECTOR
 from pydantic.types import Json
 from sqlalchemy import (
     ARRAY,
-    JSON,
     TIMESTAMP,
     UUID,
     BigInteger,
@@ -20,12 +19,15 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     SmallInteger,
-    String,
+    Text,
     UniqueConstraint,
+    desc,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
@@ -120,6 +122,11 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
                 cls.__table_args__ = {"comment": table_comment}
             elif isinstance(cls.__table_args__, dict) and cls.__table_args__.get("comment") is None:
                 cls.__table_args__["comment"] = table_comment
+            elif isinstance(cls.__table_args__, tuple):
+                if cls.__table_args__ and isinstance(cls.__table_args__[-1], dict):
+                    cls.__table_args__[-1].setdefault("comment", table_comment)
+                else:
+                    cls.__table_args__ = (*cls.__table_args__, {"comment": table_comment})
 
         super().__init_subclass__(**kwargs)
 
@@ -140,13 +147,15 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     """Internal primary key. Unrelated to the user's Discord or Minecraft identifiers."""
-    ign: Mapped[str] = mapped_column(String, default=None)
+    ign: Mapped[str] = mapped_column(Text, nullable=True, default=None)
     """The user's Minecraft in-game name, as of the last verification."""
     discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     """The user's Discord snowflake ID, if they have linked a Discord account."""
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The user's Mojang account UUID, if they have linked a Minecraft account."""
-    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=False), server_default=func.now(), default=None
+    )
     """When this row was first inserted."""
 
     build_creators: Mapped[list["BuildCreator"]] = relationship(
@@ -162,7 +171,7 @@ class Version(Base):
 
     __tablename__ = "versions"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    edition: Mapped[str] = mapped_column(String, nullable=False)
+    edition: Mapped[str] = mapped_column(Text, nullable=False)
     major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -184,11 +193,11 @@ class Restriction(Base):
 
     __tablename__ = "restrictions"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(String)
+    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(
-        String, unique=True
+        Text, nullable=True, unique=True
     )  # FIXME: Shouldn't be nullable, note that to make type checkers happy I made this Mapped[str] instead of Mapped[str | None], even though it is nullable in the database
-    type: Mapped[RestrictionTypeLiteral | None] = mapped_column(String)
+    type: Mapped[RestrictionTypeLiteral | None] = mapped_column(Text)
 
     build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
         back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
@@ -210,9 +219,23 @@ class RestrictionAlias(Base):
     """An alias for a restriction, allowing for alternative names."""
 
     __tablename__ = "restriction_aliases"
-    restriction_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("restrictions.id"), nullable=False)
-    alias: Mapped[str] = mapped_column(String, nullable=False, unique=True, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    restriction_id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(),
+        ForeignKey(
+            "restrictions.id",
+            name="restriction_aliases_restriction_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        nullable=False,
+    )
+    alias: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
+    )
+
+    __table_args__ = (Index("restriction_aliases_restriction_id_idx", "restriction_id"),)
 
     restriction: Mapped[Restriction] = relationship(back_populates="aliases", init=False, lazy="joined")
 
@@ -222,9 +245,9 @@ class Type(Base):
 
     __tablename__ = "types"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(String)
+    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(
-        String, unique=True
+        Text, nullable=True, unique=True
     )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
 
     build_types: Mapped[list["BuildType"]] = relationship(
@@ -242,13 +265,27 @@ class Message(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
-    server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    server_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("server_settings.server_id", name="public_messages_server_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+    )
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    purpose: Mapped[str] = mapped_column(String, nullable=False)
-    content: Mapped[str | None] = mapped_column(String)
-    build_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("builds.id"), default=None)
-    vote_session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("vote_sessions.id"), default=None)
+    purpose: Mapped[str] = mapped_column(
+        Text, nullable=False, comment="The reason why the message is stored in the database"
+    )
+    content: Mapped[str | None] = mapped_column(Text)
+    build_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="public_messages_build_id_fkey", ondelete="CASCADE"),
+        default=None,
+    )
+    vote_session_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("vote_sessions.id", name="messages_vote_session_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
     updated_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now()
     )
@@ -266,15 +303,33 @@ class Build(Base, kw_only=True):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
+    __table_args__ = (
+        CheckConstraint(
+            "record_category = ANY (ARRAY['Smallest', 'Fastest', 'First', 'Smallest Fastest', "
+            "'Fastest Smallest', NULL])",
+            name="check_record_category",
+        ),
+        CheckConstraint("submission_status = ANY (ARRAY[0, 1, 2])", name="check_status"),
+        CheckConstraint("depth > 0", name="submissions_build_depth_check"),
+        CheckConstraint("height > 0", name="submissions_build_height_check"),
+        CheckConstraint("width > 0", name="submissions_build_width_check"),
+        Index("idx_builds_category", "category", postgresql_where=text("category IS NOT NULL")),
+        Index(
+            "idx_builds_record_category",
+            "record_category",
+            postgresql_where=text("record_category IS NOT NULL"),
+        ),
+        Index("idx_builds_submission_time", desc("submission_time")),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     submission_status: Mapped["Status"] = mapped_column(SmallInteger, nullable=False)
-    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(String)
+    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
-    completion_time: Mapped[str | None] = mapped_column(String)  # Given by user, not parsable as a datetime
-    category: Mapped["BuildCategory | None"] = mapped_column(String)
+    completion_time: Mapped[str | None] = mapped_column(Text)  # Given by user, not parsable as a datetime
+    category: Mapped["BuildCategory | None"] = mapped_column(Text)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -290,16 +345,24 @@ class Build(Base, kw_only=True):
     original_message: Mapped[Message | None] = relationship(
         foreign_keys="Build.original_message_id", uselist=False, default=None, lazy="joined"
     )
-    version_spec: Mapped[str | None] = mapped_column(String, default=None)
+    version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))), default=None
+        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))),
+        comment='This is not actually being used. See "vecs"."builds" instead',
+        default=None,
     )
     locked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    extra_info: Mapped[Info] = mapped_column(JSON, nullable=False, default_factory=dict)
-    submission_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
-    edited_time: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
-    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    extra_info: Mapped[Info] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
+    )
+    submission_time: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=False), server_default=func.now(), default=func.now()
+    )
+    edited_time: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("(now() AT TIME ZONE 'utc'::text)"), default=func.now()
+    )
+    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
     build_creators: Mapped[list["BuildCreator"]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
@@ -353,8 +416,13 @@ class Door(Build, kw_only=True):
         "polymorphic_identity": "Door",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    orientation: Mapped[DoorOrientationLiteral] = mapped_column(String, nullable=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="doors_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False)
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
     door_depth: Mapped[int | None] = mapped_column(Integer)
@@ -371,18 +439,52 @@ class SmallestDoor(Base):
     """
 
     __tablename__ = "smallest_door_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "orientation",
+            "door_width",
+            "door_height",
+            "door_depth",
+            "types",
+            "restriction_subset",
+            name="smallest_door_records_orientation_door_width_door_height_do_key",
+        ),
+        Index(
+            "idx_smallest_door_records_dims",
+            "orientation",
+            "door_width",
+            "door_height",
+            "door_depth",
+        ),
+        Index("idx_smallest_door_records_restrictions_gin", "restrictions", postgresql_using="gin"),
+        Index("idx_smallest_door_records_types_gin", "types", postgresql_using="gin"),
+        Index(
+            "unq_smallest_key",
+            "orientation",
+            "door_width",
+            "door_height",
+            "door_depth",
+            "types",
+            "restriction_subset",
+            unique=True,
+        ),
+    )
 
     record_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), init=False)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="smallest_door_records_id_fkey", ondelete="CASCADE"),
+        init=False,
+    )
     door_width: Mapped[int] = mapped_column(Integer, nullable=False)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False)
-    door_depth: Mapped[int] = mapped_column(Integer, nullable=True)
-    orientation: Mapped[DoorOrientationLiteral] = mapped_column(String)
-    types: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
-    restrictions: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
-    restriction_subset: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
+    door_depth: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False)
+    types: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    restrictions: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'::text[]"))
+    restriction_subset: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
     volume: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str | None] = mapped_column(String)
+    title: Mapped[str | None] = mapped_column(Text)
 
 
 class Extender(Build, kw_only=True):
@@ -394,7 +496,12 @@ class Extender(Build, kw_only=True):
         "polymorphic_identity": "Extender",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="extenders_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
 
 
 class Utility(Build, kw_only=True):
@@ -406,7 +513,12 @@ class Utility(Build, kw_only=True):
         "polymorphic_identity": "Utility",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="utilities_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
 
 
 class Entrance(Build):
@@ -418,15 +530,30 @@ class Entrance(Build):
         "polymorphic_identity": "Entrance",
     }
 
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="entrances_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
 
 
 class BuildCreator(Base):
     """Association table between builds and their creators."""
 
     __tablename__ = "build_creators"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_creators_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="build_creators_user_id_fkey"),
+        primary_key=True,
+        init=False,
+    )
 
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
     user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined", repr=False, default=None)
@@ -436,9 +563,17 @@ class BuildRestriction(Base):
     """Association table between builds and their restrictions."""
 
     __tablename__ = "build_restrictions"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_restrictions_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
     restriction_id: Mapped[int] = mapped_column(
-        SmallInteger, ForeignKey("restrictions.id"), primary_key=True, init=False
+        SmallInteger,
+        ForeignKey("restrictions.id", name="build_restrictions_restriction_id_fkey", ondelete="RESTRICT"),
+        primary_key=True,
+        init=False,
     )
 
     build: Mapped[Build] = relationship(
@@ -453,8 +588,18 @@ class BuildVersion(Base):
     """Association table between builds and their versions."""
 
     __tablename__ = "build_versions"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    version_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("versions.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_versions_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    version_id: Mapped[int] = mapped_column(
+        SmallInteger,
+        ForeignKey("versions.id", name="build_versions_version_id_fkey", ondelete="RESTRICT"),
+        primary_key=True,
+        init=False,
+    )
 
     build: Mapped[Build] = relationship(back_populates="build_versions", lazy="raise_on_sql", repr=False, default=None)
     version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined", repr=False, default=None)
@@ -464,8 +609,18 @@ class BuildType(Base):
     """Association table between builds and their types."""
 
     __tablename__ = "build_types"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    type_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("types.id"), primary_key=True, init=False)
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_types_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    type_id: Mapped[int] = mapped_column(
+        SmallInteger,
+        ForeignKey("types.id", name="build_types_type_id_fkey", ondelete="RESTRICT"),
+        primary_key=True,
+        init=False,
+    )
 
     build: Mapped[Build] = relationship(back_populates="build_types", lazy="raise_on_sql", repr=False, default=None)
     type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined", repr=False, default=None)
@@ -475,9 +630,14 @@ class BuildLink(Base):
     """A link associated with a build (image, video, world download)."""
 
     __tablename__ = "build_links"
-    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"), primary_key=True, init=False)
-    url: Mapped[str] = mapped_column(String, nullable=False, primary_key=True)
-    media_type: Mapped[MediaTypeLiteral | None] = mapped_column(String)  # TODO: nullable
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_links_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
+    media_type: Mapped[MediaTypeLiteral | None] = mapped_column(Text)  # TODO: nullable
 
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
 
@@ -491,12 +651,17 @@ class BuildEditHistory(Base):
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(),
-        ForeignKey("builds.id", ondelete="CASCADE", onupdate="CASCADE"),
+        ForeignKey(
+            "builds.id",
+            name="build_edit_history_build_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
         primary_key=True,
         init=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, default=func.now(), init=False
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now(), init=False
     )
     version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
@@ -511,9 +676,9 @@ class ServerSetting(Base):
     first_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
     builds_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     voting_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
-    staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default_factory=list)
-    trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default_factory=list)
-    in_server: Mapped[bool] = mapped_column(Boolean, default=False)
+    staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
+    trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
+    in_server: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
 
 
 class VerificationCode(Base):
@@ -522,12 +687,17 @@ class VerificationCode(Base):
     __tablename__ = "verification_codes"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    code: Mapped[str] = mapped_column(String, nullable=False)
-    username: Mapped[str] = mapped_column(String, nullable=False, default="")
-    valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=False), nullable=False, default=func.now())
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    username: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    created: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=False), nullable=False, server_default=func.now(), default=func.now()
+    )
     expires: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=False), nullable=False, default=func.now() + text("INTERVAL '10 minutes'")
+        TIMESTAMP(timezone=False),
+        nullable=False,
+        server_default=text("(now() + '00:10:00'::interval)"),
+        default=func.now() + text("INTERVAL '10 minutes'"),
     )
 
 
@@ -535,14 +705,30 @@ class VoteSession(Base, kw_only=True):
     """A voting session for builds or log deletions."""
 
     __tablename__ = "vote_sessions"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    result: Mapped[VoteSessionResultLiteral] = mapped_column(String, nullable=False)
+    __table_args__ = (
+        CheckConstraint("fail_threshold < 0", name="vote_sessions_fail_threshold_check"),
+        CheckConstraint("pass_threshold > 0", name="vote_sessions_pass_threshold_check"),
+        CheckConstraint(
+            "result = ANY (ARRAY['approved', 'denied', 'cancelled', 'pending'])",
+            name="vote_sessions_result_check",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    result: Mapped[VoteSessionResultLiteral] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'pending'::text"),
+        comment="The result of the vote session.",
+    )
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    kind: Mapped[str] = mapped_column(String, nullable=False)
-    pass_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
-    fail_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[str] = mapped_column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    pass_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    fail_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[str] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
+    )
 
     messages: Mapped[list[Message]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
@@ -567,21 +753,29 @@ class VoteSessionOption(Base, kw_only=True):
 
     __tablename__ = "vote_session_options"
     __table_args__ = (
-        UniqueConstraint("vote_session_id", "position"),
+        UniqueConstraint("vote_session_id", "position", name="vote_session_options_vote_session_id_position_key"),
         CheckConstraint("choice IN ('approve', 'deny')", name="vote_session_options_choice_check"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="vote_session_options_multiplier_check",
         ),
         CheckConstraint("position >= 0", name="vote_session_options_position_check"),
+        {"comment": "Ordered reaction options and positive weight multipliers captured for each vote session."},
     )
 
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger,
+        ForeignKey(
+            "vote_sessions.id",
+            name="vote_session_options_vote_session_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        primary_key=True,
     )
-    emoji: Mapped[str] = mapped_column(String, primary_key=True)
-    choice: Mapped[VoteChoiceLiteral] = mapped_column(String, nullable=False)
-    multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    emoji: Mapped[str] = mapped_column(Text, primary_key=True)
+    choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
+    multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
@@ -592,12 +786,27 @@ class BuildVoteSession(VoteSession, kw_only=True):
 
     __tablename__ = "build_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger,
+        Identity(),
+        ForeignKey(
+            "vote_sessions.id",
+            name="build_vote_sessions_vote_session_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        primary_key=True,
     )
     build_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("builds.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger,
+        ForeignKey(
+            "builds.id",
+            name="build_vote_sessions_build_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        primary_key=True,
     )
-    changes: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
+    changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
 
     build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
 
@@ -610,7 +819,13 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
+        Identity(),
+        ForeignKey(
+            "vote_sessions.id",
+            name="delete_log_vote_sessions_vote_session_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
         nullable=False,
         primary_key=True,
     )
@@ -626,10 +841,18 @@ class Vote(Base):
 
     __tablename__ = "votes"
     vote_session_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+        BigInteger,
+        Identity(),
+        ForeignKey(
+            "vote_sessions.id",
+            name="votes_vote_session_id_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        primary_key=True,
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    weight: Mapped[float] = mapped_column(Float)  # FIXME: Shouldn't be nullable
+    weight: Mapped[float] = mapped_column(Float, nullable=True)  # FIXME: Shouldn't be nullable
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
 
