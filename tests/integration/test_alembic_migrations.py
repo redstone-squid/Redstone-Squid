@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import psycopg2
 import pytest
 from alembic.config import Config
+from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, text
 from testcontainers.postgres import PostgresContainer
 
@@ -89,3 +90,37 @@ def test_migrations_create_schema_without_drift(
     assert expected_functions <= function_names
     assert trigger_names == expected_triggers
     assert option_table == "vote_session_options"
+
+
+def test_alembic_detects_managed_function_and_trigger_drift(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changed functions and missing triggers are surfaced by Alembic autogenerate."""
+    monkeypatch.setenv("DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini")
+    command.upgrade(config, "head")
+
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+                    RETURNS trigger
+                    LANGUAGE plpgsql
+                    AS $$
+                    BEGIN
+                        RETURN NEW;
+                    END;
+                    $$
+                    """
+                )
+            )
+            connection.execute(text("DROP TRIGGER update_messages_updated_at ON public.messages"))
+    finally:
+        engine.dispose()
+
+    with pytest.raises(CommandError, match="New upgrade operations detected"):
+        command.check(config)
