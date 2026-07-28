@@ -1,10 +1,14 @@
 """SQLAlchemy repository for Minecraft versions."""
 
-from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.db.repos._base import BaseAsyncRepository
 from squid.db.schema import Version
 from squid.services.versions import Edition, MinecraftVersion
+
+
+class _VersionModelRepository(BaseAsyncRepository[Version]):
+    model_type = Version
 
 
 class VersionRepository:
@@ -15,18 +19,15 @@ class VersionRepository:
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion:
         async with self._session() as session:
-            stmt = (
-                insert(Version)
-                .values(
+            repository = _VersionModelRepository(session=session, auto_commit=True)
+            stored = await repository.add(
+                Version(
                     edition=version.edition,
                     major_version=version.major,
                     minor_version=version.minor,
                     patch_number=version.patch,
                 )
-                .returning(Version)
             )
-            stored = (await session.execute(stmt)).scalar_one()
-            await session.commit()
             return MinecraftVersion(
                 edition=self._to_edition(stored.edition),
                 major=stored.major_version,
@@ -36,12 +37,15 @@ class VersionRepository:
 
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
         async with self._session() as session:
-            stmt = (
-                select(Version)
-                .where(Version.edition == edition)
-                .order_by(Version.major_version, Version.minor_version, Version.patch_number)
+            repository = _VersionModelRepository(session=session)
+            versions = await repository.list(
+                Version.edition == edition,
+                order_by=[
+                    (Version.major_version, False),
+                    (Version.minor_version, False),
+                    (Version.patch_number, False),
+                ],
             )
-            versions = (await session.execute(stmt)).scalars().all()
             return [
                 MinecraftVersion(
                     edition=self._to_edition(version.edition),
