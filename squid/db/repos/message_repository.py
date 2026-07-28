@@ -1,12 +1,18 @@
 """Repository for managing messages in the database."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import func, insert, select, update
+from advanced_alchemy.exceptions import NotFoundError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.db.repos._base import BaseAsyncRepository
 from squid.db.schema import Message, MessagePurposeLiteral
-from squid.utils import utcnow
+
+
+class _MessageModelRepository(BaseAsyncRepository[Message]):
+    model_type = Message
 
 
 class MessageRepository:
@@ -40,18 +46,19 @@ class MessageRepository:
             vote_session_id: The vote session id of the message.
         """
         async with self._session() as session:
-            stmt = insert(Message).values(
-                id=message_id,
-                server_id=server_id,
-                channel_id=channel_id,
-                author_id=author_id,
-                purpose=purpose,
-                content=content,
-                build_id=build_id,
-                vote_session_id=vote_session_id,
+            repository = _MessageModelRepository(session=session, auto_commit=True)
+            await repository.add(
+                Message(
+                    id=message_id,
+                    server_id=server_id,
+                    channel_id=channel_id,
+                    author_id=author_id,
+                    purpose=purpose,
+                    content=content,
+                    build_id=build_id,
+                    vote_session_id=vote_session_id,
+                )
             )
-            await session.execute(stmt)
-            await session.commit()
 
     async def update_edited_time(self, message_id: int) -> None:
         """Update the edited time of a message.
@@ -60,9 +67,11 @@ class MessageRepository:
             message_id: The message ID to update.
         """
         async with self._session() as session:
-            stmt = update(Message).where(Message.id == message_id).values(edited_time=utcnow())
-            await session.execute(stmt)
-            await session.commit()
+            repository = _MessageModelRepository(session=session, auto_commit=True)
+            message = await repository.get_one_or_none(id=message_id)
+            if message is not None:
+                message.updated_at = datetime.now(tz=UTC)
+                await repository.update(message)
 
     async def get_by_id(self, message_id: int) -> Message | None:
         """Get a message by its ID.
@@ -74,9 +83,8 @@ class MessageRepository:
             The Message object if found, otherwise None.
         """
         async with self._session() as session:
-            stmt = select(Message).where(Message.id == message_id)
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            repository = _MessageModelRepository(session=session)
+            return await repository.get_one_or_none(id=message_id)
 
     async def delete_by_id(self, message_id: int) -> Message:
         """Delete a message from the database by ID.
@@ -91,17 +99,12 @@ class MessageRepository:
             ValueError: If the message is not found.
         """
         async with self._session() as session:
-            stmt = select(Message).where(Message.id == message_id)
-            result = await session.execute(stmt)
-            message_obj = result.scalar_one_or_none()
-
-            if message_obj is None:
+            repository = _MessageModelRepository(session=session, auto_commit=True)
+            try:
+                return await repository.delete(message_id)
+            except NotFoundError as exc:
                 msg = f"Message with id {message_id} not found."
-                raise ValueError(msg)
-
-            await session.delete(message_obj)
-            await session.commit()
-            return message_obj
+                raise ValueError(msg) from exc
 
     async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
         """Get outdated messages by calling the PostgreSQL function.
