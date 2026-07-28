@@ -1,5 +1,7 @@
 """Repository for managing users and verification codes in the database."""
 
+import hashlib
+import os
 import uuid
 from datetime import UTC, datetime
 
@@ -79,9 +81,16 @@ class UserRepository:
         return True
 
     @staticmethod
-    def hash_verification_code(code: str) -> str:  # FIXME: Implement proper hashing
-        """Hash a verification code for storage."""
-        return code
+    def hash_verification_code(code: str) -> str:
+        """Hash a verification code for storage.
+
+        Verification codes are short, numeric, and short-lived, so a keyed
+        SHA-256 digest (rather than a slow password hash) is sufficient to
+        keep them non-recoverable from a database dump while remaining cheap
+        to verify on every lookup.
+        """
+        pepper = os.environ.get("VERIFICATION_CODE_PEPPER", "")
+        return hashlib.sha256(f"{pepper}{code}".encode()).hexdigest()
 
     async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
         """Return a valid verification code matching the given code."""

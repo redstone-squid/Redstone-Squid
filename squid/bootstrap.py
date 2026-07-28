@@ -1,6 +1,6 @@
 """Composition root for framework-neutral application services."""
 
-import random
+import secrets
 from dataclasses import dataclass
 from importlib import resources
 from types import TracebackType
@@ -83,7 +83,7 @@ def create_application_services(db: DatabaseManager) -> ApplicationServices:
         users=UserService(
             db.user_repo,
             get_minecraft_username,
-            lambda: random.randint(100_000, 999_999),
+            lambda: secrets.randbelow(900_000) + 100_000,
         ),
         versions=version_service,
         votes=VoteService(SQLAlchemyVoteRepository(db.async_session)),
