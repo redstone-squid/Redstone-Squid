@@ -1,0 +1,1 @@
+"""Voting persistence-adapter tests."""

@@ -1,0 +1,1 @@
+"""Voting application-service tests."""

@@ -70,3 +70,21 @@ generate-schema:
 [unix]
 generate-schema-alt:
     npm run db:generate
+
+test:
+    uv run pytest tests/unit tests/architecture
+
+test-integration:
+    uv run pytest tests/integration
+
+test-all:
+    uv run pytest tests/unit tests/architecture tests/integration
+
+[unix]
+fuzz-version:
+    mkdir -p .fuzz/corpus/version_parser .fuzz/artifacts/version_parser
+    cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
+    uv run --group fuzz python -m tests.fuzz.fuzz_version_parser .fuzz/corpus/version_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/version_parser/
+
+backdate start_commit:
+    git backdate --no-business-hours {{start_commit}}..

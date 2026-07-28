@@ -1,0 +1,64 @@
+name: Scheduled Fuzzing
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+env:
+  UV_VERSION: "0.11.32"
+
+jobs:
+  version-parser:
+    name: Version parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install fuzzing dependencies
+        run: uv sync --dev --group fuzz
+
+      - name: Prepare corpus and artifact directories
+        shell: bash
+        run: |
+          mkdir -p .fuzz/corpus/version_parser .fuzz/artifacts/version_parser
+          cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
+
+      - name: Fuzz for ten minutes
+        run: >-
+          uv run --group fuzz python -m tests.fuzz.fuzz_version_parser
+          .fuzz/corpus/version_parser
+          -max_total_time=600
+          -max_len=4096
+          -artifact_prefix=.fuzz/artifacts/version_parser/
+
+      - name: Upload evolved corpus and crash artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: version-parser-fuzz-${{ github.run_id }}
+          path: .fuzz/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Minimize uv cache
+        if: always()
+        run: uv cache prune --ci

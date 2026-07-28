@@ -1,0 +1,1 @@
+"""Executable architecture constraints."""

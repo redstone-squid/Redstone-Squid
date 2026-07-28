@@ -2,28 +2,30 @@ from dataclasses import replace
 
 import pytest
 
+from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
 from squid.services.votes import (
     StoredVoteMutation,
     VoteActor,
     VoteChoice,
     VoteService,
     VoteSessionSnapshot,
+    VoteStatus,
     VoteTarget,
 )
 
 
 def snapshot(
     *,
-    kind: str = "build",
-    status: str = "open",
-    result: str = "pending",
+    kind: VoteKindLiteral = "build",
+    status: VoteStatus = "open",
+    result: VoteSessionResultLiteral = "pending",
     votes: dict[int, float] | None = None,
 ) -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=12,
-        kind=kind,  # type: ignore[arg-type]
-        status=status,  # type: ignore[arg-type]
-        result=result,  # type: ignore[arg-type]
+        kind=kind,
+        status=status,
+        result=result,
         pass_threshold=3,
         fail_threshold=-3,
         votes=votes or {},
@@ -51,7 +53,6 @@ class FakeVoteRepository:
         return self.mutation
 
 
-@pytest.mark.unit
 @pytest.mark.parametrize(
     ("choice", "is_staff", "expected_weight"),
     [
@@ -86,7 +87,6 @@ async def test_cast_vote_applies_choice_and_staff_weight(
     assert repository.cast_calls == [(100, 7, expected_weight)]
 
 
-@pytest.mark.unit
 async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
     repository = FakeVoteRepository(snapshot(kind="delete_log"))
     service = VoteService(repository)
@@ -101,7 +101,6 @@ async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
     assert repository.cast_calls == []
 
 
-@pytest.mark.unit
 async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None:
     initial = snapshot(kind="delete_log")
     repository = FakeVoteRepository(initial)
@@ -123,7 +122,6 @@ async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None
     assert repository.cast_calls == [(100, 7, 3.0)]
 
 
-@pytest.mark.unit
 async def test_closed_vote_is_rejected_before_mutation() -> None:
     repository = FakeVoteRepository(snapshot(status="closed", result="approved"))
     service = VoteService(repository)
@@ -138,7 +136,6 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
     assert repository.cast_calls == []
 
 
-@pytest.mark.unit
 async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
     initial = snapshot(votes={2: 2.0})
     closed = replace(initial, status="closed", result="approved", votes={2: 2.0, 7: 1.0})
@@ -163,7 +160,6 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
     assert result.session.net_votes == 3
 
 
-@pytest.mark.unit
 async def test_race_with_another_closing_vote_returns_closed_rejection() -> None:
     initial = snapshot()
     repository = FakeVoteRepository(initial)

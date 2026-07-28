@@ -26,6 +26,7 @@ def test_parse_time_string(time_string: str | None, expected: int | None):
     [
         ("Java 26.0", ("Java", 26, 0, 0)),
         ("Bedrock 26.1", ("Bedrock", 26, 1, 0)),
+        ("bedrock 26.1", ("Bedrock", 26, 1, 0)),
         ("26.1.3", ("Java", 26, 1, 3)),
     ],
 )

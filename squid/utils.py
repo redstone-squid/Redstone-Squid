@@ -1,14 +1,11 @@
 import io
 import os
-import re
 from datetime import UTC, datetime
-from typing import Literal
 
 import aiohttp
 
 from squid.db.schema import Version
-
-VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$", re.IGNORECASE)
+from squid.services.versions import parse_version_string as parse_version_string
 
 
 def utcnow() -> str:
@@ -46,22 +43,6 @@ def get_version_string(version: Version, no_edition: bool = False) -> str:
     if no_edition:
         return f"{version.major_version}.{version.minor_version}.{version.patch_number}"
     return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
-
-
-def parse_version_string(version_string: str) -> tuple[Literal["Java", "Bedrock"], int, int, int]:
-    """Parses a version string into its components. Defaults to Java edition if no edition is specified in the string.
-
-    A version string is formatted as follows:
-    ["Java" | "Bedrock"] major_version.minor_version[.patch_number]
-    """
-
-    match = VERSION_PATTERN.match(version_string)
-    if not match:
-        msg = "Invalid version string format."
-        raise ValueError(msg)
-
-    edition, major, minor, patch = match.groups()
-    return edition or "Java", int(major), int(minor), int(patch or 0)  # type: ignore
 
 
 def parse_time_string(time_string: str | None) -> int | None:

@@ -1,0 +1,1 @@
+"""Minecraft version domain tests."""
