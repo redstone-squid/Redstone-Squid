@@ -7,16 +7,15 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
 import squid.bot.utils as utils
-from squid.services.versions import VersionService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT, version_service: VersionService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.version_service = version_service
+        self.version_service = bot.services.versions
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
@@ -58,4 +57,4 @@ class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(Miscellaneous(bot, bot.services.versions))
+    await bot.add_cog(Miscellaneous(bot))

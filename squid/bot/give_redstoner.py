@@ -13,7 +13,7 @@ from discord.ui import Item
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_owner_server
 from squid.bot.utils.permissions import check_is_staff
-from squid.services.community import RedstonerDecisionKind, RedstonerService
+from squid.services.community import RedstonerDecisionKind
 
 if TYPE_CHECKING:
     import squid.bot
@@ -65,9 +65,9 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: di
 
 
 class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT, service: RedstonerService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.service = service
+        self.service = bot.services.redstoner
 
     @Cog.listener("on_message")
     async def give_redstoner(self, message: discord.Message):
@@ -126,4 +126,4 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
-    await bot.add_cog(GiveRedstoner(bot, bot.services.redstoner))
+    await bot.add_cog(GiveRedstoner(bot))

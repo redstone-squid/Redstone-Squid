@@ -8,16 +8,15 @@ from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
 
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.services.versions import VersionService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"):
-    def __init__(self, bot: BotT, version_service: VersionService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.version_service = version_service
+        self.version_service = bot.services.versions
 
     @commands.hybrid_command()
     @check_is_staff()
@@ -44,4 +43,4 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VersionTracker(bot, bot.services.versions))
+    await bot.add_cog(VersionTracker(bot))

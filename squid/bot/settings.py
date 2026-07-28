@@ -11,16 +11,15 @@ import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
 from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
-from squid.services.settings import SettingsService
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
-    def __init__(self, bot: BotT, settings_service: SettingsService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.settings_service = settings_service
+        self.settings_service = bot.services.settings
 
     @hybrid_group(name="settings", invoke_without_command=True)
     @check_is_staff()
@@ -173,4 +172,4 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(SettingsCog(bot, bot.services.settings))
+    await bot.add_cog(SettingsCog(bot))

@@ -9,7 +9,6 @@ from discord import AllowedMentions
 from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
-from squid.services.community import WelcomeRelayService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -22,9 +21,9 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
 
     general_channel_id: Final[int] = 433618741528625155
 
-    def __init__(self, bot: BotT, service: WelcomeRelayService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.service = service
+        self.service = bot.services.welcome_relay
 
     @Cog.listener(name="on_message")
     async def maybe_forward_welcome_message(self, message: discord.Message):
@@ -70,4 +69,4 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(WelcomeRelay(bot, bot.services.welcome_relay))
+    await bot.add_cog(WelcomeRelay(bot))

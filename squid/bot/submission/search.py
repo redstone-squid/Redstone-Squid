@@ -14,7 +14,6 @@ from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils import RunningMessage
-from squid.services.build_queries import BuildQueryService
 
 if TYPE_CHECKING:
     import squid.bot
@@ -24,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT, queries: BuildQueryService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.queries = queries
+        self.queries = bot.services.build_queries
 
     @commands.hybrid_command("search_using_sucky_embeddings")
     @app_commands.describe(query="Whatever you want to search for.")
@@ -205,4 +204,4 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 async def setup(bot: squid.bot.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(SearchCog(bot, bot.services.build_queries))
+    await bot.add_cog(SearchCog(bot))

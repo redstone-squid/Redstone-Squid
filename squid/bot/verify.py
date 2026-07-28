@@ -6,16 +6,16 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui.views import ConfirmationView
-from squid.services.users import UserService, VerificationError
+from squid.services.users import VerificationError
 
 if TYPE_CHECKING:
     import squid.bot
 
 
 class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
-    def __init__(self, bot: BotT, user_service: UserService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.user_service = user_service
+        self.user_service = bot.services.users
 
     @hybrid_command()
     @app_commands.describe(code="The code you received by running /link in the game.")
@@ -45,4 +45,4 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VerifyCog(bot, bot.services.users))
+    await bot.add_cog(VerifyCog(bot))
