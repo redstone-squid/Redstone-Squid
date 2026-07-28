@@ -21,8 +21,8 @@ from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trus
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
 from squid.db.schema import Status
-from squid.services.build_inference import BuildInferenceInput, BuildInferenceService
-from squid.services.builds import BuildService, DoorSubmissionInput
+from squid.services.build_inference import BuildInferenceInput
+from squid.services.builds import DoorSubmissionInput
 from squid.utils import upload_to_catbox
 
 if TYPE_CHECKING:
@@ -34,10 +34,11 @@ if TYPE_CHECKING:
 class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
-    def __init__(self, bot: BotT, builds: BuildService, inference: BuildInferenceService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.builds = builds
-        self.inference = inference
+        self.builds = bot.services.builds
+        self.inference = bot.services.build_inference
+        self.messages = bot.services.messages
         self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
@@ -202,7 +203,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 
         async def _send_msg(channel: GuildMessageable):
             message = await channel.send(content=build.original_link, embed=em)
-            await self.bot.services.messages.track(
+            await self.messages.track(
                 to_tracked_message(message),
                 purpose="view_confirmed_build",
                 build_id=build.id,
@@ -266,4 +267,4 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds, bot.services.build_inference))
+    await bot.add_cog(BuildSubmitCog(bot))
