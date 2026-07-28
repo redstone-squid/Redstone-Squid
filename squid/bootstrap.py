@@ -79,7 +79,7 @@ def create_application_services(db: DatabaseManager) -> ApplicationServices:
             embedding_service,
         ),
         messages=MessageService(db.message_repo),
-        settings=SettingsService(SettingsRepository(db.server_setting)),
+        settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(
             db.user_repo,
             get_minecraft_username,
