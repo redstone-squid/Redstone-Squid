@@ -1,0 +1,18 @@
+default_stages = ["pre-commit"]
+default_install_hook_types = ["pre-commit", "pre-push"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "check-merge-conflict" },
+    { id = "check-toml" },
+    { id = "check-yaml" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "ruff-check", name = "ruff check", entry = "uv run --locked ruff check --fix --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
+    { id = "ruff-format", name = "ruff format", entry = "uv run --locked ruff format --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
+    { id = "pyrefly", name = "pyrefly", entry = "uv run --locked pyrefly check --config pyproject.toml", language = "system", pass_filenames = false, always_run = true, stages = ["pre-push"] },
+]
