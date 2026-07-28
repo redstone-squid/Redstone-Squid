@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.services.votes import VoteActor, VoteChoice, VoteService
+from squid.services.votes import VoteActor, VoteChoice
 
 if TYPE_CHECKING:
     import squid.bot
@@ -26,9 +26,10 @@ _background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
-    def __init__(self, bot: BotT, vote_service: VoteService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.vote_service = vote_service
+        self.vote_service = bot.services.votes
+        self.builds = bot.services.builds
         self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def get_vote_session(
@@ -108,9 +109,9 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 build_id = result.session.target.build_id
                 assert build_id is not None
                 if result.session.result == "approved":
-                    vote_session.build = await self.bot.services.builds.confirm(build_id)
+                    vote_session.build = await self.builds.confirm(build_id)
                 else:
-                    vote_session.build = await self.bot.services.builds.deny(build_id)
+                    vote_session.build = await self.builds.deny(build_id)
             elif isinstance(vote_session, DeleteLogVoteSession) and result.session.result == "approved":
                 with contextlib.suppress(discord.NotFound):
                     await vote_session.target_message.delete()
@@ -132,4 +133,4 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VoteCog(bot, bot.services.votes))
+    await bot.add_cog(VoteCog(bot))
