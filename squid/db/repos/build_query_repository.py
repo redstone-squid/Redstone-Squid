@@ -1,5 +1,6 @@
 """SQLAlchemy queries used by build search commands."""
 
+from rapidfuzz import process
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import (
@@ -39,3 +40,8 @@ class BuildMetadataRepository:
             repository = TypeModelRepository(session=session)
             patterns = await repository.get_many(order_by=(Type.name, False))
             return [pattern.name for pattern in patterns]
+
+    async def search_patterns(self, query: str, limit: int = 25) -> list[tuple[str, float, int]]:
+        """Fuzzy search pattern names by substring."""
+        patterns = await self.list_patterns()
+        return process.extract(query, patterns, limit=limit, score_cutoff=30)

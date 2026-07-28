@@ -36,6 +36,8 @@ class BuildMetadataQueries(Protocol):
 
     async def list_patterns(self) -> list[str]: ...
 
+    async def search_patterns(self, query: str, limit: int = 25) -> list[tuple[str, float, int]]: ...
+
 
 class SemanticBuildSearch(Protocol):
     """Natural-language build lookup."""
@@ -70,6 +72,9 @@ class BuildQueryService:
 
     async def patterns(self) -> list[str]:
         return await self._metadata.list_patterns()
+
+    async def search_patterns(self, query: str) -> list[tuple[str, float, int]]:
+        return await self._metadata.search_patterns(query)
 
     async def semantic(self, query: str) -> Build | None:
         build_id = await self._semantic_search.find_build_id(query)
