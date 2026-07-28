@@ -7,7 +7,7 @@ from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import _MessageModelRepository
+from squid.db.repos._model_repos import MessageModelRepository
 from squid.db.schema import Message, MessagePurposeLiteral
 
 
@@ -42,7 +42,7 @@ class MessageRepository:
             vote_session_id: The vote session id of the message.
         """
         async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
+            repository = MessageModelRepository(session=session, auto_commit=True)
             await repository.add(
                 Message(
                     id=message_id,
@@ -63,7 +63,7 @@ class MessageRepository:
             message_id: The message ID to update.
         """
         async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
+            repository = MessageModelRepository(session=session, auto_commit=True)
             message = await repository.get_one_or_none(id=message_id)
             if message is not None:
                 message.updated_at = datetime.now(tz=UTC)
@@ -79,7 +79,7 @@ class MessageRepository:
             The Message object if found, otherwise None.
         """
         async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session)
+            repository = MessageModelRepository(session=session)
             return await repository.get_one_or_none(id=message_id)
 
     async def delete_by_id(self, message_id: int) -> Message:
@@ -95,7 +95,7 @@ class MessageRepository:
             ValueError: If the message is not found.
         """
         async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
+            repository = MessageModelRepository(session=session, auto_commit=True)
             try:
                 return await repository.delete(message_id)
             except NotFoundError as exc:

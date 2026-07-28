@@ -1,6 +1,6 @@
 """Framework-independent server settings application service."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Protocol, Unpack, overload
 
 from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
@@ -35,7 +35,16 @@ class SettingsService:
     async def guild_removed(self, server_id: int) -> None:
         await self._repository.on_guild_remove(server_id)
 
-    async def get_many(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:
+    @overload
+    async def get_many(self, server_ids: Iterable[int], setting: ScalarChannelSetting) -> Mapping[int, int | None]: ...
+
+    @overload
+    async def get_many(self, server_ids: Iterable[int], setting: ListRoleSetting) -> Mapping[int, list[int]]: ...
+
+    @overload
+    async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | list[int] | None]: ...
+
+    async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | list[int] | None]:
         return await self._repository.get(server_ids, setting)
 
     @overload

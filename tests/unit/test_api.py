@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from squid.api import create_api_app
 from squid.bootstrap import ApplicationRuntime
-from squid.db import DatabaseManager
+from squid.db.engine import DatabaseEngine
 from squid.services.container import ApplicationServices
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -50,7 +50,7 @@ def _patch_environment(monkeypatch: pytest.MonkeyPatch):
 def client():
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(cast(DatabaseManager, database), services)
+    runtime = ApplicationRuntime(cast(DatabaseEngine, database), services)
     with TestClient(create_api_app(lambda: runtime)) as c:
         yield c
     assert database.closed

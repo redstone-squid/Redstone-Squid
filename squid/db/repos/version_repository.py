@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import _VersionModelRepository
+from squid.db.repos._model_repos import VersionModelRepository
 from squid.db.schema import Version
 from squid.services.versions import Edition, MinecraftVersion
 
@@ -15,7 +15,7 @@ class VersionRepository:
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion:
         async with self._session_factory() as session:
-            repository = _VersionModelRepository(session=session, auto_commit=True)
+            repository = VersionModelRepository(session=session, auto_commit=True)
             stored = await repository.add(
                 Version(
                     edition=version.edition,
@@ -33,7 +33,7 @@ class VersionRepository:
 
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
         async with self._session_factory() as session:
-            repository = _VersionModelRepository(session=session)
+            repository = VersionModelRepository(session=session)
             versions = await repository.get_many(
                 Version.edition == edition,
                 order_by=[

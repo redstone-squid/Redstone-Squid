@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final, Literal, Protocol, Self, override
 
 from squid.db.builds import Build
@@ -53,6 +54,8 @@ class BuildRepository(Protocol):
     async def release_lock(self, build_id: int) -> None: ...
 
     async def update_smallest_door_records_without_title(self) -> None: ...
+
+    async def clean_stale_locks(self, *, older_than: datetime) -> None: ...
 
 
 class BuildEmbeddingCoordinator(Protocol):
@@ -377,6 +380,10 @@ class BuildService:
     async def save(self, build: Build) -> Build:
         await self._persist(build)
         return build
+
+    async def clean_stale_locks(self, *, older_than: datetime) -> None:
+        """Release persisted build locks older than a cutoff."""
+        await self._repository.clean_stale_locks(older_than=older_than)
 
     async def classify_restrictions(self, build: Build, restrictions: Sequence[str]) -> Build:
         """Replace a build's restrictions using repository-owned metadata."""

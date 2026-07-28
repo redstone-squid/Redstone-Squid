@@ -90,7 +90,14 @@ aiosignal==1.4.0 \
 alembic==1.18.5 \
     --hash=sha256:06d8ba9d04558022f5395e9317de03d270f3dced49cee01f89fe7a13c26f14bc \
     --hash=sha256:1554982221dd17e9a749b53902407578eb305e453f71999e8c7f0a48389fff8e
-    # via advanced-alchemy
+    # via
+    #   advanced-alchemy
+    #   alembic-utils
+    #   redstone-squid
+alembic-utils==0.8.8 \
+    --hash=sha256:2c2545dc545833c5deb63bce2c3cde01c1807bf99da5efab2497bc8d817cb86e \
+    --hash=sha256:99de5d13194f26536bc0322f0c1660020a305015700d8447ccfc20e7d1494e5b
+    # via redstone-squid
 annotated-doc==0.0.4 \
     --hash=sha256:571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320 \
     --hash=sha256:fbcda96e87e9c92ad167c2e53839e57503ecfda18804ea28102353485033faa4
@@ -531,12 +538,6 @@ deprecated==1.2.18 \
     --hash=sha256:422b6f6d859da6f2ef57857761bfb392480502a64c3028ca9bbe86085d72115d \
     --hash=sha256:bd5011788200372a32418f888e326a09ff80d0214bd961147cfed01b5c018eec
     # via vecs
-deprecation==2.1.0 \
-    --hash=sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff \
-    --hash=sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a
-    # via
-    #   postgrest
-    #   storage3
 discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus@8686b5d1bbc1d3c862292eb436ab630d6e9c9b53
     # via redstone-squid
 discord-py==2.7.1 \
@@ -561,7 +562,9 @@ fastapi==0.135.1 \
 flupy==1.2.3 \
     --hash=sha256:220b6d40dea238cd2d66784c0d4d2a5483447a48acd343385768e0c740af9609 \
     --hash=sha256:be0f5a393bad2b3534697fbab17081993cd3f5817169dd3a61e8b2e0887612e6
-    # via vecs
+    # via
+    #   alembic-utils
+    #   vecs
 frozenlist==1.8.0 \
     --hash=sha256:0325024fe97f94c41c08872db482cf8ac4800d80e79222c6b0b7b162d5b13686 \
     --hash=sha256:032efa2674356903cd0261c4317a561a6850f3ac864a63fc1583147fb05a79b0 \
@@ -666,10 +669,6 @@ google-auth-oauthlib==1.3.0 \
     --hash=sha256:386b3fb85cf4a5b819c6ad23e3128d975216b4cac76324de1d90b128aaf38f29 \
     --hash=sha256:cd39e807ac7229d6b8b9c1e297321d36fcc8a9e4857dff4301870985df51a528
     # via gspread
-gotrue==2.12.4 \
-    --hash=sha256:35d2e58e066486321f4dff0033b30a53d057c7f436c15287122fa0cb833029b1 \
-    --hash=sha256:cf36dfcebc1da63b8d1e7b93eb1a35dfee3dcb1e1376833c256464010eb5fcd6
-    # via supabase
 greenlet==3.3.2 \
     --hash=sha256:18cb1b7337bca281915b3c5d5ae19f4e76d35e1df80f4ad3c1a7be91fadf1082 \
     --hash=sha256:1a9172f5bf6bd88e6ba5a84e0a68afeac9dc7b6b412b245dd64f52d83c81e55b \
@@ -720,14 +719,6 @@ h11==0.16.0 \
     # via
     #   httpcore
     #   uvicorn
-h2==4.3.0 \
-    --hash=sha256:6c59efe4323fa18b47a632221a1888bd7fde6249819beda254aeca909f221bf1 \
-    --hash=sha256:c438f029a25f7945c69e0ccf0fb951dc3f73a5f6412981daee861431b70e2bdd
-    # via httpx
-hpack==4.1.0 \
-    --hash=sha256:157ac792668d995c657d93111f46b4535ed114f0c9c8d672271bbec7eae1b496 \
-    --hash=sha256:ec5eca154f7056aa06f196a557655c5b009b382873ac8d1e66e79e87535f1dca
-    # via h2
 httpcore==1.0.9 \
     --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55 \
     --hash=sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8
@@ -741,16 +732,7 @@ httpx==0.28.1 \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
     #   bump-my-version
-    #   gotrue
     #   openai
-    #   postgrest
-    #   storage3
-    #   supabase
-    #   supafunc
-hyperframe==6.1.0 \
-    --hash=sha256:b03380493a519fce58ea5af42e4a42317bf9bd425596f7a0835ffce80f1a42e5 \
-    --hash=sha256:f630908a00854a7adeabd6382b43923a4c4cd4b821fcb527e6ab9e15382a3b08
-    # via h2
 hypothesis==6.157.2 \
     --hash=sha256:0017db9eeb655ee959efc5ae1cc5cb9fa00189534194255e7f33095229ad907a \
     --hash=sha256:01e610327f824aeedf3fa0d418e4f3f3f1266367e71d92e719755410ee525575 \
@@ -1176,9 +1158,12 @@ packaging==26.0 \
     --hash=sha256:b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529
     # via
     #   build
-    #   deprecation
     #   pytest
     #   wheel
+parse==1.22.1 \
+    --hash=sha256:20f0925a46f06602485ac90d751764d0697fd8455aaa97489ba8953a4b66de32 \
+    --hash=sha256:d3a4740ec3da338e2b258b2d69741b731eadfddca59e24a14bc4ee5fce38c911
+    # via alembic-utils
 pgvector==0.3.6 \
     --hash=sha256:31d01690e6ea26cea8a633cde5f0f55f5b246d9c8292d68efdef8c22ec994ade \
     --hash=sha256:f6c269b3c110ccb7496bac87202148ed18f34b390a0189c783e351062400a75a
@@ -1196,10 +1181,6 @@ pluggy==1.6.0 \
     # via
     #   pytest
     #   pytest-cov
-postgrest @ git+https://github.com/redstone-squid/postgrest-py@acaa901cbfc294912a76179f0cc81c09eccd4c22
-    # via
-    #   redstone-squid
-    #   supabase
 prek==0.3.6 \
     --hash=sha256:1713119cf0c390486786f4c84450ea584bcdf43979cc28e1350ec62e5d9a41ed \
     --hash=sha256:327b9030c3424c9fbcdf962992288295e89afe54fa94a7e0928e2691d1d2b53d \
@@ -1407,11 +1388,8 @@ pydantic==2.11.7 \
     # via
     #   bump-my-version
     #   fastapi
-    #   gotrue
     #   openai
-    #   postgrest
     #   pydantic-settings
-    #   storage3
 pydantic-core==2.33.2 \
     --hash=sha256:04a1a413977ab517154eebb2d326da71638271477d6ad87a769102f7c2488c56 \
     --hash=sha256:0a9f2c9dd19656823cb8250b0724ee9c60a82f3cdf68a080979d13092a3b0fef \
@@ -1456,10 +1434,6 @@ pygments==2.19.2 \
     # via
     #   pytest
     #   rich
-pyjwt==2.12.1 \
-    --hash=sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c \
-    --hash=sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b
-    # via gotrue
 pyparsing==3.3.2 \
     --hash=sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d \
     --hash=sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc
@@ -1470,6 +1444,19 @@ pyproject-hooks==1.2.0 \
     # via
     #   build
     #   pip-tools
+pyrefly==1.1.1 \
+    --hash=sha256:2150b450ee6a6bcbe69b2d45d9a4ebc934a609e1abcf65e490433f38eb873d84 \
+    --hash=sha256:4e0430f3ef69c8ac73505fd6584db70ed504665a9f0816fef7f723de510f26cb \
+    --hash=sha256:5ffd8a8ed62fe4e6bf0afe1837d1bad149bb3b9f80e928ef248c96b836db3742 \
+    --hash=sha256:6deda959f8603a7dbdf112c48983e2275b2903cf33c8c739ed65d7e71a4fd520 \
+    --hash=sha256:83baf0db71e172665db1fca0ced50b8f7773f5192ca57e8ac6773a772b6d2fc5 \
+    --hash=sha256:a6342d87c52b04f72156da04f554c4d57f3616f2b32d1763969efb22d05a1407 \
+    --hash=sha256:b50d4510e4f8aaea79e2c4b343a4d7a060c9451c0b2aa9bfe10d7ca1ef33d68d \
+    --hash=sha256:c08b814ad03175e9cf47111390537161828b472044c39ab3320252b3ac6b2edd \
+    --hash=sha256:d50cad97f19fc893b04deff7239626cffff5dd27ffb29b7d303a1b770247b208 \
+    --hash=sha256:d6b238e1362622d47a6eb5af704fd8b613c94e8c303386efd6350e3da59fecc8 \
+    --hash=sha256:f330cf039ef3da3b910c84f3a7e431f0cf8d0c1d2dad26491d6cadf3c7cd4759 \
+    --hash=sha256:f4b8595f91885bc8b5e3c282ab68d1df21201668a84e6508b1e15f2feec0bb8d
 pytest==9.0.2 \
     --hash=sha256:711ffd45bf766d5264d487b917733b453d917afd2b0ad65223959f59089f875b \
     --hash=sha256:75186651a92bd89611d1d9fc20f0b4345fd827c41ccd5c299a868a05d70edf11
@@ -1570,10 +1557,6 @@ rapidfuzz==3.14.3 \
     --hash=sha256:f3d15d8527e2b293e38ce6e437631af0708df29eafd7c9fc48210854c94472f9 \
     --hash=sha256:fa7c8f26f009f8c673fbfb443792f0cf8cf50c4e18121ff1e285b5e08a94fbdb
     # via redstone-squid
-realtime==2.5.3 \
-    --hash=sha256:0587594f3bc1c84bf007ff625075b86db6528843e03250dc84f4f2808be3d99a \
-    --hash=sha256:eb0994636946eff04c4c7f044f980c8c633c7eb632994f549f61053a474ac970
-    # via supabase
 requests==2.32.5 \
     --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6 \
     --hash=sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf
@@ -1680,28 +1663,13 @@ sqlalchemy==2.0.48 \
     # via
     #   advanced-alchemy
     #   alembic
+    #   alembic-utils
     #   redstone-squid
     #   vecs
 starlette==1.0.0 \
     --hash=sha256:6a4beaf1f81bb472fd19ea9b918b50dc3a77a6f2e190a12954b25e6ed5eea149 \
     --hash=sha256:d3ec55e0bb321692d275455ddfd3df75fff145d009685eb40dc91fc66b03d38b
     # via fastapi
-storage3==0.12.2 \
-    --hash=sha256:1277530feb7be310523263a32057bd52c40c81c49c1e29760619be842acc487b \
-    --hash=sha256:a8f5afeb7566bd2e4ffb40a1261670135354482f774b932f8cd32634c8343e52
-    # via supabase
-strenum==0.4.15 \
-    --hash=sha256:878fb5ab705442070e4dd1929bb5e2249511c0bcf2b0eeacf3bcd80875c82eff \
-    --hash=sha256:a30cda4af7cc6b5bf52c8055bc4bf4b2b6b14a93b574626da33df53cf7740659
-    # via supafunc
-supabase==2.16.0 \
-    --hash=sha256:98f3810158012d4ec0e3083f2e5515f5e10b32bd71e7d458662140e963c1d164 \
-    --hash=sha256:99065caab3d90a56650bf39fbd0e49740995da3738ab28706c61bd7f2401db55
-    # via redstone-squid
-supafunc==0.10.2 \
-    --hash=sha256:45e4d500854167c261515c43f7a363320e0a928118182fe8932adefddeddb545 \
-    --hash=sha256:547a2c115b15319c78fc84460f19cb5ea6e72597f7573a3498f4db087787e0fd
-    # via supabase
 tabulate==0.10.0 \
     --hash=sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d \
     --hash=sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3
@@ -1724,6 +1692,7 @@ typing-extensions==4.15.0 \
     #   advanced-alchemy
     #   aiosignal
     #   alembic
+    #   alembic-utils
     #   anyio
     #   beautifulsoup4
     #   fastapi
@@ -1733,7 +1702,6 @@ typing-extensions==4.15.0 \
     #   pydantic
     #   pydantic-core
     #   pytest-asyncio
-    #   realtime
     #   sqlalchemy
     #   starlette
     #   testcontainers
@@ -1794,32 +1762,6 @@ wcwidth==0.6.0 \
     --hash=sha256:1a3a1e510b553315f8e146c54764f4fb6264ffad731b3d78088cdb1478ffbdad \
     --hash=sha256:cdc4e4262d6ef9a1a57e018384cbeb1208d8abbc64176027e2c2455c81313159
     # via prompt-toolkit
-websockets==15.0.1 \
-    --hash=sha256:0701bc3cfcb9164d04a14b149fd74be7347a530ad3bbf15ab2c678a2cd3dd9a2 \
-    --hash=sha256:0af68c55afbd5f07986df82831c7bff04846928ea8d1fd7f30052638788bc9b5 \
-    --hash=sha256:0f3c1e2ab208db911594ae5b4f79addeb3501604a165019dd221c0bdcabe4db8 \
-    --hash=sha256:229cf1d3ca6c1804400b0a9790dc66528e08a6a1feec0d5040e8b9eb14422375 \
-    --hash=sha256:3be571a8b5afed347da347bfcf27ba12b069d9d7f42cb8c7028b5e98bbb12597 \
-    --hash=sha256:3c714d2fc58b5ca3e285461a4cc0c9a66bd0e24c5da9911e30158286c9b5be7f \
-    --hash=sha256:3e90baa811a5d73f3ca0bcbf32064d663ed81318ab225ee4f427ad4e26e5aff3 \
-    --hash=sha256:558d023b3df0bffe50a04e710bc87742de35060580a293c2a984299ed83bc4e4 \
-    --hash=sha256:592f1a9fe869c778694f0aa806ba0374e97648ab57936f092fd9d87f8bc03665 \
-    --hash=sha256:595b6c3969023ecf9041b2936ac3827e4623bfa3ccf007575f04c5a6aa318c22 \
-    --hash=sha256:5a939de6b7b4e18ca683218320fc67ea886038265fd1ed30173f5ce3f8e85675 \
-    --hash=sha256:5d54b09eba2bada6011aea5375542a157637b91029687eb4fdb2dab11059c1b4 \
-    --hash=sha256:64dee438fed052b52e4f98f76c5790513235efaa1ef7f3f2192c392cd7c91b65 \
-    --hash=sha256:746ee8dba912cd6fc889a8147168991d50ed70447bf18bcda7039f7d2e3d9151 \
-    --hash=sha256:756c56e867a90fb00177d530dca4b097dd753cde348448a1012ed6c5131f8b7d \
-    --hash=sha256:82544de02076bafba038ce055ee6412d68da13ab47f0c60cab827346de828dee \
-    --hash=sha256:ba9e56e8ceeeedb2e080147ba85ffcd5cd0711b89576b83784d8605a7df455fa \
-    --hash=sha256:c338ffa0520bdb12fbc527265235639fb76e7bc7faafbb93f6ba80d9c06578a9 \
-    --hash=sha256:d5f6b181bb38171a8ad1d6aa58a67a6aa9d4b38d0f8c5f496b9e42561dfc62fe \
-    --hash=sha256:e09473f095a819042ecb2ab9465aee615bd9c2028e4ef7d933600a8401c79561 \
-    --hash=sha256:e8b56bdcdb4505c8078cb6c7157d9811a85790f2f2b3632c7d1462ab5783d215 \
-    --hash=sha256:ee443ef070bb3b6ed74514f5efaa37a252af57c90eb33b956d35c8e9c10a1931 \
-    --hash=sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f \
-    --hash=sha256:fcd5cf9e305d7b8338754470cf69cf81f420459dbae8a3b40cee57417f4614a7
-    # via realtime
 wheel==0.46.3 \
     --hash=sha256:4b399d56c9d9338230118d705d9737a2a468ccca63d5e813e2a4fc7815d8bc4d \
     --hash=sha256:e3e79874b07d776c40bd6033f8ddf76a7dad46a7b8aa1b2787a83083519a1803

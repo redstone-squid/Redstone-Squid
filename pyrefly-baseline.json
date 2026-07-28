@@ -1,10 +1,10 @@
 {
   "errors": [
     {
-      "line": 68,
-      "column": 39,
-      "stop_line": 68,
-      "stop_column": 61,
+      "line": 73,
+      "column": 44,
+      "stop_line": 73,
+      "stop_column": 66,
       "path": "squid/bootstrap.py",
       "code": -2,
       "name": "bad-argument-type",
@@ -13,9 +13,9 @@
       "severity": "error"
     },
     {
-      "line": 75,
+      "line": 80,
       "column": 41,
-      "stop_line": 75,
+      "stop_line": 80,
       "stop_column": 63,
       "path": "squid/bootstrap.py",
       "code": -2,
@@ -25,10 +25,10 @@
       "severity": "error"
     },
     {
-      "line": 77,
+      "line": 82,
       "column": 13,
-      "stop_line": 77,
-      "stop_column": 21,
+      "stop_line": 82,
+      "stop_column": 26,
       "path": "squid/bootstrap.py",
       "code": -2,
       "name": "bad-argument-type",
@@ -625,9 +625,9 @@
       "severity": "error"
     },
     {
-      "line": 271,
+      "line": 259,
       "column": 18,
-      "stop_line": 271,
+      "stop_line": 259,
       "stop_column": 22,
       "path": "squid/db/repos/vote_repository.py",
       "code": -2,
@@ -637,9 +637,9 @@
       "severity": "error"
     },
     {
-      "line": 272,
+      "line": 260,
       "column": 20,
-      "stop_line": 272,
+      "stop_line": 260,
       "stop_column": 30,
       "path": "squid/db/repos/vote_repository.py",
       "code": -2,
@@ -649,9 +649,9 @@
       "severity": "error"
     },
     {
-      "line": 155,
+      "line": 164,
       "column": 5,
-      "stop_line": 155,
+      "stop_line": 164,
       "stop_column": 11,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -661,9 +661,9 @@
       "severity": "error"
     },
     {
-      "line": 173,
+      "line": 182,
       "column": 5,
-      "stop_line": 173,
+      "stop_line": 182,
       "stop_column": 11,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -673,9 +673,9 @@
       "severity": "error"
     },
     {
-      "line": 196,
+      "line": 205,
       "column": 5,
-      "stop_line": 196,
+      "stop_line": 205,
       "stop_column": 11,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -685,9 +685,9 @@
       "severity": "error"
     },
     {
-      "line": 233,
+      "line": 256,
       "column": 5,
-      "stop_line": 233,
+      "stop_line": 256,
       "stop_column": 11,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -697,9 +697,9 @@
       "severity": "error"
     },
     {
-      "line": 307,
+      "line": 370,
       "column": 5,
-      "stop_line": 307,
+      "stop_line": 370,
       "stop_column": 13,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -709,9 +709,9 @@
       "severity": "error"
     },
     {
-      "line": 314,
+      "line": 377,
       "column": 5,
-      "stop_line": 314,
+      "stop_line": 377,
       "stop_column": 17,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -721,9 +721,9 @@
       "severity": "error"
     },
     {
-      "line": 324,
+      "line": 387,
       "column": 5,
-      "stop_line": 324,
+      "stop_line": 387,
       "stop_column": 13,
       "path": "squid/db/schema.py",
       "code": -2,
@@ -733,39 +733,15 @@
       "severity": "error"
     },
     {
-      "line": 329,
+      "line": 392,
       "column": 5,
-      "stop_line": 329,
+      "stop_line": 392,
       "stop_column": 10,
       "path": "squid/db/schema.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `types` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
       "concise_description": "Cannot set field `types` to data descriptor `AssociationProxy` with inconsistent types",
-      "severity": "error"
-    },
-    {
-      "line": 61,
-      "column": 15,
-      "stop_line": 61,
-      "stop_column": 18,
-      "path": "squid/db/server_settings.py",
-      "code": -2,
-      "name": "inconsistent-overload",
-      "description": "Overload return type `Coroutine[Unknown, Unknown, dict[int, int | None]]` is not assignable to implementation return type `Coroutine[Unknown, Unknown, dict[int, int | list[int] | None]]`",
-      "concise_description": "Overload return type `Coroutine[Unknown, Unknown, dict[int, int | None]]` is not assignable to implementation return type `Coroutine[Unknown, Unknown, dict[int, int | list[int] | None]]`",
-      "severity": "error"
-    },
-    {
-      "line": 65,
-      "column": 15,
-      "stop_line": 65,
-      "stop_column": 18,
-      "path": "squid/db/server_settings.py",
-      "code": -2,
-      "name": "inconsistent-overload",
-      "description": "Overload return type `Coroutine[Unknown, Unknown, dict[int, list[int]]]` is not assignable to implementation return type `Coroutine[Unknown, Unknown, dict[int, int | list[int] | None]]`",
-      "concise_description": "Overload return type `Coroutine[Unknown, Unknown, dict[int, list[int]]]` is not assignable to implementation return type `Coroutine[Unknown, Unknown, dict[int, int | list[int] | None]]`",
       "severity": "error"
     },
     {
@@ -781,9 +757,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -793,9 +769,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -805,9 +781,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -817,9 +793,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -829,9 +805,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -841,9 +817,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -853,9 +829,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -865,9 +841,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -877,9 +853,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -889,9 +865,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -901,9 +877,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -913,9 +889,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -925,9 +901,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -937,9 +913,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -949,9 +925,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -961,9 +937,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -973,9 +949,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -985,9 +961,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -997,9 +973,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1009,9 +985,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1021,9 +997,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1033,9 +1009,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1045,9 +1021,9 @@
       "severity": "error"
     },
     {
-      "line": 162,
+      "line": 165,
       "column": 20,
-      "stop_line": 162,
+      "stop_line": 165,
       "stop_column": 29,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1057,9 +1033,9 @@
       "severity": "error"
     },
     {
-      "line": 347,
+      "line": 350,
       "column": 29,
-      "stop_line": 347,
+      "stop_line": 350,
       "stop_column": 55,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1069,9 +1045,9 @@
       "severity": "error"
     },
     {
-      "line": 356,
+      "line": 359,
       "column": 35,
-      "stop_line": 356,
+      "stop_line": 359,
       "stop_column": 55,
       "path": "squid/services/builds.py",
       "code": -2,
@@ -1093,9 +1069,9 @@
       "severity": "error"
     },
     {
-      "line": 124,
+      "line": 125,
       "column": 39,
-      "stop_line": 124,
+      "stop_line": 125,
       "stop_column": 45,
       "path": "tests/unit/services/test_build_service.py",
       "code": -2,

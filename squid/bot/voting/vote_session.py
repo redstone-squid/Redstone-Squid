@@ -13,6 +13,7 @@ import discord
 from sqlalchemy import select
 
 from squid.bot.message_adapter import to_tracked_message
+from squid.db.build_manager import BuildManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
@@ -384,7 +385,7 @@ class BuildVoteSession(AbstractVoteSession):
             msg = f"Found a build vote session with no associated build id. session_id={record.id}"
             raise ValueError(msg)
 
-        build = bot.db.build.from_sql_build(record.build)
+        build = BuildManager.from_sql_build(record.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True

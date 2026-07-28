@@ -1,58 +1,8 @@
 """Fixtures used only by legacy unit tests."""
 
-from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.db import DatabaseManager
 from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, VersionRecord
-
-
-@pytest.fixture
-async def mock_env_vars() -> AsyncGenerator[None, None]:
-    """Provide the environment required by legacy database objects."""
-    with patch.dict(
-        "os.environ",
-        {
-            "SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_KEY": "test-key-123",
-            "DATABASE_URL": "postgresql://user:password@localhost:5432/test_db",
-            "DB_DRIVER_SYNC": "psycopg2",
-            "DB_DRIVER_ASYNC": "asyncpg",
-        },
-    ):
-        yield
-
-
-@pytest.fixture
-async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager, None]:
-    """Provide a DatabaseManager with its infrastructure dependencies replaced."""
-    with (
-        patch("squid.db.create_async_engine"),
-        patch("squid.db.create_engine"),
-        patch("squid.db.async_sessionmaker") as mock_async_sessionmaker,
-        patch("squid.db.sessionmaker"),
-        patch("squid.db.AsyncClient.__init__", return_value=None),
-        patch("squid.db.AsyncClient.table") as table_mock,
-        patch("squid.db.AsyncClient.rpc", new_callable=AsyncMock),
-    ):
-        mock_session = AsyncMock(spec=AsyncSession)
-        mock_async_sessionmaker.return_value = lambda: mock_session
-
-        table_instance = MagicMock()
-        table_instance.select.return_value = table_instance
-        table_instance.insert.return_value = table_instance
-        table_instance.update.return_value = table_instance
-        table_instance.delete.return_value = table_instance
-        table_instance.eq.return_value = table_instance
-        table_instance.order.return_value = table_instance
-        table_instance.execute = AsyncMock()
-        table_mock.return_value = table_instance
-
-        DatabaseManager._instance = None  # pyright: ignore[reportPrivateUsage]
-        yield DatabaseManager()
 
 
 @pytest.fixture

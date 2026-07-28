@@ -25,8 +25,8 @@ from squid.bootstrap import create_application_runtime
 from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
-from squid.db import DatabaseManager
 from squid.db.builds import Build
+from squid.db.engine import DatabaseEngine
 from squid.db.schema import Base
 from squid.logging_config import (
     DEFAULT_BACKUP_COUNT,
@@ -74,7 +74,7 @@ class ApplicationConfig(TypedDict, total=False):
 class RedstoneSquid(Bot):
     def __init__(
         self,
-        db: DatabaseManager,
+        db: DatabaseEngine,
         services: ApplicationServices,
         config: BotConfig | None = None,
     ):
@@ -137,7 +137,7 @@ class RedstoneSquid(Bot):
     @tasks.loop(minutes=5)
     async def clean_dangling_build_locks(self):
         """Clean up dangling build locks in case some functions failed to release them."""
-        await self.db.build.clean_stale_locks(older_than=datetime.now(UTC) - timedelta(minutes=5))
+        await self.services.builds.clean_stale_locks(older_than=datetime.now(UTC) - timedelta(minutes=5))
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """

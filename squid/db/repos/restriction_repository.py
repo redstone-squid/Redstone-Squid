@@ -5,7 +5,7 @@ from async_lru import alru_cache
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.build_tags import AliasAlreadyAdded, AliasTakenByOther, RestrictionNotFound
-from squid.db.repos._model_repos import _RestrictionAliasModelRepository, _RestrictionModelRepository
+from squid.db.repos._model_repos import RestrictionAliasModelRepository, RestrictionModelRepository
 from squid.db.schema import Restriction, RestrictionAlias
 from squid.services.builds import RestrictionDefinition
 
@@ -19,14 +19,14 @@ class RestrictionRepository:
     @alru_cache
     async def fetch_all_restrictions(self) -> list[RestrictionDefinition]:
         async with self._session_factory() as session:
-            repository = _RestrictionModelRepository(session=session)
+            repository = RestrictionModelRepository(session=session)
             restrictions = await repository.get_many()
             return [RestrictionDefinition(row.name, row.type) for row in restrictions]
 
     async def add_alias(self, restriction: str, alias: str) -> None:
         async with self._session_factory() as session:
-            restriction_repository = _RestrictionModelRepository(session=session)
-            alias_repository = _RestrictionAliasModelRepository(session=session, auto_commit=True)
+            restriction_repository = RestrictionModelRepository(session=session)
+            alias_repository = RestrictionAliasModelRepository(session=session, auto_commit=True)
             restriction_id = await self._get_restriction_id(
                 restriction_repository,
                 alias_repository,
@@ -51,8 +51,8 @@ class RestrictionRepository:
 
     @staticmethod
     async def _get_restriction_id(
-        restriction_repository: _RestrictionModelRepository,
-        alias_repository: _RestrictionAliasModelRepository,
+        restriction_repository: RestrictionModelRepository,
+        alias_repository: RestrictionAliasModelRepository,
         name_or_alias: str,
     ) -> int | None:
         restriction = await restriction_repository.get_one_or_none(Restriction.name.ilike(f"%{name_or_alias}%"))

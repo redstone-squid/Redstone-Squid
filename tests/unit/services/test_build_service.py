@@ -25,6 +25,7 @@ class FakeBuildRepository:
         self.deny = AsyncMock()
         self.acquire_lock = AsyncMock(return_value=True)
         self.release_lock = AsyncMock()
+        self.clean_stale_locks = AsyncMock()
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:

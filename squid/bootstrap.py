@@ -6,11 +6,15 @@ from importlib import resources
 from types import TracebackType
 from typing import Self
 
-from squid.db import DatabaseManager
+from squid.db.build_manager import BuildManager
+from squid.db.build_tags import BuildTagsManager
+from squid.db.engine import DatabaseEngine
 from squid.db.mojang import get_minecraft_username
 from squid.db.repos.build_query_repository import BuildMetadataRepository
+from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
 from squid.db.repos.settings_repository import SettingsRepository
+from squid.db.repos.user_repository import UserRepository
 from squid.db.repos.version_repository import VersionRepository
 from squid.db.repos.vote_repository import VoteRepository
 from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
@@ -37,7 +41,7 @@ from squid.services.votes import VoteService
 class ApplicationRuntime:
     """Own the process-level infrastructure and its application services."""
 
-    db: DatabaseManager
+    db: DatabaseEngine
     services: ApplicationServices
 
     async def close(self) -> None:
@@ -56,7 +60,7 @@ class ApplicationRuntime:
         await self.close()
 
 
-def create_application_services(db: DatabaseManager) -> ApplicationServices:
+def create_application_services(db: DatabaseEngine) -> ApplicationServices:
     """Create application services from process-level infrastructure."""
     restriction_repository = RestrictionRepository(db.async_session)
     version_service = VersionService(VersionRepository(db.async_session))
@@ -64,24 +68,25 @@ def create_application_services(db: DatabaseManager) -> ApplicationServices:
         OpenAIEmbeddingModel.from_environment(),
         VecsBuildIndex.from_environment(),
     )
+    build_manager = BuildManager(db.async_session)
     return ApplicationServices(
-        builds=BuildService(db.build, restriction_repository, version_service, embedding_service),
+        builds=BuildService(build_manager, restriction_repository, version_service, embedding_service),
         build_inference=BuildInferenceService(
             OpenAITextGenerator.from_environment(),
-            db.build_tags,
+            BuildTagsManager(db.async_session),
             version_service,
             resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8"),
         ),
         restrictions=RestrictionService(restriction_repository),
         build_queries=BuildQueryService(
-            db.build,
+            build_manager,
             BuildMetadataRepository(db.async_session),
             embedding_service,
         ),
-        messages=MessageService(db.message_repo),
+        messages=MessageService(MessageRepository(db.async_session)),
         settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(
-            db.user_repo,
+            UserRepository(db.async_session),
             get_minecraft_username,
             lambda: secrets.randbelow(900_000) + 100_000,
         ),
@@ -102,7 +107,7 @@ def create_application_services(db: DatabaseManager) -> ApplicationServices:
     )
 
 
-def create_application_runtime(db: DatabaseManager | None = None) -> ApplicationRuntime:
+def create_application_runtime(db: DatabaseEngine | None = None) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
-    database = db or DatabaseManager()
+    database = db or DatabaseEngine()
     return ApplicationRuntime(database, create_application_services(database))

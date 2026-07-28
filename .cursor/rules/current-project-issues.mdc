@@ -1,6 +1,6 @@
 ---
 description: Issues with the current project that the developers are trying to improve on
-globs: 
+globs:
 alwaysApply: false
 ---
-I am progressively moving away from the supabase client to just using SQLAlchemy. To aid in the transition, we will keep both the supabase client and the sqlalchemy (async) engine inside DatabaseManager.
+The migration away from the Supabase client to SQLAlchemy is complete. `squid.db.engine.DatabaseEngine` now owns only the SQLAlchemy engines/sessions; there is no more Supabase REST client anywhere in the process.

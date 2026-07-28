@@ -3,9 +3,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import (
-    _RestrictionAliasModelRepository,
-    _RestrictionModelRepository,
-    _TypeModelRepository,
+    RestrictionAliasModelRepository,
+    RestrictionModelRepository,
+    TypeModelRepository,
 )
 from squid.db.schema import Restriction, RestrictionAlias, Type
 from squid.services.build_queries import RestrictionSearchItem
@@ -19,8 +19,8 @@ class BuildMetadataRepository:
 
     async def search_restrictions(self, query: str | None) -> list[RestrictionSearchItem]:
         async with self._session_factory() as session:
-            restriction_repository = _RestrictionModelRepository(session=session)
-            alias_repository = _RestrictionAliasModelRepository(session=session)
+            restriction_repository = RestrictionModelRepository(session=session)
+            alias_repository = RestrictionAliasModelRepository(session=session)
             restriction_filters = []
             alias_filters = []
             if query:
@@ -36,6 +36,6 @@ class BuildMetadataRepository:
 
     async def list_patterns(self) -> list[str]:
         async with self._session_factory() as session:
-            repository = _TypeModelRepository(session=session)
+            repository = TypeModelRepository(session=session)
             patterns = await repository.get_many(order_by=(Type.name, False))
             return [pattern.name for pattern in patterns]

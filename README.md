@@ -54,11 +54,8 @@ Discord requires a discord bot account. You can learn how to make bot accounts a
 BOT_TOKEN = <Replace this with your discord access token>
 ```
 
-Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project and navigate to **Project Settings | API** and copy the URL and API key (secret, not public) to the same `.env` with the following contents:
-```
-SUPABASE_URL = <Replace this with your supabase url>
-SUPABASE_KEY = <Replace this with your supabase api key>
-```
+Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project.
+
 Database schema changes are managed by Alembic. After configuring `DATABASE_URL`, create or upgrade a database with:
 
 ```console

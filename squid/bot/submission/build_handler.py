@@ -57,7 +57,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                 msg = "Invalid status or record category"
                 raise ValueError(msg)
 
-        guild_channels = await self.bot.db.server_setting.get((guild.id for guild in self.bot.guilds), target)
+        guild_channels = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), target)
         maybe_channels = [
             self.bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None
         ]

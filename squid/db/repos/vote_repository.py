@@ -6,7 +6,7 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import _MessageModelRepository, _VoteModelRepository, _VoteSessionModelRepository
+from squid.db.repos._model_repos import MessageModelRepository, VoteModelRepository, VoteSessionModelRepository
 from squid.db.schema import (
     BuildVoteSession,
     DeleteLogVoteSession,
@@ -210,12 +210,12 @@ class VoteRepository:
         )
         if for_update:
             stmt = stmt.with_for_update(of=VoteSession)
-        repository = _VoteSessionModelRepository(session=session)
+        repository = VoteSessionModelRepository(session=session)
         return await repository.get_one_or_none(statement=stmt)
 
     @staticmethod
     async def _get_votes(session: AsyncSession, vote_session_id: int) -> dict[int, float]:
-        repository = _VoteModelRepository(session=session)
+        repository = VoteModelRepository(session=session)
         votes = await repository.get_many(Vote.vote_session_id == vote_session_id)
         return {vote.user_id: vote.weight for vote in votes}
 
@@ -225,7 +225,7 @@ class VoteRepository:
         row: VoteSession,
         votes: Mapping[int, float],
     ) -> VoteSessionSnapshot:
-        message_repository = _MessageModelRepository(session=session)
+        message_repository = MessageModelRepository(session=session)
         messages = await message_repository.get_many(
             Message.vote_session_id == row.id,
             order_by=(Message.id, False),

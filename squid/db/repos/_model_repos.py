@@ -22,41 +22,41 @@ from squid.db.schema import (
 from squid.db.schema import VerificationCode as VerificationCodeModel
 
 
-class _MessageModelRepository(BaseAsyncRepository[Message]):
+class MessageModelRepository(BaseAsyncRepository[Message]):
     model_type = Message
 
 
-class _RestrictionModelRepository(BaseAsyncRepository[Restriction]):
+class RestrictionModelRepository(BaseAsyncRepository[Restriction]):
     model_type = Restriction
 
 
-class _RestrictionAliasModelRepository(BaseAsyncRepository[RestrictionAlias]):
+class RestrictionAliasModelRepository(BaseAsyncRepository[RestrictionAlias]):
     model_type = RestrictionAlias
 
 
-class _ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):
+class ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):
     model_type = ServerSetting
 
 
-class _TypeModelRepository(BaseAsyncRepository[Type]):
+class TypeModelRepository(BaseAsyncRepository[Type]):
     model_type = Type
 
 
-class _UserModelRepository(BaseAsyncRepository[User]):
+class UserModelRepository(BaseAsyncRepository[User]):
     model_type = User
 
 
-class _VerificationCodeModelRepository(BaseAsyncRepository[VerificationCodeModel]):
+class VerificationCodeModelRepository(BaseAsyncRepository[VerificationCodeModel]):
     model_type = VerificationCodeModel
 
 
-class _VersionModelRepository(BaseAsyncRepository[Version]):
+class VersionModelRepository(BaseAsyncRepository[Version]):
     model_type = Version
 
 
-class _VoteModelRepository(BaseAsyncRepository[Vote]):
+class VoteModelRepository(BaseAsyncRepository[Vote]):
     model_type = Vote
 
 
-class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
+class VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
     model_type = VoteSession
