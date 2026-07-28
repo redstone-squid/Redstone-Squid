@@ -16,7 +16,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
     if sys.platform == "win32":
         testcontainers_config.ryuk_disabled = True
     try:
-        with PostgresContainer("postgres:17-alpine", driver="psycopg2") as container:
+        with PostgresContainer("pgvector/pgvector:0.8.1-pg17", driver="psycopg2") as container:
             yield container
     finally:
         testcontainers_config.ryuk_disabled = previous_ryuk_setting

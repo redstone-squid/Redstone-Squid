@@ -71,6 +71,22 @@ generate-schema:
 generate-schema-alt:
     npm run db:generate
 
+db-upgrade:
+    uv run alembic upgrade head
+
+db-current:
+    uv run alembic current
+
+db-check:
+    uv run alembic check
+
+db-revision name:
+    uv run alembic revision --autogenerate -m "{{name}}"
+
+# Use only when adopting a database that already matches the frozen baseline.
+db-stamp-baseline:
+    uv run alembic stamp 20260728_baseline
+
 test:
     uv run pytest tests/unit tests/architecture
 

@@ -1,13 +1,36 @@
-Pre-requisites:
-- You have access to the supabase project
-- `supabase` CLI is installed - read https://supabase.com/docs/guides/local-development
-- You linked a local db to the supabase project
+# Creating a database migration
 
+Prerequisites:
+
+- Configure `DATABASE_URL` for a PostgreSQL 15+ database with pgvector installed.
+- Upgrade your development database with `just db-upgrade`.
 
 Steps:
-1. `supabase migration new <name>`
-2. Write the SQL manually, or use the studio to make the changes then run `supabase db diff`
-3. If changed column names, update `seed.sql`, and all the references in the code base
-4. `supabase migration up` (Push migration file to local db, may fail if you already ran the migration locally)
-5. `supabase db push` (Push changes to remote)
-6. restart the bot
+
+1. Update the SQLAlchemy models in `squid/db/schema.py`.
+2. For a PostgreSQL function or trigger, update `squid/db/postgres_entities.sql`.
+3. Run `just db-revision "<short description>"`.
+4. Review the generated revision. Data migrations and PostgreSQL procedures require explicit `op.execute(...)` SQL.
+5. Run `just db-upgrade`, then `just db-check`.
+6. Run `just test` and `just test-integration`.
+7. Deploy the revision with `alembic upgrade head`.
+
+`alembic-utils` declaratively compares the functions and triggers listed in `postgres_entities.sql`. The three
+PostgreSQL procedures captured by the baseline are not supported by `alembic-utils`; change those with explicit SQL in
+a normal Alembic revision.
+
+## Adopting the existing Supabase database
+
+The frozen baseline matches the remote schema through Supabase migration `20260330091500`. The repository's former
+`20260728090000_vote_session_options.sql` migration is represented by the next Alembic revision.
+
+After verifying a backup and confirming the target matches the baseline:
+
+```console
+alembic stamp 20260728_baseline
+alembic upgrade head
+alembic check
+```
+
+Stamping changes migration metadata without applying schema SQL. Never stamp an unverified database, and do not run
+`supabase db push` for new application migrations after the cutover.

@@ -59,7 +59,15 @@ Supabase is the database used for this bot. You can sign up for a free account a
 SUPABASE_URL = <Replace this with your supabase url>
 SUPABASE_KEY = <Replace this with your supabase api key>
 ```
-The schema for the database can be obtained by applying the SQL files in Database/migrations in order.
+Database schema changes are managed by Alembic. After configuring `DATABASE_URL`, create or upgrade a database with:
+
+```console
+just db-upgrade
+```
+
+The baseline is portable PostgreSQL 15+ SQL and requires the
+[pgvector](https://github.com/pgvector/pgvector) extension. Supabase remains a supported PostgreSQL host, but the
+Supabase migration CLI is no longer used to apply application schema changes.
 
 To get the `DATABASE_URL`, click on the **Connect** button in the top of the Supabase dashboard and copy one of the connection strings (Direct connection, Transaction Pooler and Session Pooler all works, but for simplicity, use the Session pooler which supports IPv4 and overall just works nicely). The connection string should look like:
 ```
