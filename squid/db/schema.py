@@ -1,3 +1,4 @@
+import inspect
 import os
 import uuid
 from collections.abc import Sequence
@@ -29,6 +30,8 @@ from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
+
+from squid.db._docs_extraction import extract_attribute_docstrings
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
@@ -99,7 +102,36 @@ class BuildCategory(StrEnum):
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
 class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
-    pass
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Populate table/column comments from docstrings, so the database is self-documenting.
+
+        A class docstring becomes the table comment; a bare string literal
+        immediately following an attribute's annotation becomes that column's
+        comment (mirroring how attribute docstrings are written throughout
+        this module, e.g. in pydantic models).
+        """
+        is_mapped_table = "__tablename__" in cls.__dict__
+
+        # Table construction happens inside DeclarativeBase's __init_subclass__, so
+        # __table_args__ must be finalized before we delegate to it via super().
+        if is_mapped_table and cls.__doc__ is not None:
+            table_comment = inspect.cleandoc(cls.__doc__)
+            if not hasattr(cls, "__table_args__"):
+                cls.__table_args__ = {"comment": table_comment}
+            elif isinstance(cls.__table_args__, dict) and cls.__table_args__.get("comment") is None:
+                cls.__table_args__["comment"] = table_comment
+
+        super().__init_subclass__(**kwargs)
+
+        if not is_mapped_table:
+            return  # Mixin or abstract base, not a mapped table.
+
+        # Columns only exist as mapped attributes after the delegation above.
+        for attribute, comment in extract_attribute_docstrings(cls).items():
+            column = getattr(cls, attribute, None)
+            underlying_column = getattr(column, "column", None)
+            if underlying_column is not None and underlying_column.comment is None:
+                underlying_column.comment = comment
 
 
 class User(Base):
@@ -107,10 +139,15 @@ class User(Base):
 
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    """Internal primary key. Unrelated to the user's Discord or Minecraft identifiers."""
     ign: Mapped[str] = mapped_column(String, default=None)
+    """The user's Minecraft in-game name, as of the last verification."""
     discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    """The user's Discord snowflake ID, if they have linked a Discord account."""
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The user's Mojang account UUID, if they have linked a Minecraft account."""
     created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=False), default=func.now())
+    """When this row was first inserted."""
 
     build_creators: Mapped[list["BuildCreator"]] = relationship(
         back_populates="user", default_factory=list, lazy="raise_on_sql", repr=False
@@ -212,7 +249,10 @@ class Message(Base):
     content: Mapped[str | None] = mapped_column(String)
     build_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("builds.id"), default=None)
     vote_session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("vote_sessions.id"), default=None)
-    updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now()
+    )
+    """When this row was last modified. Bumped automatically on every UPDATE."""
 
     build: Mapped["Build | None"] = relationship(
         back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="raise_on_sql"
@@ -236,7 +276,17 @@ class Build(Base, kw_only=True):
     completion_time: Mapped[str | None] = mapped_column(String)  # Given by user, not parsable as a datetime
     category: Mapped["BuildCategory | None"] = mapped_column(String)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    original_message_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("messages.id"), default=None)
+    original_message_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "messages.id",
+            name="builds_original_message_id_fkey",
+            ondelete="SET NULL",
+            onupdate="CASCADE",
+            use_alter=True,
+        ),
+        default=None,
+    )
     original_message: Mapped[Message | None] = relationship(
         foreign_keys="Build.original_message_id", uselist=False, default=None, lazy="joined"
     )
