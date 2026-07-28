@@ -1,3 +1,5 @@
+"""Persistence and high-level operations for the Build domain object."""
+
 from __future__ import annotations
 
 import asyncio
@@ -16,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from squid.db.builds import Build, JoinedBuildRecord
+from squid.db.repos._build_lock import BuildLockTracker
 from squid.db.schema import (
     Build as SQLBuild,
 )
@@ -47,23 +50,20 @@ from squid.utils import get_version_string
 logger = logging.getLogger(__name__)
 
 
-class BuildManager:
-    """Service layer responsible for persistence and high-level operations on Build domain object."""
+class BuildRepository:
+    """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_lock_owners", "session")
+    __slots__ = ("_locks", "_session_factory")
 
-    def __init__(self, session: async_sessionmaker[AsyncSession]) -> None:
-        self.session = session
-        self._lock_owners: dict[int, tuple[asyncio.Task[object], int]] = {}
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+        self._locks = BuildLockTracker()
 
     async def acquire_lock(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
         """Acquire a task-reentrant lease backed by the database lock flag."""
-        task = self._current_task()
-        if lease := self._lock_owners.get(build_id):
-            owner, count = lease
-            if owner is task:
-                self._lock_owners[build_id] = (owner, count + 1)
-                return True
+        task = self._locks.current_task()
+        if self._locks.try_reenter(build_id, task):
+            return True
         if not blocking:
             return await self._try_lock(build_id, task)
 
@@ -77,45 +77,27 @@ class BuildManager:
             await asyncio.sleep(sleep_time)
             sleep_time = min(sleep_time * 1.5, 0.5)
 
-    @staticmethod
-    def _current_task() -> asyncio.Task[object]:
-        task = asyncio.current_task()
-        if task is None:
-            msg = "Build locks require a running asyncio task."
-            raise RuntimeError(msg)
-        return cast(asyncio.Task[object], task)
-
     async def _try_lock(self, build_id: int, task: asyncio.Task[object]) -> bool:
-        if build_id in self._lock_owners:
+        if self._locks.is_held_locally(build_id):
             return False
-        async with self.session() as session:
+        async with self._session_factory() as session:
             statement = (
                 update(SQLBuild).where(SQLBuild.id == build_id, SQLBuild.is_locked.is_(False)).values(is_locked=True)
             )
             result = cast(CursorResult[Any], await session.execute(statement))
             await session.commit()
         if result.rowcount == 1:
-            self._lock_owners[build_id] = (task, 1)
+            self._locks.record_acquired(build_id, task)
             return True
         return False
 
     async def release_lock(self, build_id: int) -> None:
         """Release one level of a process-local database-backed lease."""
-        lease = self._lock_owners.get(build_id)
-        if lease is None:
+        if not self._locks.release(build_id):
             return
-        owner, count = lease
-        if owner is not self._current_task():
-            msg = f"Build {build_id} lock can only be released by its owning task."
-            raise RuntimeError(msg)
-        if count > 1:
-            self._lock_owners[build_id] = (owner, count - 1)
-            return
-
-        async with self.session() as session:
+        async with self._session_factory() as session:
             await session.execute(update(SQLBuild).where(SQLBuild.id == build_id).values(is_locked=False))
             await session.commit()
-        self._lock_owners.pop(build_id, None)
 
     @asynccontextmanager
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
@@ -130,10 +112,10 @@ class BuildManager:
 
     async def clean_stale_locks(self, *, older_than: datetime) -> None:
         """Release persisted locks older than a cutoff and forget local lease state."""
-        async with self.session() as session:
+        async with self._session_factory() as session:
             await session.execute(update(SQLBuild).where(SQLBuild.locked_at < older_than).values(is_locked=False))
             await session.commit()
-        self._lock_owners.clear()
+        self._locks.clear()
 
     async def get_by_id(self, build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -144,7 +126,7 @@ class BuildManager:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
-        async with self.session() as session:
+        async with self._session_factory() as session:
             stmt = select(SQLBuild).where(SQLBuild.id == build_id)
             result = await session.execute(stmt)
             sql_build = result.unique().scalar_one_or_none()
@@ -162,7 +144,7 @@ class BuildManager:
         Returns:
             The Build object with the specified message id, or None if the build was not found.
         """
-        async with self.session() as session:
+        async with self._session_factory() as session:
             stmt = select(Message).where(Message.id == message_id)
             result = await session.execute(stmt)
             message = result.scalar_one_or_none()
@@ -384,7 +366,7 @@ class BuildManager:
                 msg = f"Only doors are supported for now, got {build.category}."
                 raise ValueError(msg)
 
-            async with self.session() as session:
+            async with self._session_factory() as session:
                 await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
                 await session.flush()
@@ -407,7 +389,7 @@ class BuildManager:
             msg = "Submitter ID must be set for existing builds."
             raise ValueError(msg)
 
-        async with self.session() as session:
+        async with self._session_factory() as session:
             statement = (
                 select(SQLBuild)
                 .where(SQLBuild.id == build.id)
@@ -623,7 +605,7 @@ class BuildManager:
 
         async with self.locked(build.id):
             build.submission_status = Status.CONFIRMED
-            async with self.session() as session:
+            async with self._session_factory() as session:
                 stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.CONFIRMED)
                 result = cast(CursorResult[Any], await session.execute(stmt))
                 await session.commit()
@@ -643,7 +625,7 @@ class BuildManager:
 
         async with self.locked(build.id):
             build.submission_status = Status.DENIED
-            async with self.session() as session:
+            async with self._session_factory() as session:
                 stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.DENIED)
                 result = cast(CursorResult[Any], await session.execute(stmt))
                 await session.commit()
@@ -653,7 +635,7 @@ class BuildManager:
 
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""
-        async with self.session() as session:
+        async with self._session_factory() as session:
             statement = (
                 select(Door)
                 .where(Door.submission_status == Status.PENDING)
@@ -674,7 +656,7 @@ class BuildManager:
         if len(build_ids) == 0:
             return []
 
-        async with self.session() as session:
+        async with self._session_factory() as session:
             stmt = (
                 select(SQLBuild)
                 .options(
@@ -706,14 +688,14 @@ class BuildManager:
     async def _get_smallest_door_records_without_title_in_db(self) -> Sequence[SmallestDoor]:
         """Get all the smallest door records that do not have a title in the database."""
         stmt = select(SmallestDoor).where(SmallestDoor.title.is_(None))
-        async with self.session() as session:
+        async with self._session_factory() as session:
             result = await session.execute(stmt)
             return result.scalars().all()
 
     async def update_smallest_door_records_without_title(self) -> None:
         """Update the titles of all records in the database."""
         smallest_door_records_without_title = await self._get_smallest_door_records_without_title_in_db()
-        async with self.session() as session:
+        async with self._session_factory() as session:
             restriction_definitions: dict[str, RestrictionTypeLiteral | None] = {
                 restriction.name: restriction.type for restriction in (await session.scalars(select(Restriction))).all()
             }
@@ -742,7 +724,7 @@ class BuildManager:
     @alru_cache(ttl=3600)  # 1 hour
     async def fetch_all_smallest_door_records(self) -> Sequence[SmallestDoor]:
         stmt = select(SmallestDoor)
-        async with self.session() as session:
+        async with self._session_factory() as session:
             result = await session.execute(stmt)
             return result.scalars().all()
 

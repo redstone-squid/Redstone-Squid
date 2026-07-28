@@ -14,8 +14,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from squid.db.build_manager import BuildManager
 from squid.db.builds import Build, JoinedBuildRecord
+from squid.db.repos.build_repository import BuildRepository
 from squid.db.schema import BuildCategory, Door, RestrictionRecord, Status, VersionRecord
 
 
@@ -194,7 +194,7 @@ class TestBuildConstructors:
 
     def test_from_json(self, sample_joined_build_record: JoinedBuildRecord):
         """Test build creation from JoinedBuildRecord."""
-        build = BuildManager._from_json(sample_joined_build_record)  # pyright: ignore[reportPrivateUsage]
+        build = BuildRepository._from_json(sample_joined_build_record)  # pyright: ignore[reportPrivateUsage]
         assert build is not None
 
 

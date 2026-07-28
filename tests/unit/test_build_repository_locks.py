@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.build_manager import BuildManager
+from squid.db.repos.build_repository import BuildRepository
 
 
 @pytest.mark.unit
@@ -19,20 +19,20 @@ async def test_build_lock_is_reentrant_only_for_owning_task() -> None:
 
     session_factory = MagicMock()
     session_factory.return_value.__aenter__.return_value = session
-    manager = BuildManager(cast(async_sessionmaker[AsyncSession], session_factory))
+    repository = BuildRepository(cast(async_sessionmaker[AsyncSession], session_factory))
 
-    assert await manager.acquire_lock(42, blocking=False)
-    assert await manager.acquire_lock(42, blocking=False)
+    assert await repository.acquire_lock(42, blocking=False)
+    assert await repository.acquire_lock(42, blocking=False)
 
     async def contend() -> bool:
-        return await manager.acquire_lock(42, blocking=False)
+        return await repository.acquire_lock(42, blocking=False)
 
     assert not await asyncio.create_task(contend())
     assert session.execute.await_count == 1
 
-    await manager.release_lock(42)
+    await repository.release_lock(42)
     assert session.execute.await_count == 1
-    await manager.release_lock(42)
+    await repository.release_lock(42)
     assert session.execute.await_count == 2
 
 
@@ -45,13 +45,13 @@ async def test_build_lock_rejects_release_from_another_task() -> None:
 
     session_factory = MagicMock()
     session_factory.return_value.__aenter__.return_value = session
-    manager = BuildManager(cast(async_sessionmaker[AsyncSession], session_factory))
-    assert await manager.acquire_lock(42, blocking=False)
+    repository = BuildRepository(cast(async_sessionmaker[AsyncSession], session_factory))
+    assert await repository.acquire_lock(42, blocking=False)
 
     async def release() -> None:
-        await manager.release_lock(42)
+        await repository.release_lock(42)
 
     with pytest.raises(RuntimeError, match="owning task"):
         await asyncio.create_task(release())
 
-    await manager.release_lock(42)
+    await repository.release_lock(42)

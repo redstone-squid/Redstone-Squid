@@ -6,11 +6,11 @@ from importlib import resources
 from types import TracebackType
 from typing import Self
 
-from squid.db.build_manager import BuildManager
 from squid.db.build_tags import BuildTagsManager
 from squid.db.engine import DatabaseEngine
 from squid.db.mojang import get_minecraft_username
 from squid.db.repos.build_query_repository import BuildMetadataRepository
+from squid.db.repos.build_repository import BuildRepository
 from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
 from squid.db.repos.settings_repository import SettingsRepository
@@ -68,9 +68,9 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
         OpenAIEmbeddingModel.from_environment(),
         VecsBuildIndex.from_environment(),
     )
-    build_manager = BuildManager(db.async_session)
+    build_repository = BuildRepository(db.async_session)
     return ApplicationServices(
-        builds=BuildService(build_manager, restriction_repository, version_service, embedding_service),
+        builds=BuildService(build_repository, restriction_repository, version_service, embedding_service),
         build_inference=BuildInferenceService(
             OpenAITextGenerator.from_environment(),
             BuildTagsManager(db.async_session),
@@ -79,7 +79,7 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
         ),
         restrictions=RestrictionService(restriction_repository),
         build_queries=BuildQueryService(
-            build_manager,
+            build_repository,
             BuildMetadataRepository(db.async_session),
             embedding_service,
         ),

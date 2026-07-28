@@ -1,0 +1,73 @@
+"""Process-local bookkeeping for task-reentrant build leases.
+
+This only tracks which asyncio task currently holds a build's in-process
+lease and how many times it has re-entered it. It has no database
+dependency; the persisted lock flag is managed by whoever calls this
+(currently :class:`squid.db.repos.build_repository.BuildRepository`).
+"""
+
+import asyncio
+from typing import cast
+
+
+class BuildLockTracker:
+    """Track task ownership of in-process build leases."""
+
+    def __init__(self) -> None:
+        self._lock_owners: dict[int, tuple[asyncio.Task[object], int]] = {}
+
+    @staticmethod
+    def current_task() -> asyncio.Task[object]:
+        """Return the running task, raising if called outside of one."""
+        task = asyncio.current_task()
+        if task is None:
+            msg = "Build locks require a running asyncio task."
+            raise RuntimeError(msg)
+        return cast(asyncio.Task[object], task)
+
+    def is_held_locally(self, build_id: int) -> bool:
+        """Return whether any task currently holds a local lease for *build_id*."""
+        return build_id in self._lock_owners
+
+    def try_reenter(self, build_id: int, task: asyncio.Task[object]) -> bool:
+        """Bump the lease count if *task* already owns *build_id*'s lease."""
+        lease = self._lock_owners.get(build_id)
+        if lease is None:
+            return False
+        owner, count = lease
+        if owner is not task:
+            return False
+        self._lock_owners[build_id] = (owner, count + 1)
+        return True
+
+    def record_acquired(self, build_id: int, task: asyncio.Task[object]) -> None:
+        """Record that *task* has newly acquired *build_id*'s lease."""
+        self._lock_owners[build_id] = (task, 1)
+
+    def release(self, build_id: int) -> bool:
+        """Release one level of *build_id*'s lease for the current task.
+
+        Returns:
+            True if this was the outermost release and the persisted lock
+            should now be released too; False if a nested lease remains, or
+            there was nothing to release.
+
+        Raises:
+            RuntimeError: If a task other than the current owner tries to release.
+        """
+        lease = self._lock_owners.get(build_id)
+        if lease is None:
+            return False
+        owner, count = lease
+        if owner is not self.current_task():
+            msg = f"Build {build_id} lock can only be released by its owning task."
+            raise RuntimeError(msg)
+        if count > 1:
+            self._lock_owners[build_id] = (owner, count - 1)
+            return False
+        self._lock_owners.pop(build_id, None)
+        return True
+
+    def clear(self) -> None:
+        """Forget all locally-tracked leases."""
+        self._lock_owners.clear()

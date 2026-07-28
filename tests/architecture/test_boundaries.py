@@ -52,7 +52,7 @@ def test_build_entity_does_not_expose_active_record_persistence_methods() -> Non
 
 
 def test_build_manager_does_not_construct_database_service_locator() -> None:
-    source = Path("squid/db/build_manager.py").read_text(encoding="utf-8")
+    source = Path("squid/db/repos/build_repository.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     assert all(
