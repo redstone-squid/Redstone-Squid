@@ -16,6 +16,7 @@ from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv.main import StrPath
+from sqlalchemy import select
 
 from squid.bootstrap import create_application_runtime
 
@@ -125,12 +126,13 @@ class RedstoneSquid(Bot):
         ]
 
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
-        self.call_supabase_to_prevent_deactivation.start()
+        self.keep_database_active.start()
 
     @tasks.loop(hours=24)
-    async def call_supabase_to_prevent_deactivation(self):
-        """Supabase deactivates a database in the free tier if it's not used for 7 days."""
-        await self.db.table("builds").select("id").limit(1).execute()
+    async def keep_database_active(self):
+        """Keep free-tier database hosting active with a lightweight direct query."""
+        async with self.db.async_session() as session:
+            await session.execute(select(1))
 
     @tasks.loop(minutes=5)
     async def clean_dangling_build_locks(self):

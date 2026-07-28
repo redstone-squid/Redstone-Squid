@@ -18,6 +18,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Identity,
     Integer,
     SmallInteger,
     String,
@@ -429,6 +430,25 @@ class BuildLink(Base):
     media_type: Mapped[MediaTypeLiteral | None] = mapped_column(String)  # TODO: nullable
 
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
+
+
+class BuildEditHistory(Base):
+    """A version marker recorded when a build is edited."""
+
+    __tablename__ = "build_edit_history"
+    __table_args__ = (UniqueConstraint("build_id", "version", name="unique_version_per_build"),)
+
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(),
+        ForeignKey("builds.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, default=func.now(), init=False
+    )
+    version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 
 class ServerSetting(Base):
