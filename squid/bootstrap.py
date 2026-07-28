@@ -58,7 +58,7 @@ class ApplicationRuntime:
 
 def create_application_services(db: DatabaseManager) -> ApplicationServices:
     """Create application services from process-level infrastructure."""
-    restriction_repository = RestrictionRepository(db.build_tags)
+    restriction_repository = RestrictionRepository(db.async_session)
     version_service = VersionService(VersionRepository(db.async_session))
     embedding_service = BuildEmbeddingService(
         OpenAIEmbeddingModel.from_environment(),
