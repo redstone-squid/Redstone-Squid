@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from pathlib import Path
 from queue import Queue
@@ -16,13 +17,15 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv.main import StrPath
 
+from squid.bootstrap import create_application_runtime
+
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.db import DatabaseManager
-from squid.db.builds import Build, clean_locks
+from squid.db.builds import Build
 from squid.db.schema import Base
 from squid.logging_config import (
     DEFAULT_BACKUP_COUNT,
@@ -132,7 +135,7 @@ class RedstoneSquid(Bot):
     @tasks.loop(minutes=5)
     async def clean_dangling_build_locks(self):
         """Clean up dangling build locks in case some functions failed to release them."""
-        await clean_locks()
+        await self.db.build.clean_stale_locks(older_than=datetime.now(UTC) - timedelta(minutes=5))
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """
@@ -260,22 +263,15 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     queue_listener = start_logging(config.get("dev_mode", False))
 
     try:
-        db = DatabaseManager()
-        from squid.bootstrap import create_application_services
+        async with create_application_runtime() as runtime:
+            await asyncio.to_thread(runtime.db.validate_database_consistency, Base)
 
-        services = create_application_services(db)
-        # Run the synchronous db validation function in a thread to avoid blocking the event loop
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: db.validate_database_consistency(Base),
-        ).add_done_callback(lambda future: future.result())  # If the validation fails, it will raise an exception
-
-        async with RedstoneSquid(db, services, config=config.get("bot_config")) as bot:
-            token = os.environ.get("BOT_TOKEN")
-            if not token:
-                msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
-                raise RuntimeError(msg)
-            await bot.start(token)
+            async with RedstoneSquid(runtime.db, runtime.services, config=config.get("bot_config")) as bot:
+                token = os.environ.get("BOT_TOKEN")
+                if not token:
+                    msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
+                    raise RuntimeError(msg)
+                await bot.start(token)
     finally:
         queue_listener.stop()
 

@@ -1,27 +1,13 @@
 """Submitting and retrieving submissions to/from the database"""
 
-import asyncio
-import logging
-import os
 import re
-import time
 import typing
-import warnings
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import cached_property
-from importlib import resources
-from types import TracebackType
 from typing import Any, Final, Literal, Self, overload
 
-import discord
-from openai import AsyncOpenAI, OpenAIError
-from sqlalchemy import update
-
-from squid.db.schema import (
-    Build as SQLBuild,
-)
 from squid.db.schema import (
     BuildCategory,
     BuildRecord,
@@ -37,18 +23,10 @@ from squid.db.schema import (
     RestrictionTypeLiteral,
     Status,
     TypeRecord,
-    UnknownRestrictions,
     UserRecord,
     UtilityRecord,
     VersionRecord,
 )
-from squid.utils import parse_time_string
-
-logger = logging.getLogger(__name__)
-
-
-all_build_columns = "*, versions(*), build_links(*), build_creators(*), users(*), types(*), restrictions(*), doors(*), extenders(*), utilities(*), entrances(*), messages!builds_original_message_id_fkey(*)"
-"""All columns that needs to be joined in the build table to get all the information about a build."""
 
 
 class JoinedBuildRecord(BuildRecord):
@@ -207,235 +185,6 @@ class Build:
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
 
-    lock: "BuildLock" = field(init=False, repr=False, compare=False)
-
-    def __post_init__(self):
-        self.lock = BuildLock(self.id)
-
-    @staticmethod
-    async def from_id(build_id: int) -> "Build | None":
-        """Creates a new Build object from a database ID.
-
-        Args:
-            build_id: The ID of the build to retrieve.
-
-        Returns:
-            The Build object with the specified ID, or None if the build was not found.
-        """
-        from squid.db import DatabaseManager
-
-        warnings.warn("Build.from_id is deprecated; use BuildManager.get_by_id", DeprecationWarning, stacklevel=2)
-        return await DatabaseManager().build.get_by_id(build_id)
-
-    @staticmethod
-    async def from_message_id(message_id: int) -> "Build | None":
-        """
-        Get the build by a message id.
-
-        Args:
-            message_id: The message id to get the build from.
-
-        Returns:
-            The Build object with the specified message id, or None if the build was not found.
-        """
-        from squid.db import DatabaseManager
-
-        warnings.warn(
-            "Build.from_message_id is deprecated; use BuildManager.get_by_message_id", DeprecationWarning, stacklevel=2
-        )
-        return await DatabaseManager().build.get_by_message_id(message_id)
-
-    @staticmethod
-    async def ai_generate_from_message(
-        message: discord.Message, *, prompt_path: str = "prompt.txt", model: str = "gpt-4.1-nano"
-    ) -> "Build | None":
-        """Parses a build from a message using AI.
-
-        Args:
-            message: The discord message
-            prompt_path: Relative path to the prompt file, defaults to "prompt.txt" in the squid.db package.
-            model: The LLM model to use for the AI generation, defaults to "gpt-4.1-nano".
-        """
-        from squid.db import DatabaseManager
-
-        base_url = os.getenv("OPENAI_BASE_URL")
-        if not base_url:
-            logger.warning("No OpenAI base URL found, defaulting to https://api.openai.com/v1.")
-            base_url = "https://api.openai.com/v1"
-
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logger.warning("No OpenAI API key found, cannot generate build from message.")
-            return None
-
-        client = AsyncOpenAI(
-            base_url=base_url,
-            api_key=api_key,
-        )
-
-        prompt = resources.files("squid.db").joinpath(prompt_path).read_text(encoding="utf-8")
-        completion = await client.beta.chat.completions.parse(
-            model=model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt.format(
-                        message=f"{message.author.display_name} wrote the following message:\n{message.clean_content}"
-                    ),
-                },
-            ],
-        )
-        output = completion.choices[0].message.content
-
-        logger.debug("AI Output: %s", output)
-
-        if output is None:
-            return None
-
-        # Step 1: Extract content between <target> and </target>
-        match = re.search(r"<target>(.*?)</target>", output, re.DOTALL)
-        if not match:
-            return None
-
-        content = match.group(1).strip()
-
-        # Step 2: Split content into lines and parse key-value pairs
-        variables: dict[str, str | None] = {}
-        for line in content.split("\n"):
-            # Skip empty lines
-            if not line.strip():
-                continue
-            # Split only on the first ':'
-            if ":" not in line:
-                print(f"Skipping malformed line: {line}")
-                continue
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-            if value.lower() in ["none", "null", "unknown"]:
-                value = None
-
-            variables[key] = value
-
-        # Step 3: Validate and convert variables
-        acceptable_keys = [
-            "record_category",
-            "component_restriction",
-            "wiring_placement_restrictions",
-            "miscellaneous_restrictions",
-            "piston_door_type",
-            "door_orientation",
-            "door_width",
-            "door_height",
-            "door_depth",
-            "build_width",
-            "build_height",
-            "build_depth",
-            "opening_time",
-            "closing_time",
-            "creators",
-            "version",
-            "image",
-            "author_note",
-        ]
-
-        # All keys must be present
-        if not all(key in variables for key in acceptable_keys):
-            logger.debug("Missing keys in AI output variables")
-            return None
-
-        build = Build(
-            original_server_id=message.guild.id if message.guild is not None else None,
-            original_channel_id=message.channel.id,
-            original_message_id=message.id,
-            original_message_author_id=message.author.id,
-            original_message=message.clean_content,
-            ai_generated=True,
-        )
-        build.record_category = variables["record_category"]  # type: ignore
-        build.extra_info["unknown_restrictions"] = UnknownRestrictions()
-
-        validation_tasks: list[tuple[str, Awaitable[tuple[list[str], list[str]]]]] = []
-        build_tags = DatabaseManager().build_tags
-        if variables["component_restriction"] is not None:
-            validation_tasks.append(
-                (
-                    "component",
-                    asyncio.create_task(
-                        build_tags.validate_restrictions(variables["component_restriction"].split(", "), "component")
-                    ),
-                )
-            )
-        if variables["wiring_placement_restrictions"] is not None:
-            validation_tasks.append(
-                (
-                    "wiring",
-                    asyncio.create_task(
-                        build_tags.validate_restrictions(
-                            variables["wiring_placement_restrictions"].split(", "), "wiring-placement"
-                        )
-                    ),
-                )
-            )
-        if variables["miscellaneous_restrictions"] is not None:
-            validation_tasks.append(
-                (
-                    "misc",
-                    asyncio.create_task(
-                        build_tags.validate_restrictions(
-                            variables["miscellaneous_restrictions"].split(", "), "miscellaneous"
-                        )
-                    ),
-                )
-            )
-        if variables["piston_door_type"] is not None:
-            validation_tasks.append(
-                (
-                    "door_types",
-                    asyncio.create_task(build_tags.validate_door_types(variables["piston_door_type"].split(", "))),
-                )
-            )
-
-        results = await asyncio.gather(*(task for _, task in validation_tasks))
-        for i, (task_type, _) in enumerate(validation_tasks):
-            if task_type == "component":
-                comps = results[i]
-                build.component_restrictions = comps[0]
-                build.extra_info["unknown_restrictions"]["component_restrictions"] = comps[1]
-            elif task_type == "wiring":
-                wirings = results[i]
-                build.wiring_placement_restrictions = wirings[0]
-                build.extra_info["unknown_restrictions"]["wiring_placement_restrictions"] = wirings[1]
-            elif task_type == "misc":
-                miscs = results[i]
-                build.miscellaneous_restrictions = miscs[0]
-                build.extra_info["unknown_restrictions"]["miscellaneous_restrictions"] = miscs[1]
-            elif task_type == "door_types":
-                door_types = results[i]
-                build.door_type = door_types[0]
-                build.extra_info["unknown_patterns"] = door_types[1]
-
-        orientation = variables["door_orientation"]
-        if orientation == "Normal":
-            build.door_orientation_type = "Door"
-        else:
-            build.door_orientation_type = orientation or "Door"  # type: ignore
-        build.door_width = int(variables["door_width"]) if variables["door_width"] else None
-        build.door_height = int(variables["door_height"]) if variables["door_height"] else None
-        build.door_depth = int(variables["door_depth"]) if variables["door_depth"] else None
-        build.width = int(variables["build_width"]) if variables["build_width"] else None
-        build.height = int(variables["build_height"]) if variables["build_height"] else None
-        build.depth = int(variables["build_depth"]) if variables["build_depth"] else None
-        build.normal_opening_time = parse_time_string(variables["opening_time"])
-        build.normal_closing_time = parse_time_string(variables["closing_time"])
-        build.creators_ign = variables["creators"].split(", ") if variables["creators"] else []
-        build.version_spec = variables["version"] or await DatabaseManager().get_or_fetch_newest_version(edition="Java")
-        build.versions = await DatabaseManager().find_versions_from_spec(build.version_spec)
-        build.image_urls = variables["image"].split(", ") if variables["image"] else []
-        if variables["author_note"] is not None:
-            build.extra_info["user"] = variables["author_note"].replace("\\n", "\n")
-        return build
-
     @cached_property
     def original_link(self) -> str | None:
         """The link to the original message of the build."""
@@ -491,32 +240,34 @@ class Build:
         self.component_restrictions = list(restrictions.get("component_restrictions") or [])
         self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions") or [])
 
-    async def set_restrictions_auto(self, restrictions: Sequence[str]) -> None:
-        """Sets the restrictions of the build automatically based on the given list of restriction names.
-
-        This method would fetch the restrictions from the database and categorize them into the appropriate lists based on their type.
-        """
-        from squid.db import DatabaseManager
-
+    def classify_restrictions(
+        self,
+        restrictions: Sequence[str],
+        definitions: Mapping[str, RestrictionTypeLiteral | None],
+    ) -> None:
+        """Replace restrictions using already-loaded classification metadata."""
         self.wiring_placement_restrictions = []
         self.component_restrictions = []
         self.miscellaneous_restrictions = []
 
-        db_restrictions = await DatabaseManager().build_tags.fetch_all_restrictions()
-        name_to_row = {r.name.lower(): r for r in db_restrictions}
+        definitions_by_name: dict[str, tuple[str, RestrictionTypeLiteral | None]] = {
+            name.lower(): (name, restriction_type) for name, restriction_type in definitions.items()
+        }
         bucket: dict[RestrictionTypeLiteral, list[str]] = {
             "wiring-placement": self.wiring_placement_restrictions,
             "component": self.component_restrictions,
             "miscellaneous": self.miscellaneous_restrictions,
         }
 
-        for r in restrictions:  # O(M)
-            row = name_to_row.get(r.lower())
-            if row:
-                if row.type is None:
-                    msg = "The type is supposed to never be None, this is a bug in the database."
-                    raise RuntimeError(msg)
-                bucket[row.type].append(row.name)
+        for restriction in restrictions:
+            definition = definitions_by_name.get(restriction.lower())
+            if definition is None:
+                continue
+            canonical_name, restriction_type = definition
+            if restriction_type is None:
+                msg = "The type is supposed to never be None, this is a bug in the database."
+                raise RuntimeError(msg)
+            bucket[restriction_type].append(canonical_name)
 
     @property
     def title(self) -> str:
@@ -580,25 +331,6 @@ class Build:
 
         return title
 
-    async def generate_embedding(self) -> list[float] | None:
-        """
-        Generates embedding for the build using OpenAI's API.
-
-        Returns:
-            The embedding generated by the API, or None if the API call failed for any reason (e.g. no API key).
-        """
-        # The EMBEDDING_ environmental variables are an override for the OPENAI_ ones.
-        base_url = os.getenv("EMBEDDING_OPENAI_BASE_URL") or os.getenv("OPENAI_BASE_URL")
-        api_key = os.getenv("EMBEDDING_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-        try:
-            client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-            response = await client.embeddings.create(input=str(self), model=model)
-            return response.data[0].embedding
-        except OpenAIError as e:
-            logger.debug("Failed to generate embedding for build %s: %s", self.id, e)
-            return None
-
     def diff[T: Any](self, other: "Build", *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
         Returns the differences between this build and another
@@ -644,167 +376,3 @@ class Build:
                 msg = f"Attribute {attribute} is not in the Build class."
                 raise ValueError(msg) from err
         return attr_type
-
-    async def confirm(self) -> None:
-        """Marks the build as confirmed.
-
-        Raises:
-            ValueError: If the build could not be confirmed.
-        """
-        from squid.db import DatabaseManager
-
-        warnings.warn("Build.confirm is deprecated; use BuildManager.confirm", DeprecationWarning, stacklevel=2)
-        await DatabaseManager().build.confirm(self)
-
-    async def deny(self) -> None:
-        """Marks the build as denied.
-
-        Raises:
-            ValueError: If the build could not be denied.
-        """
-        from squid.db import DatabaseManager
-
-        warnings.warn("Build.deny is deprecated; use BuildManager.deny", DeprecationWarning, stacklevel=2)
-        await DatabaseManager().build.deny(self)
-
-    async def save(self) -> None:
-        """
-        Updates the build in the database with the given data.
-
-        If the build does not exist in the database, it will be inserted instead.
-        """
-        from squid.db import DatabaseManager
-
-        warnings.warn("Build.save is deprecated; use BuildManager.save", DeprecationWarning, stacklevel=2)
-        await DatabaseManager().build.save(self)
-
-
-class BuildLock:
-    """A reentrant lock to prevent concurrent modifications to a build."""
-
-    def __init__(self, build_id: int | None):
-        """Initializes the lock
-
-        Args:
-            build_id: The ID of the build to lock. If None, this lock becomes a no-op.
-            None is supported mainly so users of Build doesn't have to check if the build ID is None before creating a lock.
-        """
-        self.build_id = build_id
-        # This assumes that when _lock_count is > 0, it is ALWAYS synced with the database is_locked value
-        self._lock_count = 0
-
-    def locked(self):
-        """Whether the build is locked."""
-        return self._lock_count > 0
-
-    def __call__(self, *, blocking: bool = True, timeout: float = -1) -> "LockContextManager":
-        return LockContextManager(self, blocking=blocking, timeout=timeout)
-
-    async def _try_lock(self) -> bool:
-        """Tries to acquire the lock."""
-        assert self.build_id is not None
-        from squid.db import DatabaseManager
-
-        db = DatabaseManager()
-        async with db.async_session() as session:
-            stmt = (
-                update(SQLBuild)
-                .where(SQLBuild.id == self.build_id)
-                .where(SQLBuild.is_locked.is_(False))
-                .values(is_locked=True)
-            )
-            result = await session.execute(stmt)
-            await session.commit()
-            if result.rowcount == 1:
-                self._lock_count = 1
-                return True
-            return False
-
-    async def acquire(self, *, blocking: bool = True, timeout: float = -1) -> bool:
-        """Acquires a lock on the build to prevent concurrent modifications.
-
-        Args:
-            blocking: Whether to block until the lock is acquired. If False, the function will return immediately if the lock cannot be acquired.
-            timeout: The maximum time to wait for the lock. If -1, the function will wait indefinitely.
-        """
-        # No need to lock if the build is not in the database
-        if self.build_id is None:
-            return True
-
-        if self._lock_count > 0:
-            self._lock_count += 1
-            return True
-
-        if not blocking:
-            return await self._try_lock()
-
-        # Exponential backoff for acquiring the lock
-        sleep_time = 0.01
-        max_sleep = 0.5
-        if timeout >= 0:
-            start_time = time.monotonic()
-            while True:
-                if await self._try_lock():
-                    return True
-                if time.monotonic() - start_time >= timeout:
-                    return False
-                await asyncio.sleep(sleep_time)
-                sleep_time = min(sleep_time * 1.5, max_sleep)
-        else:
-            while not await self._try_lock():
-                await asyncio.sleep(sleep_time)
-                sleep_time = min(sleep_time * 1.5, max_sleep)
-            return True
-
-    async def release(self) -> None:
-        """Releases the lock on the build.
-
-        If the lock is acquired multiple times, it will only be released when the lock count reaches 0.
-        """
-        from squid.db import DatabaseManager
-
-        if self._lock_count <= 0:
-            return
-        self._lock_count -= 1
-
-        if self.build_id is None:  # No need to release if the build is not in the database
-            return
-
-        if self._lock_count == 0:
-            db = DatabaseManager()
-            async with db.async_session() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == self.build_id).values(is_locked=False)
-                await session.execute(stmt)
-                await session.commit()
-
-
-class LockContextManager:
-    """A context manager for BuildLock."""
-
-    def __init__(self, lock: BuildLock, *, blocking: bool = True, timeout: float = -1):
-        self.lock = lock
-        self.blocking = blocking
-        self.timeout = timeout
-
-    async def __aenter__(self):
-        if await self.lock.acquire(blocking=self.blocking, timeout=self.timeout):
-            return self.lock
-        msg = "Timed out waiting for lock"
-        raise TimeoutError(msg)
-
-    async def __aexit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
-    ):
-        await self.lock.release()
-
-
-async def clean_locks() -> None:
-    """Cleans up locks that were not released properly."""
-    from squid.db import DatabaseManager
-
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        cutoff_time = discord.utils.utcnow() - timedelta(minutes=5)
-        stmt = update(SQLBuild).where(SQLBuild.locked_at < cutoff_time).values(is_locked=False)
-        await session.execute(stmt)
-        await session.commit()

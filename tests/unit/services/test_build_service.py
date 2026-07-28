@@ -1,5 +1,6 @@
 """Tests for framework-free build application services."""
 
+from typing import Literal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,6 +23,8 @@ class FakeBuildRepository:
         self.save = AsyncMock()
         self.confirm = AsyncMock()
         self.deny = AsyncMock()
+        self.acquire_lock = AsyncMock(return_value=True)
+        self.release_lock = AsyncMock()
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:
@@ -38,6 +41,28 @@ class FakeRestrictionRepository:
 
     async def add_alias(self, restriction: str, alias: str) -> None:
         return None
+
+
+class FakeVersions:
+    async def newest(self, edition: Literal["Java", "Bedrock"]) -> str:
+        return f"{edition} 1.21.0"
+
+
+class FakeEmbeddings:
+    def __init__(self) -> None:
+        self.prepared: list[Build] = []
+        self.indexed: list[Build] = []
+
+    async def prepare(self, build: Build) -> None:
+        self.prepared.append(build)
+        build.embedding = [1.0, 2.0]
+
+    async def index(self, build: Build) -> None:
+        self.indexed.append(build)
+
+
+def build_service(repository: FakeBuildRepository) -> BuildService:
+    return BuildService(repository, FakeRestrictionRepository(), FakeVersions(), FakeEmbeddings())
 
 
 @pytest.fixture
@@ -57,9 +82,7 @@ def existing_build() -> Build:
 
 async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    existing_build.lock.acquire = AsyncMock(return_value=True)  # pyright: ignore[reportAttributeAccessIssue]
-    existing_build.lock.release = AsyncMock()  # pyright: ignore[reportAttributeAccessIssue]
-    service = BuildService(repository, FakeRestrictionRepository())
+    service = build_service(repository)
     patch = BuildEditPatch(
         dimensions=(10, 11, 12),
         locationality="Not locational",
@@ -78,14 +101,13 @@ async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_buil
         assert lease.build.extra_info.get("server_info") == {"server_ip": "new.example"}
 
     repository.save.assert_not_awaited()
-    existing_build.lock.release.assert_awaited_once()
+    repository.acquire_lock.assert_awaited_once_with(42, blocking=False, timeout=30)
+    repository.release_lock.assert_awaited_once_with(42)
 
 
 async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    existing_build.lock.acquire = AsyncMock(return_value=True)  # pyright: ignore[reportAttributeAccessIssue]
-    existing_build.lock.release = AsyncMock()  # pyright: ignore[reportAttributeAccessIssue]
-    service = BuildService(repository, FakeRestrictionRepository())
+    service = build_service(repository)
 
     async with service.edit(42, BuildEditPatch(door_dimensions=(2, 3, 4))) as lease:
         result = await lease.commit()
@@ -93,31 +115,30 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
     assert result is existing_build
     assert existing_build.door_dimensions == (2, 3, 4)
     repository.save.assert_awaited_once_with(existing_build)
-    existing_build.lock.release.assert_awaited_once()
+    repository.release_lock.assert_awaited_once_with(42)
 
 
 async def test_edit_releases_lock_when_patch_application_fails(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    existing_build.lock.acquire = AsyncMock(return_value=True)  # pyright: ignore[reportAttributeAccessIssue]
-    existing_build.lock.release = AsyncMock()  # pyright: ignore[reportAttributeAccessIssue]
-    service = BuildService(repository, FakeRestrictionRepository())
+    service = build_service(repository)
     patch = BuildEditPatch(dimensions=(1, 2))  # pyright: ignore[reportArgumentType]
 
     with pytest.raises(ValueError, match="not enough values to unpack"):
         async with service.edit(42, patch):
             pass
 
-    existing_build.lock.release.assert_awaited_once()
+    repository.release_lock.assert_awaited_once_with(42)
 
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> None:
-    missing_service = BuildService(FakeBuildRepository(), FakeRestrictionRepository())
+    missing_service = build_service(FakeBuildRepository())
     with pytest.raises(BuildNotFoundError):
         async with missing_service.edit(42, BuildEditPatch()):
             pass
 
-    existing_build.lock.acquire = AsyncMock(return_value=False)  # pyright: ignore[reportAttributeAccessIssue]
-    busy_service = BuildService(FakeBuildRepository(existing_build), FakeRestrictionRepository())
+    busy_repository = FakeBuildRepository(existing_build)
+    busy_repository.acquire_lock.return_value = False
+    busy_service = build_service(busy_repository)
     with pytest.raises(BuildBusyError):
         async with busy_service.edit(42, BuildEditPatch()):
             pass
@@ -125,7 +146,7 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> No
 
 async def test_submit_door_maps_input_and_saves() -> None:
     repository = FakeBuildRepository()
-    service = BuildService(repository, FakeRestrictionRepository())
+    service = build_service(repository)
     submission = DoorSubmissionInput(
         submitter_id=123,
         door_size=(2, 3, None),
@@ -147,3 +168,32 @@ async def test_submit_door_maps_input_and_saves() -> None:
     assert build.miscellaneous_restrictions == ["Locational"]
     assert build.extra_info.get("user") == "notes"
     repository.save.assert_awaited_once_with(build)
+
+
+async def test_classify_restrictions_replaces_existing_values_without_persisting() -> None:
+    repository = FakeBuildRepository()
+    service = build_service(repository)
+    build = Build(component_restrictions=["Old"], miscellaneous_restrictions=["Old"])
+
+    result = await service.classify_restrictions(build, ["seamless", "unknown"])
+
+    assert result is build
+    assert build.wiring_placement_restrictions == ["Seamless"]
+    assert build.component_restrictions == []
+    assert build.miscellaneous_restrictions == []
+    repository.save.assert_not_awaited()
+
+
+async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
+    repository = FakeBuildRepository()
+    embeddings = FakeEmbeddings()
+    service = BuildService(repository, FakeRestrictionRepository(), FakeVersions(), embeddings)
+    build = Build(id=42)
+
+    await service.save(build)
+
+    assert build.versions == ["Java 1.21.0"]
+    assert build.embedding == [1.0, 2.0]
+    repository.save.assert_awaited_once_with(build)
+    assert embeddings.prepared == [build]
+    assert embeddings.indexed == [build]

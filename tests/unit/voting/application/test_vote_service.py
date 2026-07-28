@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import replace
 
 import pytest
@@ -6,6 +7,7 @@ from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
 from squid.services.votes import (
     StoredVoteMutation,
     VoteActor,
+    VoteChange,
     VoteChoice,
     VoteService,
     VoteSessionSnapshot,
@@ -39,6 +41,33 @@ class FakeVoteRepository:
         self.session = session
         self.cast_calls: list[tuple[int, int, float]] = []
         self.mutation: StoredVoteMutation | None = None
+        self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange]]] = []
+        self.delete_create_calls: list[tuple[int, int, int, int, int, int]] = []
+
+    async def create_build_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+    ) -> int:
+        self.build_create_calls.append((author_id, pass_threshold, fail_threshold, build_id, list(changes)))
+        return 24
+
+    async def create_delete_log_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        message_id: int,
+        channel_id: int,
+        server_id: int,
+    ) -> int:
+        self.delete_create_calls.append((author_id, pass_threshold, fail_threshold, message_id, channel_id, server_id))
+        return 25
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         return self.session
@@ -51,6 +80,33 @@ class FakeVoteRepository:
     ) -> StoredVoteMutation | None:
         self.cast_calls.append((message_id, user_id, desired_weight))
         return self.mutation
+
+
+async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
+    repository = FakeVoteRepository(None)
+    service = VoteService(repository)
+    changes: list[VoteChange] = [("status", "pending", "confirmed")]
+
+    build_session_id = await service.start_build_vote(
+        author_id=7,
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=42,
+        changes=changes,
+    )
+    delete_session_id = await service.start_delete_log_vote(
+        author_id=8,
+        pass_threshold=4,
+        fail_threshold=-2,
+        message_id=100,
+        channel_id=200,
+        server_id=300,
+    )
+
+    assert build_session_id == 24
+    assert delete_session_id == 25
+    assert repository.build_create_calls == [(7, 3, -3, 42, changes)]
+    assert repository.delete_create_calls == [(8, 4, -2, 100, 200, 300)]
 
 
 @pytest.mark.parametrize(

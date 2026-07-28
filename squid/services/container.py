@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from squid.services.build_inference import BuildInferenceService
 from squid.services.build_queries import BuildQueryService
 from squid.services.builds import BuildService, RestrictionService
 from squid.services.community import RedstonerService, WelcomeRelayService
@@ -17,6 +18,7 @@ class ApplicationServices:
     """Long-lived application services created by the process composition root."""
 
     builds: BuildService
+    build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService

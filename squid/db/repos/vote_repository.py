@@ -1,8 +1,8 @@
 """SQLAlchemy persistence for atomic vote mutations."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -11,10 +11,11 @@ from squid.db.schema import (
     DeleteLogVoteSession,
     Message,
     Vote,
+    VoteKindLiteral,
     VoteSession,
     VoteSessionResultLiteral,
 )
-from squid.services.votes import StoredVoteMutation, VoteSessionSnapshot, VoteTarget
+from squid.services.votes import StoredVoteMutation, VoteChange, VoteSessionSnapshot, VoteTarget
 
 
 class SQLAlchemyVoteRepository:
@@ -22,6 +23,83 @@ class SQLAlchemyVoteRepository:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
+
+    async def create_build_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+    ) -> int:
+        async with self._session_factory.begin() as session:
+            vote_session_id = await self._create_session(
+                session,
+                author_id=author_id,
+                kind="build",
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
+            )
+            await session.execute(
+                insert(BuildVoteSession).values(
+                    vote_session_id=vote_session_id,
+                    build_id=build_id,
+                    changes=list(changes),
+                )
+            )
+            return vote_session_id
+
+    async def create_delete_log_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        message_id: int,
+        channel_id: int,
+        server_id: int,
+    ) -> int:
+        async with self._session_factory.begin() as session:
+            vote_session_id = await self._create_session(
+                session,
+                author_id=author_id,
+                kind="delete_log",
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
+            )
+            await session.execute(
+                insert(DeleteLogVoteSession).values(
+                    vote_session_id=vote_session_id,
+                    target_message_id=message_id,
+                    target_channel_id=channel_id,
+                    target_server_id=server_id,
+                )
+            )
+            return vote_session_id
+
+    @staticmethod
+    async def _create_session(
+        session: AsyncSession,
+        *,
+        author_id: int,
+        kind: VoteKindLiteral,
+        pass_threshold: int,
+        fail_threshold: int,
+    ) -> int:
+        result = await session.execute(
+            insert(VoteSession)
+            .values(
+                status="open",
+                result="pending",
+                author_id=author_id,
+                kind=kind,
+                pass_threshold=pass_threshold,
+                fail_threshold=fail_threshold,
+            )
+            .returning(VoteSession.id)
+        )
+        return result.scalar_one()
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:

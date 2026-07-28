@@ -5,9 +5,9 @@ Essentially a wrapper around the Supabase client and python bindings so that the
 """
 
 import os
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
-from sqlalchemy import create_engine, make_url, select
+from sqlalchemy import create_engine, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from supabase._async.client import AsyncClient
@@ -18,15 +18,12 @@ from squid.db.build_tags import BuildTagsManager
 from squid.db.inspect_db import is_sane_database
 from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.user_repository import UserRepository
-from squid.db.schema import Version
 from squid.db.server_settings import ServerSettingManager
-from squid.utils import get_version_string, parse_version_string
 
 
 class DatabaseManager(AsyncClient):
-    """Singleton class for the supabase client."""
+    """Process-wide database infrastructure and repository owner."""
 
-    version_cache: ClassVar[dict[str | None, list[Version]]] = {}
     _instance: ClassVar["DatabaseManager | None"] = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> "DatabaseManager":
@@ -99,145 +96,15 @@ class DatabaseManager(AsyncClient):
         self.build_tags = BuildTagsManager(self.async_session)
         self.build = BuildManager(self.async_session)
 
+    async def close(self) -> None:
+        """Release database connection pools owned by this manager."""
+        await self.async_engine.dispose()
+        self.sync_engine.dispose()
+        if type(self)._instance is self:
+            type(self)._instance = None
+
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""
         if not is_sane_database(base_cls, self.sync_engine):
             msg = "The database schema is not consistent with the expected schema."
             raise RuntimeError(msg)
-
-    async def get_or_fetch_versions_list(self, edition: Literal["Java", "Bedrock"]) -> list[Version]:
-        """Returns a list of versions from the database, sorted from oldest to newest.
-
-        If edition is specified, only versions from that edition are returned. This method is cached."""
-        if versions := self.version_cache.get(edition):
-            return versions
-
-        async with self.async_session() as session:
-            stmt = (
-                select(Version)
-                .where(Version.edition == edition)
-                .order_by(
-                    Version.major_version,
-                    Version.minor_version,
-                    Version.patch_number,
-                )
-            )
-            result = await session.execute(stmt)
-            version_records = list(result.scalars().all())
-
-        self.version_cache[edition] = version_records
-        return version_records
-
-    async def get_or_fetch_newest_version(self, *, edition: Literal["Java", "Bedrock"]) -> str:
-        """Returns the newest version from the database. This method is cached."""
-        versions = await self.get_or_fetch_versions_list(edition=edition)
-        if len(versions) == 0:
-            msg = f"No {edition} versions found."
-            raise RuntimeError(msg)
-        return get_version_string(versions[-1])
-
-    async def find_versions_from_spec(self, version_spec: str) -> list[str]:
-        """Return all versions that match the version specification."""
-
-        # See if the spec specifies no edition (default to Java), one edition, or both
-        bedrock = version_spec.find("Bedrock") != -1
-        java = version_spec.find("Java") != -1
-        edition: Literal["Java", "Bedrock"]
-        if not bedrock and not java:
-            edition = "Java"  # Default to Java if no edition specified
-        elif bedrock and not java:
-            edition = "Bedrock"
-        elif not bedrock and java:
-            edition = "Java"
-        else:
-            msg = "Cannot specify both Java and Bedrock in the version spec."
-            raise NotImplementedError(msg)
-
-        version_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
-
-        all_versions = await self.get_or_fetch_versions_list(edition)
-        all_version_tuples = [(v.major_version, v.minor_version, v.patch_number) for v in all_versions]
-
-        # Split the spec by commas: e.g. "1.14 - 1.16.1, 1.17, 1.19+" has 3 parts
-        parts = [part.strip() for part in version_spec.split(",")]
-
-        valid_tuples: list[tuple[int, int, int]] = []
-        v_tuple: tuple[int, int, int]
-        end_tuple: tuple[Literal["Java", "Bedrock"], int, int, int]
-
-        for part in parts:
-            # Case 1: range like "1.14 - 1.16.1"
-            if "-" in part:
-                subparts = [p.strip() for p in part.split("-")]
-                if len(subparts) != 2:
-                    msg = f"Invalid version range format in {part}, expected exactly 2 parts, got {len(subparts)}."
-                    raise ValueError(msg)
-                start_str, end_str = subparts
-                start_tuple = (
-                    parse_version_string(start_str)
-                    if start_str.count(".") == 2
-                    else parse_version_string(start_str + ".0")
-                )
-
-                if end_str.count(".") == 2:
-                    end_tuple = parse_version_string(end_str)
-                else:
-                    # When no patch is specified (e.g. "1.16"), find the highest patch number for that major.minor
-                    major, minor = map(int, end_str.split("."))
-                    max_patch = 0
-                    for v_tuple in all_version_tuples:
-                        if v_tuple[0] == major and v_tuple[1] == minor:
-                            max_patch = max(max_patch, v_tuple[2])
-                    # Note: the "Java" edition here is just a placeholder for the tuple structure, it is immediately
-                    # discarded below in end_tuple[1:]
-                    end_tuple = ("Java", major, minor, max_patch)
-
-                valid_tuples.extend(
-                    v_tuple for v_tuple in all_version_tuples if start_tuple[1:] <= v_tuple <= end_tuple[1:]
-                )
-
-            # Case 2: trailing plus like "1.19+"
-            elif part.endswith("+"):
-                base_str = part[:-1].strip()
-                # Change "1.19+" to "1.19.0+"
-                if base_str.count(".") == 1:
-                    base_str += ".0"
-                base_tuple = parse_version_string(base_str)
-
-                valid_tuples.extend(v_tuple for v_tuple in all_version_tuples if v_tuple >= base_tuple[1:])
-
-            # Case 3: exact version or prefix, e.g. "1.17" or "1.17.1"
-            else:
-                subparts = part.split(".")
-                # If only major.minor specified (like "1.17"), match all "1.17.x"
-                if len(subparts) == 2:
-                    major, minor = map(int, subparts)
-                    valid_tuples.extend(
-                        v_tuple for v_tuple in all_version_tuples if v_tuple[0] == major and v_tuple[1] == minor
-                    )
-                # If a full version specified (like "1.17.1"), match exactly that version
-                elif len(subparts) == 3:
-                    v_tuple = tuple(map(int, subparts))  # pyright: ignore[reportAssignmentType]
-                    if v_tuple in all_version_tuples:
-                        valid_tuples.append(v_tuple)
-                else:
-                    # Optionally, handle malformed inputs or major-only specs
-                    pass
-
-        return [f"{edition} {major}.{minor}.{patch}" for major, minor, patch in valid_tuples]
-
-
-async def main():
-    spec_string = "1.14 - 1.16.1, 1.17, 1.19+"
-    print(DatabaseManager().find_versions_from_spec(spec_string))
-    r = await DatabaseManager().rpc("find_restriction_ids", {"search_terms": ["Seamless", "No Observers"]}).execute()
-    print(r.data)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    import dotenv
-
-    dotenv.load_dotenv()
-    asyncio.run(main())

@@ -1,47 +1,33 @@
 """Simple FastAPI server to generate verification codes for users."""
 
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 
-from squid.bootstrap import create_application_services
-from squid.db import DatabaseManager
+from squid.bootstrap import ApplicationRuntime, create_application_runtime
 from squid.logging_config import configure_api_logging
 from squid.services.container import ApplicationServices
 
-_db: DatabaseManager | None = None
-_services: ApplicationServices | None = None
+RuntimeFactory = Callable[[], ApplicationRuntime]
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    global _db, _services
-    _db = DatabaseManager()
-    _services = create_application_services(_db)
-    yield
+router = APIRouter()
 
 
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/health")
+@router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def get_db():
-    assert _db is not None, "DatabaseManager should be initialized at app startup"
-    return _db
-
-
-async def get_services() -> ApplicationServices:
+async def get_services(request: Request) -> ApplicationServices:
     """Return application services initialized during API startup."""
-    assert _services is not None, "Application services should be initialized at app startup"
-    return _services
+    runtime = cast(ApplicationRuntime, request.app.state.runtime)
+    return runtime.services
 
 
 class User(BaseModel):
@@ -50,7 +36,7 @@ class User(BaseModel):
     uuid: UUID
 
 
-@app.post("/verify", status_code=201)
+@router.post("/verify", status_code=201)
 async def get_verification_code(
     user: User,
     authorization: Annotated[str, Header()],
@@ -64,6 +50,23 @@ async def get_verification_code(
         return await services.users.generate_verification_code(user.uuid)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+def create_api_app(runtime_factory: RuntimeFactory = create_application_runtime) -> FastAPI:
+    """Create an API application with an explicitly owned runtime."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with runtime_factory() as runtime:
+            app.state.runtime = runtime
+            yield
+
+    api = FastAPI(lifespan=lifespan)
+    api.include_router(router)
+    return api
+
+
+app = create_api_app()
 
 
 def main() -> None:

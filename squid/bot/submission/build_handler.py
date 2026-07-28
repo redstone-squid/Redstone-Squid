@@ -13,7 +13,6 @@ from sqlalchemy import select
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
-from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import Message, Status
 from squid.utils import utcnow
@@ -177,7 +176,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         if build.component_restrictions and build.component_restrictions[0] != "None":
             desc.append(", ".join(build.component_restrictions))
 
-        if await DatabaseManager().get_or_fetch_newest_version(edition="Java") not in build.versions:
+        if await self.bot.services.versions.newest("Java") not in build.versions:
             desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in build.miscellaneous_restrictions:
@@ -237,14 +236,3 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             fields["Videos"] = ", ".join(build.video_urls)
 
         return fields
-
-
-async def main():
-    from squid.db.builds import Build
-
-    build = await Build.from_id(1)
-    assert build is not None
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

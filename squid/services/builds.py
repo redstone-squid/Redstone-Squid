@@ -1,6 +1,6 @@
 """Application services for build submission and editing."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal, Protocol, Self, override
 
@@ -48,7 +48,25 @@ class BuildRepository(Protocol):
 
     async def deny(self, build: Build) -> None: ...
 
+    async def acquire_lock(self, build_id: int, *, blocking: bool, timeout: float) -> bool: ...
+
+    async def release_lock(self, build_id: int) -> None: ...
+
     async def update_smallest_door_records_without_title(self) -> None: ...
+
+
+class BuildEmbeddingCoordinator(Protocol):
+    """Prepare and index build embeddings around relational persistence."""
+
+    async def prepare(self, build: Build) -> None: ...
+
+    async def index(self, build: Build) -> None: ...
+
+
+class DefaultVersionResolver(Protocol):
+    """Resolve the default version used when a build omits compatibility."""
+
+    async def newest(self, edition: Literal["Java", "Bedrock"]) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +263,7 @@ class BuildEditLease:
     def __init__(
         self,
         repository: BuildRepository,
+        persist: Callable[[Build], Awaitable[None]],
         build_id: int,
         patch: BuildEditPatch,
         *,
@@ -252,6 +271,7 @@ class BuildEditLease:
         timeout: float,
     ) -> None:
         self._repository = repository
+        self._persist = persist
         self._build_id = build_id
         self._patch = patch
         self._blocking = blocking
@@ -270,14 +290,18 @@ class BuildEditLease:
         build = await self._repository.get_by_id(self._build_id)
         if build is None:
             raise BuildNotFoundError(self._build_id)
-        acquired = await build.lock.acquire(blocking=self._blocking, timeout=self._timeout)
+        acquired = await self._repository.acquire_lock(
+            self._build_id,
+            blocking=self._blocking,
+            timeout=self._timeout,
+        )
         if not acquired:
             raise BuildBusyError(self._build_id)
         self._build = build
         try:
             self._patch.apply(build)
         except BaseException:
-            await build.lock.release()
+            await self._repository.release_lock(self._build_id)
             self._build = None
             raise
         return self
@@ -287,21 +311,29 @@ class BuildEditLease:
             msg = "This build edit has already been committed."
             raise RuntimeError(msg)
         build = self.build
-        await self._repository.save(build)
+        await self._persist(build)
         self._committed = True
         return build
 
     async def __aexit__(self, *_exc: object) -> None:
         if self._build is not None:
-            await self._build.lock.release()
+            await self._repository.release_lock(self._build_id)
 
 
 class BuildService:
     """Framework-free application operations for builds."""
 
-    def __init__(self, repository: BuildRepository, restrictions: RestrictionRepository) -> None:
+    def __init__(
+        self,
+        repository: BuildRepository,
+        restrictions: RestrictionRepository,
+        versions: DefaultVersionResolver,
+        embeddings: BuildEmbeddingCoordinator,
+    ) -> None:
         self._repository = repository
         self._restrictions = restrictions
+        self._versions = versions
+        self._embeddings = embeddings
 
     async def get(self, build_id: int) -> Build | None:
         return await self._repository.get_by_id(build_id)
@@ -339,11 +371,17 @@ class BuildService:
                 build.miscellaneous_restrictions.append(value)
         if submission.information_about_build is not None:
             build.extra_info["user"] = submission.information_about_build
-        await self._repository.save(build)
+        await self._persist(build)
         return build
 
     async def save(self, build: Build) -> Build:
-        await self._repository.save(build)
+        await self._persist(build)
+        return build
+
+    async def classify_restrictions(self, build: Build, restrictions: Sequence[str]) -> Build:
+        """Replace a build's restrictions using repository-owned metadata."""
+        definitions = await self._restrictions.fetch_all_restrictions()
+        build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
 
     async def submit(
@@ -359,7 +397,7 @@ class BuildService:
         build.ai_generated = ai_generated
         build.category = category
         build.submission_status = Status.PENDING
-        await self._repository.save(build)
+        await self._persist(build)
         return build
 
     def edit(
@@ -372,6 +410,7 @@ class BuildService:
     ) -> BuildEditLease:
         return BuildEditLease(
             self._repository,
+            self._persist,
             build_id,
             patch,
             blocking=blocking,
@@ -397,19 +436,16 @@ class BuildService:
             raise BuildNotFoundError(build_id)
         return build
 
+    async def _persist(self, build: Build) -> None:
+        if not build.versions:
+            build.versions = [await self._versions.newest("Java")]
+        await self._embeddings.prepare(build)
+        await self._repository.save(build)
+        await self._embeddings.index(build)
+
     async def _set_restrictions(self, build: Build, restrictions: Sequence[str]) -> None:
         known_restrictions = await self._restrictions.fetch_all_restrictions()
-        by_name = {restriction.name.lower(): restriction for restriction in known_restrictions}
-        buckets: dict[RestrictionTypeLiteral, list[str]] = {
-            "wiring-placement": build.wiring_placement_restrictions,
-            "component": build.component_restrictions,
-            "miscellaneous": build.miscellaneous_restrictions,
-        }
-        for requested_name in restrictions:
-            restriction = by_name.get(requested_name.lower())
-            if restriction is None:
-                continue
-            if restriction.type is None:
-                msg = f"Restriction {restriction.name!r} has no type."
-                raise RuntimeError(msg)
-            buckets[restriction.type].append(restriction.name)
+        build.classify_restrictions(
+            restrictions,
+            {restriction.name: restriction.type for restriction in known_restrictions},
+        )

@@ -1,6 +1,6 @@
 """Application service for reaction-based voting."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -9,6 +9,7 @@ from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
 
 VoteStatus = Literal["open", "closed"]
 VoteRejection = Literal["not_found", "closed", "not_eligible"]
+type VoteChange = tuple[str, object, object]
 
 
 class VoteChoice(StrEnum):
@@ -92,6 +93,27 @@ class CastVoteResult:
 class VoteRepository(Protocol):
     """Persistence operations required by :class:`VoteService`."""
 
+    async def create_build_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+    ) -> int: ...
+
+    async def create_delete_log_session(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        message_id: int,
+        channel_id: int,
+        server_id: int,
+    ) -> int: ...
+
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None: ...
 
     async def cast_vote(
@@ -107,6 +129,44 @@ class VoteService:
 
     def __init__(self, repository: VoteRepository):
         self._repository = repository
+
+    async def start_build_vote(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+    ) -> int:
+        """Create a build vote and its target atomically."""
+        return await self._repository.create_build_session(
+            author_id=author_id,
+            pass_threshold=pass_threshold,
+            fail_threshold=fail_threshold,
+            build_id=build_id,
+            changes=changes,
+        )
+
+    async def start_delete_log_vote(
+        self,
+        *,
+        author_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        message_id: int,
+        channel_id: int,
+        server_id: int,
+    ) -> int:
+        """Create a message-deletion vote and its target atomically."""
+        return await self._repository.create_delete_log_session(
+            author_id=author_id,
+            pass_threshold=pass_threshold,
+            fail_threshold=fail_threshold,
+            message_id=message_id,
+            channel_id=channel_id,
+            server_id=server_id,
+        )
 
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
         return await self._repository.get_by_message(message_id)

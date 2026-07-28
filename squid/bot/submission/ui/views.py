@@ -31,9 +31,10 @@ if TYPE_CHECKING:
 
 
 class SubmissionModal(discord.ui.Modal):
-    def __init__(self, build: Build):
+    def __init__(self, build: Build, builds: BuildService):
         super().__init__(title="Submit Your Build")
         self.build = build
+        self.builds = builds
 
         # Door size
         self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g. 2x2 (piston door)")
@@ -74,7 +75,7 @@ class SubmissionModal(discord.ui.Modal):
         self.build.door_dimensions = parse_hallway_dimensions(self.door_size.value)
         self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
         self.build.dimensions = parse_dimensions(self.dimensions.value)
-        await self.build.set_restrictions_auto(self.restrictions.value.split(", "))
+        await self.builds.classify_restrictions(self.build, self.restrictions.value.split(", "))
 
         # Extract IGN
         ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
@@ -123,13 +124,14 @@ class EditModal[BotT: "squid.bot.RedstoneSquid"](discord.ui.Modal):
 
 
 class BuildSubmissionForm(discord.ui.View):
-    def __init__(self, build: Build, *, timeout: float | None = 180.0):
+    def __init__(self, build: Build, builds: BuildService, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
         # Assumptions
         build.submission_status = Status.PENDING
         build.category = BuildCategory.DOOR
 
         self.build = build
+        self.builds = builds
         self.value = None
         self.add_item(RecordCategorySelect(self.build))
         self.add_item(DoorTypeSelect(self.build))
@@ -144,7 +146,7 @@ class BuildSubmissionForm(discord.ui.View):
 
     @discord.ui.button(label="Add more Information", custom_id="open_modal", style=discord.ButtonStyle.primary)
     async def add_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(SubmissionModal(self.build))
+        await interaction.response.send_modal(SubmissionModal(self.build, self.builds))
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):

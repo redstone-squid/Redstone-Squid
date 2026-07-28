@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator, Mapping
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.db.repos.vote_repository import SQLAlchemyVoteRepository
@@ -27,6 +28,11 @@ CREATE TABLE delete_log_vote_sessions (
     target_channel_id BIGINT NOT NULL,
     target_server_id BIGINT NOT NULL
 );
+CREATE TABLE build_vote_sessions (
+    vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
+    build_id BIGINT NOT NULL,
+    changes JSONB NOT NULL
+);
 CREATE TABLE messages (
     id BIGINT PRIMARY KEY,
     server_id BIGINT NOT NULL,
@@ -47,7 +53,7 @@ CREATE TABLE votes (
 """
 
 _DROP_SCHEMA = """
-DROP TABLE IF EXISTS votes, messages, delete_log_vote_sessions, vote_sessions CASCADE;
+DROP TABLE IF EXISTS votes, messages, build_vote_sessions, delete_log_vote_sessions, vote_sessions CASCADE;
 """
 
 
@@ -125,6 +131,96 @@ async def seed_delete_log_vote(
                 ],
             )
     return vote_session_id, message_id
+
+
+async def test_vote_aggregates_are_persisted_by_repository(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = SQLAlchemyVoteRepository(async_session_factory)
+    build_session_id = await repository.create_build_session(
+        author_id=99,
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=42,
+        changes=[("submission_status", "pending", "confirmed")],
+    )
+    delete_session_id = await repository.create_delete_log_session(
+        author_id=100,
+        pass_threshold=4,
+        fail_threshold=-2,
+        message_id=501,
+        channel_id=502,
+        server_id=503,
+    )
+
+    async with async_session_factory() as session:
+        build_row = (
+            (
+                await session.execute(
+                    text("SELECT build_id, changes FROM build_vote_sessions WHERE vote_session_id = :id"),
+                    {"id": build_session_id},
+                )
+            )
+            .tuples()
+            .one()
+        )
+        delete_row = (
+            (
+                await session.execute(
+                    text(
+                        """
+                    SELECT target_message_id, target_channel_id, target_server_id
+                    FROM delete_log_vote_sessions
+                    WHERE vote_session_id = :id
+                    """
+                    ),
+                    {"id": delete_session_id},
+                )
+            )
+            .tuples()
+            .one()
+        )
+        roots = (
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT author_id, kind, pass_threshold, fail_threshold, status, result
+                        FROM vote_sessions
+                        ORDER BY id
+                        """
+                    )
+                )
+            )
+            .tuples()
+            .all()
+        )
+
+    assert build_row == (42, [["submission_status", "pending", "confirmed"]])
+    assert delete_row == (501, 502, 503)
+    assert roots == [
+        (99, "build", 3, -3, "open", "pending"),
+        (100, "delete_log", 4, -2, "open", "pending"),
+    ]
+
+
+async def test_target_failure_rolls_back_vote_root(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = SQLAlchemyVoteRepository(async_session_factory)
+
+    with pytest.raises(StatementError):
+        await repository.create_build_session(
+            author_id=99,
+            pass_threshold=3,
+            fail_threshold=-3,
+            build_id=42,
+            changes=[("invalid", object(), object())],
+        )
+
+    async with async_session_factory() as session:
+        count = (await session.execute(text("SELECT count(*) FROM vote_sessions"))).scalar_one()
+    assert count == 0
 
 
 async def test_get_by_message_maps_votes_messages_and_delete_target(

@@ -4,24 +4,21 @@ import asyncio
 import contextlib
 import inspect
 from abc import ABC, abstractmethod
-from asyncio import Task
 from collections.abc import Iterable
 from textwrap import dedent
 from types import MethodType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
 
 import discord
-from sqlalchemy import insert, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import select
 
 from squid.bot.message_adapter import to_tracked_message
-from squid.db import DatabaseManager
 from squid.db.builds import Build
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
-from squid.db.schema import Message, Status, Vote, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
+from squid.db.schema import Message, Status, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
 from squid.services.messages import MessageService
-from squid.services.votes import VoteSessionSnapshot
+from squid.services.votes import VoteChange, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot
@@ -32,94 +29,31 @@ DENY_EMOJIS = ["👎", "❌"]
 # TODO: Unhardcode these emojis
 
 
-async def track_vote_session(
+async def track_vote_messages(
     messages: Iterable[discord.Message],
     message_service: MessageService,
-    author_id: int,
-    kind: VoteKindLiteral,
-    pass_threshold: int,
-    fail_threshold: int,
+    vote_session_id: int,
     *,
     build_id: int | None = None,
-) -> int:
-    """Track a vote session in the database.
+) -> None:
+    """Associate Discord messages with a persisted vote session.
 
     Args:
         messages: The messages belonging to the vote session.
-        author_id: The discord id of the author of the vote session.
-        kind: The type of vote session.
-        pass_threshold: The number of votes required to pass the vote.
-        fail_threshold: The number of votes required to fail the vote.
+        message_service: Application service for tracked Discord messages.
+        vote_session_id: The persisted vote session identifier.
         build_id: The id of the build to vote on. None if the vote is not about a build.
-
-    Returns:
-        The id of the vote session.
     """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = (
-            insert(VoteSession)
-            .values(
-                status="open",
-                result="pending",
-                author_id=author_id,
-                kind=kind,
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
-            )
-            .returning(VoteSession.id)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
-        session_id = result.scalar_one()
     coros = [
         message_service.track(
             to_tracked_message(message),
             "vote",
             build_id=build_id,
-            vote_session_id=session_id,
+            vote_session_id=vote_session_id,
         )
         for message in messages
     ]
     await asyncio.gather(*coros)
-    return session_id
-
-
-async def close_vote_session(vote_session_id: int, result: VoteSessionResultLiteral) -> None:
-    """Close a vote session in the database.
-
-    Args:
-        vote_session_id: The id of the vote session.
-        result: The finalized result of the vote session.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = update(VoteSession).where(VoteSession.id == vote_session_id).values(status="closed", result=result)
-        await session.execute(stmt)
-        await session.commit()
-
-
-async def upsert_vote(vote_session_id: int, user_id: int, weight: float | None) -> None:
-    """Upsert a vote in the database.
-
-    Args:
-        vote_session_id: The id of the vote session.
-        user_id: The id of the user voting.
-        weight: The weight of the vote. None to remove the vote.
-    """
-    db = DatabaseManager()
-    async with db.async_session() as session:
-        stmt = (
-            pg_insert(Vote)
-            .values(
-                vote_session_id=vote_session_id,
-                user_id=user_id,
-                weight=weight,
-            )
-            .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.user_id], set_=dict(weight=weight))
-        )
-        await session.execute(stmt)
-        await session.commit()
 
 
 class AbstractVoteSession(ABC):
@@ -131,8 +65,6 @@ class AbstractVoteSession(ABC):
     - create(), with the same signature as __init__
     - from_id()
     - update_message()
-    - close()
-
     Subclasses must also set the kind attribute to a VoteKind.
     """
 
@@ -186,7 +118,6 @@ class AbstractVoteSession(ABC):
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
         self._votes: dict[int, float] = {}  # Dict of user_id: weight
-        self._tasks: set[Task[Any]] = set()
 
     @classmethod
     @abstractmethod
@@ -202,16 +133,7 @@ class AbstractVoteSession(ABC):
 
     @abstractmethod
     async def _async_init(self) -> None:
-        """Perform async initialization. Called by create()."""
-        self.id = await track_vote_session(
-            self._messages,
-            self.bot.services.messages,
-            self.author_id,
-            self.kind,
-            self.pass_threshold,
-            self.fail_threshold,
-        )
-        await self.update_messages()
+        """Persist and initialize a newly created vote session."""
 
     def __init_subclass__(cls, **kwargs: Any):
         """Check that the 'create' method signature matches the '__init__' method signature."""
@@ -336,17 +258,6 @@ class AbstractVoteSession(ABC):
     async def update_messages(self) -> None:
         """Update the messages with an embed of new vote counts"""
 
-    @abstractmethod
-    async def close(self) -> None:
-        """Close the vote session"""
-        self.is_closed = True
-        # Wait for any pending vote operations
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=False)
-        await self.update_messages()
-        assert self.id is not None
-        await close_vote_session(self.id, self.result)
-
     def __getitem__(self, user_id: int) -> float | None:
         return self._votes.get(user_id)
 
@@ -357,46 +268,6 @@ class AbstractVoteSession(ABC):
             raise ValueError(msg)
         self._votes = dict(snapshot.votes)
         self.is_closed = snapshot.status == "closed"
-
-    def __setitem__(self, user_id: int, weight: float | None) -> None:
-        """
-        Set a vote synchronously, creating background tasks for updates.
-        For direct async access, use set_vote() instead.
-        """
-        if self.is_closed:
-            return
-
-        if weight is None:
-            self._votes.pop(user_id, None)
-        else:
-            self._votes[user_id] = weight
-
-        if not self.fail_threshold < self.net_votes < self.pass_threshold:
-            task = asyncio.create_task(self.close())
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
-
-        # Create tasks for the updates
-        if self.id is not None:
-            db_task = asyncio.create_task(upsert_vote(self.id, user_id, weight))
-            self._tasks.add(db_task)
-            db_task.add_done_callback(self._tasks.discard)
-
-    async def set_vote(self, user_id: int, weight: int | None) -> None:
-        """Set a vote for a user with proper database tracking."""
-        if self.is_closed:
-            return
-
-        if weight is None:
-            self._votes.pop(user_id, None)
-        else:
-            self._votes[user_id] = weight
-
-        if not self.fail_threshold < self.net_votes < self.pass_threshold:
-            await self.close()
-
-        if self.id is not None:
-            await upsert_vote(self.id, user_id, weight)
 
 
 @final
@@ -450,31 +321,27 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
-        self.id = await track_vote_session(
-            await self.fetch_messages(),
-            self.bot.services.messages,
-            self.author_id,
-            self.kind,
-            self.pass_threshold,
-            self.fail_threshold,
-            build_id=self.build.id,
-        )
         assert self.build.id is not None
         if self.type == "add":
-            changes = [("submission_status", Status.PENDING, Status.CONFIRMED)]
+            changes: list[VoteChange] = [("submission_status", Status.PENDING, Status.CONFIRMED)]
         else:
-            original = await Build.from_id(self.build.id)
+            original = await self.bot.services.builds.get(self.build.id)
             assert original is not None
-            changes: list[tuple[str, Any, Any]] = original.diff(self.build)
+            changes = original.diff(self.build)
 
-        async with DatabaseManager().async_session() as session:
-            stmt = insert(SQLBuildVoteSession).values(
-                vote_session_id=self.id,
-                build_id=self.build.id,
-                changes=changes,
-            )
-            await session.execute(stmt)
-            await session.commit()
+        self.id = await self.bot.services.votes.start_build_vote(
+            author_id=self.author_id,
+            pass_threshold=self.pass_threshold,
+            fail_threshold=self.fail_threshold,
+            build_id=self.build.id,
+            changes=changes,
+        )
+        await track_vote_messages(
+            await self.fetch_messages(),
+            self.bot.services.messages,
+            self.id,
+            build_id=self.build.id,
+        )
 
         await self.update_messages()
 
@@ -501,7 +368,7 @@ class BuildVoteSession(AbstractVoteSession):
             msg = f"Found a build vote session with no associated build id. session_id={record.id}"
             raise ValueError(msg)
 
-        build = DatabaseManager().build.from_sql_build(record.build)
+        build = bot.db.build.from_sql_build(record.build)
         assert build is not None
         self = cls.__new__(cls)
         self._allow_init = True
@@ -544,23 +411,6 @@ class BuildVoteSession(AbstractVoteSession):
         await asyncio.gather(
             *[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()]
         )
-
-    @override
-    async def close(self) -> None:
-        if self.is_closed:
-            return
-
-        self.is_closed = True
-        if self.result == "approved":
-            await self.build.confirm()
-        else:
-            await self.build.deny()
-        # TODO: decide whether to delete the messages or not
-
-        await self.update_messages()
-
-        if self.id is not None:
-            await close_vote_session(self.id, self.result)
 
     @classmethod
     async def get_open_vote_sessions(
@@ -622,23 +472,20 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
-        self.id = await track_vote_session(
+        assert self.target_message.guild is not None
+        self.id = await self.bot.services.votes.start_delete_log_vote(
+            author_id=self.author_id,
+            pass_threshold=self.pass_threshold,
+            fail_threshold=self.fail_threshold,
+            message_id=self.target_message.id,
+            channel_id=self.target_message.channel.id,
+            server_id=self.target_message.guild.id,
+        )
+        await track_vote_messages(
             await self.fetch_messages(),
             self.bot.services.messages,
-            self.author_id,
-            self.kind,
-            self.pass_threshold,
-            self.fail_threshold,
+            self.id,
         )
-        async with self.bot.db.async_session() as session:
-            stmt = insert(SQLDeleteLogVoteSession).values(
-                vote_session_id=self.id,
-                target_message_id=self.target_message.id,
-                target_channel_id=self.target_message.channel.id,
-                target_server_id=self.target_message.guild.id,  # type: ignore
-            )
-            await session.execute(stmt)
-            await session.commit()
         await self.update_messages()
         reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
         reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
@@ -727,19 +574,6 @@ class DeleteLogVoteSession(AbstractVoteSession):
             ),
         )
         await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
-
-    @override
-    async def close(self) -> None:
-        if self.is_closed:
-            return
-
-        self.is_closed = True
-        if self.result == "approved":
-            await self.target_message.delete()
-        await self.update_messages()
-
-        if self.id is not None:
-            await close_vote_session(self.id, self.result)
 
     @classmethod
     async def get_open_vote_sessions(

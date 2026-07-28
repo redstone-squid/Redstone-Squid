@@ -136,6 +136,25 @@ async def test_version_service_honors_explicit_edition() -> None:
     assert version == MinecraftVersion("Bedrock", 1, 21, 4)
 
 
+async def test_version_service_resolves_ranges_and_newest_version() -> None:
+    repository = FakeVersionRepository()
+    repository.versions = [
+        MinecraftVersion("Java", 1, 19, 0),
+        MinecraftVersion("Java", 1, 19, 1),
+        MinecraftVersion("Java", 1, 20, 0),
+        MinecraftVersion("Java", 1, 21, 0),
+    ]
+    service = VersionService(repository)
+
+    assert await service.newest("Java") == "Java 1.21.0"
+    assert await service.resolve_spec("1.19 - 1.20, 1.21+") == [
+        "Java 1.19.0",
+        "Java 1.19.1",
+        "Java 1.20.0",
+        "Java 1.21.0",
+    ]
+
+
 class FakeMessageRepository:
     def __init__(self) -> None:
         self.inserted: tuple[int, int | None] | None = None

@@ -1,13 +1,16 @@
 import uuid
 from types import SimpleNamespace
+from typing import cast
 from uuid import UUID
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-import squid.api as api_module
+from squid.api import create_api_app
+from squid.bootstrap import ApplicationRuntime
 from squid.db import DatabaseManager
+from squid.services.container import ApplicationServices
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -25,30 +28,32 @@ class MockUserManager:
         raise ValueError("User not found")
 
 
+class MockDatabaseManager:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
-def _patch_environment(monkeypatch: pytest.MonkeyPatch, mock_db_manager: DatabaseManager):
-    """Inject dummy DB + secret for every test."""
-
-    # Provide the secret expected by the endpoint
+def _patch_environment(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SYNERGY_SECRET", TEST_SYNERGY_SECRET)
-
-    # Swap process infrastructure and the endpoint's service dependency for test doubles.
-    monkeypatch.setattr(api_module, "_db", mock_db_manager)
-    api_module.app.dependency_overrides[api_module.get_services] = lambda: SimpleNamespace(users=MockUserManager())
-
-    yield
-    api_module.app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def client():
-    with TestClient(api_module.app) as c:
+    database = MockDatabaseManager()
+    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
+    runtime = ApplicationRuntime(cast(DatabaseManager, database), services)
+    with TestClient(create_api_app(lambda: runtime)) as c:
         yield c
+    assert database.closed
 
 
 # ---------------------------------------------------------------------------

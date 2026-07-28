@@ -21,6 +21,7 @@ from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trus
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
 from squid.db.builds import Build
 from squid.db.schema import Status
+from squid.services.build_inference import BuildInferenceInput, BuildInferenceService
 from squid.services.builds import BuildService, DoorSubmissionInput
 from squid.utils import upload_to_catbox
 
@@ -33,9 +34,10 @@ if TYPE_CHECKING:
 class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
-    def __init__(self, bot: BotT, builds: BuildService):
+    def __init__(self, bot: BotT, builds: BuildService, inference: BuildInferenceService):
         self.bot = bot
         self.builds = builds
+        self.inference = inference
         self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
@@ -162,7 +164,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             else:
                 build.video_urls.append(url)
 
-        view = BuildSubmissionForm(build)
+        view = BuildSubmissionForm(build, self.builds)
         followup = interaction.followup
 
         await followup.send("Use the select menus then click the button", view=view)
@@ -220,7 +222,17 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         if message.channel.id not in [build_logs, record_logs]:
             return
 
-        build = await Build.ai_generate_from_message(message, model="deepseek/deepseek-v3.2")
+        build = await self.inference.infer(
+            BuildInferenceInput(
+                author_name=message.author.display_name,
+                content=message.clean_content,
+                message_id=message.id,
+                author_id=message.author.id,
+                channel_id=message.channel.id,
+                server_id=message.guild.id if message.guild is not None else None,
+            ),
+            model="deepseek/deepseek-v3.2",
+        )
         if build is None:
             return
 
@@ -254,4 +266,4 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds))
+    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds, bot.services.build_inference))

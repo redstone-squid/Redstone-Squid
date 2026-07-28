@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.db import DatabaseManager
-from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, Version, VersionRecord
+from squid.db.schema import BuildCategory, Restriction, RestrictionRecord, VersionRecord
 
 
 @pytest.fixture
@@ -52,7 +52,6 @@ async def mock_db_manager(mock_env_vars: None) -> AsyncGenerator[DatabaseManager
         table_mock.return_value = table_instance
 
         DatabaseManager._instance = None  # pyright: ignore[reportPrivateUsage]
-        DatabaseManager.version_cache = {}
         yield DatabaseManager()
 
 
@@ -84,27 +83,6 @@ def sample_restriction_json_data() -> list[RestrictionRecord]:
         {"id": 4, "name": "1-wide", "type": "wiring-placement", "build_category": BuildCategory.DOOR},
         {"id": 5, "name": "2-wide", "type": "miscellaneous", "build_category": BuildCategory.DOOR},
     ]
-
-
-@pytest.fixture
-def sample_version_data() -> list[Version]:
-    """Return representative persisted versions."""
-    versions = [
-        Version(edition="Java", major_version=1, minor_version=14, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=15, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=16, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=16, patch_number=1),
-        Version(edition="Java", major_version=1, minor_version=17, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=17, patch_number=1),
-        Version(edition="Java", major_version=1, minor_version=18, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=19, patch_number=0),
-        Version(edition="Java", major_version=1, minor_version=19, patch_number=1),
-        Version(edition="Java", major_version=1, minor_version=19, patch_number=2),
-        Version(edition="Java", major_version=1, minor_version=20, patch_number=0),
-    ]
-    for i, version in enumerate(versions):
-        version.id = i + 1
-    return versions
 
 
 @pytest.fixture

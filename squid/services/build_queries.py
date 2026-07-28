@@ -1,11 +1,11 @@
 """Framework-neutral application queries for builds."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from squid.db.builds import Build
-from squid.db.schema import SmallestDoor, Status
+from squid.db.schema import SmallestDoor
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +26,7 @@ class BuildQueryRepository(Protocol):
         self, query: str, *, limit: int
     ) -> list[tuple[SmallestDoor, float, int]]: ...
 
-    async def get_builds_by_filter(self, *, filter: Mapping[str, object] | None = None) -> list[Build]: ...
+    async def get_pending(self) -> list[Build]: ...
 
 
 class BuildMetadataQueries(Protocol):
@@ -60,7 +60,7 @@ class BuildQueryService:
         return await self._builds.get_by_id(build_id)
 
     async def pending(self) -> Sequence[Build]:
-        return await self._builds.get_builds_by_filter(filter={"submission_status": Status.PENDING})
+        return await self._builds.get_pending()
 
     async def search_records(self, query: str) -> list[tuple[SmallestDoor, float, int]]:
         return await self._builds.search_smallest_door_records(query, limit=11)

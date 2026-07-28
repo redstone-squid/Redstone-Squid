@@ -16,4 +16,4 @@ async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot, bot.services.builds))
     await bot.add_cog(SearchCog(bot, bot.services.build_queries))
-    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds))
+    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds, bot.services.build_inference))
