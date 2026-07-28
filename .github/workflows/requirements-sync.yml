@@ -1,7 +1,7 @@
 name: Requirements Sync
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -18,24 +18,35 @@ on:
       - .github/workflows/requirements-sync.yml
   workflow_dispatch:
 
+concurrency:
+  group: requirements-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync:
+    name: Export requirements
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # Commit regenerated exports after pushes.
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        version: "0.11.2"
+        persist-credentials: false
+
+    - name: Install uv and Python
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        version: "0.11.32"
+        python-version: "3.12"
         enable-cache: true
         cache-dependency-glob: "uv.lock"
 
     - name: Regenerate exported requirements
       run: |
-        uv export -o requirements/base.txt --quiet
-        uv export --only-dev -o requirements/dev.txt --quiet
+        uv export --locked -o requirements/base.txt --quiet
+        uv export --locked --only-dev -o requirements/dev.txt --quiet
 
     - name: Detect regenerated changes
       id: diff
@@ -50,11 +61,14 @@ jobs:
     - name: Commit regenerated requirements
       if: github.event_name == 'push' && steps.diff.outputs.changed == 'true'
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add requirements/base.txt requirements/dev.txt
         git commit -m "Sync exported requirements"
+        gh auth setup-git
         git push || {
           echo "Unable to push regenerated requirements. Commit the updated files manually."
           exit 1

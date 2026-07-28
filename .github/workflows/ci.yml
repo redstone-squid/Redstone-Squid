@@ -1,7 +1,6 @@
 name: Continuous Integration
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   push:
@@ -15,29 +14,48 @@ on:
 env:
   UV_VERSION: "0.11.32"
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  actions-security:
+    name: Actions security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # Upload zizmor's SARIF results to GitHub code scanning.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Analyze GitHub Actions
+        uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+
   quality:
     name: Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     env:
       UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install uv
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
       - name: Install the project
-        run: uv sync --dev
+        run: uv sync --locked --dev
 
       - name: Check all files have corresponding gitattributes
         shell: bash
@@ -50,21 +68,38 @@ jobs:
           printf '%s\n' 'All files have a corresponding rule in .gitattributes'
 
       - name: Check linting
-        run: uv run ruff check --extend-select I
+        run: uv run --locked ruff check --extend-select I
 
       - name: Check formatting
-        run: uv run ruff format --target-version py312 --check
+        run: uv run --locked ruff format --target-version py312 --check
 
-      - name: Check types
-        run: uv run basedpyright --level=warning
+      - name: Check repository files
+        run: uv run --locked prek run --all-files
+
+      - name: Check types with BasedPyright
+        run: uv run --locked basedpyright --level=warning
 
       - name: Minimize uv cache
         if: always()
         run: uv cache prune --ci
 
+  deploy:
+    name: Deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [actions-security, quality, unit, integration]
+    permissions: {}
+    uses: ./.github/workflows/cd.yml
+    secrets:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+
   unit:
     name: Unit and architecture (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -73,26 +108,24 @@ jobs:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install uv
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Install the project
-        run: uv sync --dev
+        run: uv sync --locked --dev
 
       - name: Run unit and architecture tests
         env:
           HYPOTHESIS_PROFILE: ci
-        run: uv run pytest tests/unit tests/architecture --cov=squid --cov-report=term-missing --cov-report=html
+        run: uv run --locked pytest tests/unit tests/architecture --cov=squid --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -107,28 +140,29 @@ jobs:
   integration:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     env:
       UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install uv
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
       - name: Install the project
-        run: uv sync --dev
+        run: uv sync --locked --dev
 
       - name: Run integration tests
-        run: uv run pytest tests/integration --no-cov
+        run: uv run --locked pytest tests/integration --no-cov
 
       - name: Minimize uv cache
         if: always()

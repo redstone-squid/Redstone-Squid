@@ -1,7 +1,6 @@
 name: Scheduled Fuzzing
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   schedule:
@@ -11,30 +10,34 @@ on:
 env:
   UV_VERSION: "0.11.32"
 
+concurrency:
+  group: fuzzing
+  cancel-in-progress: false
+
 jobs:
   version-parser:
     name: Version parser
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     env:
       UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install uv
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
       - name: Install fuzzing dependencies
-        run: uv sync --dev --group fuzz
+        run: uv sync --locked --dev --group fuzz
 
       - name: Prepare corpus and artifact directories
         shell: bash
@@ -44,7 +47,7 @@ jobs:
 
       - name: Fuzz for ten minutes
         run: >-
-          uv run --group fuzz python -m tests.fuzz.fuzz_version_parser
+          uv run --locked --group fuzz python -m tests.fuzz.fuzz_version_parser
           .fuzz/corpus/version_parser
           -max_total_time=600
           -max_len=4096

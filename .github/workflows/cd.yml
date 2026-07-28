@@ -3,10 +3,14 @@ name: Continuous Deployment
 permissions: {}
 
 on:
-  workflow_run:
-    workflows: ["Continuous Integration"]
-    types: [completed]
-    branches: [master]
+  workflow_call:
+    secrets:
+      SSH_HOST:
+        required: true
+      SSH_KEY:
+        required: true
+      SSH_USER:
+        required: true
   workflow_dispatch:
 
 concurrency:
@@ -15,9 +19,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      github.event_name == 'workflow_dispatch' || 
-      github.event.workflow_run.conclusion == 'success'
+    name: Production
     runs-on: ubuntu-latest
     environment: production
     steps:
