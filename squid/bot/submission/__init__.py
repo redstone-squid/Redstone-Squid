@@ -14,6 +14,6 @@ if TYPE_CHECKING:
 async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildEditCog(bot, bot.services.builds))
-    await bot.add_cog(SearchCog(bot, bot.services.build_queries))
-    await bot.add_cog(BuildSubmitCog(bot, bot.services.builds, bot.services.build_inference))
+    await bot.add_cog(BuildEditCog(bot))
+    await bot.add_cog(SearchCog(bot))
+    await bot.add_cog(BuildSubmitCog(bot))

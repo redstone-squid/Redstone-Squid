@@ -20,8 +20,7 @@ from squid.bot.utils import (
     fix_converter_annotations,
 )
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
-from squid.services.builds import BuildBusyError, BuildEditPatch, BuildNotFoundError, BuildService
-from squid.services.messages import MessageService
+from squid.services.builds import BuildBusyError, BuildEditPatch, BuildNotFoundError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -30,10 +29,10 @@ if TYPE_CHECKING:
 class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
     """A cog with commands for editing builds."""
 
-    def __init__(self, bot: BotT, builds: BuildService, messages: MessageService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.builds = builds
-        self.messages = messages
+        self.builds = bot.services.builds
+        self.messages = bot.services.messages
         # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
         self.edit_ctx_menu = app_commands.ContextMenu(
             name="Edit Build",
@@ -169,4 +168,4 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
 async def setup(bot: "squid.bot.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildEditCog(bot, bot.services.builds, bot.services.messages))
+    await bot.add_cog(BuildEditCog(bot))
