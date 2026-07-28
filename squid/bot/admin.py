@@ -16,7 +16,7 @@ from squid.db.build_tags import (
     AliasTakenByOther,
     RestrictionNotFound,
 )
-from squid.services.builds import BuildNotFoundError, BuildService, RestrictionService
+from squid.services.builds import BuildNotFoundError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     """Cog for admin commands."""
 
-    def __init__(self, bot: BotT, builds: BuildService, restrictions: RestrictionService):
+    def __init__(self, bot: BotT):
         self.bot = bot
-        self.builds = builds
-        self.restrictions = restrictions
+        self.builds = bot.services.builds
+        self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @commands.hybrid_command(name="confirm")
@@ -221,4 +221,4 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
 async def setup(bot: "squid.bot.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(Admin(bot, bot.services.builds, bot.services.restrictions))
+    await bot.add_cog(Admin(bot))
