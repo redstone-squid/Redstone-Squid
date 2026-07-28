@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
 
+from advanced_alchemy.base import BasicAttributes
 from pgvector.sqlalchemy import VECTOR
 from pydantic.types import Json
 from sqlalchemy import (
@@ -93,7 +94,7 @@ class BuildCategory(StrEnum):
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(AsyncAttrs, MappedAsDataclass, DeclarativeBase):
+class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
     pass
 
 
