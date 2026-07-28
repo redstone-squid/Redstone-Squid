@@ -12,7 +12,7 @@ from squid.db.repos.build_query_repository import BuildMetadataRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
 from squid.db.repos.settings_repository import SettingsRepository
 from squid.db.repos.version_repository import VersionRepository
-from squid.db.repos.vote_repository import SQLAlchemyVoteRepository
+from squid.db.repos.vote_repository import VoteRepository
 from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
 from squid.infrastructure.text_generation import OpenAITextGenerator
 from squid.services.build_inference import BuildInferenceService
@@ -86,7 +86,7 @@ def create_application_services(db: DatabaseManager) -> ApplicationServices:
             lambda: secrets.randbelow(900_000) + 100_000,
         ),
         versions=version_service,
-        votes=VoteService(SQLAlchemyVoteRepository(db.async_session)),
+        votes=VoteService(VoteRepository(db.async_session)),
         redstoner=RedstonerService(
             RedstonerPolicy(
                 starboard_author_id=700796664276844612,

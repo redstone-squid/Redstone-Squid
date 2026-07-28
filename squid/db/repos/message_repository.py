@@ -7,19 +7,15 @@ from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._base import BaseAsyncRepository
+from squid.db.repos._model_repos import _MessageModelRepository
 from squid.db.schema import Message, MessagePurposeLiteral
-
-
-class _MessageModelRepository(BaseAsyncRepository[Message]):
-    model_type = Message
 
 
 class MessageRepository:
     """Repository for pure database operations on messages."""
 
-    def __init__(self, session: async_sessionmaker[AsyncSession]):
-        self._session = session
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
+        self._session_factory = session_factory
 
     async def insert(
         self,
@@ -45,7 +41,7 @@ class MessageRepository:
             build_id: The associated build id, can be None.
             vote_session_id: The vote session id of the message.
         """
-        async with self._session() as session:
+        async with self._session_factory() as session:
             repository = _MessageModelRepository(session=session, auto_commit=True)
             await repository.add(
                 Message(
@@ -66,7 +62,7 @@ class MessageRepository:
         Args:
             message_id: The message ID to update.
         """
-        async with self._session() as session:
+        async with self._session_factory() as session:
             repository = _MessageModelRepository(session=session, auto_commit=True)
             message = await repository.get_one_or_none(id=message_id)
             if message is not None:
@@ -82,7 +78,7 @@ class MessageRepository:
         Returns:
             The Message object if found, otherwise None.
         """
-        async with self._session() as session:
+        async with self._session_factory() as session:
             repository = _MessageModelRepository(session=session)
             return await repository.get_one_or_none(id=message_id)
 
@@ -98,7 +94,7 @@ class MessageRepository:
         Raises:
             ValueError: If the message is not found.
         """
-        async with self._session() as session:
+        async with self._session_factory() as session:
             repository = _MessageModelRepository(session=session, auto_commit=True)
             try:
                 return await repository.delete(message_id)
@@ -119,6 +115,6 @@ class MessageRepository:
         # Since the function returns records matching the messages table,
         # we can select from it and map to Message objects
         stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
-        async with self._session() as session:
+        async with self._session_factory() as session:
             result = await session.execute(stmt)
             return result.scalars().all()

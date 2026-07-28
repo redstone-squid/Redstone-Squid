@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.db.repos.vote_repository import SQLAlchemyVoteRepository
+from squid.db.repos.vote_repository import VoteRepository
 from squid.services.votes import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 
 pytestmark = pytest.mark.integration
@@ -167,7 +167,7 @@ async def seed_delete_log_vote(
 async def test_vote_aggregates_are_persisted_by_repository(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
     build_session_id = await repository.create_build_session(
         author_id=99,
         pass_threshold=3,
@@ -238,7 +238,7 @@ async def test_vote_aggregates_are_persisted_by_repository(
 async def test_target_failure_rolls_back_vote_root(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
 
     with pytest.raises(StatementError):
         await repository.create_build_session(
@@ -261,7 +261,7 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
         async_session_factory,
         votes={7: 1.0, 8: -1.0},
     )
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
 
     snapshot = await repository.get_by_message(message_id)
 
@@ -276,7 +276,7 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
 async def test_custom_vote_options_are_persisted_in_order(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
     options = (
         VoteOption("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
         VoteOption("👎", VoteChoice.DENY),
@@ -322,7 +322,7 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
         pass_threshold=10,
         fail_threshold=-10,
     )
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
 
     inserted = await repository.cast_vote(message_id, 7, 1.0)
     replaced = await repository.cast_vote(message_id, 7, -1.0)
@@ -351,7 +351,7 @@ async def test_cast_vote_closes_at_either_threshold(
         pass_threshold=1,
         fail_threshold=-1,
     )
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
 
     mutation = await repository.cast_vote(message_id, 7, desired_weight)
 
@@ -369,7 +369,7 @@ async def test_concurrent_votes_report_exactly_one_closure(
         pass_threshold=1,
         fail_threshold=-10,
     )
-    repository = SQLAlchemyVoteRepository(async_session_factory)
+    repository = VoteRepository(async_session_factory)
 
     results = await asyncio.gather(
         repository.cast_vote(message_id, 7, 1.0),

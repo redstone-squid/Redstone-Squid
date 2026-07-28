@@ -2,21 +2,13 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._base import BaseAsyncRepository
+from squid.db.repos._model_repos import (
+    _RestrictionAliasModelRepository,
+    _RestrictionModelRepository,
+    _TypeModelRepository,
+)
 from squid.db.schema import Restriction, RestrictionAlias, Type
 from squid.services.build_queries import RestrictionSearchItem
-
-
-class _RestrictionModelRepository(BaseAsyncRepository[Restriction]):
-    model_type = Restriction
-
-
-class _RestrictionAliasModelRepository(BaseAsyncRepository[RestrictionAlias]):
-    model_type = RestrictionAlias
-
-
-class _TypeModelRepository(BaseAsyncRepository[Type]):
-    model_type = Type
 
 
 class BuildMetadataRepository:

@@ -6,7 +6,7 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._base import BaseAsyncRepository
+from squid.db.repos._model_repos import _MessageModelRepository, _VoteModelRepository, _VoteSessionModelRepository
 from squid.db.schema import (
     BuildVoteSession,
     DeleteLogVoteSession,
@@ -29,19 +29,7 @@ from squid.services.votes import (
 )
 
 
-class _MessageModelRepository(BaseAsyncRepository[Message]):
-    model_type = Message
-
-
-class _VoteModelRepository(BaseAsyncRepository[Vote]):
-    model_type = Vote
-
-
-class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
-    model_type = VoteSession
-
-
-class SQLAlchemyVoteRepository:
+class VoteRepository:
     """Store votes while serializing mutation and closure per session."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):

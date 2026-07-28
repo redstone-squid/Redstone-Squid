@@ -5,17 +5,9 @@ from async_lru import alru_cache
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.build_tags import AliasAlreadyAdded, AliasTakenByOther, RestrictionNotFound
-from squid.db.repos._base import BaseAsyncRepository
+from squid.db.repos._model_repos import _RestrictionAliasModelRepository, _RestrictionModelRepository
 from squid.db.schema import Restriction, RestrictionAlias
 from squid.services.builds import RestrictionDefinition
-
-
-class _RestrictionModelRepository(BaseAsyncRepository[Restriction]):
-    model_type = Restriction
-
-
-class _RestrictionAliasModelRepository(BaseAsyncRepository[RestrictionAlias]):
-    model_type = RestrictionAlias
 
 
 class RestrictionRepository:
