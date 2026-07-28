@@ -1,14 +1,22 @@
 """Repository for managing users and verification codes in the database."""
 
 import uuid
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.db.repos._base import BaseAsyncRepository
 from squid.db.schema import User
 from squid.db.schema import VerificationCode as VerificationCodeModel
 from squid.services.users import UserAccount, VerificationCode
-from squid.utils import utcnow
+
+
+class _UserModelRepository(BaseAsyncRepository[User]):
+    model_type = User
+
+
+class _VerificationCodeModelRepository(BaseAsyncRepository[VerificationCodeModel]):
+    model_type = VerificationCodeModel
 
 
 class UserRepository:
@@ -23,9 +31,8 @@ class UserRepository:
         """Insert a new user and return its primary key."""
         async with self._session() as session:
             user = User(discord_id=discord_id, ign=ign or "", minecraft_uuid=minecraft_uuid)  # FIXME: Allow empty IGN
-            session.add(user)
-            await session.flush()
-            await session.commit()
+            repository = _UserModelRepository(session=session, auto_commit=True)
+            user = await repository.add(user)
             return UserAccount(
                 discord_id=user.discord_id,
                 minecraft_uuid=user.minecraft_uuid,
@@ -35,9 +42,8 @@ class UserRepository:
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None:
         """Return the user matching *discord_id* or *None* if not found."""
         async with self._session() as session:
-            stmt = select(User).where(User.discord_id == discord_id)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
+            repository = _UserModelRepository(session=session)
+            user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return None
             return UserAccount(discord_id=discord_id, minecraft_uuid=user.minecraft_uuid, ign=user.ign)
@@ -48,10 +54,11 @@ class UserRepository:
             msg = "Cannot update a Discord-linked account without a Discord ID."
             raise ValueError(msg)
         async with self._session() as session:
-            stored_user = (await session.execute(select(User).where(User.discord_id == user.discord_id))).scalar_one()
+            repository = _UserModelRepository(session=session, auto_commit=True)
+            stored_user = await repository.get_one(discord_id=user.discord_id)
             stored_user.minecraft_uuid = user.minecraft_uuid
             stored_user.ign = user.ign or ""
-            await session.commit()
+            await repository.update(stored_user)
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:
         """Unlink a user's Minecraft account.
@@ -63,12 +70,12 @@ class UserRepository:
             True if the accounts were successfully unlinked, False otherwise.
         """
         async with self._session() as session:
-            result = await session.execute(select(User).where(User.discord_id == discord_id))
-            user = result.scalar_one_or_none()
+            repository = _UserModelRepository(session=session, auto_commit=True)
+            user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return False
             user.minecraft_uuid = None
-            await session.commit()
+            await repository.update(user)
         return True
 
     @staticmethod
@@ -79,14 +86,12 @@ class UserRepository:
     async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
         """Return a valid verification code matching the given code."""
         async with self._session() as session:
-            stmt = (
-                select(VerificationCodeModel)
-                .where(VerificationCodeModel.code == self.hash_verification_code(code))
-                .where(VerificationCodeModel.expires > utcnow())
-                .where(VerificationCodeModel.valid.is_(True))
+            repository = _VerificationCodeModelRepository(session=session)
+            verification_code = await repository.get_one_or_none(
+                VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
+                code=self.hash_verification_code(code),
+                valid=True,
             )
-            result = await session.execute(stmt)
-            verification_code = result.scalar_one_or_none()
             if verification_code is None:
                 return None
             return VerificationCode(
@@ -97,20 +102,21 @@ class UserRepository:
     async def invalidate_codes(self, minecraft_uuid: uuid.UUID) -> None:
         """Invalidate all verification codes for the given Minecraft UUID."""
         async with self._session() as session:
-            stmt = (
-                update(VerificationCodeModel)
-                .where(VerificationCodeModel.minecraft_uuid == str(minecraft_uuid))
-                .where(VerificationCodeModel.expires > utcnow())
-                .values(valid=False)
+            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
+            verification_codes = await repository.list(
+                VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
+                minecraft_uuid=minecraft_uuid,
+                valid=True,
             )
-            await session.execute(stmt)
-            await session.commit()
+            for verification_code in verification_codes:
+                verification_code.valid = False
+            if verification_codes:
+                await repository.update_many(verification_codes)
 
     async def create_verification_code(self, *, minecraft_uuid: uuid.UUID, code: str, username: str) -> None:
         """Insert a new verification code for the given Minecraft UUID and username."""
         code = self.hash_verification_code(code)
         async with self._session() as session:
             verification_code = VerificationCodeModel(minecraft_uuid=minecraft_uuid, code=code, username=username)
-            session.add(verification_code)
-            await session.flush()
-            await session.commit()
+            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
+            await repository.add(verification_code)
