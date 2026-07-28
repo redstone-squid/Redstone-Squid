@@ -15,11 +15,13 @@ from sqlalchemy import (
     UUID,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Float,
     ForeignKey,
     Integer,
     SmallInteger,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
@@ -45,6 +47,7 @@ MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "v
 
 VoteKindLiteral = Literal["build", "delete_log"]
 VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]
+VoteChoiceLiteral: TypeAlias = Literal["approve", "deny"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 
@@ -477,8 +480,41 @@ class VoteSession(Base, kw_only=True):
     votes: Mapped[list["Vote"]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
+    options: Mapped[list["VoteSessionOption"]] = relationship(
+        back_populates="vote_session",
+        default_factory=list,
+        lazy="selectin",
+        order_by="VoteSessionOption.position",
+        init=False,
+        repr=False,
+    )
 
     __mapper_args__ = {"polymorphic_on": kind}
+
+
+class VoteSessionOption(Base, kw_only=True):
+    """A reaction option configured for one vote session."""
+
+    __tablename__ = "vote_session_options"
+    __table_args__ = (
+        UniqueConstraint("vote_session_id", "position"),
+        CheckConstraint("choice IN ('approve', 'deny')", name="vote_session_options_choice_check"),
+        CheckConstraint(
+            "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
+            name="vote_session_options_multiplier_check",
+        ),
+        CheckConstraint("position >= 0", name="vote_session_options_position_check"),
+    )
+
+    vote_session_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"), primary_key=True
+    )
+    emoji: Mapped[str] = mapped_column(String, primary_key=True)
+    choice: Mapped[VoteChoiceLiteral] = mapped_column(String, nullable=False)
+    multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
 
 
 class BuildVoteSession(VoteSession, kw_only=True):

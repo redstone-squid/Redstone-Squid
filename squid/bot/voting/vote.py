@@ -11,15 +11,11 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.services.votes import VoteActor, VoteChoice
+from squid.services.votes import VoteActor
 
 if TYPE_CHECKING:
     import squid.bot
 
-
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-# TODO: Unhardcode these emojis
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
@@ -76,13 +72,9 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             return  # Ignore bot reactions
 
         emoji_name = str(payload.emoji)
-        user_id = payload.user_id
-        if emoji_name in APPROVE_EMOJIS:
-            choice = VoteChoice.APPROVE
-        elif emoji_name in DENY_EMOJIS:
-            choice = VoteChoice.DENY
-        else:
+        if emoji_name not in {option.emoji for option in vote_session.options}:
             return
+        user_id = payload.user_id
 
         staff = await is_staff(self.bot, payload.guild_id, user_id)
         trusted = False
@@ -95,7 +87,7 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         result = await self.vote_service.cast_vote(
             payload.message_id,
             VoteActor(user_id=user_id, is_staff=staff, is_trusted=trusted),
-            choice,
+            emoji_name,
         )
         if result.rejection == "not_eligible":
             await channel.send("You do not have a trusted role.")

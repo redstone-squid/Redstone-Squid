@@ -3,12 +3,13 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
 from typing import Literal, Protocol
 
 from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
 
 VoteStatus = Literal["open", "closed"]
-VoteRejection = Literal["not_found", "closed", "not_eligible"]
+VoteRejection = Literal["not_found", "closed", "not_eligible", "invalid_option"]
 type VoteChange = tuple[str, object, object]
 
 
@@ -17,6 +18,45 @@ class VoteChoice(StrEnum):
 
     APPROVE = "approve"
     DENY = "deny"
+
+
+@dataclass(frozen=True, slots=True)
+class VoteOption:
+    """A reaction option and its contribution to a vote."""
+
+    emoji: str
+    choice: VoteChoice
+    multiplier: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not self.emoji:
+            msg = "Vote option emoji cannot be empty."
+            raise ValueError(msg)
+        if not isfinite(self.multiplier) or self.multiplier <= 0:
+            msg = "Vote option multiplier must be finite and greater than zero."
+            raise ValueError(msg)
+
+
+DEFAULT_VOTE_OPTIONS = (
+    VoteOption("👍", VoteChoice.APPROVE),
+    VoteOption("✅", VoteChoice.APPROVE),
+    VoteOption("👎", VoteChoice.DENY),
+    VoteOption("❌", VoteChoice.DENY),
+)
+
+
+def normalize_vote_options(options: Sequence[VoteOption]) -> tuple[VoteOption, ...]:
+    """Validate and freeze the options for a vote session."""
+    normalized = tuple(options)
+    emojis = [option.emoji for option in normalized]
+    if len(emojis) != len(set(emojis)):
+        msg = "Vote option emojis must be unique within a session."
+        raise ValueError(msg)
+    choices = {option.choice for option in normalized}
+    if choices != {VoteChoice.APPROVE, VoteChoice.DENY}:
+        msg = "Vote sessions require at least one approve and one deny option."
+        raise ValueError(msg)
+    return normalized
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +90,7 @@ class VoteSessionSnapshot:
     fail_threshold: int
     votes: Mapping[int, float]
     message_ids: tuple[int, ...]
+    options: tuple[VoteOption, ...]
     target: VoteTarget
 
     @property
@@ -101,6 +142,7 @@ class VoteRepository(Protocol):
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
+        options: Sequence[VoteOption],
     ) -> int: ...
 
     async def create_delete_log_session(
@@ -112,6 +154,7 @@ class VoteRepository(Protocol):
         message_id: int,
         channel_id: int,
         server_id: int,
+        options: Sequence[VoteOption],
     ) -> int: ...
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None: ...
@@ -138,14 +181,17 @@ class VoteService:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         """Create a build vote and its target atomically."""
+        options = normalize_vote_options(options)
         return await self._repository.create_build_session(
             author_id=author_id,
             pass_threshold=pass_threshold,
             fail_threshold=fail_threshold,
             build_id=build_id,
             changes=changes,
+            options=options,
         )
 
     async def start_delete_log_vote(
@@ -157,8 +203,10 @@ class VoteService:
         message_id: int,
         channel_id: int,
         server_id: int,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         """Create a message-deletion vote and its target atomically."""
+        options = normalize_vote_options(options)
         return await self._repository.create_delete_log_session(
             author_id=author_id,
             pass_threshold=pass_threshold,
@@ -166,12 +214,13 @@ class VoteService:
             message_id=message_id,
             channel_id=channel_id,
             server_id=server_id,
+            options=options,
         )
 
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
         return await self._repository.get_by_message(message_id)
 
-    async def cast_vote(self, message_id: int, actor: VoteActor, choice: VoteChoice) -> CastVoteResult:
+    async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection="not_found")
@@ -180,8 +229,12 @@ class VoteService:
         if snapshot.kind == "delete_log" and not (actor.is_trusted or actor.is_staff):
             return CastVoteResult(session=snapshot, rejection="not_eligible")
 
-        weight = 3.0 if actor.is_staff else 1.0
-        desired_weight = weight if choice is VoteChoice.APPROVE else -weight
+        option = next((option for option in snapshot.options if option.emoji == emoji), None)
+        if option is None:
+            return CastVoteResult(session=snapshot, rejection="invalid_option")
+
+        weight = option.multiplier * (3.0 if actor.is_staff else 1.0)
+        desired_weight = weight if option.choice is VoteChoice.APPROVE else -weight
         mutation = await self._repository.cast_vote(message_id, actor.user_id, desired_weight)
         if mutation is None:
             latest = await self._repository.get_by_message(message_id)

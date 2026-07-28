@@ -192,9 +192,13 @@ def assert_build_attributes(build: Build, expected: dict[str, Any]):
 class TestBuildConstructors:
     """Tests for Build class constructors."""
 
-    def test_from_json(self, sample_joined_build_record: JoinedBuildRecord):
+    def test_from_json(
+        self,
+        sample_joined_build_record: JoinedBuildRecord,
+        mock_db_manager: DatabaseManager,
+    ):
         """Test build creation from JoinedBuildRecord."""
-        build = DatabaseManager().build._from_json(sample_joined_build_record)  # pyright: ignore[reportPrivateUsage]
+        build = mock_db_manager.build._from_json(sample_joined_build_record)  # pyright: ignore[reportPrivateUsage]
         assert build is not None
 
 

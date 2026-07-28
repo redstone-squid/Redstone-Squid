@@ -7,7 +7,7 @@ from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.db.repos.vote_repository import SQLAlchemyVoteRepository
-from squid.services.votes import StoredVoteMutation, VoteTarget
+from squid.services.votes import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 
 pytestmark = pytest.mark.integration
 
@@ -21,6 +21,22 @@ CREATE TABLE vote_sessions (
     pass_threshold INTEGER NOT NULL,
     fail_threshold INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE vote_session_options (
+    vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
+    emoji VARCHAR NOT NULL,
+    choice VARCHAR NOT NULL,
+    multiplier DOUBLE PRECISION NOT NULL,
+    position SMALLINT NOT NULL,
+    PRIMARY KEY (vote_session_id, emoji),
+    UNIQUE (vote_session_id, position),
+    CHECK (choice IN ('approve', 'deny')),
+    CHECK (
+        multiplier > 0
+        AND multiplier != 'Infinity'::double precision
+        AND multiplier != 'NaN'::double precision
+    ),
+    CHECK (position >= 0)
 );
 CREATE TABLE delete_log_vote_sessions (
     vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
@@ -53,7 +69,8 @@ CREATE TABLE votes (
 """
 
 _DROP_SCHEMA = """
-DROP TABLE IF EXISTS votes, messages, build_vote_sessions, delete_log_vote_sessions, vote_sessions CASCADE;
+DROP TABLE IF EXISTS
+    votes, messages, build_vote_sessions, delete_log_vote_sessions, vote_session_options, vote_sessions CASCADE;
 """
 
 
@@ -95,6 +112,20 @@ async def seed_delete_log_vote(
             )
         ).scalar_one()
         message_id = 1_000 + vote_session_id
+        await session.execute(
+            text(
+                """
+                INSERT INTO vote_session_options
+                    (vote_session_id, emoji, choice, multiplier, position)
+                VALUES
+                    (:vote_session_id, '👍', 'approve', 1.0, 0),
+                    (:vote_session_id, '✅', 'approve', 1.0, 1),
+                    (:vote_session_id, '👎', 'deny', 1.0, 2),
+                    (:vote_session_id, '❌', 'deny', 1.0, 3)
+                """
+            ),
+            {"vote_session_id": vote_session_id},
+        )
         await session.execute(
             text(
                 """
@@ -238,7 +269,49 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
     assert snapshot.id == vote_session_id
     assert snapshot.votes == {7: 1.0, 8: -1.0}
     assert snapshot.message_ids == (message_id,)
+    assert snapshot.options == DEFAULT_VOTE_OPTIONS
     assert snapshot.target == VoteTarget(message_id=501, channel_id=502, server_id=503)
+
+
+async def test_custom_vote_options_are_persisted_in_order(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = SQLAlchemyVoteRepository(async_session_factory)
+    options = (
+        VoteOption("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
+        VoteOption("👎", VoteChoice.DENY),
+    )
+
+    vote_session_id = await repository.create_delete_log_session(
+        author_id=100,
+        pass_threshold=4,
+        fail_threshold=-2,
+        message_id=501,
+        channel_id=502,
+        server_id=503,
+        options=options,
+    )
+
+    async with async_session_factory() as session:
+        rows = (
+            (
+                await session.execute(
+                    text(
+                        """
+                        SELECT emoji, choice, multiplier
+                        FROM vote_session_options
+                        WHERE vote_session_id = :vote_session_id
+                        ORDER BY position
+                        """
+                    ),
+                    {"vote_session_id": vote_session_id},
+                )
+            )
+            .tuples()
+            .all()
+        )
+
+    assert rows == [("<:strong_yes:123>", "approve", 2.0), ("👎", "deny", 1.0)]
 
 
 async def test_cast_vote_replaces_then_toggles_the_same_choice(

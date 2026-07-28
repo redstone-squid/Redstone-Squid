@@ -14,9 +14,19 @@ from squid.db.schema import (
     Vote,
     VoteKindLiteral,
     VoteSession,
+    VoteSessionOption,
     VoteSessionResultLiteral,
 )
-from squid.services.votes import StoredVoteMutation, VoteChange, VoteSessionSnapshot, VoteTarget
+from squid.services.votes import (
+    DEFAULT_VOTE_OPTIONS,
+    StoredVoteMutation,
+    VoteChange,
+    VoteChoice,
+    VoteOption,
+    VoteSessionSnapshot,
+    VoteTarget,
+    normalize_vote_options,
+)
 
 
 class _MessageModelRepository(BaseAsyncRepository[Message]):
@@ -45,7 +55,9 @@ class SQLAlchemyVoteRepository:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
+        options = normalize_vote_options(options)
         async with self._session_factory.begin() as session:
             vote_session_id = await self._create_session(
                 session,
@@ -53,6 +65,7 @@ class SQLAlchemyVoteRepository:
                 kind="build",
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
+                options=options,
             )
             await session.execute(
                 insert(BuildVoteSession).values(
@@ -72,7 +85,9 @@ class SQLAlchemyVoteRepository:
         message_id: int,
         channel_id: int,
         server_id: int,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
+        options = normalize_vote_options(options)
         async with self._session_factory.begin() as session:
             vote_session_id = await self._create_session(
                 session,
@@ -80,6 +95,7 @@ class SQLAlchemyVoteRepository:
                 kind="delete_log",
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
+                options=options,
             )
             await session.execute(
                 insert(DeleteLogVoteSession).values(
@@ -99,6 +115,7 @@ class SQLAlchemyVoteRepository:
         kind: VoteKindLiteral,
         pass_threshold: int,
         fail_threshold: int,
+        options: Sequence[VoteOption],
     ) -> int:
         result = await session.execute(
             insert(VoteSession)
@@ -112,7 +129,21 @@ class SQLAlchemyVoteRepository:
             )
             .returning(VoteSession.id)
         )
-        return result.scalar_one()
+        vote_session_id = result.scalar_one()
+        await session.execute(
+            insert(VoteSessionOption),
+            [
+                {
+                    "vote_session_id": vote_session_id,
+                    "emoji": option.emoji,
+                    "choice": option.choice.value,
+                    "multiplier": option.multiplier,
+                    "position": position,
+                }
+                for position, option in enumerate(options)
+            ],
+        )
+        return vote_session_id
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:
@@ -244,5 +275,13 @@ class SQLAlchemyVoteRepository:
             fail_threshold=row.fail_threshold,
             votes=dict(votes),
             message_ids=message_ids,
+            options=tuple(
+                VoteOption(
+                    emoji=option.emoji,
+                    choice=VoteChoice(option.choice),
+                    multiplier=option.multiplier,
+                )
+                for option in row.options
+            ),
             target=target,
         )

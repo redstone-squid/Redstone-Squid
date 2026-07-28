@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import inspect
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from textwrap import dedent
 from types import MethodType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, override
@@ -18,15 +18,17 @@ from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
 from squid.services.messages import MessageService
-from squid.services.votes import VoteChange, VoteSessionSnapshot
+from squid.services.votes import (
+    DEFAULT_VOTE_OPTIONS,
+    VoteChange,
+    VoteChoice,
+    VoteOption,
+    VoteSessionSnapshot,
+    normalize_vote_options,
+)
 
 if TYPE_CHECKING:
     import squid.bot
-
-
-APPROVE_EMOJIS = ["👍", "✅"]
-DENY_EMOJIS = ["👎", "❌"]
-# TODO: Unhardcode these emojis
 
 
 async def track_vote_messages(
@@ -77,6 +79,7 @@ class AbstractVoteSession(ABC):
         author_id: int,
         pass_threshold: int,
         fail_threshold: int,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ):
         """
         Initialize the vote session, this should be called by subclasses only. Use create() instead.
@@ -117,6 +120,7 @@ class AbstractVoteSession(ABC):
         self.author_id = author_id
         self.pass_threshold = pass_threshold
         self.fail_threshold = fail_threshold
+        self.options = normalize_vote_options(options)
         self._votes: dict[int, float] = {}  # Dict of user_id: weight
 
     @classmethod
@@ -221,6 +225,11 @@ class AbstractVoteSession(ABC):
             return "cancelled"
         return "pending"
 
+    @final
+    def primary_emoji(self, choice: VoteChoice) -> str:
+        """Return the first configured emoji for a vote choice."""
+        return next(option.emoji for option in self.options if option.choice is choice)
+
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send a vote session message to a channel"""
@@ -268,6 +277,7 @@ class AbstractVoteSession(ABC):
             raise ValueError(msg)
         self._votes = dict(snapshot.votes)
         self.is_closed = snapshot.status == "closed"
+        self.options = snapshot.options
 
 
 @final
@@ -285,6 +295,7 @@ class BuildVoteSession(AbstractVoteSession):
         type: Literal["add", "update"],
         pass_threshold: int = 3,
         fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ):
         """
         Initialize the vote session.
@@ -298,7 +309,7 @@ class BuildVoteSession(AbstractVoteSession):
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
+        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold, options)
         self.build = build
         self.type = type
 
@@ -313,8 +324,9 @@ class BuildVoteSession(AbstractVoteSession):
         type: Literal["add", "update"],
         pass_threshold: int = 3,
         fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> "BuildVoteSession":
-        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold)
+        self = await super().create(bot, messages, author_id, build, type, pass_threshold, fail_threshold, options)
         assert isinstance(self, BuildVoteSession)
         return self
 
@@ -335,6 +347,7 @@ class BuildVoteSession(AbstractVoteSession):
             fail_threshold=self.fail_threshold,
             build_id=self.build.id,
             changes=changes,
+            options=self.options,
         )
         await track_vote_messages(
             await self.fetch_messages(),
@@ -345,8 +358,11 @@ class BuildVoteSession(AbstractVoteSession):
 
         await self.update_messages()
 
-        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
-        reaction_tasks.extend([message.add_reaction(DENY_EMOJIS[0]) for message in self._messages])
+        reaction_tasks = [
+            message.add_reaction(self.primary_emoji(choice))
+            for message in self._messages
+            for choice in (VoteChoice.APPROVE, VoteChoice.DENY)
+        ]
         with contextlib.suppress(discord.Forbidden):
             await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
@@ -380,6 +396,9 @@ class BuildVoteSession(AbstractVoteSession):
             type="add",  # TODO: Handle update type properly
             pass_threshold=record.pass_threshold,
             fail_threshold=record.fail_threshold,
+            options=tuple(
+                VoteOption(option.emoji, VoteChoice(option.choice), option.multiplier) for option in record.options
+            ),
         )
         # We can skip _async_init because we already have the id and everything has been tracked before
         self.id = record.id
@@ -439,6 +458,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         target_message: discord.Message,
         pass_threshold: int = 3,
         fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ):
         """
         Initialize the delete log vote session.
@@ -451,7 +471,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             pass_threshold: The number of votes required to pass the vote.
             fail_threshold: The number of votes required to fail the vote.
         """
-        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold)
+        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold, options)
         self.target_message = target_message
 
     @classmethod
@@ -464,8 +484,9 @@ class DeleteLogVoteSession(AbstractVoteSession):
         target_message: discord.Message,
         pass_threshold: int = 3,
         fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> "DeleteLogVoteSession":
-        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold)
+        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold, options)
         assert isinstance(self, DeleteLogVoteSession)
         return self
 
@@ -480,6 +501,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             message_id=self.target_message.id,
             channel_id=self.target_message.channel.id,
             server_id=self.target_message.guild.id,
+            options=self.options,
         )
         await track_vote_messages(
             await self.fetch_messages(),
@@ -487,8 +509,11 @@ class DeleteLogVoteSession(AbstractVoteSession):
             self.id,
         )
         await self.update_messages()
-        reaction_tasks = [message.add_reaction(APPROVE_EMOJIS[0]) for message in self._messages]
-        reaction_tasks.extend(message.add_reaction(DENY_EMOJIS[0]) for message in self._messages)
+        reaction_tasks = [
+            message.add_reaction(self.primary_emoji(choice))
+            for message in self._messages
+            for choice in (VoteChoice.APPROVE, VoteChoice.DENY)
+        ]
         with contextlib.suppress(discord.Forbidden):
             await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 
@@ -522,6 +547,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             target_message,
             record.pass_threshold,
             record.fail_threshold,
+            tuple(VoteOption(option.emoji, VoteChoice(option.choice), option.multiplier) for option in record.options),
         )
         self.id = (
             record.vote_session_id
@@ -537,7 +563,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             title="Vote to Delete Log",
             description=(
                 dedent(f"""
-                React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n
+                React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or {self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n
                 **Log Content:**\n{self.target_message.content}\n\n
                 **Upvotes:** {self.upvotes}
                 **Downvotes:** {self.downvotes}
@@ -552,7 +578,10 @@ class DeleteLogVoteSession(AbstractVoteSession):
         match self.result:
             case "pending":
                 title = "Vote to Delete Log"
-                action = f"React with {APPROVE_EMOJIS[0]} to upvote or {DENY_EMOJIS[0]} to downvote.\n\n"
+                action = (
+                    f"React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or "
+                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n"
+                )
             case "approved":
                 title = "Vote to Delete Log: Passed"
                 action = ""
