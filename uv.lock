@@ -2316,7 +2316,7 @@ fuzz = [
 
 [package.metadata]
 requires-dist = [
-    { name = "advanced-alchemy", specifier = ">=1.7.0" },
+    { name = "advanced-alchemy", specifier = ">=1.11.0" },
     { name = "async-lru", specifier = ">=2.0.4" },
     { name = "beartype", specifier = ">=0.19.0" },
     { name = "beautifulsoup4", specifier = ">=4.12.3" },

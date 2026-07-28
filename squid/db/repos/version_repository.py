@@ -38,7 +38,7 @@ class VersionRepository:
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
         async with self._session() as session:
             repository = _VersionModelRepository(session=session)
-            versions = await repository.list(
+            versions = await repository.get_many(
                 Version.edition == edition,
                 order_by=[
                     (Version.major_version, False),

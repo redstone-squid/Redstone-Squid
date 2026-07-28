@@ -38,7 +38,7 @@ class SettingsRepository:
     ) -> dict[int, int | list[int] | None]:
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session)
-            rows = await repository.list(ServerSetting.server_id.in_(tuple(server_ids)))
+            rows = await repository.get_many(ServerSetting.server_id.in_(tuple(server_ids)))
             column_name = _SETTING_TO_DB_KEY[setting]
             return {row.server_id: cast(int | list[int] | None, getattr(row, column_name)) for row in rows}
 

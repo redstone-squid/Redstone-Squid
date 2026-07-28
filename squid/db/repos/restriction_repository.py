@@ -28,7 +28,7 @@ class RestrictionRepository:
     async def fetch_all_restrictions(self) -> list[RestrictionDefinition]:
         async with self._session_factory() as session:
             repository = _RestrictionModelRepository(session=session)
-            restrictions = await repository.list()
+            restrictions = await repository.get_many()
             return [RestrictionDefinition(row.name, row.type) for row in restrictions]
 
     async def add_alias(self, restriction: str, alias: str) -> None:

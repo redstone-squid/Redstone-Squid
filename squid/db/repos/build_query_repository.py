@@ -35,8 +35,8 @@ class BuildMetadataRepository:
                 restriction_filters.append(Restriction.name.ilike(f"%{query}%"))
                 alias_filters.append(RestrictionAlias.alias.ilike(f"%{query}%"))
 
-            restrictions = await restriction_repository.list(*restriction_filters)
-            aliases = await alias_repository.list(*alias_filters)
+            restrictions = await restriction_repository.get_many(*restriction_filters)
+            aliases = await alias_repository.get_many(*alias_filters)
             return [
                 *(RestrictionSearchItem(row.id, row.name, is_alias=False) for row in restrictions),
                 *(RestrictionSearchItem(row.restriction_id, row.alias, is_alias=True) for row in aliases),
@@ -45,5 +45,5 @@ class BuildMetadataRepository:
     async def list_patterns(self) -> list[str]:
         async with self._session_factory() as session:
             repository = _TypeModelRepository(session=session)
-            patterns = await repository.list(order_by=(Type.name, False))
+            patterns = await repository.get_many(order_by=(Type.name, False))
             return [pattern.name for pattern in patterns]

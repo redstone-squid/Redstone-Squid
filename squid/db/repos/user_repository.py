@@ -103,7 +103,7 @@ class UserRepository:
         """Invalidate all verification codes for the given Minecraft UUID."""
         async with self._session() as session:
             repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
-            verification_codes = await repository.list(
+            verification_codes = await repository.get_many(
                 VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
                 minecraft_uuid=minecraft_uuid,
                 valid=True,
