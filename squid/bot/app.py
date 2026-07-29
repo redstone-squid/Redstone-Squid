@@ -2,11 +2,9 @@
 
 import asyncio
 import logging
-import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
-from pathlib import Path
 from queue import Queue
 from typing import Any, Final, Self, TypedDict, override
 
@@ -26,10 +24,10 @@ from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.builds.domain import Build
+from squid.config import BotProcessConfig, LoggingConfig
 from squid.logging_config import (
     DEFAULT_BACKUP_COUNT,
     DEFAULT_DISCORD_LOG_FILE,
-    DEFAULT_LOG_DIR_NAME,
     DEFAULT_MAX_BYTES,
     prepare_log_path,
 )
@@ -191,8 +189,9 @@ class RedstoneSquid(Bot):
         return BuildHandler(self, build)
 
 
-def start_logging(dev_mode: bool = False) -> QueueListener:
+def start_logging(dev_mode: bool = False, config: LoggingConfig | None = None) -> QueueListener:
     """Set up logging for the bot process."""
+    logging_config = config or LoggingConfig.from_environment(default_log_file=DEFAULT_DISCORD_LOG_FILE)
     # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
     dt_fmt = "%Y-%m-%d %H:%M:%S"
     formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
@@ -202,9 +201,7 @@ def start_logging(dev_mode: bool = False) -> QueueListener:
     stream_handler.setLevel(logging.INFO)
 
     # Create logs directory if it doesn't exist
-    log_dir_env = os.environ.get("LOG_DIR")
-    logs_dir = Path(log_dir_env) if log_dir_env else Path.cwd() / DEFAULT_LOG_DIR_NAME
-    log_file_path = prepare_log_path(logs_dir, os.environ.get("LOG_FILE", DEFAULT_DISCORD_LOG_FILE))
+    log_file_path = prepare_log_path(logging_config.directory, logging_config.log_file)
 
     handlers: list[logging.Handler] = [stream_handler]
     if log_file_path is not None:
@@ -255,22 +252,19 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
-    queue_listener = start_logging(config.get("dev_mode", False))
+    process_config = BotProcessConfig.from_environment()
+    queue_listener = start_logging(config.get("dev_mode", False), process_config.logging)
 
     try:
         async with (
-            create_application_runtime() as runtime,
+            create_application_runtime(process_config.runtime) as runtime,
             RedstoneSquid(
                 runtime.services,
                 runtime.keep_database_active,
                 config=config.get("bot_config"),
             ) as bot,
         ):
-            token = os.environ.get("BOT_TOKEN")
-            if not token:
-                msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
-                raise RuntimeError(msg)
-            await bot.start(token)
+            await bot.start(process_config.token)
     finally:
         queue_listener.stop()
 

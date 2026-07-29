@@ -1,6 +1,5 @@
 """Simple FastAPI server to generate verification codes for users."""
 
-import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, cast
@@ -11,11 +10,13 @@ from pydantic import BaseModel
 
 from squid.api.errors import register_exception_handlers
 from squid.bootstrap import create_application_runtime
+from squid.config import ApiProcessConfig
 from squid.core.errors import AuthenticationError
 from squid.logging_config import configure_api_logging
 from squid.runtime import ApplicationRuntime, ApplicationServices
 
 RuntimeFactory = Callable[[], ApplicationRuntime]
+ConfigFactory = Callable[[], ApiProcessConfig]
 
 
 router = APIRouter()
@@ -42,20 +43,26 @@ class User(BaseModel):
 async def get_verification_code(
     user: User,
     authorization: Annotated[str, Header()],
+    request: Request,
     services: Annotated[ApplicationServices, Depends(get_services)],
 ) -> int:
     """Generate a verification code for a user."""
-    if authorization != os.environ["SYNERGY_SECRET"]:
+    config = cast(ApiProcessConfig, request.app.state.config)
+    if authorization != config.synergy_secret:
         raise AuthenticationError
 
     return await services.users.generate_verification_code(user.uuid)
 
 
-def create_api_app(runtime_factory: RuntimeFactory = create_application_runtime) -> FastAPI:
+def create_api_app(
+    runtime_factory: RuntimeFactory = create_application_runtime,
+    config_factory: ConfigFactory = ApiProcessConfig.from_environment,
+) -> FastAPI:
     """Create an API application with an explicitly owned runtime."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.config = config_factory()
         async with runtime_factory() as runtime:
             app.state.runtime = runtime
             yield
@@ -73,8 +80,9 @@ def main() -> None:
     """Run the FastAPI server."""
     import uvicorn
 
-    configure_api_logging()
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("API_PORT", 8000)), log_config=None)
+    config = ApiProcessConfig.from_environment()
+    configure_api_logging(config.logging)
+    uvicorn.run(create_api_app(config_factory=lambda: config), host="0.0.0.0", port=config.port, log_config=None)
 
 
 if __name__ == "__main__":

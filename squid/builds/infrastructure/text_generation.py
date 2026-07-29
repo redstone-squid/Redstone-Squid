@@ -1,10 +1,10 @@
 """OpenAI-compatible text generation adapter."""
 
 import logging
-import os
-from typing import Self
 
 from openai import AsyncOpenAI
+
+from squid.config import OpenAIConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +16,15 @@ class OpenAITextGenerator:
         self._client = client
 
     @classmethod
-    def from_environment(cls) -> Self:
-        """Create an adapter from process configuration."""
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
+    def from_config(cls, config: OpenAIConfig) -> "OpenAITextGenerator":
+        """Create an adapter from typed process configuration."""
+        if not config.api_key:
             logger.warning("No OpenAI API key found; build inference is disabled.")
             return cls(None)
         return cls(
             AsyncOpenAI(
-                base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-                api_key=api_key,
+                base_url=config.base_url,
+                api_key=config.api_key,
             )
         )
 

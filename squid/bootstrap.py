@@ -18,6 +18,7 @@ from squid.builds.infrastructure.taxonomy import BuildTagsManager
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
+from squid.config import RuntimeConfig
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.persistence.engine import DatabaseEngine
@@ -33,19 +34,19 @@ from squid.voting.application import VoteService
 from squid.voting.infrastructure.repository import VoteRepository
 
 
-def create_application_services(db: DatabaseEngine) -> ApplicationServices:
+def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> ApplicationServices:
     """Create application services from process-level infrastructure."""
     restriction_repository = RestrictionRepository(db.async_session)
     version_service = VersionService(VersionRepository(db.async_session))
     embedding_service = BuildEmbeddingService(
-        OpenAIEmbeddingModel.from_environment(),
-        VecsBuildIndex.from_environment(),
+        OpenAIEmbeddingModel.from_config(config.embeddings),
+        VecsBuildIndex(config.embeddings.database_connection, dimension=config.embeddings.dimension),
     )
     build_repository = BuildRepository(db.async_session)
     return ApplicationServices(
         builds=BuildService(build_repository, restriction_repository, version_service, embedding_service),
         build_inference=BuildInferenceService(
-            OpenAITextGenerator.from_environment(),
+            OpenAITextGenerator.from_config(config.openai),
             BuildTagsManager(db.async_session),
             version_service,
             resources.files("squid.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8"),
@@ -59,7 +60,7 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
         messages=MessageService(MessageRepository(db.async_session)),
         settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(
-            UserRepository(db.async_session),
+            UserRepository(db.async_session, config.verification_code_pepper),
             get_minecraft_username,
             lambda: secrets.randbelow(900_000) + 100_000,
         ),
@@ -80,7 +81,10 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
     )
 
 
-def create_application_runtime(db: DatabaseEngine | None = None) -> ApplicationRuntime:
+def create_application_runtime(
+    config: RuntimeConfig | None = None, db: DatabaseEngine | None = None
+) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
-    database = db or DatabaseEngine()
-    return ApplicationRuntime(create_application_services(database), database.close, database.ping)
+    runtime_config = config or RuntimeConfig.from_environment()
+    database = db or DatabaseEngine(runtime_config.database)
+    return ApplicationRuntime(create_application_services(database, runtime_config), database.close, database.ping)

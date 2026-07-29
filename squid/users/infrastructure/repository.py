@@ -1,7 +1,6 @@
 """SQLAlchemy user repository."""
 
 import hashlib
-import os
 import uuid
 from datetime import UTC, datetime
 
@@ -27,8 +26,9 @@ class _VerificationCodeModelRepository(BaseAsyncRepository[VerificationCodeModel
 class UserRepository:
     """Repository for managing users and verification codes in the database."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession], verification_code_pepper: str):
         self._session_factory = session_factory
+        self._verification_code_pepper = verification_code_pepper
 
     async def add(
         self, *, discord_id: int | None = None, minecraft_uuid: uuid.UUID | None = None, ign: str | None = None
@@ -86,8 +86,7 @@ class UserRepository:
             await repository.update(user)
         return True
 
-    @staticmethod
-    def hash_verification_code(code: str) -> str:
+    def hash_verification_code(self, code: str) -> str:
         """Hash a verification code for storage.
 
         Verification codes are short, numeric, and short-lived, so a keyed
@@ -95,8 +94,7 @@ class UserRepository:
         keep them non-recoverable from a database dump while remaining cheap
         to verify on every lookup.
         """
-        pepper = os.environ.get("VERIFICATION_CODE_PEPPER", "")
-        return hashlib.sha256(f"{pepper}{code}".encode()).hexdigest()
+        return hashlib.sha256(f"{self._verification_code_pepper}{code}".encode()).hexdigest()
 
     async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
         """Return a valid verification code matching the given code."""

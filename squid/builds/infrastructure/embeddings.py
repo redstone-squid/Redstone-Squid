@@ -2,11 +2,12 @@
 
 import asyncio
 import logging
-import os
 from typing import Self
 
 import vecs
 from openai import AsyncOpenAI, OpenAIError
+
+from squid.config import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +20,17 @@ class OpenAIEmbeddingModel:
         self._model = model
 
     @classmethod
-    def from_environment(cls) -> Self:
-        """Create an embedding adapter from process configuration."""
-        api_key = os.environ.get("EMBEDDING_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        model = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
-        if not api_key:
+    def from_config(cls, config: EmbeddingConfig) -> Self:
+        """Create an embedding adapter from typed process configuration."""
+        if not config.api_key:
             logger.warning("No OpenAI API key found; build embeddings are disabled.")
-            return cls(None, model)
+            return cls(None, config.model)
         return cls(
             AsyncOpenAI(
-                base_url=os.environ.get("EMBEDDING_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL"),
-                api_key=api_key,
+                base_url=config.base_url,
+                api_key=config.api_key,
             ),
-            model,
+            config.model,
         )
 
     async def embed(self, text: str) -> list[float] | None:
@@ -51,14 +50,6 @@ class VecsBuildIndex:
     def __init__(self, connection: str | None, *, dimension: int) -> None:
         self._connection = connection
         self._dimension = dimension
-
-    @classmethod
-    def from_environment(cls) -> Self:
-        """Create a vecs index from process configuration."""
-        return cls(
-            os.environ.get("DB_CONNECTION"),
-            dimension=int(os.environ.get("EMBEDDING_DIMENSION", "1536")),
-        )
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
         if self._connection is None:

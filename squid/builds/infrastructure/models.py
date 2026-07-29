@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 from pgvector.sqlalchemy import VECTOR
@@ -36,6 +35,7 @@ from squid.builds.domain import (
     RestrictionTypeLiteral,
     Status,
 )
+from squid.config import embedding_dimension_from_environment
 from squid.persistence.base import Base
 
 
@@ -143,7 +143,7 @@ class Build(Base, kw_only=True):
     )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))),
+        VECTOR(embedding_dimension_from_environment()),
         comment='This is not actually being used. See "vecs"."builds" instead',
         default=None,
     )

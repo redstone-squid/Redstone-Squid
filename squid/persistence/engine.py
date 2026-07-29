@@ -1,12 +1,11 @@
 """Process-level SQLAlchemy engine and session infrastructure."""
 
-import os
-
 from sqlalchemy import Engine, create_engine, make_url, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from squid.core.errors import ConfigurationError, DataIntegrityError
+from squid.config import DatabaseConfig
+from squid.core.errors import DataIntegrityError
 from squid.persistence.inspection import is_sane_database
 
 
@@ -15,42 +14,26 @@ class DatabaseEngine:
 
     def __init__(
         self,
-        database_url: str | None = None,
+        config: DatabaseConfig,
         *,
         debug: bool = False,
     ) -> None:
         """Initializes the engines and session factories.
 
         Args:
-            database_url: The database connection string. Falls back to the
-                DATABASE_URL environment variable if not given.
+            config: Database connection URL and drivers.
             debug: Whether to echo SQL statements, for debugging.
         """
-        database_url = database_url or os.environ.get("DATABASE_URL")
-        driver_sync = os.environ.get("DB_DRIVER_SYNC")
-        driver_async = os.environ.get("DB_DRIVER_ASYNC")
-
-        if not database_url:
-            msg = (
-                "database_url not given and no DATABASE_URL environmental variable found. "
-                "Specify DATABASE_URL either with a .env file or a DATABASE_URL environment variable."
-            )
-            raise ConfigurationError(msg, context={"field": "DATABASE_URL"})
-        if not driver_sync:
-            msg = "No DB_DRIVER_SYNC environment variable found."
-            raise ConfigurationError(msg, context={"field": "DB_DRIVER_SYNC"})
-        if not driver_async:
-            msg = "No DB_DRIVER_ASYNC environment variable found."
-            raise ConfigurationError(msg, context={"field": "DB_DRIVER_ASYNC"})
-
-        base = make_url(database_url)
+        base = make_url(config.url)
         self.async_engine: AsyncEngine = create_async_engine(
-            base.set(drivername=f"{base.drivername}+{driver_async}"), echo=debug
+            base.set(drivername=f"{base.drivername}+{config.async_driver}"), echo=debug
         )
         self.async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.async_engine, expire_on_commit=False
         )
-        self.sync_engine: Engine = create_engine(base.set(drivername=f"{base.drivername}+{driver_sync}"), echo=debug)
+        self.sync_engine: Engine = create_engine(
+            base.set(drivername=f"{base.drivername}+{config.sync_driver}"), echo=debug
+        )
         self.sync_session: sessionmaker[Session] = sessionmaker(self.sync_engine, expire_on_commit=False)
 
     async def close(self) -> None:
