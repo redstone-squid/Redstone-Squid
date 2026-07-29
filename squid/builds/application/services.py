@@ -35,7 +35,7 @@ class BuildService:
             ai_generated=submission.ai_generated,
             category=BuildCategory.DOOR,
             submission_status=Status.PENDING,
-            record_category=submission.record_category,  # pyright: ignore[reportArgumentType]
+            record_category=submission.record_category,
             version_spec=submission.works_in,
             width=submission.build_size[0],
             height=submission.build_size[1],
@@ -44,7 +44,7 @@ class BuildService:
             door_height=submission.door_size[1],
             door_depth=submission.door_size[2],
             door_type=list(submission.pattern),
-            door_orientation_type=submission.door_type,  # pyright: ignore[reportArgumentType]
+            door_orientation_type=submission.door_type,
             normal_closing_time=submission.normal_closing_time,
             normal_opening_time=submission.normal_opening_time,
             creators_ign=list(submission.creators),

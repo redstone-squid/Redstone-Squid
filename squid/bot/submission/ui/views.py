@@ -4,7 +4,7 @@ import asyncio
 import datetime
 import re
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, override
 
 import discord
 from discord import Interaction
@@ -195,7 +195,6 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
             timeout: The timeout for the view.
         """
         super().__init__(timeout=timeout)
-        self.timeout = cast(float, self.timeout)
         self.build = build
         self.builds = builds
         if items is DEFAULT:
@@ -221,7 +220,7 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
         self.items = items
         self.page = 1
         self._max_pages = len(self.items) // 5 + 1
-        self.expiry_time: datetime.datetime = discord.utils.utcnow() + datetime.timedelta(seconds=self.timeout)
+        self.expiry_time: datetime.datetime = discord.utils.utcnow() + datetime.timedelta(seconds=timeout)
 
     @override
     async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]

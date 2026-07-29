@@ -19,8 +19,11 @@ class RestrictionRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
 
-    @alru_cache
     async def fetch_all_restrictions(self) -> list[RestrictionDefinition]:
+        return await self._fetch_all_restrictions()
+
+    @alru_cache
+    async def _fetch_all_restrictions(self) -> list[RestrictionDefinition]:
         async with self._session_factory() as session:
             repository = RestrictionModelRepository(session=session)
             restrictions = await repository.get_many()

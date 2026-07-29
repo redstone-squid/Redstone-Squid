@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from squid.builds.domain import DoorOrientationLiteral, RecordCategoryLiteral
+
 type Dimensions = tuple[int | None, int | None, int | None]
 
 
@@ -11,9 +13,9 @@ class DoorSubmissionInput:
 
     submitter_id: int
     door_size: Dimensions
-    record_category: str | None = None
+    record_category: RecordCategoryLiteral | None = None
     pattern: tuple[str, ...] = ("Regular",)
-    door_type: str = "Door"
+    door_type: DoorOrientationLiteral = "Door"
     build_size: Dimensions = (None, None, None)
     works_in: str | None = None
     restrictions: tuple[str, ...] = ()

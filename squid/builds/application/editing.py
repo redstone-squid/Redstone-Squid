@@ -63,7 +63,10 @@ class BuildEditPatch:
                 context={"fields": sorted(unknown)},
                 public_context={"fields": sorted(unknown)},
             )
-        return cls(**changes)  # pyright: ignore[reportArgumentType]
+        patch = cls()
+        for name, value in changes.items():
+            object.__setattr__(patch, name, value)
+        return patch
 
     def apply(self, build: Build) -> None:
         """Apply the patch after the caller has acquired the build lock."""

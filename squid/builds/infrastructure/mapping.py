@@ -76,7 +76,7 @@ class BuildMapper:
             visible_closing_time=sql_build.visible_closing_time,
             visible_opening_time=sql_build.visible_opening_time,
             extra_info=sql_build.extra_info,
-            creators_ign=[name for name in creator_names if name is not None],
+            creators_ign=creator_names,
             image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
             video_urls=[link.url for link in sql_build.links if link.media_type == "video"],
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],

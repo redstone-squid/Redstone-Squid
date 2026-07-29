@@ -8,7 +8,7 @@ dependency; the persisted lock flag is managed by whoever calls this
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, cast
@@ -129,7 +129,7 @@ class BuildLockRepository:
             await session.commit()
 
     @asynccontextmanager
-    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
+    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
         if not await self.acquire(build_id, timeout=timeout):
             raise BuildBusyError(build_id)
         try:

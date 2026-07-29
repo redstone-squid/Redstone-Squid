@@ -236,9 +236,10 @@ class BuildRepository:
             )
             # Update extra_info with unknown restrictions
             if unknown_restrictions:
-                build.extra_info["unknown_restrictions"] = (
-                    build.extra_info.get("unknown_restrictions", {}) | unknown_restrictions
-                )
+                merged_restrictions: UnknownRestrictions = {}
+                merged_restrictions.update(build.extra_info.get("unknown_restrictions", {}))
+                merged_restrictions.update(unknown_restrictions)
+                build.extra_info["unknown_restrictions"] = merged_restrictions
 
         # Handle types
         if not build.door_type:

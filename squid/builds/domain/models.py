@@ -2,7 +2,7 @@
 
 import re
 import typing
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from datetime import datetime
 from enum import IntEnum, StrEnum
@@ -102,17 +102,7 @@ class FrozenField[T]:
         setattr(instance, self._private_name, value)
 
 
-def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Copies the signature of a function to another function."""
-
-    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
-        return func
-
-    return _decorator
-
-
-@signature_from(field)
-def frozen_field(**kwargs: Any):
+def frozen_field(**kwargs: Any) -> Any:
     """A field that is immutable after it has been set. See `dataclasses.field` for more information."""
     metadata = kwargs.pop("metadata", {}) | {"frozen": True}
     return field(**kwargs, metadata=metadata)

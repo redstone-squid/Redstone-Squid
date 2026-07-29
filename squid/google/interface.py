@@ -1,14 +1,15 @@
 import json
 import os
+from typing import cast
 
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 from squid.core.errors import ConfigurationError
 
 
 # Establishing connection with Google APIs
-def connect():
+def connect() -> tuple[Credentials, gspread.Client]:
     scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
     if not os.path.isfile("google/client_secret.json"):
@@ -21,23 +22,26 @@ def connect():
             raise ConfigurationError(msg, context={"field": "GOOGLE_CREDENTIALS"})
 
         # Formatting credentials
-        credentials = json.loads(credentials)
-        credentials = ServiceAccountCredentials.from_json_keyfile_dict(credentials, scopes)  # pyright: ignore [reportArgumentType]
+        credentials_info = json.loads(credentials)
+        if not isinstance(credentials_info, dict):
+            msg = "GOOGLE_CREDENTIALS must contain a JSON object."
+            raise ConfigurationError(msg, context={"field": "GOOGLE_CREDENTIALS"})
+        credentials = Credentials.from_service_account_info(cast(dict[str, object], credentials_info), scopes=scopes)
     else:
         # Getting service account credentials from json file
-        credentials = ServiceAccountCredentials.from_json_keyfile_name("google/client_secret.json", scopes)  # pyright: ignore [reportArgumentType]
+        credentials = Credentials.from_service_account_file("google/client_secret.json", scopes=scopes)
 
-    return credentials, gspread.authorize(credentials)  # pyright: ignore [reportPrivateImportUsage, reportArgumentType]
+    return credentials, gspread.authorize(credentials)
 
 
 class Connection:
     """Singleton class to manage the connection to Google Sheets."""
 
-    _CREDS: ServiceAccountCredentials | None = None
-    _GC: gspread.Client | None = None  # pyright: ignore [reportPrivateImportUsage]
+    _CREDS: Credentials | None = None
+    _GC: gspread.Client | None = None
 
     @staticmethod
-    def get():
-        if not Connection._GC or Connection._CREDS.access_token_expired:  # type: ignore
+    def get() -> gspread.Client:
+        if Connection._GC is None or Connection._CREDS is None or Connection._CREDS.expired:
             Connection._CREDS, Connection._GC = connect()
         return Connection._GC
