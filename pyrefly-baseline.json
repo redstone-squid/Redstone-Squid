@@ -1,9 +1,9 @@
 {
   "errors": [
     {
-      "line": 72,
+      "line": 46,
       "column": 47,
-      "stop_line": 72,
+      "stop_line": 46,
       "stop_column": 69,
       "path": "squid/bootstrap.py",
       "code": -2,
@@ -13,9 +13,9 @@
       "severity": "error"
     },
     {
-      "line": 79,
+      "line": 53,
       "column": 41,
-      "stop_line": 79,
+      "stop_line": 53,
       "stop_column": 63,
       "path": "squid/bootstrap.py",
       "code": -2,
@@ -25,9 +25,9 @@
       "severity": "error"
     },
     {
-      "line": 81,
+      "line": 55,
       "column": 13,
-      "stop_line": 81,
+      "stop_line": 55,
       "stop_column": 29,
       "path": "squid/bootstrap.py",
       "code": -2,
@@ -517,9 +517,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -529,9 +529,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -541,9 +541,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -553,9 +553,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -565,9 +565,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -577,9 +577,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -589,9 +589,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -601,9 +601,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -613,9 +613,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -625,9 +625,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -637,9 +637,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -649,9 +649,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -661,9 +661,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -673,9 +673,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -685,9 +685,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -697,9 +697,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -709,9 +709,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -721,9 +721,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -733,9 +733,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -745,9 +745,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -757,9 +757,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -769,9 +769,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -781,9 +781,9 @@
       "severity": "error"
     },
     {
-      "line": 161,
+      "line": 162,
       "column": 20,
-      "stop_line": 161,
+      "stop_line": 162,
       "stop_column": 29,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -793,9 +793,9 @@
       "severity": "error"
     },
     {
-      "line": 346,
+      "line": 347,
       "column": 29,
-      "stop_line": 346,
+      "stop_line": 347,
       "stop_column": 55,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -805,9 +805,9 @@
       "severity": "error"
     },
     {
-      "line": 355,
+      "line": 356,
       "column": 35,
-      "stop_line": 355,
+      "stop_line": 356,
       "stop_column": 55,
       "path": "squid/builds/application/services.py",
       "code": -2,
@@ -817,9 +817,9 @@
       "severity": "error"
     },
     {
-      "line": 114,
+      "line": 115,
       "column": 5,
-      "stop_line": 114,
+      "stop_line": 115,
       "stop_column": 17,
       "path": "squid/builds/domain/models.py",
       "code": -2,
@@ -829,9 +829,9 @@
       "severity": "error"
     },
     {
-      "line": 114,
+      "line": 115,
       "column": 5,
-      "stop_line": 114,
+      "stop_line": 115,
       "stop_column": 17,
       "path": "squid/builds/domain/models.py",
       "code": -2,
@@ -841,23 +841,11 @@
       "severity": "error"
     },
     {
-      "line": 334,
-      "column": 21,
-      "stop_line": 334,
-      "stop_column": 92,
-      "path": "squid/builds/infrastructure/repository.py",
-      "code": -2,
-      "name": "bad-assignment",
-      "description": "`dict[str, object] | UnknownRestrictions` is not assignable to TypedDict key `unknown_restrictions` with type `UnknownRestrictions`",
-      "concise_description": "`dict[str, object] | UnknownRestrictions` is not assignable to TypedDict key `unknown_restrictions` with type `UnknownRestrictions`",
-      "severity": "error"
-    },
-    {
-      "line": 106,
+      "line": 64,
       "column": 5,
-      "stop_line": 106,
+      "stop_line": 64,
       "stop_column": 11,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
@@ -865,11 +853,11 @@
       "severity": "error"
     },
     {
-      "line": 124,
+      "line": 115,
       "column": 5,
-      "stop_line": 124,
+      "stop_line": 115,
       "stop_column": 11,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
@@ -877,35 +865,11 @@
       "severity": "error"
     },
     {
-      "line": 147,
+      "line": 188,
       "column": 5,
-      "stop_line": 147,
-      "stop_column": 11,
-      "path": "squid/db/schema.py",
-      "code": -2,
-      "name": "bad-class-definition",
-      "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
-      "concise_description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types",
-      "severity": "error"
-    },
-    {
-      "line": 198,
-      "column": 5,
-      "stop_line": 198,
-      "stop_column": 11,
-      "path": "squid/db/schema.py",
-      "code": -2,
-      "name": "bad-class-definition",
-      "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
-      "concise_description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types",
-      "severity": "error"
-    },
-    {
-      "line": 312,
-      "column": 5,
-      "stop_line": 312,
+      "stop_line": 188,
       "stop_column": 13,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `creators` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
@@ -913,11 +877,11 @@
       "severity": "error"
     },
     {
-      "line": 319,
+      "line": 195,
       "column": 5,
-      "stop_line": 319,
+      "stop_line": 195,
       "stop_column": 17,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `restrictions` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
@@ -925,11 +889,11 @@
       "severity": "error"
     },
     {
-      "line": 329,
+      "line": 205,
       "column": 5,
-      "stop_line": 329,
+      "stop_line": 205,
       "stop_column": 13,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `versions` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
@@ -937,15 +901,27 @@
       "severity": "error"
     },
     {
-      "line": 334,
+      "line": 210,
       "column": 5,
-      "stop_line": 334,
+      "stop_line": 210,
       "stop_column": 10,
-      "path": "squid/db/schema.py",
+      "path": "squid/builds/infrastructure/models.py",
       "code": -2,
       "name": "bad-class-definition",
       "description": "Cannot set field `types` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
       "concise_description": "Cannot set field `types` to data descriptor `AssociationProxy` with inconsistent types",
+      "severity": "error"
+    },
+    {
+      "line": 331,
+      "column": 21,
+      "stop_line": 331,
+      "stop_column": 92,
+      "path": "squid/builds/infrastructure/repository.py",
+      "code": -2,
+      "name": "bad-assignment",
+      "description": "`dict[str, object] | UnknownRestrictions` is not assignable to TypedDict key `unknown_restrictions` with type `UnknownRestrictions`",
+      "concise_description": "`dict[str, object] | UnknownRestrictions` is not assignable to TypedDict key `unknown_restrictions` with type `UnknownRestrictions`",
       "severity": "error"
     },
     {
@@ -961,27 +937,27 @@
       "severity": "error"
     },
     {
-      "line": 129,
-      "column": 16,
-      "stop_line": 129,
-      "stop_column": 40,
-      "path": "tests/unit/services/test_application_services.py",
+      "line": 45,
+      "column": 5,
+      "stop_line": 45,
+      "stop_column": 11,
+      "path": "squid/users/infrastructure/models.py",
       "code": -2,
-      "name": "bad-return",
-      "description": "Returned type `object | None` is not assignable to declared return type `int | list[int] | None`",
-      "concise_description": "Returned type `object | None` is not assignable to declared return type `int | list[int] | None`",
+      "name": "bad-class-definition",
+      "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
+      "concise_description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types",
       "severity": "error"
     },
     {
-      "line": 123,
-      "column": 39,
-      "stop_line": 123,
-      "stop_column": 45,
-      "path": "tests/unit/services/test_build_service.py",
+      "line": 36,
+      "column": 5,
+      "stop_line": 36,
+      "stop_column": 11,
+      "path": "squid/versions/infrastructure/models.py",
       "code": -2,
-      "name": "bad-argument-type",
-      "description": "Argument `tuple[Literal[1], Literal[2]]` is not assignable to parameter `dimensions` with type `_Unset | tuple[int | None, int | None, int | None]` in function `squid.builds.application.services.BuildEditPatch.__init__`",
-      "concise_description": "Argument `tuple[Literal[1], Literal[2]]` is not assignable to parameter `dimensions` with type `_Unset | tuple[int | None, int | None, int | None]` in function `squid.builds.application.services.BuildEditPatch.__init__`",
+      "name": "bad-class-definition",
+      "description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types\n  Return type `AssociationProxyInstance[_T] | _T | Self@AssociationProxy` of `AssociationProxy.__get__` is not assignable to value type `_T` of `AssociationProxy.__set__`",
+      "concise_description": "Cannot set field `builds` to data descriptor `AssociationProxy` with inconsistent types",
       "severity": "error"
     }
   ]

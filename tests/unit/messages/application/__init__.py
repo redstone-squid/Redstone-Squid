@@ -1,0 +1,1 @@
+"""Message application unit tests."""

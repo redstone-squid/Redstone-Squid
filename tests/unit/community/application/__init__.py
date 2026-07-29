@@ -1,0 +1,1 @@
+"""Community application unit tests."""
