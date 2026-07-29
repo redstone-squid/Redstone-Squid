@@ -15,3 +15,7 @@ __all__ = [
     "version_models",
     "voting_models",
 ]
+
+
+def register_models() -> None:
+    """Ensure all context-owned ORM models have been imported."""

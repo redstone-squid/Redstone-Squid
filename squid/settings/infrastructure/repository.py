@@ -5,9 +5,17 @@ from typing import Literal, Unpack, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.repositories import ServerSettingModelRepository
+from squid.persistence.models import register_models
+from squid.persistence.repository import BaseAsyncRepository
 from squid.settings.domain import Setting, SettingOptions
 from squid.settings.infrastructure.models import ServerSetting
+
+register_models()
+
+
+class _ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):
+    model_type = ServerSetting
+
 
 DbSettingKey = Literal[
     "smallest_channel_id",
@@ -52,7 +60,7 @@ class SettingsRepository:
             Servers with no row are omitted.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session)
+            repository = _ServerSettingModelRepository(session=session)
             rows = await repository.get_many(ServerSetting.server_id.in_(tuple(server_ids)))
             column_name = _SETTING_TO_DB_KEY[setting]
             return {row.server_id: cast(int | list[int] | None, getattr(row, column_name)) for row in rows}
@@ -69,7 +77,7 @@ class SettingsRepository:
             or the setting is unset.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session)
+            repository = _ServerSettingModelRepository(session=session)
             row = await repository.get_one_or_none(server_id=server_id)
             if row is None:
                 return None
@@ -86,7 +94,7 @@ class SettingsRepository:
             no row.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session)
+            repository = _ServerSettingModelRepository(session=session)
             row = await repository.get_one_or_none(server_id=server_id)
             if row is None:
                 return {}
@@ -102,7 +110,7 @@ class SettingsRepository:
             **settings: The settings to set, by name.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session, auto_commit=True)
+            repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             row = await repository.get_one_or_none(server_id=server_id)
             if row is None:
                 row = ServerSetting(server_id=server_id)
@@ -121,7 +129,7 @@ class SettingsRepository:
             server_id: The server ID that was joined.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session, auto_commit=True)
+            repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             await repository.get_or_upsert(
                 match_fields="server_id",
                 server_id=server_id,
@@ -135,7 +143,7 @@ class SettingsRepository:
             server_id: The server ID that was removed.
         """
         async with self._session_factory() as session:
-            repository = ServerSettingModelRepository(session=session, auto_commit=True)
+            repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             row = await repository.get_one_or_none(server_id=server_id)
             if row is not None:
                 row.in_server = False

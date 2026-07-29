@@ -8,7 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.messages.infrastructure.models import Message
-from squid.persistence.repositories import MessageModelRepository, VoteModelRepository, VoteSessionModelRepository
+from squid.persistence.models import register_models
+from squid.persistence.repository import BaseAsyncRepository
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     StoredVoteMutation,
@@ -30,6 +31,20 @@ from squid.voting.infrastructure.models import (
     VoteSession,
     VoteSessionOption,
 )
+
+register_models()
+
+
+class _MessageModelRepository(BaseAsyncRepository[Message]):
+    model_type = Message
+
+
+class _VoteModelRepository(BaseAsyncRepository[Vote]):
+    model_type = Vote
+
+
+class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
+    model_type = VoteSession
 
 
 class VoteRepository:
@@ -146,7 +161,7 @@ class VoteRepository:
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:
-            repository = VoteSessionModelRepository(session=session)
+            repository = _VoteSessionModelRepository(session=session)
             row = await repository.get_one_or_none(id=vote_session_id)
             if row is None:
                 return None
@@ -154,7 +169,7 @@ class VoteRepository:
 
     async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
         async with self._session_factory() as session:
-            repository = VoteSessionModelRepository(session=session)
+            repository = _VoteSessionModelRepository(session=session)
             rows = await repository.get_many(VoteSession.status == "open", VoteSession.kind == kind)
             return [await self._to_snapshot(session, row, await self._get_votes(session, row.id)) for row in rows]
 
@@ -227,12 +242,12 @@ class VoteRepository:
         )
         if for_update:
             stmt = stmt.with_for_update(of=VoteSession)
-        repository = VoteSessionModelRepository(session=session)
+        repository = _VoteSessionModelRepository(session=session)
         return await repository.get_one_or_none(statement=stmt)
 
     @staticmethod
     async def _get_votes(session: AsyncSession, vote_session_id: int) -> dict[int, float]:
-        repository = VoteModelRepository(session=session)
+        repository = _VoteModelRepository(session=session)
         votes = await repository.get_many(Vote.vote_session_id == vote_session_id)
         return {vote.user_id: vote.weight for vote in votes}
 
@@ -242,7 +257,7 @@ class VoteRepository:
         row: VoteSession,
         votes: Mapping[int, float],
     ) -> VoteSessionSnapshot:
-        message_repository = MessageModelRepository(session=session)
+        message_repository = _MessageModelRepository(session=session)
         messages = await message_repository.get_many(
             Message.vote_session_id == row.id,
             order_by=(Message.id, False),

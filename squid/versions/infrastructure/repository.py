@@ -3,9 +3,16 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import DataIntegrityError
-from squid.persistence.repositories import VersionModelRepository
+from squid.persistence.models import register_models
+from squid.persistence.repository import BaseAsyncRepository
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.infrastructure.models import Version
+
+register_models()
+
+
+class _VersionModelRepository(BaseAsyncRepository[Version]):
+    model_type = Version
 
 
 class VersionRepository:
@@ -16,7 +23,7 @@ class VersionRepository:
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion:
         async with self._session_factory() as session:
-            repository = VersionModelRepository(session=session, auto_commit=True)
+            repository = _VersionModelRepository(session=session, auto_commit=True)
             stored = await repository.add(
                 Version(
                     edition=version.edition,
@@ -34,7 +41,7 @@ class VersionRepository:
 
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
         async with self._session_factory() as session:
-            repository = VersionModelRepository(session=session)
+            repository = _VersionModelRepository(session=session)
             versions = await repository.get_many(
                 Version.edition == edition,
                 order_by=[

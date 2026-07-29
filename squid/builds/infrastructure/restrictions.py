@@ -6,8 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.application import RestrictionDefinition
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
+from squid.builds.infrastructure.model_repositories import (
+    RestrictionAliasModelRepository,
+    RestrictionModelRepository,
+)
 from squid.builds.infrastructure.models import Restriction, RestrictionAlias
-from squid.persistence.repositories import RestrictionAliasModelRepository, RestrictionModelRepository
+from squid.persistence.models import register_models
+
+register_models()
 
 
 class RestrictionRepository:

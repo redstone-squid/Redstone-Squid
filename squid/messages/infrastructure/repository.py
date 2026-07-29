@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
-from squid.persistence.repositories import MessageModelRepository
+from squid.persistence.models import register_models
+from squid.persistence.repository import BaseAsyncRepository
+
+register_models()
+
+
+class _MessageModelRepository(BaseAsyncRepository[Message]):
+    model_type = Message
 
 
 class MessageRepository:
@@ -45,7 +52,7 @@ class MessageRepository:
             vote_session_id: The vote session id of the message.
         """
         async with self._session_factory() as session:
-            repository = MessageModelRepository(session=session, auto_commit=True)
+            repository = _MessageModelRepository(session=session, auto_commit=True)
             await repository.add(
                 Message(
                     id=message_id,
@@ -66,7 +73,7 @@ class MessageRepository:
             message_id: The message ID to update.
         """
         async with self._session_factory() as session:
-            repository = MessageModelRepository(session=session, auto_commit=True)
+            repository = _MessageModelRepository(session=session, auto_commit=True)
             message = await repository.get_one_or_none(id=message_id)
             if message is not None:
                 message.updated_at = datetime.now(tz=UTC)
@@ -82,7 +89,7 @@ class MessageRepository:
             The Message object if found, otherwise None.
         """
         async with self._session_factory() as session:
-            repository = MessageModelRepository(session=session)
+            repository = _MessageModelRepository(session=session)
             message = await repository.get_one_or_none(id=message_id)
             return None if message is None else self._to_record(message)
 
@@ -99,7 +106,7 @@ class MessageRepository:
             MessageNotFoundError: If the message is not found.
         """
         async with self._session_factory() as session:
-            repository = MessageModelRepository(session=session, auto_commit=True)
+            repository = _MessageModelRepository(session=session, auto_commit=True)
             try:
                 return self._to_record(await repository.delete(message_id))
             except NotFoundError as exc:

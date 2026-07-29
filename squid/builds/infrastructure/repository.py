@@ -44,8 +44,11 @@ from squid.builds.infrastructure.models import (
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
+from squid.persistence.models import register_models
 from squid.users.infrastructure.models import User
 from squid.versions.infrastructure.models import Version
+
+register_models()
 
 logger = logging.getLogger(__name__)
 

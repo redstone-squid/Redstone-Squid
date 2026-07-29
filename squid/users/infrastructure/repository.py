@@ -9,11 +9,22 @@ from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
-from squid.persistence.repositories import UserModelRepository, VerificationCodeModelRepository
+from squid.persistence.models import register_models
+from squid.persistence.repository import BaseAsyncRepository
 from squid.users.domain import UserAccount, VerificationCode
 from squid.users.errors import UserNotFoundError
 from squid.users.infrastructure.models import User
 from squid.users.infrastructure.models import VerificationCode as VerificationCodeModel
+
+register_models()
+
+
+class _UserModelRepository(BaseAsyncRepository[User]):
+    model_type = User
+
+
+class _VerificationCodeModelRepository(BaseAsyncRepository[VerificationCodeModel]):
+    model_type = VerificationCodeModel
 
 
 class UserRepository:
@@ -28,7 +39,7 @@ class UserRepository:
         """Insert a new user and return its primary key."""
         async with self._session_factory() as session:
             user = User(discord_id=discord_id, ign=ign or "", minecraft_uuid=minecraft_uuid)  # FIXME: Allow empty IGN
-            repository = UserModelRepository(session=session, auto_commit=True)
+            repository = _UserModelRepository(session=session, auto_commit=True)
             user = await repository.add(user)
             return UserAccount(
                 discord_id=user.discord_id,
@@ -39,7 +50,7 @@ class UserRepository:
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None:
         """Return the user matching *discord_id* or *None* if not found."""
         async with self._session_factory() as session:
-            repository = UserModelRepository(session=session)
+            repository = _UserModelRepository(session=session)
             user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return None
@@ -51,7 +62,7 @@ class UserRepository:
             msg = "Cannot update a Discord-linked account without a Discord ID."
             raise InvalidStateError(msg, context={"resource": "user"})
         async with self._session_factory() as session:
-            repository = UserModelRepository(session=session, auto_commit=True)
+            repository = _UserModelRepository(session=session, auto_commit=True)
             try:
                 stored_user = await repository.get_one(discord_id=user.discord_id)
             except NotFoundError as exc:
@@ -70,7 +81,7 @@ class UserRepository:
             True if the accounts were successfully unlinked, False otherwise.
         """
         async with self._session_factory() as session:
-            repository = UserModelRepository(session=session, auto_commit=True)
+            repository = _UserModelRepository(session=session, auto_commit=True)
             user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return False
@@ -93,7 +104,7 @@ class UserRepository:
     async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
         """Return a valid verification code matching the given code."""
         async with self._session_factory() as session:
-            repository = VerificationCodeModelRepository(session=session)
+            repository = _VerificationCodeModelRepository(session=session)
             verification_code = await repository.get_one_or_none(
                 VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
                 code=self.hash_verification_code(code),
@@ -109,7 +120,7 @@ class UserRepository:
     async def invalidate_codes(self, minecraft_uuid: uuid.UUID) -> None:
         """Invalidate all verification codes for the given Minecraft UUID."""
         async with self._session_factory() as session:
-            repository = VerificationCodeModelRepository(session=session, auto_commit=True)
+            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
             verification_codes = await repository.get_many(
                 VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
                 minecraft_uuid=minecraft_uuid,
@@ -125,5 +136,5 @@ class UserRepository:
         code = self.hash_verification_code(code)
         async with self._session_factory() as session:
             verification_code = VerificationCodeModel(minecraft_uuid=minecraft_uuid, code=code, username=username)
-            repository = VerificationCodeModelRepository(session=session, auto_commit=True)
+            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
             await repository.add(verification_code)
