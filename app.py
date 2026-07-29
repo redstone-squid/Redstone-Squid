@@ -25,7 +25,6 @@ if __name__ == "__main__":
             "bot_name": "Redstone Squid",
             "bot_version": "1.5.7",
             "source_code_url": "https://github.com/redstone-squid/Redstone-Squid",
-            "print_tracebacks": True,
         },
     }
 

@@ -11,12 +11,7 @@ from rapidfuzz import process
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.exceptions import (
-    AliasAlreadyAddedError,
-    AliasInUseError,
-    BuildNotFoundError,
-    RestrictionNotFoundError,
-)
+from squid.exceptions import AliasAlreadyAddedError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -40,12 +35,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
 
         This posts the submission to all the servers which configured the bot."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            try:
-                build = await self.builds.confirm(build_id)
-            except BuildNotFoundError:
-                error_embed = utils.error_embed("Error", "No pending build with that ID.")
-                await sent_message.edit(embed=error_embed)
-                return
+            build = await self.builds.confirm(build_id)
 
             self.bot.dispatch("build_confirmed", build)
 
@@ -59,12 +49,7 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Marks a submission as denied."""
         async with self.bot.get_running_message(ctx) as sent_message:
-            try:
-                build = await self.builds.deny(build_id)
-            except BuildNotFoundError:
-                error_embed = utils.error_embed("Error", "No pending submission with that ID.")
-                await sent_message.edit(embed=error_embed)
-                return
+            build = await self.builds.deny(build_id)
 
             await self.bot.for_build(build).update_messages()
 
@@ -79,17 +64,8 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         async with self.bot.get_running_message(ctx) as sent_message:
             try:
                 await self.restrictions.add_alias(restriction, alias)
-            except RestrictionNotFoundError:
-                await sent_message.edit(embed=utils.error_embed("Error", f"No restriction named '{restriction}'."))
             except AliasAlreadyAddedError:
                 await sent_message.edit(embed=utils.info_embed("Already added", "Alias already on this restriction."))
-            except AliasInUseError as e:
-                await sent_message.edit(
-                    embed=utils.error_embed(
-                        "Error",
-                        f"Alias in use by another restriction (ID: {e.other_id}).",
-                    )
-                )
             else:
                 await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
 

@@ -11,6 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
+from squid.bot.errors import ErrorHandledView
 from squid.bot.utils import check_is_owner_server
 from squid.bot.utils.permissions import check_is_staff
 from squid.services.community import RedstonerDecisionKind
@@ -77,7 +78,7 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
     @check_is_owner_server()
     @check_is_staff()
     async def abc(self, ctx: Context[BotT]):
-        view = discord.ui.View()
+        view = ErrorHandledView()
         view.add_item(DynamicRemoveOwnRedstonerRoleButton())
         await ctx.send("a", view=view)
 
@@ -115,7 +116,7 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
             f"Gave {member.mention} the redstoner role.", allowed_mentions=discord.AllowedMentions.none()
         )
 
-        view = discord.ui.View()
+        view = ErrorHandledView()
         view.add_item(DynamicRemoveOwnRedstonerRoleButton())
         await self.bot.get_channel(433643026204852224).send(
             f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 15 upvotes in {decision.source_message_url}.",

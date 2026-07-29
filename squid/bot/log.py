@@ -1,11 +1,10 @@
 """Logging for the bot."""
 
-import logging
-
 from discord import User
 from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
+from squid.bot.errors import handle_context_error
 from squid.utils import utcnow
 
 
@@ -83,9 +82,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         if isinstance(exception, commands.CommandNotFound):
             return
 
-        await ctx.send(f"An error occurred: {exception}")
-
-        logging.getLogger(__name__).error("Ignoring exception in command %s", command, exc_info=exception)
+        await handle_context_error(ctx, exception)
 
 
 async def setup(bot: commands.Bot):

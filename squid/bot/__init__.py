@@ -23,6 +23,7 @@ from squid.bootstrap import create_application_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
+from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.db.builds import Build
@@ -56,8 +57,6 @@ class BotConfig(TypedDict, total=False):
     """Select one "home" server where some commands are only available in this server. If not set, the bot will not restrict commands to a specific server."""
     source_code_url: str
     """The URL of the source code repository, used in the help command."""
-    print_tracebacks: bool
-    """Whether to print tracebacks directly to the user, may leak system information"""
 
 
 class ApplicationConfig(TypedDict, total=False):
@@ -97,6 +96,7 @@ class RedstoneSquid(Bot):
             owner_id=config.get("owner_id"),
             intents=discord.Intents.all(),
             description=description or None,
+            tree_cls=SquidCommandTree,
         )
 
         # Store bot configuration as instance attributes
@@ -104,7 +104,6 @@ class RedstoneSquid(Bot):
         self.bot_version = config.get("bot_version")
         self.owner_server_id = config.get("owner_server_id")
         self.source_code_url = config.get("source_code_url")
-        self.print_tracebacks = config.get("print_tracebacks", False)
 
     @override
     async def setup_hook(self) -> None:
@@ -189,8 +188,6 @@ class RedstoneSquid(Bot):
             title=title,
             description=description,
             delete_on_exit=delete_on_exit,
-            print_tracebacks=self.print_tracebacks,
-            id_to_mention_on_error=self.owner_id,
         )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:

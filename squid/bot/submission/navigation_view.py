@@ -17,6 +17,8 @@ import discord
 from discord.ui import Item
 from discord.utils import maybe_coroutine
 
+from squid.bot.errors import ErrorHandledView
+
 type BaseViewInit[**P, T] = Callable[Concatenate["BaseNavigableView[Any]", P], T]
 type MaybeAwaitable[T] = T | Awaitable[T]
 type MaybeAwaitableFunc[**P, T] = Callable[P, MaybeAwaitable[T]]
@@ -37,7 +39,7 @@ async def resolve_parent[ClientT: discord.Client](
     return parent
 
 
-class BaseNavigableView[ClientT: discord.Client](discord.ui.View, abc.ABC):
+class BaseNavigableView[ClientT: discord.Client](ErrorHandledView, abc.ABC):
     """
     A view which adds the ability to navigate through a tree of views.
 

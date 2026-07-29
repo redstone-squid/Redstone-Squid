@@ -1,7 +1,7 @@
 """A cog with commands to editing builds."""
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import discord
 from discord import app_commands
@@ -20,7 +20,6 @@ from squid.bot.utils import (
     fix_converter_annotations,
 )
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
-from squid.exceptions import BuildBusyError, BuildNotFoundError
 from squid.services.builds import BuildEditPatch
 
 if TYPE_CHECKING:
@@ -107,41 +106,32 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         """Edits a door record in the database directly."""
         await ctx.defer()
         async with RunningMessage(ctx) as sent_message:
-            try:
-                async with self.builds.edit(flags.build_id, flags.to_patch()) as edit:
-                    build = edit.build
-                    if ctx.interaction:
-                        await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-                        view = ConfirmationView()
-                        preview = await ctx.interaction.followup.send(
-                            "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                            embed=await self.bot.for_build(build).generate_embed(),
-                            view=view,
-                            ephemeral=True,
-                            wait=True,
+            async with self.builds.edit(flags.build_id, flags.to_patch()) as edit:
+                build = edit.build
+                if ctx.interaction:
+                    interaction = cast(discord.Interaction[discord.Client], ctx.interaction)
+                    await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
+                    view = ConfirmationView()
+                    preview = await interaction.followup.send(
+                        "Here is a preview of the changes. Use the buttons to confirm or cancel.",
+                        embed=await self.bot.for_build(build).generate_embed(),
+                        view=view,
+                        ephemeral=True,
+                        wait=True,
+                    )
+                    await view.wait()
+                    await preview.delete()
+                    if view.value is None:
+                        await sent_message.edit(
+                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
                         )
-                        await view.wait()
-                        await preview.delete()
-                        if view.value is None:
-                            await sent_message.edit(
-                                embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
-                            )
-                            return
-                        if view.value is False:
-                            await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
-                            return
+                        return
+                    if view.value is False:
+                        await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+                        return
 
-                    await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
-                    await edit.commit()
-            except BuildNotFoundError:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                await sent_message.edit(embed=error_embed)
-                return
-            except BuildBusyError:
-                await sent_message.edit(
-                    embed=utils.error_embed("Error", "Build is currently being edited by someone else.")
-                )
-                return
+                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+                await edit.commit()
 
             await asyncio.gather(
                 self.bot.for_build(build).update_messages(),

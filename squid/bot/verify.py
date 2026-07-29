@@ -6,7 +6,6 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot.submission.ui.views import ConfirmationView
-from squid.exceptions import AccountAlreadyLinkedError, InvalidVerificationCodeError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -21,11 +20,8 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
     @app_commands.describe(code="The code you received by running /link in the game.")
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
-        try:
-            await self.user_service.link_minecraft_account(ctx.author.id, code)
-            await ctx.send("Your discord account has been linked with your minecraft account.")
-        except (InvalidVerificationCodeError, AccountAlreadyLinkedError):
-            await ctx.send("Invalid code. Please generate a new code and try again.")
+        await self.user_service.link_minecraft_account(ctx.author.id, code)
+        await ctx.send("Your discord account has been linked with your minecraft account.")
 
     @hybrid_command()
     async def unlink(self, ctx: Context[BotT]):

@@ -1,6 +1,5 @@
 """Discord embed utilities and messaging helpers."""
 
-from traceback import format_tb
 from types import TracebackType
 
 import discord
@@ -46,16 +45,12 @@ class RunningMessage:
         title: str = "Working",
         description: str = "Getting information...",
         delete_on_exit: bool = False,
-        print_tracebacks: bool = False,  # Whether to print tracebacks in the message
-        id_to_mention_on_error: int | None = None,
     ):
         self.ctx = ctx
         self.title = title
         self.description = description
         self.delete_on_exit = delete_on_exit
         self.sent_message: Message
-        self.print_tracebacks = print_tracebacks
-        self.id_to_mention_on_error = id_to_mention_on_error
 
     async def __aenter__(self) -> Message:
         sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
@@ -70,14 +65,10 @@ class RunningMessage:
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         # Handle exceptions
-        if exc_type is not None:
-            description = f"{exc_val!s}"
-            if self.print_tracebacks:
-                description += f"\n\n```{''.join(format_tb(exc_tb))}```"
-            await self.sent_message.edit(
-                content=f"<@{self.id_to_mention_on_error}>" if self.id_to_mention_on_error else None,
-                embed=error_embed(f"An error has occurred: {exc_type.__name__}", description),
-            )
+        if exc_val is not None:
+            from squid.bot.errors import handle_message_error
+
+            await handle_message_error(self.sent_message, exc_val)
             return False
 
         # Handle normal exit

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 import discord
 from discord import Interaction
 
+from squid.bot.errors import ErrorHandledModal, ErrorHandledView
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
@@ -23,7 +24,6 @@ from squid.bot.submission.ui.components import (
 from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
-from squid.exceptions import BuildBusyError
 from squid.services.builds import BuildEditPatch, BuildService
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     import squid.bot.submission.build_handler
 
 
-class SubmissionModal(discord.ui.Modal):
+class SubmissionModal(ErrorHandledModal):
     def __init__(self, build: Build, builds: BuildService):
         super().__init__(title="Submit Your Build")
         self.build = build
@@ -105,7 +105,7 @@ class SubmissionModal(discord.ui.Modal):
             self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
-class EditModal[BotT: "squid.bot.RedstoneSquid"](discord.ui.Modal):
+class EditModal[BotT: "squid.bot.RedstoneSquid"](ErrorHandledModal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
@@ -124,7 +124,7 @@ class EditModal[BotT: "squid.bot.RedstoneSquid"](discord.ui.Modal):
         await self.parent.update(interaction)
 
 
-class BuildSubmissionForm(discord.ui.View):
+class BuildSubmissionForm(ErrorHandledView):
     def __init__(self, build: Build, builds: BuildService, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
         # Assumptions
@@ -156,7 +156,7 @@ class BuildSubmissionForm(discord.ui.View):
         self.stop()
 
 
-class ConfirmationView(discord.ui.View):
+class ConfirmationView(ErrorHandledView):
     """A simple Yes/No style pair of buttons for confirming an action."""
 
     def __init__(self, timeout: int = 60):
@@ -174,7 +174,7 @@ class ConfirmationView(discord.ui.View):
         self.stop()
 
 
-class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
+class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
     """A view that allows users to edit a build.
 
     Changes are accumulated locally and applied under a service-managed lock on submit.
@@ -312,15 +312,8 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](discord.ui.View):
             patch.apply(self.build)
             await self.builds.save(self.build)
         else:
-            try:
-                async with self.builds.edit(self.build.id, patch) as edit:
-                    self.build = await edit.commit()
-            except BuildBusyError:
-                await interaction.followup.send(
-                    content="This build is currently being edited by someone else.",
-                    ephemeral=True,
-                )
-                return
+            async with self.builds.edit(self.build.id, patch) as edit:
+                self.build = await edit.commit()
         await interaction.followup.send(
             content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True
         )
