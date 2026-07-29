@@ -9,8 +9,8 @@ from squid.services.community import RedstonerService, WelcomeRelayService
 from squid.services.messages import MessageService
 from squid.services.settings import SettingsService
 from squid.services.users import UserService
-from squid.services.versions import VersionService
 from squid.services.votes import VoteService
+from squid.versions.application.services import VersionService
 
 
 @dataclass(frozen=True, slots=True)

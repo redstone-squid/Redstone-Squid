@@ -17,7 +17,8 @@ from squid.exceptions import (
 from squid.services.messages import MessageService, TrackedMessage
 from squid.services.settings import SettingOptions, SettingsService
 from squid.services.users import UserAccount, UserService, VerificationCode
-from squid.services.versions import Edition, MinecraftVersion, VersionService
+from squid.versions.application.services import VersionService
+from squid.versions.domain import Edition, MinecraftVersion
 
 
 class FakeUserRepository:

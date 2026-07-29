@@ -2,7 +2,7 @@
 
 from squid.db.schema import RestrictionTypeLiteral
 from squid.services.build_inference import BuildInferenceInput, BuildInferenceService
-from squid.services.versions import Edition
+from squid.versions.domain import Edition
 
 COMPLETE_OUTPUT = """
 <target>

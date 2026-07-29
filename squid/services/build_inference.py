@@ -9,8 +9,8 @@ from typing import Protocol, cast
 
 from squid.db.builds import Build
 from squid.db.schema import DoorOrientationLiteral, RecordCategoryLiteral, RestrictionTypeLiteral, UnknownRestrictions
-from squid.services.versions import Edition
 from squid.utils import parse_time_string
+from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)
 

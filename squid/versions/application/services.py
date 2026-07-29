@@ -1,47 +1,8 @@
-"""Framework-independent Minecraft version application service."""
-
-import re
-from dataclasses import dataclass
-from typing import Literal, Protocol, override
+"""Minecraft version application services."""
 
 from squid.exceptions import InvalidVersionError, VersionCatalogUnavailableError
-
-Edition = Literal["Java", "Bedrock"]
-VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$", re.IGNORECASE)
-
-
-def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
-    """Parse a Minecraft version, defaulting to Java when the edition is omitted."""
-    match = VERSION_PATTERN.match(version_string)
-    if not match:
-        msg = "Invalid version string format."
-        raise InvalidVersionError(msg, context={"version": version_string})
-
-    edition, major, minor, patch = match.groups()
-    parsed_edition: Edition = "Bedrock" if edition is not None and edition.lower() == "bedrock" else "Java"
-    return parsed_edition, int(major), int(minor), int(patch or 0)
-
-
-@dataclass(frozen=True, slots=True)
-class MinecraftVersion:
-    """A Minecraft edition and semantic version."""
-
-    edition: Edition
-    major: int
-    minor: int
-    patch: int
-
-    @override
-    def __str__(self) -> str:
-        return f"{self.edition} {self.major}.{self.minor}.{self.patch}"
-
-
-class VersionRepository(Protocol):
-    """Persistence operations required by :class:`VersionService`."""
-
-    async def add(self, version: MinecraftVersion) -> MinecraftVersion: ...
-
-    async def list(self, edition: Edition) -> list[MinecraftVersion]: ...
+from squid.versions.application.ports import VersionRepository
+from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
 
 
 class VersionService:

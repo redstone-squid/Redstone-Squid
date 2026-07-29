@@ -20,8 +20,8 @@ class _Atheris(Protocol):
 
 atheris = cast(_Atheris, importlib.import_module("atheris"))
 
-with atheris.instrument_imports(include=["squid.services.versions"]):
-    from squid.services.versions import MinecraftVersion, parse_version_string
+with atheris.instrument_imports(include=["squid.versions.domain"]):
+    from squid.versions.domain import MinecraftVersion, parse_version_string
 
 
 def test_one_input(data: bytes) -> None:

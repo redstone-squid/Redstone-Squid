@@ -15,7 +15,6 @@ from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
 from squid.db.repos.settings_repository import SettingsRepository
 from squid.db.repos.user_repository import UserRepository
-from squid.db.repos.version_repository import VersionRepository
 from squid.db.repos.vote_repository import VoteRepository
 from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
 from squid.infrastructure.text_generation import OpenAITextGenerator
@@ -33,8 +32,9 @@ from squid.services.embeddings import BuildEmbeddingService
 from squid.services.messages import MessageService
 from squid.services.settings import SettingsService
 from squid.services.users import UserService
-from squid.services.versions import VersionService
 from squid.services.votes import VoteService
+from squid.versions.application.services import VersionService
+from squid.versions.infrastructure.repository import VersionRepository
 
 
 @dataclass(frozen=True, slots=True)

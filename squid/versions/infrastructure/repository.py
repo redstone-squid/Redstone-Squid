@@ -1,11 +1,11 @@
-"""SQLAlchemy repository for Minecraft versions."""
+"""SQLAlchemy persistence adapter for Minecraft versions."""
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import VersionModelRepository
 from squid.db.schema import Version
 from squid.exceptions import DataIntegrityError
-from squid.services.versions import Edition, MinecraftVersion
+from squid.versions.domain import Edition, MinecraftVersion
 
 
 class VersionRepository:
