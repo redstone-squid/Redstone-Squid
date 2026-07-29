@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
-from squid.services.votes import VoteActor
+from squid.voting.domain import VoteActor
 
 if TYPE_CHECKING:
     import squid.bot

@@ -35,6 +35,7 @@ from sqlalchemy.sql import func
 
 from squid.db._docs_extraction import extract_attribute_docstrings
 from squid.messages.domain import MessagePurposeLiteral
+from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
@@ -49,10 +50,6 @@ DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOri
 
 RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
-
-VoteKindLiteral = Literal["build", "delete_log"]
-VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]
-VoteChoiceLiteral: TypeAlias = Literal["approve", "deny"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 

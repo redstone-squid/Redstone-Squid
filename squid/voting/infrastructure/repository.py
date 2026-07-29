@@ -1,29 +1,25 @@
-"""SQLAlchemy persistence for atomic vote mutations."""
+"""SQLAlchemy voting repository."""
 
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import MessageModelRepository, VoteModelRepository, VoteSessionModelRepository
-from squid.db.schema import (
-    BuildVoteSession,
-    DeleteLogVoteSession,
-    Message,
-    Vote,
-    VoteKindLiteral,
-    VoteSession,
-    VoteSessionOption,
-    VoteSessionResultLiteral,
-)
-from squid.services.votes import (
+from squid.db.schema import BuildVoteSession, DeleteLogVoteSession, Message, Vote, VoteSession, VoteSessionOption
+from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     StoredVoteMutation,
     VoteChange,
     VoteChoice,
+    VoteKindLiteral,
+    VoteMessage,
     VoteOption,
+    VoteSessionResultLiteral,
     VoteSessionSnapshot,
+    VoteStatus,
     VoteTarget,
     normalize_vote_options,
 )
@@ -141,6 +137,20 @@ class VoteRepository:
             votes = await self._get_votes(session, row.id)
             return await self._to_snapshot(session, row, votes)
 
+    async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+        async with self._session_factory() as session:
+            repository = VoteSessionModelRepository(session=session)
+            row = await repository.get_one_or_none(id=vote_session_id)
+            if row is None:
+                return None
+            return await self._to_snapshot(session, row, await self._get_votes(session, row.id))
+
+    async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
+        async with self._session_factory() as session:
+            repository = VoteSessionModelRepository(session=session)
+            rows = await repository.get_many(VoteSession.status == "open", VoteSession.kind == kind)
+            return [await self._to_snapshot(session, row, await self._get_votes(session, row.id)) for row in rows]
+
     async def cast_vote(
         self,
         message_id: int,
@@ -230,7 +240,9 @@ class VoteRepository:
             Message.vote_session_id == row.id,
             order_by=(Message.id, False),
         )
-        message_ids = tuple(message.id for message in messages)
+        vote_messages = tuple(
+            VoteMessage(message.id, message.channel_id) for message in messages if message.channel_id is not None
+        )
         target = VoteTarget()
         kind = row.kind
         if kind == "build":
@@ -256,13 +268,14 @@ class VoteRepository:
 
         return VoteSessionSnapshot(
             id=row.id,
-            kind=kind,  # pyright: ignore[reportArgumentType]
-            status=row.status,  # pyright: ignore[reportArgumentType]
+            author_id=row.author_id,
+            kind=cast(VoteKindLiteral, kind),
+            status=cast(VoteStatus, row.status),
             result=row.result,
             pass_threshold=row.pass_threshold,
             fail_threshold=row.fail_threshold,
             votes=dict(votes),
-            message_ids=message_ids,
+            messages=vote_messages,
             options=tuple(
                 VoteOption(
                     emoji=option.emoji,

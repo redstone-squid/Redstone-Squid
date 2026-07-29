@@ -13,7 +13,6 @@ from squid.db.engine import DatabaseEngine
 from squid.db.repos.build_query_repository import BuildMetadataRepository
 from squid.db.repos.build_repository import BuildRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
-from squid.db.repos.vote_repository import VoteRepository
 from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
 from squid.infrastructure.text_generation import OpenAITextGenerator
 from squid.messages.application import MessageService
@@ -23,7 +22,6 @@ from squid.services.build_queries import BuildQueryService
 from squid.services.builds import BuildService, RestrictionService
 from squid.services.container import ApplicationServices
 from squid.services.embeddings import BuildEmbeddingService
-from squid.services.votes import VoteService
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.users.application import UserService
@@ -31,6 +29,8 @@ from squid.users.infrastructure.mojang import get_minecraft_username
 from squid.users.infrastructure.repository import UserRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
+from squid.voting.application import VoteService
+from squid.voting.infrastructure.repository import VoteRepository
 
 
 @dataclass(frozen=True, slots=True)

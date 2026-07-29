@@ -4,16 +4,17 @@ from math import inf, nan
 
 import pytest
 
-from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
 from squid.exceptions import InvalidVoteConfigurationError
-from squid.services.votes import (
+from squid.voting.application import VoteService
+from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     StoredVoteMutation,
     VoteActor,
     VoteChange,
     VoteChoice,
+    VoteKindLiteral,
     VoteOption,
-    VoteService,
+    VoteSessionResultLiteral,
     VoteSessionSnapshot,
     VoteStatus,
     VoteTarget,
@@ -29,13 +30,14 @@ def snapshot(
 ) -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=12,
+        author_id=7,
         kind=kind,
         status=status,
         result=result,
         pass_threshold=3,
         fail_threshold=-3,
         votes=votes or {},
-        message_ids=(100,),
+        messages=(),
         options=DEFAULT_VOTE_OPTIONS,
         target=VoteTarget(build_id=42),
     )
@@ -82,6 +84,12 @@ class FakeVoteRepository:
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         return self.session
+
+    async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+        return self.session
+
+    async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
+        return [] if self.session is None else [self.session]
 
     async def cast_vote(
         self,

@@ -6,8 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.db.repos.vote_repository import VoteRepository
-from squid.services.votes import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
+from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
+from squid.voting.infrastructure.repository import VoteRepository
 
 pytestmark = pytest.mark.integration
 
