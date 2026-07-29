@@ -1,9 +1,12 @@
 """Build application service tests."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Literal, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
 from squid.builds.application.services import (
@@ -19,9 +22,6 @@ class FakeBuildRepository:
         self.save = AsyncMock()
         self.confirm = AsyncMock()
         self.deny = AsyncMock()
-        self.acquire_lock = AsyncMock(return_value=True)
-        self.release_lock = AsyncMock()
-        self.clean_stale_locks = AsyncMock()
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:
@@ -38,6 +38,22 @@ class FakeRestrictionRepository:
 
     async def add_alias(self, restriction: str, alias: str) -> None:
         return None
+
+
+class FakeBuildLocks:
+    def __init__(self) -> None:
+        self.acquire = AsyncMock(return_value=True)
+        self.release = AsyncMock()
+        self.clean_stale = AsyncMock()
+
+    @asynccontextmanager
+    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
+        if not await self.acquire(build_id, blocking=True, timeout=timeout):
+            raise BuildBusyError(build_id)
+        try:
+            yield
+        finally:
+            await self.release(build_id)
 
 
 class FakeVersions:
@@ -58,8 +74,14 @@ class FakeEmbeddings:
         self.indexed.append(build)
 
 
-def build_service(repository: FakeBuildRepository) -> BuildService:
-    return BuildService(repository, FakeRestrictionRepository(), FakeVersions(), FakeEmbeddings())
+def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None = None) -> BuildService:
+    return BuildService(
+        repository,
+        locks or FakeBuildLocks(),
+        FakeRestrictionRepository(),
+        FakeVersions(),
+        FakeEmbeddings(),
+    )
 
 
 @pytest.fixture
@@ -79,7 +101,8 @@ def existing_build() -> Build:
 
 async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    service = build_service(repository)
+    locks = FakeBuildLocks()
+    service = build_service(repository, locks)
     patch = BuildEditPatch(
         dimensions=(10, 11, 12),
         locationality="Not locational",
@@ -98,13 +121,14 @@ async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_buil
         assert lease.build.extra_info.get("server_info") == {"server_ip": "new.example"}
 
     repository.save.assert_not_awaited()
-    repository.acquire_lock.assert_awaited_once_with(42, blocking=False, timeout=30)
-    repository.release_lock.assert_awaited_once_with(42)
+    locks.acquire.assert_awaited_once_with(42, blocking=False, timeout=30)
+    locks.release.assert_awaited_once_with(42)
 
 
 async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    service = build_service(repository)
+    locks = FakeBuildLocks()
+    service = build_service(repository, locks)
 
     async with service.edit(42, BuildEditPatch(door_dimensions=(2, 3, 4))) as lease:
         result = await lease.commit()
@@ -112,12 +136,17 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
     assert result is existing_build
     assert existing_build.door_dimensions == (2, 3, 4)
     repository.save.assert_awaited_once_with(existing_build)
-    repository.release_lock.assert_awaited_once_with(42)
+    assert locks.acquire.await_args_list == [
+        ((42,), {"blocking": False, "timeout": 30}),
+        ((42,), {"blocking": True, "timeout": 30}),
+    ]
+    assert locks.release.await_count == 2
 
 
 async def test_edit_releases_lock_when_patch_application_fails(existing_build: Build) -> None:
     repository = FakeBuildRepository(existing_build)
-    service = build_service(repository)
+    locks = FakeBuildLocks()
+    service = build_service(repository, locks)
     invalid_dimensions = cast(tuple[int | None, int | None, int | None], (1, 2))
     patch = BuildEditPatch(dimensions=invalid_dimensions)
 
@@ -125,7 +154,7 @@ async def test_edit_releases_lock_when_patch_application_fails(existing_build: B
         async with service.edit(42, patch):
             pass
 
-    repository.release_lock.assert_awaited_once_with(42)
+    locks.release.assert_awaited_once_with(42)
 
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> None:
@@ -134,12 +163,29 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> No
         async with missing_service.edit(42, BuildEditPatch()):
             pass
 
-    busy_repository = FakeBuildRepository(existing_build)
-    busy_repository.acquire_lock.return_value = False
-    busy_service = build_service(busy_repository)
+    busy_locks = FakeBuildLocks()
+    busy_locks.acquire.return_value = False
+    busy_service = build_service(FakeBuildRepository(existing_build), busy_locks)
     with pytest.raises(BuildBusyError):
         async with busy_service.edit(42, BuildEditPatch()):
             pass
+
+
+async def test_status_changes_and_cleanup_use_lock_manager(existing_build: Build) -> None:
+    repository = FakeBuildRepository(existing_build)
+    locks = FakeBuildLocks()
+    service = build_service(repository, locks)
+    cutoff = Instant.from_utc(2026, 7, 29)
+
+    await service.confirm(42)
+    await service.deny(42)
+    await service.clean_stale_locks(older_than=cutoff)
+
+    repository.confirm.assert_awaited_once_with(existing_build)
+    repository.deny.assert_awaited_once_with(existing_build)
+    assert locks.acquire.await_count == 2
+    assert locks.release.await_count == 2
+    locks.clean_stale.assert_awaited_once_with(older_than=cutoff)
 
 
 async def test_submit_door_maps_input_and_saves() -> None:
@@ -185,7 +231,8 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
 async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
     repository = FakeBuildRepository()
     embeddings = FakeEmbeddings()
-    service = BuildService(repository, FakeRestrictionRepository(), FakeVersions(), embeddings)
+    locks = FakeBuildLocks()
+    service = BuildService(repository, locks, FakeRestrictionRepository(), FakeVersions(), embeddings)
     build = Build(id=42)
 
     await service.save(build)
@@ -193,5 +240,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     assert build.versions == ["Java 1.21.0"]
     assert build.embedding == [1.0, 2.0]
     repository.save.assert_awaited_once_with(build)
+    locks.acquire.assert_awaited_once_with(42, blocking=True, timeout=30)
+    locks.release.assert_awaited_once_with(42)
     assert embeddings.prepared == [build]
     assert embeddings.indexed == [build]

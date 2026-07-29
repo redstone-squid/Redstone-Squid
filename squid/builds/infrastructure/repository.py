@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from contextlib import AbstractAsyncContextManager
 from typing import Any, cast
 
 from sqlalchemy import func, select, update
@@ -21,7 +20,6 @@ from squid.builds.domain import (
     UnknownRestrictions,
 )
 from squid.builds.errors import InvalidBuildError
-from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
@@ -48,25 +46,12 @@ logger = logging.getLogger(__name__)
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_locks", "_mapper", "_records", "_session_factory")
+    __slots__ = ("_mapper", "_records", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._locks = BuildLockRepository(session_factory)
         self._mapper = BuildMapper()
         self._records = SmallestDoorRecordRepository(session_factory)
-
-    async def acquire_lock(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
-        return await self._locks.acquire(build_id, blocking=blocking, timeout=timeout)
-
-    async def release_lock(self, build_id: int) -> None:
-        await self._locks.release(build_id)
-
-    def locked(self, build_id: int, *, timeout: float = 30) -> AbstractAsyncContextManager[None]:
-        return self._locks.locked(build_id, timeout=timeout)
-
-    async def clean_stale_locks(self, *, older_than: Instant) -> None:
-        await self._locks.clean_stale(older_than=older_than)
 
     async def get_by_id(self, build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -157,8 +142,7 @@ class BuildRepository:
                 sql_build.original_message_id = build.original_message_id
                 await session.commit()
         else:
-            async with self.locked(build.id):
-                await self._update_existing(build)
+            await self._update_existing(build)
 
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
@@ -386,15 +370,14 @@ class BuildRepository:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
 
-        async with self.locked(build.id):
-            build.submission_status = Status.CONFIRMED
-            async with self._session_factory() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.CONFIRMED)
-                result = cast(CursorResult[Any], await session.execute(stmt))
-                await session.commit()
-                if result.rowcount != 1:
-                    msg = "Failed to confirm submission in the database."
-                    raise PersistenceError(msg, context={"build_id": build.id, "operation": "confirm"})
+        build.submission_status = Status.CONFIRMED
+        async with self._session_factory() as session:
+            stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.CONFIRMED)
+            result = cast(CursorResult[Any], await session.execute(stmt))
+            await session.commit()
+            if result.rowcount != 1:
+                msg = "Failed to confirm submission in the database."
+                raise PersistenceError(msg, context={"build_id": build.id, "operation": "confirm"})
 
     async def deny(self, build: Build) -> None:
         """Marks the build as denied.
@@ -406,15 +389,14 @@ class BuildRepository:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
 
-        async with self.locked(build.id):
-            build.submission_status = Status.DENIED
-            async with self._session_factory() as session:
-                stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.DENIED)
-                result = cast(CursorResult[Any], await session.execute(stmt))
-                await session.commit()
-                if result.rowcount != 1:
-                    msg = "Failed to deny submission in the database."
-                    raise PersistenceError(msg, context={"build_id": build.id, "operation": "deny"})
+        build.submission_status = Status.DENIED
+        async with self._session_factory() as session:
+            stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.DENIED)
+            result = cast(CursorResult[Any], await session.execute(stmt))
+            await session.commit()
+            if result.rowcount != 1:
+                msg = "Failed to deny submission in the database."
+                raise PersistenceError(msg, context={"build_id": build.id, "operation": "deny"})
 
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""

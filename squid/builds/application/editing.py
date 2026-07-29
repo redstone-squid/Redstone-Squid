@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Final, Literal, Self, override
 
 from squid.builds.application.commands import Dimensions
-from squid.builds.application.ports import BuildRepository
+from squid.builds.application.ports import BuildLockManager, BuildRepository
 from squid.builds.domain import Build, Info, ServerInfo
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, InvalidBuildError
 from squid.core.errors import InvalidStateError
@@ -170,6 +170,7 @@ class BuildEditLease:
     def __init__(
         self,
         repository: BuildRepository,
+        locks: BuildLockManager,
         persist: Callable[[Build], Awaitable[None]],
         build_id: int,
         patch: BuildEditPatch,
@@ -178,6 +179,7 @@ class BuildEditLease:
         timeout: float,
     ) -> None:
         self._repository = repository
+        self._locks = locks
         self._persist = persist
         self._build_id = build_id
         self._patch = patch
@@ -197,7 +199,7 @@ class BuildEditLease:
         build = await self._repository.get_by_id(self._build_id)
         if build is None:
             raise BuildNotFoundError(self._build_id)
-        acquired = await self._repository.acquire_lock(
+        acquired = await self._locks.acquire(
             self._build_id,
             blocking=self._blocking,
             timeout=self._timeout,
@@ -208,7 +210,7 @@ class BuildEditLease:
         try:
             self._patch.apply(build)
         except BaseException:
-            await self._repository.release_lock(self._build_id)
+            await self._locks.release(self._build_id)
             self._build = None
             raise
         return self
@@ -224,4 +226,4 @@ class BuildEditLease:
 
     async def __aexit__(self, *_exc: object) -> None:
         if self._build is not None:
-            await self._repository.release_lock(self._build_id)
+            await self._locks.release(self._build_id)

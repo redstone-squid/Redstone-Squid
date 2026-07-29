@@ -6,7 +6,12 @@ from whenever import Instant
 
 from squid.builds.application.commands import DoorSubmissionInput
 from squid.builds.application.editing import BuildEditLease, BuildEditPatch
-from squid.builds.application.ports import BuildEmbeddingCoordinator, BuildRepository, DefaultVersionResolver
+from squid.builds.application.ports import (
+    BuildEmbeddingCoordinator,
+    BuildLockManager,
+    BuildRepository,
+    DefaultVersionResolver,
+)
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildNotFoundError
@@ -18,11 +23,13 @@ class BuildService:
     def __init__(
         self,
         repository: BuildRepository,
+        locks: BuildLockManager,
         restrictions: RestrictionRepository,
         versions: DefaultVersionResolver,
         embeddings: BuildEmbeddingCoordinator,
     ) -> None:
         self._repository = repository
+        self._locks = locks
         self._restrictions = restrictions
         self._versions = versions
         self._embeddings = embeddings
@@ -72,7 +79,7 @@ class BuildService:
 
     async def clean_stale_locks(self, *, older_than: Instant) -> None:
         """Release persisted build locks older than a cutoff."""
-        await self._repository.clean_stale_locks(older_than=older_than)
+        await self._locks.clean_stale(older_than=older_than)
 
     async def classify_restrictions(self, build: Build, restrictions: Sequence[str]) -> Build:
         """Replace a build's restrictions using repository-owned metadata."""
@@ -106,6 +113,7 @@ class BuildService:
     ) -> BuildEditLease:
         return BuildEditLease(
             self._repository,
+            self._locks,
             self._persist,
             build_id,
             patch,
@@ -115,12 +123,14 @@ class BuildService:
 
     async def confirm(self, build_id: int) -> Build:
         build = await self._get_required(build_id)
-        await self._repository.confirm(build)
+        async with self._locks.locked(build_id):
+            await self._repository.confirm(build)
         return build
 
     async def deny(self, build_id: int) -> Build:
         build = await self._get_required(build_id)
-        await self._repository.deny(build)
+        async with self._locks.locked(build_id):
+            await self._repository.deny(build)
         return build
 
     async def refresh_record_titles(self) -> None:
@@ -136,7 +146,11 @@ class BuildService:
         if not build.versions:
             build.versions = [await self._versions.newest("Java")]
         await self._embeddings.prepare(build)
-        await self._repository.save(build)
+        if build.id is None:
+            await self._repository.save(build)
+        else:
+            async with self._locks.locked(build.id):
+                await self._repository.save(build)
         await self._embeddings.index(build)
 
     async def _set_restrictions(self, build: Build, restrictions: Sequence[str]) -> None:

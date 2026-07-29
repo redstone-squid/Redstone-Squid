@@ -1,5 +1,6 @@
 """Build application ports."""
 
+from contextlib import AbstractAsyncContextManager
 from typing import Literal, Protocol
 
 from whenever import Instant
@@ -18,13 +19,19 @@ class BuildRepository(Protocol):
 
     async def deny(self, build: Build) -> None: ...
 
-    async def acquire_lock(self, build_id: int, *, blocking: bool, timeout: float) -> bool: ...
-
-    async def release_lock(self, build_id: int) -> None: ...
-
     async def update_smallest_door_records_without_title(self) -> None: ...
 
-    async def clean_stale_locks(self, *, older_than: Instant) -> None: ...
+
+class BuildLockManager(Protocol):
+    """Coordinate exclusive, task-reentrant access to persisted builds."""
+
+    async def acquire(self, build_id: int, *, blocking: bool, timeout: float) -> bool: ...
+
+    async def release(self, build_id: int) -> None: ...
+
+    def locked(self, build_id: int, *, timeout: float = 30) -> AbstractAsyncContextManager[None]: ...
+
+    async def clean_stale(self, *, older_than: Instant) -> None: ...
 
 
 class BuildEmbeddingCoordinator(Protocol):

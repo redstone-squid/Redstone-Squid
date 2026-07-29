@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.core.errors import InvalidStateError
 
 
@@ -20,20 +20,20 @@ async def test_build_lock_is_reentrant_only_for_owning_task() -> None:
 
     session_factory = MagicMock()
     session_factory.return_value.__aenter__.return_value = session
-    repository = BuildRepository(cast(async_sessionmaker[AsyncSession], session_factory))
+    locks = BuildLockRepository(cast(async_sessionmaker[AsyncSession], session_factory))
 
-    assert await repository.acquire_lock(42, blocking=False)
-    assert await repository.acquire_lock(42, blocking=False)
+    assert await locks.acquire(42, blocking=False)
+    assert await locks.acquire(42, blocking=False)
 
     async def contend() -> bool:
-        return await repository.acquire_lock(42, blocking=False)
+        return await locks.acquire(42, blocking=False)
 
     assert not await asyncio.create_task(contend())
     assert session.execute.await_count == 1
 
-    await repository.release_lock(42)
+    await locks.release(42)
     assert session.execute.await_count == 1
-    await repository.release_lock(42)
+    await locks.release(42)
     assert session.execute.await_count == 2
 
 
@@ -46,13 +46,13 @@ async def test_build_lock_rejects_release_from_another_task() -> None:
 
     session_factory = MagicMock()
     session_factory.return_value.__aenter__.return_value = session
-    repository = BuildRepository(cast(async_sessionmaker[AsyncSession], session_factory))
-    assert await repository.acquire_lock(42, blocking=False)
+    locks = BuildLockRepository(cast(async_sessionmaker[AsyncSession], session_factory))
+    assert await locks.acquire(42, blocking=False)
 
     async def release() -> None:
-        await repository.release_lock(42)
+        await locks.release(42)
 
     with pytest.raises(InvalidStateError, match="owning task"):
         await asyncio.create_task(release())
 
-    await repository.release_lock(42)
+    await locks.release(42)

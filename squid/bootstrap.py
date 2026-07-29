@@ -11,6 +11,7 @@ from squid.builds.application import (
     RestrictionService,
 )
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
+from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.queries import BuildMetadataRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
@@ -43,8 +44,9 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         VecsBuildIndex(config.embeddings.database_connection, dimension=config.embeddings.dimension),
     )
     build_repository = BuildRepository(db.async_session)
+    build_locks = BuildLockRepository(db.async_session)
     return ApplicationServices(
-        builds=BuildService(build_repository, restriction_repository, version_service, embedding_service),
+        builds=BuildService(build_repository, build_locks, restriction_repository, version_service, embedding_service),
         build_inference=BuildInferenceService(
             OpenAITextGenerator.from_config(config.openai),
             BuildTagsManager(db.async_session),

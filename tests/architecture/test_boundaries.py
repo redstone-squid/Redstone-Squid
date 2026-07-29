@@ -97,3 +97,13 @@ def test_build_manager_does_not_construct_database_service_locator() -> None:
         not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DatabaseManager")
         for node in ast.walk(tree)
     )
+
+
+def test_build_repository_does_not_coordinate_leases() -> None:
+    source = Path("squid/builds/infrastructure/repository.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    repository = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "BuildRepository")
+    method_names = {node.name for node in repository.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
+
+    assert method_names.isdisjoint({"acquire_lock", "release_lock", "locked", "clean_stale_locks"})
+    assert "BuildLockRepository" not in source
