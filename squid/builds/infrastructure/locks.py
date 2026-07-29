@@ -7,8 +7,18 @@ dependency; the persisted lock flag is managed by whoever calls this
 """
 
 import asyncio
-from typing import cast
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, cast
 
+from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from squid.builds.errors import BuildBusyError
+from squid.builds.infrastructure.models import Build
 from squid.core.errors import InvalidStateError
 
 
@@ -73,3 +83,62 @@ class BuildLockTracker:
     def clear(self) -> None:
         """Forget all locally-tracked leases."""
         self._lock_owners.clear()
+
+
+class BuildLockRepository:
+    """Manage task-reentrant leases backed by the persisted build lock."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+        self._tracker = BuildLockTracker()
+
+    async def acquire(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
+        task = self._tracker.current_task()
+        if self._tracker.try_reenter(build_id, task):
+            return True
+        if not blocking:
+            return await self._try_acquire(build_id, task)
+
+        sleep_time = 0.01
+        started_at = time.monotonic()
+        while True:
+            if await self._try_acquire(build_id, task):
+                return True
+            if timeout >= 0 and time.monotonic() - started_at >= timeout:
+                return False
+            await asyncio.sleep(sleep_time)
+            sleep_time = min(sleep_time * 1.5, 0.5)
+
+    async def _try_acquire(self, build_id: int, task: asyncio.Task[object]) -> bool:
+        if self._tracker.is_held_locally(build_id):
+            return False
+        async with self._session_factory() as session:
+            statement = update(Build).where(Build.id == build_id, Build.is_locked.is_(False)).values(is_locked=True)
+            result = cast(CursorResult[Any], await session.execute(statement))
+            await session.commit()
+        if result.rowcount == 1:
+            self._tracker.record_acquired(build_id, task)
+            return True
+        return False
+
+    async def release(self, build_id: int) -> None:
+        if not self._tracker.release(build_id):
+            return
+        async with self._session_factory() as session:
+            await session.execute(update(Build).where(Build.id == build_id).values(is_locked=False))
+            await session.commit()
+
+    @asynccontextmanager
+    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
+        if not await self.acquire(build_id, timeout=timeout):
+            raise BuildBusyError(build_id)
+        try:
+            yield
+        finally:
+            await self.release(build_id)
+
+    async def clean_stale(self, *, older_than: datetime) -> None:
+        async with self._session_factory() as session:
+            await session.execute(update(Build).where(Build.locked_at < older_than).values(is_locked=False))
+            await session.commit()
+        self._tracker.clear()

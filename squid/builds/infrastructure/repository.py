@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
-from collections.abc import AsyncIterator, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from async_lru import alru_cache
-from rapidfuzz import process
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -22,12 +17,11 @@ from squid.builds.domain import (
     Build,
     BuildCategory,
     MediaTypeLiteral,
-    RestrictionTypeLiteral,
     Status,
     UnknownRestrictions,
 )
-from squid.builds.errors import BuildBusyError, InvalidBuildError
-from squid.builds.infrastructure.locks import BuildLockTracker
+from squid.builds.errors import InvalidBuildError
+from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
@@ -40,9 +34,9 @@ from squid.builds.infrastructure.models import (
     BuildVersion,
     Door,
     Restriction,
-    SmallestDoor,
     Type,
 )
+from squid.builds.infrastructure.records import SmallestDoorRecordRepository
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.users.infrastructure.models import User
@@ -54,69 +48,25 @@ logger = logging.getLogger(__name__)
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_locks", "_mapper", "_session_factory")
+    __slots__ = ("_locks", "_mapper", "_records", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._locks = BuildLockTracker()
+        self._locks = BuildLockRepository(session_factory)
         self._mapper = BuildMapper()
+        self._records = SmallestDoorRecordRepository(session_factory)
 
     async def acquire_lock(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
-        """Acquire a task-reentrant lease backed by the database lock flag."""
-        task = self._locks.current_task()
-        if self._locks.try_reenter(build_id, task):
-            return True
-        if not blocking:
-            return await self._try_lock(build_id, task)
-
-        sleep_time = 0.01
-        started_at = time.monotonic()
-        while True:
-            if await self._try_lock(build_id, task):
-                return True
-            if timeout >= 0 and time.monotonic() - started_at >= timeout:
-                return False
-            await asyncio.sleep(sleep_time)
-            sleep_time = min(sleep_time * 1.5, 0.5)
-
-    async def _try_lock(self, build_id: int, task: asyncio.Task[object]) -> bool:
-        if self._locks.is_held_locally(build_id):
-            return False
-        async with self._session_factory() as session:
-            statement = (
-                update(SQLBuild).where(SQLBuild.id == build_id, SQLBuild.is_locked.is_(False)).values(is_locked=True)
-            )
-            result = cast(CursorResult[Any], await session.execute(statement))
-            await session.commit()
-        if result.rowcount == 1:
-            self._locks.record_acquired(build_id, task)
-            return True
-        return False
+        return await self._locks.acquire(build_id, blocking=blocking, timeout=timeout)
 
     async def release_lock(self, build_id: int) -> None:
-        """Release one level of a process-local database-backed lease."""
-        if not self._locks.release(build_id):
-            return
-        async with self._session_factory() as session:
-            await session.execute(update(SQLBuild).where(SQLBuild.id == build_id).values(is_locked=False))
-            await session.commit()
+        await self._locks.release(build_id)
 
-    @asynccontextmanager
-    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
-        """Hold a database-backed build lease for one operation."""
-        if not await self.acquire_lock(build_id, timeout=timeout):
-            raise BuildBusyError(build_id)
-        try:
-            yield
-        finally:
-            await self.release_lock(build_id)
+    def locked(self, build_id: int, *, timeout: float = 30) -> AbstractAsyncContextManager[None]:
+        return self._locks.locked(build_id, timeout=timeout)
 
     async def clean_stale_locks(self, *, older_than: datetime) -> None:
-        """Release persisted locks older than a cutoff and forget local lease state."""
-        async with self._session_factory() as session:
-            await session.execute(update(SQLBuild).where(SQLBuild.locked_at < older_than).values(is_locked=False))
-            await session.commit()
-        self._locks.clear()
+        await self._locks.clean_stale(older_than=older_than)
 
     async def get_by_id(self, build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -511,63 +461,10 @@ class BuildRepository:
         """Get all the builds that have not been posted on the server"""
         raise NotImplementedError
 
-    async def _get_smallest_door_records_without_title_in_db(self) -> Sequence[SmallestDoor]:
-        """Get all the smallest door records that do not have a title in the database."""
-        stmt = select(SmallestDoor).where(SmallestDoor.title.is_(None))
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            return result.scalars().all()
-
     async def update_smallest_door_records_without_title(self) -> None:
-        """Update the titles of all records in the database."""
-        smallest_door_records_without_title = await self._get_smallest_door_records_without_title_in_db()
-        async with self._session_factory() as session:
-            restriction_definitions: dict[str, RestrictionTypeLiteral | None] = {
-                restriction.name: restriction.type for restriction in (await session.scalars(select(Restriction))).all()
-            }
-            for door in smallest_door_records_without_title:
-                # Generate a title based on the door's attributes
-                build = Build(
-                    id=door.id,
-                    # These are invariants by the fact that they are in the smallest_door_records table
-                    record_category="Smallest",
-                    category=BuildCategory.DOOR,
-                    submission_status=Status.CONFIRMED,
-                    # We assume ai_generated is False to generate the simpler title
-                    ai_generated=False,
-                    # from the table
-                    door_width=door.door_width,
-                    door_height=door.door_height,
-                    door_depth=door.door_depth,
-                    door_type=door.types,
-                    door_orientation_type=door.orientation,
-                )
-                build.classify_restrictions(door.restriction_subset, restriction_definitions)
-                door.title = build.title
-                session.add(door)
-            await session.commit()
+        await self._records.update_records_without_title()
 
-    @alru_cache(ttl=3600)  # 1 hour
-    async def fetch_all_smallest_door_records(self) -> Sequence[SmallestDoor]:
-        stmt = select(SmallestDoor)
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            return result.scalars().all()
-
-    @alru_cache(ttl=3600)  # 1 hour
     async def search_smallest_door_records(
         self, query: str, limit: int = 25
     ) -> list[tuple[SmallestDoorRecord, float, int]]:
-        """Search for smallest door records by title."""
-        records = await self.fetch_all_smallest_door_records()
-        records = [r for r in records if r.title is not None]  # Filter out records without titles
-
-        def processor(raw: str | SmallestDoor) -> str:
-            if isinstance(raw, SmallestDoor):
-                return raw.title  # type: ignore  # Title is never None here
-            return raw
-
-        matches = process.extract(query, records, limit=limit, processor=processor)
-        return [
-            (SmallestDoorRecord(record.id, cast(str, record.title)), score, index) for record, score, index in matches
-        ]
+        return await self._records.search(query, limit)

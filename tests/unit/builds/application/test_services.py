@@ -5,11 +5,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
 from squid.builds.application.services import (
-    BuildEditPatch,
     BuildService,
-    DoorSubmissionInput,
-    RestrictionDefinition,
 )
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildBusyError, BuildNotFoundError

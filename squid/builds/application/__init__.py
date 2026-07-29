@@ -1,14 +1,13 @@
 """Public build application API."""
 
+from squid.builds.application.commands import DoorSubmissionInput
+from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.embeddings import BuildEmbeddingService
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService
 from squid.builds.application.queries import BuildQueryService, RestrictionSearchItem, SmallestDoorRecord
+from squid.builds.application.restrictions import RestrictionDefinition, RestrictionService
 from squid.builds.application.services import (
-    BuildEditPatch,
     BuildService,
-    DoorSubmissionInput,
-    RestrictionDefinition,
-    RestrictionService,
 )
 
 __all__ = [
