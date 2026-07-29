@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
-from squid.db.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
 

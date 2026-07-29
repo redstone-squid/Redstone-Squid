@@ -7,19 +7,14 @@ more than one public repository (e.g. messages are read by both
 owning file for them.
 """
 
-from squid.db.repos._base import BaseAsyncRepository
-from squid.db.schema import (
-    Message,
-    Restriction,
-    RestrictionAlias,
-    ServerSetting,
-    Type,
-    User,
-    Version,
-    Vote,
-    VoteSession,
-)
-from squid.db.schema import VerificationCode as VerificationCodeModel
+from squid.builds.infrastructure.models import Restriction, RestrictionAlias, Type
+from squid.messages.infrastructure.models import Message
+from squid.persistence.repository import BaseAsyncRepository
+from squid.settings.infrastructure.models import ServerSetting
+from squid.users.infrastructure.models import User
+from squid.users.infrastructure.models import VerificationCode as VerificationCodeModel
+from squid.versions.infrastructure.models import Version
+from squid.voting.infrastructure.models import Vote, VoteSession
 
 
 class MessageModelRepository(BaseAsyncRepository[Message]):

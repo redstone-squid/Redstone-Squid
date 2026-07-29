@@ -12,8 +12,8 @@ from sqlalchemy.engine import URL
 from sqlalchemy.schema import SchemaItem
 
 from alembic import context
-from squid.db.alembic_entities import ALEMBIC_UTIL_ENTITIES
-from squid.db.schema import Base
+from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.base import Base
 
 load_dotenv()
 

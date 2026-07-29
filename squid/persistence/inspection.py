@@ -1,3 +1,5 @@
+"""Database schema inspection and consistency checks."""
+
 from __future__ import annotations
 
 import logging

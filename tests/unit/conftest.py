@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.db.schema import Restriction
+from squid.builds.infrastructure.models import Restriction
 
 
 @pytest.fixture

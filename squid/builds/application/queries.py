@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.builds.domain import Build
-from squid.db.schema import SmallestDoor
+from squid.builds.infrastructure.models import SmallestDoor
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,0 +1,1 @@
+"""Shared SQLAlchemy infrastructure."""

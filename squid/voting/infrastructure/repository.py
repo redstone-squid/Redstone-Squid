@@ -7,8 +7,8 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import MessageModelRepository, VoteModelRepository, VoteSessionModelRepository
-from squid.db.schema import BuildVoteSession, DeleteLogVoteSession, Message, Vote, VoteSession, VoteSessionOption
+from squid.messages.infrastructure.models import Message
+from squid.persistence.repositories import MessageModelRepository, VoteModelRepository, VoteSessionModelRepository
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     StoredVoteMutation,
@@ -22,6 +22,13 @@ from squid.voting.domain import (
     VoteStatus,
     VoteTarget,
     normalize_vote_options,
+)
+from squid.voting.infrastructure.models import (
+    BuildVoteSession,
+    DeleteLogVoteSession,
+    Vote,
+    VoteSession,
+    VoteSessionOption,
 )
 
 

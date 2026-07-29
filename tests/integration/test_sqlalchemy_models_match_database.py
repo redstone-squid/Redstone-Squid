@@ -28,7 +28,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from sqlalchemy.sql.type_api import TypeEngine
 
-from squid.db.inspect_db import is_sane_database
+from squid.persistence.inspection import is_sane_database
 
 
 # TODO: Think about what kind of tests are missing

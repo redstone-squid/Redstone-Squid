@@ -1,4 +1,4 @@
-"""Extraction of attribute docstrings for use as SQLAlchemy column/table comments.
+"""Extract attribute docstrings for SQLAlchemy column comments.
 
 Python does not attach bare string literals following an attribute assignment to
 anything at runtime (unlike class/function docstrings), so we recover them by
@@ -14,7 +14,7 @@ from typing import Any, override
 
 
 class _AttributeDocstringVisitor(ast.NodeVisitor):
-    """Collects `attr: Type = ...` followed by a bare string literal statement."""
+    """Collect `attr: Type = ...` followed by a bare string literal."""
 
     def __init__(self) -> None:
         self.docstrings: dict[str, str] = {}

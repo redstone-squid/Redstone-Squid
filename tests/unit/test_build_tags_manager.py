@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from squid.builds.infrastructure.models import Restriction
 from squid.builds.infrastructure.taxonomy import BuildTagsManager
-from squid.db.schema import Restriction
 
 
 @pytest.mark.unit

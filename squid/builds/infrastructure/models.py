@@ -1,19 +1,18 @@
-import inspect
-import os
-import uuid
-from datetime import datetime
-from typing import Any
+"""SQLAlchemy build and taxonomy models."""
 
-from advanced_alchemy.base import BasicAttributes
+from __future__ import annotations
+
+import os
+from datetime import datetime
+from typing import TYPE_CHECKING
+
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
     ARRAY,
     TIMESTAMP,
-    UUID,
     BigInteger,
     Boolean,
     CheckConstraint,
-    Float,
     ForeignKey,
     Identity,
     Index,
@@ -22,13 +21,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     desc,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
-from sqlalchemy.sql import func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from squid.builds.domain import (
     BuildCategory,
@@ -40,94 +38,13 @@ from squid.builds.domain import (
     RestrictionTypeLiteral,
     Status,
 )
-from squid.db._docs_extraction import extract_attribute_docstrings
-from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
+from squid.persistence.base import Base
 
-
-# AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
-class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Populate table/column comments from docstrings, so the database is self-documenting.
-
-        A class docstring becomes the table comment; a bare string literal
-        immediately following an attribute's annotation becomes that column's
-        comment (mirroring how attribute docstrings are written throughout
-        this module, e.g. in pydantic models).
-        """
-        is_mapped_table = "__tablename__" in cls.__dict__
-
-        # Table construction happens inside DeclarativeBase's __init_subclass__, so
-        # __table_args__ must be finalized before we delegate to it via super().
-        if is_mapped_table and cls.__doc__ is not None:
-            table_comment = inspect.cleandoc(cls.__doc__)
-            if not hasattr(cls, "__table_args__"):
-                cls.__table_args__ = {"comment": table_comment}
-            elif isinstance(cls.__table_args__, dict) and cls.__table_args__.get("comment") is None:
-                cls.__table_args__["comment"] = table_comment
-            elif isinstance(cls.__table_args__, tuple):
-                if cls.__table_args__ and isinstance(cls.__table_args__[-1], dict):
-                    cls.__table_args__[-1].setdefault("comment", table_comment)
-                else:
-                    cls.__table_args__ = (*cls.__table_args__, {"comment": table_comment})
-
-        super().__init_subclass__(**kwargs)
-
-        if not is_mapped_table:
-            return  # Mixin or abstract base, not a mapped table.
-
-        # Columns only exist as mapped attributes after the delegation above.
-        for attribute, comment in extract_attribute_docstrings(cls).items():
-            column = getattr(cls, attribute, None)
-            underlying_column = getattr(column, "column", None)
-            if underlying_column is not None and underlying_column.comment is None:
-                underlying_column.comment = comment
-
-
-class User(Base):
-    """A user in the system, which can be linked to both Discord and Minecraft accounts."""
-
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    """Internal primary key. Unrelated to the user's Discord or Minecraft identifiers."""
-    ign: Mapped[str] = mapped_column(Text, nullable=True, default=None)
-    """The user's Minecraft in-game name, as of the last verification."""
-    discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
-    """The user's Discord snowflake ID, if they have linked a Discord account."""
-    minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The user's Mojang account UUID, if they have linked a Minecraft account."""
-    created_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=False), server_default=func.now(), default=None
-    )
-    """When this row was first inserted."""
-
-    build_creators: Mapped[list["BuildCreator"]] = relationship(
-        back_populates="user", default_factory=list, lazy="raise_on_sql", repr=False
-    )
-    builds: AssociationProxy[list["Build"]] = association_proxy(
-        "build_creators", "build", default_factory=list, repr=False, creator=lambda b: BuildCreator(build=b)
-    )
-
-
-class Version(Base):
-    """A version of Minecraft that a build is compatible with."""
-
-    __tablename__ = "versions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    edition: Mapped[str] = mapped_column(Text, nullable=False)
-    major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
-    build_versions: Mapped[list["BuildVersion"]] = relationship(
-        back_populates="version", default_factory=list, lazy="raise_on_sql", repr=False
-    )
-    builds: AssociationProxy[list["Build"]] = association_proxy(
-        "build_versions",
-        "build",
-        default_factory=list,
-        repr=False,
-        creator=lambda b: BuildVersion(build=b),
-    )
+if TYPE_CHECKING:
+    from squid.messages.infrastructure.models import Message
+    from squid.users.infrastructure.models import User
+    from squid.versions.infrastructure.models import Version
+    from squid.voting.infrastructure.models import BuildVoteSession
 
 
 class Restriction(Base):
@@ -141,10 +58,10 @@ class Restriction(Base):
     )  # FIXME: Shouldn't be nullable, note that to make type checkers happy I made this Mapped[str] instead of Mapped[str | None], even though it is nullable in the database
     type: Mapped[RestrictionTypeLiteral | None] = mapped_column(Text)
 
-    build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
+    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
         back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy(
+    builds: AssociationProxy[list[Build]] = association_proxy(
         "build_restrictions",
         "build",
         default_factory=list,
@@ -152,7 +69,7 @@ class Restriction(Base):
         creator=lambda b: BuildRestriction(build=b),
     )
 
-    aliases: Mapped[list["RestrictionAlias"]] = relationship(
+    aliases: Mapped[list[RestrictionAlias]] = relationship(
         back_populates="restriction", default_factory=list, lazy="selectin"
     )
 
@@ -192,52 +109,11 @@ class Type(Base):
         Text, nullable=True, unique=True
     )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
 
-    build_types: Mapped[list["BuildType"]] = relationship(
+    build_types: Mapped[list[BuildType]] = relationship(
         back_populates="type", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list["Build"]] = association_proxy(
+    builds: AssociationProxy[list[Build]] = association_proxy(
         "build_types", "build", default_factory=list, creator=lambda b: BuildType(build=b), repr=False
-    )
-
-
-class Message(Base):
-    """A message associated with a build or vote session."""
-
-    __tablename__ = "messages"
-    id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True
-    )  # init=True because this is the message ID, which should be known when creating the object
-    server_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("server_settings.server_id", name="public_messages_server_id_fkey", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    channel_id: Mapped[int | None] = mapped_column(BigInteger)
-    author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    purpose: Mapped[str] = mapped_column(
-        Text, nullable=False, comment="The reason why the message is stored in the database"
-    )
-    content: Mapped[str | None] = mapped_column(Text)
-    build_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("builds.id", name="public_messages_build_id_fkey", ondelete="CASCADE"),
-        default=None,
-    )
-    vote_session_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("vote_sessions.id", name="messages_vote_session_id_fkey", ondelete="SET NULL"),
-        default=None,
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now()
-    )
-    """When this row was last modified. Bumped automatically on every UPDATE."""
-
-    build: Mapped["Build | None"] = relationship(
-        back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="raise_on_sql"
-    )
-    vote_session: Mapped["VoteSession | None"] = relationship(
-        back_populates="messages", default=None, lazy="raise_on_sql"
     )
 
 
@@ -265,13 +141,13 @@ class Build(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    submission_status: Mapped["Status"] = mapped_column(SmallInteger, nullable=False)
+    submission_status: Mapped[Status] = mapped_column(SmallInteger, nullable=False)
     record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
     completion_time: Mapped[str | None] = mapped_column(Text)  # Given by user, not parsable as a datetime
-    category: Mapped["BuildCategory | None"] = mapped_column(Text)
+    category: Mapped[BuildCategory | None] = mapped_column(Text)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -306,14 +182,14 @@ class Build(Base, kw_only=True):
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
-    build_creators: Mapped[list["BuildCreator"]] = relationship(
+    build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
     creators: AssociationProxy[list[User]] = association_proxy(
         "build_creators", "user", default_factory=list, creator=lambda u: BuildCreator(user=u)
     )
 
-    build_restrictions: Mapped[list["BuildRestriction"]] = relationship(
+    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
     restrictions: AssociationProxy[list[Restriction]] = association_proxy(
@@ -323,23 +199,23 @@ class Build(Base, kw_only=True):
         creator=lambda r: BuildRestriction(restriction=r),
     )
 
-    build_versions: Mapped[list["BuildVersion"]] = relationship(
+    build_versions: Mapped[list[BuildVersion]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
     versions: AssociationProxy[list[Version]] = association_proxy(
         "build_versions", "version", default_factory=list, creator=lambda v: BuildVersion(version=v)
     )
 
-    build_types: Mapped[list["BuildType"]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
+    build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
     types: AssociationProxy[list[Type]] = association_proxy(
         "build_types", "type", default_factory=list, creator=lambda t: BuildType(type=t)
     )
 
-    build_vote_sessions: Mapped[list["BuildVoteSession"]] = relationship(
+    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(
         back_populates="build", default_factory=list, lazy="raise_on_sql", repr=False
     )
 
-    links: Mapped[list["BuildLink"]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
+    links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
     messages: Mapped[list[Message]] = relationship(
         back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="raise_on_sql", repr=False
     )
@@ -606,194 +482,3 @@ class BuildEditHistory(Base):
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now(), init=False
     )
     version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
-
-class ServerSetting(Base):
-    """Settings for a Discord server."""
-
-    __tablename__ = "server_settings"
-    server_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    smallest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
-    fastest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
-    first_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
-    builds_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
-    voting_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
-    staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
-    trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
-    in_server: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
-
-
-class VerificationCode(Base):
-    """A verification code for linking Minecraft accounts."""
-
-    __tablename__ = "verification_codes"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    code: Mapped[str] = mapped_column(Text, nullable=False)
-    username: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
-    created: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=False), nullable=False, server_default=func.now(), default=func.now()
-    )
-    expires: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=False),
-        nullable=False,
-        server_default=text("(now() + '00:10:00'::interval)"),
-        default=func.now() + text("INTERVAL '10 minutes'"),
-    )
-
-
-class VoteSession(Base, kw_only=True):
-    """A voting session for builds or log deletions."""
-
-    __tablename__ = "vote_sessions"
-    __table_args__ = (
-        CheckConstraint("fail_threshold < 0", name="vote_sessions_fail_threshold_check"),
-        CheckConstraint("pass_threshold > 0", name="vote_sessions_pass_threshold_check"),
-        CheckConstraint(
-            "result = ANY (ARRAY['approved', 'denied', 'cancelled', 'pending'])",
-            name="vote_sessions_result_check",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False)
-    result: Mapped[VoteSessionResultLiteral] = mapped_column(
-        Text,
-        nullable=False,
-        server_default=text("'pending'::text"),
-        comment="The result of the vote session.",
-    )
-    author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
-    pass_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    fail_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    created_at: Mapped[str] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
-    )
-
-    messages: Mapped[list[Message]] = relationship(
-        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
-    )
-    votes: Mapped[list["Vote"]] = relationship(
-        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
-    )
-    options: Mapped[list["VoteSessionOption"]] = relationship(
-        back_populates="vote_session",
-        default_factory=list,
-        lazy="selectin",
-        order_by="VoteSessionOption.position",
-        init=False,
-        repr=False,
-    )
-
-    __mapper_args__ = {"polymorphic_on": kind}
-
-
-class VoteSessionOption(Base, kw_only=True):
-    """A reaction option configured for one vote session."""
-
-    __tablename__ = "vote_session_options"
-    __table_args__ = (
-        UniqueConstraint("vote_session_id", "position", name="vote_session_options_vote_session_id_position_key"),
-        CheckConstraint("choice IN ('approve', 'deny')", name="vote_session_options_choice_check"),
-        CheckConstraint(
-            "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
-            name="vote_session_options_multiplier_check",
-        ),
-        CheckConstraint("position >= 0", name="vote_session_options_position_check"),
-        {"comment": "Ordered reaction options and positive weight multipliers captured for each vote session."},
-    )
-
-    vote_session_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey(
-            "vote_sessions.id",
-            name="vote_session_options_vote_session_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        primary_key=True,
-    )
-    emoji: Mapped[str] = mapped_column(Text, primary_key=True)
-    choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
-    multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
-    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
-    vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
-
-
-class BuildVoteSession(VoteSession, kw_only=True):
-    """Association table between builds and vote sessions."""
-
-    __tablename__ = "build_vote_sessions"
-    vote_session_id: Mapped[int] = mapped_column(
-        BigInteger,
-        Identity(),
-        ForeignKey(
-            "vote_sessions.id",
-            name="build_vote_sessions_vote_session_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        primary_key=True,
-    )
-    build_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey(
-            "builds.id",
-            name="build_vote_sessions_build_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        primary_key=True,
-    )
-    changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
-
-    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
-
-    __mapper_args__ = {"polymorphic_identity": "build"}
-
-
-class DeleteLogVoteSession(VoteSession, kw_only=True):
-    """Association table between vote sessions and messages to be deleted."""
-
-    __tablename__ = "delete_log_vote_sessions"
-    vote_session_id: Mapped[int] = mapped_column(
-        BigInteger,
-        Identity(),
-        ForeignKey(
-            "vote_sessions.id",
-            name="delete_log_vote_sessions_vote_session_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        nullable=False,
-        primary_key=True,
-    )
-    target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    target_server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-
-    __mapper_args__ = {"polymorphic_identity": "delete_log"}
-
-
-class Vote(Base):
-    """A vote cast in a vote session."""
-
-    __tablename__ = "votes"
-    vote_session_id: Mapped[int] = mapped_column(
-        BigInteger,
-        Identity(),
-        ForeignKey(
-            "vote_sessions.id",
-            name="votes_vote_session_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        primary_key=True,
-    )
-    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    weight: Mapped[float] = mapped_column(Float, nullable=True)  # FIXME: Shouldn't be nullable
-
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)

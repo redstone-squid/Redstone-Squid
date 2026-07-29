@@ -8,10 +8,10 @@ from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import MessageModelRepository
-from squid.db.schema import Message
 from squid.exceptions import MessageNotFoundError
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord
+from squid.messages.infrastructure.models import Message
+from squid.persistence.repositories import MessageModelRepository
 
 
 class MessageRepository:

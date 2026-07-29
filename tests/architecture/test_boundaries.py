@@ -39,7 +39,7 @@ def test_voting_adapter_does_not_construct_database_service_locator() -> None:
 
 
 def test_build_entity_does_not_expose_active_record_persistence_methods() -> None:
-    source = Path("squid/db/builds.py").read_text(encoding="utf-8")
+    source = Path("squid/builds/domain/models.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     build_class = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Build")
     method_names = {node.name for node in build_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
@@ -63,7 +63,7 @@ def test_build_entity_does_not_expose_active_record_persistence_methods() -> Non
 
 
 def test_build_manager_does_not_construct_database_service_locator() -> None:
-    source = Path("squid/db/repos/build_repository.py").read_text(encoding="utf-8")
+    source = Path("squid/builds/infrastructure/repository.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     assert all(

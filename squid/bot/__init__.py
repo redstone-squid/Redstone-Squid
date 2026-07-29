@@ -27,7 +27,6 @@ from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.builds.domain import Build
-from squid.db.engine import DatabaseEngine
 from squid.logging_config import (
     DEFAULT_BACKUP_COUNT,
     DEFAULT_DISCORD_LOG_FILE,
@@ -35,6 +34,7 @@ from squid.logging_config import (
     DEFAULT_MAX_BYTES,
     prepare_log_path,
 )
+from squid.persistence.engine import DatabaseEngine
 from squid.services.container import ApplicationServices
 
 logger = logging.getLogger(__name__)

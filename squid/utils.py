@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import aiohttp
 
-from squid.db.schema import Version
+from squid.versions.infrastructure.models import Version
 
 
 def utcnow() -> str:

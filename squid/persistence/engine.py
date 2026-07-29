@@ -6,8 +6,8 @@ from sqlalchemy import Engine, create_engine, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from squid.db.inspect_db import is_sane_database
 from squid.exceptions import ConfigurationError, DataIntegrityError
+from squid.persistence.inspection import is_sane_database
 
 
 class DatabaseEngine:

@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from squid.api import create_api_app
 from squid.bootstrap import ApplicationRuntime
-from squid.db.engine import DatabaseEngine
 from squid.exceptions import (
     ErrorCode,
     InternalError,
@@ -18,6 +17,7 @@ from squid.exceptions import (
     MinecraftServiceUnavailableError,
 )
 from squid.http_errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.persistence.engine import DatabaseEngine
 from squid.services.container import ApplicationServices
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")

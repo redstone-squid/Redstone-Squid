@@ -3,7 +3,7 @@
 This only tracks which asyncio task currently holds a build's in-process
 lease and how many times it has re-entered it. It has no database
 dependency; the persisted lock flag is managed by whoever calls this
-(currently :class:`squid.db.repos.build_repository.BuildRepository`).
+(currently :class:`squid.builds.infrastructure.repository.BuildRepository`).
 """
 
 import asyncio

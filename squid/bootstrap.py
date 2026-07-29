@@ -21,9 +21,9 @@ from squid.builds.infrastructure.taxonomy import BuildTagsManager
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
-from squid.db.engine import DatabaseEngine
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.persistence.engine import DatabaseEngine
 from squid.services.container import ApplicationServices
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository

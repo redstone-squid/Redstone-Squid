@@ -5,9 +5,9 @@ from typing import Literal, Unpack, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos._model_repos import ServerSettingModelRepository
-from squid.db.schema import ServerSetting
+from squid.persistence.repositories import ServerSettingModelRepository
 from squid.settings.domain import Setting, SettingOptions
+from squid.settings.infrastructure.models import ServerSetting
 
 DbSettingKey = Literal[
     "smallest_channel_id",

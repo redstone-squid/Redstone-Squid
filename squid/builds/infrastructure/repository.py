@@ -26,22 +26,19 @@ from squid.builds.domain import (
     UnknownRestrictions,
 )
 from squid.builds.infrastructure.locks import BuildLockTracker
-from squid.db.schema import (
+from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
-from squid.db.schema import (
+from squid.builds.infrastructure.models import (
     BuildCreator,
     BuildLink,
     BuildRestriction,
     BuildType,
     BuildVersion,
     Door,
-    Message,
     Restriction,
     SmallestDoor,
     Type,
-    User,
-    Version,
 )
 from squid.exceptions import (
     BuildBusyError,
@@ -49,6 +46,9 @@ from squid.exceptions import (
     InvalidStateError,
     PersistenceError,
 )
+from squid.messages.infrastructure.models import Message
+from squid.users.infrastructure.models import User
+from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
 
