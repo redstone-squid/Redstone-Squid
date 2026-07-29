@@ -2,9 +2,9 @@
 
 from collections.abc import Sequence
 
-from squid.exceptions import InvalidMessageError
 from squid.messages.application.ports import MessageRepository
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
+from squid.messages.errors import InvalidMessageError
 
 
 class MessageService:
@@ -49,3 +49,7 @@ class MessageService:
 
     async def get_outdated(self, server_id: int) -> Sequence[MessageRecord]:
         return await self._repository.get_outdated_messages(server_id)
+
+    async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
+        """Return messages for a build created by one Discord author."""
+        return await self._repository.list_for_build(build_id, author_id)

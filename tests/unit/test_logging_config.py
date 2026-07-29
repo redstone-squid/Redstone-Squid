@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from squid.exceptions import ConfigurationError
+from squid.core.errors import ConfigurationError
 from squid.logging_config import build_logging_config, prepare_log_path, resolve_level
 
 

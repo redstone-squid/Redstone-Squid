@@ -7,7 +7,7 @@ from pytest_archon import archrule
 def test_exception_model_is_transport_neutral() -> None:
     (
         archrule("application exceptions stay independent from transport adapters")
-        .match("squid.exceptions")
+        .match("squid.core.errors")
         .should_not_import("discord*")
         .should_not_import("fastapi*")
         .should_not_import("squid.bot*")
@@ -15,14 +15,41 @@ def test_exception_model_is_transport_neutral() -> None:
     )
 
 
-def test_application_services_do_not_import_discord_or_bot_layer() -> None:
+def test_domain_layers_are_framework_and_persistence_independent() -> None:
     (
-        archrule("application services stay independent from Discord adapters")
-        .match("squid.services*")
+        archrule("domain layers stay independent from frameworks and outer layers")
+        .match("squid.*.domain*")
+        .should_not_import("sqlalchemy*")
         .should_not_import("discord*")
-        .should_not_import("squid.bot*")
+        .should_not_import("fastapi*")
+        .should_not_import("squid.*.application*")
+        .should_not_import("squid.*.infrastructure*")
         .check("squid", only_direct_imports=True)
     )
+
+
+def test_application_layers_are_framework_and_infrastructure_independent() -> None:
+    (
+        archrule("application layers depend on ports rather than adapters")
+        .match("squid.*.application*")
+        .should_not_import("sqlalchemy*")
+        .should_not_import("discord*")
+        .should_not_import("fastapi*")
+        .should_not_import("squid.*.infrastructure*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
+def test_transports_do_not_import_persistence_adapters() -> None:
+    for transport in ("squid.bot*", "squid.api*"):
+        (
+            archrule("transports invoke application services")
+            .match(transport)
+            .should_not_import("sqlalchemy*")
+            .should_not_import("squid.persistence*")
+            .should_not_import("squid.*.infrastructure*")
+            .check("squid", only_direct_imports=True)
+        )
 
 
 def test_voting_adapter_does_not_construct_database_service_locator() -> None:

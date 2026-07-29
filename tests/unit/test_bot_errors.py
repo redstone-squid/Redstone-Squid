@@ -12,7 +12,8 @@ from squid.bot.errors import (
     is_error_presented,
     unwrap_error,
 )
-from squid.exceptions import BuildNotFoundError, InternalError
+from squid.builds.errors import BuildNotFoundError
+from squid.core.errors import InternalError
 from tests.helpers.discord import make_interaction, make_message
 
 

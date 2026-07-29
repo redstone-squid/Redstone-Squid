@@ -6,7 +6,7 @@ from enum import StrEnum
 from math import isfinite
 from typing import Literal, TypeAlias
 
-from squid.exceptions import InvalidVoteConfigurationError
+from squid.voting.errors import InvalidVoteConfigurationError
 
 VoteKindLiteral = Literal["build", "delete_log"]
 VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]

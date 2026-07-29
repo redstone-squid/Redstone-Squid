@@ -11,7 +11,7 @@ from rapidfuzz import process
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.exceptions import AliasAlreadyAddedError
+from squid.builds.errors import AliasAlreadyAddedError
 
 if TYPE_CHECKING:
     import squid.bot

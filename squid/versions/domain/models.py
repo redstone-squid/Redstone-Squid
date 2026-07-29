@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal, override
 
-from squid.exceptions import InvalidVersionError
+from squid.versions.errors import InvalidVersionError
 
 Edition = Literal["Java", "Bedrock"]
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$", re.IGNORECASE)

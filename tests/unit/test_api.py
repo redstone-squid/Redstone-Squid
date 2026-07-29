@@ -1,6 +1,7 @@
 import uuid
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import httpx
@@ -9,16 +10,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from squid.api import create_api_app
-from squid.bootstrap import ApplicationRuntime
-from squid.exceptions import (
-    ErrorCode,
-    InternalError,
-    MinecraftAccountNotFoundError,
-    MinecraftServiceUnavailableError,
-)
-from squid.http_errors import PROBLEM_DETAIL_MEDIA_TYPE
-from squid.persistence.engine import DatabaseEngine
-from squid.services.container import ApplicationServices
+from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.core.errors import ErrorCode, InternalError
+from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.users.errors import MinecraftAccountNotFoundError, MinecraftServiceUnavailableError
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -58,7 +53,7 @@ def _patch_environment(monkeypatch: pytest.MonkeyPatch):
 def client():
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(cast(DatabaseEngine, database), services)
+    runtime = ApplicationRuntime(services, database.close, AsyncMock())
     with TestClient(create_api_app(lambda: runtime)) as c:
         yield c
     assert database.closed
@@ -119,7 +114,7 @@ def test_success_returns_verification_code(client: httpx.Client):
 def test_internal_error_is_redacted_and_correlated() -> None:
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(cast(DatabaseEngine, database), services)
+    runtime = ApplicationRuntime(services, database.close, AsyncMock())
     app: FastAPI = create_api_app(lambda: runtime)
 
     @app.get("/boom")
@@ -144,7 +139,7 @@ def test_internal_error_is_redacted_and_correlated() -> None:
 def test_service_unavailable_is_safe_and_correlated() -> None:
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(cast(DatabaseEngine, database), services)
+    runtime = ApplicationRuntime(services, database.close, AsyncMock())
     app: FastAPI = create_api_app(lambda: runtime)
 
     @app.get("/unavailable")

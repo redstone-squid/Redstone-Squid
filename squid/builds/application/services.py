@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import Final, Literal, Protocol, Self, override
 
 from squid.builds.domain import Build, BuildCategory, Info, RestrictionTypeLiteral, ServerInfo, Status
-from squid.exceptions import BuildBusyError, BuildNotFoundError, InvalidBuildError, InvalidStateError
+from squid.builds.errors import BuildBusyError, BuildNotFoundError, InvalidBuildError
+from squid.core.errors import InvalidStateError
 
 
 class _Unset:

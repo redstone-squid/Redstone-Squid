@@ -19,7 +19,8 @@ from typing import (
     overload,
 )
 
-from squid.exceptions import DataIntegrityError, InvalidBuildError
+from squid.builds.errors import InvalidBuildError
+from squid.core.errors import DataIntegrityError
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(

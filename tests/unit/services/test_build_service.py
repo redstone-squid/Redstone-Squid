@@ -12,7 +12,7 @@ from squid.builds.application.services import (
     RestrictionDefinition,
 )
 from squid.builds.domain import Build, BuildCategory, Status
-from squid.exceptions import BuildBusyError, BuildNotFoundError
+from squid.builds.errors import BuildBusyError, BuildNotFoundError
 
 
 class FakeBuildRepository:

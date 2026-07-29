@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.exceptions import InvalidStateError
+from squid.core.errors import InvalidStateError
 
 
 @pytest.mark.unit

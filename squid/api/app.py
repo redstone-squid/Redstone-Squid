@@ -9,11 +9,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, Header, Request
 from pydantic import BaseModel
 
-from squid.bootstrap import ApplicationRuntime, create_application_runtime
-from squid.exceptions import AuthenticationError
-from squid.http_errors import register_exception_handlers
+from squid.api.errors import register_exception_handlers
+from squid.bootstrap import create_application_runtime
+from squid.core.errors import AuthenticationError
 from squid.logging_config import configure_api_logging
-from squid.services.container import ApplicationServices
+from squid.runtime import ApplicationRuntime, ApplicationServices
 
 RuntimeFactory = Callable[[], ApplicationRuntime]
 

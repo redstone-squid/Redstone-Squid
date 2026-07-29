@@ -78,7 +78,6 @@ the library's generic CRUD surface.
 
 ## Architecture migration
 
-The currently enforced rule keeps `squid.services` independent from Discord and `squid.bot`. Once a bounded context
-moves to the DDD layout, enable rules for that context so domain and application code cannot import
-`advanced_alchemy`, `sqlalchemy`, `discord`, `fastapi`, `supabase`, or concrete infrastructure packages. Do not enable
-rules for package boundaries that have not been chosen yet.
+The enforced rules keep every context's domain and application layers independent from transport and persistence.
+Domain and application code cannot import `advanced_alchemy`, `sqlalchemy`, `discord`, `fastapi`, `supabase`, or
+concrete infrastructure packages.

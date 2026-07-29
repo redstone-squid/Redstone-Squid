@@ -4,7 +4,7 @@ from uuid import UUID
 
 import aiohttp
 
-from squid.exceptions import MinecraftServiceUnavailableError
+from squid.users.errors import MinecraftServiceUnavailableError
 
 
 async def get_minecraft_username(minecraft_uuid: UUID) -> str | None:

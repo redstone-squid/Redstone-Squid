@@ -3,19 +3,16 @@
 import asyncio
 import io
 import mimetypes
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
-from sqlalchemy import select
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
 from squid.builds.domain import Build, Status
-from squid.messages.infrastructure.models import Message
-from squid.utils import utcnow
+from squid.core.time import utcnow
 
 if TYPE_CHECKING:
     import squid.bot
@@ -108,10 +105,8 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         This does not include messages from other users, only the bot's messages.
         """
         assert self.bot.user is not None, "Bot should be logged in"
-        stmt = select(Message).where(Message.build_id == self.build.id, Message.author_id == self.bot.user.id)
-        async with self.bot.db.async_session() as session:
-            result = await session.execute(stmt)
-            messages: Sequence[Message] = result.scalars().all()
+        assert self.build.id is not None, "Persisted display messages require a build ID"
+        messages = await self.bot.services.messages.list_for_build(self.build.id, self.bot.user.id)
         maybe_messages = await asyncio.gather(
             *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
         )

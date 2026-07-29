@@ -9,7 +9,7 @@ dependency; the persisted lock flag is managed by whoever calls this
 import asyncio
 from typing import cast
 
-from squid.exceptions import InvalidStateError
+from squid.core.errors import InvalidStateError
 
 
 class BuildLockTracker:

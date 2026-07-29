@@ -4,7 +4,6 @@ from math import inf, nan
 
 import pytest
 
-from squid.exceptions import InvalidVoteConfigurationError
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -19,6 +18,7 @@ from squid.voting.domain import (
     VoteStatus,
     VoteTarget,
 )
+from squid.voting.errors import InvalidVoteConfigurationError
 
 
 def snapshot(

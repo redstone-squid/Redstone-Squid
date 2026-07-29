@@ -3,14 +3,14 @@
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from squid.exceptions import (
+from squid.users.application.ports import UserRepository
+from squid.users.domain import UserAccount
+from squid.users.errors import (
     AccountAlreadyLinkedError,
     InvalidUserError,
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
 )
-from squid.users.application.ports import UserRepository
-from squid.users.domain import UserAccount
 
 
 class UserService:

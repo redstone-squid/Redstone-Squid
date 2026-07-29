@@ -2,7 +2,7 @@
 
 from squid.builds.application.embeddings import BuildEmbeddingService
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService
-from squid.builds.application.queries import BuildQueryService, RestrictionSearchItem
+from squid.builds.application.queries import BuildQueryService, RestrictionSearchItem, SmallestDoorRecord
 from squid.builds.application.services import (
     BuildEditPatch,
     BuildService,
@@ -22,4 +22,5 @@ __all__ = [
     "RestrictionDefinition",
     "RestrictionSearchItem",
     "RestrictionService",
+    "SmallestDoorRecord",
 ]

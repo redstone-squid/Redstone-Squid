@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.builds.infrastructure.models import Restriction, RestrictionAlias, Type
-from squid.exceptions import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 
 
 class BuildTagsManager:

@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from squid.exceptions import (
+from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
     ConflictError,

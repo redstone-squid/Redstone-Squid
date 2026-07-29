@@ -1,6 +1,9 @@
-"""Application service container shared by the bot and HTTP API."""
+"""Framework-neutral application services and process runtime."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from types import TracebackType
+from typing import Self
 
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
@@ -26,3 +29,26 @@ class ApplicationServices:
     votes: VoteService
     redstoner: RedstonerService
     welcome_relay: WelcomeRelayService
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicationRuntime:
+    """Own application services and process-level resource callbacks."""
+
+    services: ApplicationServices
+    close_resources: Callable[[], Awaitable[None]]
+    keep_database_active: Callable[[], Awaitable[None]]
+
+    async def close(self) -> None:
+        await self.close_resources()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self.close()

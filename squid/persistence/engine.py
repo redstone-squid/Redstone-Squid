@@ -2,11 +2,11 @@
 
 import os
 
-from sqlalchemy import Engine, create_engine, make_url
+from sqlalchemy import Engine, create_engine, make_url, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from squid.exceptions import ConfigurationError, DataIntegrityError
+from squid.core.errors import ConfigurationError, DataIntegrityError
 from squid.persistence.inspection import is_sane_database
 
 
@@ -57,6 +57,11 @@ class DatabaseEngine:
         """Release database connection pools owned by this engine."""
         await self.async_engine.dispose()
         self.sync_engine.dispose()
+
+    async def ping(self) -> None:
+        """Execute a lightweight query to verify the async connection path."""
+        async with self.async_session() as session:
+            await session.execute(select(1))
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""

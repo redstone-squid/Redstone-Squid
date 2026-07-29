@@ -7,7 +7,7 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-from squid.exceptions import ConfigurationError
+from squid.core.errors import ConfigurationError
 
 DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when LOG_LEVEL is not set."""

@@ -10,7 +10,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from squid.exceptions import DomainError, SquidError
+from squid.core.errors import DomainError, SquidError
 
 logger = logging.getLogger(__name__)
 

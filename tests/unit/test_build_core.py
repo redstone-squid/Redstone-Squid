@@ -14,8 +14,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.models import Door
-from squid.exceptions import InvalidBuildError
 
 
 @pytest.fixture

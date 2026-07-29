@@ -1,10 +1,7 @@
 """Composition root for framework-neutral application services."""
 
 import secrets
-from dataclasses import dataclass
 from importlib import resources
-from types import TracebackType
-from typing import Self
 
 from squid.builds.application import (
     BuildEmbeddingService,
@@ -24,7 +21,7 @@ from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.persistence.engine import DatabaseEngine
-from squid.services.container import ApplicationServices
+from squid.runtime import ApplicationRuntime, ApplicationServices
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.users.application import UserService
@@ -34,29 +31,6 @@ from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
 from squid.voting.infrastructure.repository import VoteRepository
-
-
-@dataclass(frozen=True, slots=True)
-class ApplicationRuntime:
-    """Own the process-level infrastructure and its application services."""
-
-    db: DatabaseEngine
-    services: ApplicationServices
-
-    async def close(self) -> None:
-        """Release infrastructure resources owned by the runtime."""
-        await self.db.close()
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        await self.close()
 
 
 def create_application_services(db: DatabaseEngine) -> ApplicationServices:
@@ -109,4 +83,4 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
 def create_application_runtime(db: DatabaseEngine | None = None) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
     database = db or DatabaseEngine()
-    return ApplicationRuntime(database, create_application_services(database))
+    return ApplicationRuntime(create_application_services(database), database.close, database.ping)

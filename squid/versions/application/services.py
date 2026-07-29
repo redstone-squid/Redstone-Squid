@@ -1,8 +1,8 @@
 """Minecraft version application services."""
 
-from squid.exceptions import InvalidVersionError, VersionCatalogUnavailableError
 from squid.versions.application.ports import VersionRepository
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
+from squid.versions.errors import InvalidVersionError, VersionCatalogUnavailableError
 
 
 class VersionService:

@@ -1,11 +1,11 @@
 from unittest.mock import AsyncMock
 
-from squid.bootstrap import ApplicationRuntime
+from squid.runtime import ApplicationRuntime
 
 
 async def test_application_runtime_closes_database() -> None:
     database = AsyncMock()
-    runtime = ApplicationRuntime(database, AsyncMock())
+    runtime = ApplicationRuntime(AsyncMock(), database.close, AsyncMock())
 
     async with runtime:
         pass

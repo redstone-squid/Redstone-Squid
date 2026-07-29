@@ -5,7 +5,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
 from squid.bot.errors import handle_context_error
-from squid.utils import utcnow
+from squid.core.time import utcnow
 
 
 class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):

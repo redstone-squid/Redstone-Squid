@@ -6,21 +6,17 @@ from uuid import UUID
 
 import pytest
 
-from squid.exceptions import (
-    AccountAlreadyLinkedError,
-    InvalidMessageError,
-    InvalidVerificationCodeError,
-    MinecraftAccountNotFoundError,
-    VersionCatalogUnavailableError,
-)
 from squid.messages.application import MessageService
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
+from squid.messages.errors import InvalidMessageError
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting, SettingOptions
 from squid.users.application import UserService
 from squid.users.domain import UserAccount, VerificationCode
+from squid.users.errors import AccountAlreadyLinkedError, InvalidVerificationCodeError, MinecraftAccountNotFoundError
 from squid.versions.application.services import VersionService
 from squid.versions.domain import Edition, MinecraftVersion
+from squid.versions.errors import VersionCatalogUnavailableError
 
 
 class FakeUserRepository:
@@ -228,6 +224,9 @@ class FakeMessageRepository:
         raise LookupError(msg)
 
     async def get_outdated_messages(self, server_id: int) -> Sequence[MessageRecord]:
+        return []
+
+    async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
         return []
 
 

@@ -17,6 +17,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from squid.builds.application.queries import SmallestDoorRecord
 from squid.builds.domain import (
     Build,
     BuildCategory,
@@ -25,6 +26,7 @@ from squid.builds.domain import (
     Status,
     UnknownRestrictions,
 )
+from squid.builds.errors import BuildBusyError, InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockTracker
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
@@ -40,12 +42,7 @@ from squid.builds.infrastructure.models import (
     SmallestDoor,
     Type,
 )
-from squid.exceptions import (
-    BuildBusyError,
-    InvalidBuildError,
-    InvalidStateError,
-    PersistenceError,
-)
+from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.users.infrastructure.models import User
 from squid.versions.infrastructure.models import Version
@@ -605,7 +602,9 @@ class BuildRepository:
             return result.scalars().all()
 
     @alru_cache(ttl=3600)  # 1 hour
-    async def search_smallest_door_records(self, query: str, limit: int = 25) -> list[tuple[SmallestDoor, float, int]]:
+    async def search_smallest_door_records(
+        self, query: str, limit: int = 25
+    ) -> list[tuple[SmallestDoorRecord, float, int]]:
         """Search for smallest door records by title."""
         records = await self.fetch_all_smallest_door_records()
         records = [r for r in records if r.title is not None]  # Filter out records without titles
@@ -615,4 +614,7 @@ class BuildRepository:
                 return raw.title  # type: ignore  # Title is never None here
             return raw
 
-        return process.extract(query, records, limit=limit, processor=processor)
+        matches = process.extract(query, records, limit=limit, processor=processor)
+        return [
+            (SmallestDoorRecord(record.id, cast(str, record.title)), score, index) for record, score, index in matches
+        ]

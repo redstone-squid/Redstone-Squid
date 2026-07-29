@@ -4,7 +4,7 @@ import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-from squid.exceptions import ConfigurationError
+from squid.core.errors import ConfigurationError
 
 
 # Establishing connection with Google APIs

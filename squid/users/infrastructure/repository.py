@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.exceptions import InvalidStateError, UserNotFoundError
+from squid.core.errors import InvalidStateError
 from squid.persistence.repositories import UserModelRepository, VerificationCodeModelRepository
 from squid.users.domain import UserAccount, VerificationCode
+from squid.users.errors import UserNotFoundError
 from squid.users.infrastructure.models import User
 from squid.users.infrastructure.models import VerificationCode as VerificationCodeModel
 

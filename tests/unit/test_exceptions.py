@@ -1,12 +1,8 @@
 from uuid import UUID
 
-from squid.exceptions import (
-    AccountAlreadyLinkedError,
-    BuildNotFoundError,
-    ErrorCode,
-    InvalidBuildError,
-    InvalidStateError,
-)
+from squid.builds.errors import BuildNotFoundError, InvalidBuildError
+from squid.core.errors import ErrorCode, InvalidStateError
+from squid.users.errors import AccountAlreadyLinkedError
 
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from squid.exceptions import ConfigurationError
+from squid.core.errors import ConfigurationError
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,8 +8,8 @@ from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.exceptions import MessageNotFoundError
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord
+from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repositories import MessageModelRepository
 
@@ -118,6 +118,13 @@ class MessageRepository:
         # Since the function returns records matching the messages table,
         # we can select from it and map to Message objects
         stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
+        async with self._session_factory() as session:
+            result = await session.execute(stmt)
+            return [self._to_record(message) for message in result.scalars().all()]
+
+    async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
+        """Return messages for a build created by one Discord author."""
+        stmt = select(Message).where(Message.build_id == build_id, Message.author_id == author_id)
         async with self._session_factory() as session:
             result = await session.execute(stmt)
             return [self._to_record(message) for message in result.scalars().all()]
