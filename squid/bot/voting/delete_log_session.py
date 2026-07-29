@@ -1,0 +1,184 @@
+"""Discord vote sessions for deleting log messages."""
+
+import asyncio
+import contextlib
+from collections.abc import Iterable, Sequence
+from textwrap import dedent
+from typing import TYPE_CHECKING, final, override
+
+import discord
+
+from squid.bot.voting.base_session import AbstractVoteSession
+from squid.bot.voting.message_tracking import track_vote_messages
+from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChoice, VoteOption, VoteSessionSnapshot
+
+if TYPE_CHECKING:
+    import squid.bot
+
+
+@final
+class DeleteLogVoteSession(AbstractVoteSession):
+    """A vote session for deleting a message from the log."""
+
+    kind = "delete_log"
+
+    def __init__(
+        self,
+        bot: "squid.bot.RedstoneSquid",
+        messages: Iterable[discord.Message] | Iterable[int],
+        author_id: int,
+        target_message: discord.Message,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+    ):
+        """
+        Initialize the delete log vote session.
+
+        Args:
+            bot: The discord client.
+            messages: The messages (or their ids) belonging to the vote session.
+            author_id: The discord id of the author of the vote session.
+            target_message: The message to delete if the vote passes.
+            pass_threshold: The number of votes required to pass the vote.
+            fail_threshold: The number of votes required to fail the vote.
+        """
+        super().__init__(bot, messages, author_id, pass_threshold, fail_threshold, options)
+        self.target_message = target_message
+
+    @classmethod
+    @override
+    async def create(
+        cls,
+        bot: "squid.bot.RedstoneSquid",
+        messages: Iterable[discord.Message] | Iterable[int],
+        author_id: int,
+        target_message: discord.Message,
+        pass_threshold: int = 3,
+        fail_threshold: int = -3,
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+    ) -> "DeleteLogVoteSession":
+        self = await super().create(bot, messages, author_id, target_message, pass_threshold, fail_threshold, options)
+        assert isinstance(self, DeleteLogVoteSession)
+        return self
+
+    @override
+    async def _async_init(self) -> None:
+        """Track the vote session in the database."""
+        assert self.target_message.guild is not None
+        self.id = await self.bot.services.votes.start_delete_log_vote(
+            author_id=self.author_id,
+            pass_threshold=self.pass_threshold,
+            fail_threshold=self.fail_threshold,
+            message_id=self.target_message.id,
+            channel_id=self.target_message.channel.id,
+            server_id=self.target_message.guild.id,
+            options=self.options,
+        )
+        await track_vote_messages(
+            await self.fetch_messages(),
+            self.bot.services.messages,
+            self.id,
+        )
+        await self.update_messages()
+        reaction_tasks = [
+            message.add_reaction(self.primary_emoji(choice))
+            for message in self._messages
+            for choice in (VoteChoice.APPROVE, VoteChoice.DENY)
+        ]
+        with contextlib.suppress(discord.Forbidden):
+            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
+
+    @classmethod
+    @override
+    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
+        snapshot = await bot.services.votes.get_session_by_id(vote_session_id)
+        if snapshot is None or snapshot.kind != cls.kind:
+            return None
+        return await cls._from_snapshot(bot, snapshot)
+
+    @classmethod
+    async def _from_snapshot(
+        cls, bot: "squid.bot.RedstoneSquid", snapshot: VoteSessionSnapshot
+    ) -> "DeleteLogVoteSession | None":
+        """Restore a Discord view from an application snapshot."""
+        target = snapshot.target
+        if target.channel_id is None or target.message_id is None:
+            return None
+        target_message = await bot.get_or_fetch_message(target.channel_id, target.message_id)
+        if target_message is None:
+            return None
+
+        self = cls.__new__(cls)
+        self._allow_init = True
+        self.__init__(
+            bot,
+            snapshot.message_ids,
+            snapshot.author_id,
+            target_message,
+            snapshot.pass_threshold,
+            snapshot.fail_threshold,
+            snapshot.options,
+        )
+        self.id = snapshot.id
+        self._message_channels = {message.id: message.channel_id for message in snapshot.messages}
+        self.apply_persisted_state(snapshot)
+        return self
+
+    @override
+    async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
+        """Send the initial message to the channel."""
+        embed = discord.Embed(
+            title="Vote to Delete Log",
+            description=(
+                dedent(f"""
+                React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or {self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n
+                **Log Content:**\n{self.target_message.content}\n\n
+                **Upvotes:** {self.upvotes}
+                **Downvotes:** {self.downvotes}
+                **Net Votes:** {self.net_votes}""")
+            ),
+        )
+        return await channel.send(embed=embed)
+
+    @override
+    async def update_messages(self) -> None:
+        """Updates the message with the current vote count."""
+        match self.result:
+            case "pending":
+                title = "Vote to Delete Log"
+                action = (
+                    f"React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or "
+                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n"
+                )
+            case "approved":
+                title = "Vote to Delete Log: Passed"
+                action = ""
+            case "denied":
+                title = "Vote to Delete Log: Failed"
+                action = ""
+            case _:
+                title = "Vote to Delete Log: Closed"
+                action = ""
+
+        embed = discord.Embed(
+            title=title,
+            description=(
+                dedent(f"""
+                {action}**Log Content:**\n{self.target_message.content}\n\n
+                **Upvotes:** {self.upvotes}
+                **Downvotes:** {self.downvotes}
+                **Net Votes:** {self.net_votes}""")
+            ),
+        )
+        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
+
+    @classmethod
+    async def get_open_vote_sessions(
+        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
+    ) -> "list[DeleteLogVoteSession]":
+        """Get all open vote sessions from the database."""
+        sessions = await asyncio.gather(
+            *(cls._from_snapshot(bot, snapshot) for snapshot in await bot.services.votes.list_open(cls.kind))
+        )
+        return [session for session in sessions if session is not None]

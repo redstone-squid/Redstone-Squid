@@ -10,7 +10,9 @@ from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
-from squid.bot.voting.vote_session import AbstractVoteSession, BuildVoteSession, DeleteLogVoteSession
+from squid.bot.voting.base_session import AbstractVoteSession
+from squid.bot.voting.build_session import BuildVoteSession
+from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.voting.domain import VoteActor
 
 if TYPE_CHECKING:

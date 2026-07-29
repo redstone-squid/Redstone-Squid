@@ -10,7 +10,7 @@ from discord.utils import escape_markdown
 
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
-from squid.bot.voting.vote_session import BuildVoteSession
+from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
 from squid.core.time import utcnow
 
