@@ -6,10 +6,12 @@ from contextlib import asynccontextmanager
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Request
 from pydantic import BaseModel
 
 from squid.bootstrap import ApplicationRuntime, create_application_runtime
+from squid.exceptions import AuthenticationError
+from squid.http_errors import register_exception_handlers
 from squid.logging_config import configure_api_logging
 from squid.services.container import ApplicationServices
 
@@ -44,12 +46,9 @@ async def get_verification_code(
 ) -> int:
     """Generate a verification code for a user."""
     if authorization != os.environ["SYNERGY_SECRET"]:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise AuthenticationError
 
-    try:
-        return await services.users.generate_verification_code(user.uuid)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return await services.users.generate_verification_code(user.uuid)
 
 
 def create_api_app(runtime_factory: RuntimeFactory = create_application_runtime) -> FastAPI:
@@ -62,6 +61,7 @@ def create_api_app(runtime_factory: RuntimeFactory = create_application_runtime)
             yield
 
     api = FastAPI(lifespan=lifespan)
+    register_exception_handlers(api)
     api.include_router(router)
     return api
 
