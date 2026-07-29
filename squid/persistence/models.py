@@ -18,4 +18,12 @@ __all__ = [
 
 
 def load_models() -> None:
-    """Load all model modules into shared metadata at composition boundaries."""
+    """Populate the shared SQLAlchemy metadata with every context's tables.
+
+    Defining a model class registers its table with :class:`Base.metadata`, so
+    importing the model modules above performs the actual registration. This
+    otherwise-empty function makes that import side effect explicit at
+    composition boundaries such as Alembic, before they inspect the metadata.
+
+    Python caches imported modules, making repeated calls safe and inexpensive.
+    """
