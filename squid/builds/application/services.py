@@ -1,7 +1,8 @@
 """Application services for build submission and editing."""
 
 from collections.abc import Sequence
-from datetime import datetime
+
+from whenever import Instant
 
 from squid.builds.application.commands import DoorSubmissionInput
 from squid.builds.application.editing import BuildEditLease, BuildEditPatch
@@ -69,7 +70,7 @@ class BuildService:
         await self._persist(build)
         return build
 
-    async def clean_stale_locks(self, *, older_than: datetime) -> None:
+    async def clean_stale_locks(self, *, older_than: Instant) -> None:
         """Release persisted build locks older than a cutoff."""
         await self._repository.clean_stale_locks(older_than=older_than)
 

@@ -1,12 +1,12 @@
 """SQLAlchemy tracked message repository."""
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import cast
 
 from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord
 from squid.messages.errors import MessageNotFoundError
@@ -73,7 +73,7 @@ class MessageRepository:
             repository = _MessageModelRepository(session=session, auto_commit=True)
             message = await repository.get_one_or_none(id=message_id)
             if message is not None:
-                message.updated_at = datetime.now(tz=UTC)
+                message.updated_at = Instant.now().to_stdlib()
                 await repository.update(message)
 
     async def get_by_id(self, message_id: int) -> MessageRecord | None:
@@ -144,5 +144,5 @@ class MessageRepository:
             content=message.content,
             build_id=message.build_id,
             vote_session_id=message.vote_session_id,
-            updated_at=message.updated_at,
+            updated_at=Instant(message.updated_at) if message.updated_at is not None else None,
         )

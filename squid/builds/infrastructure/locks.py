@@ -10,12 +10,12 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.builds.errors import BuildBusyError
 from squid.builds.infrastructure.models import Build
@@ -137,8 +137,8 @@ class BuildLockRepository:
         finally:
             await self.release(build_id)
 
-    async def clean_stale(self, *, older_than: datetime) -> None:
+    async def clean_stale(self, *, older_than: Instant) -> None:
         async with self._session_factory() as session:
-            await session.execute(update(Build).where(Build.locked_at < older_than).values(is_locked=False))
+            await session.execute(update(Build).where(Build.locked_at < older_than.to_stdlib()).values(is_locked=False))
             await session.commit()
         self._tracker.clear()

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
+from whenever import Instant
 
 from squid.builds.application.queries import SmallestDoorRecord
 from squid.builds.domain import (
@@ -65,7 +65,7 @@ class BuildRepository:
     def locked(self, build_id: int, *, timeout: float = 30) -> AbstractAsyncContextManager[None]:
         return self._locks.locked(build_id, timeout=timeout)
 
-    async def clean_stale_locks(self, *, older_than: datetime) -> None:
+    async def clean_stale_locks(self, *, older_than: Instant) -> None:
         await self._locks.clean_stale(older_than=older_than)
 
     async def get_by_id(self, build_id: int) -> Build | None:
@@ -110,7 +110,7 @@ class BuildRepository:
 
         If the build does not exist in the database, it will be inserted instead.
         """
-        build.edited_time = datetime.now(tz=UTC)
+        build.edited_time = Instant.now()
 
         if build.id is None:
             if build.submitter_id is None:
@@ -132,7 +132,7 @@ class BuildRepository:
                     ai_generated=build.ai_generated or False,
                     embedding=build.embedding,
                     extra_info=build.extra_info,
-                    edited_time=build.edited_time,
+                    edited_time=build.edited_time.to_stdlib(),
                     is_locked=False,
                     orientation=build.door_orientation_type or "Door",
                     door_width=build.door_width or 1,
@@ -193,7 +193,7 @@ class BuildRepository:
             sql_build.version_spec = build.version_spec
             sql_build.ai_generated = build.ai_generated or False
             sql_build.embedding = build.embedding
-            sql_build.edited_time = build.edited_time
+            sql_build.edited_time = build.edited_time.to_stdlib() if build.edited_time is not None else None
 
             if not isinstance(sql_build, Door):
                 msg = f"Only doors are supported for now, got {sql_build.category}."
@@ -373,7 +373,7 @@ class BuildRepository:
             message.purpose = "build_original_message"
             message.content = build.original_message
             message.build_id = build.id
-            message.updated_at = datetime.now(tz=UTC)
+            message.updated_at = Instant.now().to_stdlib()
         await session.flush()
 
     async def confirm(self, build: Build) -> None:

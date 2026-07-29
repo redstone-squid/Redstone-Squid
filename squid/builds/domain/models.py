@@ -4,7 +4,6 @@ import re
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from datetime import datetime
 from enum import IntEnum, StrEnum
 from functools import cached_property
 from typing import (
@@ -18,6 +17,8 @@ from typing import (
     get_args,
     overload,
 )
+
+from whenever import Instant
 
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError
@@ -193,7 +194,7 @@ class Build:
     submitter_id: int | None = None
     # TODO: save the submitted time too
     completion_time: str | None = None
-    edited_time: datetime | None = None
+    edited_time: Instant | None = None
 
     original_server_id: Final[int | None] = frozen_field(default=None)
     original_channel_id: Final[int | None] = frozen_field(default=None)

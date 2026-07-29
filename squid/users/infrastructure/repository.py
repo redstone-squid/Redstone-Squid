@@ -2,10 +2,10 @@
 
 import hashlib
 import uuid
-from datetime import UTC, datetime
 
 from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.persistence.repository import BaseAsyncRepository
@@ -101,7 +101,7 @@ class UserRepository:
         async with self._session_factory() as session:
             repository = _VerificationCodeModelRepository(session=session)
             verification_code = await repository.get_one_or_none(
-                VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
+                VerificationCodeModel.expires > Instant.now().to_fixed_offset().to_plain().to_stdlib(),
                 code=self.hash_verification_code(code),
                 valid=True,
             )
@@ -117,7 +117,7 @@ class UserRepository:
         async with self._session_factory() as session:
             repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
             verification_codes = await repository.get_many(
-                VerificationCodeModel.expires > datetime.now(tz=UTC).replace(tzinfo=None),
+                VerificationCodeModel.expires > Instant.now().to_fixed_offset().to_plain().to_stdlib(),
                 minecraft_uuid=minecraft_uuid,
                 valid=True,
             )

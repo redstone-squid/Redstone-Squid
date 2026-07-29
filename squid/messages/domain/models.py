@@ -1,8 +1,9 @@
 """Tracked message domain values."""
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Literal
+
+from whenever import Instant
 
 MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
 
@@ -30,4 +31,4 @@ class MessageRecord:
     content: str | None
     build_id: int | None
     vote_session_id: int | None
-    updated_at: datetime | None
+    updated_at: Instant | None

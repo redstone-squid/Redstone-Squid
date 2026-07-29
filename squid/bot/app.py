@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
 from typing import Any, Final, Self, TypedDict, override
@@ -14,6 +13,7 @@ from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
 from dotenv.main import StrPath
+from whenever import Instant
 
 from squid.bootstrap import create_application_runtime
 
@@ -130,7 +130,7 @@ class RedstoneSquid(Bot):
     @tasks.loop(minutes=5)
     async def clean_dangling_build_locks(self):
         """Clean up dangling build locks in case some functions failed to release them."""
-        await self.services.builds.clean_stale_locks(older_than=datetime.now(UTC) - timedelta(minutes=5))
+        await self.services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """

@@ -1,13 +1,13 @@
 """Models and views for discord interactions."""
 
 import asyncio
-import datetime
 import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, override
 
 import discord
 from discord import Interaction
+from whenever import Instant
 
 from squid.bot.errors import ErrorHandledModal, ErrorHandledView
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
@@ -220,11 +220,11 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
         self.items = items
         self.page = 1
         self._max_pages = len(self.items) // 5 + 1
-        self.expiry_time: datetime.datetime = discord.utils.utcnow() + datetime.timedelta(seconds=timeout)
+        self.expiry_time = Instant.now().add(seconds=timeout)
 
     @override
     async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]
-        if discord.utils.utcnow() > self.expiry_time:
+        if Instant.now() > self.expiry_time:
             for item in self.children:
                 item.disabled = True  # type: ignore
             await interaction.followup.send("This edit session has expired. Your edits are not saved.", ephemeral=True)
@@ -236,7 +236,7 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
         modal = EditModal(
             parent=self,
             title=f"Edit Build (Page {self.page})",
-            timeout=(self.expiry_time - discord.utils.utcnow()).seconds,
+            timeout=max(0.0, (self.expiry_time - Instant.now()).total("seconds")),
         )
         if 5 * self.page <= len(self.items):
             for i in range(5):

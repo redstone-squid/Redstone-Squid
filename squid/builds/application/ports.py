@@ -1,7 +1,8 @@
 """Build application ports."""
 
-from datetime import datetime
 from typing import Literal, Protocol
+
+from whenever import Instant
 
 from squid.builds.domain import Build
 
@@ -23,7 +24,7 @@ class BuildRepository(Protocol):
 
     async def update_smallest_door_records_without_title(self) -> None: ...
 
-    async def clean_stale_locks(self, *, older_than: datetime) -> None: ...
+    async def clean_stale_locks(self, *, older_than: Instant) -> None: ...
 
 
 class BuildEmbeddingCoordinator(Protocol):
