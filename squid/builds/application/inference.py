@@ -7,9 +7,14 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from squid.db.builds import Build
-from squid.db.schema import DoorOrientationLiteral, RecordCategoryLiteral, RestrictionTypeLiteral, UnknownRestrictions
-from squid.utils import parse_time_string
+from squid.builds.domain import (
+    Build,
+    DoorOrientationLiteral,
+    RecordCategoryLiteral,
+    RestrictionTypeLiteral,
+    UnknownRestrictions,
+    parse_time_string,
+)
 from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)

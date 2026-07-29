@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from squid.db.build_tags import BuildTagsManager
+from squid.builds.infrastructure.taxonomy import BuildTagsManager
 from squid.db.schema import Restriction
 
 

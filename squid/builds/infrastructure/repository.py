@@ -17,42 +17,38 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from squid.db.builds import Build, JoinedBuildRecord
-from squid.db.repos._build_lock import BuildLockTracker
+from squid.builds.domain import (
+    Build,
+    BuildCategory,
+    MediaTypeLiteral,
+    RestrictionTypeLiteral,
+    Status,
+    UnknownRestrictions,
+)
+from squid.builds.infrastructure.locks import BuildLockTracker
 from squid.db.schema import (
     Build as SQLBuild,
 )
 from squid.db.schema import (
-    BuildCategory,
     BuildCreator,
     BuildLink,
     BuildRestriction,
     BuildType,
     BuildVersion,
     Door,
-    LinkRecord,
-    MediaTypeLiteral,
     Message,
-    MessageRecord,
     Restriction,
-    RestrictionRecord,
-    RestrictionTypeLiteral,
     SmallestDoor,
-    Status,
     Type,
-    UnknownRestrictions,
     User,
     Version,
-    VersionRecord,
 )
 from squid.exceptions import (
     BuildBusyError,
-    DataIntegrityError,
     InvalidBuildError,
     InvalidStateError,
     PersistenceError,
 )
-from squid.utils import get_version_string
 
 logger = logging.getLogger(__name__)
 
@@ -158,132 +154,6 @@ class BuildRepository:
             if message and message.build_id is not None:
                 return await self.get_by_id(message.build_id)
             return None
-
-    @staticmethod
-    def _from_json(data: JoinedBuildRecord) -> Build:
-        """
-        Converts a JSON object to a Build object.
-
-        Args:
-            data: A legacy joined build record.
-
-        Returns:
-            A Build object.
-        """
-        id = data["id"]
-        submission_status = data["submission_status"]
-        record_category = data["record_category"]
-        category = data["category"]
-
-        width = data["width"]
-        height = data["height"]
-        depth = data["depth"]
-
-        match data["category"]:
-            case "Door":
-                assert "doors" in data and data["doors"] is not None
-                door_orientation_type = data["doors"]["orientation"]
-                door_width = data["doors"]["door_width"]
-                door_height = data["doors"]["door_height"]
-                door_depth = data["doors"]["door_depth"]
-                normal_closing_time = data["doors"]["normal_closing_time"]
-                normal_opening_time = data["doors"]["normal_opening_time"]
-                visible_closing_time = data["doors"]["visible_closing_time"]
-                visible_opening_time = data["doors"]["visible_opening_time"]
-            case "Extender":
-                raise NotImplementedError
-            case "Utility":
-                raise NotImplementedError
-            case "Entrance":
-                raise NotImplementedError
-            case _:
-                msg = f"Unsupported persisted build category: {category!r}."
-                raise DataIntegrityError(msg, context={"category": category})
-
-        # FIXME: This is hardcoded for now
-        if types := data.get("types"):
-            door_type = [type_["name"] for type_ in types]
-        else:
-            door_type = ["Regular"]
-
-        restrictions: list[RestrictionRecord] = data.get("restrictions", [])
-        wiring_placement_restrictions = [r["name"] for r in restrictions if r["type"] == "wiring-placement"]
-        component_restrictions = [r["name"] for r in restrictions if r["type"] == "component"]
-        miscellaneous_restrictions = [r["name"] for r in restrictions if r["type"] == "miscellaneous"]
-
-        extra_info = data["extra_info"]
-
-        creators = data.get("users", [])
-        creators_ign = [creator["ign"] for creator in creators]
-
-        version_spec = data["version_spec"]
-        version_records: list[VersionRecord] = data.get("versions", [])
-        versions = []
-        for r in version_records:
-            version = Version(r["edition"], r["major_version"], r["minor_version"], r["patch_number"])
-            versions.append(get_version_string(version))
-
-        links: list[LinkRecord] = data.get("build_links", [])
-        image_urls = [link["url"] for link in links if link["media_type"] == "image"]
-        video_urls = [link["url"] for link in links if link["media_type"] == "video"]
-        world_download_urls = [link["url"] for link in links if link["media_type"] == "world-download"]
-
-        submitter_id = data["submitter_id"]
-        completion_time = data["completion_time"]
-        edited_time = data["edited_time"]
-
-        message_record: MessageRecord | None = data["messages"]
-        if message_record is None:
-            original_server_id = original_channel_id = original_message_id = original_message_author_id = None
-            original_message = None
-        else:
-            original_server_id = message_record["server_id"]
-            original_channel_id = message_record["channel_id"]
-            original_message_id = data["original_message_id"]
-            original_message_author_id = message_record["author_id"]
-            original_message = message_record["content"]
-
-        ai_generated = data["ai_generated"]
-        embedding = data["embedding"]
-
-        return Build(
-            id=id,
-            submission_status=Status(submission_status),
-            record_category=record_category,
-            category=BuildCategory(category),
-            versions=versions,
-            version_spec=version_spec,
-            width=width,
-            height=height,
-            depth=depth,
-            door_width=door_width,
-            door_height=door_height,
-            door_depth=door_depth,
-            door_type=door_type,
-            door_orientation_type=door_orientation_type,
-            wiring_placement_restrictions=wiring_placement_restrictions,
-            component_restrictions=component_restrictions,
-            miscellaneous_restrictions=miscellaneous_restrictions,
-            normal_closing_time=normal_closing_time,
-            normal_opening_time=normal_opening_time,
-            visible_closing_time=visible_closing_time,
-            visible_opening_time=visible_opening_time,
-            extra_info=extra_info,
-            creators_ign=creators_ign,
-            image_urls=image_urls,
-            video_urls=video_urls,
-            world_download_urls=world_download_urls,
-            submitter_id=submitter_id,
-            completion_time=completion_time,
-            edited_time=datetime.strptime(edited_time, "%Y-%m-%dT%H:%M:%S%z"),
-            original_server_id=original_server_id,
-            original_channel_id=original_channel_id,
-            original_message_id=original_message_id,
-            original_message_author_id=original_message_author_id,
-            original_message=original_message,
-            ai_generated=ai_generated,
-            embedding=embedding,
-        )
 
     @staticmethod
     def from_sql_build(sql_build: SQLBuild) -> Build:

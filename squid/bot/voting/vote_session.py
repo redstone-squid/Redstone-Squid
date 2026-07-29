@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final, ove
 import discord
 
 from squid.bot.message_adapter import to_tracked_message
-from squid.db.builds import Build
-from squid.db.schema import Status
+from squid.builds.domain import Build, Status
 from squid.messages.application import MessageService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,

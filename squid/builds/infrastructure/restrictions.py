@@ -4,10 +4,10 @@ from advanced_alchemy.exceptions import DuplicateKeyError
 from async_lru import alru_cache
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.builds.application import RestrictionDefinition
 from squid.db.repos._model_repos import RestrictionAliasModelRepository, RestrictionModelRepository
 from squid.db.schema import Restriction, RestrictionAlias
 from squid.exceptions import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
-from squid.services.builds import RestrictionDefinition
 
 
 class RestrictionRepository:

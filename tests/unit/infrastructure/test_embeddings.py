@@ -1,4 +1,4 @@
-from squid.infrastructure.embeddings import VecsBuildIndex
+from squid.builds.infrastructure.embeddings import VecsBuildIndex
 
 
 async def test_vecs_index_is_disabled_without_connection() -> None:

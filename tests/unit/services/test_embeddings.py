@@ -1,7 +1,7 @@
 """Tests for build embedding application coordination."""
 
-from squid.db.builds import Build
-from squid.services.embeddings import BuildEmbeddingService
+from squid.builds.application import BuildEmbeddingService
+from squid.builds.domain import Build
 
 
 class FakeEmbeddingModel:

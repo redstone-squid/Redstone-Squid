@@ -12,8 +12,7 @@ from discord import Interaction, TextStyle
 from discord.ui import Item
 
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.db.builds import Build
-from squid.db.schema import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Build
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime

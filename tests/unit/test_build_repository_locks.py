@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.repos.build_repository import BuildRepository
+from squid.builds.infrastructure.repository import BuildRepository
 from squid.exceptions import InvalidStateError
 
 

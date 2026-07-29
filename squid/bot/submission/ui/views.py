@@ -22,9 +22,8 @@ from squid.bot.submission.ui.components import (
     get_text_input,
 )
 from squid.bot.utils import DEFAULT, DefaultType
-from squid.db.builds import Build
-from squid.db.schema import BuildCategory, Status
-from squid.services.builds import BuildEditPatch, BuildService
+from squid.builds.application import BuildEditPatch, BuildService
+from squid.builds.domain import Build, BuildCategory, Status
 
 if TYPE_CHECKING:
     import squid.bot

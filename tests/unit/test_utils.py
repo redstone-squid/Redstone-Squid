@@ -1,6 +1,6 @@
 import pytest
 
-from squid.utils import parse_time_string
+from squid.builds.domain import parse_time_string
 from squid.versions.domain import parse_version_string
 
 

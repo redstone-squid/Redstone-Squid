@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import aiohttp
 
 from squid.db.schema import Version
-from squid.versions.domain import parse_version_string as parse_version_string
 
 
 def utcnow() -> str:
@@ -43,22 +42,3 @@ def get_version_string(version: Version, no_edition: bool = False) -> str:
     if no_edition:
         return f"{version.major_version}.{version.minor_version}.{version.patch_number}"
     return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
-
-
-def parse_time_string(time_string: str | None) -> int | None:
-    """Parses a time string into an integer.
-
-    Args:
-        time_string: The time string to parse.
-
-    Returns:
-        The time in ticks.
-    """
-    # TODO: parse "ticks"
-    if time_string is None:
-        return None
-    time_string = time_string.replace("s", "").replace("~", "").strip()
-    try:
-        return int(float(time_string) * 20)
-    except ValueError:
-        return None

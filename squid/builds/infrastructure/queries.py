@@ -3,13 +3,13 @@
 from rapidfuzz import process
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.builds.application import RestrictionSearchItem
 from squid.db.repos._model_repos import (
     RestrictionAliasModelRepository,
     RestrictionModelRepository,
     TypeModelRepository,
 )
 from squid.db.schema import Restriction, RestrictionAlias, Type
-from squid.services.build_queries import RestrictionSearchItem
 
 
 class BuildMetadataRepository:

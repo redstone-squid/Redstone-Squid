@@ -1,14 +1,11 @@
 import inspect
 import os
 import uuid
-from collections.abc import Sequence
 from datetime import datetime
-from enum import IntEnum, StrEnum
-from typing import Any, Literal, TypeAlias, TypedDict, cast, get_args
+from typing import Any
 
 from advanced_alchemy.base import BasicAttributes
 from pgvector.sqlalchemy import VECTOR
-from pydantic.types import Json
 from sqlalchemy import (
     ARRAY,
     TIMESTAMP,
@@ -33,65 +30,18 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from squid.db._docs_extraction import extract_attribute_docstrings
-from squid.messages.domain import MessagePurposeLiteral
-from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
-
-RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
-RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
-    Sequence[RecordCategoryLiteral], get_args(RecordCategoryLiteral)
+from squid.builds.domain import (
+    BuildCategory,
+    BuildCategoryLiteral,
+    DoorOrientationLiteral,
+    Info,
+    MediaTypeLiteral,
+    RecordCategoryLiteral,
+    RestrictionTypeLiteral,
+    Status,
 )
-
-BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
-BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
-
-DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
-DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
-
-RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
-RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
-
-MediaTypeLiteral = Literal["image", "video", "world-download"]
-
-
-class UnknownRestrictions(TypedDict, total=False):
-    wiring_placement_restrictions: list[str]
-    component_restrictions: list[str]
-    miscellaneous_restrictions: list[str]
-
-
-class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server"""
-
-    server_ip: str
-    coordinates: str
-    command_to_build: str
-
-
-class Info(TypedDict, total=False):
-    """A special JSON field in the database that stores various additional information about the build"""
-
-    user: str  # Provided by the submitter if they have any additional information to provide.
-    unknown_patterns: list[str]
-    unknown_restrictions: UnknownRestrictions
-    server_info: ServerInfo
-
-
-class Status(IntEnum):
-    """The status of a submission."""
-
-    PENDING = 0
-    CONFIRMED = 1
-    DENIED = 2
-
-
-class BuildCategory(StrEnum):
-    """The categories of the builds."""
-
-    DOOR = "Door"
-    EXTENDER = "Extender"
-    UTILITY = "Utility"
-    ENTRANCE = "Entrance"
+from squid.db._docs_extraction import extract_attribute_docstrings
+from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
 
 
 # AIDEV-NOTE: SQLAlchemy table definitions for gradual migration from Supabase
@@ -847,176 +797,3 @@ class Vote(Base):
     weight: Mapped[float] = mapped_column(Float, nullable=True)  # FIXME: Shouldn't be nullable
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
-
-
-class BuildRecord(TypedDict):
-    """A record of a build in the database."""
-
-    id: int
-    submission_status: Status
-    record_category: RecordCategoryLiteral | None
-    extra_info: Info
-    submission_time: str
-    edited_time: str
-    width: int | None
-    height: int | None
-    depth: int | None
-    completion_time: str | None  # Given by user, not parsable as a datetime
-    category: BuildCategory
-    submitter_id: int
-    original_message_id: int | None
-    version_spec: str
-    ai_generated: bool
-    embedding: list[float] | None
-    is_locked: bool
-    locked_at: str | None  # timestamptz
-
-
-class MessageRecord(TypedDict):
-    """A record of a message in the database."""
-
-    id: int
-    updated_at: str
-    server_id: int
-    channel_id: int
-    author_id: int
-    purpose: MessagePurposeLiteral
-    build_id: int | None
-    vote_session_id: int | None
-    content: str | None
-
-
-class DoorRecord(TypedDict):
-    """A record of a door in the database."""
-
-    build_id: int
-    orientation: DoorOrientationLiteral
-    door_width: int | None
-    door_height: int | None
-    door_depth: int | None
-    normal_opening_time: int | None
-    normal_closing_time: int | None
-    visible_opening_time: int | None
-    visible_closing_time: int | None
-
-
-class ExtenderRecord(TypedDict):
-    """A record of an extender in the database."""
-
-    build_id: int
-
-
-class UtilityRecord(TypedDict):
-    """A record of a utility in the database."""
-
-    build_id: int
-
-
-class EntranceRecord(TypedDict):
-    """A record of an entrance in the database."""
-
-    build_id: int
-
-
-class ServerSettingRecord(TypedDict):
-    """A record of a server's setting in the database."""
-
-    server_id: int
-    smallest_channel_id: int | None
-    fastest_channel_id: int | None
-    first_channel_id: int | None
-    builds_channel_id: int | None
-    voting_channel_id: int | None
-    staff_roles_ids: list[int] | None
-    trusted_roles_ids: list[int] | None
-    in_server: bool
-
-
-class LinkRecord(TypedDict):
-    """A record of a link in the database."""
-
-    build_id: int
-    url: str
-    media_type: Literal["image", "video", "world-download"]
-
-
-class UserRecord(TypedDict):
-    """A record of a user in the database."""
-
-    id: int
-    discord_id: int | None
-    minecraft_uuid: str | None
-    ign: str
-    created_at: str
-
-
-class TypeRecord(TypedDict):
-    """A record of a type in the database."""
-
-    id: int
-    build_category: BuildCategory
-    name: str
-
-
-class RestrictionRecord(TypedDict):
-    """A restriction on a build."""
-
-    id: int
-    build_category: BuildCategory
-    name: str
-    type: RestrictionTypeLiteral
-
-
-class RestrictionAliasRecord(TypedDict):
-    """An alias for a restriction on a build."""
-
-    restriction_id: int
-    alias: str
-    created_at: str
-
-
-class VersionRecord(TypedDict):
-    """A record of a version in the database"""
-
-    id: int
-    edition: str
-    major_version: int
-    minor_version: int
-    patch_number: int
-
-
-class QuantifiedVersionRecord(TypedDict):
-    """A record of a quantified version in the database. This is obtained by calling the get_quantified_version_names RPC."""
-
-    id: int
-    quantified_name: str
-
-
-class VoteSessionRecord(TypedDict):
-    """A record of a vote session in the database."""
-
-    id: int
-    created_at: str
-    status: Literal["open", "closed"]
-    result: VoteSessionResultLiteral
-    author_id: int
-    kind: str
-    pass_threshold: int
-    fail_threshold: int
-
-
-class BuildVoteSessionRecord(TypedDict):
-    """A record of a build vote session in the database."""
-
-    vote_session_id: int
-    build_id: int
-    changes: Json[list]
-
-
-class DeleteLogVoteSessionRecord(TypedDict):
-    """A record of a delete log vote session in the database."""
-
-    vote_session_id: int
-    target_message_id: int
-    target_channel_id: int
-    target_server_id: int

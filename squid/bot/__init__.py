@@ -26,9 +26,8 @@ from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
-from squid.db.builds import Build
+from squid.builds.domain import Build
 from squid.db.engine import DatabaseEngine
-from squid.db.schema import Base
 from squid.logging_config import (
     DEFAULT_BACKUP_COUNT,
     DEFAULT_DISCORD_LOG_FILE,
@@ -262,15 +261,15 @@ async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     queue_listener = start_logging(config.get("dev_mode", False))
 
     try:
-        async with create_application_runtime() as runtime:
-            await asyncio.to_thread(runtime.db.validate_database_consistency, Base)
-
-            async with RedstoneSquid(runtime.db, runtime.services, config=config.get("bot_config")) as bot:
-                token = os.environ.get("BOT_TOKEN")
-                if not token:
-                    msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
-                    raise RuntimeError(msg)
-                await bot.start(token)
+        async with (
+            create_application_runtime() as runtime,
+            RedstoneSquid(runtime.db, runtime.services, config=config.get("bot_config")) as bot,
+        ):
+            token = os.environ.get("BOT_TOKEN")
+            if not token:
+                msg = "Specify discord token either with .env file or a BOT_TOKEN environment variable."
+                raise RuntimeError(msg)
+            await bot.start(token)
     finally:
         queue_listener.stop()
 

@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal, Protocol, Self, override
 
-from squid.db.builds import Build
-from squid.db.schema import BuildCategory, Info, RestrictionTypeLiteral, ServerInfo, Status
+from squid.builds.domain import Build, BuildCategory, Info, RestrictionTypeLiteral, ServerInfo, Status
 from squid.exceptions import BuildBusyError, BuildNotFoundError, InvalidBuildError, InvalidStateError
 
 

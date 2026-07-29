@@ -5,15 +5,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.db.builds import Build
-from squid.db.schema import BuildCategory, Status
-from squid.exceptions import BuildBusyError, BuildNotFoundError
-from squid.services.builds import (
+from squid.builds.application.services import (
     BuildEditPatch,
     BuildService,
     DoorSubmissionInput,
     RestrictionDefinition,
 )
+from squid.builds.domain import Build, BuildCategory, Status
+from squid.exceptions import BuildBusyError, BuildNotFoundError
 
 
 class FakeBuildRepository:

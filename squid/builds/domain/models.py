@@ -1,49 +1,77 @@
-"""Submitting and retrieving submissions to/from the database"""
+"""Build domain entity and value objects."""
 
 import re
 import typing
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from datetime import datetime
+from enum import IntEnum, StrEnum
 from functools import cached_property
-from typing import Any, Final, Literal, Self, overload
-
-from squid.db.schema import (
-    BuildCategory,
-    BuildRecord,
-    DoorOrientationLiteral,
-    DoorRecord,
-    EntranceRecord,
-    ExtenderRecord,
-    Info,
-    LinkRecord,
-    MessageRecord,
-    RecordCategoryLiteral,
-    RestrictionRecord,
-    RestrictionTypeLiteral,
-    Status,
-    TypeRecord,
-    UserRecord,
-    UtilityRecord,
-    VersionRecord,
+from typing import (
+    Any,
+    Final,
+    Literal,
+    Self,
+    TypeAlias,
+    TypedDict,
+    cast,
+    get_args,
+    overload,
 )
+
 from squid.exceptions import DataIntegrityError, InvalidBuildError
 
+RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
+RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
+    Sequence[RecordCategoryLiteral], get_args(RecordCategoryLiteral)
+)
+BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
+DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
+DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
+RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
+RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
+MediaTypeLiteral = Literal["image", "video", "world-download"]
 
-class JoinedBuildRecord(BuildRecord):
-    """Represents a build record with all the columns joined."""
 
-    versions: list[VersionRecord]
-    build_links: list[LinkRecord]
-    build_creators: list[dict[str, Any]]  # You want to use users instead. This is just a join table.
-    users: list[UserRecord]
-    types: list[TypeRecord]
-    restrictions: list[RestrictionRecord]
-    doors: DoorRecord | None
-    extenders: ExtenderRecord | None
-    utilities: UtilityRecord | None
-    entrances: EntranceRecord | None
-    messages: MessageRecord | None  # Not actually all the associated messages, just the original message
+class UnknownRestrictions(TypedDict, total=False):
+    wiring_placement_restrictions: list[str]
+    component_restrictions: list[str]
+    miscellaneous_restrictions: list[str]
+
+
+class ServerInfo(TypedDict, total=False):
+    """Various additional information about the server"""
+
+    server_ip: str
+    coordinates: str
+    command_to_build: str
+
+
+class Info(TypedDict, total=False):
+    """A special JSON field in the database that stores various additional information about the build"""
+
+    user: str  # Provided by the submitter if they have any additional information to provide.
+    unknown_patterns: list[str]
+    unknown_restrictions: UnknownRestrictions
+    server_info: ServerInfo
+
+
+class Status(IntEnum):
+    """The status of a submission."""
+
+    PENDING = 0
+    CONFIRMED = 1
+    DENIED = 2
+
+
+class BuildCategory(StrEnum):
+    """The categories of the builds."""
+
+    DOOR = "Door"
+    EXTENDER = "Extender"
+    UTILITY = "Utility"
+    ENTRANCE = "Entrance"
 
 
 class FrozenField[T]:
@@ -73,7 +101,6 @@ class FrozenField[T]:
         setattr(instance, self._private_name, value)
 
 
-# https://stackoverflow.com/questions/74714300/paramspec-for-a-pre-defined-function-without-using-generic-callablep
 def signature_from[**P, T](_original: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Copies the signature of a function to another function."""
 
@@ -377,3 +404,22 @@ class Build:
                 msg = f"Attribute {attribute} is not in the Build class."
                 raise InvalidBuildError(msg, context={"attribute": attribute}) from err
         return attr_type
+
+
+def parse_time_string(time_string: str | None) -> int | None:
+    """Parses a time string into an integer.
+
+    Args:
+        time_string: The time string to parse.
+
+    Returns:
+        The time in ticks.
+    """
+    # TODO: parse "ticks"
+    if time_string is None:
+        return None
+    time_string = time_string.replace("s", "").replace("~", "").strip()
+    try:
+        return int(float(time_string) * 20)
+    except ValueError:
+        return None

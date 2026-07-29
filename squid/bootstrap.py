@@ -6,22 +6,25 @@ from importlib import resources
 from types import TracebackType
 from typing import Self
 
+from squid.builds.application import (
+    BuildEmbeddingService,
+    BuildInferenceService,
+    BuildQueryService,
+    BuildService,
+    RestrictionService,
+)
+from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
+from squid.builds.infrastructure.queries import BuildMetadataRepository
+from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.infrastructure.restrictions import RestrictionRepository
+from squid.builds.infrastructure.taxonomy import BuildTagsManager
+from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
-from squid.db.build_tags import BuildTagsManager
 from squid.db.engine import DatabaseEngine
-from squid.db.repos.build_query_repository import BuildMetadataRepository
-from squid.db.repos.build_repository import BuildRepository
-from squid.db.repos.restriction_repository import RestrictionRepository
-from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
-from squid.infrastructure.text_generation import OpenAITextGenerator
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
-from squid.services.build_inference import BuildInferenceService
-from squid.services.build_queries import BuildQueryService
-from squid.services.builds import BuildService, RestrictionService
 from squid.services.container import ApplicationServices
-from squid.services.embeddings import BuildEmbeddingService
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.users.application import UserService
@@ -71,7 +74,7 @@ def create_application_services(db: DatabaseEngine) -> ApplicationServices:
             OpenAITextGenerator.from_environment(),
             BuildTagsManager(db.async_session),
             version_service,
-            resources.files("squid.db").joinpath("prompt.txt").read_text(encoding="utf-8"),
+            resources.files("squid.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8"),
         ),
         restrictions=RestrictionService(restriction_repository),
         build_queries=BuildQueryService(

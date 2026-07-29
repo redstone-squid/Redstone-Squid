@@ -2,11 +2,10 @@
 Tests for the core functionality of the Build class.
 
 This module tests:
-1. Static constructors (from_id, from_dict, from_json)
-2. Data validation (parse_time_string, dimension properties)
-3. Title generation (get_title)
-4. Build comparison (diff method)
-5. Attribute iteration (__iter__)
+1. Data validation and dimension properties
+2. Title generation
+3. Build comparison
+4. Attribute iteration
 """
 
 from typing import Any
@@ -14,9 +13,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from squid.db.builds import Build, JoinedBuildRecord
-from squid.db.repos.build_repository import BuildRepository
-from squid.db.schema import BuildCategory, Door, RestrictionRecord, Status, VersionRecord
+from squid.builds.domain import Build, BuildCategory, Status
+from squid.db.schema import Door
 from squid.exceptions import InvalidBuildError
 
 
@@ -48,94 +46,6 @@ def sample_build() -> Build:
         ai_generated=False,
         extra_info={},
     )
-
-
-@pytest.fixture
-def sample_joined_build_record(
-    sample_version_json_data: list[VersionRecord], sample_restriction_json_data: list[RestrictionRecord]
-) -> JoinedBuildRecord:
-    """Sample JoinedBuildRecord for testing."""
-    return {  # type: ignore  # This is real data, JoinedBuildRecord uses enums which causes type checking issues
-        "id": 172,
-        "submission_status": 1,
-        "edited_time": "2025-06-09T12:58:32+00:00",
-        "record_category": "Fastest",
-        "extra_info": {
-            "user": "Improved version\n**size**\n22x11x4=968b\n**other info**\nuncontained cus layout big\nfound out it was loc and dir, now it's reliable\nvideo should be less laggy now :)",
-            "unknown_patterns": [],
-            "unknown_restrictions": {
-                "component_restrictions": ["Obsless", "Entityless"],
-                "miscellaneous_restrictions": ["Only piston sounds"],
-                "wiring_placement_restrictions": ["Unseamless"],
-            },
-        },
-        "width": 22,
-        "height": 11,
-        "depth": 4,
-        "completion_time": None,
-        "submission_time": "2025-01-11T15:06:04.110194",
-        "category": "Door",
-        "submitter_id": 1159485264570359839,
-        "ai_generated": True,
-        "original_message_id": 1327569309899292754,
-        "version_spec": "Java 1.21.1",
-        "embedding": None,
-        "is_locked": False,
-        "locked_at": None,
-        "versions": [{"id": 246, "edition": "Java", "patch_number": 1, "major_version": 1, "minor_version": 21}],
-        "build_links": [
-            {"url": "https://files.catbox.moe/t09cty.png", "build_id": 172, "media_type": "image"},
-            {"url": "https://files.catbox.moe/uadbru.mp4", "build_id": 172, "media_type": "video"},
-        ],
-        "build_creators": [{"user_id": 14, "build_id": 172}, {"user_id": 15, "build_id": 172}],
-        "users": [
-            {
-                "id": 14,
-                "ign": "parkertoo",
-                "created_at": "2025-01-11T15:06:08.552961",
-                "discord_id": None,
-                "minecraft_uuid": None,
-            },
-            {
-                "id": 15,
-                "ign": "Hammie",
-                "created_at": "2025-01-11T15:06:08.934349",
-                "discord_id": None,
-                "minecraft_uuid": None,
-            },
-        ],
-        "types": [{"id": 1, "name": "Regular", "build_category": "Door"}],
-        "restrictions": [
-            {"id": 7, "name": "Flush", "type": "wiring-placement", "build_category": "Door"},
-            {"id": 43, "name": "Locational", "type": "miscellaneous", "build_category": "Door"},
-            {"id": 44, "name": "Directional", "type": "miscellaneous", "build_category": "Door"},
-        ],
-        "doors": {
-            "build_id": 172,
-            "door_depth": 1,
-            "door_width": 4,
-            "door_height": 4,
-            "orientation": "Door",
-            "normal_closing_time": 5,
-            "normal_opening_time": 5,
-            "visible_closing_time": None,
-            "visible_opening_time": None,
-        },
-        "extenders": None,
-        "utilities": None,
-        "entrances": None,
-        "messages": {
-            "id": 1327569309899292754,
-            "content": "Improved version\n## Fastest unseamless 4x4 flush\nby @parkertoo and @Hammie \n**speed**\n0.25s close 0 reset\n0.25s open 0 reset\n\n**size**\n22x11x4=968b\n\n**other info**\nentityless\nuncontained cus layout big\nfound out it was loc and dir, now it's reliable\nonly piston sounds\n**obless**\nvideo should be less laggy now :)",
-            "purpose": "build_original_message",
-            "build_id": 172,
-            "author_id": 1159485264570359839,
-            "server_id": 433618741528625152,
-            "channel_id": 667401499554611210,
-            "updated_at": "2025-06-02T08:23:19.755221+00:00",
-            "vote_session_id": None,
-        },
-    }
 
 
 @pytest.fixture
@@ -188,15 +98,6 @@ def assert_build_attributes(build: Build, expected: dict[str, Any]):
     """Assert that the build attributes are equal to the expected values."""
     for attr, value in expected.items():
         assert getattr(build, attr) == value
-
-
-class TestBuildConstructors:
-    """Tests for Build class constructors."""
-
-    def test_from_json(self, sample_joined_build_record: JoinedBuildRecord):
-        """Test build creation from JoinedBuildRecord."""
-        build = BuildRepository._from_json(sample_joined_build_record)  # pyright: ignore[reportPrivateUsage]
-        assert build is not None
 
 
 class TestBuildValidation:

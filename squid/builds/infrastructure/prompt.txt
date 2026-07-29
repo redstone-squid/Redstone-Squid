@@ -47,7 +47,7 @@ author_note: credit to lum3nd0 in spirit, (if this has already been done let me 
 
 <original>
 Smallest 3x3 Full Deluxe Door
-By: @Cwee957 
+By: @Cwee957
 Size: 294 Blocks (14x3x7)
 Speed:
 - Closing & Opening: ~8s

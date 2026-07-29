@@ -19,10 +19,8 @@ from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
 from squid.bot.utils.converters import DimensionsConverter, ListConverter
-from squid.db.builds import Build
-from squid.db.schema import Status
-from squid.services.build_inference import BuildInferenceInput
-from squid.services.builds import DoorSubmissionInput
+from squid.builds.application import BuildInferenceInput, DoorSubmissionInput
+from squid.builds.domain import Build, Status
 from squid.utils import upload_to_catbox
 
 if TYPE_CHECKING:

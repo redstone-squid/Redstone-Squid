@@ -13,8 +13,8 @@ from sqlalchemy import select
 import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
 from squid.bot.voting.vote_session import BuildVoteSession
-from squid.db.builds import Build
-from squid.db.schema import Message, Status
+from squid.builds.domain import Build, Status
+from squid.db.schema import Message
 from squid.utils import utcnow
 
 if TYPE_CHECKING:

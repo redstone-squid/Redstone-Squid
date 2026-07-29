@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.db.builds import Build
+from squid.builds.domain import Build
 from squid.db.schema import SmallestDoor
 
 
