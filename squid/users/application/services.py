@@ -1,8 +1,6 @@
-"""Framework-independent user account application service."""
+"""User account application services."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from typing import Protocol
 from uuid import UUID
 
 from squid.exceptions import (
@@ -11,43 +9,8 @@ from squid.exceptions import (
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
 )
-
-
-@dataclass(slots=True)
-class UserAccount:
-    """The account information needed by the application layer."""
-
-    discord_id: int | None
-    minecraft_uuid: UUID | None
-    ign: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class VerificationCode:
-    """A valid verification code returned by persistence."""
-
-    minecraft_uuid: UUID
-    username: str
-
-
-class UserRepository(Protocol):
-    """Persistence operations required by :class:`UserService`."""
-
-    async def add(
-        self, *, discord_id: int | None = None, minecraft_uuid: UUID | None = None, ign: str | None = None
-    ) -> UserAccount: ...
-
-    async def get_by_discord_id(self, discord_id: int) -> UserAccount | None: ...
-
-    async def update(self, user: UserAccount) -> None: ...
-
-    async def unlink_minecraft_account(self, discord_id: int) -> bool: ...
-
-    async def get_valid_verification_code(self, code: str) -> VerificationCode | None: ...
-
-    async def invalidate_codes(self, minecraft_uuid: UUID) -> None: ...
-
-    async def create_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...
+from squid.users.application.ports import UserRepository
+from squid.users.domain import UserAccount
 
 
 class UserService:

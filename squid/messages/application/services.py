@@ -1,47 +1,10 @@
-"""Framework-neutral message tracking service."""
+"""Tracked message application services."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Protocol
 
-from squid.db.schema import Message, MessagePurposeLiteral
 from squid.exceptions import InvalidMessageError
-
-
-@dataclass(frozen=True, slots=True)
-class TrackedMessage:
-    """Discord message metadata needed for persistence."""
-
-    id: int
-    server_id: int
-    channel_id: int
-    author_id: int
-    content: str | None
-
-
-class MessageRepository(Protocol):
-    """Persistence operations required by :class:`MessageService`."""
-
-    async def insert(
-        self,
-        message_id: int,
-        server_id: int,
-        channel_id: int,
-        author_id: int,
-        purpose: MessagePurposeLiteral,
-        content: str | None,
-        *,
-        build_id: int | None = None,
-        vote_session_id: int | None = None,
-    ) -> None: ...
-
-    async def update_edited_time(self, message_id: int) -> None: ...
-
-    async def get_by_id(self, message_id: int) -> Message | None: ...
-
-    async def delete_by_id(self, message_id: int) -> Message: ...
-
-    async def get_outdated_messages(self, server_id: int) -> Sequence[Message]: ...
+from squid.messages.application.ports import MessageRepository
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
 
 
 class MessageService:
@@ -78,11 +41,11 @@ class MessageService:
     async def update_edited_time(self, message_id: int) -> None:
         await self._repository.update_edited_time(message_id)
 
-    async def untrack(self, message_id: int) -> Message:
+    async def untrack(self, message_id: int) -> MessageRecord:
         return await self._repository.delete_by_id(message_id)
 
-    async def get(self, message_id: int) -> Message | None:
+    async def get(self, message_id: int) -> MessageRecord | None:
         return await self._repository.get_by_id(message_id)
 
-    async def get_outdated(self, server_id: int) -> Sequence[Message]:
+    async def get_outdated(self, server_id: int) -> Sequence[MessageRecord]:
         return await self._repository.get_outdated_messages(server_id)

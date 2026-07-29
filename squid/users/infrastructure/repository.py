@@ -1,4 +1,4 @@
-"""Repository for managing users and verification codes in the database."""
+"""SQLAlchemy user repository."""
 
 import hashlib
 import os
@@ -12,7 +12,7 @@ from squid.db.repos._model_repos import UserModelRepository, VerificationCodeMod
 from squid.db.schema import User
 from squid.db.schema import VerificationCode as VerificationCodeModel
 from squid.exceptions import InvalidStateError, UserNotFoundError
-from squid.services.users import UserAccount, VerificationCode
+from squid.users.domain import UserAccount, VerificationCode
 
 
 class UserRepository:

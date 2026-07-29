@@ -1,26 +1,10 @@
-"""Framework-independent server settings application service."""
+"""Server settings application services."""
 
 from collections.abc import Iterable, Mapping
-from typing import Protocol, Unpack, overload
+from typing import overload
 
-from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
-from squid.db.server_settings import SettingOptions
-
-
-class SettingsStore(Protocol):
-    """Persistence operations required by :class:`SettingsService`."""
-
-    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]: ...
-
-    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None: ...
-
-    async def get_all(self, server_id: int) -> SettingOptions: ...
-
-    async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None: ...
-
-    async def on_guild_join(self, server_id: int) -> None: ...
-
-    async def on_guild_remove(self, server_id: int) -> None: ...
+from squid.settings.application.ports import SettingsStore
+from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting, SettingOptions
 
 
 class SettingsService:

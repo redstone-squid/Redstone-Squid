@@ -1,15 +1,17 @@
-"""Repository for managing messages in the database."""
+"""SQLAlchemy tracked message repository."""
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import cast
 
 from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import MessageModelRepository
-from squid.db.schema import Message, MessagePurposeLiteral
+from squid.db.schema import Message
 from squid.exceptions import MessageNotFoundError
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord
 
 
 class MessageRepository:
@@ -70,7 +72,7 @@ class MessageRepository:
                 message.updated_at = datetime.now(tz=UTC)
                 await repository.update(message)
 
-    async def get_by_id(self, message_id: int) -> Message | None:
+    async def get_by_id(self, message_id: int) -> MessageRecord | None:
         """Get a message by its ID.
 
         Args:
@@ -81,9 +83,10 @@ class MessageRepository:
         """
         async with self._session_factory() as session:
             repository = MessageModelRepository(session=session)
-            return await repository.get_one_or_none(id=message_id)
+            message = await repository.get_one_or_none(id=message_id)
+            return None if message is None else self._to_record(message)
 
-    async def delete_by_id(self, message_id: int) -> Message:
+    async def delete_by_id(self, message_id: int) -> MessageRecord:
         """Delete a message from the database by ID.
 
         Args:
@@ -98,11 +101,11 @@ class MessageRepository:
         async with self._session_factory() as session:
             repository = MessageModelRepository(session=session, auto_commit=True)
             try:
-                return await repository.delete(message_id)
+                return self._to_record(await repository.delete(message_id))
             except NotFoundError as exc:
                 raise MessageNotFoundError(message_id) from exc
 
-    async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
+    async def get_outdated_messages(self, server_id: int) -> Sequence[MessageRecord]:
         """Get outdated messages by calling the PostgreSQL function.
 
         Args:
@@ -117,4 +120,18 @@ class MessageRepository:
         stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
         async with self._session_factory() as session:
             result = await session.execute(stmt)
-            return result.scalars().all()
+            return [self._to_record(message) for message in result.scalars().all()]
+
+    @staticmethod
+    def _to_record(message: Message) -> MessageRecord:
+        return MessageRecord(
+            id=message.id,
+            server_id=message.server_id,
+            channel_id=message.channel_id,
+            author_id=message.author_id,
+            purpose=cast(MessagePurposeLiteral, message.purpose),
+            content=message.content,
+            build_id=message.build_id,
+            vote_session_id=message.vote_session_id,
+            updated_at=message.updated_at,
+        )

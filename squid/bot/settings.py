@@ -10,7 +10,7 @@ from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.utils import check_is_staff
-from squid.db.schema import ListRoleSetting, ScalarChannelSetting, Setting
+from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
 
 if TYPE_CHECKING:
     import squid.bot

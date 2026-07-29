@@ -2,7 +2,7 @@
 
 import discord
 
-from squid.services.messages import TrackedMessage
+from squid.messages.domain import TrackedMessage
 
 
 def to_tracked_message(message: discord.Message) -> TrackedMessage:

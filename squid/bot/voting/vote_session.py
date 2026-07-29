@@ -18,7 +18,7 @@ from squid.db.repos.build_repository import BuildRepository
 from squid.db.schema import BuildVoteSession as SQLBuildVoteSession
 from squid.db.schema import DeleteLogVoteSession as SQLDeleteLogVoteSession
 from squid.db.schema import Message, Status, VoteKindLiteral, VoteSession, VoteSessionResultLiteral
-from squid.services.messages import MessageService
+from squid.messages.application import MessageService
 from squid.services.votes import (
     DEFAULT_VOTE_OPTIONS,
     VoteChange,

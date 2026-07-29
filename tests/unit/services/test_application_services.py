@@ -6,7 +6,6 @@ from uuid import UUID
 
 import pytest
 
-from squid.db.schema import Message, MessagePurposeLiteral, Setting
 from squid.exceptions import (
     AccountAlreadyLinkedError,
     InvalidMessageError,
@@ -14,9 +13,12 @@ from squid.exceptions import (
     MinecraftAccountNotFoundError,
     VersionCatalogUnavailableError,
 )
-from squid.services.messages import MessageService, TrackedMessage
-from squid.services.settings import SettingOptions, SettingsService
-from squid.services.users import UserAccount, UserService, VerificationCode
+from squid.messages.application import MessageService
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
+from squid.settings.application import SettingsService
+from squid.settings.domain import Setting, SettingOptions
+from squid.users.application import UserService
+from squid.users.domain import UserAccount, VerificationCode
 from squid.versions.application.services import VersionService
 from squid.versions.domain import Edition, MinecraftVersion
 
@@ -218,14 +220,14 @@ class FakeMessageRepository:
     async def update_edited_time(self, message_id: int) -> None:
         return None
 
-    async def get_by_id(self, message_id: int) -> Message | None:
+    async def get_by_id(self, message_id: int) -> MessageRecord | None:
         return None
 
-    async def delete_by_id(self, message_id: int) -> Message:
+    async def delete_by_id(self, message_id: int) -> MessageRecord:
         msg = "not implemented by this test fake"
         raise LookupError(msg)
 
-    async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
+    async def get_outdated_messages(self, server_id: int) -> Sequence[MessageRecord]:
         return []
 
 

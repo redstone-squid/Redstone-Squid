@@ -1,0 +1,1 @@
+"""Tracked message bounded context."""

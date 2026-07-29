@@ -1,0 +1,1 @@
+"""Server settings bounded context."""

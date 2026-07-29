@@ -6,33 +6,29 @@ from importlib import resources
 from types import TracebackType
 from typing import Self
 
+from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.db.build_tags import BuildTagsManager
 from squid.db.engine import DatabaseEngine
-from squid.db.mojang import get_minecraft_username
 from squid.db.repos.build_query_repository import BuildMetadataRepository
 from squid.db.repos.build_repository import BuildRepository
-from squid.db.repos.message_repository import MessageRepository
 from squid.db.repos.restriction_repository import RestrictionRepository
-from squid.db.repos.settings_repository import SettingsRepository
-from squid.db.repos.user_repository import UserRepository
 from squid.db.repos.vote_repository import VoteRepository
 from squid.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
 from squid.infrastructure.text_generation import OpenAITextGenerator
+from squid.messages.application import MessageService
+from squid.messages.infrastructure.repository import MessageRepository
 from squid.services.build_inference import BuildInferenceService
 from squid.services.build_queries import BuildQueryService
 from squid.services.builds import BuildService, RestrictionService
-from squid.services.community import (
-    RedstonerPolicy,
-    RedstonerService,
-    WelcomeRelayPolicy,
-    WelcomeRelayService,
-)
 from squid.services.container import ApplicationServices
 from squid.services.embeddings import BuildEmbeddingService
-from squid.services.messages import MessageService
-from squid.services.settings import SettingsService
-from squid.services.users import UserService
 from squid.services.votes import VoteService
+from squid.settings.application import SettingsService
+from squid.settings.infrastructure.repository import SettingsRepository
+from squid.users.application import UserService
+from squid.users.infrastructure.mojang import get_minecraft_username
+from squid.users.infrastructure.repository import UserRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 

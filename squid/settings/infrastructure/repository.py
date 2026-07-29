@@ -1,14 +1,23 @@
-"""Advanced-alchemy repository for server settings."""
+"""SQLAlchemy server settings repository."""
 
 from collections.abc import Iterable
-from typing import Unpack, cast
+from typing import Literal, Unpack, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import ServerSettingModelRepository
-from squid.db.schema import ServerSetting, Setting
-from squid.db.server_settings import DbSettingKey, SettingOptions
+from squid.db.schema import ServerSetting
+from squid.settings.domain import Setting, SettingOptions
 
+DbSettingKey = Literal[
+    "smallest_channel_id",
+    "fastest_channel_id",
+    "first_channel_id",
+    "builds_channel_id",
+    "voting_channel_id",
+    "staff_roles_ids",
+    "trusted_roles_ids",
+]
 _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
     "Fastest": "fastest_channel_id",

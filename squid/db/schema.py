@@ -34,6 +34,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_co
 from sqlalchemy.sql import func
 
 from squid.db._docs_extraction import extract_attribute_docstrings
+from squid.messages.domain import MessagePurposeLiteral
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
@@ -49,17 +50,11 @@ DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOri
 RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
 
-MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
-
 VoteKindLiteral = Literal["build", "delete_log"]
 VoteSessionResultLiteral: TypeAlias = Literal["approved", "denied", "cancelled", "pending"]
 VoteChoiceLiteral: TypeAlias = Literal["approve", "deny"]
 
 MediaTypeLiteral = Literal["image", "video", "world-download"]
-
-ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-ListRoleSetting = Literal["Staff", "Trusted"]
-Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
 
 
 class UnknownRestrictions(TypedDict, total=False):

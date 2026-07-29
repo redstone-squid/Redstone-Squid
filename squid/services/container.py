@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass
 
+from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.messages.application import MessageService
 from squid.services.build_inference import BuildInferenceService
 from squid.services.build_queries import BuildQueryService
 from squid.services.builds import BuildService, RestrictionService
-from squid.services.community import RedstonerService, WelcomeRelayService
-from squid.services.messages import MessageService
-from squid.services.settings import SettingsService
-from squid.services.users import UserService
 from squid.services.votes import VoteService
+from squid.settings.application import SettingsService
+from squid.users.application import UserService
 from squid.versions.application.services import VersionService
 
 

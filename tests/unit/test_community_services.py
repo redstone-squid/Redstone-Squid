@@ -2,14 +2,9 @@ from random import Random
 
 import pytest
 
+from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy, WelcomeRelayPolicy
 from squid.exceptions import ConfigurationError
-from squid.services.community import (
-    RedstonerDecisionKind,
-    RedstonerPolicy,
-    RedstonerService,
-    WelcomeRelayPolicy,
-    WelcomeRelayService,
-)
 
 
 @pytest.mark.parametrize(

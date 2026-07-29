@@ -1,4 +1,4 @@
-"""Minecraft account lookup adapter."""
+"""Mojang account lookup adapter."""
 
 from uuid import UUID
 

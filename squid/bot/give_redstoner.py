@@ -14,7 +14,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledView
 from squid.bot.utils import check_is_owner_server
 from squid.bot.utils.permissions import check_is_staff
-from squid.services.community import RedstonerDecisionKind
+from squid.community.domain import RedstonerDecisionKind
 
 if TYPE_CHECKING:
     import squid.bot
