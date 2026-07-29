@@ -7,14 +7,7 @@ from typing import Final, Literal, Protocol, Self, override
 
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Info, RestrictionTypeLiteral, ServerInfo, Status
-
-
-class BuildNotFoundError(LookupError):
-    """Raised when a requested build does not exist."""
-
-
-class BuildBusyError(RuntimeError):
-    """Raised when a build is already being edited."""
+from squid.exceptions import BuildBusyError, BuildNotFoundError, InvalidBuildError, InvalidStateError
 
 
 class _Unset:
@@ -161,7 +154,11 @@ class BuildEditPatch:
         unknown = changes.keys() - supported
         if unknown:
             msg = f"Unsupported build edit fields: {', '.join(sorted(unknown))}"
-            raise ValueError(msg)
+            raise InvalidBuildError(
+                msg,
+                context={"fields": sorted(unknown)},
+                public_context={"fields": sorted(unknown)},
+            )
         return cls(**changes)  # pyright: ignore[reportArgumentType]
 
     def apply(self, build: Build) -> None:
@@ -286,7 +283,7 @@ class BuildEditLease:
     def build(self) -> Build:
         if self._build is None:
             msg = "The edit lease has not been entered."
-            raise RuntimeError(msg)
+            raise InvalidStateError(msg)
         return self._build
 
     async def __aenter__(self) -> Self:
@@ -312,7 +309,7 @@ class BuildEditLease:
     async def commit(self) -> Build:
         if self._committed:
             msg = "This build edit has already been committed."
-            raise RuntimeError(msg)
+            raise InvalidStateError(msg)
         build = self.build
         await self._persist(build)
         self._committed = True

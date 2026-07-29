@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import MessageModelRepository
 from squid.db.schema import Message, MessagePurposeLiteral
+from squid.exceptions import MessageNotFoundError
 
 
 class MessageRepository:
@@ -92,15 +93,14 @@ class MessageRepository:
             The deleted Message object.
 
         Raises:
-            ValueError: If the message is not found.
+            MessageNotFoundError: If the message is not found.
         """
         async with self._session_factory() as session:
             repository = MessageModelRepository(session=session, auto_commit=True)
             try:
                 return await repository.delete(message_id)
             except NotFoundError as exc:
-                msg = f"Message with id {message_id} not found."
-                raise ValueError(msg) from exc
+                raise MessageNotFoundError(message_id) from exc
 
     async def get_outdated_messages(self, server_id: int) -> Sequence[Message]:
         """Get outdated messages by calling the PostgreSQL function.

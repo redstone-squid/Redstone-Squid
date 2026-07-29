@@ -17,6 +17,7 @@ import pytest
 from squid.db.builds import Build, JoinedBuildRecord
 from squid.db.repos.build_repository import BuildRepository
 from squid.db.schema import BuildCategory, Door, RestrictionRecord, Status, VersionRecord
+from squid.exceptions import InvalidBuildError
 
 
 @pytest.fixture
@@ -281,7 +282,7 @@ class TestBuildTitle:
     def test_get_title_missing_orientation(self, sample_build: Build):
         """Test title generation fails with missing orientation."""
         sample_build.door_orientation_type = None
-        with pytest.raises(ValueError, match="Door orientation type"):
+        with pytest.raises(InvalidBuildError, match="Door orientation type"):
             _ = sample_build.title
 
 

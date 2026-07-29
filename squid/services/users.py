@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from squid.exceptions import (
+    AccountAlreadyLinkedError,
+    InvalidUserError,
+    InvalidVerificationCodeError,
+    MinecraftAccountNotFoundError,
+)
+
 
 @dataclass(slots=True)
 class UserAccount:
@@ -43,10 +50,6 @@ class UserRepository(Protocol):
     async def create_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...
 
 
-class VerificationError(ValueError):
-    """A verification code cannot be used for the requested account."""
-
-
 class UserService:
     """Orchestrate user creation and Minecraft account verification."""
 
@@ -66,15 +69,14 @@ class UserService:
         """Add a user with at least one identifying value."""
         if discord_id is None and minecraft_uuid is None and ign is None:
             msg = "At least one of discord_id, minecraft_uuid, or ign must be provided."
-            raise ValueError(msg)
+            raise InvalidUserError(msg)
         return await self._repository.add(discord_id=discord_id, minecraft_uuid=minecraft_uuid, ign=ign)
 
     async def link_minecraft_account(self, discord_id: int, code: str) -> None:
         """Link a Discord user using a valid, unexpired verification code."""
         verification_code = await self._repository.get_valid_verification_code(code)
         if verification_code is None:
-            msg = f"Invalid or expired verification code: {code}. Please generate a new code."
-            raise VerificationError(msg)
+            raise InvalidVerificationCodeError
 
         user = await self._repository.get_by_discord_id(discord_id)
         if user is None:
@@ -86,11 +88,7 @@ class UserService:
             return
 
         if user.minecraft_uuid is not None and user.minecraft_uuid != verification_code.minecraft_uuid:
-            msg = (
-                f"User {discord_id} already has a Minecraft account linked: {user.minecraft_uuid}. "
-                "Please unlink it before linking a new one."
-            )
-            raise VerificationError(msg)
+            raise AccountAlreadyLinkedError(discord_id, user.minecraft_uuid)
 
         user.minecraft_uuid = verification_code.minecraft_uuid
         user.ign = verification_code.username
@@ -104,8 +102,7 @@ class UserService:
         """Generate a verification code after validating the Minecraft account."""
         minecraft_username = await self._minecraft_username_lookup(minecraft_uuid)
         if minecraft_username is None:
-            msg = f"User {minecraft_uuid} does not match a valid Minecraft account."
-            raise ValueError(msg)
+            raise MinecraftAccountNotFoundError(minecraft_uuid)
 
         await self._repository.invalidate_codes(minecraft_uuid)
         code = self._verification_code_factory()

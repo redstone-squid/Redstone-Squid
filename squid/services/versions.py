@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol, override
 
+from squid.exceptions import InvalidVersionError, VersionCatalogUnavailableError
+
 Edition = Literal["Java", "Bedrock"]
 VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$", re.IGNORECASE)
 
@@ -13,7 +15,7 @@ def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
     match = VERSION_PATTERN.match(version_string)
     if not match:
         msg = "Invalid version string format."
-        raise ValueError(msg)
+        raise InvalidVersionError(msg, context={"version": version_string})
 
     edition, major, minor, patch = match.groups()
     parsed_edition: Edition = "Bedrock" if edition is not None and edition.lower() == "bedrock" else "Java"
@@ -63,8 +65,7 @@ class VersionService:
         """Return the newest recognized version for an edition."""
         versions = await self.list_versions(edition)
         if not versions:
-            msg = f"No {edition} versions found."
-            raise RuntimeError(msg)
+            raise VersionCatalogUnavailableError(edition)
         return str(versions[-1])
 
     async def resolve_spec(self, version_spec: str) -> list[str]:
@@ -101,7 +102,7 @@ class VersionService:
         has_java = "Java" in version_spec
         if has_bedrock and has_java:
             msg = "Cannot specify both Java and Bedrock in the version spec."
-            raise ValueError(msg)
+            raise InvalidVersionError(msg, context={"version_spec": version_spec})
         return "Bedrock" if has_bedrock else "Java"
 
     @staticmethod
@@ -109,7 +110,7 @@ class VersionService:
         bounds = tuple(bound.strip() for bound in part.split("-"))
         if len(bounds) != 2:
             msg = f"Invalid version range format in {part}, expected exactly 2 parts, got {len(bounds)}."
-            raise ValueError(msg)
+            raise InvalidVersionError(msg, context={"range": part})
         return bounds
 
     @staticmethod
@@ -120,7 +121,7 @@ class VersionService:
         if len(numbers) == 3:
             return numbers
         msg = f"Invalid version number: {value!r}."
-        raise ValueError(msg)
+        raise InvalidVersionError(msg, context={"version": value})
 
     @classmethod
     def _parse_range_end(
@@ -133,7 +134,7 @@ class VersionService:
             return numbers
         if len(numbers) != 2:
             msg = f"Invalid version number: {value!r}."
-            raise ValueError(msg)
+            raise InvalidVersionError(msg, context={"version": value})
         major, minor = numbers
         patches = [
             patch

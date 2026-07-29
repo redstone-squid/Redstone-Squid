@@ -23,7 +23,8 @@ from squid.bot.submission.ui.components import (
 from squid.bot.utils import DEFAULT, DefaultType
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
-from squid.services.builds import BuildBusyError, BuildEditPatch, BuildService
+from squid.exceptions import BuildBusyError
+from squid.services.builds import BuildEditPatch, BuildService
 
 if TYPE_CHECKING:
     import squid.bot

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos._model_repos import VersionModelRepository
 from squid.db.schema import Version
+from squid.exceptions import DataIntegrityError
 from squid.services.versions import Edition, MinecraftVersion
 
 
@@ -57,4 +58,4 @@ class VersionRepository:
         if value == "Java" or value == "Bedrock":
             return value
         msg = f"Unsupported Minecraft edition in database: {value!r}"
-        raise ValueError(msg)
+        raise DataIntegrityError(msg, context={"edition": value})

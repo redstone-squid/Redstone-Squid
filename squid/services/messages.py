@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.db.schema import Message, MessagePurposeLiteral
+from squid.exceptions import InvalidMessageError
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,10 +60,10 @@ class MessageService:
     ) -> None:
         if purpose in ("view_pending_build", "confirm_pending_build") and build_id is None:
             msg = "build_id cannot be None for this purpose."
-            raise ValueError(msg)
+            raise InvalidMessageError(msg, context={"purpose": purpose})
         if purpose == "vote" and vote_session_id is None:
             msg = "vote_session_id cannot be None for this purpose."
-            raise ValueError(msg)
+            raise InvalidMessageError(msg, context={"purpose": purpose})
         await self._repository.insert(
             message_id=message.id,
             server_id=message.server_id,

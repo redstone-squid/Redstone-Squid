@@ -20,7 +20,8 @@ from squid.bot.utils import (
     fix_converter_annotations,
 )
 from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
-from squid.services.builds import BuildBusyError, BuildEditPatch, BuildNotFoundError
+from squid.exceptions import BuildBusyError, BuildNotFoundError
+from squid.services.builds import BuildEditPatch
 
 if TYPE_CHECKING:
     import squid.bot

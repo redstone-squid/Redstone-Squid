@@ -27,6 +27,7 @@ from squid.db.schema import (
     UtilityRecord,
     VersionRecord,
 )
+from squid.exceptions import DataIntegrityError, InvalidBuildError
 
 
 class JoinedBuildRecord(BuildRecord):
@@ -266,7 +267,7 @@ class Build:
             canonical_name, restriction_type = definition
             if restriction_type is None:
                 msg = "The type is supposed to never be None, this is a bug in the database."
-                raise RuntimeError(msg)
+                raise DataIntegrityError(msg, context={"restriction": canonical_name})
             bucket[restriction_type].append(canonical_name)
 
     @property
@@ -326,7 +327,7 @@ class Build:
         # Door type
         if self.door_orientation_type is None:
             msg = "Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing."
-            raise ValueError(msg)
+            raise InvalidBuildError(msg)
         title += self.door_orientation_type
 
         return title
@@ -347,7 +348,7 @@ class Build:
         """
         if self.id != other.id and not allow_different_id:
             msg = "The IDs of the builds are different."
-            raise ValueError(msg)
+            raise InvalidBuildError(msg, context={"left_id": self.id, "right_id": other.id})
 
         differences: list[tuple[str, T, T]] = []
         # TODO: too much magic, try using __dataclass_fields__ or just listing the fields manually
@@ -374,5 +375,5 @@ class Build:
                     raise NotImplementedError(msg)
             except AttributeError as err:
                 msg = f"Attribute {attribute} is not in the Build class."
-                raise ValueError(msg) from err
+                raise InvalidBuildError(msg, context={"attribute": attribute}) from err
         return attr_type

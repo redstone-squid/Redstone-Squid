@@ -10,30 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.schema import Restriction, RestrictionAlias, Type
-
-
-class RestrictionError(Exception):
-    """Base for *all* restriction/alias problems."""
-
-
-class RestrictionNotFound(RestrictionError):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"Restriction '{name}' does not exist")
-
-
-class AliasAlreadyAdded(RestrictionError):
-    def __init__(self, alias: str, restriction_id: int) -> None:
-        self.alias = alias
-        self.restriction_id = restriction_id
-        super().__init__(f"Alias '{alias}' is already on restriction {restriction_id}")
-
-
-class AliasTakenByOther(RestrictionError):
-    def __init__(self, alias: str, other_id: int) -> None:
-        self.alias = alias
-        self.other_id = other_id
-        super().__init__(f"Alias '{alias}' belongs to restriction {other_id}")
+from squid.exceptions import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 
 
 class BuildTagsManager:
@@ -105,7 +82,7 @@ class BuildTagsManager:
                 await session.rollback()
                 alias_rid = await self.get_restriction_id(alias)
                 assert alias_rid is not None
-                raise AliasAlreadyAdded(alias, alias_rid) from None
+                raise AliasAlreadyAddedError(alias, alias_rid) from None
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
         """Add an alias for a restriction by its name or alias.
@@ -115,18 +92,18 @@ class BuildTagsManager:
             alias (str): The alias to add.
 
         Raises:
-            RestrictionNotFound: If the restriction does not exist.
-            AliasAlreadyAdded: If the alias is already added to the restriction.
-            AliasTakenByOther: If the alias is already taken by another restriction.
+            RestrictionNotFoundError: If the restriction does not exist.
+            AliasAlreadyAddedError: If the alias is already added to the restriction.
+            AliasInUseError: If the alias is already taken by another restriction.
         """
         rid, alias_rid = await asyncio.gather(self.get_restriction_id(name_or_alias), self.get_restriction_id(alias))
         if rid is None:
-            raise RestrictionNotFound(name_or_alias)
+            raise RestrictionNotFoundError(name_or_alias)
 
         if alias_rid is not None:
             if alias_rid == rid:
-                raise AliasAlreadyAdded(alias, rid)
-            raise AliasTakenByOther(alias, alias_rid)
+                raise AliasAlreadyAddedError(alias, rid)
+            raise AliasInUseError(alias, alias_rid)
 
         await self.add_restriction_alias_by_id(rid, alias)
 

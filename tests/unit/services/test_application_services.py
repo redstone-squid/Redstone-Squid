@@ -7,9 +7,16 @@ from uuid import UUID
 import pytest
 
 from squid.db.schema import Message, MessagePurposeLiteral, Setting
+from squid.exceptions import (
+    AccountAlreadyLinkedError,
+    InvalidMessageError,
+    InvalidVerificationCodeError,
+    MinecraftAccountNotFoundError,
+    VersionCatalogUnavailableError,
+)
 from squid.services.messages import MessageService, TrackedMessage
 from squid.services.settings import SettingOptions, SettingsService
-from squid.services.users import UserAccount, UserService, VerificationCode, VerificationError
+from squid.services.users import UserAccount, UserService, VerificationCode
 from squid.services.versions import Edition, MinecraftVersion, VersionService
 
 
@@ -61,7 +68,7 @@ def username_lookup(username: str | None) -> Callable[[UUID], Awaitable[str | No
 async def test_user_link_rejects_invalid_code() -> None:
     service = UserService(FakeUserRepository(), username_lookup("Player"), lambda: 123456)
 
-    with pytest.raises(VerificationError, match="Invalid or expired"):
+    with pytest.raises(InvalidVerificationCodeError, match="invalid or expired"):
         await service.link_minecraft_account(1, "bad")
 
 
@@ -77,6 +84,31 @@ async def test_user_link_and_code_generation() -> None:
     assert repository.user == UserAccount(1, minecraft_uuid, "Player")
     assert generated == 123456
     assert repository.created_code == "123456"
+
+
+async def test_user_link_rejects_a_different_existing_account() -> None:
+    repository = FakeUserRepository()
+    existing_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    requested_uuid = UUID("22222222-2222-2222-2222-222222222222")
+    repository.user = UserAccount(1, existing_uuid, "Existing")
+    repository.code = VerificationCode(requested_uuid, "Requested")
+    service = UserService(repository, username_lookup("Requested"), lambda: 123456)
+
+    with pytest.raises(AccountAlreadyLinkedError) as exc_info:
+        await service.link_minecraft_account(1, "valid")
+
+    assert exc_info.value.context == {"discord_id": 1, "minecraft_uuid": str(existing_uuid)}
+    assert exc_info.value.public_context == {}
+
+
+async def test_code_generation_rejects_unknown_minecraft_account() -> None:
+    minecraft_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    service = UserService(FakeUserRepository(), username_lookup(None), lambda: 123456)
+
+    with pytest.raises(MinecraftAccountNotFoundError) as exc_info:
+        await service.generate_verification_code(minecraft_uuid)
+
+    assert exc_info.value.public_context == {"minecraft_uuid": str(minecraft_uuid)}
 
 
 class FakeSettingsRepository:
@@ -155,6 +187,15 @@ async def test_version_service_resolves_ranges_and_newest_version() -> None:
     ]
 
 
+async def test_version_service_reports_an_empty_catalog_as_infrastructure_failure() -> None:
+    service = VersionService(FakeVersionRepository())
+
+    with pytest.raises(VersionCatalogUnavailableError) as exc_info:
+        await service.newest("Bedrock")
+
+    assert exc_info.value.context == {"edition": "Bedrock"}
+
+
 class FakeMessageRepository:
     def __init__(self) -> None:
         self.inserted: tuple[int, int | None] | None = None
@@ -191,5 +232,5 @@ async def test_message_service_requires_vote_session_id() -> None:
     service = MessageService(FakeMessageRepository())
     message = TrackedMessage(1, 2, 3, 4, "content")
 
-    with pytest.raises(ValueError, match="vote_session_id"):
+    with pytest.raises(InvalidMessageError, match="vote_session_id"):
         await service.track(message, "vote")

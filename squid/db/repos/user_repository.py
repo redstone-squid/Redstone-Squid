@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.db.repos._model_repos import UserModelRepository, VerificationCodeModelRepository
 from squid.db.schema import User
 from squid.db.schema import VerificationCode as VerificationCodeModel
+from squid.exceptions import InvalidStateError, UserNotFoundError
 from squid.services.users import UserAccount, VerificationCode
 
 
@@ -47,14 +48,13 @@ class UserRepository:
         """Update the Minecraft details for an existing user."""
         if user.discord_id is None:
             msg = "Cannot update a Discord-linked account without a Discord ID."
-            raise ValueError(msg)
+            raise InvalidStateError(msg, context={"resource": "user"})
         async with self._session_factory() as session:
             repository = UserModelRepository(session=session, auto_commit=True)
             try:
                 stored_user = await repository.get_one(discord_id=user.discord_id)
             except NotFoundError as exc:
-                msg = f"User with discord_id {user.discord_id} not found."
-                raise ValueError(msg) from exc
+                raise UserNotFoundError(user.discord_id) from exc
             stored_user.minecraft_uuid = user.minecraft_uuid
             stored_user.ign = user.ign or ""
             await repository.update(stored_user)

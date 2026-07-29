@@ -7,6 +7,7 @@ from math import isfinite
 from typing import Literal, Protocol
 
 from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
+from squid.exceptions import InvalidVoteConfigurationError
 
 VoteStatus = Literal["open", "closed"]
 VoteRejection = Literal["not_found", "closed", "not_eligible", "invalid_option"]
@@ -31,10 +32,10 @@ class VoteOption:
     def __post_init__(self) -> None:
         if not self.emoji:
             msg = "Vote option emoji cannot be empty."
-            raise ValueError(msg)
+            raise InvalidVoteConfigurationError(msg)
         if not isfinite(self.multiplier) or self.multiplier <= 0:
             msg = "Vote option multiplier must be finite and greater than zero."
-            raise ValueError(msg)
+            raise InvalidVoteConfigurationError(msg, context={"multiplier": self.multiplier})
 
 
 DEFAULT_VOTE_OPTIONS = (
@@ -51,11 +52,11 @@ def normalize_vote_options(options: Sequence[VoteOption]) -> tuple[VoteOption, .
     emojis = [option.emoji for option in normalized]
     if len(emojis) != len(set(emojis)):
         msg = "Vote option emojis must be unique within a session."
-        raise ValueError(msg)
+        raise InvalidVoteConfigurationError(msg)
     choices = {option.choice for option in normalized}
     if choices != {VoteChoice.APPROVE, VoteChoice.DENY}:
         msg = "Vote sessions require at least one approve and one deny option."
-        raise ValueError(msg)
+        raise InvalidVoteConfigurationError(msg)
     return normalized
 
 

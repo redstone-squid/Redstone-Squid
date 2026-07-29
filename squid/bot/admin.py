@@ -11,12 +11,12 @@ from rapidfuzz import process
 
 from squid.bot import utils
 from squid.bot.utils import check_is_owner_server, check_is_staff
-from squid.db.build_tags import (
-    AliasAlreadyAdded,
-    AliasTakenByOther,
-    RestrictionNotFound,
+from squid.exceptions import (
+    AliasAlreadyAddedError,
+    AliasInUseError,
+    BuildNotFoundError,
+    RestrictionNotFoundError,
 )
-from squid.services.builds import BuildNotFoundError
 
 if TYPE_CHECKING:
     import squid.bot
@@ -79,11 +79,11 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
         async with self.bot.get_running_message(ctx) as sent_message:
             try:
                 await self.restrictions.add_alias(restriction, alias)
-            except RestrictionNotFound:
+            except RestrictionNotFoundError:
                 await sent_message.edit(embed=utils.error_embed("Error", f"No restriction named '{restriction}'."))
-            except AliasAlreadyAdded:
+            except AliasAlreadyAddedError:
                 await sent_message.edit(embed=utils.info_embed("Already added", "Alias already on this restriction."))
-            except AliasTakenByOther as e:
+            except AliasInUseError as e:
                 await sent_message.edit(
                     embed=utils.error_embed(
                         "Error",

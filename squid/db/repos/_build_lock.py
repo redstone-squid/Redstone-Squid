@@ -9,6 +9,8 @@ dependency; the persisted lock flag is managed by whoever calls this
 import asyncio
 from typing import cast
 
+from squid.exceptions import InvalidStateError
+
 
 class BuildLockTracker:
     """Track task ownership of in-process build leases."""
@@ -22,7 +24,7 @@ class BuildLockTracker:
         task = asyncio.current_task()
         if task is None:
             msg = "Build locks require a running asyncio task."
-            raise RuntimeError(msg)
+            raise InvalidStateError(msg)
         return cast(asyncio.Task[object], task)
 
     def is_held_locally(self, build_id: int) -> bool:
@@ -61,7 +63,7 @@ class BuildLockTracker:
         owner, count = lease
         if owner is not self.current_task():
             msg = f"Build {build_id} lock can only be released by its owning task."
-            raise RuntimeError(msg)
+            raise InvalidStateError(msg, context={"build_id": build_id})
         if count > 1:
             self._lock_owners[build_id] = (owner, count - 1)
             return False

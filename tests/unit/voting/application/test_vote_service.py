@@ -5,6 +5,7 @@ from math import inf, nan
 import pytest
 
 from squid.db.schema import VoteKindLiteral, VoteSessionResultLiteral
+from squid.exceptions import InvalidVoteConfigurationError
 from squid.services.votes import (
     DEFAULT_VOTE_OPTIONS,
     StoredVoteMutation,
@@ -292,7 +293,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
     repository = FakeVoteRepository(None)
     service = VoteService(repository)
 
-    with pytest.raises(ValueError, match="unique"):
+    with pytest.raises(InvalidVoteConfigurationError, match="unique"):
         await service.start_build_vote(
             author_id=7,
             pass_threshold=3,
@@ -305,7 +306,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
             ),
         )
 
-    with pytest.raises(ValueError, match="approve and one deny"):
+    with pytest.raises(InvalidVoteConfigurationError, match="approve and one deny"):
         await service.start_build_vote(
             author_id=7,
             pass_threshold=3,
@@ -318,5 +319,5 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
 
 @pytest.mark.parametrize("multiplier", [0.0, -1.0, inf, nan])
 def test_vote_option_rejects_non_positive_or_non_finite_multiplier(multiplier: float) -> None:
-    with pytest.raises(ValueError, match="finite and greater than zero"):
+    with pytest.raises(InvalidVoteConfigurationError, match="finite and greater than zero"):
         VoteOption("👍", VoteChoice.APPROVE, multiplier)

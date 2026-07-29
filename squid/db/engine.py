@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from squid.db.inspect_db import is_sane_database
+from squid.exceptions import ConfigurationError, DataIntegrityError
 
 
 class DatabaseEngine:
@@ -34,13 +35,13 @@ class DatabaseEngine:
                 "database_url not given and no DATABASE_URL environmental variable found. "
                 "Specify DATABASE_URL either with a .env file or a DATABASE_URL environment variable."
             )
-            raise RuntimeError(msg)
+            raise ConfigurationError(msg, context={"field": "DATABASE_URL"})
         if not driver_sync:
             msg = "No DB_DRIVER_SYNC environment variable found."
-            raise RuntimeError(msg)
+            raise ConfigurationError(msg, context={"field": "DB_DRIVER_SYNC"})
         if not driver_async:
             msg = "No DB_DRIVER_ASYNC environment variable found."
-            raise RuntimeError(msg)
+            raise ConfigurationError(msg, context={"field": "DB_DRIVER_ASYNC"})
 
         base = make_url(database_url)
         self.async_engine: AsyncEngine = create_async_engine(
@@ -61,4 +62,4 @@ class DatabaseEngine:
         """Validates that the database schema is consistent with the expected schema."""
         if not is_sane_database(base_cls, self.sync_engine):
             msg = "The database schema is not consistent with the expected schema."
-            raise RuntimeError(msg)
+            raise DataIntegrityError(msg)

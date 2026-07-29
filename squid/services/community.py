@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from random import Random
 
+from squid.exceptions import ConfigurationError
+
 
 @dataclass(frozen=True, slots=True)
 class RedstonerPolicy:
@@ -86,13 +88,13 @@ class WelcomeRelayPolicy:
     def __post_init__(self) -> None:
         if not 0 <= self.forward_chance <= 1:
             msg = "forward_chance must be between zero and one"
-            raise ValueError(msg)
+            raise ConfigurationError(msg, context={"field": "forward_chance"})
         if self.pending_ttl_seconds <= 0:
             msg = "pending_ttl_seconds must be positive"
-            raise ValueError(msg)
+            raise ConfigurationError(msg, context={"field": "pending_ttl_seconds"})
         if self.max_pending_members <= 0:
             msg = "max_pending_members must be positive"
-            raise ValueError(msg)
+            raise ConfigurationError(msg, context={"field": "max_pending_members"})
 
 
 @dataclass(frozen=True, slots=True)

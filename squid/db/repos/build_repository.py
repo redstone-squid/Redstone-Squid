@@ -45,6 +45,13 @@ from squid.db.schema import (
     Version,
     VersionRecord,
 )
+from squid.exceptions import (
+    BuildBusyError,
+    DataIntegrityError,
+    InvalidBuildError,
+    InvalidStateError,
+    PersistenceError,
+)
 from squid.utils import get_version_string
 
 logger = logging.getLogger(__name__)
@@ -103,8 +110,7 @@ class BuildRepository:
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
         """Hold a database-backed build lease for one operation."""
         if not await self.acquire_lock(build_id, timeout=timeout):
-            msg = f"Timed out waiting for build {build_id} lock."
-            raise TimeoutError(msg)
+            raise BuildBusyError(build_id)
         try:
             yield
         finally:
@@ -191,8 +197,8 @@ class BuildRepository:
             case "Entrance":
                 raise NotImplementedError
             case _:
-                msg = "Invalid category"
-                raise ValueError(msg)
+                msg = f"Unsupported persisted build category: {category!r}."
+                raise DataIntegrityError(msg, context={"category": category})
 
         # FIXME: This is hardcoded for now
         if types := data.get("types"):
@@ -334,7 +340,7 @@ class BuildRepository:
         if build.id is None:
             if build.submitter_id is None:
                 msg = "Submitter ID must be set for new builds."
-                raise ValueError(msg)
+                raise InvalidStateError(msg, context={"resource": "build"})
 
             # Create new build - determine the right subclass
             if build.category == BuildCategory.DOOR:
@@ -364,7 +370,7 @@ class BuildRepository:
                 )
             else:
                 msg = f"Only doors are supported for now, got {build.category}."
-                raise ValueError(msg)
+                raise InvalidBuildError(msg, context={"category": build.category})
 
             async with self._session_factory() as session:
                 await self._setup_relationships(build, session, sql_build)
@@ -384,10 +390,10 @@ class BuildRepository:
         assert build.id is not None
         if build.submission_status is None:
             msg = "Submission status must be set for existing builds."
-            raise ValueError(msg)
+            raise InvalidStateError(msg, context={"build_id": build.id})
         if build.submitter_id is None:
             msg = "Submitter ID must be set for existing builds."
-            raise ValueError(msg)
+            raise InvalidStateError(msg, context={"build_id": build.id})
 
         async with self._session_factory() as session:
             statement = (
@@ -601,7 +607,7 @@ class BuildRepository:
         """
         if build.id is None:
             msg = "Build ID is missing."
-            raise ValueError(msg)
+            raise InvalidStateError(msg, context={"operation": "confirm"})
 
         async with self.locked(build.id):
             build.submission_status = Status.CONFIRMED
@@ -611,7 +617,7 @@ class BuildRepository:
                 await session.commit()
                 if result.rowcount != 1:
                     msg = "Failed to confirm submission in the database."
-                    raise ValueError(msg)
+                    raise PersistenceError(msg, context={"build_id": build.id, "operation": "confirm"})
 
     async def deny(self, build: Build) -> None:
         """Marks the build as denied.
@@ -621,7 +627,7 @@ class BuildRepository:
         """
         if build.id is None:
             msg = "Build ID is missing."
-            raise ValueError(msg)
+            raise InvalidStateError(msg, context={"operation": "deny"})
 
         async with self.locked(build.id):
             build.submission_status = Status.DENIED
@@ -631,7 +637,7 @@ class BuildRepository:
                 await session.commit()
                 if result.rowcount != 1:
                     msg = "Failed to deny submission in the database."
-                    raise ValueError(msg)
+                    raise PersistenceError(msg, context={"build_id": build.id, "operation": "deny"})
 
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""

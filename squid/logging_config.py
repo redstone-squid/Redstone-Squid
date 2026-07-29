@@ -7,6 +7,8 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+from squid.exceptions import ConfigurationError
+
 DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when LOG_LEVEL is not set."""
 
@@ -50,7 +52,7 @@ def resolve_level(level_name: str) -> int:
     level = logging.getLevelNamesMapping().get(level_name.upper())
     if level is None:
         msg = f"Invalid log level: {level_name}"
-        raise ValueError(msg)
+        raise ConfigurationError(msg, context={"log_level": level_name})
     return level
 
 

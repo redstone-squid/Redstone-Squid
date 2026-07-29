@@ -4,6 +4,17 @@ from pathlib import Path
 from pytest_archon import archrule
 
 
+def test_exception_model_is_transport_neutral() -> None:
+    (
+        archrule("application exceptions stay independent from transport adapters")
+        .match("squid.exceptions")
+        .should_not_import("discord*")
+        .should_not_import("fastapi*")
+        .should_not_import("squid.bot*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
 def test_application_services_do_not_import_discord_or_bot_layer() -> None:
     (
         archrule("application services stay independent from Discord adapters")

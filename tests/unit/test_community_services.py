@@ -1,5 +1,8 @@
 from random import Random
 
+import pytest
+
+from squid.exceptions import ConfigurationError
 from squid.services.community import (
     RedstonerDecisionKind,
     RedstonerPolicy,
@@ -7,6 +10,31 @@ from squid.services.community import (
     WelcomeRelayPolicy,
     WelcomeRelayService,
 )
+
+
+@pytest.mark.parametrize(
+    ("forward_chance", "pending_ttl_seconds", "max_pending_members", "field"),
+    [
+        (2, 300, 100, "forward_chance"),
+        (1, 0, 100, "pending_ttl_seconds"),
+        (1, 300, 0, "max_pending_members"),
+    ],
+)
+def test_welcome_relay_rejects_invalid_configuration(
+    forward_chance: float,
+    pending_ttl_seconds: float,
+    max_pending_members: int,
+    field: str,
+) -> None:
+    with pytest.raises(ConfigurationError) as exc_info:
+        WelcomeRelayPolicy(
+            welcome_channel_id=1,
+            forward_chance=forward_chance,
+            pending_ttl_seconds=pending_ttl_seconds,
+            max_pending_members=max_pending_members,
+        )
+
+    assert exc_info.value.context == {"field": field}
 
 
 def test_redstoner_ignores_unrelated_posts() -> None:

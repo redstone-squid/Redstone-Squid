@@ -4,9 +4,9 @@ from advanced_alchemy.exceptions import DuplicateKeyError
 from async_lru import alru_cache
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.db.build_tags import AliasAlreadyAdded, AliasTakenByOther, RestrictionNotFound
 from squid.db.repos._model_repos import RestrictionAliasModelRepository, RestrictionModelRepository
 from squid.db.schema import Restriction, RestrictionAlias
+from squid.exceptions import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.services.builds import RestrictionDefinition
 
 
@@ -38,16 +38,16 @@ class RestrictionRepository:
                 alias,
             )
             if restriction_id is None:
-                raise RestrictionNotFound(restriction)
+                raise RestrictionNotFoundError(restriction)
             if alias_restriction_id == restriction_id:
-                raise AliasAlreadyAdded(alias, restriction_id)
+                raise AliasAlreadyAddedError(alias, restriction_id)
             if alias_restriction_id is not None:
-                raise AliasTakenByOther(alias, alias_restriction_id)
+                raise AliasInUseError(alias, alias_restriction_id)
 
             try:
                 await alias_repository.add(RestrictionAlias(restriction_id=restriction_id, alias=alias))
             except DuplicateKeyError as exc:
-                raise AliasAlreadyAdded(alias, restriction_id) from exc
+                raise AliasAlreadyAddedError(alias, restriction_id) from exc
 
     @staticmethod
     async def _get_restriction_id(

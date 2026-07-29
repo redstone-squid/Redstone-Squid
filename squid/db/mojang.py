@@ -4,6 +4,8 @@ from uuid import UUID
 
 import aiohttp
 
+from squid.exceptions import MinecraftServiceUnavailableError
+
 
 async def get_minecraft_username(minecraft_uuid: UUID) -> str | None:
     """Return the current username for a Minecraft UUID."""
@@ -19,4 +21,7 @@ async def get_minecraft_username(minecraft_uuid: UUID) -> str | None:
         msg = (
             f"Failed to get username for UUID {minecraft_uuid}. The Mojang API returned status code {response.status}."
         )
-        raise ValueError(msg)
+        raise MinecraftServiceUnavailableError(
+            msg,
+            context={"minecraft_uuid": str(minecraft_uuid), "status": response.status},
+        )

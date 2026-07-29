@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from squid.exceptions import ConfigurationError
 from squid.logging_config import build_logging_config, prepare_log_path, resolve_level
 
 
@@ -11,7 +12,7 @@ class TestResolveLevel:
         assert resolve_level("WARNING") == 30
 
     def test_rejects_unknown_level_names(self) -> None:
-        with pytest.raises(ValueError, match="Invalid log level: loud"):
+        with pytest.raises(ConfigurationError, match="Invalid log level: loud"):
             resolve_level("loud")
 
 

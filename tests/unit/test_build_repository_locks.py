@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.db.repos.build_repository import BuildRepository
+from squid.exceptions import InvalidStateError
 
 
 @pytest.mark.unit
@@ -51,7 +52,7 @@ async def test_build_lock_rejects_release_from_another_task() -> None:
     async def release() -> None:
         await repository.release_lock(42)
 
-    with pytest.raises(RuntimeError, match="owning task"):
+    with pytest.raises(InvalidStateError, match="owning task"):
         await asyncio.create_task(release())
 
     await repository.release_lock(42)

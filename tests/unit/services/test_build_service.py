@@ -7,10 +7,9 @@ import pytest
 
 from squid.db.builds import Build
 from squid.db.schema import BuildCategory, Status
+from squid.exceptions import BuildBusyError, BuildNotFoundError
 from squid.services.builds import (
-    BuildBusyError,
     BuildEditPatch,
-    BuildNotFoundError,
     BuildService,
     DoorSubmissionInput,
     RestrictionDefinition,

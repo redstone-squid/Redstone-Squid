@@ -4,6 +4,8 @@ import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+from squid.exceptions import ConfigurationError
+
 
 # Establishing connection with Google APIs
 def connect():
@@ -16,7 +18,7 @@ def connect():
         # Checking environment variables exist
         if not credentials:
             msg = "Specify google credentials with a client_secret.json or environment variables."
-            raise RuntimeError(msg)
+            raise ConfigurationError(msg, context={"field": "GOOGLE_CREDENTIALS"})
 
         # Formatting credentials
         credentials = json.loads(credentials)

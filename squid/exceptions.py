@@ -1,10 +1,11 @@
 """Transport-neutral application exception hierarchy."""
 
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 from uuid import UUID
 
-type JSONValue = None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
+type JSONValue = None | bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue]
 
 
 class ErrorCode(StrEnum):
@@ -56,8 +57,8 @@ class SquidError(Exception):
         *,
         code: ErrorCode | None = None,
         resource: str | None = None,
-        context: dict[str, JSONValue] | None = None,
-        public_context: dict[str, JSONValue] | None = None,
+        context: Mapping[str, JSONValue] | None = None,
+        public_context: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
         end_user_action: str | None = None,
         title: str | None = None,
@@ -91,8 +92,8 @@ class SquidError(Exception):
     def with_context(
         self,
         *,
-        context: dict[str, JSONValue] | None = None,
-        public_context: dict[str, JSONValue] | None = None,
+        context: Mapping[str, JSONValue] | None = None,
+        public_context: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
         end_user_action: str | None = None,
     ) -> Self:
