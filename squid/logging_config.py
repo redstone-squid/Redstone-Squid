@@ -4,6 +4,7 @@ import logging
 import logging.config
 import sys
 from collections.abc import Mapping
+from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 
 from squid.config import LoggingConfig
@@ -94,6 +95,7 @@ def build_logging_config(
     default_log_file: str | None = None,
     default_access_log_file: str | None = None,
     include_uvicorn_loggers: bool = False,
+    use_queue: bool = False,
 ) -> dict[str, object]:
     """Build a logging configuration dictionary for dictConfig."""
     resolved_config = config or LoggingConfig.from_environment(
@@ -114,7 +116,7 @@ def build_logging_config(
             "stream": "ext://sys.stdout",
         },
     }
-    base_handlers = ["console"]
+    output_handlers = ["console"]
 
     if resolved_log_file is not None:
         handlers["file"] = {
@@ -126,7 +128,15 @@ def build_logging_config(
             "backupCount": DEFAULT_BACKUP_COUNT,
             "encoding": "utf-8",
         }
-        base_handlers.append("file")
+        output_handlers.append("file")
+
+    base_handlers = output_handlers
+    if use_queue:
+        handlers["queue"] = {
+            "class": "logging.handlers.QueueHandler",
+            "handlers": output_handlers,
+        }
+        base_handlers = ["queue"]
 
     if include_uvicorn_loggers:
         handlers["access_console"] = {
@@ -200,7 +210,7 @@ def build_logging_config(
     }
 
 
-def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None = None) -> None:
+def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None = None) -> QueueListener:
     """Configure logging for the Discord bot process."""
     root_level_name = DEFAULT_LOG_LEVEL if dev_mode else DEFAULT_ROOT_LOG_LEVEL
     named_logger_levels = {
@@ -218,8 +228,19 @@ def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None =
             root_level_name=root_level_name,
             named_logger_levels=named_logger_levels,
             default_log_file=DEFAULT_DISCORD_LOG_FILE,
+            use_queue=True,
         )
     )
+    queue_handler = logging.getHandlerByName("queue")
+    if not isinstance(queue_handler, QueueHandler):
+        msg = "Queue-backed logging configuration did not create a queue handler"
+        raise TypeError(msg)
+    if not isinstance(queue_handler.listener, QueueListener):
+        msg = "Queue-backed logging configuration did not create a queue listener"
+        raise TypeError(msg)
+
+    queue_handler.listener.start()
+    return queue_handler.listener
 
 
 def configure_api_logging(config: LoggingConfig | None = None) -> None:

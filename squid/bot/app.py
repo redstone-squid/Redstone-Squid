@@ -3,9 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
-from queue import Queue
-from typing import Any, Final, Self, TypedDict, override
+from typing import Final, Self, TypedDict, override
 
 import discord
 from discord import Webhook
@@ -24,13 +22,8 @@ from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils import RunningMessage
 from squid.builds.domain import Build
-from squid.config import BotProcessConfig, LoggingConfig
-from squid.logging_config import (
-    DEFAULT_BACKUP_COUNT,
-    DEFAULT_DISCORD_LOG_FILE,
-    DEFAULT_MAX_BYTES,
-    prepare_log_path,
-)
+from squid.config import BotProcessConfig
+from squid.logging_config import configure_bot_logging
 from squid.runtime import ApplicationServices
 
 logger = logging.getLogger(__name__)
@@ -189,58 +182,6 @@ class RedstoneSquid(Bot):
         return BuildHandler(self, build)
 
 
-def start_logging(dev_mode: bool = False, config: LoggingConfig | None = None) -> QueueListener:
-    """Set up logging for the bot process."""
-    logging_config = config or LoggingConfig.from_environment(default_log_file=DEFAULT_DISCORD_LOG_FILE)
-    # Using format from https://discordpy.readthedocs.io/en/latest/logging.html
-    dt_fmt = "%Y-%m-%d %H:%M:%S"
-    formatter = logging.Formatter("[{asctime}] [{levelname:<8}] {name}: {message}", dt_fmt, style="{")
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    stream_handler.setLevel(logging.INFO)
-
-    # Create logs directory if it doesn't exist
-    log_file_path = prepare_log_path(logging_config.directory, logging_config.log_file)
-
-    handlers: list[logging.Handler] = [stream_handler]
-    if log_file_path is not None:
-        file_handler = RotatingFileHandler(
-            filename=log_file_path,
-            encoding="utf-8",
-            maxBytes=DEFAULT_MAX_BYTES,  # 32 MiB
-            backupCount=DEFAULT_BACKUP_COUNT,  # Rotate through 5 files
-        )
-        file_handler.setFormatter(formatter)
-        handlers.append(file_handler)
-
-    # Create queue handler that will process logs in a separate thread
-    log_queue: Queue[Any] = Queue(-1)
-    queue_listener = QueueListener(log_queue, *handlers, respect_handler_level=True)
-    queue_listener.start()
-    queue_handler = QueueHandler(log_queue)
-
-    root = logging.getLogger()
-    root.setLevel(logging.INFO if dev_mode else logging.WARNING)
-
-    # Clear existing handlers and add the queue handler
-    root.handlers.clear()
-    root.addHandler(queue_handler)
-
-    logging.getLogger("squid").setLevel(logging.INFO)
-    logging.getLogger("discord").setLevel(logging.INFO)
-
-    if dev_mode:
-        # See https://github.com/sqlalchemy/sqlalchemy/discussions/10302
-        logging.getLogger("sqlalchemy.engine.Engine").handlers = [logging.NullHandler()]  # Avoid duplicate logging
-
-        # dpy emits heartbeat warning whenever you suspend the bot for over 10 seconds, which is annoying if you attach a debugger
-        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
-
-    # Return the queue listener so it can be stopped later
-    return queue_listener
-
-
 DEFAULT_CONFIG: Final[ApplicationConfig] = {
     "dev_mode": False,
     "bot_config": {
@@ -253,7 +194,7 @@ DEFAULT_CONFIG: Final[ApplicationConfig] = {
 async def main(config: ApplicationConfig = DEFAULT_CONFIG):
     """Main entry point for the bot."""
     process_config = BotProcessConfig.from_environment()
-    queue_listener = start_logging(config.get("dev_mode", False), process_config.logging)
+    queue_listener = configure_bot_logging(config.get("dev_mode", False), process_config.logging)
 
     try:
         async with (

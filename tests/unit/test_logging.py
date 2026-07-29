@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
 from squid.logging_config import build_logging_config, prepare_log_path, resolve_level
 
@@ -74,3 +75,27 @@ class TestBuildLoggingConfig:
         handlers = config["handlers"]
         assert isinstance(handlers, dict)
         assert handlers["file"]["filename"] == str(tmp_path / "discord.log")
+
+    def test_routes_loggers_through_queue(self, tmp_path: Path) -> None:
+        config = build_logging_config(
+            config=LoggingConfig(
+                level="INFO",
+                root_level="WARNING",
+                directory=tmp_path,
+                log_file="discord.log",
+                access_log_file=None,
+            ),
+            named_logger_levels={"squid": "INFO", "discord": "INFO"},
+            use_queue=True,
+        )
+
+        handlers = config["handlers"]
+        loggers = config["loggers"]
+        root = config["root"]
+        assert isinstance(handlers, dict)
+        assert isinstance(loggers, dict)
+        assert isinstance(root, dict)
+        assert handlers["queue"]["handlers"] == ["console", "file"]
+        assert root["handlers"] == ["queue"]
+        assert loggers["squid"]["handlers"] == ["queue"]
+        assert loggers["discord"]["handlers"] == ["queue"]
