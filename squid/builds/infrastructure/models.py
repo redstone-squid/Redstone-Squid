@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
@@ -25,7 +24,6 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from squid.builds.domain import (
@@ -39,12 +37,6 @@ from squid.builds.domain import (
     Status,
 )
 from squid.persistence.base import Base
-
-if TYPE_CHECKING:
-    from squid.messages.infrastructure.models import Message
-    from squid.users.infrastructure.models import User
-    from squid.versions.infrastructure.models import Version
-    from squid.voting.infrastructure.models import BuildVoteSession
 
 
 class Restriction(Base):
@@ -61,14 +53,6 @@ class Restriction(Base):
     build_restrictions: Mapped[list[BuildRestriction]] = relationship(
         back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
     )
-    builds: AssociationProxy[list[Build]] = association_proxy(
-        "build_restrictions",
-        "build",
-        default_factory=list,
-        repr=False,
-        creator=lambda b: BuildRestriction(build=b),
-    )
-
     aliases: Mapped[list[RestrictionAlias]] = relationship(
         back_populates="restriction", default_factory=list, lazy="selectin"
     )
@@ -111,9 +95,6 @@ class Type(Base):
 
     build_types: Mapped[list[BuildType]] = relationship(
         back_populates="type", default_factory=list, lazy="raise_on_sql", repr=False
-    )
-    builds: AssociationProxy[list[Build]] = association_proxy(
-        "build_types", "build", default_factory=list, creator=lambda b: BuildType(build=b), repr=False
     )
 
 
@@ -160,9 +141,6 @@ class Build(Base, kw_only=True):
         ),
         default=None,
     )
-    original_message: Mapped[Message | None] = relationship(
-        foreign_keys="Build.original_message_id", uselist=False, default=None, lazy="joined"
-    )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
         VECTOR(int(os.getenv("EMBEDDING_DIMENSION", "1536"))),
@@ -185,40 +163,17 @@ class Build(Base, kw_only=True):
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    creators: AssociationProxy[list[User]] = association_proxy(
-        "build_creators", "user", default_factory=list, creator=lambda u: BuildCreator(user=u)
-    )
-
     build_restrictions: Mapped[list[BuildRestriction]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
-    )
-    restrictions: AssociationProxy[list[Restriction]] = association_proxy(
-        "build_restrictions",
-        "restriction",
-        default_factory=list,
-        creator=lambda r: BuildRestriction(restriction=r),
     )
 
     build_versions: Mapped[list[BuildVersion]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    versions: AssociationProxy[list[Version]] = association_proxy(
-        "build_versions", "version", default_factory=list, creator=lambda v: BuildVersion(version=v)
-    )
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
-    types: AssociationProxy[list[Type]] = association_proxy(
-        "build_types", "type", default_factory=list, creator=lambda t: BuildType(type=t)
-    )
-
-    build_vote_sessions: Mapped[list[BuildVoteSession]] = relationship(
-        back_populates="build", default_factory=list, lazy="raise_on_sql", repr=False
-    )
 
     links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
-    messages: Mapped[list[Message]] = relationship(
-        back_populates="build", foreign_keys="Message.build_id", default_factory=list, lazy="raise_on_sql", repr=False
-    )
 
     __mapper_args__ = {
         "polymorphic_on": category,
@@ -370,11 +325,9 @@ class BuildCreator(Base):
         Integer,
         ForeignKey("users.id", name="build_creators_user_id_fkey"),
         primary_key=True,
-        init=False,
     )
 
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
-    user: Mapped[User] = relationship(back_populates="build_creators", lazy="joined", repr=False, default=None)
 
 
 class BuildRestriction(Base):
@@ -416,11 +369,9 @@ class BuildVersion(Base):
         SmallInteger,
         ForeignKey("versions.id", name="build_versions_version_id_fkey", ondelete="RESTRICT"),
         primary_key=True,
-        init=False,
     )
 
     build: Mapped[Build] = relationship(back_populates="build_versions", lazy="raise_on_sql", repr=False, default=None)
-    version: Mapped[Version] = relationship(back_populates="build_versions", lazy="joined", repr=False, default=None)
 
 
 class BuildType(Base):

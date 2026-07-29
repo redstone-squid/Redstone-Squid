@@ -14,8 +14,10 @@ from sqlalchemy.schema import SchemaItem
 from alembic import context
 from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 from squid.persistence.base import Base
+from squid.persistence.models import load_models
 
 load_dotenv()
+load_models()
 
 config = context.config
 if config.config_file_name is not None:

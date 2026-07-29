@@ -11,10 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.messages.domain import MessagePurposeLiteral, MessageRecord
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
-from squid.persistence.models import register_models
 from squid.persistence.repository import BaseAsyncRepository
-
-register_models()
 
 
 class _MessageModelRepository(BaseAsyncRepository[Message]):

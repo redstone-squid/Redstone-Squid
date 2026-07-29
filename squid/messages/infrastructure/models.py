@@ -1,18 +1,11 @@
 """SQLAlchemy tracked message models."""
 
-from __future__ import annotations
-
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import TIMESTAMP, BigInteger, ForeignKey, Text, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from squid.persistence.base import Base
-
-if TYPE_CHECKING:
-    from squid.builds.infrastructure.models import Build
-    from squid.voting.infrastructure.models import VoteSession
 
 
 class Message(Base):
@@ -47,10 +40,3 @@ class Message(Base):
         TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now()
     )
     """When this row was last modified. Bumped automatically on every UPDATE."""
-
-    build: Mapped[Build | None] = relationship(
-        back_populates="messages", foreign_keys="Message.build_id", default=None, lazy="raise_on_sql"
-    )
-    vote_session: Mapped[VoteSession | None] = relationship(
-        back_populates="messages", default=None, lazy="raise_on_sql"
-    )

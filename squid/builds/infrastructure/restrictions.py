@@ -11,9 +11,6 @@ from squid.builds.infrastructure.model_repositories import (
     RestrictionModelRepository,
 )
 from squid.builds.infrastructure.models import Restriction, RestrictionAlias
-from squid.persistence.models import register_models
-
-register_models()
 
 
 class RestrictionRepository:

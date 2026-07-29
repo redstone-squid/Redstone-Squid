@@ -10,9 +10,6 @@ from squid.builds.infrastructure.model_repositories import (
     TypeModelRepository,
 )
 from squid.builds.infrastructure.models import Restriction, RestrictionAlias, Type
-from squid.persistence.models import register_models
-
-register_models()
 
 
 class BuildMetadataRepository:

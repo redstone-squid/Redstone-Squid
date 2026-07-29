@@ -28,6 +28,7 @@ from squid.builds.domain import (
 )
 from squid.builds.errors import BuildBusyError, InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockTracker
+from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
@@ -44,11 +45,8 @@ from squid.builds.infrastructure.models import (
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
-from squid.persistence.models import register_models
 from squid.users.infrastructure.models import User
 from squid.versions.infrastructure.models import Version
-
-register_models()
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +54,12 @@ logger = logging.getLogger(__name__)
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_locks", "_session_factory")
+    __slots__ = ("_locks", "_mapper", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         self._locks = BuildLockTracker()
+        self._mapper = BuildMapper()
 
     async def acquire_lock(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
         """Acquire a task-reentrant lease backed by the database lock flag."""
@@ -134,7 +133,7 @@ class BuildRepository:
             sql_build = result.unique().scalar_one_or_none()
             if sql_build is None:
                 return None
-            return self.from_sql_build(sql_build)
+            return await self._mapper.to_domain(session, sql_build)
 
     async def get_by_message_id(self, message_id: int) -> Build | None:
         """
@@ -154,50 +153,6 @@ class BuildRepository:
             if message and message.build_id is not None:
                 return await self.get_by_id(message.build_id)
             return None
-
-    @staticmethod
-    def from_sql_build(sql_build: SQLBuild) -> Build:
-        """Converts a SQLBuild to a Build object."""
-        if not isinstance(sql_build, Door):
-            msg = "Can only handle doors right now."
-            raise TypeError(msg)
-        door = sql_build
-        return Build(
-            id=door.id,
-            submission_status=door.submission_status,  # type: ignore
-            category=BuildCategory(door.category),
-            record_category=door.record_category,
-            width=door.width,
-            height=door.height,
-            depth=door.depth,
-            door_width=door.door_width,
-            door_height=door.door_height,
-            door_depth=door.door_depth,
-            door_type=[type.name for type in door.types],
-            door_orientation_type=door.orientation,
-            wiring_placement_restrictions=[r.name for r in door.restrictions if r.type == "wiring-placement"],
-            component_restrictions=[r.name for r in door.restrictions if r.type == "component"],
-            miscellaneous_restrictions=[r.name for r in door.restrictions if r.type == "miscellaneous"],
-            normal_closing_time=door.normal_closing_time,
-            normal_opening_time=door.normal_opening_time,
-            visible_closing_time=door.visible_closing_time,
-            visible_opening_time=door.visible_opening_time,
-            extra_info=door.extra_info,  # type: ignore
-            creators_ign=[creator.ign for creator in door.creators],
-            image_urls=[link.url for link in door.links if link.media_type == "image"],
-            video_urls=[link.url for link in door.links if link.media_type == "video"],
-            world_download_urls=[link.url for link in door.links if link.media_type == "world-download"],
-            submitter_id=door.submitter_id,
-            completion_time=door.completion_time,
-            edited_time=door.edited_time,
-            original_server_id=door.original_message.server_id if door.original_message else None,
-            original_channel_id=door.original_message.channel_id if door.original_message else None,
-            original_message_id=door.original_message_id,
-            original_message_author_id=door.original_message.author_id if door.original_message else None,
-            original_message=door.original_message.content if door.original_message else None,
-            ai_generated=door.ai_generated,
-            embedding=door.embedding,
-        )
 
     async def save(self, build: Build) -> None:
         """
@@ -270,12 +225,11 @@ class BuildRepository:
                 select(SQLBuild)
                 .where(SQLBuild.id == build.id)
                 .options(
-                    selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
+                    selectinload(SQLBuild.build_creators),
                     selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
+                    selectinload(SQLBuild.build_versions),
                     selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                     selectinload(SQLBuild.links),
-                    selectinload(SQLBuild.messages),
                 )
             )
             sql_build = (await session.execute(statement)).scalar_one()
@@ -319,7 +273,7 @@ class BuildRepository:
         # Handle creators
         if build.creators_ign:
             creators = await self._get_or_create_users(session, build.creators_ign)
-            sql_build.creators = creators
+            sql_build.build_creators.extend(BuildCreator(user_id=user.id) for user in creators)
 
         # Handle restrictions
         all_restrictions = (
@@ -327,7 +281,9 @@ class BuildRepository:
         )
         if all_restrictions:
             restriction_objects, unknown_restrictions = await self._get_restrictions(build, session, all_restrictions)
-            sql_build.restrictions = restriction_objects
+            sql_build.build_restrictions.extend(
+                BuildRestriction(restriction=restriction) for restriction in restriction_objects
+            )
             # Update extra_info with unknown restrictions
             if unknown_restrictions:
                 build.extra_info["unknown_restrictions"] = (
@@ -338,14 +294,14 @@ class BuildRepository:
         if not build.door_type:
             build.door_type = ["Regular"]
         type_objects, unknown_types = await self._get_types(build, session, build.door_type)
-        sql_build.types = type_objects
+        sql_build.build_types.extend(BuildType(type=build_type) for build_type in type_objects)
         # Update extra_info with unknown types
         if unknown_types:
             build.extra_info["unknown_patterns"] = build.extra_info.get("unknown_patterns", []) + unknown_types
 
         # Handle versions
         version_objects = await self._get_versions(session, build.versions)
-        sql_build.versions = version_objects
+        sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
         # Handle links
         all_links: list[tuple[str, MediaTypeLiteral]] = []
@@ -516,16 +472,13 @@ class BuildRepository:
                 select(Door)
                 .where(Door.submission_status == Status.PENDING)
                 .options(
-                    selectinload(Door.build_creators).selectinload(BuildCreator.user),
                     selectinload(Door.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(Door.build_versions).selectinload(BuildVersion.version),
                     selectinload(Door.build_types).selectinload(BuildType.type),
                     selectinload(Door.links),
-                    selectinload(Door.messages),
                 )
             )
             result = await session.execute(statement)
-            return [self.from_sql_build(build) for build in result.unique().scalars().all()]
+            return [await self._mapper.to_domain(session, build) for build in result.unique().scalars().all()]
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
         """Fetches builds from the database with the given IDs."""
@@ -536,12 +489,9 @@ class BuildRepository:
             stmt = (
                 select(SQLBuild)
                 .options(
-                    selectinload(SQLBuild.build_creators).selectinload(BuildCreator.user),
                     selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(SQLBuild.build_versions).selectinload(BuildVersion.version),
                     selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                     selectinload(SQLBuild.links),
-                    selectinload(SQLBuild.messages),
                 )
                 .where(SQLBuild.id.in_(build_ids))
             )
@@ -554,7 +504,7 @@ class BuildRepository:
             # Fill in the found builds at their correct positions
             for sql_build in sql_builds:
                 idx = build_ids.index(sql_build.id)
-                builds[idx] = self.from_sql_build(sql_build)
+                builds[idx] = await self._mapper.to_domain(session, sql_build)
             return builds
 
     async def get_unsent_builds(self, server_id: int) -> list[Build] | None:

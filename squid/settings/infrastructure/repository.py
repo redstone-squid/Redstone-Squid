@@ -5,12 +5,9 @@ from typing import Literal, Unpack, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.models import register_models
 from squid.persistence.repository import BaseAsyncRepository
 from squid.settings.domain import Setting, SettingOptions
 from squid.settings.infrastructure.models import ServerSetting
-
-register_models()
 
 
 class _ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):

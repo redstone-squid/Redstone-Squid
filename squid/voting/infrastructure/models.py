@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import (
     TIMESTAMP,
@@ -22,10 +22,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from squid.persistence.base import Base
 from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
-
-if TYPE_CHECKING:
-    from squid.builds.infrastructure.models import Build
-    from squid.messages.infrastructure.models import Message
 
 
 class VoteSession(Base, kw_only=True):
@@ -57,9 +53,6 @@ class VoteSession(Base, kw_only=True):
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
     )
 
-    messages: Mapped[list[Message]] = relationship(
-        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
-    )
     votes: Mapped[list[Vote]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
@@ -71,8 +64,6 @@ class VoteSession(Base, kw_only=True):
         init=False,
         repr=False,
     )
-
-    __mapper_args__ = {"polymorphic_on": kind}
 
 
 class VoteSessionOption(Base, kw_only=True):
@@ -108,9 +99,7 @@ class VoteSessionOption(Base, kw_only=True):
     vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
 
 
-class BuildVoteSession(VoteSession, kw_only=True):
-    """Association table between builds and vote sessions."""
-
+class BuildVoteSession(Base, kw_only=True):
     __tablename__ = "build_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -135,14 +124,8 @@ class BuildVoteSession(VoteSession, kw_only=True):
     )
     changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
 
-    build: Mapped[Build] = relationship(back_populates="build_vote_sessions", lazy="joined")
 
-    __mapper_args__ = {"polymorphic_identity": "build"}
-
-
-class DeleteLogVoteSession(VoteSession, kw_only=True):
-    """Association table between vote sessions and messages to be deleted."""
-
+class DeleteLogVoteSession(Base, kw_only=True):
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -159,8 +142,6 @@ class DeleteLogVoteSession(VoteSession, kw_only=True):
     target_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     target_server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-
-    __mapper_args__ = {"polymorphic_identity": "delete_log"}
 
 
 class Vote(Base):

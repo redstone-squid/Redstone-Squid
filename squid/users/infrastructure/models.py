@@ -1,25 +1,12 @@
 """SQLAlchemy user account models."""
 
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import TIMESTAMP, UUID, BigInteger, Boolean, SmallInteger, Text, func, text
-from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from squid.persistence.base import Base
-
-if TYPE_CHECKING:
-    from squid.builds.infrastructure.models import Build, BuildCreator
-
-
-def _build_creator(build: Build) -> BuildCreator:
-    from squid.builds.infrastructure.models import BuildCreator
-
-    return BuildCreator(build=build)
 
 
 class User(Base):
@@ -38,13 +25,6 @@ class User(Base):
         TIMESTAMP(timezone=False), server_default=func.now(), default=None
     )
     """When this row was first inserted."""
-
-    build_creators: Mapped[list[BuildCreator]] = relationship(
-        back_populates="user", default_factory=list, lazy="raise_on_sql", repr=False
-    )
-    builds: AssociationProxy[list[Build]] = association_proxy(
-        "build_creators", "build", default_factory=list, repr=False, creator=_build_creator
-    )
 
 
 class VerificationCode(Base):

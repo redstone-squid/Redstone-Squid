@@ -17,5 +17,5 @@ __all__ = [
 ]
 
 
-def register_models() -> None:
-    """Ensure all context-owned ORM models have been imported."""
+def load_models() -> None:
+    """Load all model modules into shared metadata at composition boundaries."""
