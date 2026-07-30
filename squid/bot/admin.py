@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 from rapidfuzz import process
 
-import squid.bot.utils.embeds as utils
+from squid.bot.utils.components import edit_layout, info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.builds.errors import AliasAlreadyAddedError
 
@@ -39,8 +39,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
             self.bot.dispatch("build_confirmed", build)
 
-            success_embed = utils.info_embed("Success", "Submission has been confirmed.")
-            await sent_message.edit(embed=success_embed)
+            await edit_layout(
+                sent_message,
+                info_layout("Success", "Submission has been confirmed."),
+                allowed_mentions=no_mentions(),
+            )
 
     @commands.hybrid_command(name="deny")
     @app_commands.describe(build_id="The ID of the build you want to deny.")
@@ -53,8 +56,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
             await self.bot.for_build(build).update_messages()
 
-            success_embed = utils.info_embed("Success", "Submission has been denied.")
-            await sent_message.edit(embed=success_embed)
+            await edit_layout(
+                sent_message,
+                info_layout("Success", "Submission has been denied."),
+                allowed_mentions=no_mentions(),
+            )
 
     @commands.hybrid_command("add_alias")
     @check_is_staff()
@@ -65,9 +71,17 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             try:
                 await self.restrictions.add_alias(restriction, alias)
             except AliasAlreadyAddedError:
-                await sent_message.edit(embed=utils.info_embed("Already added", "Alias already on this restriction."))
+                await edit_layout(
+                    sent_message,
+                    info_layout("Already added", "Alias already on this restriction."),
+                    allowed_mentions=no_mentions(),
+                )
             else:
-                await sent_message.edit(embed=utils.info_embed("Success", "Alias added."))
+                await edit_layout(
+                    sent_message,
+                    info_layout("Success", "Alias added."),
+                    allowed_mentions=no_mentions(),
+                )
 
     @add_restriction_alias.autocomplete("restriction")
     async def restriction_autocomplete(
@@ -156,7 +170,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
-            await ctx.send(f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}")
+            await ctx.send(
+                view=text_layout(
+                    f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+                ),
+                allowed_mentions=no_mentions(),
+            )
             return
 
         ret = 0
@@ -168,14 +187,22 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 ret += 1
 
-        await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
+        await ctx.send(
+            view=text_layout(f"Synced the tree to {ret}/{len(guilds)}."),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
         await ctx.send(
-            "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221"
+            view=link_layout(
+                "Build spreadsheet",
+                "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
+                label="Open spreadsheet",
+            ),
+            allowed_mentions=no_mentions(),
         )
 
     @commands.command(name="db", hidden=True)
@@ -183,7 +210,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
         await ctx.send(
-            "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc"
+            view=link_layout(
+                "Database",
+                "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
+                label="Open database",
+            ),
+            allowed_mentions=no_mentions(),
         )
 
     @commands.command(name="error", aliases=["e"], hidden=True)

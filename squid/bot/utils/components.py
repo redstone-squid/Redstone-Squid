@@ -141,13 +141,14 @@ async def edit_layout(
     allowed_mentions: discord.AllowedMentions | None = None,
 ) -> discord.Message:
     """Edit a message with a V2 layout, clearing legacy fields on first conversion."""
-    kwargs: dict[str, object] = {"view": layout}
-    if allowed_mentions is not None:
-        kwargs["allowed_mentions"] = allowed_mentions
     if not _message_uses_components_v2(message):
-        kwargs["content"] = None
-        kwargs["embed"] = None
-    return await message.edit(**kwargs)  # pyright: ignore[reportArgumentType]
+        return await message.edit(
+            content=None,
+            embed=None,
+            view=layout,
+            allowed_mentions=allowed_mentions,
+        )
+    return await message.edit(view=layout, allowed_mentions=allowed_mentions)
 
 
 async def edit_interaction_layout(
@@ -155,9 +156,8 @@ async def edit_interaction_layout(
     layout: discord.ui.LayoutView,
 ) -> None:
     """Edit the source interaction message, converting legacy payloads when needed."""
-    kwargs: dict[str, object] = {"view": layout}
     message = interaction.message
     if message is not None and not _message_uses_components_v2(message):
-        kwargs["content"] = None
-        kwargs["embed"] = None
-    await interaction.response.edit_message(**kwargs)  # pyright: ignore[reportArgumentType]
+        await interaction.response.edit_message(content=None, embed=None, view=layout)
+        return
+    await interaction.response.edit_message(view=layout)

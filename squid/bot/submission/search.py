@@ -9,10 +9,16 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
 
-import squid.bot.utils.embeds as utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
-from squid.bot.utils.components import StaticLayout, edit_layout, no_mentions
+from squid.bot.utils.components import (
+    StaticLayout,
+    edit_layout,
+    error_layout,
+    info_layout,
+    no_mentions,
+    text_layout,
+)
 from squid.bot.utils.embeds import RunningMessage
 
 if TYPE_CHECKING:
@@ -34,7 +40,10 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await ctx.defer()
         build = await self.queries.semantic(query)
         if build is None:
-            await ctx.send(embed=utils.error_embed("No results found", "No builds match that query."))
+            await ctx.send(
+                view=error_layout("No results found", "No builds match that query."),
+                allowed_mentions=no_mentions(),
+            )
             return
         await ctx.send(
             view=await self.bot.for_build(build).render_layout(),
@@ -48,8 +57,10 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         async with RunningMessage(ctx) as sent_message:
             matches = await self.queries.search_records(query)
             if not matches:
-                return await sent_message.edit(
-                    embed=utils.error_embed("No results found", "No records match that query.")
+                return await edit_layout(
+                    sent_message,
+                    error_layout("No results found", "No records match that query."),
+                    allowed_mentions=no_mentions(),
                 )
 
             # Use the running message to display the top result
@@ -71,13 +82,19 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             other_results = [(door, score, idx) for door, score, idx in matches[1:] if score >= 50][:10]
             if other_results:
                 await ctx.send(
-                    f"Found {len(other_results)} other records matching your query.\n"
-                    + "\n".join(
-                        f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
-                    )
+                    view=info_layout(
+                        f"{len(other_results)} other matches",
+                        "\n".join(
+                            f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
+                        ),
+                    ),
+                    allowed_mentions=no_mentions(),
                 )
                 return None
-            await ctx.send("No other results met the score threshold.")
+            await ctx.send(
+                view=text_layout("No other results met the score threshold."),
+                allowed_mentions=no_mentions(),
+            )
             return None
 
     @commands.command("search_restrictions")
@@ -88,15 +105,21 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             description = "\n".join(
                 f"{item.restriction_id}: {item.name}{' (alias)' if item.is_alias else ''}" for item in matches
             )
-            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
+            await edit_layout(
+                sent_message,
+                info_layout("Restrictions", description),
+                allowed_mentions=no_mentions(),
+            )
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
             names = await self.queries.patterns()
-            await sent_message.edit(
-                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            await edit_layout(
+                sent_message,
+                info_layout("Patterns", ", ".join(names)),
+                allowed_mentions=no_mentions(),
             )
 
     @commands.command("search_patterns")
@@ -105,7 +128,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         async with RunningMessage(ctx) as sent_message:
             matches = await self.queries.search_patterns(query)
             description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
-            await sent_message.edit(embed=utils.info_embed("Patterns", description or "No patterns match that query."))
+            await edit_layout(
+                sent_message,
+                info_layout("Patterns", description or "No patterns match that query."),
+                allowed_mentions=no_mentions(),
+            )
 
     @hybrid_group(name="build")
     async def build_hybrid_group(self, ctx: Context[BotT]):
@@ -130,8 +157,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     )
                 desc = "\n\n".join(desc)
 
-            em = utils.info_embed(title="Open Records", description=desc)
-            await sent_message.edit(embed=em)
+            await edit_layout(
+                sent_message,
+                info_layout(title="Open Records", description=desc),
+                allowed_mentions=no_mentions(),
+            )
 
     @build_hybrid_group.command(name="view")
     @app_commands.describe(build_id="The ID of the build you want to see.")
@@ -142,8 +172,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(
+                    view=error_layout("Error", "No build with that ID."),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
                 return None
 
             view = BuildInfoView[BotT](build)
@@ -153,8 +186,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             build = await self.queries.get(build_id)
 
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                return await edit_layout(
+                    sent_message,
+                    error_layout("Error", "No build with that ID."),
+                    allowed_mentions=no_mentions(),
+                )
 
             await edit_layout(
                 sent_message,
@@ -171,10 +207,17 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             build = await self.queries.get(build_id)
 
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                return await edit_layout(
+                    sent_message,
+                    error_layout("Error", "No build with that ID."),
+                    allowed_mentions=no_mentions(),
+                )
 
-            await sent_message.edit(content=escape_markdown(str(build.__dict__)), embed=None)
+            await edit_layout(
+                sent_message,
+                text_layout(escape_markdown(str(build.__dict__))),
+                allowed_mentions=no_mentions(),
+            )
         return None
 
     @Cog.listener("on_command_error")

@@ -246,7 +246,11 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
             for item in self.walk_children():
                 if isinstance(item, discord.ui.Button | discord.ui.Select):
                     item.disabled = True
-            await interaction.followup.send("This edit session has expired. Your edits are not saved.", ephemeral=True)
+            await interaction.followup.send(
+                view=StaticLayout(discord.ui.TextDisplay("This edit session has expired. Your edits are not saved.")),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
             return False
         return True
 

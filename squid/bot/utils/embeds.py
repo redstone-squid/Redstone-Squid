@@ -1,40 +1,11 @@
-"""Legacy embed helpers and the Components V2 progress-message context."""
+"""Components V2 progress-message context."""
 
 from types import TracebackType
 
-import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
 
 from squid.bot.utils.components import info_layout, no_mentions
-
-discord_red = 0xF04747
-discord_yellow = 0xFAA61A
-discord_green = 0x43B581
-
-
-def error_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_red, description=":x: " + description)
-
-
-def warning_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=":warning: " + title, colour=discord_yellow, description=description)
-
-
-def info_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_green, description=description)
-
-
-def help_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_green, description=description)
 
 
 class RunningMessage:

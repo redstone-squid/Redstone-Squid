@@ -9,6 +9,7 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.build_session import BuildVoteSession
@@ -92,7 +93,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             emoji_name,
         )
         if result.rejection == "not_eligible":
-            await channel.send("You do not have a trusted role.")
+            await channel.send(
+                view=text_layout("You do not have a trusted role."),
+                allowed_mentions=no_mentions(),
+            )
             return
         if not result.accepted or result.session is None:
             return
@@ -116,7 +120,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Starts a vote to delete a specified message by providing its URL."""
         # Check if guild_id matches the current guild
         if ctx.guild != target_message.guild:
-            await ctx.send("The message is not from this guild.")
+            await ctx.send(
+                view=text_layout("The message is not from this guild."),
+                allowed_mentions=no_mentions(),
+            )
             return
 
         async with self.bot.get_running_message(ctx) as message:

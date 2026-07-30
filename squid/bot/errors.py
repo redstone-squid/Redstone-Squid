@@ -212,20 +212,6 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         await handle_interaction_error(interaction, error, surface="application_command")
 
 
-class ErrorHandledView(discord.ui.View):
-    """Discord view that delegates callback failures to the shared handler."""
-
-    @override
-    async def on_error[ClientT: discord.Client](
-        self,
-        interaction: discord.Interaction[ClientT],
-        error: Exception,
-        item: discord.ui.Item[Self],
-        /,
-    ) -> None:
-        await handle_interaction_error(interaction, error, surface=f"view:{type(item).__name__}")
-
-
 class ErrorHandledLayoutView(discord.ui.LayoutView):
     """Components V2 view that delegates callback failures to the shared handler."""
 

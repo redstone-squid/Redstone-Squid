@@ -7,6 +7,7 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
 
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 
 if TYPE_CHECKING:
@@ -25,7 +26,10 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a new version to the database"""
         version = await self.version_service.add(version_string, edition=edition)
-        await ctx.send(f"Version added successfully: {version}")
+        await ctx.send(
+            view=text_layout(f"Version added successfully: {version}"),
+            allowed_mentions=no_mentions(),
+        )
 
     @Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message):
@@ -38,7 +42,10 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
 
         first_line = message.content.split("\n", 1)[0]
         version = await self.version_service.add(first_line)
-        await self.bot.get_channel(channel_id).send(f"Version added successfully: {version}")  # type: ignore
+        await self.bot.get_channel(channel_id).send(  # type: ignore
+            view=text_layout(f"Version added successfully: {version}"),
+            allowed_mentions=no_mentions(),
+        )
 
 
 async def setup(bot: "squid.bot.app.RedstoneSquid"):

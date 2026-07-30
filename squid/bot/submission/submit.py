@@ -16,7 +16,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
-from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions
+from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
@@ -175,10 +175,18 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         await followup.send(view=view, allowed_mentions=no_mentions())
         await view.wait()
         if view.value is None:
-            await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            await followup.send(
+                view=text_layout("Submission canceled due to inactivity."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
             return
         if view.value is False:
-            await followup.send("Submission canceled by user", ephemeral=True)
+            await followup.send(
+                view=text_layout("Submission canceled by user."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
             return
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
         await asyncio.gather(
@@ -266,7 +274,11 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
-        await ctx.send("Build recalculated.", ephemeral=True)
+        await ctx.send(
+            view=text_layout("Build recalculated."),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
 
     @tasks.loop(minutes=5.0)
     async def update_record_titles(self):

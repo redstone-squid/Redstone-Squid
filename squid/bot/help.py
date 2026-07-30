@@ -12,7 +12,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
 from rapidfuzz import process
 
-import squid.bot.utils.embeds as utils
+from squid.bot.utils.components import error_layout, help_layout, no_mentions, text_layout
 
 MORE_INFORMATION = "Use `/help <command>` to get more information."
 
@@ -38,7 +38,13 @@ class HelpCog[BotT: commands.Bot](Cog):
         #
         # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
         # and one message with the help information.
-        await interaction.response.send_message(content="loading...", ephemeral=True, delete_after=0, silent=True)
+        await interaction.response.send_message(
+            view=text_layout("Loading…"),
+            ephemeral=True,
+            delete_after=0,
+            silent=True,
+            allowed_mentions=no_mentions(),
+        )
         ctx = await self.bot.get_context(interaction, cls=Context[BotT])
         if command is not None:
             await ctx.send_help(command)
@@ -90,28 +96,32 @@ class Help(commands.MinimalHelpCommand):
             {MORE_INFORMATION}
             """
         )
-        em = utils.help_embed("Help", desc)
-
+        footer: str | None = None
         try:
             repo = git.Repo(search_parent_directories=True)
-            em.set_footer(text=f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}")
+            footer = f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}"
         except git.InvalidGitRepositoryError:
             # If the repo is not a git repository, we can still use environment variables if available
             # Usually this is because the bot is running in a container
             git_commit_hash = os.getenv("GIT_COMMIT_HASH")
             git_commit_message = os.getenv("GIT_COMMIT_MESSAGE")
             if git_commit_hash is not None and git_commit_message is not None:
-                em.set_footer(text=f"commit: {git_commit_hash[:7]}, message: {git_commit_message.strip()}")
-        await self.get_destination().send(embed=em)
+                footer = f"commit: {git_commit_hash[:7]}, message: {git_commit_message.strip()}"
+        await self.get_destination().send(
+            view=help_layout("Help", desc, footer=footer),
+            allowed_mentions=no_mentions(),
+        )
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        em = utils.help_embed(
-            f"Command Help - `{command.qualified_name}`",
-            f"{command.help or 'No details provided'}",
+        await self.get_destination().send(
+            view=help_layout(
+                f"Command Help - `{command.qualified_name}`",
+                f"{command.help or 'No details provided'}",
+            ),
+            allowed_mentions=no_mentions(),
         )
-        await self.get_destination().send(embed=em)
 
     @staticmethod
     def get_commands_brief_details(
@@ -156,8 +166,10 @@ class Help(commands.MinimalHelpCommand):
             Usable Subcommands: {command_details or "None"}
 
             {MORE_INFORMATION}"""
-        em = utils.help_embed("Command Help", desc)
-        await self.get_destination().send(embed=em)
+        await self.get_destination().send(
+            view=help_layout("Command Help", desc),
+            allowed_mentions=no_mentions(),
+        )
         return None
 
     # !help <cog>
@@ -171,8 +183,10 @@ class Help(commands.MinimalHelpCommand):
             Usable Subcommands:{command_details or "None"}
 
             {MORE_INFORMATION}"""
-        em = utils.help_embed("Command Help", desc)
-        await self.get_destination().send(embed=em)
+        await self.get_destination().send(
+            view=help_layout("Command Help", desc),
+            allowed_mentions=no_mentions(),
+        )
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
@@ -181,8 +195,10 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        embed = utils.error_embed("Error.", error)
-        await self.get_destination().send(embed=embed)
+        await self.get_destination().send(
+            view=error_layout("Error.", error),
+            allowed_mentions=no_mentions(),
+        )
 
 
 async def setup(bot: commands.Bot):

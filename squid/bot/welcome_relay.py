@@ -9,6 +9,7 @@ from discord import AllowedMentions
 from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.components import text_layout
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -57,7 +58,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
 
         await general_channel.send(
-            message.system_content.replace(decision.matched_name, member.mention),
+            view=text_layout(message.system_content.replace(decision.matched_name, member.mention)),
             allowed_mentions=AllowedMentions(users=False, roles=False, everyone=False, replied_user=False),
         )
 

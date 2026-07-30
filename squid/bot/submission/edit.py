@@ -10,7 +10,7 @@ from discord.ext.commands import Cog, Context, flag
 
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
-from squid.bot.utils.components import edit_layout, info_layout, no_mentions
+from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import (
     DimensionsConverter,
     GameTickConverter,
@@ -167,11 +167,19 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
         if message.author.id != self.bot.user.id:  # type: ignore
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+            return await interaction.followup.send(
+                view=text_layout("This does not look like a build."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
 
         message_record = await self.messages.get(message.id)
         if message_record is None or message_record.build_id is None:
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+            return await interaction.followup.send(
+                view=text_layout("This does not look like a build."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
 
         build = await self.builds.get(message_record.build_id)
         assert build is not None

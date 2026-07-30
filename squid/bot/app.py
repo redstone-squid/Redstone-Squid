@@ -165,9 +165,9 @@ class RedstoneSquid(Bot):
         Usage:
             ```python
             async with bot.get_running_message(ctx, title="Processing") as msg:
-                await msg.edit(description="Still working...")
+                await edit_layout(msg, info_layout("Processing", "Still working..."))
                 # Do some work here
-                await msg.edit(description="Done!")
+                await edit_layout(msg, info_layout("Processing", "Done!"))
             ```
         """
         return RunningMessage(

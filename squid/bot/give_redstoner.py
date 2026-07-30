@@ -12,7 +12,7 @@ from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledLayoutView
-from squid.bot.utils.components import no_mentions
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.community.domain import RedstonerDecisionKind
 
@@ -59,11 +59,23 @@ class DynamicRemoveOwnRedstonerRoleButton[
         assert owner is not None
         redstoner_channel = interaction.client.get_channel(534945678850523138)  # redstoner-corner
         assert isinstance(redstoner_channel, GuildMessageable)
-        await redstoner_channel.send(f"{owner.mention}, {member.mention} has removed their own redstoner role.")
+        await redstoner_channel.send(
+            view=text_layout(f"{owner.mention}, {member.mention} has removed their own redstoner role."),
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False,
+                users=(owner, member),
+                roles=False,
+                replied_user=False,
+            ),
+        )
         await asyncio.sleep(10)
 
         await member.add_roles(redstoner_role)
-        await interaction.followup.send(f"{member.mention} jk, here is your role back.", ephemeral=True)
+        await interaction.followup.send(
+            view=text_layout(f"{member.mention} — just kidding, here is your role back."),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
 
 
 class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -102,7 +114,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
 
         if decision.kind is RedstonerDecisionKind.MALFORMED:
-            await message.channel.send(f"{decision.reason} in {message.jump_url}")
+            await message.channel.send(
+                view=text_layout(f"{decision.reason} in {message.jump_url}"),
+                allowed_mentions=no_mentions(),
+            )
             return
 
         assert decision.member_id is not None
@@ -111,11 +126,15 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(433670432420397060)
         if redstoner_role is None:
-            await message.channel.send("Could not find the redstoner role.")
+            await message.channel.send(
+                view=text_layout("Could not find the redstoner role."),
+                allowed_mentions=no_mentions(),
+            )
             return
         await member.add_roles(redstoner_role)
         await message.channel.send(
-            f"Gave {member.mention} the redstoner role.", allowed_mentions=discord.AllowedMentions.none()
+            view=text_layout(f"Gave {member.mention} the redstoner role."),
+            allowed_mentions=no_mentions(),
         )
 
         view = ErrorHandledLayoutView(timeout=None)
