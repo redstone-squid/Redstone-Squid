@@ -32,7 +32,6 @@ dependencies = [
     "advanced-alchemy>=1.11.0",
     "alembic-utils>=0.8.8",
     "whenever>=0.10.3",
-    "luqum>=1.0,<2",
 ]
 
 [project.urls]
