@@ -126,7 +126,7 @@ async def test_rebuild_computes_eager_subsets_and_both_metrics() -> None:
     fastest = next(record for record in shared if record.record_class is RecordClass.FASTEST)
     assert smallest.resolution.holder_ids == (1,)
     assert fastest.resolution.holder_ids == (2,)
-    assert smallest.title.title == "SMALLEST Flush 2x2 Regular Door"
+    assert smallest.title.title == "Smallest Flush 2x2 Door"
     assert tuple(period.build_ids for period in fastest.history) == ((1,), (2,))
     assert fastest.history[0].held_until == datetime(2020, 1, 2, tzinfo=UTC)
 
