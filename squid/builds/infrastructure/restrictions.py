@@ -1,20 +1,20 @@
-"""Advanced-alchemy repository for build restriction metadata."""
+"""Repository for official restriction metadata."""
 
-from advanced_alchemy.exceptions import DuplicateKeyError
+from typing import cast
+
 from async_lru import alru_cache
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.application import RestrictionDefinition
+from squid.builds.domain import RestrictionTypeLiteral
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
-from squid.builds.infrastructure.model_repositories import (
-    RestrictionAliasModelRepository,
-    RestrictionModelRepository,
-)
-from squid.builds.infrastructure.models import Restriction, RestrictionAlias
+from squid.tags.infrastructure.models import TagAlias, TagDefinition
 
 
 class RestrictionRepository:
-    """Convert persistence restriction rows into application values."""
+    """Convert official tag rows into restriction application values."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
@@ -25,24 +25,30 @@ class RestrictionRepository:
     @alru_cache
     async def _fetch_all_restrictions(self) -> list[RestrictionDefinition]:
         async with self._session_factory() as session:
-            repository = RestrictionModelRepository(session=session)
-            restrictions = await repository.get_many()
-            return [RestrictionDefinition(row.name, row.type) for row in restrictions]
+            rows = (
+                await session.scalars(
+                    select(TagDefinition)
+                    .where(
+                        TagDefinition.authority == "official",
+                        TagDefinition.semantic_kind == "restriction",
+                        TagDefinition.moderation_status == "approved",
+                    )
+                    .order_by(TagDefinition.default_display_order, TagDefinition.display_name)
+                )
+            ).all()
+            return [
+                RestrictionDefinition(
+                    row.display_name,
+                    cast(RestrictionTypeLiteral | None, row.restriction_type),
+                )
+                for row in rows
+            ]
 
     async def add_alias(self, restriction: str, alias: str) -> None:
+        normalized_alias = _normalize(alias)
         async with self._session_factory() as session:
-            restriction_repository = RestrictionModelRepository(session=session)
-            alias_repository = RestrictionAliasModelRepository(session=session, auto_commit=True)
-            restriction_id = await self._get_restriction_id(
-                restriction_repository,
-                alias_repository,
-                restriction,
-            )
-            alias_restriction_id = await self._get_restriction_id(
-                restriction_repository,
-                alias_repository,
-                alias,
-            )
+            restriction_id = await get_restriction_id(session, restriction)
+            alias_restriction_id = await get_restriction_id(session, alias)
             if restriction_id is None:
                 raise RestrictionNotFoundError(restriction)
             if alias_restriction_id == restriction_id:
@@ -50,19 +56,34 @@ class RestrictionRepository:
             if alias_restriction_id is not None:
                 raise AliasInUseError(alias, alias_restriction_id)
 
+            definition = await session.get(TagDefinition, restriction_id)
+            assert definition is not None
+            session.add(TagAlias(definition=definition, alias=alias.strip(), normalized_alias=normalized_alias))
             try:
-                await alias_repository.add(RestrictionAlias(restriction_id=restriction_id, alias=alias))
-            except DuplicateKeyError as exc:
-                raise AliasAlreadyAddedError(alias, restriction_id) from exc
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                raise AliasAlreadyAddedError(alias, restriction_id) from error
+            self._fetch_all_restrictions.cache_clear()
 
-    @staticmethod
-    async def _get_restriction_id(
-        restriction_repository: RestrictionModelRepository,
-        alias_repository: RestrictionAliasModelRepository,
-        name_or_alias: str,
-    ) -> int | None:
-        restriction = await restriction_repository.get_one_or_none(Restriction.name.ilike(f"%{name_or_alias}%"))
-        if restriction is not None:
-            return restriction.id
-        alias = await alias_repository.get_one_or_none(RestrictionAlias.alias.ilike(f"%{name_or_alias}%"))
-        return None if alias is None else alias.restriction_id
+
+async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int | None:
+    normalized = _normalize(name_or_alias)
+    statement = (
+        select(TagDefinition.id)
+        .outerjoin(TagAlias, TagAlias.tag_id == TagDefinition.id)
+        .where(
+            TagDefinition.authority == "official",
+            TagDefinition.semantic_kind == "restriction",
+            or_(
+                TagDefinition.normalized_name == normalized,
+                TagAlias.normalized_alias == normalized,
+            ),
+        )
+    )
+    rows = tuple((await session.scalars(statement)).unique().all())
+    return rows[0] if len(rows) == 1 else None
+
+
+def _normalize(value: str) -> str:
+    return " ".join(value.casefold().split())

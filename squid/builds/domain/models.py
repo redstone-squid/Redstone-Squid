@@ -21,6 +21,7 @@ from whenever import Instant
 
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError
+from squid.tags.domain import TagAssignment
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
@@ -179,6 +180,7 @@ class Build:
     animated_restrictions: list[str] = field(default_factory=list)
     component_restrictions: list[str] = field(default_factory=list)
     miscellaneous_restrictions: list[str] = field(default_factory=list)
+    tags: list[TagAssignment] = field(default_factory=list)
 
     extender_orientation: str | None = None
     extension_length: int | None = None

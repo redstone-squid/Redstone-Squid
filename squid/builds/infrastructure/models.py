@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
     ARRAY,
@@ -36,6 +38,9 @@ from squid.builds.domain import (
 from squid.config import embedding_dimension_from_environment
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
+
+if TYPE_CHECKING:
+    from squid.tags.infrastructure.models import BuildTagAssignment
 
 
 class Restriction(Base):
@@ -174,6 +179,12 @@ class Build(Base, kw_only=True):
     )
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
+
+    tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
+        default_factory=list,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
 

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -35,6 +36,18 @@ from squid.builds.infrastructure.models import (
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
+from squid.tags.domain import TagAssignment as DomainTagAssignment
+from squid.tags.domain import TagSemanticKind, TagValueType
+from squid.tags.infrastructure.models import (
+    BuildTagAssignment as SQLTagAssignment,
+)
+from squid.tags.infrastructure.models import (
+    TagAlias,
+    TagApplicability,
+)
+from squid.tags.infrastructure.models import (
+    TagDefinition as SQLTagDefinition,
+)
 from squid.users.infrastructure.models import User
 from squid.versions.infrastructure.models import Version
 
@@ -163,6 +176,7 @@ class BuildRepository:
                     selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
                     selectinload(SQLBuild.build_versions),
                     selectinload(SQLBuild.build_types).selectinload(BuildType.type),
+                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(SQLBuild.links),
                 )
             )
@@ -197,6 +211,7 @@ class BuildRepository:
             sql_build.build_restrictions.clear()
             sql_build.build_versions.clear()
             sql_build.build_types.clear()
+            sql_build.tag_assignments.clear()
             sql_build.links.clear()
             await self._setup_relationships(build, session, sql_build)
             if build.original_message_id is not None:
@@ -239,6 +254,8 @@ class BuildRepository:
         if unknown_types:
             build.extra_info["unknown_patterns"] = build.extra_info.get("unknown_patterns", []) + unknown_types
 
+        await self._setup_tag_assignments(build, session, sql_build)
+
         # Handle versions
         version_objects = await self._get_versions(session, build.versions)
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
@@ -255,6 +272,77 @@ class BuildRepository:
         for url, media_type in all_links:
             build_link = BuildLink(url=url, media_type=media_type)
             sql_build.links.append(build_link)
+
+    async def _setup_tag_assignments(
+        self,
+        build: Build,
+        session: AsyncSession,
+        sql_build: SQLBuild,
+    ) -> None:
+        assignments = build.tags
+        if not assignments:
+            assignments = await self._legacy_tag_assignments(build, session)
+            build.tags = assignments
+        if not assignments:
+            return
+
+        definitions = {
+            definition.id: definition
+            for definition in (
+                await session.scalars(
+                    select(SQLTagDefinition).where(
+                        SQLTagDefinition.id.in_({assignment.definition.id for assignment in assignments})
+                    )
+                )
+            ).all()
+        }
+        missing = sorted({assignment.definition.id for assignment in assignments} - definitions.keys())
+        if missing:
+            msg = f"Unknown tag definition IDs: {missing}"
+            raise InvalidBuildError(msg, context={"build_id": build.id, "tag_ids": missing})
+
+        for assignment in assignments:
+            definition = definitions[assignment.definition.id]
+            if definition.value_type != assignment.definition.value_type:
+                msg = f"Tag {definition.stable_key} value type changed while the build was being edited."
+                raise InvalidBuildError(msg, context={"tag_id": definition.id})
+            numeric_value, text_value, boolean_value = _split_tag_value(assignment)
+            sql_build.tag_assignments.append(
+                SQLTagAssignment(
+                    definition=definition,
+                    value_type=assignment.definition.value_type,
+                    numeric_value=numeric_value,
+                    text_value=text_value,
+                    boolean_value=boolean_value,
+                    display_unit_key=assignment.display_unit,
+                    display_order=assignment.display_order,
+                    evidence=assignment.evidence,
+                    provenance=assignment.provenance,
+                    created_by_discord_id=build.submitter_id,
+                )
+            )
+
+    async def _legacy_tag_assignments(self, build: Build, session: AsyncSession) -> list[DomainTagAssignment]:
+        restrictions = (
+            build.wiring_placement_restrictions
+            + build.animated_restrictions
+            + build.component_restrictions
+            + build.miscellaneous_restrictions
+        )
+        patterns = build.door_type or ["Regular"]
+        rows = await _resolve_official_tag_rows(
+            session,
+            build_kind=build.category.value if build.category is not None else None,
+            restrictions=restrictions,
+            patterns=patterns,
+        )
+        return [
+            DomainTagAssignment(
+                definition=self._mapper.tag_definition_to_domain(row),
+                provenance="submitted",
+            )
+            for row in rows
+        ]
 
     @staticmethod
     async def _get_or_create_users(session: AsyncSession, igns: list[str]) -> list[User]:
@@ -415,6 +503,7 @@ class BuildRepository:
                 .options(
                     selectinload(Door.build_restrictions).selectinload(BuildRestriction.restriction),
                     selectinload(Door.build_types).selectinload(BuildType.type),
+                    selectinload(Door.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(Door.links),
                 )
             )
@@ -432,6 +521,7 @@ class BuildRepository:
                 .options(
                     selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
                     selectinload(SQLBuild.build_types).selectinload(BuildType.type),
+                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(SQLBuild.links),
                 )
                 .where(SQLBuild.id.in_(build_ids))
@@ -451,3 +541,72 @@ class BuildRepository:
     async def get_unsent_builds(self, server_id: int) -> list[Build] | None:
         """Get all the builds that have not been posted on the server"""
         raise NotImplementedError
+
+
+def _split_tag_value(
+    assignment: DomainTagAssignment,
+) -> tuple[Decimal | None, str | None, bool | None]:
+    value_type = assignment.definition.value_type
+    value = assignment.value
+    if value_type is TagValueType.NONE and value is None:
+        return None, None, None
+    if value_type is TagValueType.NUMERIC and isinstance(value, Decimal):
+        return value, None, None
+    if value_type is TagValueType.TEXT and isinstance(value, str):
+        return None, value, None
+    if value_type is TagValueType.BOOLEAN and isinstance(value, bool):
+        return None, None, value
+    msg = f"Tag {assignment.definition.stable_key} expects a {value_type.value} value."
+    raise InvalidBuildError(msg, context={"tag_id": assignment.definition.id})
+
+
+async def _resolve_official_tag_rows(
+    session: AsyncSession,
+    *,
+    build_kind: str | None,
+    restrictions: list[str],
+    patterns: list[str],
+) -> list[SQLTagDefinition]:
+    restriction_names = {_normalize_tag_name(name) for name in restrictions}
+    pattern_names = {_normalize_tag_name(name) for name in patterns}
+    if not restriction_names and not pattern_names:
+        return []
+
+    matched_name = or_(
+        SQLTagDefinition.normalized_name.in_(restriction_names | pattern_names),
+        TagAlias.normalized_alias.in_(restriction_names | pattern_names),
+    )
+    matched_kind = or_(
+        (SQLTagDefinition.semantic_kind == TagSemanticKind.RESTRICTION)
+        & matched_name
+        & or_(
+            SQLTagDefinition.normalized_name.in_(restriction_names),
+            TagAlias.normalized_alias.in_(restriction_names),
+        ),
+        (SQLTagDefinition.semantic_kind == TagSemanticKind.PATTERN)
+        & matched_name
+        & or_(
+            SQLTagDefinition.normalized_name.in_(pattern_names),
+            TagAlias.normalized_alias.in_(pattern_names),
+        ),
+    )
+    statement = (
+        select(SQLTagDefinition)
+        .outerjoin(TagAlias, TagAlias.tag_id == SQLTagDefinition.id)
+        .where(
+            SQLTagDefinition.authority == "official",
+            SQLTagDefinition.moderation_status == "approved",
+            matched_kind,
+        )
+        .order_by(SQLTagDefinition.default_display_order, SQLTagDefinition.id)
+    )
+    if build_kind is not None:
+        statement = statement.join(
+            TagApplicability,
+            TagApplicability.tag_id == SQLTagDefinition.id,
+        ).where(TagApplicability.build_kind == build_kind)
+    return list((await session.scalars(statement)).unique().all())
+
+
+def _normalize_tag_name(value: str) -> str:
+    return " ".join(value.casefold().split())
