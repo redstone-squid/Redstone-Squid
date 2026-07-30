@@ -1296,6 +1296,18 @@ wheels = [
 ]
 
 [[package]]
+name = "luqum"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ply" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/47/eb/740c176edbfcc8a207f9b4af0476e9ad07b96481e7dc37b03e47669dc208/luqum-1.0.0.tar.gz", hash = "sha256:3e7bf3a94eaf8dc936c63de3019b306ee96e63575bc19372dad56114b194f8e0", size = 75950, upload-time = "2025-02-18T07:39:31.799Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/25/cfcd4c64369b24b5bf28ccada686f228440897bf001bc165c0dd4f8aebe3/luqum-1.0.0-py3-none-any.whl", hash = "sha256:25e8723aa7b4a522f296eaf8553f7c887b75a29cc92479293cb44333a3b0bc2b", size = 55276, upload-time = "2025-02-18T07:39:29.592Z" },
+]
+
+[[package]]
 name = "mako"
 version = "1.3.12"
 source = { registry = "https://pypi.org/simple" }
@@ -1710,6 +1722,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "ply"
+version = "3.11"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/69/882ee5c9d017149285cab114ebeab373308ef0f874fcdac9beb90e0ac4da/ply-3.11.tar.gz", hash = "sha256:00c7c1aaa88358b9c765b6d3000c6eec0ba42abca5351b095321aef446081da3", size = 159130, upload-time = "2018-02-15T19:01:31.097Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/58/35da89ee790598a0700ea49b2a66594140f44dec458c07e8e3d4979137fc/ply-3.11-py2.py3-none-any.whl", hash = "sha256:096f9b8350b65ebd2fd1346b12452efe5b9607f7482813ffca50c22722a807ce", size = 49567, upload-time = "2018-02-15T19:01:27.172Z" },
 ]
 
 [[package]]
@@ -2292,6 +2313,7 @@ dependencies = [
     { name = "gitpython" },
     { name = "gspread" },
     { name = "jishaku" },
+    { name = "luqum" },
     { name = "markdown" },
     { name = "openai" },
     { name = "python-dotenv" },
@@ -2337,6 +2359,7 @@ requires-dist = [
     { name = "gitpython", specifier = ">=3.1.31" },
     { name = "gspread", specifier = ">=6.1.4" },
     { name = "jishaku", specifier = ">=2.6.0" },
+    { name = "luqum", specifier = ">=1.0,<2" },
     { name = "markdown", specifier = ">=3.7" },
     { name = "openai", specifier = ">=1.58.1" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
