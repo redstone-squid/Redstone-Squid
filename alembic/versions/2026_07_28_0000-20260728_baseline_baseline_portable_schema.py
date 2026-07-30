@@ -22,6 +22,9 @@ def upgrade() -> None:
     """Create the complete application-owned PostgreSQL schema."""
     schema_sql = SCHEMA_SQL_PATH.read_text(encoding="utf-8")
     driver_connection = op.get_bind().connection.driver_connection
+    if driver_connection is None:
+        msg = "Alembic did not provide a DBAPI driver connection."
+        raise RuntimeError(msg)
     cursor = driver_connection.cursor()
     try:
         cursor.execute(schema_sql)

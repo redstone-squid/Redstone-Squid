@@ -21,7 +21,7 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
         self.bot = bot
         self.settings_service = bot.services.settings
 
-    @hybrid_group(name="settings", invoke_without_command=True)
+    @hybrid_group(name="settings")
     @check_is_staff()
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context[BotT]):

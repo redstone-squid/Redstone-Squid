@@ -105,7 +105,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
             await sent_message.edit(embed=utils.info_embed("Patterns", description or "No patterns match that query."))
 
-    @hybrid_group(name="build", invoke_without_command=True)
+    @hybrid_group(name="build")
     async def build_hybrid_group(self, ctx: Context[BotT]):
         """Submit, view, confirm and deny submissions."""
         await ctx.send_help("build")
