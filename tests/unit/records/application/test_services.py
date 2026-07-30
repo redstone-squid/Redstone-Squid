@@ -38,9 +38,13 @@ class FakeRuns:
         self.queued: tuple[BuildKind, ...] = ()
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
+        self.current_version_id: int | None = None
 
     async def active_ruleset_id(self) -> int:
         return 7
+
+    async def active_current_version_id(self) -> int | None:
+        return self.current_version_id
 
     async def activate(self, batch: ComputationBatch) -> int:
         self.batches.append(batch)
@@ -262,3 +266,17 @@ async def test_process_queue_rebuilds_and_acknowledges_claimed_kinds() -> None:
     assert result.rebuild is not None
     assert result.rebuild.run_ids == (1, 2)
     assert runs.completed == (BuildKind.DOOR, BuildKind.EXTENDER)
+
+
+@pytest.mark.asyncio
+async def test_process_queue_preserves_the_pinned_current_version() -> None:
+    runs = FakeRuns()
+    runs.queued = (BuildKind.DOOR,)
+    runs.current_version_id = 3
+    computation = RecordComputationService(FakeCandidates(()), runs)
+
+    result = await computation.process_queue()
+
+    assert result.rebuild is not None
+    assert result.rebuild.run_ids == (1, 2)
+    assert [batch.version_id for batch in runs.batches] == [None, 3]

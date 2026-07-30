@@ -151,6 +151,8 @@ class RecordComputationService:
         kinds = tuple(await self._runs.claim_recompute_kinds(limit=limit))
         if not kinds:
             return QueueProcessSummary(kinds=(), rebuild=None)
+        if current_version_id is None:
+            current_version_id = await self._runs.active_current_version_id()
         try:
             summary = await self.rebuild(current_version_id=current_version_id, kinds=kinds)
         except Exception as error:

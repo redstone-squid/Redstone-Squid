@@ -78,17 +78,31 @@ class PostgresRecordRepository:
                 .limit(1)
             )
             ruleset_id = (await session.execute(statement)).scalar_one_or_none()
-            if ruleset_id is None:
-                ruleset = RecordRuleset(
-                    document_hash=RULESET_DOCUMENT_HASH,
-                    calculator_version=CALCULATOR_VERSION,
-                    formatter_version=FORMATTER_VERSION,
-                    activated_at=Instant.now(),
+            if ruleset_id is not None:
+                return ruleset_id
+            ruleset = RecordRuleset(
+                document_hash=RULESET_DOCUMENT_HASH,
+                calculator_version=CALCULATOR_VERSION,
+                formatter_version=FORMATTER_VERSION,
+                activated_at=Instant.now(),
+            )
+            session.add(ruleset)
+            await session.flush()
+            return ruleset.id
+
+    async def active_current_version_id(self) -> int | None:
+        """Return the version pinned by the newest active current-scope run."""
+        async with self._session_factory() as session:
+            statement = (
+                select(RecordComputationRun.version_id)
+                .where(
+                    RecordComputationRun.is_active,
+                    RecordComputationRun.version_id.is_not(None),
                 )
-                session.add(ruleset)
-                await session.flush()
-                return ruleset.id
-            return ruleset_id
+                .order_by(RecordComputationRun.started_at.desc(), RecordComputationRun.id.desc())
+                .limit(1)
+            )
+            return (await session.execute(statement)).scalar_one_or_none()
 
     async def activate(self, batch: ComputationBatch) -> int:
         """Persist and activate a complete run in one transaction."""
