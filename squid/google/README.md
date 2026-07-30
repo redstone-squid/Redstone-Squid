@@ -13,5 +13,3 @@ Below is a guide to getting a Google sheets API.
 6. Create a file called `client_secret.json` in the Google folder and add the credentials, or add the json to your environmental variables as `GOOGLE_CREDENTIALS`.
 7. Create a new Google sheet and share it with the email address of the service account you just created. This will allow the service account to access the sheet.
 8. You can now use the `Interface` class to access the sheet. You may also want to create a forms to collect data and connect the form and the sheet.
-
-

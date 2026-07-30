@@ -1,6 +1,6 @@
 ---
 description: This rule contains comprehensive information about the Redstone Squid Discord bot project structure, codebase organization, and development workflow.
-globs: 
+globs:
 alwaysApply: false
 ---
 # Redstone Squid Project Overview
@@ -12,11 +12,11 @@ Redstone Squid is a Discord bot designed to manage and streamline the submission
 
 ### `/squid/` - Main Application Code
 - **`/squid/bot/`** - Discord bot implementation with commands, utilities, and event handlers
-- **`/squid/db/`** - Database layer with models, queries, and schema definitions  
+- **`/squid/db/`** - Database layer with models, queries, and schema definitions
 - **`/squid/google/`** - Google Services integration for Forms/Sheets
 - **`/squid/config.py`** - Bot configuration and constants
 
-### `/supabase/` - Database Management  
+### `/supabase/` - Database Management
 Do not try to edit this directory directly. It is managed by Supabase and contains the database schema and migrations.
 If you want to read the current schema, you can see it in schema_dump.sql.
 
