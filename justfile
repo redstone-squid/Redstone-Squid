@@ -9,7 +9,6 @@ shebang := if os() == 'windows' {
 
 python_dir := if os_family() == "windows" { "./.venv/Scripts" } else { "./.venv/bin" }
 python := python_dir + if os_family() == "windows" { "/python.exe" } else { "/python3" }
-system_python := if os_family() == "windows" { "py.exe -3.12" } else { "python3.12" }
 
 default:
   just --list
@@ -38,16 +37,19 @@ stop:
     $process = Get-CimInstance win32_process -Filter "CommandLine like '%app.py%'"
     if ($process) { Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue }
 
-init: && sync
-    if test ! -e .venv; then {{system_python}} -m venv .venv; fi
-    {{python}} -m pip install --upgrade pip pip-tools
+init: sync
+
+alias s := sync
+sync:
+    uv sync --locked
+
+alias up := upgrade
+upgrade *packages:
+    uv sync {{ prepend("--upgrade-package ", packages) }}
 
 compile:
-    {{python_dir}}/pip-compile --output-file=requirements/base.txt pyproject.toml
-    {{python_dir}}/pip-compile --constraint=requirements/base.txt --output-file=requirements/dev.txt requirements/dev.in
-
-sync:
-    {{python_dir}}/pip-sync --python-executable {{python}} requirements/base.txt requirements/dev.txt
+    uv export --locked --output-file requirements/base.txt
+    uv export --locked --only-dev --output-file requirements/dev.txt
 
 lint:
     {{python}} -m ruff check --extend-select I --fix --exit-zero
