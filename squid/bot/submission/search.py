@@ -1,7 +1,5 @@
 """Everything related to querying the database for information."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -10,19 +8,19 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
 
-from squid.bot import utils
+import squid.bot.utils.embeds as utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
-from squid.bot.utils import RunningMessage
+from squid.bot.utils.embeds import RunningMessage
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 logger = logging.getLogger(__name__)
 
 
-class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.queries = bot.services.build_queries
@@ -209,7 +207,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.invoke(self.view_build, build_id=build_id)
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

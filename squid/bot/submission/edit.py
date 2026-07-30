@@ -8,25 +8,26 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
 
-from squid.bot import utils
+import squid.bot.utils.embeds as utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
-from squid.bot.utils import (
-    MISSING,
-    MissingType,
-    RunningMessage,
-    check_is_owner_server,
-    check_is_trusted_or_staff,
+from squid.bot.utils.converters import (
+    DimensionsConverter,
+    GameTickConverter,
+    ListConverter,
+    NoneStrConverter,
     fix_converter_annotations,
 )
-from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
+from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
+from squid.bot.utils.sentinel import MISSING, MissingType
 from squid.builds.application import BuildEditPatch
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """A cog with commands for editing builds."""
 
     def __init__(self, bot: BotT):
@@ -156,7 +157,7 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         return None
 
 
-async def setup(bot: "squid.bot.RedstoneSquid") -> None:
+async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

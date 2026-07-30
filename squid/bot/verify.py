@@ -8,10 +8,10 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from squid.bot.submission.ui.views import ConfirmationView
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
+class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.user_service = bot.services.users
@@ -39,6 +39,6 @@ class VerifyCog[BotT: squid.bot.RedstoneSquid](Cog, name="verify"):
                 )
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))

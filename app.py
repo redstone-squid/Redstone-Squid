@@ -9,9 +9,9 @@ import sys
 
 from dotenv import load_dotenv
 
-from squid.api import main as api_main
-from squid.bot import ApplicationConfig
-from squid.bot import main as bot_main
+from squid.api.app import main as api_main
+from squid.bot.app import ApplicationConfig
+from squid.bot.app import main as bot_main
 
 if __name__ == "__main__":
     # Check .env.example for environment variables configuration

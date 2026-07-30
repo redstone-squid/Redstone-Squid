@@ -9,15 +9,15 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 from rapidfuzz import process
 
-from squid.bot import utils
-from squid.bot.utils import check_is_owner_server, check_is_staff
+import squid.bot.utils.embeds as utils
+from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.builds.errors import AliasAlreadyAddedError
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
+class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):
@@ -195,6 +195,6 @@ class Admin[BotT: "squid.bot.RedstoneSquid"](commands.Cog):
             raise ValueError(msg)
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Admin(bot))

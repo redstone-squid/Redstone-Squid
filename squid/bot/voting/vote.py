@@ -16,14 +16,14 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.voting.domain import VoteActor
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
 
 
-class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
@@ -125,6 +125,6 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             )
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VoteCog(bot))

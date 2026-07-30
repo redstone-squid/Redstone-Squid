@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from discord.ext.commands import CheckFailure, Context, MissingAnyRole, NoPrivateMessage, check
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 def check_is_owner_server():
     """Check if the command is executed on the owner's server."""
 
-    async def predicate(ctx: Context["squid.bot.RedstoneSquid"]) -> bool:
+    async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
         if ctx.bot.owner_server_id is None:
             return True  # No owner server set, so we allow the command to run anywhere
 
@@ -26,7 +26,7 @@ def check_is_owner_server():
     return check(predicate)
 
 
-def is_owner_server(bot: "squid.bot.RedstoneSquid", server_id: int) -> bool:
+def is_owner_server(bot: "squid.bot.app.RedstoneSquid", server_id: int) -> bool:
     """Check if the server is the owner's server."""
     return server_id == bot.owner_server_id
 
@@ -35,7 +35,7 @@ def is_owner_server(bot: "squid.bot.RedstoneSquid", server_id: int) -> bool:
 def check_is_staff():
     """Check if the user has a staff role, as defined in the server settings."""
 
-    async def predicate(ctx: Context["squid.bot.RedstoneSquid"]) -> bool:
+    async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
@@ -50,7 +50,7 @@ def check_is_staff():
     return check(predicate)
 
 
-async def is_staff(bot: "squid.bot.RedstoneSquid", server_id: int | None, user_id: int) -> bool:
+async def is_staff(bot: "squid.bot.app.RedstoneSquid", server_id: int | None, user_id: int) -> bool:
     """Check if the user has a staff role, as defined in the server settings."""
     if server_id is None:
         return False  # TODO: global staff role
@@ -70,7 +70,7 @@ async def is_staff(bot: "squid.bot.RedstoneSquid", server_id: int | None, user_i
 def check_is_trusted_or_staff():
     """Check if the user has a trusted or staff role, as defined in the server settings."""
 
-    async def predicate(ctx: Context["squid.bot.RedstoneSquid"]) -> bool:
+    async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
         server_id = ctx.guild.id
@@ -86,7 +86,7 @@ def check_is_trusted_or_staff():
     return check(predicate)
 
 
-async def is_trusted_or_staff(bot: "squid.bot.RedstoneSquid", server_id: int, user_id: int) -> bool:
+async def is_trusted_or_staff(bot: "squid.bot.app.RedstoneSquid", server_id: int, user_id: int) -> bool:
     """Check if the user has a trusted or staff role, as defined in the server settings."""
     server = bot.get_guild(server_id)
     if server is None:

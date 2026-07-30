@@ -12,15 +12,14 @@ from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledView
-from squid.bot.utils import check_is_owner_server
-from squid.bot.utils.permissions import check_is_staff
+from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.community.domain import RedstonerDecisionKind
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](
+class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.app.RedstoneSquid", V: discord.ui.View](
     discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner"
 ):
     """A button that allows users to remove their own redstoner role."""
@@ -65,7 +64,7 @@ class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.RedstoneSquid", V: di
         await interaction.followup.send(f"{member.mention} jk, here is your role back.", ephemeral=True)
 
 
-class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
+class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.service = bot.services.redstoner
@@ -125,6 +124,6 @@ class GiveRedstoner[BotT: "squid.bot.RedstoneSquid"](Cog):
         )
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
     await bot.add_cog(GiveRedstoner(bot))

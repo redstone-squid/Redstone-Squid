@@ -7,16 +7,16 @@ from beartype.door import is_bearable
 from discord import app_commands
 from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 
-import squid.bot.utils as utils
+import squid.bot.utils.embeds as utils
 from squid.bot._types import GuildMessageable
-from squid.bot.utils import check_is_staff
+from squid.bot.utils.permissions import check_is_staff
 from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
+class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.settings_service = bot.services.settings
@@ -170,6 +170,6 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
             await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

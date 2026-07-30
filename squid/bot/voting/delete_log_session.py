@@ -13,7 +13,7 @@ from squid.bot.voting.message_tracking import track_vote_messages
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 @final
@@ -24,7 +24,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -50,7 +50,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -91,7 +91,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
+    async def from_id(cls, bot: "squid.bot.app.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
         snapshot = await bot.services.votes.get_session_by_id(vote_session_id)
         if snapshot is None or snapshot.kind != cls.kind:
             return None
@@ -99,7 +99,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     async def _from_snapshot(
-        cls, bot: "squid.bot.RedstoneSquid", snapshot: VoteSessionSnapshot
+        cls, bot: "squid.bot.app.RedstoneSquid", snapshot: VoteSessionSnapshot
     ) -> "DeleteLogVoteSession | None":
         """Restore a Discord view from an application snapshot."""
         target = snapshot.target
@@ -175,7 +175,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
+        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.app.RedstoneSquid"
     ) -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
         sessions = await asyncio.gather(

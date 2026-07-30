@@ -6,13 +6,13 @@ import discord
 import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
-import squid.bot.utils as utils
+import squid.bot.utils.embeds as utils
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
+class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.version_service = bot.services.versions
@@ -55,6 +55,6 @@ class Miscellaneous[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.send(", ".join(versions_human_readable))
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))

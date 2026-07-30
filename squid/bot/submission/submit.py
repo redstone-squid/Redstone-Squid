@@ -12,24 +12,25 @@ from discord.ext.commands import (
     flag,
 )
 
-from squid.bot import utils
+import squid.bot.utils.embeds as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
-from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
-from squid.bot.utils.converters import DimensionsConverter, ListConverter
+from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
+from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import BuildInferenceInput, DoorSubmissionInput
 from squid.builds.domain import Build, Status
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
+class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
     def __init__(self, bot: BotT):
@@ -262,7 +263,7 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         await self.builds.refresh_record_titles()
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildSubmitCog(bot))

@@ -21,12 +21,12 @@ from squid.bot.submission.ui.components import (
     RecordCategorySelect,
     get_text_input,
 )
-from squid.bot.utils import DEFAULT, DefaultType
+from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Build, BuildCategory, Status
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
     import squid.bot.submission.build_handler
 
 
@@ -104,7 +104,7 @@ class SubmissionModal(ErrorHandledModal):
             self.build.world_download_urls = [download_link.strip() for download_link in download_links]
 
 
-class EditModal[BotT: "squid.bot.RedstoneSquid"](ErrorHandledModal):
+class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
@@ -173,7 +173,7 @@ class ConfirmationView(ErrorHandledView):
         self.stop()
 
 
-class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
+class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
     """A view that allows users to edit a build.
 
     Changes are accumulated locally and applied under a service-managed lock on submit.
@@ -317,7 +317,7 @@ class BuildEditView[BotT: "squid.bot.RedstoneSquid"](ErrorHandledView):
         )
 
 
-class BuildInfoView[BotT: squid.bot.RedstoneSquid](BaseNavigableView[BotT]):
+class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):
     def __init__(
         self,
         build: Build,

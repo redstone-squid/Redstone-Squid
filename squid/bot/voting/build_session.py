@@ -14,7 +14,7 @@ from squid.builds.domain import Build, Status
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChange, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 @final
@@ -25,7 +25,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -54,7 +54,7 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -105,7 +105,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
+    async def from_id(cls, bot: "squid.bot.app.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
         snapshot = await bot.services.votes.get_session_by_id(vote_session_id)
         if snapshot is None or snapshot.kind != cls.kind:
             return None
@@ -113,7 +113,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     async def _from_snapshot(
-        cls, bot: "squid.bot.RedstoneSquid", snapshot: VoteSessionSnapshot
+        cls, bot: "squid.bot.app.RedstoneSquid", snapshot: VoteSessionSnapshot
     ) -> "BuildVoteSession | None":
         """Restore a Discord view from an application snapshot."""
         if snapshot.target.build_id is None:
@@ -166,7 +166,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: type["BuildVoteSession"], bot: "squid.bot.RedstoneSquid"
+        cls: type["BuildVoteSession"], bot: "squid.bot.app.RedstoneSquid"
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
         sessions = await asyncio.gather(

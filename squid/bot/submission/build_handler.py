@@ -8,17 +8,18 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
-import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.embeds import info_embed
+from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
 from squid.core.time import utcnow
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
+class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     """A class to handle the display of a build object."""
 
     def __init__(self, bot: BotT, build: Build):
@@ -135,7 +136,7 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
     async def generate_embed(self) -> discord.Embed:
         """Generates an embed for the build."""
         build = self.build
-        em = bot_utils.info_embed(title=self.build.title, description=await self.get_description())
+        em = info_embed(title=self.build.title, description=await self.get_description())
 
         fields = self.get_metadata_fields()
         for key, val in fields.items():
@@ -147,14 +148,14 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
                 if mimetype is not None and mimetype.startswith("image"):
                     em.set_image(url=url)
                     break
-                preview = await bot_utils.get_website_preview(url)
+                preview = await get_website_preview(url)
                 if isinstance(preview["image"], io.BytesIO):
                     msg = "Got a BytesIO object instead of a URL."
                     raise TypeError(msg)
                 em.set_image(url=preview["image"])
         elif build.video_urls:
             for url in build.video_urls:
-                preview = await bot_utils.get_website_preview(url)
+                preview = await get_website_preview(url)
                 if image := preview["image"]:
                     if isinstance(image, str):
                         em.set_image(url=image)

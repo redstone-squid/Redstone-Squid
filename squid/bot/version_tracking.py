@@ -7,13 +7,13 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog
 from discord.ext.commands.bot import app_commands
 
-from squid.bot.utils import check_is_owner_server, check_is_staff
+from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"):
+class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTracker"):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.version_service = bot.services.versions
@@ -41,6 +41,6 @@ class VersionTracker[BotT: "squid.bot.RedstoneSquid"](Cog, name="VersionTracker"
         await self.bot.get_channel(channel_id).send(f"Version added successfully: {version}")  # type: ignore
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VersionTracker(bot))

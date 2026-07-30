@@ -12,7 +12,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
 from rapidfuzz import process
 
-from squid.bot import utils
+import squid.bot.utils.embeds as utils
 
 MORE_INFORMATION = "Use `/help <command>` to get more information."
 
