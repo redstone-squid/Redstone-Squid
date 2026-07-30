@@ -9,9 +9,10 @@
 **/.venv
 **/.classpath
 **/.dockerignore
-**/.env
+**/*.env
 **/.git
 **/.gitignore
+**/.python-version
 **/.project
 **/.settings
 **/.toolstarget
@@ -37,3 +38,7 @@ docs/
 scripts/
 tests/
 logs/
+dist/
+site/
+.coverage
+schema_dump.sql
