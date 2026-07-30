@@ -70,7 +70,7 @@ def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:
     payload = form.to_components()
 
     assert form.has_components_v2()
-    assert [component["type"] for component in payload] == [10, 1, 1, 1, 1]
+    assert [component["type"] for component in payload] == [10, 1, 1, 1]
     assert len(payload[-1]["components"]) == 3
 
 
