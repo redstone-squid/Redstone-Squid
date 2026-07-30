@@ -1,0 +1,154 @@
+"""Components V2 layout and message-boundary helpers."""
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
+
+import discord
+
+DISCORD_RED = 0xF04747
+DISCORD_YELLOW = 0xFAA61A
+DISCORD_GREEN = 0x43B581
+MAX_DISPLAY_CHARACTERS = 4000
+
+
+@dataclass(frozen=True, slots=True)
+class CardField:
+    """A labelled value rendered inside a card."""
+
+    name: str
+    value: str
+
+
+class StaticLayout(discord.ui.LayoutView):
+    """A non-interactive Components V2 message layout."""
+
+    def __init__(self, *items: discord.ui.Item[Any]) -> None:
+        super().__init__(timeout=None)
+        for item in items:
+            self.add_item(item)
+
+
+def truncate_display_text(content: str, limit: int) -> str:
+    """Fit text into a Discord display budget with an explicit marker."""
+    if len(content) <= limit:
+        return content
+    if limit <= 1:
+        return "…"[:limit]
+    return content[: limit - 1].rstrip() + "…"
+
+
+def card_container(
+    title: str,
+    description: str | None = None,
+    *,
+    accent_colour: int = DISCORD_GREEN,
+    fields: Sequence[CardField] = (),
+    footer: str | None = None,
+) -> discord.ui.Container[discord.ui.LayoutView]:
+    """Create a purpose-built V2 card container."""
+    footer_content = f"-# {footer}" if footer else ""
+    field_content = "\n".join(f"**{field.name}**\n{field.value}" for field in fields)
+    fixed_length = len(title) + len(field_content) + len(footer_content) + 8
+    description_budget = max(0, MAX_DISPLAY_CHARACTERS - fixed_length)
+    body = truncate_display_text(description or "", description_budget)
+
+    heading = f"## {title}"
+    if body:
+        heading += f"\n{body}"
+
+    children: list[discord.ui.Item[Any]] = [discord.ui.TextDisplay(heading)]
+    if field_content:
+        children.extend((discord.ui.Separator(), discord.ui.TextDisplay(field_content)))
+    if footer_content:
+        children.append(discord.ui.TextDisplay(footer_content))
+    return discord.ui.Container(*children, accent_colour=accent_colour)
+
+
+def card_layout(
+    title: str,
+    description: str | None = None,
+    *,
+    accent_colour: int = DISCORD_GREEN,
+    fields: Sequence[CardField] = (),
+    footer: str | None = None,
+) -> StaticLayout:
+    """Create a standalone V2 card."""
+    return StaticLayout(
+        card_container(
+            title,
+            description,
+            accent_colour=accent_colour,
+            fields=fields,
+            footer=footer,
+        )
+    )
+
+
+def text_layout(content: str, *, accent_colour: int | None = None) -> StaticLayout:
+    """Create a simple V2 text response."""
+    content = truncate_display_text(content, MAX_DISPLAY_CHARACTERS)
+    if accent_colour is None:
+        return StaticLayout(discord.ui.TextDisplay(content))
+    return StaticLayout(discord.ui.Container(discord.ui.TextDisplay(content), accent_colour=accent_colour))
+
+
+def error_layout(title: str, description: str | None) -> StaticLayout:
+    return card_layout(title, f":x: {description or ''}", accent_colour=DISCORD_RED)
+
+
+def warning_layout(title: str, description: str | None) -> StaticLayout:
+    return card_layout(f":warning: {title}", description, accent_colour=DISCORD_YELLOW)
+
+
+def info_layout(title: str, description: str | None) -> StaticLayout:
+    return card_layout(title, description, accent_colour=DISCORD_GREEN)
+
+
+def help_layout(title: str, description: str | None, *, footer: str | None = None) -> StaticLayout:
+    return card_layout(title, description, accent_colour=DISCORD_GREEN, footer=footer)
+
+
+def link_layout(title: str, url: str, *, description: str | None = None, label: str = "Open link") -> StaticLayout:
+    """Create a card whose primary action opens a URL."""
+    container = card_container(title, description)
+    container.add_item(discord.ui.ActionRow(discord.ui.Button(label=label, url=url)))
+    return StaticLayout(container)
+
+
+def no_mentions() -> discord.AllowedMentions:
+    """Return the default mention policy for rendered component text."""
+    return discord.AllowedMentions.none()
+
+
+def _message_uses_components_v2(message: discord.Message) -> bool:
+    return bool(getattr(getattr(message, "flags", None), "components_v2", False))
+
+
+async def edit_layout(
+    message: discord.Message,
+    layout: discord.ui.LayoutView,
+    *,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> discord.Message:
+    """Edit a message with a V2 layout, clearing legacy fields on first conversion."""
+    kwargs: dict[str, object] = {"view": layout}
+    if allowed_mentions is not None:
+        kwargs["allowed_mentions"] = allowed_mentions
+    if not _message_uses_components_v2(message):
+        kwargs["content"] = None
+        kwargs["embed"] = None
+    return await message.edit(**kwargs)  # pyright: ignore[reportArgumentType]
+
+
+async def edit_interaction_layout(
+    interaction: discord.Interaction[Any],
+    layout: discord.ui.LayoutView,
+) -> None:
+    """Edit the source interaction message, converting legacy payloads when needed."""
+    kwargs: dict[str, object] = {"view": layout}
+    message = interaction.message
+    if message is not None and not _message_uses_components_v2(message):
+        kwargs["content"] = None
+        kwargs["embed"] = None
+    await interaction.response.edit_message(**kwargs)  # pyright: ignore[reportArgumentType]

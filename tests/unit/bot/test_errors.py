@@ -1,9 +1,7 @@
 """Discord error adapter tests."""
 
-from typing import cast
 from unittest.mock import patch
 
-import discord
 import pytest
 from discord.ext import commands
 
@@ -53,8 +51,10 @@ async def test_interaction_error_uses_initial_ephemeral_response() -> None:
     initial_call = harness.send_initial.await_args
     assert initial_call is not None
     assert initial_call.kwargs["ephemeral"] is True
-    embed = cast(discord.Embed, initial_call.kwargs["embed"])
-    assert embed.description == ":x: Build not found. Check the build ID and try again."
+    layout = initial_call.kwargs["view"]
+    assert layout.has_components_v2()
+    assert "Build not found. Check the build ID and try again." in str(layout.to_components())
+    assert "embed" not in initial_call.kwargs
     harness.send_followup.assert_not_awaited()
 
 
@@ -82,6 +82,11 @@ async def test_presented_error_is_not_rendered_or_logged_twice() -> None:
         await handle_interaction_error(interaction.interaction, error, surface="command")
 
     message.edit.assert_awaited_once()
+    edit_call = message.edit.await_args
+    assert edit_call is not None
+    assert edit_call.kwargs["content"] is None
+    assert edit_call.kwargs["embed"] is None
+    assert edit_call.kwargs["view"].has_components_v2()
     interaction.send_initial.assert_not_awaited()
     log_error.assert_called_once()
     assert is_error_presented(error)

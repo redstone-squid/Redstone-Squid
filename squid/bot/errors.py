@@ -10,12 +10,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
 from squid.core.errors import DomainError, SquidError
 
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[discord.Embed], Awaitable[None]]
+type ErrorResponder = Callable[[StaticLayout], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,9 +27,9 @@ class ErrorPresentation:
     detail: str
     error_id: str | None = None
 
-    def to_embed(self) -> discord.Embed:
-        """Build the Discord embed for this presentation."""
-        return discord.Embed(title=self.title, colour=0xF04747, description=f":x: {self.detail}")
+    def to_layout(self) -> StaticLayout:
+        """Build the Components V2 layout for this presentation."""
+        return error_layout(self.title, self.detail)
 
 
 def unwrap_error(error: BaseException) -> BaseException:
@@ -115,7 +116,7 @@ async def _handle_discord_error(
         )
 
     try:
-        await responder(presentation.to_embed())
+        await responder(presentation.to_layout())
     except discord.HTTPException:
         logger.exception(
             "Failed to send Discord error response [error_id=%s surface=%s]",
@@ -132,8 +133,12 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(embed: discord.Embed) -> None:
-        await context.send(embed=embed, ephemeral=context.interaction is not None)
+    async def respond(layout: StaticLayout) -> None:
+        await context.send(
+            view=layout,
+            ephemeral=context.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
 
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
@@ -157,11 +162,11 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(embed: discord.Embed) -> None:
+    async def respond(layout: StaticLayout) -> None:
         if interaction.response.is_done():
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(view=layout, ephemeral=True, allowed_mentions=no_mentions())
         else:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(view=layout, ephemeral=True, allowed_mentions=no_mentions())
 
     command = interaction.command
     await _handle_discord_error(
@@ -183,8 +188,8 @@ async def handle_message_error(
 ) -> None:
     """Render an exception into an existing progress message."""
 
-    async def respond(embed: discord.Embed) -> None:
-        await message.edit(content=None, embed=embed)
+    async def respond(layout: StaticLayout) -> None:
+        await edit_layout(message, layout, allowed_mentions=no_mentions())
 
     await _handle_discord_error(
         error,
@@ -209,6 +214,20 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
 
 class ErrorHandledView(discord.ui.View):
     """Discord view that delegates callback failures to the shared handler."""
+
+    @override
+    async def on_error[ClientT: discord.Client](
+        self,
+        interaction: discord.Interaction[ClientT],
+        error: Exception,
+        item: discord.ui.Item[Self],
+        /,
+    ) -> None:
+        await handle_interaction_error(interaction, error, surface=f"view:{type(item).__name__}")
+
+
+class ErrorHandledLayoutView(discord.ui.LayoutView):
+    """Components V2 view that delegates callback failures to the shared handler."""
 
     @override
     async def on_error[ClientT: discord.Client](

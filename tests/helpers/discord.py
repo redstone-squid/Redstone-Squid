@@ -49,7 +49,7 @@ class MessageHarness:
     edit: AsyncMock
 
 
-def make_message(*, channel_id: int = 2, message_id: int = 3) -> MessageHarness:
+def make_message(*, channel_id: int = 2, message_id: int = 3, components_v2: bool = False) -> MessageHarness:
     """Create the minimal message contract used by shared error handling."""
     edit = AsyncMock()
     message = cast(
@@ -58,6 +58,7 @@ def make_message(*, channel_id: int = 2, message_id: int = 3) -> MessageHarness:
             edit=edit,
             channel=SimpleNamespace(id=channel_id),
             id=message_id,
+            flags=SimpleNamespace(components_v2=components_v2),
         ),
     )
     return MessageHarness(message, edit)
