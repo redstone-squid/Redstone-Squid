@@ -117,7 +117,7 @@ class BuildRepository:
                     ai_generated=build.ai_generated or False,
                     embedding=build.embedding,
                     extra_info=build.extra_info,
-                    edited_time=build.edited_time.to_stdlib(),
+                    edited_time=build.edited_time,
                     is_locked=False,
                     orientation=build.door_orientation_type or "Door",
                     door_width=build.door_width or 1,
@@ -177,7 +177,7 @@ class BuildRepository:
             sql_build.version_spec = build.version_spec
             sql_build.ai_generated = build.ai_generated or False
             sql_build.embedding = build.embedding
-            sql_build.edited_time = build.edited_time.to_stdlib() if build.edited_time is not None else None
+            sql_build.edited_time = build.edited_time
 
             if not isinstance(sql_build, Door):
                 msg = f"Only doors are supported for now, got {sql_build.category}."
@@ -357,7 +357,7 @@ class BuildRepository:
             message.purpose = "build_original_message"
             message.content = build.original_message
             message.build_id = build.id
-            message.updated_at = Instant.now().to_stdlib()
+            message.updated_at = Instant.now()
         await session.flush()
 
     async def confirm(self, build: Build) -> None:

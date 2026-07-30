@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
     ARRAY,
-    TIMESTAMP,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -24,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from whenever import Instant
 
 from squid.builds.domain import (
     BuildCategory,
@@ -37,6 +35,7 @@ from squid.builds.domain import (
 )
 from squid.config import embedding_dimension_from_environment
 from squid.persistence.base import Base
+from squid.persistence.types import InstantUTC
 
 
 class Restriction(Base):
@@ -74,8 +73,8 @@ class RestrictionAlias(Base):
         nullable=False,
     )
     alias: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     __table_args__ = (Index("restriction_aliases_restriction_id_idx", "restriction_id"),)
@@ -147,16 +146,16 @@ class Build(Base, kw_only=True):
         comment='This is not actually being used. See "vecs"."builds" instead',
         default=None,
     )
-    locked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_info: Mapped[Info] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
-    submission_time: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=False), server_default=func.now(), default=func.now()
+    submission_time: Mapped[Instant | None] = mapped_column(
+        InstantUTC(), server_default=func.now(), default_factory=Instant.now
     )
-    edited_time: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=text("(now() AT TIME ZONE 'utc'::text)"), default=func.now()
+    edited_time: Mapped[Instant | None] = mapped_column(
+        InstantUTC(), server_default=func.now(), default_factory=Instant.now
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
@@ -429,7 +428,7 @@ class BuildEditHistory(Base):
         primary_key=True,
         init=False,
     )
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now(), init=False
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now, init=False
     )
     version: Mapped[int] = mapped_column(SmallInteger, nullable=False)

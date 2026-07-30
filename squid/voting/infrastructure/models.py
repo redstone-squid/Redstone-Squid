@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import (
-    TIMESTAMP,
     BigInteger,
     CheckConstraint,
     Float,
@@ -19,8 +18,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.types import InstantUTC
 from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
 
 
@@ -49,8 +50,8 @@ class VoteSession(Base, kw_only=True):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     fail_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    created_at: Mapped[str] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), default=func.now()
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     votes: Mapped[list[Vote]] = relationship(

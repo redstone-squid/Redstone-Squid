@@ -1,11 +1,11 @@
 """SQLAlchemy tracked message models."""
 
-from datetime import datetime
-
-from sqlalchemy import TIMESTAMP, BigInteger, ForeignKey, Text, func
+from sqlalchemy import BigInteger, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
+from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.types import InstantUTC
 
 
 class Message(Base):
@@ -36,7 +36,5 @@ class Message(Base):
         ForeignKey("vote_sessions.id", name="messages_vote_session_id_fkey", ondelete="SET NULL"),
         default=None,
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default_factory=Instant.now, onupdate=func.now())
     """When this row was last modified. Bumped automatically on every UPDATE."""

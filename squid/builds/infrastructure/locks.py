@@ -138,6 +138,6 @@ class BuildLockRepository:
 
     async def clean_stale(self, *, older_than: Instant) -> None:
         async with self._session_factory() as session:
-            await session.execute(update(Build).where(Build.locked_at < older_than.to_stdlib()).values(is_locked=False))
+            await session.execute(update(Build).where(Build.locked_at < older_than).values(is_locked=False))
             await session.commit()
         self._tracker.clear()

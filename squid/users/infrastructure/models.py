@@ -1,12 +1,13 @@
 """SQLAlchemy user account models."""
 
 import uuid
-from datetime import datetime
 
-from sqlalchemy import TIMESTAMP, UUID, BigInteger, Boolean, SmallInteger, Text, func, text
+from sqlalchemy import UUID, BigInteger, Boolean, SmallInteger, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
+from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.types import InstantUTC
 
 
 class User(Base):
@@ -21,9 +22,7 @@ class User(Base):
     """The user's Discord snowflake ID, if they have linked a Discord account."""
     minecraft_uuid: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The user's Mojang account UUID, if they have linked a Minecraft account."""
-    created_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=False), server_default=func.now(), default=None
-    )
+    created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), server_default=func.now(), default=None)
     """When this row was first inserted."""
 
 
@@ -36,12 +35,12 @@ class VerificationCode(Base):
     code: Mapped[str] = mapped_column(Text, nullable=False)
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
-    created: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=False), nullable=False, server_default=func.now(), default=func.now()
+    created: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
-    expires: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=False),
+    expires: Mapped[Instant] = mapped_column(
+        InstantUTC(),
         nullable=False,
         server_default=text("(now() + '00:10:00'::interval)"),
-        default=func.now() + text("INTERVAL '10 minutes'"),
+        default_factory=lambda: Instant.now().add(minutes=10),
     )

@@ -2,7 +2,6 @@
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from whenever import Instant
 
 from squid.builds.domain import Build, BuildCategory
 from squid.builds.infrastructure.models import (
@@ -83,7 +82,7 @@ class BuildMapper:
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
             submitter_id=sql_build.submitter_id,
             completion_time=sql_build.completion_time,
-            edited_time=Instant(sql_build.edited_time) if sql_build.edited_time is not None else None,
+            edited_time=sql_build.edited_time,
             original_server_id=original_message.server_id if original_message else None,
             original_channel_id=original_message.channel_id if original_message else None,
             original_message_id=sql_build.original_message_id,
