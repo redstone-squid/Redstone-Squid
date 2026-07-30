@@ -16,13 +16,11 @@
   - `FASTEST SMALLEST`
   - `SMALLEST FASTEST`
 - [ ] Add calculators and typed categories for entrances and utilities.
-- [ ] Complete the Door Rules title formatter.
-  - Trapdoor orientation rewrites.
-  - Minimal and algebraic size forms.
-  - Animated restrictions and named layouts.
-  - Canonical aliases, combined types, and conflict validation.
-  - `[BROKEN]` and current-version presentation.
-- [ ] Add an animated-restriction taxonomy type.
+- [x] Implement the fixed-size Door Rules title formatter.
+  - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, conflict diagnostics, and
+    current-version `[BROKEN]` presentation.
+- [ ] Add algebraic and minimal expandable-size title forms after expandable-volume records are modeled.
+- [x] Add an animated-restriction taxonomy type.
 - [ ] Decide which general eligibility rules remain moderation responsibilities and which need structured evidence.
 
 ## Search
@@ -32,6 +30,9 @@
 - [ ] Consider dynamic `facet.<name>` filters so new projected facets do not require a field-registry code change.
 - [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, facet, RRF, and cursor behavior.
 - [ ] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+- [ ] Replace raw showcase qualifiers with parameterized taxonomy tags.
+  - Store metric kind, value, unit, display order, and evidence.
+  - Consider Pareto-frontier calculation for builds with multiple showcase metrics.
 
 ## Record operations
 
