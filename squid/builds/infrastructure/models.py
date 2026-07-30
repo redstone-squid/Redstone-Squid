@@ -127,6 +127,9 @@ class Build(Base, kw_only=True):
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
     completion_time: Mapped[str | None] = mapped_column(Text)  # Given by user, not parsable as a datetime
+    completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
+    description: Mapped[str | None] = mapped_column(Text, default=None)
     category: Mapped[BuildCategory | None] = mapped_column(Text)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(
@@ -274,6 +277,9 @@ class Extender(Build, kw_only=True):
         primary_key=True,
         init=False,
     )
+    orientation: Mapped[str | None] = mapped_column(Text, default=None)
+    extension_length: Mapped[int | None] = mapped_column(Integer, default=None)
+    extender_type: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class Utility(Build, kw_only=True):
