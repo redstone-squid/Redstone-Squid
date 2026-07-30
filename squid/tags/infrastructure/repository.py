@@ -1,21 +1,26 @@
 """PostgreSQL tag-definition repository."""
 
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import override
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.infrastructure.mapping import BuildMapper
+from squid.builds.infrastructure.models import Build
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.domain import (
     TagAuthority,
     TagDefinition,
     TagModerationStatus,
     TagSemanticKind,
+    TagValue,
     TagValueType,
 )
+from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
 
 
@@ -73,6 +78,12 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             return tuple(BuildMapper.tag_definition_to_domain(row) for row in rows)
 
     @override
+    async def get(self, tag_id: int) -> TagDefinition | None:
+        async with self._session_factory() as session:
+            row = await session.get(SQLTagDefinition, tag_id)
+            return None if row is None else BuildMapper.tag_definition_to_domain(row)
+
+    @override
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
         async with self._session_factory.begin() as session:
             row = await session.get(SQLTagDefinition, tag_id, with_for_update=True)
@@ -98,3 +109,61 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                 },
             )
             return BuildMapper.tag_definition_to_domain(row)
+
+    @override
+    async def assign_showcase(
+        self,
+        *,
+        build_id: int,
+        tag_id: int,
+        value: TagValue,
+        actor_discord_id: int,
+    ) -> bool:
+        async with self._session_factory.begin() as session:
+            owned_build_id = await session.scalar(
+                select(Build.id).where(Build.id == build_id, Build.submitter_id == actor_discord_id)
+            )
+            if owned_build_id is None:
+                return False
+            definition = await session.get(SQLTagDefinition, tag_id)
+            if definition is None:
+                return False
+            numeric_value, text_value, boolean_value = _split_value(definition.value_type, value)
+            statement = insert(BuildTagAssignment).values(
+                build_id=build_id,
+                tag_id=tag_id,
+                value_type=definition.value_type,
+                numeric_value=numeric_value,
+                text_value=text_value,
+                boolean_value=boolean_value,
+                provenance="submitted",
+                created_by_discord_id=actor_discord_id,
+            )
+            await session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[BuildTagAssignment.build_id, BuildTagAssignment.tag_id],
+                    set_={
+                        "numeric_value": statement.excluded.numeric_value,
+                        "text_value": statement.excluded.text_value,
+                        "boolean_value": statement.excluded.boolean_value,
+                        "updated_at": Instant.now().to_stdlib(),
+                    },
+                )
+            )
+            return True
+
+
+def _split_value(
+    value_type: TagValueType,
+    value: TagValue,
+) -> tuple[Decimal | None, str | None, bool | None]:
+    if value_type is TagValueType.NONE and value is None:
+        return None, None, None
+    if value_type is TagValueType.NUMERIC and isinstance(value, Decimal):
+        return value, None, None
+    if value_type is TagValueType.TEXT and isinstance(value, str):
+        return None, value, None
+    if value_type is TagValueType.BOOLEAN and isinstance(value, bool):
+        return None, None, value
+    msg = f"invalid {value_type.value} tag value"
+    raise ValueError(msg)

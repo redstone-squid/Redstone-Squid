@@ -128,6 +128,32 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @commands.hybrid_command(name="tag_build")
+    @app_commands.describe(
+        build_id="A build you submitted.",
+        tag_id="An approved user showcase tag.",
+        value="The tag value, omitted for plain tags.",
+    )
+    async def tag_build(
+        self,
+        ctx: Context[BotT],
+        build_id: int,
+        tag_id: int,
+        value: str | None = None,
+    ) -> None:
+        """Attach an approved showcase tag to one of your builds."""
+        tag = await self.tags.assign_showcase(
+            build_id,
+            tag_id,
+            value,
+            actor_discord_id=ctx.author.id,
+        )
+        await ctx.send(
+            view=info_layout("Build tagged", f"Attached **{tag.display_name}** to build #{build_id}."),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
     @commands.hybrid_command(name="pending_tags")
     @check_is_staff()
     @check_is_owner_server()

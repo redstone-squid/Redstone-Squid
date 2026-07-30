@@ -2,10 +2,11 @@
 
 import re
 from collections.abc import Sequence
+from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from uuid import uuid4
 
-from squid.tags.domain import TagDefinition, TagModerationStatus, TagValueType
+from squid.tags.domain import TagDefinition, TagModerationStatus, TagValue, TagValueType
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -26,7 +27,18 @@ class TagDefinitionRepository(Protocol):
 
     async def pending(self) -> Sequence[TagDefinition]: ...
 
+    async def get(self, tag_id: int) -> TagDefinition | None: ...
+
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
+
+    async def assign_showcase(
+        self,
+        *,
+        build_id: int,
+        tag_id: int,
+        value: TagValue,
+        actor_discord_id: int,
+    ) -> bool: ...
 
 
 class TagService:
@@ -78,9 +90,70 @@ class TagService:
         """Hide a published tag while retaining assignments and history."""
         return await self._set_status(tag_id, TagModerationStatus.ARCHIVED)
 
+    async def assign_showcase(
+        self,
+        build_id: int,
+        tag_id: int,
+        raw_value: str | None,
+        *,
+        actor_discord_id: int,
+    ) -> TagDefinition:
+        """Attach an approved showcase tag to a build submitted by the caller."""
+        definition = await self._repository.get(tag_id)
+        if (
+            definition is None
+            or definition.authority.value != "user"
+            or definition.semantic_kind.value != "showcase"
+            or definition.moderation_status is not TagModerationStatus.APPROVED
+        ):
+            msg = "an approved user showcase tag is required"
+            raise ValueError(msg)
+        value = _coerce_assignment_value(definition, raw_value)
+        assigned = await self._repository.assign_showcase(
+            build_id=build_id,
+            tag_id=tag_id,
+            value=value,
+            actor_discord_id=actor_discord_id,
+        )
+        if not assigned:
+            msg = "the build does not exist or was not submitted by you"
+            raise ValueError(msg)
+        return definition
+
     async def _set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition:
         definition = await self._repository.set_status(tag_id, status)
         if definition is None:
             msg = f"tag {tag_id} does not exist"
             raise ValueError(msg)
         return definition
+
+
+def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
+    if definition.value_type is TagValueType.NONE:
+        if raw_value not in {None, ""}:
+            msg = f"{definition.display_name} does not accept a value"
+            raise ValueError(msg)
+        return None
+    if raw_value is None or not raw_value.strip():
+        msg = f"{definition.display_name} requires a {definition.value_type.value} value"
+        raise ValueError(msg)
+    value = raw_value.strip()
+    if definition.value_type is TagValueType.TEXT:
+        return value
+    if definition.value_type is TagValueType.BOOLEAN:
+        normalized = value.casefold()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0"}:
+            return False
+        msg = f"{definition.display_name} expects true or false"
+        raise ValueError(msg)
+    try:
+        numeric = Decimal(value)
+    except InvalidOperation as error:
+        msg = f"{definition.display_name} expects a number in its canonical unit"
+        raise ValueError(msg) from error
+    if not numeric.is_finite():
+        msg = f"{definition.display_name} expects a finite number"
+        raise ValueError(msg)
+    return numeric

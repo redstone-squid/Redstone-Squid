@@ -1,6 +1,7 @@
 """Tag governance service tests."""
 
 from dataclasses import replace
+from decimal import Decimal
 
 import pytest
 
@@ -10,6 +11,7 @@ from squid.tags.domain import (
     TagDefinition,
     TagModerationStatus,
     TagSemanticKind,
+    TagValue,
     TagValueType,
 )
 
@@ -44,11 +46,25 @@ class FakeRepository:
     async def pending(self) -> tuple[TagDefinition, ...]:
         return () if self.definition is None else (self.definition,)
 
+    async def get(self, tag_id: int) -> TagDefinition | None:
+        return self.definition if self.definition is not None and self.definition.id == tag_id else None
+
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
         if self.definition is None or tag_id != self.definition.id:
             return None
         self.definition = replace(self.definition, moderation_status=status)
         return self.definition
+
+    async def assign_showcase(
+        self,
+        *,
+        build_id: int,
+        tag_id: int,
+        value: TagValue,
+        actor_discord_id: int,
+    ) -> bool:
+        assert (build_id, tag_id, value) == (10, 1, Decimal("0.4"))
+        return actor_discord_id == 42
 
 
 @pytest.mark.asyncio
@@ -96,3 +112,20 @@ async def test_invalid_public_query_name_is_rejected_before_persistence() -> Non
             query_name="not-valid!",
             created_by_discord_id=42,
         )
+
+
+@pytest.mark.asyncio
+async def test_submitter_can_attach_approved_typed_showcase_tag() -> None:
+    repository = FakeRepository()
+    service = TagService(repository)
+    proposed = await service.propose_showcase(
+        "Closing showcase",
+        value_type=TagValueType.NUMERIC,
+        query_name="closing_showcase",
+        created_by_discord_id=42,
+    )
+    await service.approve(proposed.id)
+
+    assigned = await service.assign_showcase(10, proposed.id, "0.4", actor_discord_id=42)
+
+    assert assigned.id == proposed.id
