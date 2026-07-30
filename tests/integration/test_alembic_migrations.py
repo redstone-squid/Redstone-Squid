@@ -52,7 +52,7 @@ def test_migrations_create_schema_without_drift(
 ) -> None:
     """A clean PostgreSQL database reaches head with all managed entities in sync."""
     monkeypatch.setenv("DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini")
+    config = Config("alembic.ini", toml_file="pyproject.toml")
 
     command.upgrade(config, "head")
     command.check(config)
@@ -98,7 +98,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
 ) -> None:
     """Changed functions and missing triggers are surfaced by Alembic autogenerate."""
     monkeypatch.setenv("DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini")
+    config = Config("alembic.ini", toml_file="pyproject.toml")
     command.upgrade(config, "head")
 
     engine = create_engine(migration_database_url)

@@ -93,9 +93,25 @@
 # Exclude files from exporting
 #
 
-.gitattributes export-ignore
-.gitignore     export-ignore
-.gitkeep       export-ignore
+.gitattributes text export-ignore
+.gitignore     text export-ignore
+.gitkeep       text export-ignore
+
+# Repository metadata and extensionless text files
+.cursor/**     text
+.cursorignore  text
+.dockerignore  text
+.env.example   text
+.gitmodules    text
+Dockerfile     text
+LICENSE        text
+alembic.ini    text
+justfile       text
+scripts/pre-push text
+tests/fuzz/corpus/** text
+*.js           text
+*.lock         text
+*.mako         text
 
 # Basic .gitattributes for a python repo.
 
