@@ -33,6 +33,8 @@ from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.tags.application import TagService
+from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.users.application import UserService
 from squid.users.infrastructure.mojang import get_minecraft_username
 from squid.users.infrastructure.repository import UserRepository
@@ -78,6 +80,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
             CursorCodec(secrets.token_bytes(32)),
             search_fields,
         ),
+        tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
         refresh_search_index=partial(run_projection_batch, db.async_session),
         settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(

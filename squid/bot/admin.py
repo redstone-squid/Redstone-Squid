@@ -12,6 +12,7 @@ from rapidfuzz import process
 from squid.bot.utils.components import edit_layout, info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.builds.errors import AliasAlreadyAddedError
+from squid.tags.domain import TagValueType
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -24,6 +25,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self.bot = bot
         self.builds = bot.services.builds
         self.restrictions = bot.services.restrictions
+        self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @commands.hybrid_command(name="confirm")
@@ -99,6 +101,81 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             score_cutoff=30,
         )
         return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
+
+    @commands.hybrid_command(name="propose_tag")
+    @app_commands.describe(
+        name="Public display name.",
+        value_type="Whether assignments carry a number, text, boolean, or no value.",
+        query_name="Optional filter/sort field, for example closing_delay.",
+    )
+    async def propose_tag(
+        self,
+        ctx: Context[BotT],
+        name: str,
+        value_type: TagValueType = TagValueType.NONE,
+        query_name: str | None = None,
+    ) -> None:
+        """Propose a user showcase tag for staff review."""
+        definition = await self.tags.propose_showcase(
+            name,
+            value_type=value_type,
+            query_name=query_name,
+            created_by_discord_id=ctx.author.id,
+        )
+        await ctx.send(
+            view=info_layout("Tag proposed", f"Tag #{definition.id} is awaiting staff approval."),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
+    @commands.hybrid_command(name="pending_tags")
+    @check_is_staff()
+    @check_is_owner_server()
+    async def pending_tags(self, ctx: Context[BotT]) -> None:
+        """List user tags awaiting moderation."""
+        definitions = await self.tags.pending()
+        body = "\n".join(
+            f"**#{tag.id}** {tag.display_name} ({tag.value_type.value}; `{tag.query_name or 'no field'}`)"
+            for tag in definitions
+        )
+        await ctx.send(
+            view=info_layout("Pending tags", body or "No tags are awaiting review."),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
+    @commands.hybrid_command(name="approve_tag")
+    @check_is_staff()
+    @check_is_owner_server()
+    async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
+        """Publish a proposed showcase tag."""
+        tag = await self.tags.approve(tag_id)
+        await ctx.send(
+            view=info_layout("Tag approved", f"Published **{tag.display_name}**."),
+            allowed_mentions=no_mentions(),
+        )
+
+    @commands.hybrid_command(name="reject_tag")
+    @check_is_staff()
+    @check_is_owner_server()
+    async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
+        """Reject a proposed showcase tag."""
+        tag = await self.tags.reject(tag_id)
+        await ctx.send(
+            view=info_layout("Tag rejected", f"Rejected **{tag.display_name}**."),
+            allowed_mentions=no_mentions(),
+        )
+
+    @commands.hybrid_command(name="archive_tag")
+    @check_is_staff()
+    @check_is_owner_server()
+    async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
+        """Archive a published tag."""
+        tag = await self.tags.archive(tag_id)
+        await ctx.send(
+            view=info_layout("Tag archived", f"Archived **{tag.display_name}**."),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.hybrid_command(name="archive")
     @check_is_staff()
