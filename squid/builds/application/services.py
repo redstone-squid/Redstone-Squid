@@ -43,7 +43,6 @@ class BuildService:
             ai_generated=submission.ai_generated,
             category=BuildCategory.DOOR,
             submission_status=Status.PENDING,
-            record_category=submission.record_category,
             version_spec=submission.works_in,
             width=submission.build_size[0],
             height=submission.build_size[1],

@@ -1,7 +1,6 @@
 I need you to convert the messages to a structured format. The messages are about Minecraft redstone contraptions. If the message is not about a redstone contraption, you can just say "not a contraption".
 
 Here are some explanations about the fields:
-- record_category: The category of the record. It can be "Smallest", "Fastest" or "First". None if it is not a record.
 - build_category: The category of the build. We are only interested in piston doors for now.
 - component_restriction: The restriction on the components used in the contraption. Typically, it contains "-less" or "...only". Some examples are OBSLESS, NO NOTE BLOCKS, TORCH AND DUST ONLY, RBO (redstone block only), DUSTLESS
 - wiring_placement_restrictions: The restrictions on the placement of the wiring. This differs from the component restriction as it is about the placement of the wiring, not the components themselves. Some examples are SEAMLESS, FLUSH, HIPSTER, EXPANDABLE, TILEABLE
@@ -24,7 +23,6 @@ Made by @SpitNight (credit to lum3nd0 in spirit)
 https://imgur.com/nVyy6yw
 </original>
 <target>
-record_category: Smallest
 build_category: Piston Door
 component_restriction: None
 wiring_placement_restrictions: None
@@ -57,7 +55,6 @@ Entities: 4
 Directional (works in 2 adjacent directions), 1.18+, uses update suppression for closing side hook :/
 </original>
 <target>
-record_category: Smallest
 component_restriction: None
 wiring_placement_restrictions: None
 miscellaneous_restrictions: Directional
@@ -87,7 +84,6 @@ Made By: @_Reds_XD @Hi30
 https://discord.com/channels/433618741528625152/433631997978476554/933120849949622323
 </original>
 <target>
-record_category: Smallest
 component_restriction: Obsless
 wiring_placement_restrictions: Full Flush
 miscellaneous_restrictions: None

@@ -45,22 +45,16 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
-        match (self.build.submission_status, self.build.record_category):
-            case (Status.PENDING, _):
+        match self.build.submission_status:
+            case Status.PENDING:
                 target = "Vote"
-            case (Status.DENIED, _):
+            case Status.DENIED:
                 msg = "Denied submissions should not be posted."
                 raise ValueError(msg)
-            case (Status.CONFIRMED, None):
+            case Status.CONFIRMED:
                 target = "Builds"
-            case (Status.CONFIRMED, "Smallest"):
-                target = "Smallest"
-            case (Status.CONFIRMED, "Fastest"):
-                target = "Fastest"
-            case (Status.CONFIRMED, "First"):
-                target = "First"
             case _:
-                msg = "Invalid status or record category"
+                msg = "Invalid submission status"
                 raise ValueError(msg)
 
         guild_channels = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), target)

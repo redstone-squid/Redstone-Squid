@@ -12,7 +12,7 @@ from discord import Interaction, TextStyle
 from discord.ui import Item
 
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Build
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -22,25 +22,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class RecordCategorySelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=category) for category in RECORD_CATEGORIES]
-        super().__init__(
-            placeholder="Choose the record category",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
-        self.build.record_category = data["values"][0]  # type: ignore
-        await interaction.response.defer()  # type: ignore
 
 
 class DoorTypeSelect(discord.ui.Select):

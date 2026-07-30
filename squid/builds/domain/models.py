@@ -304,9 +304,6 @@ class Build:
             title += "Denied: "
         if self.ai_generated:
             title += "\N{ROBOT FACE}"
-        if self.record_category:
-            title += f"{self.record_category} "
-
         # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
         for restriction in self.extra_info.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
             if re.match(r"\d+\.\d+\s*s", restriction) or re.match(r"\d+\s*[Bb]locks", restriction):

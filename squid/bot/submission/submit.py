@@ -54,7 +54,6 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
             return DoorSubmissionInput(
                 submitter_id=submitter_id,
                 door_size=self.door_size,
-                record_category=self.record_category,
                 pattern=tuple(self.pattern),
                 door_type=self.door_type,
                 build_size=self.build_size,
@@ -77,7 +76,6 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         # fmt: off
         # Intentionally moved closer to the submit command
         door_size: tuple[int | None, int | None, int | None] = flag(converter=DimensionsConverter, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
-        record_category: Literal['Smallest', 'Fastest', 'First'] | None = flag(default=None, description='Is this build a record?')
         pattern: list[str] = flag(default=lambda ctx: ['Regular'], converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] = flag(default=lambda ctx: (None, None, None), converter=DimensionsConverter, description='The dimension of the build. In width x height (x depth), spaces optional.')

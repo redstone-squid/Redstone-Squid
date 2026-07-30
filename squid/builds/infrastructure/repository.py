@@ -106,7 +106,7 @@ class BuildRepository:
             if build.category == BuildCategory.DOOR:
                 sql_build = Door(
                     submission_status=build.submission_status or Status.PENDING,
-                    record_category=build.record_category,
+                    record_category=None,
                     width=build.width,
                     height=build.height,
                     depth=build.depth,
@@ -168,7 +168,6 @@ class BuildRepository:
             )
             sql_build = (await session.execute(statement)).scalar_one()
             sql_build.submission_status = build.submission_status
-            sql_build.record_category = build.record_category
             sql_build.width = build.width
             sql_build.height = build.height
             sql_build.depth = build.depth

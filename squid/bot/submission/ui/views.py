@@ -18,7 +18,6 @@ from squid.bot.submission.ui.components import (
     DoorTypeSelect,
     DynamicBuildEditButton,
     EphemeralBuildEditButton,
-    RecordCategorySelect,
     get_text_input,
 )
 from squid.bot.utils.components import (
@@ -142,7 +141,6 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         controls = self.actions
         self.clear_items()
         self.add_item(discord.ui.TextDisplay("Use the select menus, then submit or cancel."))
-        self.add_item(discord.ui.ActionRow(RecordCategorySelect(self.build)))
         self.add_item(discord.ui.ActionRow(DoorTypeSelect(self.build)))
         self.add_item(discord.ui.ActionRow(DirectonalityLocationalitySelect(self.build)))
         self.add_item(controls)

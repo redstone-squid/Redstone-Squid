@@ -10,7 +10,6 @@ from typing import Protocol, cast
 from squid.builds.domain import (
     Build,
     DoorOrientationLiteral,
-    RecordCategoryLiteral,
     RestrictionTypeLiteral,
     UnknownRestrictions,
     parse_time_string,
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 _REQUIRED_FIELDS = frozenset(
     {
-        "record_category",
         "component_restriction",
         "wiring_placement_restrictions",
         "miscellaneous_restrictions",
@@ -118,7 +116,6 @@ class BuildInferenceService:
             original_message=source.content,
             ai_generated=True,
         )
-        build.record_category = cast(RecordCategoryLiteral | None, variables["record_category"])
         await self._apply_taxonomy(build, variables)
         await self._apply_fields(build, variables)
         return build
