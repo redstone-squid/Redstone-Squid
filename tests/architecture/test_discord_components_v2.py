@@ -35,7 +35,11 @@ class DiscordUiVisitor(ast.NodeVisitor):
                 keyword.arg for keyword in node.keywords if keyword.arg is not None and keyword.arg in LEGACY_KEYWORDS
             }
             is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["archive_message"]
-            if legacy and not is_archive_relay:
+            is_conversion_boundary = self.path.name == "components.py" and self.function_names[-1:] in [
+                ["edit_layout"],
+                ["edit_interaction_layout"],
+            ]
+            if legacy and not is_archive_relay and not is_conversion_boundary:
                 self.violations.append(f"{self.path}:{node.lineno}: legacy message fields {sorted(legacy)}")
         self.generic_visit(node)
 
