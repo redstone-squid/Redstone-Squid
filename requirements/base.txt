@@ -225,7 +225,9 @@ audioop-lts==0.2.2 ; python_full_version >= '3.13' \
 basedpyright==1.39.9 \
     --hash=sha256:32cbea5fc8273e89df3db20daea56cb7286e419ccdfdc479c64759d2dc071901 \
     --hash=sha256:6b0837b9eba972c71895167ab9b127e6afdbc17abc92312e3f8d15ca82a5611c
-beartype @ git+https://github.com/beartype/beartype/@a9f360384ac84e0c119dc9093b3ce0ae0e86fc29
+beartype==0.22.9 \
+    --hash=sha256:8f82b54aa723a2848a56008d18875f91c1db02c32ef6a62319a002e3e25a975f \
+    --hash=sha256:d16c9bbc61ea14637596c5f6fbff2ee99cbe3573e46a716401734ef50c3060c2
     # via redstone-squid
 beautifulsoup4==4.15.0 \
     --hash=sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7 \
