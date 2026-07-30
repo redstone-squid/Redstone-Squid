@@ -54,7 +54,7 @@ def test_formats_record_class_before_category() -> None:
 
     record = formatter.format_record(RecordClass.SMALLEST, category)
 
-    assert record.title == "smallest 2x2 regular door"
+    assert record.title == "SMALLEST 2x2 regular door"
     assert record.subtitle is None
 
 

@@ -89,7 +89,7 @@ class RulesTitleFormatter:
         )
 
     def format_record(self, record_class: RecordClass, category: CategoryText) -> CategoryText:
-        record_name = record_class.value.replace("_", " ")
+        record_name = record_class.value.replace("_", " ").upper()
         return CategoryText(title=f"{record_name} {category.title}", subtitle=category.subtitle)
 
 
