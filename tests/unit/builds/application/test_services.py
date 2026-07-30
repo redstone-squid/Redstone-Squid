@@ -28,9 +28,6 @@ class FakeBuildRepository:
             return self.build
         return None
 
-    async def update_smallest_door_records_without_title(self) -> None:
-        return None
-
 
 class FakeRestrictionRepository:
     async def fetch_all_restrictions(self) -> list[RestrictionDefinition]:

@@ -8,13 +8,14 @@ from typing import TYPE_CHECKING, Literal, final, override
 import discord
 
 from squid.bot.message_adapter import to_tracked_message
+from squid.bot.utils.components import StaticLayout, edit_layout, no_mentions
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.message_tracking import track_vote_messages
 from squid.builds.domain import Build, Status
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChange, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 @final
@@ -25,7 +26,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -54,7 +55,7 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         build: Build,
@@ -105,7 +106,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
+    async def from_id(cls, bot: "squid.bot.app.RedstoneSquid", vote_session_id: int) -> "BuildVoteSession | None":
         snapshot = await bot.services.votes.get_session_by_id(vote_session_id)
         if snapshot is None or snapshot.kind != cls.kind:
             return None
@@ -113,7 +114,7 @@ class BuildVoteSession(AbstractVoteSession):
 
     @classmethod
     async def _from_snapshot(
-        cls, bot: "squid.bot.RedstoneSquid", snapshot: VoteSessionSnapshot
+        cls, bot: "squid.bot.app.RedstoneSquid", snapshot: VoteSessionSnapshot
     ) -> "BuildVoteSession | None":
         """Restore a Discord view from an application snapshot."""
         if snapshot.target.build_id is None:
@@ -143,7 +144,8 @@ class BuildVoteSession(AbstractVoteSession):
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         message = await channel.send(
-            content=self.build.original_link, embed=await self.bot.for_build(self.build).generate_embed()
+            view=await self.bot.for_build(self.build).render_layout(),
+            allowed_mentions=no_mentions(),
         )
         await self.bot.services.messages.track(
             to_tracked_message(message),
@@ -156,17 +158,23 @@ class BuildVoteSession(AbstractVoteSession):
 
     @override
     async def update_messages(self):
-        embed = await self.bot.for_build(self.build).generate_embed()
-        embed.add_field(name="", value="", inline=False)  # Add a blank field to separate the vote count
-        embed.add_field(name="Accept", value=f"{self.upvotes}/{self.pass_threshold}", inline=True)
-        embed.add_field(name="Deny", value=f"{self.downvotes}/{-self.fail_threshold}", inline=True)
+        container = await self.bot.for_build(self.build).render_container()
+        container.add_item(discord.ui.Separator())
+        container.add_item(
+            discord.ui.TextDisplay(
+                f"### Vote progress\n"
+                f"**Accept:** {self.upvotes}/{self.pass_threshold}\n"
+                f"**Deny:** {self.downvotes}/{-self.fail_threshold}"
+            )
+        )
+        layout = StaticLayout(container)
         await asyncio.gather(
-            *[message.edit(content=self.build.original_link, embed=embed) for message in await self.fetch_messages()]
+            *(edit_layout(message, layout, allowed_mentions=no_mentions()) for message in await self.fetch_messages())
         )
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: type["BuildVoteSession"], bot: "squid.bot.RedstoneSquid"
+        cls: type["BuildVoteSession"], bot: "squid.bot.app.RedstoneSquid"
     ) -> "list[BuildVoteSession]":
         """Get all open vote sessions from the database."""
         sessions = await asyncio.gather(

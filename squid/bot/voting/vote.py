@@ -9,6 +9,7 @@ import discord
 from discord.ext.commands import Cog, Context, hybrid_command
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.build_session import BuildVoteSession
@@ -16,14 +17,14 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.voting.domain import VoteActor
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
 
 
-class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
@@ -92,7 +93,10 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             emoji_name,
         )
         if result.rejection == "not_eligible":
-            await channel.send("You do not have a trusted role.")
+            await channel.send(
+                view=text_layout("You do not have a trusted role."),
+                allowed_mentions=no_mentions(),
+            )
             return
         if not result.accepted or result.session is None:
             return
@@ -116,7 +120,10 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         """Starts a vote to delete a specified message by providing its URL."""
         # Check if guild_id matches the current guild
         if ctx.guild != target_message.guild:
-            await ctx.send("The message is not from this guild.")
+            await ctx.send(
+                view=text_layout("The message is not from this guild."),
+                allowed_mentions=no_mentions(),
+            )
             return
 
         async with self.bot.get_running_message(ctx) as message:
@@ -125,6 +132,6 @@ class VoteCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             )
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VoteCog(bot))

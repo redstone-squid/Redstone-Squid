@@ -1,0 +1,76 @@
+name: Automatic formatting
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+  pull_request:
+    branches: ["*"]
+
+env:
+  UV_VERSION: "0.11.32"
+
+concurrency:
+  group: autofix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.head_ref || github.ref_name }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install the project
+        run: uv sync --locked --dev
+
+      - name: Fix linting and formatting
+        run: |
+          uv run --locked ruff check --extend-select I --fix-only
+          uv run --locked ruff format --target-version py312
+
+      - name: Fix repository formatting
+        run: |
+          uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files ||
+            uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files
+
+      - name: Commit automatic fixes
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --update
+          git commit -m "ci: apply automatic formatting"
+          gh auth setup-git
+          git push origin "HEAD:${BRANCH}"
+
+      - name: Minimize uv cache
+        if: always()
+        run: uv cache prune --ci

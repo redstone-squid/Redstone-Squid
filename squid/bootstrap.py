@@ -1,6 +1,7 @@
 """Composition root for framework-neutral application services."""
 
 import secrets
+from functools import partial
 from importlib import resources
 
 from squid.builds.application import (
@@ -23,9 +24,17 @@ from squid.config import RuntimeConfig
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.persistence.engine import DatabaseEngine
+from squid.records.application import RecordComputationService, RecordService
+from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.search.application import CursorCodec, SearchQueryParser, SearchService
+from squid.search.infrastructure import PostgresSearchBackend
+from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
+from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.tags.application import TagService
+from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.users.application import UserService
 from squid.users.infrastructure.mojang import get_minecraft_username
 from squid.users.infrastructure.repository import UserRepository
@@ -45,6 +54,9 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     )
     build_repository = BuildRepository(db.async_session)
     build_locks = BuildLockRepository(db.async_session)
+    record_repository = PostgresRecordRepository(db.async_session)
+    record_computation = RecordComputationService(record_repository, record_repository)
+    search_fields = PostgresFieldRegistryProvider(db.async_session)
     return ApplicationServices(
         builds=BuildService(build_repository, build_locks, restriction_repository, version_service, embedding_service),
         build_inference=BuildInferenceService(
@@ -60,6 +72,16 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
             embedding_service,
         ),
         messages=MessageService(MessageRepository(db.async_session)),
+        records=RecordService(record_repository, record_repository, record_computation),
+        record_computation=record_computation,
+        search=SearchService(
+            PostgresSearchBackend(db.async_session, fields=search_fields),
+            SearchQueryParser(),
+            CursorCodec(secrets.token_bytes(32)),
+            search_fields,
+        ),
+        tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
+        refresh_search_index=partial(run_projection_batch, db.async_session),
         settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(
             UserRepository(db.async_session, config.verification_code_pepper),

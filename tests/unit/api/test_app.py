@@ -11,7 +11,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from squid.api import create_api_app
+from squid.api.app import create_api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.core.errors import ErrorCode, InternalError
 from squid.runtime import ApplicationRuntime, ApplicationServices

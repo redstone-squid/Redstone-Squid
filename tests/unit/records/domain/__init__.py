@@ -1,0 +1,1 @@
+"""Record domain unit tests."""

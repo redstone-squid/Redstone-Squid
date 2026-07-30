@@ -1,7 +1,5 @@
 """Everything related to querying the database for information."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -10,73 +8,75 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
 
-from squid.bot import utils
+from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
-from squid.bot.utils import RunningMessage
+from squid.bot.utils.components import (
+    edit_layout,
+    error_layout,
+    info_layout,
+    no_mentions,
+    text_layout,
+)
+from squid.bot.utils.embeds import RunningMessage
+from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 logger = logging.getLogger(__name__)
 
 
-class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.queries = bot.services.build_queries
+        self.search = bot.services.search
 
     @commands.hybrid_command("search_using_sucky_embeddings")
     @app_commands.describe(query="Whatever you want to search for.")
     async def search_builds(self, ctx: Context[BotT], query: str):
-        """Searches for a build with natural language."""
+        """Searches builds semantically, with lexical fallback."""
         await ctx.defer()
-        build = await self.queries.semantic(query)
-        if build is None:
-            await ctx.send(embed=utils.error_embed("No results found", "No builds match that query."))
-            return
-        await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+        request = SearchRequest(query, scope=SearchScope.BUILDS, mode=SearchMode.SEMANTIC)
+        page = await self.search.search(request)
+        await ctx.send(
+            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.hybrid_command("search")
-    @app_commands.describe(query="The record's title.")
-    async def search_records(self, ctx: Context[BotT], query: str):
-        """Searches for a **record** by title."""
-        async with RunningMessage(ctx) as sent_message:
-            matches = await self.queries.search_records(query)
-            if not matches:
-                return await sent_message.edit(
-                    embed=utils.error_embed("No results found", "No records match that query.")
-                )
-
-            # Use the running message to display the top result
-            top_door = matches[0][0]
-            build = await self.queries.get(top_door.id)
-            assert build is not None, "A record must have a build."
-            embed = await self.bot.for_build(build).generate_embed()
-            content = f"Top match: {top_door.title} (score: {matches[0][1]:.1f})"
-            if build.original_link:
-                content += f"\n{build.original_link}"
-            content += (
-                "\n/search is in early testing, results are likely inaccurate. "
-                "Please use discord's built-in search function if you cannot find "
-                "what you want in the first try"
-            )
-            await sent_message.edit(
-                content=content,
-                embed=embed,
-            )
-            other_results = [(door, score, idx) for door, score, idx in matches[1:] if score >= 50][:10]
-            if other_results:
-                await ctx.send(
-                    f"Found {len(other_results)} other records matching your query.\n"
-                    + "\n".join(
-                        f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
-                    )
-                )
-                return None
-            await ctx.send("No other results met the score threshold.")
-            return None
+    @app_commands.describe(
+        query="Lucene-style text and filters.",
+        scope="What to search.",
+        mode="Lexical or semantic ranking.",
+        sort="Numeric or text field to sort by, such as width or a data-tag query name.",
+        direction="Sort low-to-high or high-to-low.",
+    )
+    async def search_records(
+        self,
+        ctx: Context[BotT],
+        scope: SearchScope = SearchScope.RECORDS,
+        mode: SearchMode = SearchMode.LEXICAL,
+        sort: str | None = None,
+        direction: SortDirection = SortDirection.ASCENDING,
+        *,
+        query: str,
+    ) -> None:
+        """Search records, builds, and metadata using text and field filters."""
+        await ctx.defer()
+        request = SearchRequest(
+            query,
+            scope=scope,
+            mode=mode,
+            sort=SearchSort(sort, direction) if sort is not None else None,
+        )
+        page = await self.search.search(request)
+        await ctx.send(
+            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.command("search_restrictions")
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
@@ -86,15 +86,21 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             description = "\n".join(
                 f"{item.restriction_id}: {item.name}{' (alias)' if item.is_alias else ''}" for item in matches
             )
-            await sent_message.edit(embed=utils.info_embed("Restrictions", description))
+            await edit_layout(
+                sent_message,
+                info_layout("Restrictions", description),
+                allowed_mentions=no_mentions(),
+            )
 
     @commands.hybrid_command()
     async def list_patterns(self, ctx: Context[BotT]):
         """Lists all the available patterns."""
         async with RunningMessage(ctx) as sent_message:
             names = await self.queries.patterns()
-            await sent_message.edit(
-                content="Here are the available patterns:", embed=utils.info_embed("Patterns", ", ".join(names))
+            await edit_layout(
+                sent_message,
+                info_layout("Patterns", ", ".join(names)),
+                allowed_mentions=no_mentions(),
             )
 
     @commands.command("search_patterns")
@@ -103,14 +109,18 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         async with RunningMessage(ctx) as sent_message:
             matches = await self.queries.search_patterns(query)
             description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
-            await sent_message.edit(embed=utils.info_embed("Patterns", description or "No patterns match that query."))
+            await edit_layout(
+                sent_message,
+                info_layout("Patterns", description or "No patterns match that query."),
+                allowed_mentions=no_mentions(),
+            )
 
     @hybrid_group(name="build")
     async def build_hybrid_group(self, ctx: Context[BotT]):
         """Submit, view, confirm and deny submissions."""
         await ctx.send_help("build")
 
-    @build_hybrid_group.command(name="pending")
+    @build_hybrid_group.command(name="pending")  # pyright: ignore[reportFunctionMemberAccess]
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
@@ -128,10 +138,13 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                     )
                 desc = "\n\n".join(desc)
 
-            em = utils.info_embed(title="Open Records", description=desc)
-            await sent_message.edit(embed=em)
+            await edit_layout(
+                sent_message,
+                info_layout(title="Open Records", description=desc),
+                allowed_mentions=no_mentions(),
+            )
 
-    @build_hybrid_group.command(name="view")
+    @build_hybrid_group.command(name="view")  # pyright: ignore[reportFunctionMemberAccess]
     @app_commands.describe(build_id="The ID of the build you want to see.")
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
@@ -140,8 +153,11 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(
+                    view=error_layout("Error", "No build with that ID."),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
                 return None
 
             view = BuildInfoView[BotT](build)
@@ -151,13 +167,20 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             build = await self.queries.get(build_id)
 
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                return await edit_layout(
+                    sent_message,
+                    error_layout("Error", "No build with that ID."),
+                    allowed_mentions=no_mentions(),
+                )
 
-            await sent_message.edit(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+            await edit_layout(
+                sent_message,
+                await self.bot.for_build(build).render_layout(),
+                allowed_mentions=no_mentions(),
+            )
         return None
 
-    @build_hybrid_group.command(name="debug")
+    @build_hybrid_group.command(name="debug")  # pyright: ignore[reportFunctionMemberAccess]
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission's debug info."""
@@ -165,10 +188,17 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
             build = await self.queries.get(build_id)
 
             if build is None:
-                error_embed = utils.error_embed("Error", "No build with that ID.")
-                return await sent_message.edit(embed=error_embed)
+                return await edit_layout(
+                    sent_message,
+                    error_layout("Error", "No build with that ID."),
+                    allowed_mentions=no_mentions(),
+                )
 
-            await sent_message.edit(content=escape_markdown(str(build.__dict__)), embed=None)
+            await edit_layout(
+                sent_message,
+                text_layout(escape_markdown(str(build.__dict__))),
+                allowed_mentions=no_mentions(),
+            )
         return None
 
     @Cog.listener("on_command_error")
@@ -209,7 +239,7 @@ class SearchCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         await ctx.invoke(self.view_build, build_id=build_id)
 
 
-async def setup(bot: squid.bot.RedstoneSquid):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

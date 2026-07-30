@@ -8,25 +8,26 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
 
-from squid.bot import utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
-from squid.bot.utils import (
-    MISSING,
-    MissingType,
-    RunningMessage,
-    check_is_owner_server,
-    check_is_trusted_or_staff,
+from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
+from squid.bot.utils.converters import (
+    DimensionsConverter,
+    GameTickConverter,
+    ListConverter,
+    NoneStrConverter,
     fix_converter_annotations,
 )
-from squid.bot.utils.converters import DimensionsConverter, GameTickConverter, ListConverter, NoneStrConverter
+from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
+from squid.bot.utils.sentinel import MISSING, MissingType
 from squid.builds.application import BuildEditPatch
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
+class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """A cog with commands for editing builds."""
 
     def __init__(self, bot: BotT):
@@ -60,6 +61,7 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 "door_type": self.pattern,
                 "door_orientation_type": self.door_type,
                 "wiring_placement_restrictions": self.wiring_placement_restrictions,
+                "animated_restrictions": self.animated_restrictions,
                 "component_restrictions": self.component_restrictions,
                 "locationality": self.locationality,
                 "directionality": self.directionality,
@@ -85,6 +87,7 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         build_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
         works_in: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        animated_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Symmetrical, Full Sync". See the regulations (/docs) for the complete list.')
         component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         extra_user_info: str | None | MissingType = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
         normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
@@ -110,32 +113,54 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
                 build = edit.build
                 if ctx.interaction:
                     interaction = cast(discord.Interaction[discord.Client], ctx.interaction)
-                    await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-                    view = ConfirmationView()
+                    await edit_layout(
+                        sent_message,
+                        info_layout("Waiting", "User confirming changes..."),
+                        allowed_mentions=no_mentions(),
+                    )
+                    view = ConfirmationView("Here is a preview of the changes. Use the buttons to confirm or cancel.")
+                    controls = view.actions
+                    view.clear_items()
+                    view.add_item(discord.ui.TextDisplay("Review the proposed build changes."))
+                    view.add_item(await self.bot.for_build(build).render_container())
+                    view.add_item(controls)
                     preview = await interaction.followup.send(
-                        "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                        embed=await self.bot.for_build(build).generate_embed(),
                         view=view,
                         ephemeral=True,
                         wait=True,
+                        allowed_mentions=no_mentions(),
                     )
                     await view.wait()
                     await preview.delete()
                     if view.value is None:
-                        await sent_message.edit(
-                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                        await edit_layout(
+                            sent_message,
+                            info_layout("Timed out", "Build edit canceled due to inactivity."),
+                            allowed_mentions=no_mentions(),
                         )
                         return
                     if view.value is False:
-                        await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+                        await edit_layout(
+                            sent_message,
+                            info_layout("Cancelled", "Build edit canceled by user"),
+                            allowed_mentions=no_mentions(),
+                        )
                         return
 
-                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+                await edit_layout(
+                    sent_message,
+                    info_layout("Editing", "Editing build..."),
+                    allowed_mentions=no_mentions(),
+                )
                 await edit.commit()
 
             await asyncio.gather(
                 self.bot.for_build(build).update_messages(),
-                sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully")),
+                edit_layout(
+                    sent_message,
+                    info_layout("Success", "Build edited successfully"),
+                    allowed_mentions=no_mentions(),
+                ),
             )
             return
         return
@@ -144,11 +169,19 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
         if message.author.id != self.bot.user.id:  # type: ignore
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+            return await interaction.followup.send(
+                view=text_layout("This does not look like a build."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
 
         message_record = await self.messages.get(message.id)
         if message_record is None or message_record.build_id is None:
-            return await interaction.followup.send("This does not look like a build.", ephemeral=True)
+            return await interaction.followup.send(
+                view=text_layout("This does not look like a build."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
 
         build = await self.builds.get(message_record.build_id)
         assert build is not None
@@ -156,7 +189,7 @@ class BuildEditCog[BotT: "squid.bot.RedstoneSquid"](Cog):
         return None
 
 
-async def setup(bot: "squid.bot.RedstoneSquid") -> None:
+async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildEditCog(bot))

@@ -12,35 +12,16 @@ from discord import Interaction, TextStyle
 from discord.ui import Item
 
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import DOOR_ORIENTATION_NAMES, RECORD_CATEGORIES, Build
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
     import discord.types.interactions
 
-    import squid.bot
+    import squid.bot.app
 
 
 logger = logging.getLogger(__name__)
-
-
-class RecordCategorySelect(discord.ui.Select):
-    def __init__(self, build: Build):
-        self.build = build
-
-        options = [discord.SelectOption(label=category) for category in RECORD_CATEGORIES]
-        super().__init__(
-            placeholder="Choose the record category",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    @override
-    async def callback(self, interaction: discord.Interaction):
-        data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
-        self.build.record_category = data["values"][0]  # type: ignore
-        await interaction.response.defer()  # type: ignore
 
 
 class DoorTypeSelect(discord.ui.Select):
@@ -147,8 +128,8 @@ class BuildField[T](discord.ui.TextInput):
         self.attr_type = attr_type
         self.parser = parser
         self.formatter = formatter
+        self.display_label = label or attribute.replace("_", " ").title()
         super().__init__(
-            label=label or attribute.replace("_", " ").title(),
             style=style,
             custom_id=os.urandom(16).hex() if custom_id is None else custom_id,
             placeholder=placeholder,
@@ -176,7 +157,11 @@ class BuildField[T](discord.ui.TextInput):
 
     @property
     def summary(self) -> str:
-        return f"{self.label}: {self.value}"
+        return f"{self.display_label}: {self.value}"
+
+    def to_label(self) -> discord.ui.Label:
+        """Wrap this input in the accessible V2 modal layout component."""
+        return discord.ui.Label(text=self.display_label, component=self)
 
 
 def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs: Any) -> BuildField[T]:
@@ -195,9 +180,10 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-class DynamicBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](
-    discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"
-):
+class DynamicBuildEditButton[
+    BotT: "squid.bot.app.RedstoneSquid",
+    V: discord.ui.LayoutView,
+](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(
@@ -225,7 +211,10 @@ class DynamicBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View
         await BuildEditView(self.build, interaction.client.services.builds).send(interaction)
 
 
-class EphemeralBuildEditButton[BotT: "squid.bot.RedstoneSquid", V: discord.ui.View](discord.ui.Button[V]):
+class EphemeralBuildEditButton[
+    BotT: "squid.bot.app.RedstoneSquid",
+    V: discord.ui.LayoutView,
+](discord.ui.Button[V]):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)

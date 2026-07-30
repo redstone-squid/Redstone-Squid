@@ -1,0 +1,32 @@
+import subprocess
+import sys
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    ("module", "unexpected_modules"),
+    [
+        ("squid.api.errors", ("squid.api.app", "squid.bootstrap")),
+        ("squid.bot.utils.permissions", ("squid.bot.app",)),
+        ("squid.bot.submission.ui.components", ("squid.bot.submission.ui.views",)),
+    ],
+)
+def test_narrow_transport_imports_do_not_load_application_graph(
+    module: str, unexpected_modules: tuple[str, ...]
+) -> None:
+    script = (
+        f"import {module}\n"
+        "import sys\n"
+        f"unexpected = {unexpected_modules!r}\n"
+        "assert all(name not in sys.modules for name in unexpected)\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr

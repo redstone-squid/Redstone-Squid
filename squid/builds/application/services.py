@@ -43,7 +43,6 @@ class BuildService:
             ai_generated=submission.ai_generated,
             category=BuildCategory.DOOR,
             submission_status=Status.PENDING,
-            record_category=submission.record_category,
             version_spec=submission.works_in,
             width=submission.build_size[0],
             height=submission.build_size[1],
@@ -70,6 +69,7 @@ class BuildService:
                 build.miscellaneous_restrictions.append(value)
         if submission.information_about_build is not None:
             build.extra_info["user"] = submission.information_about_build
+            build.description = submission.information_about_build
         await self._persist(build)
         return build
 
@@ -132,9 +132,6 @@ class BuildService:
         async with self._locks.locked(build_id):
             await self._repository.deny(build)
         return build
-
-    async def refresh_record_titles(self) -> None:
-        await self._repository.update_smallest_door_records_without_title()
 
     async def _get_required(self, build_id: int) -> Build:
         build = await self._repository.get_by_id(build_id)

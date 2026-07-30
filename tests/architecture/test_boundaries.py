@@ -53,12 +53,10 @@ def test_transports_do_not_import_persistence_adapters() -> None:
 
 
 def test_voting_adapter_does_not_construct_database_service_locator() -> None:
-    source = Path("squid/bot/voting/vote_session.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
     database_manager_calls = [
-        node
-        for node in ast.walk(tree)
+        (path, node.lineno)
+        for path in Path("squid/bot/voting").glob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DatabaseManager"
     ]
 

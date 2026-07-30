@@ -109,6 +109,7 @@ alembic.ini    text
 justfile       text
 scripts/pre-push text
 tests/fuzz/corpus/** text
+tests/supabase -text
 *.js           text
 *.lock         text
 *.mako         text

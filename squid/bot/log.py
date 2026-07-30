@@ -5,6 +5,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
 from squid.bot.errors import handle_context_error
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.core.time import utcnow
 
 
@@ -35,7 +36,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         if first_log:
             timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
         if dm_owner and self.owner:
-            await self.owner.send(timestamp_msg)
+            await self.owner.send(view=text_layout(timestamp_msg), allowed_mentions=no_mentions())
         print(timestamp_msg)
 
     # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready

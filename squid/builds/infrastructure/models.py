@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
     ARRAY,
@@ -36,6 +38,9 @@ from squid.builds.domain import (
 from squid.config import embedding_dimension_from_environment
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
+
+if TYPE_CHECKING:
+    from squid.tags.infrastructure.models import BuildTagAssignment
 
 
 class Restriction(Base):
@@ -127,6 +132,9 @@ class Build(Base, kw_only=True):
     height: Mapped[int | None] = mapped_column(Integer)
     depth: Mapped[int | None] = mapped_column(Integer)
     completion_time: Mapped[str | None] = mapped_column(Text)  # Given by user, not parsable as a datetime
+    completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
+    description: Mapped[str | None] = mapped_column(Text, default=None)
     category: Mapped[BuildCategory | None] = mapped_column(Text)
     submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     original_message_id: Mapped[int | None] = mapped_column(
@@ -171,6 +179,12 @@ class Build(Base, kw_only=True):
     )
 
     build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
+
+    tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
+        default_factory=list,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
 
@@ -274,6 +288,9 @@ class Extender(Build, kw_only=True):
         primary_key=True,
         init=False,
     )
+    orientation: Mapped[str | None] = mapped_column(Text, default=None)
+    extension_length: Mapped[int | None] = mapped_column(Integer, default=None)
+    extender_type: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class Utility(Build, kw_only=True):

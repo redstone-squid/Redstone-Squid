@@ -1,0 +1,25 @@
+"""Search request and discriminated result model tests."""
+
+import pytest
+
+from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage, SearchRequest
+
+
+def test_search_page_preserves_discriminated_hits() -> None:
+    page = SearchPage(
+        hits=(
+            RecordSearchHit("r1", "Fastest Door", None, 1, "Door", "fastest", "all-time"),
+            BuildSearchHit("b1", "Door", "confirmed"),
+            MetadataSearchHit("m1", "Seamless", "restriction"),
+        ),
+        next_cursor=None,
+        has_more=False,
+    )
+
+    assert [hit.resource_kind for hit in page.hits] == ["record", "build", "metadata"]
+
+
+@pytest.mark.parametrize("page_size", [0, 51])
+def test_search_request_bounds_page_size(page_size: int) -> None:
+    with pytest.raises(ValueError, match="between 1 and 50"):
+        SearchRequest("door", page_size=page_size)

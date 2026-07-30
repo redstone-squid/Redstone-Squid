@@ -1,38 +1,11 @@
-"""Discord embed utilities and messaging helpers."""
+"""Components V2 progress-message context."""
 
 from types import TracebackType
 
-import discord
 from discord import Message, Webhook
 from discord.abc import Messageable
 
-discord_red = 0xF04747
-discord_yellow = 0xFAA61A
-discord_green = 0x43B581
-
-
-def error_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_red, description=":x: " + description)
-
-
-def warning_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=":warning: " + title, colour=discord_yellow, description=description)
-
-
-def info_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_green, description=description)
-
-
-def help_embed(title: str, description: str | None):
-    if description is None:
-        description = ""
-    return discord.Embed(title=title, colour=discord_green, description=description)
+from squid.bot.utils.components import info_layout, no_mentions
 
 
 class RunningMessage:
@@ -53,7 +26,10 @@ class RunningMessage:
         self.sent_message: Message
 
     async def __aenter__(self) -> Message:
-        sent_message = await self.ctx.send(embed=info_embed(self.title, self.description))
+        sent_message = await self.ctx.send(
+            view=info_layout(self.title, self.description),
+            allowed_mentions=no_mentions(),
+        )
         if sent_message is None:
             msg = "Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)"
             raise ValueError(msg)

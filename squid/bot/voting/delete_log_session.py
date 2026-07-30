@@ -8,12 +8,22 @@ from typing import TYPE_CHECKING, final, override
 
 import discord
 
+from squid.bot.utils.components import (
+    DISCORD_GREEN,
+    DISCORD_RED,
+    DISCORD_YELLOW,
+    CardField,
+    StaticLayout,
+    card_layout,
+    edit_layout,
+    no_mentions,
+)
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.message_tracking import track_vote_messages
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 @final
@@ -24,7 +34,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -50,7 +60,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def create(
         cls,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         target_message: discord.Message,
@@ -91,7 +101,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     @override
-    async def from_id(cls, bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
+    async def from_id(cls, bot: "squid.bot.app.RedstoneSquid", vote_session_id: int) -> "DeleteLogVoteSession | None":
         snapshot = await bot.services.votes.get_session_by_id(vote_session_id)
         if snapshot is None or snapshot.kind != cls.kind:
             return None
@@ -99,7 +109,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
 
     @classmethod
     async def _from_snapshot(
-        cls, bot: "squid.bot.RedstoneSquid", snapshot: VoteSessionSnapshot
+        cls, bot: "squid.bot.app.RedstoneSquid", snapshot: VoteSessionSnapshot
     ) -> "DeleteLogVoteSession | None":
         """Restore a Discord view from an application snapshot."""
         target = snapshot.target
@@ -128,18 +138,15 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send the initial message to the channel."""
-        embed = discord.Embed(
+        layout = self._render_layout(
             title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or {self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
+            action=(
+                f"React with {self.primary_emoji(VoteChoice.APPROVE)} to approve or "
+                f"{self.primary_emoji(VoteChoice.DENY)} to deny."
             ),
+            accent_colour=DISCORD_YELLOW,
         )
-        return await channel.send(embed=embed)
+        return await channel.send(view=layout, allowed_mentions=no_mentions())
 
     @override
     async def update_messages(self) -> None:
@@ -149,33 +156,48 @@ class DeleteLogVoteSession(AbstractVoteSession):
                 title = "Vote to Delete Log"
                 action = (
                     f"React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or "
-                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n"
+                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote."
                 )
+                accent_colour = DISCORD_YELLOW
             case "approved":
                 title = "Vote to Delete Log: Passed"
                 action = ""
+                accent_colour = DISCORD_GREEN
             case "denied":
                 title = "Vote to Delete Log: Failed"
                 action = ""
+                accent_colour = DISCORD_RED
             case _:
                 title = "Vote to Delete Log: Closed"
                 action = ""
+                accent_colour = DISCORD_YELLOW
 
-        embed = discord.Embed(
-            title=title,
-            description=(
-                dedent(f"""
-                {action}**Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
+        layout = self._render_layout(title=title, action=action, accent_colour=accent_colour)
+        await asyncio.gather(
+            *(edit_layout(message, layout, allowed_mentions=no_mentions()) for message in await self.fetch_messages())
+        )
+
+    def _render_layout(self, *, title: str, action: str, accent_colour: int) -> StaticLayout:
+        description = dedent(f"""
+            {action}
+
+            **Log content**
+            {self.target_message.content}
+            """).strip()
+        return card_layout(
+            title,
+            description,
+            accent_colour=accent_colour,
+            fields=(
+                CardField("Upvotes", str(self.upvotes)),
+                CardField("Downvotes", str(self.downvotes)),
+                CardField("Net votes", str(self.net_votes)),
             ),
         )
-        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @classmethod
     async def get_open_vote_sessions(
-        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.RedstoneSquid"
+        cls: "type[DeleteLogVoteSession]", bot: "squid.bot.app.RedstoneSquid"
     ) -> "list[DeleteLogVoteSession]":
         """Get all open vote sessions from the database."""
         sessions = await asyncio.gather(

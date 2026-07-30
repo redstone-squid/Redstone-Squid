@@ -9,14 +9,15 @@ from discord import AllowedMentions
 from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.components import text_layout
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 logger = logging.getLogger(__name__)
 
 
-class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
+class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Listens for built-in welcome messages and occasionally mirrors them elsewhere."""
 
     general_channel_id: Final[int] = 433618741528625155
@@ -57,7 +58,7 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
             return
 
         await general_channel.send(
-            message.system_content.replace(decision.matched_name, member.mention),
+            view=text_layout(message.system_content.replace(decision.matched_name, member.mention)),
             allowed_mentions=AllowedMentions(users=False, roles=False, everyone=False, replied_user=False),
         )
 
@@ -67,6 +68,6 @@ class WelcomeRelay[BotT: "squid.bot.RedstoneSquid"](Cog):
         self.service.record_join(member.id, member.name)
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(WelcomeRelay(bot))

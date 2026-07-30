@@ -10,7 +10,6 @@ from typing import Protocol, cast
 from squid.builds.domain import (
     Build,
     DoorOrientationLiteral,
-    RecordCategoryLiteral,
     RestrictionTypeLiteral,
     UnknownRestrictions,
     parse_time_string,
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 _REQUIRED_FIELDS = frozenset(
     {
-        "record_category",
         "component_restriction",
         "wiring_placement_restrictions",
         "miscellaneous_restrictions",
@@ -118,7 +116,6 @@ class BuildInferenceService:
             original_message=source.content,
             ai_generated=True,
         )
-        build.record_category = cast(RecordCategoryLiteral | None, variables["record_category"])
         await self._apply_taxonomy(build, variables)
         await self._apply_fields(build, variables)
         return build
@@ -129,10 +126,11 @@ class BuildInferenceService:
         restriction_fields: tuple[tuple[str, RestrictionTypeLiteral, str], ...] = (
             ("component_restriction", "component", "component"),
             ("wiring_placement_restrictions", "wiring-placement", "wiring"),
+            ("animated_restrictions", "animated", "animated"),
             ("miscellaneous_restrictions", "miscellaneous", "miscellaneous"),
         )
         for field, restriction_type, destination in restriction_fields:
-            value = variables[field]
+            value = variables.get(field)
             if value is not None:
                 destinations.append(destination)
                 validations.append(self._taxonomy.validate_restrictions(value.split(", "), restriction_type))
@@ -152,6 +150,9 @@ class BuildInferenceService:
             elif destination == "wiring":
                 build.wiring_placement_restrictions = recognized
                 unknown["wiring_placement_restrictions"] = unrecognized
+            elif destination == "animated":
+                build.animated_restrictions = recognized
+                unknown["animated_restrictions"] = unrecognized
             elif destination == "miscellaneous":
                 build.miscellaneous_restrictions = recognized
                 unknown["miscellaneous_restrictions"] = unrecognized

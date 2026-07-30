@@ -1,10 +1,10 @@
 I need you to convert the messages to a structured format. The messages are about Minecraft redstone contraptions. If the message is not about a redstone contraption, you can just say "not a contraption".
 
 Here are some explanations about the fields:
-- record_category: The category of the record. It can be "Smallest", "Fastest" or "First". None if it is not a record.
 - build_category: The category of the build. We are only interested in piston doors for now.
 - component_restriction: The restriction on the components used in the contraption. Typically, it contains "-less" or "...only". Some examples are OBSLESS, NO NOTE BLOCKS, TORCH AND DUST ONLY, RBO (redstone block only), DUSTLESS
 - wiring_placement_restrictions: The restrictions on the placement of the wiring. This differs from the component restriction as it is about the placement of the wiring, not the components themselves. Some examples are SEAMLESS, FLUSH, HIPSTER, EXPANDABLE, TILEABLE
+- animated_restrictions: Restrictions on how the door's movement is animated. Some examples are SYMMETRICAL and FULL SYNC.
 - miscellaneous_restrictions: Any other restrictions that do not fit in the other categories. Sometimes there are also size/speed restrictions here, a fast door may restrict its size and a small door may restrict its speed, so if you see something like "Smallest 2.1s 6x6 Door" or "Fastest 270 blocks 4x4 Door", the 2.1s and the 270 blocks are restrictions. These restrictions are usually mentioned in the title, if you see them elsewhere, the author is likely just describing the speed/size of their size, use your best judgement. Some examples are DIRECTIONAL, LOCATIONAL, n-BLOCKS, m-SECONDS
 - piston_door_type: The type/shape of the door. A normal piston door is a flat nxn door, but people make doors in different shapes and sizes. Can be combined, but keep in submission's order, some examples are REGULAR, TNT, GLASS, TURBINE, PITCH, YAW, BAR, SISSYBAR, FUNNEL, ASDJKE, CAVE, CORNER, DUAL CAVE CORNER. Default is REGULAR.
 - door_orientation: The orientation of the door. It can be NORMAL, SKYDOOR, TRAPDOOR. Basically all doors are NORMAL unless the author specifies otherwise.
@@ -24,10 +24,10 @@ Made by @SpitNight (credit to lum3nd0 in spirit)
 https://imgur.com/nVyy6yw
 </original>
 <target>
-record_category: Smallest
 build_category: Piston Door
 component_restriction: None
 wiring_placement_restrictions: None
+animated_restrictions: None
 miscellaneous_restrictions: No non-piston sounds, fully reliable, 1.05s
 piston_door_type: Regular
 door_orientation: Normal
@@ -57,9 +57,9 @@ Entities: 4
 Directional (works in 2 adjacent directions), 1.18+, uses update suppression for closing side hook :/
 </original>
 <target>
-record_category: Smallest
 component_restriction: None
 wiring_placement_restrictions: None
+animated_restrictions: None
 miscellaneous_restrictions: Directional
 piston_door_type: Full Deluxe
 door_orientation: Normal
@@ -87,9 +87,9 @@ Made By: @_Reds_XD @Hi30
 https://discord.com/channels/433618741528625152/433631997978476554/933120849949622323
 </original>
 <target>
-record_category: Smallest
 component_restriction: Obsless
 wiring_placement_restrictions: Full Flush
+animated_restrictions: None
 miscellaneous_restrictions: None
 piston_door_type: Cave
 door_orientation: Normal

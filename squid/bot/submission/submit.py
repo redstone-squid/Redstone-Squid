@@ -5,31 +5,32 @@ from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord import Message, app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ext.commands import (
     Cog,
     Context,
     flag,
 )
 
-from squid.bot import utils
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
-from squid.bot.utils import RunningMessage, check_is_owner_server, check_is_trusted_or_staff, fix_converter_annotations
-from squid.bot.utils.converters import DimensionsConverter, ListConverter
+from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
+from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
+from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import BuildInferenceInput, DoorSubmissionInput
 from squid.builds.domain import Build, Status
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
+class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
     """A cog with commands to submit builds."""
 
     def __init__(self, bot: BotT):
@@ -37,7 +38,6 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         self.builds = bot.services.builds
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
-        self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
     async def submit_group(self, ctx: Context[BotT]):
@@ -53,7 +53,6 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             return DoorSubmissionInput(
                 submitter_id=submitter_id,
                 door_size=self.door_size,
-                record_category=self.record_category,
                 pattern=tuple(self.pattern),
                 door_type=self.door_type,
                 build_size=self.build_size,
@@ -76,7 +75,6 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         # fmt: off
         # Intentionally moved closer to the submit command
         door_size: tuple[int | None, int | None, int | None] = flag(converter=DimensionsConverter, description='e.g. *2x2* piston door. In width x height (x depth), spaces optional.')
-        record_category: Literal['Smallest', 'Fastest', 'First'] | None = flag(default=None, description='Is this build a record?')
         pattern: list[str] = flag(default=lambda ctx: ['Regular'], converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] = flag(default='Door', description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] = flag(default=lambda ctx: (None, None, None), converter=DimensionsConverter, description='The dimension of the build. In width x height (x depth), spaces optional.')
@@ -107,17 +105,22 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
                 build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
                 build_handler = self.bot.for_build(build)
                 await followup.send(
-                    "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await build_handler.generate_embed(),
+                    view=StaticLayout(
+                        discord.ui.TextDisplay(
+                            "Here is a preview of the submission. Use `/edit` if you have made a mistake."
+                        ),
+                        await build_handler.render_container(),
+                    ),
                     ephemeral=True,
+                    allowed_mentions=no_mentions(),
                 )
 
-                success_embed = utils.info_embed(
+                success_layout = info_layout(
                     "Success",
                     f"Build submitted successfully!\nThe build ID is: {build.id}",
                 )
                 await asyncio.gather(
-                    message.edit(embed=success_embed),
+                    edit_layout(message, success_layout, allowed_mentions=no_mentions()),
                     build_handler.post_for_voting(),
                 )
         else:
@@ -166,20 +169,33 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         view = BuildSubmissionForm(build, self.builds)
         followup = interaction.followup
 
-        await followup.send("Use the select menus then click the button", view=view)
+        await followup.send(view=view, allowed_mentions=no_mentions())
         await view.wait()
         if view.value is None:
-            await followup.send("Submission canceled due to inactivity", ephemeral=True)
+            await followup.send(
+                view=text_layout("Submission canceled due to inactivity."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
             return
         if view.value is False:
-            await followup.send("Submission canceled by user", ephemeral=True)
+            await followup.send(
+                view=text_layout("Submission canceled by user."),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
             return
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
         await asyncio.gather(
             followup.send(
-                "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await self.bot.for_build(build).generate_embed(),
+                view=StaticLayout(
+                    discord.ui.TextDisplay(
+                        "Here is a preview of the submission. Use `/edit` if you have made a mistake."
+                    ),
+                    await self.bot.for_build(build).render_container(),
+                ),
                 ephemeral=True,
+                allowed_mentions=no_mentions(),
             ),
             self.bot.for_build(build).post_for_voting(),
         )
@@ -197,10 +213,10 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
             raise ValueError(msg)
 
         build_handler = self.bot.for_build(build)
-        em = await build_handler.generate_embed()
+        layout = await build_handler.render_layout()
 
         async def _send_msg(channel: GuildMessageable):
-            message = await channel.send(content=build.original_link, embed=em)
+            message = await channel.send(view=layout, allowed_mentions=no_mentions())
             await self.messages.track(
                 to_tracked_message(message),
                 purpose="view_confirmed_build",
@@ -255,14 +271,14 @@ class BuildSubmitCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Build"):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
-        await ctx.send("Build recalculated.", ephemeral=True)
+        await ctx.send(
+            view=text_layout("Build recalculated."),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
 
-    @tasks.loop(minutes=5.0)
-    async def update_record_titles(self):
-        await self.builds.refresh_record_titles()
 
-
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(BuildSubmitCog(bot))

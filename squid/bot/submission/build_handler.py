@@ -1,24 +1,34 @@
 """Handles the display of a build object."""
 
 import asyncio
-import io
+import logging
 import mimetypes
 from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord.utils import escape_markdown
 
-import squid.bot.utils as bot_utils
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.components import (
+    CardField,
+    StaticLayout,
+    card_container,
+    edit_layout,
+    no_mentions,
+)
+from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
+from squid.builds.domain.titles import format_build_display_title
 from squid.core.time import utcnow
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
+
+logger = logging.getLogger(__name__)
 
 
-class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
+class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     """A class to handle the display of a build object."""
 
     def __init__(self, bot: BotT, build: Build):
@@ -36,22 +46,16 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
 
         target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 
-        match (self.build.submission_status, self.build.record_category):
-            case (Status.PENDING, _):
+        match self.build.submission_status:
+            case Status.PENDING:
                 target = "Vote"
-            case (Status.DENIED, _):
+            case Status.DENIED:
                 msg = "Denied submissions should not be posted."
                 raise ValueError(msg)
-            case (Status.CONFIRMED, None):
+            case Status.CONFIRMED:
                 target = "Builds"
-            case (Status.CONFIRMED, "Smallest"):
-                target = "Smallest"
-            case (Status.CONFIRMED, "Fastest"):
-                target = "Fastest"
-            case (Status.CONFIRMED, "First"):
-                target = "First"
             case _:
-                msg = "Invalid status or record category"
+                msg = "Invalid submission status"
                 raise ValueError(msg)
 
         guild_channels = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), target)
@@ -78,10 +82,10 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
             msg = "The build must be pending to post it."
             raise ValueError(msg)
 
-        em = await self.generate_embed()
+        layout = await self.render_layout()
         messages = await asyncio.gather(
             *(
-                vote_channel.send(content=build.original_link, embed=em)
+                vote_channel.send(view=layout, allowed_mentions=no_mentions())
                 for vote_channel in await self.get_channels_to_post_to()
             )
         )
@@ -121,58 +125,75 @@ class BuildHandler[BotT: "squid.bot.RedstoneSquid"]:
         # Get all messages for a build
         async with asyncio.TaskGroup() as tg:
             msg_task = tg.create_task(self.get_display_messages())
-            em_task = tg.create_task(self.generate_embed())
+            layout_task = tg.create_task(self.render_layout())
 
         messages = await msg_task
-        em = await em_task
+        layout = await layout_task
 
         async def _update_single_message(message: discord.Message):
-            await message.edit(content=self.build.original_link, embed=em)
+            await edit_layout(message, layout, allowed_mentions=no_mentions())
             await self.bot.services.messages.update_edited_time(message.id)
 
         await asyncio.gather(*(_update_single_message(message) for message in messages))
 
-    async def generate_embed(self) -> discord.Embed:
-        """Generates an embed for the build."""
+    async def render_layout(self) -> StaticLayout:
+        """Render a standalone Components V2 layout for the build."""
+        return StaticLayout(await self.render_container())
+
+    async def render_container(self) -> discord.ui.Container[discord.ui.LayoutView]:
+        """Render the build card for composition into a larger V2 layout."""
         build = self.build
-        em = bot_utils.info_embed(title=self.build.title, description=await self.get_description())
+        current_java_version = await self.bot.services.versions.newest("Java")
+        fields = tuple(CardField(name, escape_markdown(value)) for name, value in self.get_metadata_fields().items())
+        container = card_container(
+            format_build_display_title(build, markdown=True, current_version=current_java_version),
+            await self.get_description(),
+            fields=fields,
+            footer=f"Submission ID: {build.id} • Last Update {utcnow()}",
+            media=await self._get_media_urls(),
+        )
+        if build.original_link is not None:
+            container.add_item(
+                discord.ui.ActionRow(
+                    discord.ui.Button(label="Original submission", url=build.original_link),
+                )
+            )
+        return container
 
-        fields = self.get_metadata_fields()
-        for key, val in fields.items():
-            em.add_field(name=key, value=escape_markdown(val), inline=True)
+    async def _get_media_urls(self) -> list[str]:
+        media: list[str] = []
+        for url in self.build.image_urls:
+            mimetype, _ = mimetypes.guess_type(url)
+            if mimetype is not None and mimetype.startswith("image"):
+                media.append(url)
+                continue
+            try:
+                preview = await get_website_preview(url)
+            except Exception:
+                logger.warning("Could not resolve build media preview for %s", url, exc_info=True)
+                continue
+            image = preview["image"]
+            if isinstance(image, str):
+                media.append(image)
 
-        if build.image_urls:
-            for url in build.image_urls:
-                mimetype, _ = mimetypes.guess_type(url)
-                if mimetype is not None and mimetype.startswith("image"):
-                    em.set_image(url=url)
+        if not media:
+            for url in self.build.video_urls:
+                try:
+                    preview = await get_website_preview(url)
+                except Exception:
+                    logger.warning("Could not resolve build video preview for %s", url, exc_info=True)
+                    continue
+                image = preview["image"]
+                if isinstance(image, str):
+                    media.append(image)
                     break
-                preview = await bot_utils.get_website_preview(url)
-                if isinstance(preview["image"], io.BytesIO):
-                    msg = "Got a BytesIO object instead of a URL."
-                    raise TypeError(msg)
-                em.set_image(url=preview["image"])
-        elif build.video_urls:
-            for url in build.video_urls:
-                preview = await bot_utils.get_website_preview(url)
-                if image := preview["image"]:
-                    if isinstance(image, str):
-                        em.set_image(url=image)
-                    break
 
-        em.set_footer(text=f"Submission ID: {build.id} • Last Update {utcnow()}")
-        return em
+        return media[:10]
 
     async def get_description(self) -> str | None:  # type: ignore
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         build = self.build
         desc = []
-
-        if build.component_restrictions and build.component_restrictions[0] != "None":
-            desc.append(", ".join(build.component_restrictions))
-
-        if await self.bot.services.versions.newest("Java") not in build.versions:
-            desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in build.miscellaneous_restrictions:
             desc.append("**Locational**.")

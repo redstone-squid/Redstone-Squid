@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
     "alembic>=1.18.5",
-    "discord-py[speed]>=2.5.0,<3",
+    "discord-py[speed]>=2.6.0,<3",
     "gspread>=6.1.4",
     "python-dotenv>=1.0.1",
     "jishaku>=2.6.0",

@@ -20,7 +20,7 @@ from squid.voting.domain import (
 )
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
 class AbstractVoteSession(ABC):
@@ -39,7 +39,7 @@ class AbstractVoteSession(ABC):
 
     def __init__(
         self,
-        bot: "squid.bot.RedstoneSquid",
+        bot: "squid.bot.app.RedstoneSquid",
         messages: Iterable[discord.Message] | Iterable[int],
         author_id: int,
         pass_threshold: int,
@@ -145,7 +145,7 @@ class AbstractVoteSession(ABC):
 
     @classmethod
     @abstractmethod
-    async def from_id(cls: type[Self], bot: "squid.bot.RedstoneSquid", vote_session_id: int) -> Self | None:
+    async def from_id(cls: type[Self], bot: "squid.bot.app.RedstoneSquid", vote_session_id: int) -> Self | None:
         """
         Create a vote session from an id.
 

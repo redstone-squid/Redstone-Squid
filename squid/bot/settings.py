@@ -7,16 +7,16 @@ from beartype.door import is_bearable
 from discord import app_commands
 from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 
-import squid.bot.utils as utils
 from squid.bot._types import GuildMessageable
-from squid.bot.utils import check_is_staff
+from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
+from squid.bot.utils.permissions import check_is_staff
 from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
 
 if TYPE_CHECKING:
-    import squid.bot
+    import squid.bot.app
 
 
-class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
+class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.settings_service = bot.services.settings
@@ -64,7 +64,11 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                 else:  # Should not happen, but may happen if the schema is updated and this code is not
                     desc += f"{setting}: {value}\n"
 
-            await sent_message.edit(embed=utils.info_embed(title="Current Settings", description=desc))
+            await edit_layout(
+                sent_message,
+                info_layout(title="Current Settings", description=desc),
+                allowed_mentions=no_mentions(),
+            )
 
     @settings_hybrid_group.command(name="search")
     @app_commands.rename(setting="type")
@@ -96,7 +100,11 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
                     title = setting
                     description = str(await self.settings_service.get(ctx.guild.id, setting))
 
-            await sent_message.edit(embed=utils.info_embed(title=title, description=description))
+            await edit_layout(
+                sent_message,
+                info_layout(title=title, description=description),
+                allowed_mentions=no_mentions(),
+            )
 
     @settings_hybrid_group.command(name="set")
     @app_commands.describe(
@@ -117,45 +125,66 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
 
         if channel is not None and roles is not None:
             await ctx.send(
-                embed=utils.error_embed("Error", "You can only provide a channel or a list of roles, not both.")
+                view=error_layout("Error", "You can only provide a channel or a list of roles, not both."),
+                allowed_mentions=no_mentions(),
             )
             return
 
         async with self.bot.get_running_message(ctx) as sent_message:
             if is_bearable(setting, ScalarChannelSetting):
                 if channel is None:
-                    await sent_message.edit(
-                        embed=utils.error_embed("Error", "You must provide a channel for this setting.")
+                    await edit_layout(
+                        sent_message,
+                        error_layout("Error", "You must provide a channel for this setting."),
+                        allowed_mentions=no_mentions(),
                     )
                     return
 
                 if ctx.guild.get_channel(channel.id) is None:
-                    await sent_message.edit(embed=utils.error_embed("Error", "Could not find that channel."))
+                    await edit_layout(
+                        sent_message,
+                        error_layout("Error", "Could not find that channel."),
+                        allowed_mentions=no_mentions(),
+                    )
                     return
 
                 # TODO: Add a check when adding channels to the database to make sure they are GuildMessageable
                 await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
-                await sent_message.edit(
-                    embed=utils.info_embed("Settings updated", f"{setting} channel has successfully been set.")
+                await edit_layout(
+                    sent_message,
+                    info_layout("Settings updated", f"{setting} channel has successfully been set."),
+                    allowed_mentions=no_mentions(),
                 )
             elif is_bearable(setting, ListRoleSetting):
                 if roles is None:
-                    await sent_message.edit(
-                        embed=utils.error_embed("Error", "You must provide a list of roles for this setting.")
+                    await edit_layout(
+                        sent_message,
+                        error_layout("Error", "You must provide a list of roles for this setting."),
+                        allowed_mentions=no_mentions(),
                     )
                     return
 
                 role_ids = [role.id for role in roles]
                 if any(role.guild != ctx.guild for role in roles):
-                    await sent_message.edit(embed=utils.error_embed("Error", "The roles must be from this server."))
+                    await edit_layout(
+                        sent_message,
+                        error_layout("Error", "The roles must be from this server."),
+                        allowed_mentions=no_mentions(),
+                    )
                     return
 
                 await self.settings_service.set_roles(ctx.guild.id, setting, role_ids)
-                await sent_message.edit(
-                    embed=utils.info_embed("Settings updated", f"{setting} roles have successfully been set.")
+                await edit_layout(
+                    sent_message,
+                    info_layout("Settings updated", f"{setting} roles have successfully been set."),
+                    allowed_mentions=no_mentions(),
                 )
             else:  # Should not happen, but may happen if the schema is updated and this code is not
-                await sent_message.edit(embed=utils.error_embed("Error", "This setting is not supported."))
+                await edit_layout(
+                    sent_message,
+                    error_layout("Error", "This setting is not supported."),
+                    allowed_mentions=no_mentions(),
+                )
                 raise AssertionError()
 
     @settings_hybrid_group.command(name="clear")
@@ -167,9 +196,13 @@ class SettingsCog[BotT: "squid.bot.RedstoneSquid"](Cog, name="Settings"):
 
         async with self.bot.get_running_message(ctx) as sent_message:
             await self.settings_service.clear(ctx.guild.id, setting)
-            await sent_message.edit(embed=utils.info_embed("Setting updated", f"{setting} has been cleared."))
+            await edit_layout(
+                sent_message,
+                info_layout("Setting updated", f"{setting} has been cleared."),
+                allowed_mentions=no_mentions(),
+            )
 
 
-async def setup(bot: "squid.bot.RedstoneSquid"):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

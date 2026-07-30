@@ -20,7 +20,7 @@ from squid.bootstrap import create_application_runtime
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.utils import RunningMessage
+from squid.bot.utils.embeds import RunningMessage
 from squid.builds.domain import Build
 from squid.config import BotProcessConfig
 from squid.logging_config import configure_bot_logging
@@ -165,9 +165,9 @@ class RedstoneSquid(Bot):
         Usage:
             ```python
             async with bot.get_running_message(ctx, title="Processing") as msg:
-                await msg.edit(description="Still working...")
+                await edit_layout(msg, info_layout("Processing", "Still working..."))
                 # Do some work here
-                await msg.edit(description="Done!")
+                await edit_layout(msg, info_layout("Processing", "Done!"))
             ```
         """
         return RunningMessage(

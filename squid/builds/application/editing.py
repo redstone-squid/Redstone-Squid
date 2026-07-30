@@ -33,6 +33,7 @@ class BuildEditPatch:
     door_type: PatchValue[list[str]] = UNSET
     door_orientation_type: PatchValue[str | None] = UNSET
     wiring_placement_restrictions: PatchValue[list[str]] = UNSET
+    animated_restrictions: PatchValue[list[str]] = UNSET
     component_restrictions: PatchValue[list[str]] = UNSET
     miscellaneous_restrictions: PatchValue[list[str]] = UNSET
     locationality: PatchValue[str] = UNSET
@@ -75,6 +76,7 @@ class BuildEditPatch:
             "door_type",
             "door_orientation_type",
             "wiring_placement_restrictions",
+            "animated_restrictions",
             "component_restrictions",
             "miscellaneous_restrictions",
             "normal_closing_time",
@@ -113,6 +115,7 @@ class BuildEditPatch:
             )
 
         if not isinstance(self.extra_user_info, _Unset):
+            build.description = self.extra_user_info
             if self.extra_user_info is None:
                 build.extra_info.pop("user", None)
             else:
