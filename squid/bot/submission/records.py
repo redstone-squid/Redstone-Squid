@@ -130,7 +130,12 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             raise commands.BadArgument(msg) from error
         await ctx.defer()
         summary = await self.records.lookup_or_materialize(
-            RecordLookupRequest(kind, base_key, restriction_ids, version_id)
+            RecordLookupRequest(
+                kind=kind,
+                base_category_key=base_key,
+                restriction_ids=restriction_ids,
+                version_id=version_id,
+            )
         )
         await ctx.send(
             view=info_layout(
