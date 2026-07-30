@@ -18,3 +18,12 @@ This file is append-only. New observations are added at the end without revising
   symbol move failed immediately with JSON code `INTERNAL_ERROR` and message `unknown method: move`.
 - The `unknown method: move` result came from a stale IDE plugin. After restarting IntelliJ, moves worked; the CLI
   requires a project-relative `.py` destination path even though its help text describes an existing Python module.
+
+## 2026-07-30
+
+- `refactor usages load_models --expect load_models:function` rejects the positional symbol with
+  `unexpected argument 'load_models' found`; discovering that selectors must be supplied through `--symbol` or
+  `--file`/`--line`/`--col` required consulting the subcommand help.
+- A successful `usages` search returned process exit code 0 while its JSON reported `summary.code: 2`. This makes the
+  instruction to treat exit code 2 as review-required ambiguous: shell callers see success and must also inspect the
+  nested JSON code.
