@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord import Message, app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ext.commands import (
     Cog,
     Context,
@@ -38,7 +38,6 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         self.builds = bot.services.builds
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
-        self.update_record_titles.start()
 
     @commands.hybrid_group(name="submit")
     async def submit_group(self, ctx: Context[BotT]):
@@ -277,10 +276,6 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
-
-    @tasks.loop(minutes=5.0)
-    async def update_record_titles(self):
-        await self.builds.refresh_record_titles()
 
 
 async def setup(bot: "squid.bot.app.RedstoneSquid"):

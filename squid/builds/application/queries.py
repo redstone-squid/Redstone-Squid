@@ -16,22 +16,10 @@ class RestrictionSearchItem:
     is_alias: bool
 
 
-@dataclass(frozen=True, slots=True)
-class SmallestDoorRecord:
-    """Transport-neutral projection of a smallest-door search result."""
-
-    id: int
-    title: str
-
-
 class BuildQueryRepository(Protocol):
     """Build persistence queries required by search workflows."""
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
-
-    async def search_smallest_door_records(
-        self, query: str, *, limit: int
-    ) -> list[tuple[SmallestDoorRecord, float, int]]: ...
 
     async def get_pending(self) -> list[Build]: ...
 
@@ -70,9 +58,6 @@ class BuildQueryService:
 
     async def pending(self) -> Sequence[Build]:
         return await self._builds.get_pending()
-
-    async def search_records(self, query: str) -> list[tuple[SmallestDoorRecord, float, int]]:
-        return await self._builds.search_smallest_door_records(query, limit=11)
 
     async def restrictions(self, query: str | None) -> list[RestrictionSearchItem]:
         return await self._metadata.search_restrictions(query)

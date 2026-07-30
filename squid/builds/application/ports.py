@@ -19,8 +19,6 @@ class BuildRepository(Protocol):
 
     async def deny(self, build: Build) -> None: ...
 
-    async def update_smallest_door_records_without_title(self) -> None: ...
-
 
 class BuildLockManager(Protocol):
     """Coordinate exclusive, task-reentrant access to persisted builds."""

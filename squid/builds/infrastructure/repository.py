@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
-from squid.builds.application.queries import SmallestDoorRecord
 from squid.builds.domain import (
     Build,
     BuildCategory,
@@ -34,7 +33,6 @@ from squid.builds.infrastructure.models import (
     Restriction,
     Type,
 )
-from squid.builds.infrastructure.records import SmallestDoorRecordRepository
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.users.infrastructure.models import User
@@ -46,12 +44,11 @@ logger = logging.getLogger(__name__)
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_mapper", "_records", "_session_factory")
+    __slots__ = ("_mapper", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         self._mapper = BuildMapper()
-        self._records = SmallestDoorRecordRepository(session_factory)
 
     async def get_by_id(self, build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -448,11 +445,3 @@ class BuildRepository:
     async def get_unsent_builds(self, server_id: int) -> list[Build] | None:
         """Get all the builds that have not been posted on the server"""
         raise NotImplementedError
-
-    async def update_smallest_door_records_without_title(self) -> None:
-        await self._records.update_records_without_title()
-
-    async def search_smallest_door_records(
-        self, query: str, limit: int = 25
-    ) -> list[tuple[SmallestDoorRecord, float, int]]:
-        return await self._records.search(query, limit)

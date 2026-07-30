@@ -133,9 +133,6 @@ class BuildService:
             await self._repository.deny(build)
         return build
 
-    async def refresh_record_titles(self) -> None:
-        await self._repository.update_smallest_door_records_without_title()
-
     async def _get_required(self, build_id: int) -> Build:
         build = await self._repository.get_by_id(build_id)
         if build is None:
