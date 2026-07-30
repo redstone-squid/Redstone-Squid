@@ -196,6 +196,12 @@ project-includes = ["squid/**/*.py", "tests/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.12"
 
+[tool.alembic]
+script_location = "%(here)s/alembic"
+file_template = "%%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s"
+prepend_sys_path = ["."]
+timezone = "utc"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = [
