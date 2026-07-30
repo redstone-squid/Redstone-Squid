@@ -51,7 +51,7 @@ from squid.records.infrastructure.models import (
 from squid.tags.infrastructure.models import BuildTagAssignment, TagDefinition
 
 RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "2"
+CALCULATOR_VERSION = "3"
 FORMATTER_VERSION = "2"
 
 
@@ -299,7 +299,7 @@ class PostgresRecordRepository:
     async def save_requested_category(self, ruleset_id: int, category: CategoryIdentity) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
         async with self._session_factory() as session, session.begin():
-            for record_class in (RecordClass.SMALLEST, RecordClass.FASTEST):
+            for record_class in _record_classes(category.kind):
                 statement = select(RecordDefinition).where(
                     RecordDefinition.ruleset_id == ruleset_id,
                     RecordDefinition.record_class == record_class.value,
@@ -697,10 +697,29 @@ def _provisional_build_id(computed: ComputedRecord) -> int | None:
 
 
 def _metric_snapshot(computed: ComputedRecord, candidate: RecordCandidate) -> dict[str, object]:
-    if computed.record_class is RecordClass.SMALLEST:
-        return {"volume": candidate.fixed_volume}
+    snapshot: dict[str, object] = {}
+    if computed.record_class in (
+        RecordClass.FASTEST_SMALLEST,
+        RecordClass.SMALLEST,
+        RecordClass.SMALLEST_FASTEST,
+    ):
+        snapshot["volume"] = candidate.fixed_volume
+    if computed.record_class is RecordClass.FIRST:
+        snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
+        return snapshot
     reduction = reduce_timing_variants(candidate.timing_variants)
-    return {"timing": list(reduction.timing.values) if reduction.timing is not None else None}
+    snapshot["timing"] = list(reduction.timing.values) if reduction.timing is not None else None
+    return snapshot
+
+
+def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
+    shared = (
+        RecordClass.FASTEST,
+        RecordClass.SMALLEST,
+        RecordClass.FASTEST_SMALLEST,
+        RecordClass.SMALLEST_FASTEST,
+    )
+    return (RecordClass.FIRST, *shared) if kind is BuildKind.DOOR else shared
 
 
 def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordGap:

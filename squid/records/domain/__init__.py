@@ -19,7 +19,14 @@ from squid.records.domain.models import (
     TimingVariant,
     VersionScope,
 )
-from squid.records.domain.resolution import reduce_timing_variants, resolve_fastest, resolve_smallest
+from squid.records.domain.resolution import (
+    reduce_timing_variants,
+    resolve_fastest,
+    resolve_fastest_smallest,
+    resolve_first,
+    resolve_smallest,
+    resolve_smallest_fastest,
+)
 
 __all__ = [
     "BuildKind",
@@ -40,5 +47,8 @@ __all__ = [
     "generate_category_subsets",
     "reduce_timing_variants",
     "resolve_fastest",
+    "resolve_fastest_smallest",
+    "resolve_first",
     "resolve_smallest",
+    "resolve_smallest_fastest",
 ]

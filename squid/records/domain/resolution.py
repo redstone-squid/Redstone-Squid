@@ -41,12 +41,10 @@ def reduce_timing_variants(variants: Sequence[TimingVariant]) -> TimingReduction
 
 def resolve_smallest(candidates: Iterable[RecordCandidate]) -> RecordResolution:
     """Resolve the fixed-volume record, consulting completion only for a tie."""
-    eligible = [candidate for candidate in candidates if candidate.fixed_volume is not None]
-    if not eligible:
+    active = _smallest_pool(candidates)
+    if not active:
         return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
 
-    minimum = min(candidate.fixed_volume for candidate in eligible if candidate.fixed_volume is not None)
-    active = [candidate for candidate in eligible if candidate.fixed_volume == minimum]
     if len(active) == 1:
         return _resolved(active)
     return _resolve_completion_tie(active)
@@ -54,6 +52,58 @@ def resolve_smallest(candidates: Iterable[RecordCandidate]) -> RecordResolution:
 
 def resolve_fastest(candidates: Iterable[RecordCandidate], methods: Sequence[str]) -> RecordResolution:
     """Resolve speed lexicographically, requesting lower methods only for ties."""
+    active, incomplete = _fastest_pool(candidates, methods)
+    if incomplete is not None:
+        return incomplete
+    if len(active) == 1:
+        return _resolved(active)
+    return _resolve_completion_tie(active)
+
+
+def resolve_first(candidates: Iterable[RecordCandidate]) -> RecordResolution:
+    """Resolve the earliest provable completion date."""
+    eligible = [candidate for candidate in candidates if candidate.completion_at is not None]
+    if not eligible:
+        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
+
+    earliest = min(candidate.completion_at for candidate in eligible if candidate.completion_at is not None)
+    return _resolved(candidate for candidate in eligible if candidate.completion_at == earliest)
+
+
+def resolve_fastest_smallest(
+    candidates: Iterable[RecordCandidate],
+    methods: Sequence[str],
+) -> RecordResolution:
+    """Resolve the fastest build in the minimum-volume pool."""
+    active = _smallest_pool(candidates)
+    if not active:
+        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
+    return resolve_fastest(active, methods)
+
+
+def resolve_smallest_fastest(
+    candidates: Iterable[RecordCandidate],
+    methods: Sequence[str],
+) -> RecordResolution:
+    """Resolve the smallest build in the fastest-timing pool."""
+    active, incomplete = _fastest_pool(candidates, methods)
+    if incomplete is not None:
+        return incomplete
+    return resolve_smallest(active)
+
+
+def _smallest_pool(candidates: Iterable[RecordCandidate]) -> list[RecordCandidate]:
+    eligible = [candidate for candidate in candidates if candidate.fixed_volume is not None]
+    if not eligible:
+        return []
+    minimum = min(candidate.fixed_volume for candidate in eligible if candidate.fixed_volume is not None)
+    return [candidate for candidate in eligible if candidate.fixed_volume == minimum]
+
+
+def _fastest_pool(
+    candidates: Iterable[RecordCandidate],
+    methods: Sequence[str],
+) -> tuple[list[RecordCandidate], RecordResolution | None]:
     candidate_reductions = [(candidate, reduce_timing_variants(candidate.timing_variants)) for candidate in candidates]
     active = [
         (candidate, reduction)
@@ -61,11 +111,11 @@ def resolve_fastest(candidates: Iterable[RecordCandidate], methods: Sequence[str
         if reduction.timing is not None and reduction.timing.values[0] is not None
     ]
     if not active:
-        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
+        return [], RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
 
     for index, method in enumerate(methods):
         if len(active) == 1:
-            return _resolved([active[0][0]])
+            return [active[0][0]], None
 
         missing = [
             CandidateGap(candidate.build_id, method)
@@ -75,10 +125,13 @@ def resolve_fastest(candidates: Iterable[RecordCandidate], methods: Sequence[str
             or reduction.timing.values[index] is None
         ]
         if missing:
-            return RecordResolution(
-                status=ResolutionStatus.UNRESOLVED,
-                provisional_holder_ids=_candidate_ids(candidate for candidate, _ in active),
-                gaps=tuple(missing),
+            return (
+                [],
+                RecordResolution(
+                    status=ResolutionStatus.UNRESOLVED,
+                    provisional_holder_ids=_candidate_ids(candidate for candidate, _ in active),
+                    gaps=tuple(missing),
+                ),
             )
 
         known_values = [
@@ -95,7 +148,7 @@ def resolve_fastest(candidates: Iterable[RecordCandidate], methods: Sequence[str
             if reduction.timing is not None and reduction.timing.values[index] == minimum
         ]
 
-    return _resolve_completion_tie([candidate for candidate, _ in active])
+    return [candidate for candidate, _ in active], None
 
 
 def _resolve_completion_tie(candidates: Sequence[RecordCandidate]) -> RecordResolution:

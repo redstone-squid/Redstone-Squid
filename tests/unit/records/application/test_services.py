@@ -109,7 +109,7 @@ def _door(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_computes_eager_subsets_and_both_metrics() -> None:
+async def test_rebuild_computes_eager_subsets_and_all_door_record_classes() -> None:
     flush = CandidateFacet(id=1, kind="restriction", name="Flush", restriction_type="wiring-placement")
     observerless = CandidateFacet(id=2, kind="restriction", name="Observerless", restriction_type="component")
     candidates = FakeCandidates(
@@ -124,14 +124,20 @@ async def test_rebuild_computes_eager_subsets_and_both_metrics() -> None:
     summary = await service.rebuild(kinds=(BuildKind.DOOR,))
 
     assert summary.run_ids == (1,)
-    assert summary.definitions == 8
-    assert summary.resolved == 8
+    assert summary.definitions == 20
+    assert summary.resolved == 20
     batch = runs.batches[0]
     shared = [record for record in batch.records if record.competition.identity.restriction_ids == (1,)]
+    first = next(record for record in shared if record.record_class is RecordClass.FIRST)
     smallest = next(record for record in shared if record.record_class is RecordClass.SMALLEST)
     fastest = next(record for record in shared if record.record_class is RecordClass.FASTEST)
+    fastest_smallest = next(record for record in shared if record.record_class is RecordClass.FASTEST_SMALLEST)
+    smallest_fastest = next(record for record in shared if record.record_class is RecordClass.SMALLEST_FASTEST)
+    assert first.resolution.holder_ids == (1,)
     assert smallest.resolution.holder_ids == (1,)
     assert fastest.resolution.holder_ids == (2,)
+    assert fastest_smallest.resolution.holder_ids == (1,)
+    assert smallest_fastest.resolution.holder_ids == (2,)
     assert smallest.title.title == "Smallest Flush 2x2 Door"
     assert tuple(period.build_ids for period in fastest.history) == ((1,), (2,))
     assert fastest.history[0].held_until == datetime(2020, 1, 2, tzinfo=UTC)
@@ -176,10 +182,19 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
         if record.competition.identity.restriction_values == ((7, "at_most", "4"),)
     ]
     assert {record.resolution.holder_ids for record in threshold_three} == {(1,)}
-    assert {record.resolution.holder_ids for record in threshold_four} == {(2,)}
+    assert {record.record_class: record.resolution.holder_ids for record in threshold_four} == {
+        RecordClass.FIRST: (1,),
+        RecordClass.FASTEST: (2,),
+        RecordClass.SMALLEST: (2,),
+        RecordClass.FASTEST_SMALLEST: (2,),
+        RecordClass.SMALLEST_FASTEST: (2,),
+    }
     assert {record.title.title for record in threshold_four} == {
+        "First 2x2 Door",
         "Fastest 2x2 Door",
+        "Fastest Smallest 2x2 Door",
         "Smallest 2x2 Door",
+        "Smallest Fastest 2x2 Door",
     }
     assert {record.title.subtitle for record in threshold_four} == {"4 Wide"}
 
@@ -274,7 +289,7 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     assert summary.run_ids == (1,)
     assert runs.requested[BuildKind.DOOR][0].restriction_ids == tuple(range(1, 10))
     exact = [record for record in runs.batches[0].records if len(record.competition.identity.restriction_ids) == 9]
-    assert {record.record_class for record in exact} == {RecordClass.SMALLEST, RecordClass.FASTEST}
+    assert {record.record_class for record in exact} == set(RecordClass)
     assert all(record.competition.source == "public_lookup" for record in exact)
 
 

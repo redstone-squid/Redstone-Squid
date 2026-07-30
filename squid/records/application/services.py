@@ -28,12 +28,16 @@ from squid.records.domain import (
     ExtenderCategory,
     RecordCandidate,
     RecordClass,
+    RecordResolution,
     ResolutionStatus,
     RulesTitleFormatter,
     TitleFormatter,
     VersionScope,
     resolve_fastest,
+    resolve_fastest_smallest,
+    resolve_first,
     resolve_smallest,
+    resolve_smallest_fastest,
 )
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS
 
@@ -117,12 +121,8 @@ class RecordComputationService:
         scope = VersionScope.ALL_TIME if version_id is None else VersionScope.CURRENT
         records: list[ComputedRecord] = []
         for competition in competitions.values():
-            for record_class in (RecordClass.SMALLEST, RecordClass.FASTEST):
-                resolution = (
-                    resolve_smallest(competition.candidates)
-                    if record_class is RecordClass.SMALLEST
-                    else resolve_fastest(competition.candidates, _timing_methods(kind))
-                )
+            for record_class in _record_classes(kind):
+                resolution = _resolve_record(record_class, kind, competition.candidates)
                 records.append(
                     ComputedRecord(
                         record_class=record_class,
@@ -465,6 +465,37 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
     raise ValueError(msg)
 
 
+def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
+    shared = (
+        RecordClass.FASTEST,
+        RecordClass.SMALLEST,
+        RecordClass.FASTEST_SMALLEST,
+        RecordClass.SMALLEST_FASTEST,
+    )
+    if kind is BuildKind.DOOR:
+        return (RecordClass.FIRST, *shared)
+    if kind is BuildKind.EXTENDER:
+        return shared
+    msg = f"Records are not supported for {kind.value}."
+    raise ValueError(msg)
+
+
+def _resolve_record(
+    record_class: RecordClass,
+    kind: BuildKind,
+    candidates: Iterable[RecordCandidate],
+) -> RecordResolution:
+    if record_class is RecordClass.FIRST:
+        return resolve_first(candidates)
+    if record_class is RecordClass.FASTEST:
+        return resolve_fastest(candidates, _timing_methods(kind))
+    if record_class is RecordClass.SMALLEST:
+        return resolve_smallest(candidates)
+    if record_class is RecordClass.FASTEST_SMALLEST:
+        return resolve_fastest_smallest(candidates, _timing_methods(kind))
+    return resolve_smallest_fastest(candidates, _timing_methods(kind))
+
+
 def _broken_holders(
     holder_ids: tuple[int, ...],
     candidate_version_ids: tuple[tuple[int, frozenset[int]], ...],
@@ -491,11 +522,7 @@ def _reconstruct_history(
     periods: list[HolderHistoryEntry] = []
     for completion_at, group in groupby(dated, key=_known_completion):
         active.extend(group)
-        resolution = (
-            resolve_smallest(active)
-            if record_class is RecordClass.SMALLEST
-            else resolve_fastest(active, _timing_methods(kind))
-        )
+        resolution = _resolve_record(record_class, kind, active)
         if resolution.status is not ResolutionStatus.RESOLVED:
             continue
         if periods and periods[-1].build_ids == resolution.holder_ids:

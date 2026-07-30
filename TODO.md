@@ -11,7 +11,7 @@
   - Store control-volume and per-layer expressions.
   - Store valid expandable domains.
   - Compare piecewise expressions and persist record-breaking ranges and co-holders.
-- [ ] Implement the remaining record classes.
+- [x] Implement the remaining record classes.
   - `FIRST`
   - `FASTEST SMALLEST`
   - `SMALLEST FASTEST`

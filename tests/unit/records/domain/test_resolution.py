@@ -10,7 +10,14 @@ from squid.records.domain.models import (
     ResolutionStatus,
     TimingVariant,
 )
-from squid.records.domain.resolution import reduce_timing_variants, resolve_fastest, resolve_smallest
+from squid.records.domain.resolution import (
+    reduce_timing_variants,
+    resolve_fastest,
+    resolve_fastest_smallest,
+    resolve_first,
+    resolve_smallest,
+    resolve_smallest_fastest,
+)
 
 EARLY = datetime(2020, 1, 1, tzinfo=UTC)
 LATE = datetime(2021, 1, 1, tzinfo=UTC)
@@ -68,6 +75,36 @@ def test_smallest_is_unresolved_when_tied_build_lacks_completion() -> None:
 
 def test_smallest_has_no_candidate_without_fixed_volume() -> None:
     result = resolve_smallest((RecordCandidate(build_id=1),))
+
+    assert result.status is ResolutionStatus.NO_CANDIDATE
+
+
+def test_first_selects_the_earliest_known_completion() -> None:
+    result = resolve_first(
+        (
+            RecordCandidate(build_id=1, completion_at=LATE),
+            RecordCandidate(build_id=2),
+            RecordCandidate(build_id=3, completion_at=EARLY),
+        )
+    )
+
+    assert result.status is ResolutionStatus.RESOLVED
+    assert result.holder_ids == (3,)
+
+
+def test_first_preserves_exact_co_holders() -> None:
+    result = resolve_first(
+        (
+            RecordCandidate(build_id=2, completion_at=EARLY),
+            RecordCandidate(build_id=1, completion_at=EARLY),
+        )
+    )
+
+    assert result.holder_ids == (1, 2)
+
+
+def test_first_has_no_candidate_without_completion_evidence() -> None:
+    result = resolve_first((RecordCandidate(build_id=1),))
 
     assert result.status is ResolutionStatus.NO_CANDIDATE
 
@@ -135,6 +172,45 @@ def test_fastest_uses_completion_and_co_holders_after_all_methods_tie() -> None:
 
     assert result.status is ResolutionStatus.RESOLVED
     assert result.holder_ids == (1, 2)
+
+
+def test_fastest_smallest_uses_speed_within_the_minimum_volume_pool() -> None:
+    result = resolve_fastest_smallest(
+        (
+            RecordCandidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((5,)),)),
+            RecordCandidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
+            RecordCandidate(build_id=3, fixed_volume=11, timing_variants=(TimingVariant((3,)),)),
+        ),
+        ("opening",),
+    )
+
+    assert result.holder_ids == (2,)
+
+
+def test_smallest_fastest_uses_volume_within_the_fastest_timing_pool() -> None:
+    result = resolve_smallest_fastest(
+        (
+            RecordCandidate(build_id=1, fixed_volume=11, timing_variants=(TimingVariant((4,)),)),
+            RecordCandidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
+            RecordCandidate(build_id=3, fixed_volume=9, timing_variants=(TimingVariant((5,)),)),
+        ),
+        ("opening",),
+    )
+
+    assert result.holder_ids == (2,)
+
+
+def test_smallest_fastest_reports_a_gap_before_the_fastest_pool_is_known() -> None:
+    result = resolve_smallest_fastest(
+        (
+            RecordCandidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((4, None)),)),
+            RecordCandidate(build_id=2, fixed_volume=11, timing_variants=(TimingVariant((4, 2)),)),
+        ),
+        ("opening", "opening_visible"),
+    )
+
+    assert result.status is ResolutionStatus.UNRESOLVED
+    assert result.gaps == (CandidateGap(build_id=1, field="opening_visible"),)
 
 
 def test_reduce_timing_variants_selects_lexicographically_slowest_behavior() -> None:

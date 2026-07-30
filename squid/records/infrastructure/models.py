@@ -53,7 +53,7 @@ class RecordDefinition(Base, kw_only=True):
     __tablename__ = "record_definitions"
     __table_args__ = (
         CheckConstraint(
-            "record_class IN ('smallest', 'fastest')",
+            "record_class IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
             name="record_definitions_record_class_check",
         ),
         CheckConstraint(
