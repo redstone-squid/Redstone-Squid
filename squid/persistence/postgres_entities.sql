@@ -280,6 +280,158 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_build_id bigint;
+    target_action text := 'upsert';
+BEGIN
+    IF TG_TABLE_NAME = 'builds' THEN
+        target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        IF TG_OP = 'DELETE' THEN
+            target_action := 'delete';
+        END IF;
+    ELSE
+        target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
+    END IF;
+
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+    VALUES ('build', target_build_id::text, target_action, now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        attempts = 0,
+        locked_at = NULL,
+        last_error = NULL;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION public.enqueue_metadata_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_id bigint;
+    target_kind text;
+    target_action text := 'upsert';
+BEGIN
+    target_kind := CASE TG_TABLE_NAME
+        WHEN 'restrictions' THEN 'restriction'
+        WHEN 'restriction_aliases' THEN 'restriction'
+        WHEN 'types' THEN 'type'
+        WHEN 'users' THEN 'creator'
+        WHEN 'versions' THEN 'version'
+    END;
+    IF TG_TABLE_NAME = 'restriction_aliases' THEN
+        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.restriction_id ELSE NEW.restriction_id END;
+    ELSE
+        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    END IF;
+    IF TG_OP = 'DELETE' AND TG_TABLE_NAME <> 'restriction_aliases' THEN
+        target_action := 'delete';
+    END IF;
+
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        attempts = 0,
+        locked_at = NULL,
+        last_error = NULL;
+
+    IF TG_TABLE_NAME IN ('restrictions', 'restriction_aliases') THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', br.build_id::text, 'upsert', now()
+        FROM public.build_restrictions br
+        WHERE br.restriction_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'types' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bt.build_id::text, 'upsert', now()
+        FROM public.build_types bt
+        WHERE bt.type_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'users' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bc.build_id::text, 'upsert', now()
+        FROM public.build_creators bc
+        WHERE bc.user_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'versions' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bv.build_id::text, 'upsert', now()
+        FROM public.build_versions bv
+        WHERE bv.version_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION public.enqueue_legacy_record_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_record_id bigint;
+    target_action text := 'upsert';
+BEGIN
+    target_record_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.record_id ELSE NEW.record_id END;
+    IF TG_OP = 'DELETE' THEN
+        target_action := 'delete';
+    END IF;
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+    VALUES ('record', 'legacy-smallest:' || target_record_id::text, target_action, now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        attempts = 0,
+        locked_at = NULL,
+        last_error = NULL;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_result_id bigint;
+BEGIN
+    IF TG_TABLE_NAME = 'record_results' THEN
+        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        VALUES (
+            'record',
+            'result:' || target_result_id::text,
+            CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END,
+            now()
+        )
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
+        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now())
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSE
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'record', 'result:' || rr.id::text, 'upsert', now()
+        FROM public.record_results rr
+        WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
 CREATE TRIGGER build_restrictions_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
 CREATE TRIGGER build_types_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
@@ -297,3 +449,35 @@ CREATE TRIGGER trg_sync_on_tag AFTER INSERT ON public.restrictions FOR EACH ROW 
 CREATE TRIGGER trg_sync_on_tag_alias AFTER INSERT ON public.restriction_aliases FOR EACH ROW EXECUTE FUNCTION public.sync_new_restriction();
 
 CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER restriction_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restriction_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.types FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER users_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER smallest_door_records_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.smallest_door_records FOR EACH ROW EXECUTE FUNCTION public.enqueue_legacy_record_search_projection();
+
+CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+CREATE TRIGGER record_result_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_result_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
