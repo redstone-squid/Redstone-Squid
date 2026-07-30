@@ -1,3 +1,5 @@
+from sqlalchemy import Index
+
 from squid.records.application.models import CategoryIdentity
 from squid.records.domain import BuildKind
 from squid.records.infrastructure.models import RecordComputationRun, RecordDefinition
@@ -25,8 +27,8 @@ def test_record_definitions_persist_canonical_title_metadata() -> None:
 def test_active_run_identity_is_global_across_rulesets() -> None:
     active_index = next(
         index
-        for index in RecordComputationRun.__table__.indexes
-        if index.name == "record_computation_runs_one_active_idx"
+        for index in RecordComputationRun.__table_args__
+        if isinstance(index, Index) and index.name == "record_computation_runs_one_active_idx"
     )
 
     assert tuple(column.name for column in active_index.columns) == ("build_kind", "version_id")

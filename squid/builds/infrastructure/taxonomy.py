@@ -2,13 +2,13 @@
 
 import asyncio
 from collections.abc import Sequence
-from typing import Literal
 
 from async_lru import alru_cache
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.builds.domain.models import RestrictionTypeLiteral
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.builds.infrastructure.models import Restriction, RestrictionAlias, Type
 
@@ -107,9 +107,7 @@ class BuildTagsManager:
 
         await self.add_restriction_alias_by_id(rid, alias)
 
-    async def get_valid_restrictions(
-        self, type: Literal["component", "wiring-placement", "miscellaneous"]
-    ) -> Sequence[str]:
+    async def get_valid_restrictions(self, type: RestrictionTypeLiteral) -> Sequence[str]:
         """Gets a list of valid restrictions for a given type. The restrictions are returned in the original case.
 
         Args:
@@ -135,7 +133,7 @@ class BuildTagsManager:
             return result.scalars().all()
 
     async def validate_restrictions(
-        self, restrictions: list[str], type: Literal["component", "wiring-placement", "miscellaneous"]
+        self, restrictions: list[str], type: RestrictionTypeLiteral
     ) -> tuple[list[str], list[str]]:
         """Validates a list of restrictions for a given type.
 
