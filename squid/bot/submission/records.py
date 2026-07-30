@@ -34,12 +34,12 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def cog_unload(self) -> None:
         self.process_maintenance.cancel()
 
-    @hybrid_group(name="records", invoke_without_command=True)  # pyright: ignore[reportCallIssue, reportUntypedFunctionDecorator]
+    @hybrid_group(name="records")
     async def records_group(self, ctx: Context[BotT]) -> None:
         """Inspect and recompute canonical records."""
         await ctx.send_help("records")
 
-    @records_group.command(name="gaps")  # pyright: ignore[reportFunctionMemberAccess]
+    @records_group.command(name="gaps")
     @app_commands.describe(kind="Optionally limit gaps to one build kind.")
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
@@ -57,7 +57,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             description = "No unresolved active record categories."
         await ctx.send(view=info_layout("Record evidence gaps", description), allowed_mentions=no_mentions())
 
-    @records_group.command(name="title-gaps")  # pyright: ignore[reportFunctionMemberAccess]
+    @records_group.command(name="title-gaps")
     @check_is_owner_server()
     @check_is_trusted_or_staff()
     @app_commands.describe(kind="Optionally limit title diagnostics to one build kind.")
@@ -80,7 +80,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @records_group.command(name="rebuild")  # pyright: ignore[reportFunctionMemberAccess]
+    @records_group.command(name="rebuild")
     @commands.is_owner()
     @app_commands.describe(
         current_version_id="Optional database ID to also compute the pinned current-version records.",
@@ -106,7 +106,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @records_group.command(name="lookup")  # pyright: ignore[reportFunctionMemberAccess]
+    @records_group.command(name="lookup")
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind="The typed record family.",
@@ -132,7 +132,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         summary = await self.records.lookup_or_materialize(
             RecordLookupRequest(
                 kind=kind,
-                base_category_key=base_key,
+                base_key=base_key,
                 restriction_ids=restriction_ids,
                 version_id=version_id,
             )
