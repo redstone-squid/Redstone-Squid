@@ -7,6 +7,7 @@ from typing import Literal, Protocol, cast, override
 
 from sqlalchemy import case, func, literal, or_, select, true, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from squid.search.application import (
@@ -14,11 +15,13 @@ from squid.search.application import (
     RankedCandidate,
     RankingBranch,
     SearchBackend,
+    SearchFieldRegistryProvider,
     SearchSlice,
     is_filter_only,
     positive_text_expressions,
     reciprocal_rank_fusion,
 )
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldType
 from squid.search.domain import (
     BuildSearchHit,
     CursorPosition,
@@ -30,10 +33,11 @@ from squid.search.domain import (
     SearchQuery,
     SearchRequest,
     SearchScope,
+    SortDirection,
     TextExpression,
 )
 from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
-from squid.search.infrastructure.models import SearchDocument
+from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 
 _CANDIDATE_LIMIT = 200
 _SEMANTIC_WARNING = "Semantic search is temporarily unavailable; showing lexical results."
@@ -64,10 +68,12 @@ class PostgresSearchBackend(SearchBackend):
         *,
         compiler: PostgresSearchQueryCompiler | None = None,
         semantic_provider: SemanticCandidateProvider | None = None,
+        fields: SearchFieldRegistryProvider | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._compiler = compiler or PostgresSearchQueryCompiler()
         self._semantic_provider = semantic_provider
+        self._fields = fields
 
     @override
     async def search(
@@ -77,21 +83,88 @@ class PostgresSearchBackend(SearchBackend):
         cursor: CursorPosition | None,
     ) -> SearchSlice:
         """Search indexed documents and return one stable page."""
-        predicate = self.compile_predicate(request, query)
+        registry = DEFAULT_FIELD_REGISTRY if self._fields is None else await self._fields.registry()
+        compiler = self._compiler if self._fields is None else PostgresSearchQueryCompiler(registry)
+        predicate = self.compile_predicate(request, query, compiler=compiler)
         async with self._session_factory() as session:
+            if request.sort is not None:
+                field = registry.resolve(request.sort.field)
+                if field is None or not field.supports_sort:
+                    msg = f"Search field {request.sort.field!r} cannot be sorted."
+                    raise ValueError(msg)
+                return await self._sorted(session, request, predicate, cursor, field)
             if is_filter_only(query):
                 return await self._filter_only(session, request, predicate, cursor)
             return await self._ranked(session, request, query, predicate, cursor)
 
-    def compile_predicate(self, request: SearchRequest, query: SearchQuery) -> ColumnElement[bool]:
+    def compile_predicate(
+        self,
+        request: SearchRequest,
+        query: SearchQuery,
+        *,
+        compiler: PostgresSearchQueryCompiler | None = None,
+    ) -> ColumnElement[bool]:
         """Compile scope, visibility defaults, and the complete user predicate."""
-        predicate = self._scope_predicate(request.scope) & self._compiler.compile(query)
+        predicate = self._scope_predicate(request.scope) & (compiler or self._compiler).compile(query)
         if self._requires_confirmed_default(request.scope, query):
             predicate &= or_(
                 SearchDocument.resource_kind != "build",
                 func.lower(SearchDocument.status) == "confirmed",
             )
         return predicate
+
+    async def _sorted(
+        self,
+        session: AsyncSession,
+        request: SearchRequest,
+        predicate: ColumnElement[bool],
+        cursor: CursorPosition | None,
+        field: FieldDefinition,
+    ) -> SearchSlice:
+        facet = aliased(SearchDocumentFacet)
+        value_column = {
+            FieldType.TEXT: func.lower(facet.text_value),
+            FieldType.NUMBER: facet.numeric_value,
+            FieldType.TIMESTAMP: facet.timestamp_value,
+            FieldType.BOOLEAN: facet.boolean_value,
+        }[field.value_type]
+        ordered_value = (
+            value_column.asc()
+            if request.sort is None or request.sort.direction is SortDirection.ASCENDING
+            else value_column.desc()
+        )
+        statement = (
+            select(SearchDocument)
+            .outerjoin(
+                facet,
+                (facet.document_id == SearchDocument.id) & (facet.field_name == (field.storage_name or field.name)),
+            )
+            .where(predicate)
+            .order_by(
+                value_column.is_(None),
+                ordered_value,
+                SearchDocument.normalized_title,
+                SearchDocument.resource_kind,
+                SearchDocument.source_key,
+            )
+            .limit(_CANDIDATE_LIMIT)
+        )
+        documents = list((await session.scalars(statement)).unique().all())
+        start = 0
+        if cursor is not None:
+            raw_identity = _raw_identity(cursor.resource_kind, cursor.source_id)
+            start = next(
+                (
+                    index + 1
+                    for index, document in enumerate(documents)
+                    if (document.resource_kind, document.source_key) == raw_identity
+                ),
+                len(documents),
+            )
+        selected = documents[start : start + request.page_size + 1]
+        has_more = len(selected) > request.page_size
+        hits = tuple(_to_hit(document, None) for document in selected[: request.page_size])
+        return SearchSlice(hits, has_more, _last_position(request, hits))
 
     @override
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:

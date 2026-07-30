@@ -3,7 +3,7 @@
 import pytest
 
 from squid.search.application import CursorCodec, InvalidCursorError
-from squid.search.domain import CursorPosition, SearchMode, SearchRequest, SearchScope
+from squid.search.domain import CursorPosition, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 
 def _position(request: SearchRequest, codec: CursorCodec) -> CursorPosition:
@@ -42,6 +42,18 @@ def test_cursor_cannot_be_reused_for_another_request() -> None:
 
     with pytest.raises(InvalidCursorError, match="different search request"):
         codec.decode(cursor, request=SearchRequest("door", scope=SearchScope.BUILDS))
+
+
+def test_cursor_cannot_be_reused_for_another_sort() -> None:
+    codec = CursorCodec(b"a suitably long test secret")
+    original = SearchRequest("door", sort=SearchSort("width"))
+    cursor = codec.encode(_position(original, codec))
+
+    with pytest.raises(InvalidCursorError, match="different search request"):
+        codec.decode(
+            cursor,
+            request=SearchRequest("door", sort=SearchSort("width", SortDirection.DESCENDING)),
+        )
 
 
 def test_cursor_rejects_short_secret_and_garbage() -> None:

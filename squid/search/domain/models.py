@@ -22,6 +22,21 @@ class SearchMode(StrEnum):
     SEMANTIC = "semantic"
 
 
+class SortDirection(StrEnum):
+    """Direction for an explicit search-field sort."""
+
+    ASCENDING = "asc"
+    DESCENDING = "desc"
+
+
+@dataclass(frozen=True, slots=True)
+class SearchSort:
+    """A caller-selected scalar field ordering."""
+
+    field: str
+    direction: SortDirection = SortDirection.ASCENDING
+
+
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
     """A normalized search request passed to an application service."""
@@ -31,6 +46,7 @@ class SearchRequest:
     mode: SearchMode = SearchMode.LEXICAL
     page_size: int = 5
     cursor: str | None = None
+    sort: SearchSort | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.page_size <= 50:

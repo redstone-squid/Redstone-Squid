@@ -19,7 +19,7 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.embeds import RunningMessage
-from squid.search.domain import SearchMode, SearchRequest, SearchScope
+from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -51,18 +51,27 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         query="Lucene-style text and filters.",
         scope="What to search.",
         mode="Lexical or semantic ranking.",
+        sort="Numeric or text field to sort by, such as width or a data-tag query name.",
+        direction="Sort low-to-high or high-to-low.",
     )
     async def search_records(
         self,
         ctx: Context[BotT],
         scope: SearchScope = SearchScope.RECORDS,
         mode: SearchMode = SearchMode.LEXICAL,
+        sort: str | None = None,
+        direction: SortDirection = SortDirection.ASCENDING,
         *,
         query: str,
     ) -> None:
         """Search records, builds, and metadata using text and field filters."""
         await ctx.defer()
-        request = SearchRequest(query, scope=scope, mode=mode)
+        request = SearchRequest(
+            query,
+            scope=scope,
+            mode=mode,
+            sort=SearchSort(sort, direction) if sort is not None else None,
+        )
         page = await self.search.search(request)
         await ctx.send(
             view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),

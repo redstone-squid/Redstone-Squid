@@ -1,6 +1,7 @@
 """Typed search query syntax tree."""
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 from typing import TypeAlias
 
@@ -22,7 +23,7 @@ class ComparisonOperator(StrEnum):
     GREATER_THAN_OR_EQUAL = "gte"
 
 
-ScalarValue: TypeAlias = str | int | float | bool
+ScalarValue: TypeAlias = str | int | float | Decimal | bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,8 @@ class FieldExpression:
     operator: ComparisonOperator
     value: ScalarValue | RangeValue
     phrase: bool = False
+    storage_field: str | None = None
+    value_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from difflib import get_close_matches
 from enum import StrEnum
 
@@ -26,6 +27,10 @@ class FieldDefinition:
     value_type: FieldType
     supports_range: bool = False
     aliases: tuple[str, ...] = ()
+    storage_name: str | None = None
+    supports_sort: bool = False
+    unit_scales: tuple[tuple[str, Decimal], ...] = ()
+    numeric_quantum: Decimal | None = None
 
 
 class FieldRegistry:
@@ -57,11 +62,11 @@ class FieldRegistry:
             return raw
         if field.value_type is FieldType.NUMBER:
             try:
-                number = float(raw)
-            except ValueError as error:
+                number = _coerce_decimal(raw, field)
+            except (InvalidOperation, ValueError) as error:
                 msg = f"{field.name} expects a number"
                 raise ValueError(msg) from error
-            return int(number) if number.is_integer() else number
+            return number
         if field.value_type is FieldType.TIMESTAMP:
             try:
                 return datetime.fromisoformat(raw).isoformat()
@@ -81,6 +86,11 @@ class FieldRegistry:
         """Return canonical registered names."""
         return tuple(dict.fromkeys(field.name for field in self._fields.values()))
 
+    @property
+    def definitions(self) -> tuple[FieldDefinition, ...]:
+        """Return canonical field definitions without alias duplicates."""
+        return tuple(dict.fromkeys(self._fields.values()))
+
 
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
@@ -98,9 +108,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("version_scope", FieldType.TEXT),
         FieldDefinition("record_state", FieldType.TEXT),
         FieldDefinition("volume", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("width", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("height", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("depth", FieldType.NUMBER, supports_range=True),
+        FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),
+        FieldDefinition("height", FieldType.NUMBER, supports_range=True, supports_sort=True),
+        FieldDefinition("depth", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("orientation", FieldType.TEXT),
         FieldDefinition("extender_length", FieldType.NUMBER, supports_range=True),
         FieldDefinition("completion_at", FieldType.TIMESTAMP, supports_range=True, aliases=("completion_date",)),
@@ -116,3 +126,24 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("retraction_reset_time", FieldType.NUMBER, supports_range=True),
     )
 )
+
+
+def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
+    normalized = raw.strip().casefold()
+    if not field.unit_scales:
+        value = Decimal(normalized)
+    else:
+        matches = sorted(field.unit_scales, key=lambda item: len(item[0]), reverse=True)
+        for suffix, scale in matches:
+            if normalized.endswith(suffix.casefold()):
+                number = normalized[: -len(suffix)].strip()
+                value = Decimal(number) * scale
+                break
+        else:
+            value = Decimal(normalized)
+    if not value.is_finite():
+        raise ValueError
+    if field.numeric_quantum is not None and value % field.numeric_quantum != 0:
+        msg = f"{field.name} must align to increments of {field.numeric_quantum}"
+        raise ValueError(msg)
+    return value

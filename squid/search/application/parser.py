@@ -13,6 +13,7 @@ from squid.search.domain.query import (
     NotExpression,
     QueryExpression,
     RangeValue,
+    ScalarValue,
     SearchQuery,
     TextExpression,
 )
@@ -232,6 +233,8 @@ class SearchQueryParser:
             operator,
             self._coerce(field, value_token),
             phrase=value_token.kind is _TokenKind.PHRASE,
+            storage_field=field.storage_name,
+            value_type=field.value_type.value if field.storage_name is not None else None,
         )
 
     def _parse_range(self, field: FieldDefinition) -> FieldExpression:
@@ -245,9 +248,11 @@ class SearchQueryParser:
             field.name,
             ComparisonOperator.EQUAL,
             RangeValue(self._coerce(field, lower), self._coerce(field, upper)),
+            storage_field=field.storage_name,
+            value_type=field.value_type.value if field.storage_name is not None else None,
         )
 
-    def _coerce(self, field: FieldDefinition, token: _Token) -> str | int | float | bool:
+    def _coerce(self, field: FieldDefinition, token: _Token) -> ScalarValue:
         try:
             return self._registry.coerce(field, token.value)
         except ValueError as error:
@@ -332,7 +337,7 @@ def _quote(value: str) -> str:
     return f'"{value.replace("\\", "\\\\").replace('"', '\\"')}"'
 
 
-def _scalar(value: str | int | float | bool) -> str:
+def _scalar(value: ScalarValue) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     return str(value)

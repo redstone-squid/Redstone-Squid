@@ -41,6 +41,8 @@ from squid.search.infrastructure.models import (
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
 )
+from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
+from squid.tags.infrastructure.models import TagAlias, TagDefinition
 from squid.users.infrastructure.models import User
 from squid.versions.infrastructure.models import Version
 
@@ -252,6 +254,7 @@ class SearchProjectionLoader:
             .options(
                 selectinload(Build.build_restrictions).selectinload(BuildRestriction.restriction),
                 selectinload(Build.build_types).selectinload(BuildType.type),
+                selectinload(Build.tag_assignments),
                 selectinload(Build.links),
             )
         )
@@ -328,6 +331,24 @@ class SearchProjectionLoader:
             name for restriction in restrictions if (name := _mapped_text(restriction, "name")) is not None
         )
         type_names = tuple(name for build_type in types if (name := _mapped_text(build_type, "name")) is not None)
+        approved_assignments = tuple(
+            assignment for assignment in build.tag_assignments if assignment.definition.moderation_status == "approved"
+        )
+        assigned_tag_names = tuple(_render_tag_assignment(assignment) for assignment in approved_assignments)
+        official_restrictions = tuple(
+            assignment.definition.display_name
+            for assignment in approved_assignments
+            if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "restriction"
+        )
+        official_patterns = tuple(
+            assignment.definition.display_name
+            for assignment in approved_assignments
+            if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "pattern"
+        )
+        if official_restrictions:
+            restriction_names = official_restrictions
+        if official_patterns:
+            type_names = official_patterns
         creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "ign")) is not None)
         version_names = tuple(_version_name(version) for version in versions)
         dimensions = {
@@ -344,7 +365,21 @@ class SearchProjectionLoader:
             ProjectionFacet("status", build.submission_status.name.lower()),
             ProjectionFacet("kind", build.category or "unknown"),
             *(ProjectionFacet(name, Decimal(value)) for name, value in dimensions.items()),
+            *(
+                ProjectionFacet(f"tag:{assignment.tag_id}", value)
+                for assignment in approved_assignments
+                if (value := _assignment_value(assignment)) is not None
+            ),
         ]
+        for name in (
+            "normal_opening_time",
+            "visible_opening_time",
+            "normal_closing_time",
+            "visible_closing_time",
+        ):
+            value = getattr(build, name, None)
+            if value is not None:
+                facets.append(ProjectionFacet(name.removeprefix("normal_"), Decimal(value)))
         if build.completion_at is not None:
             facets.append(ProjectionFacet("completion_at", build.completion_at))
         return SearchProjection(
@@ -354,7 +389,7 @@ class SearchProjectionLoader:
             subtitle=canonical_subtitle,
             description=description,
             status=build.submission_status.name.lower(),
-            tags=(*restriction_names, *type_names, *creator_names, *version_names),
+            tags=(*assigned_tag_names, *restriction_names, *type_names, *creator_names, *version_names),
             document_data={
                 "build_id": build.id,
                 "canonical_title": canonical_title,
@@ -365,6 +400,7 @@ class SearchProjectionLoader:
                 "creators": creator_names,
                 "restrictions": restriction_names,
                 "types": type_names,
+                "tags": assigned_tag_names,
                 "versions": version_names,
             },
             facets=tuple(facets),
@@ -467,6 +503,31 @@ class SearchProjectionLoader:
         )
 
     async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
+        if subtype == "tag":
+            definition = await self._session.get(TagDefinition, source_id)
+            if definition is None or definition.moderation_status != "approved":
+                return None
+            aliases = tuple(
+                (
+                    await self._session.scalars(
+                        select(TagAlias.alias).where(TagAlias.tag_id == source_id).order_by(TagAlias.alias)
+                    )
+                ).all()
+            )
+            return _metadata_projection(
+                source_key=f"tag:{source_id}",
+                title=definition.display_name,
+                subtype="tag",
+                tags=aliases,
+                data={
+                    "tag_id": source_id,
+                    "aliases": aliases,
+                    "authority": definition.authority,
+                    "semantic_kind": definition.semantic_kind,
+                    "value_type": definition.value_type,
+                    "query_name": definition.query_name,
+                },
+            )
         if subtype == "restriction":
             restriction = await self._session.get(Restriction, source_id)
             if restriction is None:
@@ -642,6 +703,7 @@ def projection_source_hash(projection: SearchProjection) -> str:
             "status": projection.status,
             "tags": projection.tags,
             "document_data": projection.document_data,
+            "facets": tuple((facet.field_name, facet.value) for facet in projection.facets),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -657,3 +719,27 @@ def _version_name(version: Version) -> str:
 def _mapped_text(model: object, attribute: str) -> str | None:
     value = vars(model).get(attribute)
     return value if isinstance(value, str) else None
+
+
+def _assignment_value(assignment: TagAssignment) -> str | Decimal | bool | None:
+    value_type = assignment.value_type
+    attribute = {
+        "numeric": "numeric_value",
+        "text": "text_value",
+        "boolean": "boolean_value",
+    }.get(value_type)
+    return None if attribute is None else getattr(assignment, attribute)
+
+
+def _render_tag_assignment(assignment: TagAssignment) -> str:
+    definition = assignment.definition
+    name = definition.display_name
+    value = _assignment_value(assignment)
+    if value is None:
+        return name
+    unit = assignment.display_unit_key or definition.default_display_unit_key or ""
+    template = definition.render_template
+    try:
+        return template.format(name=name, value=value, unit=unit)
+    except (IndexError, KeyError, ValueError):
+        return f"{name}: {value}{unit}"

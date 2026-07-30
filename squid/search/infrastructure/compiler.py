@@ -61,7 +61,16 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
 
     def _compile_field(self, expression: FieldExpression) -> ColumnElement[bool]:
         field = self._registry.resolve(expression.field)
-        if field is None:
+        if field is None and (expression.storage_field is None or expression.value_type is None):
+            return false()
+        if expression.value_type is not None:
+            field_type = FieldType(expression.value_type)
+        elif field is not None:
+            field_type = field.value_type
+        else:
+            return false()
+        storage_field = expression.storage_field or (field.name if field is not None else None)
+        if storage_field is None:
             return false()
         if expression.field in _VECTOR_FIELDS:
             if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
@@ -87,14 +96,14 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
             FieldType.NUMBER: facet.numeric_value,
             FieldType.TIMESTAMP: facet.timestamp_value,
             FieldType.BOOLEAN: facet.boolean_value,
-        }[field.value_type]
-        comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
+        }[field_type]
+        comparison = _comparison(cast(ColumnElement[object], value_column), expression, field_type)
         return (
             facet.__table__.select()
             .with_only_columns(facet.document_id)
             .where(
                 facet.document_id == SearchDocument.id,
-                facet.field_name == field.name,
+                facet.field_name == storage_field,
                 comparison,
             )
             .exists()
@@ -127,7 +136,7 @@ def _comparison(
     }[expression.operator]
 
 
-def _database_value(value: str | int | float | bool, field_type: FieldType) -> str | Decimal | bool | Instant:
+def _database_value(value: str | int | float | Decimal | bool, field_type: FieldType) -> str | Decimal | bool | Instant:
     if field_type is FieldType.NUMBER:
         return Decimal(str(value))
     if field_type is FieldType.TIMESTAMP:

@@ -109,6 +109,7 @@ class SearchResultsView(ErrorHandledLayoutView):
             self._request.mode,
             self._request.page_size,
             self._page.next_cursor,
+            self._request.sort,
         )
         self._page = await self._service.search(self._request)
         self.render_results()
@@ -125,6 +126,7 @@ class SearchResultsView(ErrorHandledLayoutView):
             self._request.mode,
             self._request.page_size,
             cursor,
+            self._request.sort,
         )
         self._page = await self._service.search(self._request)
         self.render_results()

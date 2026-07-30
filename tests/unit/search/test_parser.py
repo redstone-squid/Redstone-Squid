@@ -1,8 +1,10 @@
 """Search query parser tests."""
 
+from decimal import Decimal
+
 import pytest
 
-from squid.search.application import QuerySyntaxError, SearchQueryParser
+from squid.search.application import FieldDefinition, FieldRegistry, FieldType, QuerySyntaxError, SearchQueryParser
 from squid.search.domain import (
     BooleanExpression,
     BooleanOperator,
@@ -96,3 +98,28 @@ def test_parser_normalizes_alias_and_timestamp() -> None:
 
 def test_parser_accepts_empty_query_for_filter_defaults() -> None:
     assert SearchQueryParser().parse("   ").expression is None
+
+
+def test_parser_coerces_units_for_database_defined_data_tag() -> None:
+    registry = FieldRegistry(
+        (
+            FieldDefinition(
+                "closing_delay",
+                FieldType.NUMBER,
+                supports_range=True,
+                storage_name="tag:42",
+                unit_scales=(("s", Decimal("20")), ("gt", Decimal("1"))),
+                numeric_quantum=Decimal("1"),
+            ),
+        )
+    )
+
+    parsed = SearchQueryParser(registry).parse("closing_delay:[0.4s TO 10gt]")
+
+    assert parsed.expression == FieldExpression(
+        "closing_delay",
+        ComparisonOperator.EQUAL,
+        RangeValue(Decimal("8.0"), Decimal("10")),
+        storage_field="tag:42",
+        value_type="number",
+    )

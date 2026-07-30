@@ -10,6 +10,8 @@ from squid.search.domain.models import (
     SearchPage,
     SearchRequest,
     SearchScope,
+    SearchSort,
+    SortDirection,
 )
 from squid.search.domain.query import (
     BooleanExpression,
@@ -41,5 +43,7 @@ __all__ = [
     "SearchQuery",
     "SearchRequest",
     "SearchScope",
+    "SearchSort",
+    "SortDirection",
     "TextExpression",
 ]

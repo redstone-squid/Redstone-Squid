@@ -13,7 +13,7 @@ from squid.search.application.ranking import (
     reciprocal_rank_fusion,
     sort_filter_only,
 )
-from squid.search.application.services import SearchService
+from squid.search.application.services import SearchFieldRegistryProvider, SearchService
 
 __all__ = [
     "DEFAULT_FIELD_REGISTRY",
@@ -28,6 +28,7 @@ __all__ = [
     "RankingBranch",
     "SearchBackend",
     "SearchDocumentOrder",
+    "SearchFieldRegistryProvider",
     "SearchQueryCompiler",
     "SearchQueryParser",
     "SearchService",

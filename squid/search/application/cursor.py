@@ -64,6 +64,14 @@ class CursorCodec:
                 "mode": request.mode.value,
                 "query": " ".join(request.query.split()),
                 "scope": request.scope.value,
+                "sort": (
+                    None
+                    if request.sort is None
+                    else {
+                        "field": request.sort.field,
+                        "direction": request.sort.direction.value,
+                    }
+                ),
             },
             separators=(",", ":"),
             sort_keys=True,
