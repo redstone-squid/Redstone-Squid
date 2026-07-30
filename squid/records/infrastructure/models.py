@@ -92,6 +92,11 @@ class RecordDefinition(Base, kw_only=True):
         default=None,
     )
     category_key: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    subtitle: Mapped[str | None] = mapped_column(Text, default=None)
+    title_diagnostics: Mapped[list[dict[str, str | list[str]]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
+    )
     materialization_source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eager'"))
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
@@ -135,7 +140,6 @@ class RecordComputationRun(Base, kw_only=True):
         ),
         Index(
             "record_computation_runs_one_active_idx",
-            "ruleset_id",
             "build_kind",
             "version_id",
             unique=True,

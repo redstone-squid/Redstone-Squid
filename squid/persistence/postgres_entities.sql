@@ -310,17 +310,22 @@ BEGIN
 
     IF target_kind IN ('door', 'extender') THEN
         INSERT INTO public.record_recompute_queue
-            (scope_key, build_kind, build_id, reason, enqueued_at)
+            (scope_key, build_kind, build_id, reasons, enqueued_at)
         VALUES (
             target_kind,
             target_kind,
             CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
-            'source_change',
+            '["source_change"]'::jsonb,
             now()
         )
         ON CONFLICT (scope_key) DO UPDATE
         SET build_id = EXCLUDED.build_id,
-            reason = EXCLUDED.reason,
+            reasons = (
+                SELECT jsonb_agg(DISTINCT reason)
+                FROM jsonb_array_elements_text(
+                    record_recompute_queue.reasons || EXCLUDED.reasons
+                ) AS reason
+            ),
             enqueued_at = EXCLUDED.enqueued_at,
             attempts = 0,
             locked_at = NULL,

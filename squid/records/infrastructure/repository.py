@@ -49,7 +49,7 @@ from squid.records.infrastructure.models import (
 
 RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "1"
-FORMATTER_VERSION = "1"
+FORMATTER_VERSION = "2"
 
 
 class PostgresRecordRepository:
@@ -68,26 +68,65 @@ class PostgresRecordRepository:
             return ()
 
     async def active_ruleset_id(self) -> int:
-        """Return the active ruleset, seeding the initial immutable ruleset if needed."""
+        """Return the running ruleset, activating and queuing it when needed."""
         async with self._session_factory() as session, session.begin():
             await _advisory_lock(session, "record-ruleset-activation")
-            statement = (
-                select(RecordRuleset.id)
-                .where(RecordRuleset.activated_at.is_not(None))
-                .order_by(RecordRuleset.activated_at.desc())
-                .limit(1)
+            active_id = (
+                await session.execute(
+                    select(RecordRuleset.id)
+                    .where(RecordRuleset.activated_at.is_not(None))
+                    .order_by(RecordRuleset.activated_at.desc(), RecordRuleset.id.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            ruleset = (
+                await session.execute(
+                    select(RecordRuleset).where(
+                        RecordRuleset.document_hash == RULESET_DOCUMENT_HASH,
+                        RecordRuleset.calculator_version == CALCULATOR_VERSION,
+                        RecordRuleset.formatter_version == FORMATTER_VERSION,
+                    )
+                )
+            ).scalar_one_or_none()
+            if ruleset is not None and ruleset.id == active_id:
+                return ruleset.id
+
+            now = Instant.now()
+            if ruleset is None:
+                ruleset = RecordRuleset(
+                    document_hash=RULESET_DOCUMENT_HASH,
+                    calculator_version=CALCULATOR_VERSION,
+                    formatter_version=FORMATTER_VERSION,
+                    activated_at=now,
+                )
+                session.add(ruleset)
+                await session.flush()
+            else:
+                ruleset.activated_at = now
+            await session.execute(
+                update(RecordRuleset)
+                .where(RecordRuleset.id != ruleset.id, RecordRuleset.activated_at.is_not(None))
+                .values(activated_at=None)
             )
-            ruleset_id = (await session.execute(statement)).scalar_one_or_none()
-            if ruleset_id is not None:
-                return ruleset_id
-            ruleset = RecordRuleset(
-                document_hash=RULESET_DOCUMENT_HASH,
-                calculator_version=CALCULATOR_VERSION,
-                formatter_version=FORMATTER_VERSION,
-                activated_at=Instant.now(),
-            )
-            session.add(ruleset)
-            await session.flush()
+            for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
+                await session.execute(
+                    insert(RecordRecomputeQueueItem)
+                    .values(
+                        scope_key=kind.value,
+                        build_kind=kind.value,
+                        reasons=["ruleset_activation"],
+                    )
+                    .on_conflict_do_update(
+                        index_elements=[RecordRecomputeQueueItem.scope_key],
+                        set_={
+                            "reasons": ["ruleset_activation"],
+                            "enqueued_at": func.now(),
+                            "attempts": 0,
+                            "locked_at": None,
+                            "last_error": None,
+                        },
+                    )
+                )
             return ruleset.id
 
     async def active_current_version_id(self) -> int | None:
@@ -109,7 +148,7 @@ class PostgresRecordRepository:
         async with self._session_factory() as session, session.begin():
             await _advisory_lock(
                 session,
-                f"record-run:{batch.ruleset_id}:{batch.kind.value}:{batch.version_id}",
+                f"record-run:{batch.kind.value}:{batch.version_id}",
             )
             run = RecordComputationRun(
                 ruleset_id=batch.ruleset_id,
@@ -177,7 +216,6 @@ class PostgresRecordRepository:
             await session.execute(
                 update(RecordComputationRun)
                 .where(
-                    RecordComputationRun.ruleset_id == batch.ruleset_id,
                     RecordComputationRun.build_kind == batch.kind.value,
                     version_predicate,
                     RecordComputationRun.is_active.is_(True),
@@ -250,6 +288,9 @@ class PostgresRecordRepository:
                         version_scope=VersionScope.ALL_TIME.value,
                         version_id=None,
                         category_key=category.key,
+                        title=f"{record_class.value.replace('_', ' ').title()} {category.base_key}",
+                        subtitle=None,
+                        title_diagnostics=[],
                         materialization_source="public_lookup",
                     )
                     session.add(definition)
@@ -384,6 +425,9 @@ class PostgresRecordRepository:
         )
         definition = (await session.execute(statement)).scalar_one_or_none()
         if definition is not None:
+            definition.title = computed.title.title
+            definition.subtitle = computed.title.subtitle
+            definition.title_diagnostics = [diagnostic.as_dict() for diagnostic in computed.title.diagnostics]
             await self._ensure_facets(session, definition.id, computed)
             return definition
 
@@ -394,6 +438,9 @@ class PostgresRecordRepository:
             version_scope=computed.scope.value,
             version_id=computed.version_id,
             category_key=computed.competition.identity.key,
+            title=computed.title.title,
+            subtitle=computed.title.subtitle,
+            title_diagnostics=[diagnostic.as_dict() for diagnostic in computed.title.diagnostics],
             materialization_source=computed.competition.source,
         )
         session.add(definition)
