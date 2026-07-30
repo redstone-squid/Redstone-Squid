@@ -16,6 +16,7 @@
   - `FASTEST SMALLEST`
   - `SMALLEST FASTEST`
 - [ ] Add calculators and typed categories for entrances and utilities.
+- [ ] Add piston-extender create/update submission persistence; record computation and read/search mapping are supported.
 - [x] Implement the fixed-size Door Rules title formatter.
   - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, conflict diagnostics, and
     current-version `[BROKEN]` presentation.
