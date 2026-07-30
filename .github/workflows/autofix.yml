@@ -1,7 +1,7 @@
-name: autofix.ci
+name: Automatic formatting
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   push:
@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.head_ref || github.ref_name }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
       - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -51,8 +53,23 @@ jobs:
           uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files ||
             uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files
 
-      - name: Apply automatic fixes
-        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+      - name: Commit automatic fixes
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --update
+          git commit -m "ci: apply automatic formatting"
+          gh auth setup-git
+          git push origin "HEAD:${BRANCH}"
 
       - name: Minimize uv cache
         if: always()
