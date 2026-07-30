@@ -3,7 +3,7 @@
 from squid.search.application.cursor import CursorCodec, InvalidCursorError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.search.application.parser import QuerySyntaxError, SearchQueryParser
-from squid.search.application.ports import SearchQueryCompiler
+from squid.search.application.ports import SearchBackend, SearchQueryCompiler, SearchSlice
 from squid.search.application.query_analysis import is_filter_only, positive_text_expressions
 from squid.search.application.ranking import (
     DEFAULT_RRF_WEIGHTS,
@@ -13,6 +13,7 @@ from squid.search.application.ranking import (
     reciprocal_rank_fusion,
     sort_filter_only,
 )
+from squid.search.application.services import SearchService
 
 __all__ = [
     "DEFAULT_FIELD_REGISTRY",
@@ -25,9 +26,12 @@ __all__ = [
     "QuerySyntaxError",
     "RankedCandidate",
     "RankingBranch",
+    "SearchBackend",
     "SearchDocumentOrder",
     "SearchQueryCompiler",
     "SearchQueryParser",
+    "SearchService",
+    "SearchSlice",
     "is_filter_only",
     "positive_text_expressions",
     "reciprocal_rank_fusion",
