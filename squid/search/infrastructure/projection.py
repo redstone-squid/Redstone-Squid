@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
+from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
@@ -296,8 +297,27 @@ class SearchProjectionLoader:
                 )
             ).all()
         )
+        canonical_title: str | None = None
+        canonical_subtitle: str | None = None
+        title_diagnostics: list[dict[str, str | list[str]]] = []
         try:
-            title = (await self._build_mapper.to_domain(self._session, build)).title
+            domain_build = await self._build_mapper.to_domain(self._session, build)
+            formatted = format_build_category(domain_build)
+            current_java = await self._session.scalar(
+                select(Version)
+                .where(Version.edition == "Java")
+                .order_by(
+                    Version.major_version.desc(),
+                    Version.minor_version.desc(),
+                    Version.patch_number.desc(),
+                )
+                .limit(1)
+            )
+            current_version = _version_name(current_java) if current_java is not None else None
+            title = format_build_display_title(domain_build, markdown=False, current_version=current_version)
+            canonical_title = formatted.title
+            canonical_subtitle = formatted.subtitle
+            title_diagnostics = [diagnostic.as_dict() for diagnostic in formatted.diagnostics]
         except (DataIntegrityError, InvalidBuildError, NotImplementedError, TypeError, ValueError):
             title = f"{build.category or 'Build'} #{build.id}"
         description = build.description
@@ -331,11 +351,15 @@ class SearchProjectionLoader:
             resource_kind="build",
             source_key=str(build.id),
             title=title,
+            subtitle=canonical_subtitle,
             description=description,
             status=build.submission_status.name.lower(),
             tags=(*restriction_names, *type_names, *creator_names, *version_names),
             document_data={
                 "build_id": build.id,
+                "canonical_title": canonical_title,
+                "canonical_subtitle": canonical_subtitle,
+                "title_diagnostics": title_diagnostics,
                 "category": build.category,
                 "dimensions": dimensions,
                 "creators": creator_names,

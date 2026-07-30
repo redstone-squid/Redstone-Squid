@@ -65,6 +65,15 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     assert "Submission ID: 7" in str(payload)
 
 
+@pytest.mark.asyncio
+async def test_build_handler_does_not_repeat_headline_component_restrictions(display_build: Build) -> None:
+    versions = SimpleNamespace(newest=AsyncMock(return_value="Java 1.20"))
+    bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build)
+
+    assert await handler.get_description() is None
+
+
 def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:
     form = BuildSubmissionForm(display_build, cast(BuildService, object()))
     payload = form.to_components()

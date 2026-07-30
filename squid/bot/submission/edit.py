@@ -61,6 +61,7 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 "door_type": self.pattern,
                 "door_orientation_type": self.door_type,
                 "wiring_placement_restrictions": self.wiring_placement_restrictions,
+                "animated_restrictions": self.animated_restrictions,
                 "component_restrictions": self.component_restrictions,
                 "locationality": self.locationality,
                 "directionality": self.directionality,
@@ -86,6 +87,7 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         build_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
         works_in: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
+        animated_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Symmetrical, Full Sync". See the regulations (/docs) for the complete list.')
         component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
         extra_user_info: str | None | MissingType = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
         normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in gameticks. (1s = 20gt)')

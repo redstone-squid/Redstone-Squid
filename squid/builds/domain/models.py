@@ -1,6 +1,5 @@
 """Build domain entity and value objects."""
 
-import re
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
@@ -31,13 +30,14 @@ BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entran
 BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
 DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
-RestrictionTypeLiteral = Literal["wiring-placement", "component", "miscellaneous"]
+RestrictionTypeLiteral = Literal["wiring-placement", "animated", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
 MediaTypeLiteral = Literal["image", "video", "world-download"]
 
 
 class UnknownRestrictions(TypedDict, total=False):
     wiring_placement_restrictions: list[str]
+    animated_restrictions: list[str]
     component_restrictions: list[str]
     miscellaneous_restrictions: list[str]
 
@@ -176,8 +176,13 @@ class Build:
     door_orientation_type: DoorOrientationLiteral | None = None
 
     wiring_placement_restrictions: list[str] = field(default_factory=list)
+    animated_restrictions: list[str] = field(default_factory=list)
     component_restrictions: list[str] = field(default_factory=list)
     miscellaneous_restrictions: list[str] = field(default_factory=list)
+
+    extender_orientation: str | None = None
+    extension_length: int | None = None
+    extender_type: str | None = None
 
     normal_closing_time: int | None = None
     normal_opening_time: int | None = None
@@ -240,12 +245,18 @@ class Build:
     def restrictions(
         self,
     ) -> dict[
-        Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
+        Literal[
+            "wiring_placement_restrictions",
+            "animated_restrictions",
+            "component_restrictions",
+            "miscellaneous_restrictions",
+        ],
         Sequence[str] | None,
     ]:
         """The restrictions of the build."""
         return {
             "wiring_placement_restrictions": self.wiring_placement_restrictions,
+            "animated_restrictions": self.animated_restrictions,
             "component_restrictions": self.component_restrictions,
             "miscellaneous_restrictions": self.miscellaneous_restrictions,
         }
@@ -254,12 +265,18 @@ class Build:
     async def restrictions(
         self,
         restrictions: dict[
-            Literal["wiring_placement_restrictions", "component_restrictions", "miscellaneous_restrictions"],
+            Literal[
+                "wiring_placement_restrictions",
+                "animated_restrictions",
+                "component_restrictions",
+                "miscellaneous_restrictions",
+            ],
             Sequence[str] | None,
         ],
     ) -> None:
         """Sets the restrictions of the build."""
         self.wiring_placement_restrictions = list(restrictions.get("wiring_placement_restrictions") or [])
+        self.animated_restrictions = list(restrictions.get("animated_restrictions") or [])
         self.component_restrictions = list(restrictions.get("component_restrictions") or [])
         self.miscellaneous_restrictions = list(restrictions.get("miscellaneous_restrictions") or [])
 
@@ -270,6 +287,7 @@ class Build:
     ) -> None:
         """Replace restrictions using already-loaded classification metadata."""
         self.wiring_placement_restrictions = []
+        self.animated_restrictions = []
         self.component_restrictions = []
         self.miscellaneous_restrictions = []
 
@@ -278,6 +296,7 @@ class Build:
         }
         bucket: dict[RestrictionTypeLiteral, list[str]] = {
             "wiring-placement": self.wiring_placement_restrictions,
+            "animated": self.animated_restrictions,
             "component": self.component_restrictions,
             "miscellaneous": self.miscellaneous_restrictions,
         }
@@ -294,62 +313,10 @@ class Build:
 
     @property
     def title(self) -> str:
-        """The official Redstone Squid defined title for the build."""
-        title = ""
+        """The user-facing title, including individual-build UX decoration."""
+        from squid.builds.domain.titles import format_build_display_title
 
-        if self.category != "Door":
-            msg = "Only doors are supported for now."
-            raise NotImplementedError(msg)
-
-        if self.submission_status == Status.PENDING:
-            title += "Pending: "
-        elif self.submission_status == Status.DENIED:
-            title += "Denied: "
-        if self.ai_generated:
-            title += "\N{ROBOT FACE}"
-        # Special casing misc restrictions shaped like "0.3s" and "524 Blocks"
-        for restriction in self.extra_info.get("unknown_restrictions", {}).get("miscellaneous_restrictions", []):
-            if re.match(r"\d+\.\d+\s*s", restriction) or re.match(r"\d+\s*[Bb]locks", restriction):
-                title += f"{restriction} "
-
-        # FIXME: This is included in the title for now to match people's expectations
-        for restriction in self.component_restrictions:
-            title += f"{restriction} "
-        for restriction in self.extra_info.get("unknown_restrictions", {}).get("component_restrictions", []):
-            title += f"*{restriction}* "
-
-        # Door dimensions
-        if self.door_width and self.door_height and self.door_depth and self.door_depth > 1:
-            title += f"{self.door_width}x{self.door_height}x{self.door_depth} "
-        elif self.door_width and self.door_height:
-            title += f"{self.door_width}x{self.door_height} "
-        elif self.door_width:
-            title += f"{self.door_width} Wide "
-        elif self.door_height:
-            title += f"{self.door_height} High "
-
-        # Wiring Placement Restrictions
-        for restriction in self.wiring_placement_restrictions:
-            title += f"{restriction} "
-
-        for restriction in self.extra_info.get("unknown_restrictions", {}).get("wiring_placement_restrictions", []):
-            title += f"*{restriction}* "
-
-        # Pattern
-        for pattern in self.door_type:
-            if pattern != "Regular":
-                title += f"{pattern} "
-
-        for pattern in self.extra_info.get("unknown_patterns", []):
-            title += f"*{pattern}* "
-
-        # Door type
-        if self.door_orientation_type is None:
-            msg = "Door orientation type information (i.e. Door/Trapdoor/Skydoor) is missing."
-            raise InvalidBuildError(msg)
-        title += self.door_orientation_type
-
-        return title
+        return format_build_display_title(self, markdown=True)
 
     def diff[T: Any](self, other: "Build", *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """

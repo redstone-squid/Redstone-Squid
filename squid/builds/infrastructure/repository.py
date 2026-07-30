@@ -213,7 +213,10 @@ class BuildRepository:
 
         # Handle restrictions
         all_restrictions = (
-            build.wiring_placement_restrictions + build.component_restrictions + build.miscellaneous_restrictions
+            build.wiring_placement_restrictions
+            + build.animated_restrictions
+            + build.component_restrictions
+            + build.miscellaneous_restrictions
         )
         if all_restrictions:
             restriction_objects, unknown_restrictions = await self._get_restrictions(build, session, all_restrictions)
@@ -287,11 +290,14 @@ class BuildRepository:
         found_names = {r.name for r in found_restrictions}
 
         unknown_wiring = [r for r in build.wiring_placement_restrictions if r.title() not in found_names]
+        unknown_animated = [r for r in build.animated_restrictions if r.title() not in found_names]
         unknown_component = [r for r in build.component_restrictions if r.title() not in found_names]
         unknown_misc = [r for r in build.miscellaneous_restrictions if r.title() not in found_names]
 
         if unknown_wiring:
             unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring
+        if unknown_animated:
+            unknown_restrictions["animated_restrictions"] = unknown_animated
         if unknown_component:
             unknown_restrictions["component_restrictions"] = unknown_component
         if unknown_misc:

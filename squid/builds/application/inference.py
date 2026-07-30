@@ -126,10 +126,11 @@ class BuildInferenceService:
         restriction_fields: tuple[tuple[str, RestrictionTypeLiteral, str], ...] = (
             ("component_restriction", "component", "component"),
             ("wiring_placement_restrictions", "wiring-placement", "wiring"),
+            ("animated_restrictions", "animated", "animated"),
             ("miscellaneous_restrictions", "miscellaneous", "miscellaneous"),
         )
         for field, restriction_type, destination in restriction_fields:
-            value = variables[field]
+            value = variables.get(field)
             if value is not None:
                 destinations.append(destination)
                 validations.append(self._taxonomy.validate_restrictions(value.split(", "), restriction_type))
@@ -149,6 +150,9 @@ class BuildInferenceService:
             elif destination == "wiring":
                 build.wiring_placement_restrictions = recognized
                 unknown["wiring_placement_restrictions"] = unrecognized
+            elif destination == "animated":
+                build.animated_restrictions = recognized
+                unknown["animated_restrictions"] = unrecognized
             elif destination == "miscellaneous":
                 build.miscellaneous_restrictions = recognized
                 unknown["miscellaneous_restrictions"] = unrecognized

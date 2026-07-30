@@ -9,6 +9,7 @@ COMPLETE_OUTPUT = """
 record_category: Smallest
 component_restriction: No Observers, Mystery
 wiring_placement_restrictions: Seamless
+animated_restrictions: Symmetrical
 miscellaneous_restrictions: none
 piston_door_type: Regular, Unknown Pattern
 door_orientation: Normal
@@ -86,6 +87,7 @@ async def test_infer_maps_generated_text_and_validates_taxonomy() -> None:
     assert build.door_dimensions == (3, 4, 1)
     assert build.dimensions == (8, 9, 10)
     assert build.component_restrictions == ["No Observers"]
+    assert build.animated_restrictions == ["Symmetrical"]
     unknown_restrictions = build.extra_info.get("unknown_restrictions")
     assert unknown_restrictions is not None
     assert unknown_restrictions.get("component_restrictions") == ["Mystery"]

@@ -19,6 +19,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
+from squid.builds.domain.titles import format_build_display_title
 from squid.core.time import utcnow
 
 if TYPE_CHECKING:
@@ -142,9 +143,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     async def render_container(self) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card for composition into a larger V2 layout."""
         build = self.build
+        current_java_version = await self.bot.services.versions.newest("Java")
         fields = tuple(CardField(name, escape_markdown(value)) for name, value in self.get_metadata_fields().items())
         container = card_container(
-            self.build.title,
+            format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
             fields=fields,
             footer=f"Submission ID: {build.id} • Last Update {utcnow()}",
@@ -192,12 +194,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
         build = self.build
         desc = []
-
-        if build.component_restrictions and build.component_restrictions[0] != "None":
-            desc.append(", ".join(build.component_restrictions))
-
-        if await self.bot.services.versions.newest("Java") not in build.versions:
-            desc.append("**Broken** in current (Java) version.")
 
         if "Locational" in build.miscellaneous_restrictions:
             desc.append("**Locational**.")
