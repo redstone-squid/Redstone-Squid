@@ -111,7 +111,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Submit, view, confirm and deny submissions."""
         await ctx.send_help("build")
 
-    @build_hybrid_group.command(name="pending")
+    @build_hybrid_group.command(name="pending")  # pyright: ignore[reportFunctionMemberAccess]
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
@@ -135,7 +135,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @build_hybrid_group.command(name="view")
+    @build_hybrid_group.command(name="view")  # pyright: ignore[reportFunctionMemberAccess]
     @app_commands.describe(build_id="The ID of the build you want to see.")
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
@@ -171,7 +171,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
         return None
 
-    @build_hybrid_group.command(name="debug")
+    @build_hybrid_group.command(name="debug")  # pyright: ignore[reportFunctionMemberAccess]
     @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission's debug info."""

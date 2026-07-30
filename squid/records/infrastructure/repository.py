@@ -210,7 +210,7 @@ class PostgresRecordRepository:
             ).scalars()
             identities: list[CategoryIdentity] = []
             for key in keys:
-                identity = _parse_category_key(key)
+                identity = parse_category_key(key)
                 if identity is not None:
                     identities.append(identity)
             return tuple(identities)
@@ -597,7 +597,7 @@ def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordG
     )
 
 
-def _parse_category_key(key: str) -> CategoryIdentity | None:
+def parse_category_key(key: str) -> CategoryIdentity | None:
     try:
         kind_value, remainder = key.split(":", maxsplit=1)
         base_key, restriction_part = remainder.rsplit(":r[", maxsplit=1)
