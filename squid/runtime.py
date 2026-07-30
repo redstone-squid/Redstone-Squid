@@ -8,6 +8,8 @@ from typing import Self
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.messages.application import MessageService
+from squid.records.application import RecordComputationService, RecordService
+from squid.search.application import SearchService
 from squid.settings.application import SettingsService
 from squid.users.application import UserService
 from squid.versions.application.services import VersionService
@@ -23,6 +25,10 @@ class ApplicationServices:
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
+    records: RecordService
+    record_computation: RecordComputationService
+    search: SearchService
+    refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     settings: SettingsService
     users: UserService
     versions: VersionService

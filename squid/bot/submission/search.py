@@ -3,16 +3,15 @@
 import logging
 from typing import TYPE_CHECKING
 
-import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
 from discord.utils import escape_markdown
 
+from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils.components import (
-    StaticLayout,
     edit_layout,
     error_layout,
     info_layout,
@@ -20,6 +19,7 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.embeds import RunningMessage
+from squid.search.domain import SearchMode, SearchRequest, SearchScope
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -32,70 +32,42 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.queries = bot.services.build_queries
+        self.search = bot.services.search
 
     @commands.hybrid_command("search_using_sucky_embeddings")
     @app_commands.describe(query="Whatever you want to search for.")
     async def search_builds(self, ctx: Context[BotT], query: str):
-        """Searches for a build with natural language."""
+        """Searches builds semantically, with lexical fallback."""
         await ctx.defer()
-        build = await self.queries.semantic(query)
-        if build is None:
-            await ctx.send(
-                view=error_layout("No results found", "No builds match that query."),
-                allowed_mentions=no_mentions(),
-            )
-            return
+        request = SearchRequest(query, scope=SearchScope.BUILDS, mode=SearchMode.SEMANTIC)
+        page = await self.search.search(request)
         await ctx.send(
-            view=await self.bot.for_build(build).render_layout(),
+            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
             allowed_mentions=no_mentions(),
         )
 
     @commands.hybrid_command("search")
-    @app_commands.describe(query="The record's title.")
-    async def search_records(self, ctx: Context[BotT], query: str):
-        """Searches for a **record** by title."""
-        async with RunningMessage(ctx) as sent_message:
-            matches = await self.queries.search_records(query)
-            if not matches:
-                return await edit_layout(
-                    sent_message,
-                    error_layout("No results found", "No records match that query."),
-                    allowed_mentions=no_mentions(),
-                )
-
-            # Use the running message to display the top result
-            top_door = matches[0][0]
-            build = await self.queries.get(top_door.id)
-            assert build is not None, "A record must have a build."
-            container = await self.bot.for_build(build).render_container()
-            content = f"Top match: {top_door.title} (score: {matches[0][1]:.1f})"
-            content += (
-                "\n/search is in early testing, results are likely inaccurate. "
-                "Please use discord's built-in search function if you cannot find "
-                "what you want in the first try"
-            )
-            await edit_layout(
-                sent_message,
-                StaticLayout(discord.ui.TextDisplay(content), container),
-                allowed_mentions=no_mentions(),
-            )
-            other_results = [(door, score, idx) for door, score, idx in matches[1:] if score >= 50][:10]
-            if other_results:
-                await ctx.send(
-                    view=info_layout(
-                        f"{len(other_results)} other matches",
-                        "\n".join(
-                            f"{door.title} (ID: {door.id}) (score: {score:.1f})" for door, score, _ in other_results
-                        ),
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
-                return None
-            await ctx.send(
-                view=text_layout("No other results met the score threshold."),
-                allowed_mentions=no_mentions(),
-            )
-            return None
+    @app_commands.describe(
+        query="Lucene-style text and filters.",
+        scope="What to search.",
+        mode="Lexical or semantic ranking.",
+    )
+    async def search_records(
+        self,
+        ctx: Context[BotT],
+        scope: SearchScope = SearchScope.RECORDS,
+        mode: SearchMode = SearchMode.LEXICAL,
+        *,
+        query: str,
+    ) -> None:
+        """Search records, builds, and metadata using text and field filters."""
+        await ctx.defer()
+        request = SearchRequest(query, scope=scope, mode=mode)
+        page = await self.search.search(request)
+        await ctx.send(
+            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.command("search_restrictions")
     async def search_restrictions(self, ctx: Context[BotT], query: str | None):
