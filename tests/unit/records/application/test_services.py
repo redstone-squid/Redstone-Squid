@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -134,6 +135,53 @@ async def test_rebuild_computes_eager_subsets_and_both_metrics() -> None:
     assert smallest.title.title == "Smallest Flush 2x2 Door"
     assert tuple(period.build_ids for period in fastest.history) == ((1,), (2,))
     assert fastest.history[0].held_until == datetime(2020, 1, 2, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> None:
+    def m_wide(value: int) -> CandidateFacet:
+        return CandidateFacet(
+            id=7,
+            kind="restriction",
+            name="M Wide",
+            restriction_type="miscellaneous",
+            stable_key="m_wide",
+            value_type="numeric",
+            assigned_value=Decimal(value),
+            record_operator="at_most",
+            render_template="{value} Wide",
+        )
+
+    runs = FakeRuns()
+    service = RecordComputationService(
+        FakeCandidates(
+            (
+                _door(1, volume=10, opening=5, restrictions=(m_wide(3),)),
+                _door(2, volume=8, opening=4, restrictions=(m_wide(4),)),
+            )
+        ),
+        runs,
+    )
+
+    await service.rebuild(kinds=(BuildKind.DOOR,))
+
+    threshold_three = [
+        record
+        for record in runs.batches[0].records
+        if record.competition.identity.restriction_values == ((7, "at_most", "3"),)
+    ]
+    threshold_four = [
+        record
+        for record in runs.batches[0].records
+        if record.competition.identity.restriction_values == ((7, "at_most", "4"),)
+    ]
+    assert {record.resolution.holder_ids for record in threshold_three} == {(1,)}
+    assert {record.resolution.holder_ids for record in threshold_four} == {(2,)}
+    assert {record.title.title for record in threshold_four} == {
+        "Fastest 2x2 Door",
+        "Smallest 2x2 Door",
+    }
+    assert {record.title.subtitle for record in threshold_four} == {"4 Wide"}
 
 
 @pytest.mark.asyncio

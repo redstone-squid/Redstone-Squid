@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from squid.records.domain import (
@@ -29,6 +30,23 @@ class CandidateFacet:
     kind: FacetKind
     name: str
     restriction_type: str | None = None
+    stable_key: str | None = None
+    value_type: str = "none"
+    assigned_value: Decimal | str | bool | None = None
+    category_value: Decimal | str | bool | None = None
+    record_operator: str | None = None
+    render_template: str = "{name}"
+    display_unit: str | None = None
+
+    @property
+    def category_name(self) -> str:
+        """Render the category threshold represented by this facet."""
+        value = self.category_value if self.category_value is not None else self.assigned_value
+        if value is None:
+            return self.name
+        rendered_value = _render_scalar(value)
+        unit = self.display_unit or ""
+        return self.render_template.format(name=self.name, value=rendered_value, unit=unit).strip()
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +69,13 @@ class CategoryIdentity:
     kind: BuildKind
     base_key: str
     restriction_ids: tuple[int, ...]
+    restriction_values: tuple[tuple[int, str, str], ...] = ()
 
     @property
     def key(self) -> str:
         restriction_key = ",".join(str(facet_id) for facet_id in self.restriction_ids)
-        return f"{self.kind.value}:{self.base_key}:r[{restriction_key}]"
+        value_key = ",".join(f"{tag_id}:{operator}:{value}" for tag_id, operator, value in self.restriction_values)
+        return f"{self.kind.value}:{self.base_key}:r[{restriction_key}]:p[{value_key}]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +151,16 @@ class RecordLookupRequest:
     kind: BuildKind
     base_key: str
     restriction_ids: frozenset[int]
+    restriction_values: tuple[tuple[int, str, str], ...] = ()
     version_id: int | None = None
+
+
+def _render_scalar(value: Decimal | str | bool) -> str:
+    if isinstance(value, Decimal):
+        return format(value.normalize(), "f")
+    if isinstance(value, bool):
+        return str(value).lower()
+    return value
 
 
 @dataclass(frozen=True, slots=True)

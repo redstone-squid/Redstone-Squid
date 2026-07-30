@@ -4,7 +4,8 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import datetime
-from itertools import groupby
+from decimal import Decimal
+from itertools import combinations, groupby, product
 
 from squid.records.application.models import (
     CandidateFacet,
@@ -23,7 +24,6 @@ from squid.records.application.models import (
 from squid.records.application.ports import RecordCandidateRepository, RecordRunRepository
 from squid.records.domain import (
     BuildKind,
-    CategorySemantics,
     DoorCategory,
     ExtenderCategory,
     RecordCandidate,
@@ -32,7 +32,6 @@ from squid.records.domain import (
     RulesTitleFormatter,
     TitleFormatter,
     VersionScope,
-    generate_category_subsets,
     resolve_fastest,
     resolve_smallest,
 )
@@ -176,17 +175,11 @@ class RecordComputationService:
         candidates: Sequence[RecordSourceCandidate],
     ) -> dict[str, CategoryCompetition]:
         grouped: dict[str, list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]]] = defaultdict(list)
-        semantics = CategorySemantics(implications={}, incompatibilities={})
+        thresholds = _observed_thresholds(candidates)
         for source in candidates:
-            restrictions_by_id = {facet.id: facet for facet in source.restrictions}
-            for restriction_keys in generate_category_subsets(
-                (str(facet_id) for facet_id in restrictions_by_id),
-                semantics,
-                max_size=self._category_limit,
-            ):
-                restriction_ids = tuple(sorted(int(key) for key in restriction_keys))
-                selected = tuple(restrictions_by_id[facet_id] for facet_id in sorted(restriction_ids))
-                identity = CategoryIdentity(kind, _base_key(source), restriction_ids)
+            choices = _restriction_choice_groups(source, thresholds)
+            for selected in _restriction_combinations(choices, max_size=self._category_limit):
+                identity = _category_identity(kind, _base_key(source), selected)
                 grouped[identity.key].append((source, selected))
         return {key: self._make_competition(items, source="eager") for key, items in grouped.items()}
 
@@ -197,10 +190,26 @@ class RecordComputationService:
     ) -> CategoryCompetition | None:
         items: list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
+        requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
         for source in candidates:
             restrictions_by_id = {facet.id: facet for facet in source.restrictions}
             if _base_key(source) == identity.base_key and requested_ids <= restrictions_by_id.keys():
-                items.append((source, tuple(restrictions_by_id[facet_id] for facet_id in identity.restriction_ids)))
+                selected: list[CandidateFacet] = []
+                for facet_id in identity.restriction_ids:
+                    facet = restrictions_by_id[facet_id]
+                    requested = requested_values.get(facet_id)
+                    if requested is None:
+                        if facet.assigned_value is not None:
+                            break
+                        selected.append(facet)
+                        continue
+                    operator, raw_value = requested
+                    threshold = _coerce_category_value(facet, raw_value)
+                    if facet.record_operator != operator or not _satisfies(facet, threshold):
+                        break
+                    selected.append(replace(facet, category_value=threshold))
+                else:
+                    items.append((source, tuple(selected)))
         return self._make_competition(items, source="public_lookup") if items else None
 
     def _make_competition(
@@ -216,7 +225,7 @@ class RecordComputationService:
             if isinstance(category, DoorCategory)
             else self._formatter.format_extender(category)
         )
-        identity = CategoryIdentity(first.kind, _base_key(first), tuple(facet.id for facet in restrictions))
+        identity = _category_identity(first.kind, _base_key(first), restrictions)
         facets = tuple(sorted((*first.types, *restrictions), key=lambda facet: (facet.kind, facet.id)))
         return CategoryCompetition(
             identity=identity,
@@ -256,6 +265,7 @@ class RecordService:
             request.kind,
             request.base_key,
             tuple(sorted(request.restriction_ids)),
+            tuple(sorted(request.restriction_values)),
         )
         if not _category_has_candidate(identity, source, request.version_id):
             msg = "No confirmed build satisfies the requested record category."
@@ -278,9 +288,126 @@ def _category_has_candidate(
     return any(
         _base_key(candidate) == identity.base_key
         and requested <= {facet.id for facet in candidate.restrictions}
+        and _candidate_satisfies_identity(candidate, identity)
         and (version_id is None or version_id in candidate.version_ids)
         for candidate in candidates
     )
+
+
+def _candidate_satisfies_identity(candidate: RecordSourceCandidate, identity: CategoryIdentity) -> bool:
+    facets = {facet.id: facet for facet in candidate.restrictions}
+    for tag_id, operator, raw_value in identity.restriction_values:
+        facet = facets.get(tag_id)
+        if facet is None or facet.record_operator != operator:
+            return False
+        if not _satisfies(facet, _coerce_category_value(facet, raw_value)):
+            return False
+    return all(
+        facets[tag_id].assigned_value is None or any(value[0] == tag_id for value in identity.restriction_values)
+        for tag_id in identity.restriction_ids
+    )
+
+
+def _observed_thresholds(
+    candidates: Sequence[RecordSourceCandidate],
+) -> dict[int, tuple[Decimal | str | bool, ...]]:
+    values: dict[int, set[Decimal | str | bool]] = defaultdict(set)
+    for source in candidates:
+        for facet in source.restrictions:
+            if facet.assigned_value is not None and facet.record_operator is not None:
+                values[facet.id].add(facet.assigned_value)
+    return {
+        tag_id: tuple(sorted(tag_values, key=lambda value: (type(value).__name__, str(value))))
+        for tag_id, tag_values in values.items()
+    }
+
+
+def _restriction_choice_groups(
+    source: RecordSourceCandidate,
+    thresholds: dict[int, tuple[Decimal | str | bool, ...]],
+) -> tuple[tuple[CandidateFacet, ...], ...]:
+    groups: list[tuple[CandidateFacet, ...]] = []
+    for facet in sorted(source.restrictions, key=lambda item: item.id):
+        if facet.assigned_value is None:
+            groups.append((facet,))
+            continue
+        if facet.record_operator is None:
+            continue
+        eligible = tuple(
+            replace(facet, category_value=threshold)
+            for threshold in thresholds.get(facet.id, ())
+            if _satisfies(facet, threshold)
+        )
+        if eligible:
+            groups.append(eligible)
+    return tuple(groups)
+
+
+def _restriction_combinations(
+    groups: tuple[tuple[CandidateFacet, ...], ...],
+    *,
+    max_size: int,
+) -> Iterable[tuple[CandidateFacet, ...]]:
+    yield ()
+    for size in range(1, min(max_size, len(groups)) + 1):
+        for selected_groups in combinations(groups, size):
+            yield from product(*selected_groups)
+
+
+def _satisfies(facet: CandidateFacet, threshold: Decimal | str | bool) -> bool:
+    assigned = facet.assigned_value
+    if assigned is None:
+        return False
+    if facet.record_operator == "exact":
+        return assigned == threshold
+    if not isinstance(assigned, Decimal) or not isinstance(threshold, Decimal):
+        return False
+    if facet.record_operator == "at_most":
+        return assigned <= threshold
+    if facet.record_operator == "at_least":
+        return assigned >= threshold
+    return False
+
+
+def _category_identity(
+    kind: BuildKind,
+    base_key: str,
+    restrictions: Sequence[CandidateFacet],
+) -> CategoryIdentity:
+    values = tuple(
+        sorted(
+            (
+                facet.id,
+                facet.record_operator or "exact",
+                _serialize_category_value(facet.category_value),
+            )
+            for facet in restrictions
+            if facet.category_value is not None
+        )
+    )
+    return CategoryIdentity(kind, base_key, tuple(sorted(facet.id for facet in restrictions)), values)
+
+
+def _serialize_category_value(value: Decimal | str | bool | None) -> str:
+    if isinstance(value, Decimal):
+        return format(value.normalize(), "f")
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, str):
+        return value
+    msg = "Parameterized record restriction is missing a category value."
+    raise ValueError(msg)
+
+
+def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str | bool:
+    if facet.value_type == "numeric":
+        return Decimal(value)
+    if facet.value_type == "boolean":
+        if value not in {"true", "false"}:
+            msg = f"Invalid boolean category value {value!r}."
+            raise ValueError(msg)
+        return value == "true"
+    return value
 
 
 def _base_key(source: RecordSourceCandidate) -> str:
@@ -306,13 +433,15 @@ def _category_with_restrictions(
     source: RecordSourceCandidate,
     restrictions: Sequence[CandidateFacet],
 ) -> DoorCategory | ExtenderCategory:
-    wiring = tuple(facet.name for facet in restrictions if facet.restriction_type == "wiring-placement")
-    components = tuple(facet.name for facet in restrictions if facet.restriction_type == "component")
-    miscellaneous = tuple(facet.name for facet in restrictions if facet.restriction_type == "miscellaneous")
+    wiring = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "wiring-placement")
+    animated = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "animated")
+    components = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "component")
+    miscellaneous = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "miscellaneous")
     if source.door is not None:
         return replace(
             source.door,
             wiring_restrictions=wiring,
+            animated_restrictions=animated,
             component_restrictions=components,
             miscellaneous_restrictions=miscellaneous,
         )

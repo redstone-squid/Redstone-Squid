@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from decimal import Decimal
 from typing import cast
 
 from sqlalchemy import delete, func, select, update
@@ -14,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import BuildRestriction, BuildType, Door, Extender
+from squid.builds.infrastructure.models import Door, Extender
 from squid.records.application.models import (
     CandidateFacet,
     CategoryIdentity,
@@ -47,9 +48,10 @@ from squid.records.infrastructure.models import (
     RecordResultHolder,
     RecordRuleset,
 )
+from squid.tags.infrastructure.models import BuildTagAssignment, TagDefinition
 
 RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "1"
+CALCULATOR_VERSION = "2"
 FORMATTER_VERSION = "2"
 
 
@@ -404,8 +406,7 @@ class PostgresRecordRepository:
             select(Door)
             .where(Door.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Door.build_restrictions).selectinload(BuildRestriction.restriction),
-                selectinload(Door.build_types).selectinload(BuildType.type),
+                selectinload(Door.tag_assignments).selectinload(BuildTagAssignment.definition),
                 selectinload(Door.build_versions),
             )
         )
@@ -418,8 +419,7 @@ class PostgresRecordRepository:
             select(Extender)
             .where(Extender.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Extender.build_restrictions).selectinload(BuildRestriction.restriction),
-                selectinload(Extender.build_types).selectinload(BuildType.type),
+                selectinload(Extender.tag_assignments).selectinload(BuildTagAssignment.definition),
                 selectinload(Extender.build_versions),
             )
         )
@@ -562,9 +562,9 @@ def _door_candidate(door: Door, timing: tuple[TimingVariant, ...]) -> RecordSour
         )
     )
     depth = door.depth or 1
-    is_expandable = any(
-        association.restriction.name.casefold() == "expandable" for association in door.build_restrictions
-    )
+    restrictions = _restriction_facets(door.tag_assignments)
+    patterns = _pattern_facets(door.tag_assignments)
+    is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
     return RecordSourceCandidate(
         kind=BuildKind.DOOR,
         candidate=RecordCandidate(
@@ -576,13 +576,13 @@ def _door_candidate(door: Door, timing: tuple[TimingVariant, ...]) -> RecordSour
             timing_variants=timing or (fallback_timing,),
         ),
         version_ids=frozenset(version.version_id for version in door.build_versions),
-        restrictions=_restriction_facets(door.build_restrictions),
-        types=_type_facets(door.build_types),
+        restrictions=restrictions,
+        types=patterns,
         door=DoorCategory(
             wiring_restrictions=(),
             animated_restrictions=(),
             size=_door_size(door),
-            types=tuple(build_type.type.name for build_type in door.build_types) or ("Regular",),
+            types=tuple(pattern.category_name for pattern in patterns) or ("Regular",),
             orientation=door.orientation,
         ),
     )
@@ -595,10 +595,10 @@ def _extender_candidate(
     if extender.orientation is None or extender.extension_length is None:
         return None
     depth = extender.depth or 1
-    is_expandable = any(
-        association.restriction.name.casefold() == "expandable" for association in extender.build_restrictions
-    )
-    type_names = tuple(build_type.type.name for build_type in extender.build_types)
+    restrictions = _restriction_facets(extender.tag_assignments)
+    patterns = _pattern_facets(extender.tag_assignments)
+    is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
+    type_names = tuple(pattern.category_name for pattern in patterns)
     if not type_names and extender.extender_type is not None:
         type_names = (extender.extender_type,)
     return RecordSourceCandidate(
@@ -612,8 +612,8 @@ def _extender_candidate(
             timing_variants=timing,
         ),
         version_ids=frozenset(version.version_id for version in extender.build_versions),
-        restrictions=_restriction_facets(extender.build_restrictions),
-        types=_type_facets(extender.build_types),
+        restrictions=restrictions,
+        types=patterns,
         extender=ExtenderCategory(
             wiring_restrictions=(),
             orientation=extender.orientation,
@@ -623,22 +623,58 @@ def _extender_candidate(
     )
 
 
-def _restriction_facets(restrictions: Sequence[BuildRestriction]) -> tuple[CandidateFacet, ...]:
+def _restriction_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[CandidateFacet, ...]:
     return tuple(
         CandidateFacet(
-            id=association.restriction_id,
+            id=assignment.tag_id,
             kind="restriction",
-            name=association.restriction.name,
-            restriction_type=association.restriction.type,
+            name=assignment.definition.display_name,
+            restriction_type=assignment.definition.restriction_type,
+            stable_key=assignment.definition.stable_key,
+            value_type=assignment.value_type,
+            assigned_value=_assignment_value(assignment),
+            record_operator=assignment.definition.record_operator,
+            render_template=assignment.definition.render_template,
+            display_unit=assignment.display_unit_key or assignment.definition.default_display_unit_key,
         )
-        for association in restrictions
+        for assignment in assignments
+        if _is_record_tag(assignment.definition, "restriction")
     )
 
 
-def _type_facets(types: Sequence[BuildType]) -> tuple[CandidateFacet, ...]:
+def _pattern_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[CandidateFacet, ...]:
     return tuple(
-        CandidateFacet(id=association.type_id, kind="type", name=association.type.name) for association in types
+        CandidateFacet(
+            id=assignment.tag_id,
+            kind="pattern",
+            name=assignment.definition.display_name,
+            stable_key=assignment.definition.stable_key,
+            value_type=assignment.value_type,
+            assigned_value=_assignment_value(assignment),
+            render_template=assignment.definition.render_template,
+            display_unit=assignment.display_unit_key or assignment.definition.default_display_unit_key,
+        )
+        for assignment in assignments
+        if _is_record_tag(assignment.definition, "pattern")
     )
+
+
+def _is_record_tag(definition: TagDefinition, semantic_kind: str) -> bool:
+    return (
+        definition.authority == "official"
+        and definition.moderation_status == "approved"
+        and definition.semantic_kind == semantic_kind
+    )
+
+
+def _assignment_value(assignment: BuildTagAssignment) -> Decimal | str | bool | None:
+    if assignment.value_type == "numeric":
+        return assignment.numeric_value
+    if assignment.value_type == "text":
+        return assignment.text_value
+    if assignment.value_type == "boolean":
+        return assignment.boolean_value
+    return None
 
 
 def _door_size(door: Door) -> str:
@@ -694,9 +730,17 @@ def parse_category_key(key: str) -> CategoryIdentity | None:
     try:
         kind_value, remainder = key.split(":", maxsplit=1)
         base_key, restriction_part = remainder.rsplit(":r[", maxsplit=1)
-        raw_ids = restriction_part.removesuffix("]")
+        raw_ids, separator, raw_values = restriction_part.partition("]:p[")
+        if not separator or not raw_values.endswith("]"):
+            return None
         restriction_ids = tuple(int(value) for value in raw_ids.split(",") if value)
-        return CategoryIdentity(BuildKind(kind_value), base_key, restriction_ids)
+        values = tuple(
+            (int(tag_id), operator, value)
+            for item in raw_values.removesuffix("]").split(",")
+            if item
+            for tag_id, operator, value in (item.split(":", maxsplit=2),)
+        )
+        return CategoryIdentity(BuildKind(kind_value), base_key, restriction_ids, values)
     except (ValueError, TypeError):
         return None
 
