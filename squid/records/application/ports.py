@@ -8,6 +8,7 @@ from squid.records.application.models import (
     ComputationBatch,
     RecordGap,
     RecordSourceCandidate,
+    TitleDiagnosticGap,
 )
 from squid.records.domain import BuildKind
 
@@ -28,6 +29,8 @@ class RecordRunRepository(Protocol):
     async def activate(self, batch: ComputationBatch) -> int: ...
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
+
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 

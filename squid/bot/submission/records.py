@@ -10,6 +10,7 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.utils.components import info_layout, no_mentions
+from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
 
@@ -55,6 +56,29 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         else:
             description = "No unresolved active record categories."
         await ctx.send(view=info_layout("Record evidence gaps", description), allowed_mentions=no_mentions())
+
+    @records_group.command(name="title-gaps")  # pyright: ignore[reportFunctionMemberAccess]
+    @check_is_owner_server()
+    @check_is_trusted_or_staff()
+    @app_commands.describe(kind="Optionally limit title diagnostics to one build kind.")
+    async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
+        """List canonical titles containing unknown or contradictory taxonomy."""
+        gaps = await self.records.title_gaps(kind=kind)
+        if gaps:
+            lines: list[str] = []
+            for gap in gaps[:30]:
+                codes = ", ".join(str(diagnostic.get("code", "unknown")) for diagnostic in gap.diagnostics)
+                lines.append(f"`{gap.definition_id}` **{gap.title}** — {codes}")
+            description = "\n".join(lines)
+            if len(gaps) > 30:
+                description += f"\n…and {len(gaps) - 30} more."
+        else:
+            description = "No active record titles require taxonomy review."
+        await ctx.send(
+            view=info_layout("Record title diagnostics", description),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
 
     @records_group.command(name="rebuild")  # pyright: ignore[reportFunctionMemberAccess]
     @commands.is_owner()

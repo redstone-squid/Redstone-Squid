@@ -66,6 +66,7 @@ class CategoryCompetition:
     facets: tuple[CandidateFacet, ...]
     category_text: CategoryText
     candidates: tuple[RecordCandidate, ...]
+    candidate_version_ids: tuple[tuple[int, frozenset[int]], ...]
     source: MaterializationSource = "eager"
 
 
@@ -79,6 +80,7 @@ class ComputedRecord:
     competition: CategoryCompetition
     title: CategoryText
     resolution: RecordResolution
+    broken_holder_ids: tuple[int, ...] = ()
     history: tuple[HolderHistoryEntry, ...] = ()
     history_complete: bool = True
 
@@ -111,6 +113,15 @@ class RecordGap:
     record_class: RecordClass
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TitleDiagnosticGap:
+    """A canonical record title containing unknown or contradictory taxonomy."""
+
+    definition_id: int
+    title: str
+    diagnostics: tuple[dict[str, str | list[str]], ...]
 
 
 @dataclass(frozen=True, slots=True)

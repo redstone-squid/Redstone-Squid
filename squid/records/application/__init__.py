@@ -5,6 +5,7 @@ from squid.records.application.models import (
     RebuildSummary,
     RecordGap,
     RecordLookupRequest,
+    TitleDiagnosticGap,
 )
 from squid.records.application.services import RecordComputationService, RecordService
 
@@ -15,4 +16,5 @@ __all__ = [
     "RecordGap",
     "RecordLookupRequest",
     "RecordService",
+    "TitleDiagnosticGap",
 ]

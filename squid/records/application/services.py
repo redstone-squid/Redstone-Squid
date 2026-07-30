@@ -18,6 +18,7 @@ from squid.records.application.models import (
     RecordGap,
     RecordLookupRequest,
     RecordSourceCandidate,
+    TitleDiagnosticGap,
 )
 from squid.records.application.ports import RecordCandidateRepository, RecordRunRepository
 from squid.records.domain import (
@@ -72,6 +73,7 @@ class RecordComputationService:
                 kind,
                 source,
                 version_id=None,
+                pinned_current_version_id=current_version_id,
                 requested=requested,
             )
             run_ids.append(await self._runs.activate(all_time))
@@ -83,6 +85,7 @@ class RecordComputationService:
                     kind,
                     source,
                     version_id=current_version_id,
+                    pinned_current_version_id=current_version_id,
                     requested=requested,
                 )
                 run_ids.append(await self._runs.activate(current))
@@ -102,6 +105,7 @@ class RecordComputationService:
         source: Sequence[RecordSourceCandidate],
         *,
         version_id: int | None,
+        pinned_current_version_id: int | None,
         requested: Sequence[CategoryIdentity],
     ) -> ComputationBatch:
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
@@ -128,6 +132,11 @@ class RecordComputationService:
                         competition=competition,
                         title=self._formatter.format_record(record_class, competition.category_text),
                         resolution=resolution,
+                        broken_holder_ids=_broken_holders(
+                            resolution.holder_ids,
+                            competition.candidate_version_ids,
+                            pinned_current_version_id,
+                        ),
                         history=_reconstruct_history(record_class, kind, competition.candidates),
                         history_complete=all(
                             candidate.completion_at is not None for candidate in competition.candidates
@@ -214,6 +223,7 @@ class RecordComputationService:
             facets=facets,
             category_text=category_text,
             candidates=tuple(item[0].candidate for item in items),
+            candidate_version_ids=tuple((item[0].candidate.build_id, item[0].version_ids) for item in items),
             source="public_lookup" if source == "public_lookup" else "eager",
         )
 
@@ -234,6 +244,10 @@ class RecordService:
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         """Return decisive facts missing from active record results."""
         return await self._runs.list_gaps(kind=kind)
+
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+        """Return active canonical record titles requiring taxonomy review."""
+        return await self._runs.list_title_gaps(kind=kind)
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
@@ -320,6 +334,19 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
         return tuple(EXTENDER_TIMING_METHODS)
     msg = f"Fastest records are not supported for {kind.value}."
     raise ValueError(msg)
+
+
+def _broken_holders(
+    holder_ids: tuple[int, ...],
+    candidate_version_ids: tuple[tuple[int, frozenset[int]], ...],
+    pinned_current_version_id: int | None,
+) -> tuple[int, ...]:
+    if pinned_current_version_id is None:
+        return ()
+    versions_by_build = dict(candidate_version_ids)
+    return tuple(
+        build_id for build_id in holder_ids if pinned_current_version_id not in versions_by_build.get(build_id, ())
+    )
 
 
 def _reconstruct_history(

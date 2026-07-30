@@ -22,6 +22,7 @@ from squid.records.application.models import (
     ComputedRecord,
     RecordGap,
     RecordSourceCandidate,
+    TitleDiagnosticGap,
 )
 from squid.records.domain import (
     BuildKind,
@@ -181,7 +182,7 @@ class PostgresRecordRepository:
                             build_id=build_id,
                             rank=1,
                             metric_snapshot=_metric_snapshot(computed, candidate),
-                            title=computed.title.title,
+                            title=_holder_title(computed, build_id),
                             subtitle=computed.title.subtitle,
                             completion_at=_as_instant(candidate.completion_at),
                         )
@@ -246,6 +247,32 @@ class PostgresRecordRepository:
                 statement = statement.where(RecordDefinition.build_kind == kind.value)
             rows = (await session.execute(statement)).all()
             return tuple(_gap_from_row(definition, result) for definition, result in rows)
+
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+        """List active canonical titles containing formatter diagnostics."""
+        async with self._session_factory() as session:
+            statement = (
+                select(RecordDefinition)
+                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
+                .join(RecordComputationRun, RecordComputationRun.id == RecordResult.run_id)
+                .where(
+                    RecordComputationRun.is_active.is_(True),
+                    RecordDefinition.title_diagnostics != [],
+                )
+                .distinct()
+                .order_by(RecordDefinition.id)
+            )
+            if kind is not None:
+                statement = statement.where(RecordDefinition.build_kind == kind.value)
+            definitions = (await session.execute(statement)).scalars()
+            return tuple(
+                TitleDiagnosticGap(
+                    definition_id=definition.id,
+                    title=definition.title,
+                    diagnostics=tuple(definition.title_diagnostics),
+                )
+                for definition in definitions
+            )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         """Return exact categories previously accepted through public lookup."""
@@ -622,6 +649,11 @@ def _door_size(door: Door) -> str:
 
 def _serialize_gaps(computed: ComputedRecord) -> dict[str, object]:
     return {"missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed.resolution.gaps]}
+
+
+def _holder_title(computed: ComputedRecord, build_id: int) -> str:
+    suffix = " [BROKEN]" if build_id in computed.broken_holder_ids else ""
+    return f"{computed.title.title}{suffix}"
 
 
 def _provisional_build_id(computed: ComputedRecord) -> int | None:

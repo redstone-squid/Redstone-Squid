@@ -10,6 +10,7 @@ from squid.records.application.models import (
     RecordGap,
     RecordLookupRequest,
     RecordSourceCandidate,
+    TitleDiagnosticGap,
 )
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import (
@@ -35,6 +36,7 @@ class FakeRuns:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
+        self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
         self.queued: tuple[BuildKind, ...] = ()
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
@@ -52,6 +54,9 @@ class FakeRuns:
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         return self.gap_rows
+
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+        return self.title_gap_rows
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
@@ -165,6 +170,10 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
         for record in current.records
         if record.resolution.status is ResolutionStatus.RESOLVED
     } == {(2,)}
+    all_time = runs.batches[0]
+    assert {
+        record.broken_holder_ids for record in all_time.records if record.resolution.status is ResolutionStatus.RESOLVED
+    } == {(1,), ()}
 
 
 @pytest.mark.asyncio
@@ -252,6 +261,21 @@ async def test_gaps_delegates_active_result_query() -> None:
     service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
 
     assert await service.gaps(kind=BuildKind.DOOR) == (gap,)
+
+
+@pytest.mark.asyncio
+async def test_title_gaps_delegates_active_definition_query() -> None:
+    runs = FakeRuns()
+    gap = TitleDiagnosticGap(
+        definition_id=1,
+        title="Fastest Mystery 2x2 Door",
+        diagnostics=({"code": "unknown_token", "message": "Unknown term.", "terms": ["Mystery"]},),
+    )
+    runs.title_gap_rows = (gap,)
+    candidates = FakeCandidates(())
+    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+
+    assert await service.title_gaps(kind=BuildKind.DOOR) == (gap,)
 
 
 @pytest.mark.asyncio
