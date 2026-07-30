@@ -147,8 +147,8 @@ class BuildField[T](discord.ui.TextInput):
         self.attr_type = attr_type
         self.parser = parser
         self.formatter = formatter
+        self.display_label = label or attribute.replace("_", " ").title()
         super().__init__(
-            label=label or attribute.replace("_", " ").title(),
             style=style,
             custom_id=os.urandom(16).hex() if custom_id is None else custom_id,
             placeholder=placeholder,
@@ -176,7 +176,11 @@ class BuildField[T](discord.ui.TextInput):
 
     @property
     def summary(self) -> str:
-        return f"{self.label}: {self.value}"
+        return f"{self.display_label}: {self.value}"
+
+    def to_label(self) -> discord.ui.Label:
+        """Wrap this input in the accessible V2 modal layout component."""
+        return discord.ui.Label(text=self.display_label, component=self)
 
 
 def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs: Any) -> BuildField[T]:
@@ -195,9 +199,10 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-class DynamicBuildEditButton[BotT: "squid.bot.app.RedstoneSquid", V: discord.ui.View](
-    discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"
-):
+class DynamicBuildEditButton[
+    BotT: "squid.bot.app.RedstoneSquid",
+    V: discord.ui.LayoutView,
+](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(
@@ -225,7 +230,10 @@ class DynamicBuildEditButton[BotT: "squid.bot.app.RedstoneSquid", V: discord.ui.
         await BuildEditView(self.build, interaction.client.services.builds).send(interaction)
 
 
-class EphemeralBuildEditButton[BotT: "squid.bot.app.RedstoneSquid", V: discord.ui.View](discord.ui.Button[V]):
+class EphemeralBuildEditButton[
+    BotT: "squid.bot.app.RedstoneSquid",
+    V: discord.ui.LayoutView,
+](discord.ui.Button[V]):
     def __init__(self, build: Build):
         self.build = build
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)

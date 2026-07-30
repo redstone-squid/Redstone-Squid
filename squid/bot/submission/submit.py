@@ -12,11 +12,11 @@ from discord.ext.commands import (
     flag,
 )
 
-import squid.bot.utils.embeds as utils
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
@@ -108,17 +108,22 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
                 build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
                 build_handler = self.bot.for_build(build)
                 await followup.send(
-                    "Here is a preview of the submission. Use /edit if you have made a mistake",
-                    embed=await build_handler.generate_embed(),
+                    view=StaticLayout(
+                        discord.ui.TextDisplay(
+                            "Here is a preview of the submission. Use `/edit` if you have made a mistake."
+                        ),
+                        await build_handler.render_container(),
+                    ),
                     ephemeral=True,
+                    allowed_mentions=no_mentions(),
                 )
 
-                success_embed = utils.info_embed(
+                success_layout = info_layout(
                     "Success",
                     f"Build submitted successfully!\nThe build ID is: {build.id}",
                 )
                 await asyncio.gather(
-                    message.edit(embed=success_embed),
+                    edit_layout(message, success_layout, allowed_mentions=no_mentions()),
                     build_handler.post_for_voting(),
                 )
         else:
@@ -167,7 +172,7 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         view = BuildSubmissionForm(build, self.builds)
         followup = interaction.followup
 
-        await followup.send("Use the select menus then click the button", view=view)
+        await followup.send(view=view, allowed_mentions=no_mentions())
         await view.wait()
         if view.value is None:
             await followup.send("Submission canceled due to inactivity", ephemeral=True)
@@ -178,9 +183,14 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
         await asyncio.gather(
             followup.send(
-                "Here is a preview of the submission. Use /edit if you have made a mistake",
-                embed=await self.bot.for_build(build).generate_embed(),
+                view=StaticLayout(
+                    discord.ui.TextDisplay(
+                        "Here is a preview of the submission. Use `/edit` if you have made a mistake."
+                    ),
+                    await self.bot.for_build(build).render_container(),
+                ),
                 ephemeral=True,
+                allowed_mentions=no_mentions(),
             ),
             self.bot.for_build(build).post_for_voting(),
         )
@@ -198,10 +208,10 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
             raise ValueError(msg)
 
         build_handler = self.bot.for_build(build)
-        em = await build_handler.generate_embed()
+        layout = await build_handler.render_layout()
 
         async def _send_msg(channel: GuildMessageable):
-            message = await channel.send(content=build.original_link, embed=em)
+            message = await channel.send(view=layout, allowed_mentions=no_mentions())
             await self.messages.track(
                 to_tracked_message(message),
                 purpose="view_confirmed_build",

@@ -3,6 +3,7 @@
 import logging
 from typing import TYPE_CHECKING
 
+import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
@@ -11,6 +12,7 @@ from discord.utils import escape_markdown
 import squid.bot.utils.embeds as utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
+from squid.bot.utils.components import StaticLayout, edit_layout, no_mentions
 from squid.bot.utils.embeds import RunningMessage
 
 if TYPE_CHECKING:
@@ -34,7 +36,10 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if build is None:
             await ctx.send(embed=utils.error_embed("No results found", "No builds match that query."))
             return
-        await ctx.send(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+        await ctx.send(
+            view=await self.bot.for_build(build).render_layout(),
+            allowed_mentions=no_mentions(),
+        )
 
     @commands.hybrid_command("search")
     @app_commands.describe(query="The record's title.")
@@ -51,18 +56,17 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             top_door = matches[0][0]
             build = await self.queries.get(top_door.id)
             assert build is not None, "A record must have a build."
-            embed = await self.bot.for_build(build).generate_embed()
+            container = await self.bot.for_build(build).render_container()
             content = f"Top match: {top_door.title} (score: {matches[0][1]:.1f})"
-            if build.original_link:
-                content += f"\n{build.original_link}"
             content += (
                 "\n/search is in early testing, results are likely inaccurate. "
                 "Please use discord's built-in search function if you cannot find "
                 "what you want in the first try"
             )
-            await sent_message.edit(
-                content=content,
-                embed=embed,
+            await edit_layout(
+                sent_message,
+                StaticLayout(discord.ui.TextDisplay(content), container),
+                allowed_mentions=no_mentions(),
             )
             other_results = [(door, score, idx) for door, score, idx in matches[1:] if score >= 50][:10]
             if other_results:
@@ -152,7 +156,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 error_embed = utils.error_embed("Error", "No build with that ID.")
                 return await sent_message.edit(embed=error_embed)
 
-            await sent_message.edit(content=build.original_link, embed=await self.bot.for_build(build).generate_embed())
+            await edit_layout(
+                sent_message,
+                await self.bot.for_build(build).render_layout(),
+                allowed_mentions=no_mentions(),
+            )
         return None
 
     @build_hybrid_group.command(name="debug")

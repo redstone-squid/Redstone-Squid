@@ -11,7 +11,8 @@ from discord.ext.commands import Cog, Context, hybrid_command
 from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
-from squid.bot.errors import ErrorHandledView
+from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.utils.components import no_mentions
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.community.domain import RedstonerDecisionKind
 
@@ -19,9 +20,10 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class DynamicRemoveOwnRedstonerRoleButton[BotT: "squid.bot.app.RedstoneSquid", V: discord.ui.View](
-    discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner"
-):
+class DynamicRemoveOwnRedstonerRoleButton[
+    BotT: "squid.bot.app.RedstoneSquid",
+    V: discord.ui.LayoutView,
+](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner"):
     """A button that allows users to remove their own redstoner role."""
 
     def __init__(self):
@@ -77,9 +79,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @check_is_owner_server()
     @check_is_staff()
     async def abc(self, ctx: Context[BotT]):
-        view = ErrorHandledView()
-        view.add_item(DynamicRemoveOwnRedstonerRoleButton())
-        await ctx.send("a", view=view)
+        view = ErrorHandledLayoutView(timeout=None)
+        view.add_item(discord.ui.TextDisplay("Redstoner role controls"))
+        view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
+        await ctx.send(view=view, allowed_mentions=no_mentions())
 
     @hybrid_command(name="reload_redstoner")
     @check_is_owner_server()
@@ -115,10 +118,15 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             f"Gave {member.mention} the redstoner role.", allowed_mentions=discord.AllowedMentions.none()
         )
 
-        view = ErrorHandledView()
-        view.add_item(DynamicRemoveOwnRedstonerRoleButton())
+        view = ErrorHandledLayoutView(timeout=None)
+        view.add_item(
+            discord.ui.TextDisplay(
+                f"Hi {member.mention}, you received the {redstoner_role.mention} role after reaching "
+                f"15 upvotes in {decision.source_message_url}."
+            )
+        )
+        view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
         await self.bot.get_channel(433643026204852224).send(
-            f"Hi {member.mention}, you just got the {redstoner_role.mention} role because you received 15 upvotes in {decision.source_message_url}.",
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
             view=view,
         )

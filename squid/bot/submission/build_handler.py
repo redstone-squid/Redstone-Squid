@@ -1,7 +1,7 @@
 """Handles the display of a build object."""
 
 import asyncio
-import io
+import logging
 import mimetypes
 from typing import TYPE_CHECKING, Literal, cast, override
 
@@ -9,7 +9,13 @@ import discord
 from discord.utils import escape_markdown
 
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.embeds import info_embed
+from squid.bot.utils.components import (
+    CardField,
+    StaticLayout,
+    card_container,
+    edit_layout,
+    no_mentions,
+)
 from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
@@ -17,6 +23,8 @@ from squid.core.time import utcnow
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+logger = logging.getLogger(__name__)
 
 
 class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
@@ -79,10 +87,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             msg = "The build must be pending to post it."
             raise ValueError(msg)
 
-        em = await self.generate_embed()
+        layout = await self.render_layout()
         messages = await asyncio.gather(
             *(
-                vote_channel.send(content=build.original_link, embed=em)
+                vote_channel.send(view=layout, allowed_mentions=no_mentions())
                 for vote_channel in await self.get_channels_to_post_to()
             )
         )
@@ -122,47 +130,69 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         # Get all messages for a build
         async with asyncio.TaskGroup() as tg:
             msg_task = tg.create_task(self.get_display_messages())
-            em_task = tg.create_task(self.generate_embed())
+            layout_task = tg.create_task(self.render_layout())
 
         messages = await msg_task
-        em = await em_task
+        layout = await layout_task
 
         async def _update_single_message(message: discord.Message):
-            await message.edit(content=self.build.original_link, embed=em)
+            await edit_layout(message, layout, allowed_mentions=no_mentions())
             await self.bot.services.messages.update_edited_time(message.id)
 
         await asyncio.gather(*(_update_single_message(message) for message in messages))
 
-    async def generate_embed(self) -> discord.Embed:
-        """Generates an embed for the build."""
+    async def render_layout(self) -> StaticLayout:
+        """Render a standalone Components V2 layout for the build."""
+        return StaticLayout(await self.render_container())
+
+    async def render_container(self) -> discord.ui.Container[discord.ui.LayoutView]:
+        """Render the build card for composition into a larger V2 layout."""
         build = self.build
-        em = info_embed(title=self.build.title, description=await self.get_description())
+        fields = tuple(CardField(name, escape_markdown(value)) for name, value in self.get_metadata_fields().items())
+        container = card_container(
+            self.build.title,
+            await self.get_description(),
+            fields=fields,
+            footer=f"Submission ID: {build.id} • Last Update {utcnow()}",
+            media=await self._get_media_urls(),
+        )
+        if build.original_link is not None:
+            container.add_item(
+                discord.ui.ActionRow(
+                    discord.ui.Button(label="Original submission", url=build.original_link),
+                )
+            )
+        return container
 
-        fields = self.get_metadata_fields()
-        for key, val in fields.items():
-            em.add_field(name=key, value=escape_markdown(val), inline=True)
-
-        if build.image_urls:
-            for url in build.image_urls:
-                mimetype, _ = mimetypes.guess_type(url)
-                if mimetype is not None and mimetype.startswith("image"):
-                    em.set_image(url=url)
-                    break
+    async def _get_media_urls(self) -> list[str]:
+        media: list[str] = []
+        for url in self.build.image_urls:
+            mimetype, _ = mimetypes.guess_type(url)
+            if mimetype is not None and mimetype.startswith("image"):
+                media.append(url)
+                continue
+            try:
                 preview = await get_website_preview(url)
-                if isinstance(preview["image"], io.BytesIO):
-                    msg = "Got a BytesIO object instead of a URL."
-                    raise TypeError(msg)
-                em.set_image(url=preview["image"])
-        elif build.video_urls:
-            for url in build.video_urls:
-                preview = await get_website_preview(url)
-                if image := preview["image"]:
-                    if isinstance(image, str):
-                        em.set_image(url=image)
+            except Exception:
+                logger.warning("Could not resolve build media preview for %s", url, exc_info=True)
+                continue
+            image = preview["image"]
+            if isinstance(image, str):
+                media.append(image)
+
+        if not media:
+            for url in self.build.video_urls:
+                try:
+                    preview = await get_website_preview(url)
+                except Exception:
+                    logger.warning("Could not resolve build video preview for %s", url, exc_info=True)
+                    continue
+                image = preview["image"]
+                if isinstance(image, str):
+                    media.append(image)
                     break
 
-        em.set_footer(text=f"Submission ID: {build.id} • Last Update {utcnow()}")
-        return em
+        return media[:10]
 
     async def get_description(self) -> str | None:  # type: ignore
         """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""

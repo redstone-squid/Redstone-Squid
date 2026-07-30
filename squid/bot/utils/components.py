@@ -45,6 +45,7 @@ def card_container(
     accent_colour: int = DISCORD_GREEN,
     fields: Sequence[CardField] = (),
     footer: str | None = None,
+    media: Sequence[str] = (),
 ) -> discord.ui.Container[discord.ui.LayoutView]:
     """Create a purpose-built V2 card container."""
     footer_content = f"-# {footer}" if footer else ""
@@ -57,9 +58,15 @@ def card_container(
     if body:
         heading += f"\n{body}"
 
-    children: list[discord.ui.Item[Any]] = [discord.ui.TextDisplay(heading)]
+    children: list[discord.ui.Item[Any]]
+    if media:
+        children = [discord.ui.Section(heading, accessory=discord.ui.Thumbnail(media[0]))]
+    else:
+        children = [discord.ui.TextDisplay(heading)]
     if field_content:
         children.extend((discord.ui.Separator(), discord.ui.TextDisplay(field_content)))
+    if len(media) > 1:
+        children.append(discord.ui.MediaGallery(*(discord.MediaGalleryItem(url) for url in media[1:10])))
     if footer_content:
         children.append(discord.ui.TextDisplay(footer_content))
     return discord.ui.Container(*children, accent_colour=accent_colour)
@@ -72,6 +79,7 @@ def card_layout(
     accent_colour: int = DISCORD_GREEN,
     fields: Sequence[CardField] = (),
     footer: str | None = None,
+    media: Sequence[str] = (),
 ) -> StaticLayout:
     """Create a standalone V2 card."""
     return StaticLayout(
@@ -81,6 +89,7 @@ def card_layout(
             accent_colour=accent_colour,
             fields=fields,
             footer=footer,
+            media=media,
         )
     )
 

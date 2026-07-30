@@ -8,6 +8,16 @@ from typing import TYPE_CHECKING, final, override
 
 import discord
 
+from squid.bot.utils.components import (
+    DISCORD_GREEN,
+    DISCORD_RED,
+    DISCORD_YELLOW,
+    CardField,
+    StaticLayout,
+    card_layout,
+    edit_layout,
+    no_mentions,
+)
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.message_tracking import track_vote_messages
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChoice, VoteOption, VoteSessionSnapshot
@@ -128,18 +138,15 @@ class DeleteLogVoteSession(AbstractVoteSession):
     @override
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:
         """Send the initial message to the channel."""
-        embed = discord.Embed(
+        layout = self._render_layout(
             title="Vote to Delete Log",
-            description=(
-                dedent(f"""
-                React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or {self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n
-                **Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
+            action=(
+                f"React with {self.primary_emoji(VoteChoice.APPROVE)} to approve or "
+                f"{self.primary_emoji(VoteChoice.DENY)} to deny."
             ),
+            accent_colour=DISCORD_YELLOW,
         )
-        return await channel.send(embed=embed)
+        return await channel.send(view=layout, allowed_mentions=no_mentions())
 
     @override
     async def update_messages(self) -> None:
@@ -149,29 +156,44 @@ class DeleteLogVoteSession(AbstractVoteSession):
                 title = "Vote to Delete Log"
                 action = (
                     f"React with {self.primary_emoji(VoteChoice.APPROVE)} to upvote or "
-                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote.\n\n"
+                    f"{self.primary_emoji(VoteChoice.DENY)} to downvote."
                 )
+                accent_colour = DISCORD_YELLOW
             case "approved":
                 title = "Vote to Delete Log: Passed"
                 action = ""
+                accent_colour = DISCORD_GREEN
             case "denied":
                 title = "Vote to Delete Log: Failed"
                 action = ""
+                accent_colour = DISCORD_RED
             case _:
                 title = "Vote to Delete Log: Closed"
                 action = ""
+                accent_colour = DISCORD_YELLOW
 
-        embed = discord.Embed(
-            title=title,
-            description=(
-                dedent(f"""
-                {action}**Log Content:**\n{self.target_message.content}\n\n
-                **Upvotes:** {self.upvotes}
-                **Downvotes:** {self.downvotes}
-                **Net Votes:** {self.net_votes}""")
+        layout = self._render_layout(title=title, action=action, accent_colour=accent_colour)
+        await asyncio.gather(
+            *(edit_layout(message, layout, allowed_mentions=no_mentions()) for message in await self.fetch_messages())
+        )
+
+    def _render_layout(self, *, title: str, action: str, accent_colour: int) -> StaticLayout:
+        description = dedent(f"""
+            {action}
+
+            **Log content**
+            {self.target_message.content}
+            """).strip()
+        return card_layout(
+            title,
+            description,
+            accent_colour=accent_colour,
+            fields=(
+                CardField("Upvotes", str(self.upvotes)),
+                CardField("Downvotes", str(self.downvotes)),
+                CardField("Net votes", str(self.net_votes)),
             ),
         )
-        await asyncio.gather(*[message.edit(embed=embed) for message in await self.fetch_messages()])
 
     @classmethod
     async def get_open_vote_sessions(

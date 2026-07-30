@@ -14,10 +14,10 @@ from typing import (
 )
 
 import discord
-from discord.ui import Item
 from discord.utils import maybe_coroutine
 
-from squid.bot.errors import ErrorHandledView
+from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.utils.components import edit_interaction_layout
 
 type BaseViewInit[**P, T] = Callable[Concatenate["BaseNavigableView[Any]", P], T]
 type MaybeAwaitable[T] = T | Awaitable[T]
@@ -39,7 +39,7 @@ async def resolve_parent[ClientT: discord.Client](
     return parent
 
 
-class BaseNavigableView[ClientT: discord.Client](ErrorHandledView, abc.ABC):
+class BaseNavigableView[ClientT: discord.Client](ErrorHandledLayoutView, abc.ABC):
     """
     A view which adds the ability to navigate through a tree of views.
 
@@ -47,7 +47,7 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledView, abc.ABC):
     As a result of adding these buttons, subclass of this view should not use row 4 for their own buttons.
     """
 
-    __slots__: tuple[str, ...] = ("parent",)
+    __slots__: tuple[str, ...] = ("_navigation_row", "parent")
 
     def __init__(
         self,
@@ -87,22 +87,15 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledView, abc.ABC):
 
     def _add_menu_children(self) -> None:
         """Add the "Stop", "Go Home", and "Go Back" buttons to the view."""
-        # We use super().add_item to allow ourselves to add the buttons to the last row while disallowing the user to do so.
-        children_cls = {type(child) for child in self.children}
+        row = discord.ui.ActionRow()
         if self.parent is not None:
-            if BackButton not in children_cls:
-                child = BackButton[BaseNavigableView[ClientT], ClientT](self.parent)
-                super().add_item(child)
+            row.add_item(BackButton[BaseNavigableView[ClientT], ClientT](self.parent))
+            find_home = cast(Callable[[], Awaitable[BaseNavigableView[ClientT]]], self.find_home)
+            row.add_item(HomeButton[BaseNavigableView[ClientT], ClientT](find_home))
 
-            if HomeButton not in children_cls:
-                # self.find_home will never return None if the parent is not None.
-                find_home = cast(Callable[[], Awaitable[BaseNavigableView[ClientT]]], self.find_home)
-                child = HomeButton[BaseNavigableView[ClientT], ClientT](find_home)
-                super().add_item(child)
-
-        if StopButton not in children_cls:
-            child = StopButton[Self, ClientT](self)
-            super().add_item(child)
+        row.add_item(StopButton[Self, ClientT](self))
+        self._navigation_row = row
+        super().add_item(row)
 
     async def find_home(self) -> "BaseNavigableView[ClientT] | None":
         """Finds the home parent from a view."""
@@ -126,13 +119,6 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledView, abc.ABC):
         home_button = next(button for button in self.children if isinstance(button, HomeButton))  # pyright: ignore [reportUnknownVariableType]
         await home_button.callback(interaction)
 
-    @override
-    def add_item(self, item: Item[Any]) -> Self:
-        if item.row == 4:
-            msg = "Row 4 is reserved for the navigation buttons."
-            raise ValueError(msg)
-        return super().add_item(item)
-
     @abc.abstractmethod
     async def send(self, interaction: discord.Interaction[ClientT]) -> None:
         """Send the view to the interaction."""
@@ -151,18 +137,18 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         self._navigation_parent = parent
-        super().__init__(style=discord.ButtonStyle.danger, label="Stop", row=4)
+        super().__init__(style=discord.ButtonStyle.danger, label="Stop")
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         """Disables all the items in the view."""
         parent = await resolve_parent(self._navigation_parent)
-        for child in parent.children:
-            # discord.ui.Item contains no attribute "disabled", but some of its children do.
-            # Only discord.ui.Button and discord.ui.Select needs to be disabled, but this is faster than checking.
-            child.disabled = True  # type: ignore
+        for child in parent.walk_children():
+            if isinstance(child, discord.ui.Button | discord.ui.Select):
+                child.disabled = True
 
         parent.stop()
+        await edit_interaction_layout(interaction, parent)
 
 
 class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](discord.ui.Button[BaseViewT]):
@@ -172,7 +158,7 @@ class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
 
     def __init__(self, parent: BaseViewT | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
         self._navigation_parent = parent
-        super().__init__(label="Go Home", emoji=HOME, row=4)
+        super().__init__(label="Go Home", emoji=HOME)
 
     @override
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
@@ -187,7 +173,7 @@ class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
     __slots__: tuple[str, ...] = ("_navigation_parent",)
 
     def __init__(self, parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]) -> None:
-        super().__init__(label="Go Back", row=4)
+        super().__init__(label="Go Back")
         self._navigation_parent = parent
 
     @override

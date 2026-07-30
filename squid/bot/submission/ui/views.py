@@ -3,13 +3,13 @@
 import asyncio
 import re
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 from discord import Interaction
 from whenever import Instant
 
-from squid.bot.errors import ErrorHandledModal, ErrorHandledView
+from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
@@ -20,6 +20,12 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     RecordCategorySelect,
     get_text_input,
+)
+from squid.bot.utils.components import (
+    StaticLayout,
+    card_container,
+    edit_interaction_layout,
+    no_mentions,
 )
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -37,36 +43,34 @@ class SubmissionModal(ErrorHandledModal):
         self.builds = builds
 
         # Door size
-        self.door_size = discord.ui.TextInput(label="Door Size", placeholder="e.g. 2x2 (piston door)")
+        self.door_size = discord.ui.TextInput(placeholder="e.g. 2x2 (piston door)")
 
         # Pattern
-        self.pattern = discord.ui.TextInput(label="Pattern Type", placeholder="e.g. full lamp, funnel", required=False)
+        self.pattern = discord.ui.TextInput(placeholder="e.g. full lamp, funnel", required=False)
 
         # Dimensions
-        self.dimensions = discord.ui.TextInput(label="Dimensions", placeholder="Width x Height x Depth", required=True)
+        self.dimensions = discord.ui.TextInput(placeholder="Width x Height x Depth", required=True)
 
         # Versions
-        self.versions = discord.ui.TextInput(label="Versions", placeholder="e.g., 1.16.1, 1.17.3", required=False)
+        self.versions = discord.ui.TextInput(placeholder="e.g., 1.16.1, 1.17.3", required=False)
 
         # Restrictions
         self.restrictions = discord.ui.TextInput(
-            label="Restrictions",
             placeholder="e.g., Seamless, Full Flush",
             required=False,
         )
 
         # Additional Information
         self.additional_info = discord.ui.TextInput(
-            label="Additional Information",
             style=discord.TextStyle.paragraph,
             required=False,
         )
 
-        self.add_item(self.door_size)
-        self.add_item(self.pattern)
-        self.add_item(self.dimensions)
-        self.add_item(self.restrictions)
-        self.add_item(self.additional_info)
+        self.add_item(discord.ui.Label(text="Door Size", component=self.door_size))
+        self.add_item(discord.ui.Label(text="Pattern Type", component=self.pattern))
+        self.add_item(discord.ui.Label(text="Dimensions", component=self.dimensions))
+        self.add_item(discord.ui.Label(text="Restrictions", component=self.restrictions))
+        self.add_item(discord.ui.Label(text="Additional Information", component=self.additional_info))
 
     @override
     async def on_submit(self, interaction: discord.Interaction):
@@ -119,11 +123,13 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
     @override
     async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
         # Update the build object with the new values
-        await asyncio.gather(*(item.on_modal_submit() for item in self.children if isinstance(item, BuildField)))
+        await asyncio.gather(*(item.on_modal_submit() for item in self.walk_children() if isinstance(item, BuildField)))
         await self.parent.update(interaction)
 
 
-class BuildSubmissionForm(ErrorHandledView):
+class BuildSubmissionForm(ErrorHandledLayoutView):
+    actions = discord.ui.ActionRow()
+
     def __init__(self, build: Build, builds: BuildService, *, timeout: float | None = 180.0):
         super().__init__(timeout=timeout)
         # Assumptions
@@ -133,51 +139,63 @@ class BuildSubmissionForm(ErrorHandledView):
         self.build = build
         self.builds = builds
         self.value = None
-        self.add_item(RecordCategorySelect(self.build))
-        self.add_item(DoorTypeSelect(self.build))
-        self.add_item(DirectonalityLocationalitySelect(self.build))
+        controls = self.actions
+        self.clear_items()
+        self.add_item(discord.ui.TextDisplay("Use the select menus, then submit or cancel."))
+        self.add_item(discord.ui.ActionRow(RecordCategorySelect(self.build)))
+        self.add_item(discord.ui.ActionRow(DoorTypeSelect(self.build)))
+        self.add_item(discord.ui.ActionRow(DirectonalityLocationalitySelect(self.build)))
+        self.add_item(controls)
 
-    @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
+    @actions.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.build.submitter_id = interaction.user.id
         self.value = True
         self.stop()
 
-    @discord.ui.button(label="Add more Information", custom_id="open_modal", style=discord.ButtonStyle.primary)
+    @actions.button(label="Add more Information", custom_id="open_modal", style=discord.ButtonStyle.primary)
     async def add_info(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(SubmissionModal(self.build, self.builds))
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         self.value = False
         self.stop()
 
 
-class ConfirmationView(ErrorHandledView):
+class ConfirmationView(ErrorHandledLayoutView):
     """A simple Yes/No style pair of buttons for confirming an action."""
 
-    def __init__(self, timeout: int = 60):
+    actions = discord.ui.ActionRow()
+
+    def __init__(self, prompt: str = "Confirm this action?", timeout: int = 60):
         super().__init__(timeout=timeout)
         self.value = None
+        controls = self.actions
+        self.clear_items()
+        self.add_item(discord.ui.TextDisplay(prompt))
+        self.add_item(controls)
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    @actions.button(label="Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         self.stop()
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
         self.stop()
 
 
-class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
+class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView):
     """A view that allows users to edit a build.
 
     Changes are accumulated locally and applied under a service-managed lock on submit.
     """
+
+    actions = discord.ui.ActionRow()
 
     def __init__(
         self,
@@ -225,8 +243,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
     @override
     async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]
         if Instant.now() > self.expiry_time:
-            for item in self.children:
-                item.disabled = True  # type: ignore
+            for item in self.walk_children():
+                if isinstance(item, discord.ui.Button | discord.ui.Select):
+                    item.disabled = True
             await interaction.followup.send("This edit session has expired. Your edits are not saved.", ephemeral=True)
             return False
         return True
@@ -241,11 +260,11 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
         if 5 * self.page <= len(self.items):
             for i in range(5):
                 base_index = 5 * (self.page - 1)
-                modal.add_item(self.items[base_index + i])
+                modal.add_item(self.items[base_index + i].to_label())
         else:
             for i in range(len(self.items) % 5):
                 base_index = 5 * (self.page - 1)
-                modal.add_item(self.items[base_index + i])
+                modal.add_item(self.items[base_index + i].to_label())
         return modal
 
     def _handle_button_states(self) -> None:
@@ -256,51 +275,54 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=ephemeral)
         self._handle_button_states()
+        await self._render(interaction)
         await interaction.followup.send(
-            f"Page {self.page}/{self._max_pages}",
             view=self,
-            embeds=await self.get_embeds(interaction),
             ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
         )
 
     async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()
-        await interaction.response.edit_message(
-            content=f"Page {self.page}/{self._max_pages}", view=self, embeds=await self.get_embeds(interaction)
-        )
+        await self._render(interaction)
+        await edit_interaction_layout(interaction, self)
 
     def get_handler(
         self, interaction: discord.Interaction[BotT]
     ) -> "squid.bot.submission.build_handler.BuildHandler[BotT]":
         return interaction.client.for_build(self.build)
 
-    async def get_embeds(self, interaction: discord.Interaction[BotT]) -> list[discord.Embed]:
-        return [self.summary_embed, await self.get_handler(interaction).generate_embed()]
-
-    @property
-    def summary_embed(self) -> discord.Embed:
+    def summary_text(self) -> str:
         summaries = [item.summary for item in self.items]
         for i in range(5 * (self.page - 1), min(len(self.items), 5 * self.page)):
             summaries[i] = f"**{summaries[i]}**"
-        return discord.Embed(title="Build Summary", description="\n".join(summaries))
+        return "\n".join(summaries)
 
-    @discord.ui.button(label="Open", style=discord.ButtonStyle.primary)
+    async def _render(self, interaction: discord.Interaction[BotT]) -> None:
+        controls = self.actions
+        self.clear_items()
+        self.add_item(discord.ui.TextDisplay(f"Page {self.page}/{self._max_pages}"))
+        self.add_item(card_container("Build Summary", self.summary_text()))
+        self.add_item(await self.get_handler(interaction).render_container())
+        self.add_item(controls)
+
+    @actions.button(label="Open", style=discord.ButtonStyle.primary)
     async def open(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await interaction.response.send_modal(self.get_modal())
 
-    @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.primary)
+    @actions.button(label="Previous Page", style=discord.ButtonStyle.primary)
     async def previous_page(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         self.page -= 1
         self._handle_button_states()
         await self.update(interaction)
 
-    @discord.ui.button(label="Next Page", style=discord.ButtonStyle.primary)
+    @actions.button(label="Next Page", style=discord.ButtonStyle.primary)
     async def next_page(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         self.page += 1
         self._handle_button_states()
         await self.update(interaction)
 
-    @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary)
+    @actions.button(label="Submit", style=discord.ButtonStyle.primary)
     async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
         await interaction.response.defer()
         patch = BuildEditPatch.from_attributes(
@@ -313,7 +335,12 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledView):
             async with self.builds.edit(self.build.id, patch) as edit:
                 self.build = await edit.commit()
         await interaction.followup.send(
-            content="Submitted", embed=await self.get_handler(interaction).generate_embed(), ephemeral=True
+            view=StaticLayout(
+                discord.ui.TextDisplay("Submitted"),
+                await self.get_handler(interaction).render_container(),
+            ),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
         )
 
 
@@ -327,19 +354,28 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         super().__init__(parent=parent, timeout=None)
         self.build = build
         if build.id is None:
-            self.add_item(EphemeralBuildEditButton(build))
+            edit_button = EphemeralBuildEditButton(build)
         else:
-            self.add_item(DynamicBuildEditButton(build))
+            edit_button = DynamicBuildEditButton(build)
+        self._edit_row = discord.ui.ActionRow(
+            cast(discord.ui.Item[discord.ui.LayoutView], edit_button),
+        )
+        self.add_item(self._edit_row)
 
-    async def get_embed(self, interaction: discord.Interaction[BotT]) -> discord.Embed:
-        return await interaction.client.for_build(self.build).generate_embed()
+    async def _render(self, interaction: discord.Interaction[BotT]) -> None:
+        self.clear_items()
+        self.add_item(await interaction.client.for_build(self.build).render_container())
+        self.add_item(self._edit_row)
+        self.add_item(self._navigation_row)
 
     @override
     async def send(self, interaction: discord.Interaction[BotT]) -> None:
         if not interaction.response.is_done():
             await interaction.response.defer()
-        await interaction.followup.send(embed=await self.get_embed(interaction), view=self)
+        await self._render(interaction)
+        await interaction.followup.send(view=self, allowed_mentions=no_mentions())
 
     @override
     async def update(self, interaction: discord.Interaction[BotT]) -> None:
-        await interaction.response.edit_message(content=None, embed=await self.get_embed(interaction), view=self)
+        await self._render(interaction)
+        await edit_interaction_layout(interaction, self)

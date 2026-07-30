@@ -8,9 +8,9 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, flag
 
-import squid.bot.utils.embeds as utils
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
+from squid.bot.utils.components import edit_layout, info_layout, no_mentions
 from squid.bot.utils.converters import (
     DimensionsConverter,
     GameTickConverter,
@@ -111,32 +111,54 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 build = edit.build
                 if ctx.interaction:
                     interaction = cast(discord.Interaction[discord.Client], ctx.interaction)
-                    await sent_message.edit(embed=utils.info_embed("Waiting", "User confirming changes..."))
-                    view = ConfirmationView()
+                    await edit_layout(
+                        sent_message,
+                        info_layout("Waiting", "User confirming changes..."),
+                        allowed_mentions=no_mentions(),
+                    )
+                    view = ConfirmationView("Here is a preview of the changes. Use the buttons to confirm or cancel.")
+                    controls = view.actions
+                    view.clear_items()
+                    view.add_item(discord.ui.TextDisplay("Review the proposed build changes."))
+                    view.add_item(await self.bot.for_build(build).render_container())
+                    view.add_item(controls)
                     preview = await interaction.followup.send(
-                        "Here is a preview of the changes. Use the buttons to confirm or cancel.",
-                        embed=await self.bot.for_build(build).generate_embed(),
                         view=view,
                         ephemeral=True,
                         wait=True,
+                        allowed_mentions=no_mentions(),
                     )
                     await view.wait()
                     await preview.delete()
                     if view.value is None:
-                        await sent_message.edit(
-                            embed=utils.info_embed("Timed out", "Build edit canceled due to inactivity.")
+                        await edit_layout(
+                            sent_message,
+                            info_layout("Timed out", "Build edit canceled due to inactivity."),
+                            allowed_mentions=no_mentions(),
                         )
                         return
                     if view.value is False:
-                        await sent_message.edit(embed=utils.info_embed("Cancelled", "Build edit canceled by user"))
+                        await edit_layout(
+                            sent_message,
+                            info_layout("Cancelled", "Build edit canceled by user"),
+                            allowed_mentions=no_mentions(),
+                        )
                         return
 
-                await sent_message.edit(embed=utils.info_embed("Editing", "Editing build..."))
+                await edit_layout(
+                    sent_message,
+                    info_layout("Editing", "Editing build..."),
+                    allowed_mentions=no_mentions(),
+                )
                 await edit.commit()
 
             await asyncio.gather(
                 self.bot.for_build(build).update_messages(),
-                sent_message.edit(embed=utils.info_embed("Success", "Build edited successfully")),
+                edit_layout(
+                    sent_message,
+                    info_layout("Success", "Build edited successfully"),
+                    allowed_mentions=no_mentions(),
+                ),
             )
             return
         return
