@@ -194,6 +194,9 @@ class Build:
     submitter_id: int | None = None
     # TODO: save the submitted time too
     completion_time: str | None = None
+    completion_at: Instant | None = None
+    completion_evidence: str | None = None
+    description: str | None = None
     edited_time: Instant | None = None
 
     original_server_id: Final[int | None] = frozen_field(default=None)

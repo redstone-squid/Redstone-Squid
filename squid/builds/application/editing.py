@@ -113,6 +113,7 @@ class BuildEditPatch:
             )
 
         if not isinstance(self.extra_user_info, _Unset):
+            build.description = self.extra_user_info
             if self.extra_user_info is None:
                 build.extra_info.pop("user", None)
             else:

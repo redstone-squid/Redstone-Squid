@@ -69,6 +69,7 @@ class BuildService:
                 build.miscellaneous_restrictions.append(value)
         if submission.information_about_build is not None:
             build.extra_info["user"] = submission.information_about_build
+            build.description = submission.information_about_build
         await self._persist(build)
         return build
 

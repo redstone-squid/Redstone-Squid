@@ -111,6 +111,9 @@ class BuildRepository:
                     height=build.height,
                     depth=build.depth,
                     completion_time=build.completion_time,
+                    completion_at=build.completion_at,
+                    completion_evidence=build.completion_evidence,
+                    description=build.description,
                     category=build.category,
                     submitter_id=build.submitter_id,
                     version_spec=build.version_spec,
@@ -172,6 +175,9 @@ class BuildRepository:
             sql_build.height = build.height
             sql_build.depth = build.depth
             sql_build.completion_time = build.completion_time
+            sql_build.completion_at = build.completion_at
+            sql_build.completion_evidence = build.completion_evidence
+            sql_build.description = build.description
             sql_build.submitter_id = build.submitter_id
             sql_build.version_spec = build.version_spec
             sql_build.ai_generated = build.ai_generated or False
