@@ -286,14 +286,17 @@ CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
 DECLARE
     target_build_id bigint;
     target_action text := 'upsert';
+    target_kind text;
 BEGIN
     IF TG_TABLE_NAME = 'builds' THEN
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        target_kind := lower(CASE WHEN TG_OP = 'DELETE' THEN OLD.category ELSE NEW.category END);
         IF TG_OP = 'DELETE' THEN
             target_action := 'delete';
         END IF;
     ELSE
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
+        SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
     END IF;
 
     INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
@@ -304,6 +307,25 @@ BEGIN
         attempts = 0,
         locked_at = NULL,
         last_error = NULL;
+
+    IF target_kind IN ('door', 'extender') THEN
+        INSERT INTO public.record_recompute_queue
+            (scope_key, build_kind, build_id, reason, enqueued_at)
+        VALUES (
+            target_kind,
+            target_kind,
+            CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
+            'source_change',
+            now()
+        )
+        ON CONFLICT (scope_key) DO UPDATE
+        SET build_id = EXCLUDED.build_id,
+            reason = EXCLUDED.reason,
+            enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0,
+            locked_at = NULL,
+            last_error = NULL;
+    END IF;
     RETURN NULL;
 END;
 $$;
@@ -463,6 +485,10 @@ CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON pu
 CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER extender_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 CREATE TRIGGER restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
