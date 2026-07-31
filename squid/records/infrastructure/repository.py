@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
+from itertools import pairwise
 from typing import cast
 
 from sqlalchemy import delete, func, select, update
@@ -162,8 +163,9 @@ class PostgresRecordRepository:
             session.add(run)
             await session.flush()
 
-            for computed in batch.records:
-                definition = await self._ensure_definition(session, batch.ruleset_id, computed)
+            definitions = await self._ensure_definitions(session, batch)
+            results: list[tuple[ComputedRecord, RecordDefinition, RecordResult]] = []
+            for computed, definition in zip(batch.records, definitions, strict=True):
                 result = RecordResult(
                     run_id=run.id,
                     definition_id=definition.id,
@@ -173,11 +175,14 @@ class PostgresRecordRepository:
                     history_complete=computed.history_complete,
                 )
                 session.add(result)
-                await session.flush()
+                results.append((computed, definition, result))
+
+            await session.flush()
+            history_chains: list[list[RecordHolderHistory]] = []
+            for computed, definition, result in results:
+                candidates_by_id = {candidate.build_id: candidate for candidate in computed.competition.candidates}
                 for build_id in computed.resolution.holder_ids:
-                    candidate = next(
-                        candidate for candidate in computed.competition.candidates if candidate.build_id == build_id
-                    )
+                    candidate = candidates_by_id[build_id]
                     session.add(
                         RecordResultHolder(
                             result_id=result.id,
@@ -190,26 +195,29 @@ class PostgresRecordRepository:
                         )
                     )
 
-                predecessor_id: int | None = None
+                history_chain: list[RecordHolderHistory] = []
                 for period in computed.history:
                     for build_id in period.build_ids:
-                        candidate = next(
-                            candidate for candidate in computed.competition.candidates if candidate.build_id == build_id
-                        )
+                        candidate = candidates_by_id[build_id]
                         history = RecordHolderHistory(
                             run_id=run.id,
                             definition_id=definition.id,
                             build_id=build_id,
-                            predecessor_id=predecessor_id,
-                            held_from=Instant.from_py_datetime(period.held_from),
-                            held_until=Instant.from_py_datetime(period.held_until)
-                            if period.held_until is not None
-                            else None,
+                            predecessor_id=None,
+                            held_from=Instant(period.held_from),
+                            held_until=Instant(period.held_until) if period.held_until is not None else None,
                             metric_snapshot=_metric_snapshot(computed, candidate),
                         )
                         session.add(history)
-                        await session.flush()
-                        predecessor_id = history.id
+                        history_chain.append(history)
+                if history_chain:
+                    history_chains.append(history_chain)
+
+            if history_chains:
+                await session.flush()
+                for history_chain in history_chains:
+                    for predecessor, history in pairwise(history_chain):
+                        history.predecessor_id = predecessor.id
 
             version_predicate = (
                 RecordComputationRun.version_id.is_(None)
@@ -226,7 +234,6 @@ class PostgresRecordRepository:
                 )
                 .values(is_active=False)
             )
-            await session.flush()
             run.status = "completed"
             run.completed_at = Instant.now()
             run.is_active = True
@@ -431,75 +438,89 @@ class PostgresRecordRepository:
             if (candidate := _extender_candidate(extender, timing_by_build.get(extender.id, ()))) is not None
         )
 
-    async def _ensure_definition(
+    async def _ensure_definitions(
         self,
         session: AsyncSession,
-        ruleset_id: int,
-        computed: ComputedRecord,
-    ) -> RecordDefinition:
+        batch: ComputationBatch,
+    ) -> tuple[RecordDefinition, ...]:
+        if not batch.records:
+            return ()
+
+        first = batch.records[0]
         version_predicate = (
             RecordDefinition.version_id.is_(None)
-            if computed.version_id is None
-            else RecordDefinition.version_id == computed.version_id
+            if first.version_id is None
+            else RecordDefinition.version_id == first.version_id
         )
-        statement = select(RecordDefinition).where(
-            RecordDefinition.ruleset_id == ruleset_id,
-            RecordDefinition.record_class == computed.record_class.value,
-            RecordDefinition.build_kind == computed.competition.identity.kind.value,
-            RecordDefinition.version_scope == computed.scope.value,
-            version_predicate,
-            RecordDefinition.category_key == computed.competition.identity.key,
-        )
-        definition = (await session.execute(statement)).scalar_one_or_none()
-        if definition is not None:
-            definition.title = computed.title.title
-            definition.subtitle = computed.title.subtitle
-            definition.title_diagnostics = [diagnostic.as_dict() for diagnostic in computed.title.diagnostics]
-            await self._ensure_facets(session, definition.id, computed)
-            return definition
+        existing = (
+            await session.execute(
+                select(RecordDefinition).where(
+                    RecordDefinition.ruleset_id == batch.ruleset_id,
+                    RecordDefinition.build_kind == batch.kind.value,
+                    RecordDefinition.version_scope == first.scope.value,
+                    version_predicate,
+                    RecordDefinition.record_class.in_({computed.record_class.value for computed in batch.records}),
+                    RecordDefinition.category_key.in_(
+                        {computed.competition.identity.key for computed in batch.records}
+                    ),
+                )
+            )
+        ).scalars()
+        by_identity = {(definition.record_class, definition.category_key): definition for definition in existing}
 
-        definition = RecordDefinition(
-            ruleset_id=ruleset_id,
-            record_class=computed.record_class.value,
-            build_kind=computed.competition.identity.kind.value,
-            version_scope=computed.scope.value,
-            version_id=computed.version_id,
-            category_key=computed.competition.identity.key,
-            title=computed.title.title,
-            subtitle=computed.title.subtitle,
-            title_diagnostics=[diagnostic.as_dict() for diagnostic in computed.title.diagnostics],
-            materialization_source=computed.competition.source,
-        )
-        session.add(definition)
+        definitions: list[RecordDefinition] = []
+        for computed in batch.records:
+            identity = (computed.record_class.value, computed.competition.identity.key)
+            definition = by_identity.get(identity)
+            if definition is None:
+                definition = RecordDefinition(
+                    ruleset_id=batch.ruleset_id,
+                    record_class=computed.record_class.value,
+                    build_kind=computed.competition.identity.kind.value,
+                    version_scope=computed.scope.value,
+                    version_id=computed.version_id,
+                    category_key=computed.competition.identity.key,
+                    title=computed.title.title,
+                    subtitle=computed.title.subtitle,
+                    title_diagnostics=[diagnostic.as_dict() for diagnostic in computed.title.diagnostics],
+                    materialization_source=computed.competition.source,
+                )
+                session.add(definition)
+                by_identity[identity] = definition
+            else:
+                definition.title = computed.title.title
+                definition.subtitle = computed.title.subtitle
+                definition.title_diagnostics = [diagnostic.as_dict() for diagnostic in computed.title.diagnostics]
+            definitions.append(definition)
+
         await session.flush()
-        await self._ensure_facets(session, definition.id, computed)
-        return definition
-
-    async def _ensure_facets(
-        self,
-        session: AsyncSession,
-        definition_id: int,
-        computed: ComputedRecord,
-    ) -> None:
-        existing = set(
+        definition_ids = [definition.id for definition in definitions]
+        existing_facets = set(
             (
                 await session.execute(
-                    select(RecordDefinitionFacet.facet_kind, RecordDefinitionFacet.facet_id).where(
-                        RecordDefinitionFacet.definition_id == definition_id
-                    )
+                    select(
+                        RecordDefinitionFacet.definition_id,
+                        RecordDefinitionFacet.facet_kind,
+                        RecordDefinitionFacet.facet_id,
+                    ).where(RecordDefinitionFacet.definition_id.in_(definition_ids))
                 )
             ).tuples()
         )
-        for order, facet in enumerate(computed.competition.facets):
-            if (facet.kind, facet.id) not in existing:
+        for definition, computed in zip(definitions, batch.records, strict=True):
+            for order, facet in enumerate(computed.competition.facets):
+                identity = (definition.id, facet.kind, facet.id)
+                if identity in existing_facets:
+                    continue
                 session.add(
                     RecordDefinitionFacet(
-                        definition_id=definition_id,
+                        definition_id=definition.id,
                         facet_kind=facet.kind,
                         facet_id=facet.id,
                         display_order=order,
                     )
                 )
+                existing_facets.add(identity)
+        return tuple(definitions)
 
 
 async def _door_timings(
@@ -769,7 +790,7 @@ def _as_datetime(value: Instant | None) -> datetime | None:
 
 
 def _as_instant(value: datetime | None) -> Instant | None:
-    return Instant.from_py_datetime(value) if value is not None else None
+    return Instant(value) if value is not None else None
 
 
 async def _advisory_lock(session: AsyncSession, key: str) -> None:
