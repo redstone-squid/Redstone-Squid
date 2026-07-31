@@ -1,6 +1,6 @@
 """Core translation lookup tests."""
 
-from squid.core.i18n import negotiate_locale, ntranslate, translate
+from squid.core.i18n import negotiate_locale, negotiate_locale_candidates, ntranslate, translate
 
 
 def test_translate_falls_back_to_source_string_for_unknown_locale() -> None:
@@ -33,6 +33,24 @@ def test_negotiate_locale_unsupported_falls_back_to_default() -> None:
 
 def test_negotiate_locale_none_falls_back_to_default() -> None:
     assert negotiate_locale(None) == "en"
+
+
+def test_negotiate_locale_candidates_prefers_exact_match_over_earlier_fuzzy_match() -> None:
+    # "zh-TW" (first preference) only matches "zh-CN" via language fallback; "en" (second
+    # preference) is an exact match and must win regardless of its position in the list.
+    assert negotiate_locale_candidates(["zh-TW", "en"]) == "en"
+
+
+def test_negotiate_locale_candidates_prefers_earlier_exact_match() -> None:
+    assert negotiate_locale_candidates(["en", "zh-CN"]) == "en"
+
+
+def test_negotiate_locale_candidates_falls_back_to_fuzzy_when_no_exact_match() -> None:
+    assert negotiate_locale_candidates(["fr", "zh-TW"]) == "zh-CN"
+
+
+def test_negotiate_locale_candidates_falls_back_to_default() -> None:
+    assert negotiate_locale_candidates(["fr", "de"]) == "en"
 
 
 def test_ntranslate_selects_plural_form() -> None:

@@ -37,3 +37,20 @@ def test_api_never_returns_a_server_error(case: schemathesis.Case) -> None:
         )
     finally:
         gc.collect()
+
+
+# Locale negotiation (squid/api/i18n.py) sits in front of every response, including error
+# responses generated from schema-conformant-but-invalid requests. Fuzz Accept-Language
+# alongside the generated request to make sure header parsing itself never 500s, and that
+# ProblemDetail's title/detail stay non-empty strings regardless of what locale was requested.
+@schema.parametrize()
+@pytest.mark.parametrize("accept_language", ["en", "zh-CN", "zh-TW", "fr-FR;q=0.9,*;q=0.1", "not-a-locale-tag", ""])
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_api_never_errors_on_accept_language(case: schemathesis.Case, accept_language: str) -> None:
+    try:
+        case.call_and_validate(
+            headers={"Authorization": TEST_SYNERGY_SECRET, "Accept-Language": accept_language},
+            checks=[schemathesis.checks.not_a_server_error],
+        )
+    finally:
+        gc.collect()
