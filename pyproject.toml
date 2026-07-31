@@ -55,6 +55,7 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
+    "schemathesis>=4.24.2",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
