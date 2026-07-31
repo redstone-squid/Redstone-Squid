@@ -7,8 +7,10 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
+from squid.core.i18n import _
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -28,8 +30,9 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     async def versions(self, ctx: Context[BotT]):
         """List the Minecraft versions the bot recognizes."""
         versions_human_readable = await self.version_service.list_display("Java", limit=20)  # TODO: pagination
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Recognized Java versions", ", ".join(versions_human_readable)),
+            view=info_layout(t(locale, _("Recognized Java versions")), ", ".join(versions_human_readable)),
             allowed_mentions=no_mentions(),
         )
 
@@ -40,8 +43,9 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a Minecraft version to the database."""
         version = await self.version_service.add(version_string, edition=edition)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout(f"Version added successfully: {version}"),
+            view=text_layout(t(locale, _("Version added successfully: {version}"), version=version)),
             allowed_mentions=no_mentions(),
         )
 
@@ -56,8 +60,9 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
 
         first_line = message.content.split("\n", 1)[0]
         version = await self.version_service.add(first_line)
+        locale = await resolve_locale(message, self.bot.services.settings)
         await self.bot.get_channel(channel_id).send(  # type: ignore
-            view=text_layout(f"Version added successfully: {version}"),
+            view=text_layout(t(locale, _("Version added successfully: {version}"), version=version)),
             allowed_mentions=no_mentions(),
         )
 
