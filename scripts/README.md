@@ -7,3 +7,7 @@
 `add-tests-supabase-submodule.sh` is a script that adds [Supabase](https://github.com/supabase/supabase) as submodule to  `tests/`. We use sparse checkout to get the docker compose files, which is used to spin up a Supabase instance in containers to run integration tests against.
 
 The scripts in `migrations/` are used to provide additional information accompanying the migrations. For example, to backfill data when a new column is added to a table. These scripts are meant to be run manually before or after the migration is applied (whether before or after depends on the migration itself, see the top docstring of the script). These scripts are only guaranteed to work at the commit they are created in. They may not work in future commits.
+
+`setup-claude-web-env.sh` bootstraps `just`, `uv`, project dependencies, and `prek` hooks in a Linux agent sandbox. It assumes the checkout is at `/home/user/Redstone-Squid`; override that with `REPO_DIR` when needed.
+
+`setup-codex-cloud-env.sh` prepares a new Codex Cloud environment. Configure it as the setup script with `bash scripts/setup-codex-cloud-env.sh`. Configure `codex-cloud-maintenance.sh` with `bash scripts/codex-cloud-maintenance.sh` as the maintenance script to refresh the locked dependencies when a cached environment resumes.
