@@ -11,6 +11,7 @@ from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 from rapidfuzz import process
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.search_view import SearchResultsView
@@ -27,6 +28,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.builds.errors import AliasAlreadyAddedError
+from squid.core.i18n import _
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 if TYPE_CHECKING:
@@ -61,11 +63,11 @@ class SearchCog[
 
     @commands.hybrid_command("search")
     @app_commands.describe(
-        query="Search text and filters, e.g. `width:5`.",
-        scope="Search records, builds, tags and fields, or everything.",
-        mode="Use keyword matching or smart meaning-based matching.",
-        sort="Field to sort by, such as width or closing_delay.",
-        direction="Sort low-to-high or high-to-low.",
+        query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
+        scope=app_commands.locale_str(_("Search records, builds, tags and fields, or everything.")),
+        mode=app_commands.locale_str(_("Use keyword matching or smart meaning-based matching.")),
+        sort=app_commands.locale_str(_("Field to sort by, such as width or closing_delay.")),
+        direction=app_commands.locale_str(_("Sort low-to-high or high-to-low.")),
     )
     async def search_records(
         self,
@@ -97,39 +99,46 @@ class SearchCog[
         await ctx.send_help("restrictions")
 
     @restrictions_group.command(name="search")
-    @app_commands.describe(query="Part of a restriction name. Leave blank to list all restrictions.")
+    @app_commands.describe(
+        query=app_commands.locale_str(_("Part of a restriction name. Leave blank to list all restrictions."))
+    )
     async def search_restrictions(self, ctx: Context[BotT], query: str | None = None):
         """Search restriction names."""
-        async with RunningMessage(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with RunningMessage(ctx, locale=locale) as sent_message:
             matches = await self.queries.restrictions(query)
             description = "\n".join(
                 f"{item.restriction_id}: {item.name}{' (alias)' if item.is_alias else ''}" for item in matches
             )
             await edit_layout(
                 sent_message,
-                info_layout("Restrictions", description),
+                info_layout(t(locale, _("Restrictions")), description),
                 allowed_mentions=no_mentions(),
             )
 
     @restrictions_group.command(name="add-alias")
     @check_is_staff()
     @check_is_owner_server()
-    @app_commands.describe(restriction="The restriction to add another name for.", alias="The additional name.")
+    @app_commands.describe(
+        restriction=app_commands.locale_str(_("The restriction to add another name for.")),
+        alias=app_commands.locale_str(_("The additional name.")),
+    )
     async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
         """Add another name for a restriction."""
-        async with self.bot.get_running_message(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             try:
                 await self.restrictions.add_alias(restriction, alias)
             except AliasAlreadyAddedError:
                 await edit_layout(
                     sent_message,
-                    info_layout("Already added", "Alias already on this restriction."),
+                    info_layout(t(locale, _("Already added")), t(locale, _("Alias already on this restriction."))),
                     allowed_mentions=no_mentions(),
                 )
             else:
                 await edit_layout(
                     sent_message,
-                    info_layout("Success", "Alias added."),
+                    info_layout(t(locale, _("Success")), t(locale, _("Alias added."))),
                     allowed_mentions=no_mentions(),
                 )
 
@@ -158,35 +167,38 @@ class SearchCog[
     @patterns_group.command(name="list")
     async def list_patterns(self, ctx: Context[BotT]):
         """List all available build patterns."""
-        async with RunningMessage(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with RunningMessage(ctx, locale=locale) as sent_message:
             names = await self.queries.patterns()
             await edit_layout(
                 sent_message,
-                info_layout("Patterns", ", ".join(names)),
+                info_layout(t(locale, _("Patterns")), ", ".join(names)),
                 allowed_mentions=no_mentions(),
             )
 
     @patterns_group.command(name="search")
-    @app_commands.describe(query="A full or partial pattern name.")
+    @app_commands.describe(query=app_commands.locale_str(_("A full or partial pattern name.")))
     async def search_patterns(self, ctx: Context[BotT], query: str):
         """Search build pattern names."""
-        async with RunningMessage(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with RunningMessage(ctx, locale=locale) as sent_message:
             matches = await self.queries.search_patterns(query)
             description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
             await edit_layout(
                 sent_message,
-                info_layout("Patterns", description or "No patterns match that query."),
+                info_layout(t(locale, _("Patterns")), description or t(locale, _("No patterns match that query."))),
                 allowed_mentions=no_mentions(),
             )
 
     @BuildCommandGroup.build_hybrid_group.command(name="pending")  # pyright: ignore[reportArgumentType]
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
-        async with self.bot.get_running_message(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             pending_submissions = await self.queries.pending()
 
             if len(pending_submissions) == 0:
-                desc = "No open submissions."
+                desc = t(locale, _("No open submissions."))
             else:
                 desc = []
                 for sub in pending_submissions:
@@ -199,22 +211,23 @@ class SearchCog[
 
             await edit_layout(
                 sent_message,
-                info_layout(title="Open Records", description=desc),
+                info_layout(title=t(locale, _("Open Records")), description=desc),
                 allowed_mentions=no_mentions(),
             )
 
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # pyright: ignore[reportArgumentType]
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id="The ID of the build you want to see.")
+    @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to see.")))
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         if ctx.interaction:
             interaction = ctx.interaction
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
                 await interaction.followup.send(
-                    view=error_layout("Error", "No build with that ID."),
+                    view=error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     ephemeral=True,
                     allowed_mentions=no_mentions(),
                 )
@@ -223,13 +236,13 @@ class SearchCog[
             view = BuildInfoView[BotT](build)
             await view.send(interaction)
             return None
-        async with self.bot.get_running_message(ctx) as sent_message:
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.queries.get(build_id)
 
             if build is None:
                 return await edit_layout(
                     sent_message,
-                    error_layout("Error", "No build with that ID."),
+                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     allowed_mentions=no_mentions(),
                 )
 
@@ -244,17 +257,18 @@ class SearchCog[
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id="The ID of the build you want to confirm.")
+    @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
     async def confirm_build(self, ctx: Context[BotT], build_id: int):
         """Mark a submission as confirmed and publish it."""
-        async with self.bot.get_running_message(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.builds.confirm(build_id)
 
             self.bot.dispatch("build_confirmed", build)
 
             await edit_layout(
                 sent_message,
-                info_layout("Success", "Submission has been confirmed."),
+                info_layout(t(locale, _("Success")), t(locale, _("Submission has been confirmed."))),
                 allowed_mentions=no_mentions(),
             )
 
@@ -262,33 +276,37 @@ class SearchCog[
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id="The ID of the build you want to deny.")
+    @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Mark a submission as denied."""
-        async with self.bot.get_running_message(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.builds.deny(build_id)
 
             await self.bot.for_build(build).update_messages()
 
             await edit_layout(
                 sent_message,
-                info_layout("Success", "Submission has been denied."),
+                info_layout(t(locale, _("Success")), t(locale, _("Submission has been denied."))),
                 allowed_mentions=no_mentions(),
             )
 
     @BuildCommandGroup.build_hybrid_group.command(name="debug")  # pyright: ignore[reportArgumentType]
     @check_is_staff()
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id="The ID of the build whose debug details you want to see.")
+    @app_commands.describe(
+        build_id=app_commands.locale_str(_("The ID of the build whose debug details you want to see."))
+    )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
-        async with self.bot.get_running_message(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.queries.get(build_id)
 
             if build is None:
                 return await edit_layout(
                     sent_message,
-                    error_layout("Error", "No build with that ID."),
+                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     allowed_mentions=no_mentions(),
                 )
 
