@@ -151,7 +151,12 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
                 msg = f"Unsupported content type: {attachment.content_type}"
                 raise ValueError(msg)
 
-            url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
+            url = await upload_to_catbox(
+                attachment.filename,
+                await attachment.read(),
+                attachment.content_type,
+                self.bot.catbox_config,
+            )
             if attachment.content_type.startswith("image"):
                 return "image", url
             return "video", url
@@ -254,7 +259,12 @@ class BuildSubmitCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Build"):
         for attachment in message.attachments:
             if attachment.content_type is None:
                 continue
-            url = await upload_to_catbox(attachment.filename, await attachment.read(), attachment.content_type)
+            url = await upload_to_catbox(
+                attachment.filename,
+                await attachment.read(),
+                attachment.content_type,
+                self.bot.catbox_config,
+            )
             if attachment.content_type.startswith("image"):
                 build.image_urls.append(url)
             elif attachment.content_type.startswith("video"):

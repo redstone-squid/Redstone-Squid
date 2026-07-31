@@ -38,19 +38,19 @@ class TestPrepareLogPath:
 
 
 class TestBuildLoggingConfig:
-    def test_uses_env_overrides_for_files(
+    def test_uses_explicit_file_settings(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        monkeypatch.setenv("LOG_DIR", str(tmp_path))
-        monkeypatch.setenv("LOG_FILE", "custom.log")
-        monkeypatch.setenv("LOG_ACCESS_FILE", "access.log")
-
         config = build_logging_config(
-            root_level_name="WARNING",
+            config=LoggingConfig(
+                level="INFO",
+                root_level="WARNING",
+                directory=tmp_path,
+                log_file="custom.log",
+                access_log_file="access.log",
+            ),
             named_logger_levels={"squid": "INFO"},
-            default_log_file="discord.log",
             include_uvicorn_loggers=True,
         )
 
@@ -61,15 +61,17 @@ class TestBuildLoggingConfig:
 
     def test_keeps_bot_default_file_when_env_is_unset(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        monkeypatch.setenv("LOG_DIR", str(tmp_path))
-
         config = build_logging_config(
-            root_level_name="WARNING",
+            config=LoggingConfig(
+                level="INFO",
+                root_level="WARNING",
+                directory=tmp_path,
+                log_file="discord.log",
+                access_log_file=None,
+            ),
             named_logger_levels={"squid": "INFO"},
-            default_log_file="discord.log",
         )
 
         handlers = config["handlers"]

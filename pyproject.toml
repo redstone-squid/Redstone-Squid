@@ -18,6 +18,7 @@ dependencies = [
     "jishaku>=2.6.0",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
+    "pydantic-settings>=2.14,<3",
     "openai>=1.58.1",
     "async-lru>=2.0.4",
     "markdown>=3.7",

@@ -24,16 +24,14 @@ class DatabaseEngine:
             config: Database connection URL and drivers.
             debug: Whether to echo SQL statements, for debugging.
         """
-        base = make_url(config.url)
+        base = make_url(config.url.get_secret_value())
         self.async_engine: AsyncEngine = create_async_engine(
-            base.set(drivername=f"{base.drivername}+{config.async_driver}"), echo=debug
+            base.set(drivername=f"{base.get_backend_name()}+asyncpg"), echo=debug
         )
         self.async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.async_engine, expire_on_commit=False
         )
-        self.sync_engine: Engine = create_engine(
-            base.set(drivername=f"{base.drivername}+{config.sync_driver}"), echo=debug
-        )
+        self.sync_engine: Engine = create_engine(base.set(drivername=f"{base.get_backend_name()}+psycopg2"), echo=debug)
         self.sync_session: sessionmaker[Session] = sessionmaker(self.sync_engine, expire_on_commit=False)
 
     async def close(self) -> None:

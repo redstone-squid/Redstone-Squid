@@ -4,7 +4,7 @@ from squid.builds.infrastructure.embeddings import VecsBuildIndex
 
 
 async def test_vecs_index_is_disabled_without_connection() -> None:
-    index = VecsBuildIndex(None, dimension=3)
+    index = VecsBuildIndex(None)
 
     await index.upsert(1, [1.0, 2.0, 3.0])
 

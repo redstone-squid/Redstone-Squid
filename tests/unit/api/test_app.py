@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from squid.api.app import create_api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.config import ApiProcessConfig
 from squid.core.errors import ErrorCode, InternalError
 from squid.runtime import ApplicationRuntime, ApplicationServices
 from squid.users.errors import MinecraftAccountNotFoundError, MinecraftServiceUnavailableError
@@ -22,6 +23,13 @@ NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
 TEST_USER_NAME = "TestUser"
 TEST_VERIFICATION_CODE = 123_456
 TEST_SYNERGY_SECRET = "test-secret"
+TEST_CONFIG = ApiProcessConfig.model_validate(
+    {
+        "database": {"url": "postgresql://user:password@database.example/squid"},
+        "verification": {"code_pepper": "verification-pepper"},
+        "api": {"secret": TEST_SYNERGY_SECRET},
+    }
+)
 
 
 class MockUserManager:
@@ -46,17 +54,12 @@ class MockDatabaseManager:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _patch_environment(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SYNERGY_SECRET", TEST_SYNERGY_SECRET)
-
-
 @pytest.fixture
 def client():
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    with TestClient(create_api_app(lambda: runtime)) as c:
+    with TestClient(create_api_app(lambda _config: runtime, config=TEST_CONFIG)) as c:
         yield c
     assert database.closed
 
@@ -117,7 +120,7 @@ def test_internal_error_is_redacted_and_correlated() -> None:
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda: runtime)
+    app: FastAPI = create_api_app(lambda _config: runtime, config=TEST_CONFIG)
 
     @app.get("/boom")
     async def boom() -> None:
@@ -142,7 +145,7 @@ def test_service_unavailable_is_safe_and_correlated() -> None:
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda: runtime)
+    app: FastAPI = create_api_app(lambda _config: runtime, config=TEST_CONFIG)
 
     @app.get("/unavailable")
     async def unavailable() -> None:

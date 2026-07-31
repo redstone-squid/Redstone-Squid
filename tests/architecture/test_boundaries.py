@@ -52,6 +52,23 @@ def test_transports_do_not_import_persistence_adapters() -> None:
         )
 
 
+def test_application_modules_do_not_read_process_environment_directly() -> None:
+    violations: list[tuple[Path, int, str]] = []
+    for path in Path("squid").rglob("*.py"):
+        if path == Path("squid/config.py"):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os":
+                if node.attr in {"environ", "getenv"}:
+                    violations.append((path, node.lineno, f"os.{node.attr}"))
+            elif (isinstance(node, ast.Import) and any(alias.name == "dotenv" for alias in node.names)) or (
+                isinstance(node, ast.ImportFrom) and node.module == "dotenv"
+            ):
+                violations.append((path, node.lineno, "dotenv import"))
+
+    assert violations == []
+
+
 def test_voting_adapter_does_not_construct_database_service_locator() -> None:
     database_manager_calls = [
         (path, node.lineno)

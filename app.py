@@ -7,36 +7,19 @@ https://github.com/redstone-squid/Redstone-Squid
 import multiprocessing
 import sys
 
-from dotenv import load_dotenv
-
 from squid.api.app import main as api_main
-from squid.bot.app import ApplicationConfig
 from squid.bot.app import main as bot_main
+from squid.config import load_application_config
 
 if __name__ == "__main__":
-    # Check .env.example for environment variables configuration
-    config: ApplicationConfig = {
-        "dev_mode": False,
-        "dotenv_path": ".env",
-        "bot_config": {
-            "prefix": "!",
-            "owner_id": 353089661175988224,
-            "owner_server_id": 433618741528625152,
-            "bot_name": "Redstone Squid",
-            "bot_version": "1.5.7",
-            "source_code_url": "https://github.com/redstone-squid/Redstone-Squid",
-        },
-    }
-
-    if config.get("dotenv_path"):
-        load_dotenv(config.get("dotenv_path"))
-    multiprocessing.Process(target=api_main).start()
+    config = load_application_config()
+    multiprocessing.Process(target=api_main, args=(config.api_process(),)).start()
 
     if sys.platform == "win32":
         import asyncio
 
-        asyncio.run(bot_main(config=config), debug=config.get("dev_mode", False))
+        asyncio.run(bot_main(process_config=config.bot_process()), debug=config.development_mode)
     else:
         import uvloop  # pyright: ignore[reportMissingImports]
 
-        uvloop.run(bot_main(config=config), debug=config.get("dev_mode", False))
+        uvloop.run(bot_main(process_config=config.bot_process()), debug=config.development_mode)

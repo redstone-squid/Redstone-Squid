@@ -1,6 +1,5 @@
 """Defines how the help command works in the bot."""
 
-import os
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
 from typing import Any, override
@@ -13,6 +12,7 @@ from discord.ext.commands import Cog, Command, Context, Group
 from rapidfuzz import process
 
 from squid.bot.utils.components import error_layout, help_layout, no_mentions, text_layout
+from squid.config import BuildConfig
 
 MORE_INFORMATION = "Use `/help <command>` to get more information."
 
@@ -101,12 +101,13 @@ class Help(commands.MinimalHelpCommand):
             repo = git.Repo(search_parent_directories=True)
             footer = f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}"
         except git.InvalidGitRepositoryError:
-            # If the repo is not a git repository, we can still use environment variables if available
-            # Usually this is because the bot is running in a container
-            git_commit_hash = os.getenv("GIT_COMMIT_HASH")
-            git_commit_message = os.getenv("GIT_COMMIT_MESSAGE")
-            if git_commit_hash is not None and git_commit_message is not None:
-                footer = f"commit: {git_commit_hash[:7]}, message: {git_commit_message.strip()}"
+            build_config = getattr(self.context.bot, "build_config", None)
+            if (
+                isinstance(build_config, BuildConfig)
+                and build_config.commit_hash is not None
+                and build_config.commit_message is not None
+            ):
+                footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
         await self.get_destination().send(
             view=help_layout("Help", desc, footer=footer),
             allowed_mentions=no_mentions(),

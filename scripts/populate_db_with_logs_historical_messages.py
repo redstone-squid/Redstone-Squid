@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 import logging
-import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,14 +13,11 @@ if __package__ in {None, ""}:
 
 import discord
 from discord import Message, TextChannel
-from dotenv import load_dotenv
 
-load_dotenv()
-
-from squid.bootstrap import create_application_runtime  # noqa: E402
-from squid.builds.application import BuildInferenceInput  # noqa: E402
-from squid.config import BotProcessConfig  # noqa: E402
-from squid.runtime import ApplicationServices  # noqa: E402
+from squid.bootstrap import create_application_runtime
+from squid.builds.application import BuildInferenceInput
+from squid.config import load_bot_process_config
+from squid.runtime import ApplicationServices
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +129,7 @@ async def run_import(
 
 async def main(*, channel_ids: Sequence[int], model: str) -> None:
     """Create process resources and run the historical import."""
-    process_config = BotProcessConfig.from_environment()
+    process_config = load_bot_process_config()
     intents = discord.Intents.default()
     intents.message_content = True
 
@@ -142,7 +138,7 @@ async def main(*, channel_ids: Sequence[int], model: str) -> None:
         discord.Client(intents=intents) as client,
         asyncio.TaskGroup() as tasks,
     ):
-        tasks.create_task(client.start(process_config.token))
+        tasks.create_task(client.start(process_config.discord.token.get_secret_value()))
         import_task = tasks.create_task(
             run_import(
                 client,
@@ -174,7 +170,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("HISTORICAL_LOG_MODEL", DEFAULT_MODEL),
+        default=DEFAULT_MODEL,
         help="Text-generation model passed to the configured OpenAI-compatible provider.",
     )
     return parser.parse_args()

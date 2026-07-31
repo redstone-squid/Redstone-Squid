@@ -35,7 +35,7 @@ from squid.builds.domain import (
     RestrictionTypeLiteral,
     Status,
 )
-from squid.config import embedding_dimension_from_environment
+from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
@@ -150,7 +150,7 @@ class Build(Base, kw_only=True):
     )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(embedding_dimension_from_environment()),
+        VECTOR(EMBEDDING_DIMENSION),
         comment='This is not actually being used. See "vecs"."builds" instead',
         default=None,
     )

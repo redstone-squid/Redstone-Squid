@@ -1,21 +1,18 @@
 """Alembic environment for the application-owned PostgreSQL schema."""
 
-import os
 from collections.abc import MutableMapping
 from logging.config import fileConfig
 from typing import Literal
 
 from alembic_utils.replaceable_entity import register_entities
-from dotenv import load_dotenv
 from sqlalchemy import Connection, engine_from_config, make_url, pool
 from sqlalchemy.engine import URL
 from sqlalchemy.schema import SchemaItem
 
 from alembic import context
+from squid.config import load_database_config
 from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 from squid.persistence.base import Base
-
-load_dotenv()
 
 config = context.config
 if config.config_file_name is not None:
@@ -39,14 +36,8 @@ register_entities(ALEMBIC_UTIL_ENTITIES, entity_types=MANAGED_ENTITY_TYPES)
 
 def database_url() -> URL:
     """Return the synchronous migration URL configured for this environment."""
-    raw_url = os.environ.get("DATABASE_URL")
-    if raw_url is None:
-        msg = "DATABASE_URL must be set to run database migrations."
-        raise RuntimeError(msg)
-
-    url = make_url(raw_url)
-    driver = os.environ.get("DB_DRIVER_SYNC", "psycopg2")
-    return url.set(drivername=f"{url.get_backend_name()}+{driver}")
+    url = make_url(load_database_config().url.get_secret_value())
+    return url.set(drivername=f"{url.get_backend_name()}+psycopg2")
 
 
 def include_object(
