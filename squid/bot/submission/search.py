@@ -81,6 +81,7 @@ class SearchCog[
     ) -> None:
         """Search records, builds, and metadata using text and field filters."""
         await ctx.defer()
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         request = SearchRequest(
             query,
             scope=scope,
@@ -89,7 +90,7 @@ class SearchCog[
         )
         page = await self.search.search(request)
         await ctx.send(
-            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
+            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale),
             allowed_mentions=no_mentions(),
         )
 

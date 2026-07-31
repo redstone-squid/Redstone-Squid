@@ -8,7 +8,9 @@ import discord
 from discord.utils import escape_markdown
 
 from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.i18n import t
 from squid.bot.utils.components import DISCORD_GREEN, edit_interaction_layout, no_mentions
+from squid.core.i18n import _
 from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 
 if TYPE_CHECKING:
@@ -25,12 +27,14 @@ class SearchResultsView(ErrorHandledLayoutView):
         page: SearchPage,
         *,
         author_id: int,
+        locale: str | None = None,
     ) -> None:
         super().__init__(timeout=180)
         self._service = service
         self._request = request
         self._page = page
         self._author_id = author_id
+        self.locale = locale
         self._cursor_history: list[str | None] = [request.cursor]
         self.render_results()
 
@@ -39,7 +43,7 @@ class SearchResultsView(ErrorHandledLayoutView):
         if interaction.user.id == self._author_id:
             return True
         await interaction.response.send_message(
-            "These search controls belong to someone else.",
+            t(self.locale, _("These search controls belong to someone else.")),
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
@@ -50,10 +54,15 @@ class SearchResultsView(ErrorHandledLayoutView):
         self.clear_items()
         lines = [_result_line(index, hit) for index, hit in enumerate(self._page.hits, start=1)]
         if not lines:
-            lines.append("No results match this query.")
+            lines.append(t(self.locale, _("No results match this query.")))
         warning = "\n".join(f"-# ⚠ {escape_markdown(item)}" for item in self._page.warnings)
         page_number = len(self._cursor_history)
-        body = f"## Search results\n{' '.join(lines)}\n-# Page {page_number}"
+        body = t(
+            self.locale,
+            _("## Search results\n{lines}\n-# Page {page}"),
+            lines=" ".join(lines),
+            page=page_number,
+        )
         if warning:
             body += f"\n{warning}"
         self.add_item(discord.ui.Container(discord.ui.TextDisplay(body), accent_colour=DISCORD_GREEN))
@@ -75,7 +84,7 @@ class SearchResultsView(ErrorHandledLayoutView):
         self.clear_items()
         self.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay(_detail_text(hit)),
+                discord.ui.TextDisplay(_detail_text(hit, self.locale)),
                 accent_colour=DISCORD_GREEN,
             )
         )
@@ -155,7 +164,7 @@ class SearchResultButton(discord.ui.Button[SearchResultsView]):
 
 class SearchPreviousButton(discord.ui.Button[SearchResultsView]):
     def __init__(self, view: SearchResultsView) -> None:
-        super().__init__(label="Previous", disabled=not view.can_go_back)
+        super().__init__(label=t(view.locale, _("Previous")), disabled=not view.can_go_back)
         self._search_view = view
 
     @override
@@ -166,7 +175,7 @@ class SearchPreviousButton(discord.ui.Button[SearchResultsView]):
 
 class SearchNextButton(discord.ui.Button[SearchResultsView]):
     def __init__(self, view: SearchResultsView) -> None:
-        super().__init__(label="Next", disabled=not view.can_go_forward)
+        super().__init__(label=t(view.locale, _("Next")), disabled=not view.can_go_forward)
         self._search_view = view
 
     @override
@@ -177,7 +186,7 @@ class SearchNextButton(discord.ui.Button[SearchResultsView]):
 
 class SearchBackButton(discord.ui.Button[SearchResultsView]):
     def __init__(self, view: SearchResultsView) -> None:
-        super().__init__(label="Back")
+        super().__init__(label=t(view.locale, _("Back")))
         self._search_view = view
 
     @override
@@ -188,7 +197,7 @@ class SearchBackButton(discord.ui.Button[SearchResultsView]):
 
 class SearchStopButton(discord.ui.Button[SearchResultsView]):
     def __init__(self, view: SearchResultsView) -> None:
-        super().__init__(label="Stop", style=discord.ButtonStyle.danger)
+        super().__init__(label=t(view.locale, _("Stop")), style=discord.ButtonStyle.danger)
         self._search_view = view
 
     @override
@@ -208,26 +217,31 @@ def _result_line(index: int, hit: SearchHit) -> str:
     return f"\n**{index}. {escape_markdown(hit.title)}**{escape_markdown(subtitle)}"
 
 
-def _detail_text(hit: SearchHit) -> str:
+def _detail_text(hit: SearchHit, locale: str | None) -> str:
     if isinstance(hit, RecordSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = (
-            f"**Build**\n{escape_markdown(hit.build_title)} (`{hit.build_id}`)\n"
-            f"**Class**\n{escape_markdown(hit.record_class)} · {escape_markdown(hit.version_scope)}"
+        fields = t(
+            locale,
+            _("**Build**\n{build_title} (`{build_id}`)\n**Class**\n{record_class} · {version_scope}"),
+            build_title=escape_markdown(hit.build_title),
+            build_id=hit.build_id,
+            record_class=escape_markdown(hit.record_class),
+            version_scope=escape_markdown(hit.version_scope),
         )
         if hit.metrics:
-            fields += "\n**Metrics**\n" + ", ".join(
+            metrics = ", ".join(
                 f"{escape_markdown(str(key))}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
             )
+            fields += t(locale, _("\n**Metrics**\n{metrics}"), metrics=metrics)
         description = hit.subtitle or ""
     elif isinstance(hit, BuildSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = f"**Status**\n{escape_markdown(hit.status)}"
+        fields = t(locale, _("**Status**\n{status}"), status=escape_markdown(hit.status))
         description = hit.description or ""
     else:
         tags = ", ".join(escape_markdown(alias) for alias in hit.aliases)
-        fields = f"**Kind**\n{escape_markdown(hit.metadata_kind)}"
+        fields = t(locale, _("**Kind**\n{kind}"), kind=escape_markdown(hit.metadata_kind))
         description = hit.description or ""
     if tags:
-        fields += f"\n**Tags**\n{tags}"
+        fields += t(locale, _("\n**Tags**\n{tags}"), tags=tags)
     return f"## {escape_markdown(hit.title)}\n{escape_markdown(description)}\n{fields}"
