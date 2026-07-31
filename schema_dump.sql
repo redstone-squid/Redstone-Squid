@@ -1418,7 +1418,8 @@ CREATE TABLE public.server_settings (
     voting_channel_id bigint,
     in_server boolean DEFAULT true NOT NULL,
     trusted_roles_ids bigint[],
-    staff_roles_ids bigint[]
+    staff_roles_ids bigint[],
+    locale text
 );
 
 
