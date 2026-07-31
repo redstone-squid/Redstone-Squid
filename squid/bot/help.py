@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 import git
@@ -16,10 +16,13 @@ from squid.bot.utils.components import error_layout, help_layout, no_mentions, t
 from squid.config import BuildConfig
 from squid.core.i18n import _
 
+if TYPE_CHECKING:
+    import squid.bot.app
+
 MORE_INFORMATION = _("Use `/help <command>` to get more information.")
 
 
-class HelpCog[BotT: commands.Bot](Cog):
+class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Show help for a command or a group of commands."""
 
     def __init__(self, bot: BotT):
@@ -82,10 +85,16 @@ class Help(commands.MinimalHelpCommand):
     def __init__(self):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
 
+    @property
+    def _bot(self) -> "squid.bot.app.RedstoneSquid":
+        # discord.py's HelpCommand.context is generically typed as Context[Bot | AutoShardedBot];
+        # the bot is always the concrete RedstoneSquid at runtime.
+        return cast("squid.bot.app.RedstoneSquid", self.context.bot)
+
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = list(self.context.bot.commands)
 
         # We do not filter commands here, because it is too slow.
@@ -120,7 +129,7 @@ class Help(commands.MinimalHelpCommand):
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         await self.get_destination().send(
             view=help_layout(
                 t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
@@ -170,7 +179,7 @@ class Help(commands.MinimalHelpCommand):
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         command_details = self.get_commands_brief_details(list(commands_), locale=locale)
         desc = t(
             locale,
@@ -189,7 +198,7 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = cog.walk_commands()
         command_details = self.get_commands_brief_details(list(commands_), locale=locale)
         desc = t(
@@ -206,7 +215,7 @@ class Help(commands.MinimalHelpCommand):
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         return t(
             locale,
             _("Unable to find command `{name}`. Use /help to get a list of available commands."),
@@ -216,13 +225,13 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        locale = await resolve_locale(self.context, self.context.bot.services.settings)
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         await self.get_destination().send(
             view=error_layout(t(locale, _("Error.")), error),
             allowed_mentions=no_mentions(),
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

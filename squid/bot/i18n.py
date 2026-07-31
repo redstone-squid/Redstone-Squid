@@ -1,6 +1,6 @@
 """Discord-facing locale resolution and translation helpers."""
 
-from typing import Any, override
+from typing import Any, cast, override
 
 import discord
 from discord import app_commands
@@ -11,16 +11,16 @@ from squid.settings.application import SettingsService
 
 
 async def resolve_locale(
-    target: "discord.Interaction[Any] | commands.Context[Any]",
+    target: "discord.Interaction[Any] | commands.Context[Any] | discord.Message",
     settings_service: SettingsService,
 ) -> str:
-    """Resolve the locale to respond in for an interaction or command invocation.
+    """Resolve the locale to respond in for an interaction, command, or message.
 
     Fallback chain: per-guild admin override (`server_settings.locale`) ->
     the guild's Discord-reported locale -> the invoking user's Discord
-    client locale -> `DEFAULT_LOCALE`. Prefix/text command invocations have
-    no Discord-reported locale, so they fall back straight from the guild
-    override to `DEFAULT_LOCALE`.
+    client locale (interactions only) -> `DEFAULT_LOCALE`. Plain messages and
+    prefix/text command invocations have no user-locale tier, since neither
+    carries the author's Discord client locale.
     """
     guild = target.guild
     if guild is not None:
@@ -30,12 +30,15 @@ async def resolve_locale(
 
     # Duck-typed rather than `isinstance(target, discord.Interaction)` so lightweight
     # test doubles (see tests/helpers/discord.py) work without subclassing discord types.
-    interaction = target if hasattr(target, "guild_locale") else getattr(target, "interaction", None)
-    if interaction is None:
-        return DEFAULT_LOCALE
-    if interaction.guild_locale is not None:
-        return negotiate_locale(str(interaction.guild_locale))
-    return negotiate_locale(str(interaction.locale))
+    interaction = cast(Any, target if hasattr(target, "guild_locale") else getattr(target, "interaction", None))
+    if interaction is not None:
+        if interaction.guild_locale is not None:
+            return negotiate_locale(str(interaction.guild_locale))
+        return negotiate_locale(str(interaction.locale))
+
+    if guild is not None:
+        return negotiate_locale(str(guild.preferred_locale))
+    return DEFAULT_LOCALE
 
 
 def t(locale: str | None, message: str, /, **params: object) -> str:

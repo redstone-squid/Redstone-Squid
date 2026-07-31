@@ -1,24 +1,50 @@
 """Bot locale resolution and translation tests."""
 
+from collections.abc import Iterable
 from types import SimpleNamespace
-from typing import cast
+from typing import Unpack, cast
 
 import discord
 import pytest
 
 from squid.bot.i18n import resolve_locale, t
 from squid.settings.application import SettingsService
+from squid.settings.domain import Setting, SettingOptions
 
 
 class FakeSettingsRepository:
     def __init__(self, locale: str | None = None) -> None:
         self._locale = locale
 
+    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:
+        return {}
+
+    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
+        return None
+
+    async def get_all(self, server_id: int) -> SettingOptions:
+        return SettingOptions()
+
+    async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None:
+        return None
+
     async def get_locale(self, server_id: int) -> str | None:
         return self._locale
 
     async def set_locale(self, server_id: int, locale: str | None) -> None:
         self._locale = locale
+
+    async def on_guild_join(self, server_id: int) -> None:
+        return None
+
+    async def on_guild_remove(self, server_id: int) -> None:
+        return None
+
+
+def _make_guild(guild_id: int | None, preferred_locale: discord.Locale = discord.Locale.american_english):
+    if guild_id is None:
+        return None
+    return SimpleNamespace(id=guild_id, preferred_locale=preferred_locale)
 
 
 def _make_interaction(
@@ -30,7 +56,7 @@ def _make_interaction(
     return cast(
         "discord.Interaction[discord.Client]",
         SimpleNamespace(
-            guild=SimpleNamespace(id=guild_id) if guild_id is not None else None,
+            guild=_make_guild(guild_id),
             guild_locale=guild_locale,
             locale=locale,
             interaction=None,
@@ -75,11 +101,30 @@ async def test_resolve_locale_defaults_when_no_guild() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_locale_context_without_interaction_defaults() -> None:
+async def test_resolve_locale_context_without_interaction_falls_back_to_guild_preferred_locale() -> None:
     service = SettingsService(FakeSettingsRepository())
     ctx = cast(
         "object",
-        SimpleNamespace(guild=SimpleNamespace(id=1), interaction=None),
+        SimpleNamespace(guild=_make_guild(1, preferred_locale=discord.Locale.chinese), interaction=None),
     )
 
-    assert await resolve_locale(ctx, service) == "en"  # type: ignore[arg-type]
+    assert await resolve_locale(ctx, service) == "zh-CN"  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_resolve_locale_message_falls_back_to_guild_preferred_locale() -> None:
+    service = SettingsService(FakeSettingsRepository())
+    message = cast(
+        "discord.Message",
+        SimpleNamespace(guild=_make_guild(1, preferred_locale=discord.Locale.chinese)),
+    )
+
+    assert await resolve_locale(message, service) == "zh-CN"
+
+
+@pytest.mark.asyncio
+async def test_resolve_locale_message_without_guild_defaults() -> None:
+    service = SettingsService(FakeSettingsRepository())
+    message = cast("discord.Message", SimpleNamespace(guild=None))
+
+    assert await resolve_locale(message, service) == "en"
