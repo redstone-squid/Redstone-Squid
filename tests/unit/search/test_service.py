@@ -38,9 +38,8 @@ class FakeSearchBackend:
         return self.suggestions[:limit]
 
 
-async def test_service_parses_query_and_encodes_backend_position() -> None:
+async def test_service_parses_query_and_encodes_backend_position(codec: CursorCodec) -> None:
     backend = FakeSearchBackend()
-    codec = CursorCodec(b"a suitably long test secret")
     service = SearchService(backend, SearchQueryParser(), codec)
     request = SearchRequest("status:confirmed door", scope=SearchScope.BUILDS)
 
@@ -54,9 +53,8 @@ async def test_service_parses_query_and_encodes_backend_position() -> None:
     assert backend.calls[0][1].normalized == "status:confirmed AND door"
 
 
-async def test_service_validates_and_passes_existing_cursor() -> None:
+async def test_service_validates_and_passes_existing_cursor(codec: CursorCodec) -> None:
     backend = FakeSearchBackend()
-    codec = CursorCodec(b"a suitably long test secret")
     service = SearchService(backend, SearchQueryParser(), codec)
     original = SearchRequest("door", scope=SearchScope.ALL, mode=SearchMode.SEMANTIC)
     position = CursorPosition(codec.request_hash(original), original.scope, original.mode, 0.5, "build", "1")
@@ -72,7 +70,7 @@ async def test_service_validates_and_passes_existing_cursor() -> None:
     assert backend.calls[0][2] == position
 
 
-async def test_service_delegates_suggestions_and_bounds_limit() -> None:
-    service = SearchService(FakeSearchBackend(), SearchQueryParser(), CursorCodec(b"a suitably long test secret"))
+async def test_service_delegates_suggestions_and_bounds_limit(codec: CursorCodec) -> None:
+    service = SearchService(FakeSearchBackend(), SearchQueryParser(), codec)
 
     assert await service.suggest("dor", limit=1) == ("door",)
