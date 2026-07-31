@@ -39,7 +39,7 @@ EXPECTED_PREFIX_COMMAND_TREE = {
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias", "search"),
     "search": (),
-    "settings": ("clear", "get", "list", "set"),
+    "settings": ("clear", "get", "list", "locale", "set"),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
     "vote": ("delete",),
