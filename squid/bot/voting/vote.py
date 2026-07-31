@@ -10,11 +10,13 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot._types import GuildMessageable
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.bot.voting.delete_log_session import DeleteLogVoteSession
+from squid.core.i18n import _
 from squid.voting.domain import VoteActor
 
 if TYPE_CHECKING:
@@ -94,8 +96,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             emoji_name,
         )
         if result.rejection == "not_eligible":
+            locale = await resolve_locale(message, self.bot.services.settings)
             await channel.send(
-                view=text_layout("You do not have a trusted role."),
+                view=text_layout(t(locale, _("You do not have a trusted role."))),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -123,18 +126,19 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @vote_group.command(name="delete")
     @app_commands.rename(target_message="message")
-    @app_commands.describe(target_message="The message to hold a deletion vote for.")
+    @app_commands.describe(target_message=app_commands.locale_str(_("The message to hold a deletion vote for.")))
     async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
         """Start a vote to delete a message."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         # Check if guild_id matches the current guild
         if ctx.guild != target_message.guild:
             await ctx.send(
-                view=text_layout("The message is not from this guild."),
+                view=text_layout(t(locale, _("The message is not from this guild."))),
                 allowed_mentions=no_mentions(),
             )
             return
 
-        async with self.bot.get_running_message(ctx) as message:
+        async with self.bot.get_running_message(ctx, locale=locale) as message:
             await DeleteLogVoteSession.create(
                 self.bot, [message], author_id=ctx.author.id, target_message=target_message
             )
