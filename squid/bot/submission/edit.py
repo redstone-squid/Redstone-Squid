@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, flag
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
@@ -22,6 +23,7 @@ from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
 from squid.bot.utils.sentinel import MISSING, MissingType
 from squid.builds.application import BuildEditPatch, BuildService
+from squid.core.i18n import _
 from squid.messages.application import MessageService
 
 if TYPE_CHECKING:
@@ -106,20 +108,23 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):
         """Edit a build with the full field list."""
         await ctx.defer()
-        async with RunningMessage(ctx) as sent_message:
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with RunningMessage(ctx, locale=locale) as sent_message:
             async with self.builds.edit(flags.build_id, flags.to_patch()) as edit:
                 build = edit.build
                 if ctx.interaction:
                     interaction = cast(discord.Interaction[discord.Client], ctx.interaction)
                     await edit_layout(
                         sent_message,
-                        info_layout("Waiting", "User confirming changes..."),
+                        info_layout(t(locale, _("Waiting")), t(locale, _("User confirming changes..."))),
                         allowed_mentions=no_mentions(),
                     )
-                    view = ConfirmationView("Here is a preview of the changes. Use the buttons to confirm or cancel.")
+                    view = ConfirmationView(
+                        t(locale, _("Here is a preview of the changes. Use the buttons to confirm or cancel."))
+                    )
                     controls = view.actions
                     view.clear_items()
-                    view.add_item(discord.ui.TextDisplay("Review the proposed build changes."))
+                    view.add_item(discord.ui.TextDisplay(t(locale, _("Review the proposed build changes."))))
                     view.add_item(await self.bot.for_build(build).render_container())
                     view.add_item(controls)
                     preview = await interaction.followup.send(
@@ -133,21 +138,24 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                     if view.value is None:
                         await edit_layout(
                             sent_message,
-                            info_layout("Timed out", "Build edit canceled due to inactivity."),
+                            info_layout(
+                                t(locale, _("Timed out")),
+                                t(locale, _("Build edit canceled due to inactivity.")),
+                            ),
                             allowed_mentions=no_mentions(),
                         )
                         return
                     if view.value is False:
                         await edit_layout(
                             sent_message,
-                            info_layout("Cancelled", "Build edit canceled by user"),
+                            info_layout(t(locale, _("Cancelled")), t(locale, _("Build edit canceled by user"))),
                             allowed_mentions=no_mentions(),
                         )
                         return
 
                 await edit_layout(
                     sent_message,
-                    info_layout("Editing", "Editing build..."),
+                    info_layout(t(locale, _("Editing")), t(locale, _("Editing build..."))),
                     allowed_mentions=no_mentions(),
                 )
                 await edit.commit()
@@ -156,7 +164,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                 self.bot.for_build(build).update_messages(),
                 edit_layout(
                     sent_message,
-                    info_layout("Success", "Build edited successfully"),
+                    info_layout(t(locale, _("Success")), t(locale, _("Build edited successfully"))),
                     allowed_mentions=no_mentions(),
                 ),
             )
@@ -166,9 +174,10 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         if message.author.id != self.bot.user.id:  # type: ignore
             return await interaction.followup.send(
-                view=text_layout("This does not look like a build."),
+                view=text_layout(t(locale, _("This does not look like a build."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
@@ -176,7 +185,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         message_record = await self.messages.get(message.id)
         if message_record is None or message_record.build_id is None:
             return await interaction.followup.send(
-                view=text_layout("This does not look like a build."),
+                view=text_layout(t(locale, _("This does not look like a build."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
