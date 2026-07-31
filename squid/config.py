@@ -416,8 +416,7 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
 
 def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> ConfigT:
     try:
-        settings_constructor: Any = config_type
-        return cast(ConfigT, settings_constructor())
+        return config_type()  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
 
@@ -445,8 +444,7 @@ def load_database_config() -> DatabaseConfig:
         database: DatabaseConfig
 
     try:
-        settings_constructor: Any = DatabaseSettings
-        return cast(DatabaseSettings, settings_constructor()).database
+        return DatabaseSettings().database  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
 
