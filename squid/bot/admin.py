@@ -7,11 +7,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
-from rapidfuzz import process
 
-from squid.bot.utils.components import edit_layout, info_layout, link_layout, no_mentions, text_layout
+from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
-from squid.builds.errors import AliasAlreadyAddedError
 from squid.tags.domain import TagValueType
 
 if TYPE_CHECKING:
@@ -23,84 +21,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
-        self.builds = bot.services.builds
-        self.restrictions = bot.services.restrictions
         self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
-
-    @commands.hybrid_command(name="confirm")
-    @app_commands.describe(build_id="The ID of the build you want to confirm.")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def confirm_build(self, ctx: Context[BotT], build_id: int):
-        """Marks a submission as confirmed.
-
-        This posts the submission to all the servers which configured the bot."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            build = await self.builds.confirm(build_id)
-
-            self.bot.dispatch("build_confirmed", build)
-
-            await edit_layout(
-                sent_message,
-                info_layout("Success", "Submission has been confirmed."),
-                allowed_mentions=no_mentions(),
-            )
-
-    @commands.hybrid_command(name="deny")
-    @app_commands.describe(build_id="The ID of the build you want to deny.")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def deny_build(self, ctx: Context[BotT], build_id: int):
-        """Marks a submission as denied."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            build = await self.builds.deny(build_id)
-
-            await self.bot.for_build(build).update_messages()
-
-            await edit_layout(
-                sent_message,
-                info_layout("Success", "Submission has been denied."),
-                allowed_mentions=no_mentions(),
-            )
-
-    @commands.hybrid_command("add_alias")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
-        """Add an alias for a restriction."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            try:
-                await self.restrictions.add_alias(restriction, alias)
-            except AliasAlreadyAddedError:
-                await edit_layout(
-                    sent_message,
-                    info_layout("Already added", "Alias already on this restriction."),
-                    allowed_mentions=no_mentions(),
-                )
-            else:
-                await edit_layout(
-                    sent_message,
-                    info_layout("Success", "Alias added."),
-                    allowed_mentions=no_mentions(),
-                )
-
-    @add_restriction_alias.autocomplete("restriction")
-    async def restriction_autocomplete(
-        self, _interaction: discord.Interaction[BotT], current: str
-    ) -> list[app_commands.Choice[str]]:
-        """Provide autocomplete for restriction names."""
-        if not current:
-            return []
-
-        restriction_names = await self.restrictions.names()
-        matches = process.extract(
-            current,
-            restriction_names,
-            limit=25,
-            score_cutoff=30,
-        )
-        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
 
     @commands.hybrid_command(name="propose_tag")
     @app_commands.describe(

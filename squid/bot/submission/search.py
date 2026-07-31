@@ -1,14 +1,20 @@
 """Everything related to querying the database for information."""
 
 import logging
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, hybrid_group, when_mentioned
+from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
+from rapidfuzz import process
 
+from squid.bot.submission.edit import BuildEditCommands
+from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.search_view import SearchResultsView
+from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
 from squid.bot.utils.components import (
@@ -19,6 +25,8 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
+from squid.builds.errors import AliasAlreadyAddedError
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 if TYPE_CHECKING:
@@ -28,37 +36,42 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class SearchModeChoice(StrEnum):
+    """User-facing names for search ranking modes."""
+
+    keyword = "keyword"
+    smart = "smart"
+
+
+class SearchCog[
+    BotT: "squid.bot.app.RedstoneSquid",
+](
+    BuildEditCommands[BotT],
+    BuildSubmitCommands[BotT],
+):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.queries = bot.services.build_queries
         self.search = bot.services.search
-
-    @commands.hybrid_command("search_using_sucky_embeddings")
-    @app_commands.describe(query="Whatever you want to search for.")
-    async def search_builds(self, ctx: Context[BotT], query: str):
-        """Searches builds semantically, with lexical fallback."""
-        await ctx.defer()
-        request = SearchRequest(query, scope=SearchScope.BUILDS, mode=SearchMode.SEMANTIC)
-        page = await self.search.search(request)
-        await ctx.send(
-            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id),
-            allowed_mentions=no_mentions(),
-        )
+        self.builds = bot.services.builds
+        self.inference = bot.services.build_inference
+        self.messages = bot.services.messages
+        self.restrictions = bot.services.restrictions
+        self.register_edit_context_menu()
 
     @commands.hybrid_command("search")
     @app_commands.describe(
-        query="Lucene-style text and filters.",
-        scope="What to search.",
-        mode="Lexical or semantic ranking.",
-        sort="Numeric or text field to sort by, such as width or a data-tag query name.",
+        query="Search text and filters, e.g. `width:5`.",
+        scope="Search records, builds, tags and fields, or everything.",
+        mode="Use keyword matching or smart meaning-based matching.",
+        sort="Field to sort by, such as width or closing_delay.",
         direction="Sort low-to-high or high-to-low.",
     )
     async def search_records(
         self,
         ctx: Context[BotT],
         scope: SearchScope = SearchScope.RECORDS,
-        mode: SearchMode = SearchMode.LEXICAL,
+        mode: SearchModeChoice = SearchModeChoice.keyword,
         sort: str | None = None,
         direction: SortDirection = SortDirection.ASCENDING,
         *,
@@ -69,7 +82,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         request = SearchRequest(
             query,
             scope=scope,
-            mode=mode,
+            mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
             sort=SearchSort(sort, direction) if sort is not None else None,
         )
         page = await self.search.search(request)
@@ -78,9 +91,15 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.command("search_restrictions")
-    async def search_restrictions(self, ctx: Context[BotT], query: str | None):
-        """This runs a substring search on the restriction names."""
+    @commands.hybrid_group(name="restrictions")
+    async def restrictions_group(self, ctx: Context[BotT]) -> None:
+        """Find restrictions and manage their aliases."""
+        await ctx.send_help("restrictions")
+
+    @restrictions_group.command(name="search")
+    @app_commands.describe(query="Part of a restriction name. Leave blank to list all restrictions.")
+    async def search_restrictions(self, ctx: Context[BotT], query: str | None = None):
+        """Search restriction names."""
         async with RunningMessage(ctx) as sent_message:
             matches = await self.queries.restrictions(query)
             description = "\n".join(
@@ -92,9 +111,53 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @commands.hybrid_command()
+    @restrictions_group.command(name="add-alias")
+    @check_is_staff()
+    @check_is_owner_server()
+    @app_commands.describe(restriction="The restriction to add another name for.", alias="The additional name.")
+    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
+        """Add another name for a restriction."""
+        async with self.bot.get_running_message(ctx) as sent_message:
+            try:
+                await self.restrictions.add_alias(restriction, alias)
+            except AliasAlreadyAddedError:
+                await edit_layout(
+                    sent_message,
+                    info_layout("Already added", "Alias already on this restriction."),
+                    allowed_mentions=no_mentions(),
+                )
+            else:
+                await edit_layout(
+                    sent_message,
+                    info_layout("Success", "Alias added."),
+                    allowed_mentions=no_mentions(),
+                )
+
+    @add_restriction_alias.autocomplete("restriction")
+    async def restriction_autocomplete(
+        self, _interaction: discord.Interaction[BotT], current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Provide autocomplete for restriction names."""
+        if not current:
+            return []
+
+        restriction_names = await self.restrictions.names()
+        matches = process.extract(
+            current,
+            restriction_names,
+            limit=25,
+            score_cutoff=30,
+        )
+        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
+
+    @commands.hybrid_group(name="patterns")
+    async def patterns_group(self, ctx: Context[BotT]) -> None:
+        """List and search build patterns."""
+        await ctx.send_help("patterns")
+
+    @patterns_group.command(name="list")
     async def list_patterns(self, ctx: Context[BotT]):
-        """Lists all the available patterns."""
+        """List all available build patterns."""
         async with RunningMessage(ctx) as sent_message:
             names = await self.queries.patterns()
             await edit_layout(
@@ -103,9 +166,10 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @commands.command("search_patterns")
+    @patterns_group.command(name="search")
+    @app_commands.describe(query="A full or partial pattern name.")
     async def search_patterns(self, ctx: Context[BotT], query: str):
-        """This runs a fuzzy search on the pattern names."""
+        """Search build pattern names."""
         async with RunningMessage(ctx) as sent_message:
             matches = await self.queries.search_patterns(query)
             description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
@@ -115,12 +179,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @hybrid_group(name="build")
-    async def build_hybrid_group(self, ctx: Context[BotT]):
-        """Submit, view, confirm and deny submissions."""
-        await ctx.send_help("build")
-
-    @build_hybrid_group.command(name="pending")  # pyright: ignore[reportFunctionMemberAccess]
+    @BuildCommandGroup.build_hybrid_group.command(name="pending")  # pyright: ignore[reportArgumentType]
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         async with self.bot.get_running_message(ctx) as sent_message:
@@ -144,7 +203,8 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @build_hybrid_group.command(name="view")  # pyright: ignore[reportFunctionMemberAccess]
+    @BuildCommandGroup.build_hybrid_group.command(name="view")  # pyright: ignore[reportArgumentType]
+    @app_commands.rename(build_id="id")
     @app_commands.describe(build_id="The ID of the build you want to see.")
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
@@ -180,10 +240,48 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
         return None
 
-    @build_hybrid_group.command(name="debug")  # pyright: ignore[reportFunctionMemberAccess]
-    @app_commands.describe(build_id="The ID of the build you want to see the debug info.")
+    @BuildCommandGroup.build_hybrid_group.command(name="confirm")  # pyright: ignore[reportArgumentType]
+    @check_is_staff()
+    @check_is_owner_server()
+    @app_commands.rename(build_id="id")
+    @app_commands.describe(build_id="The ID of the build you want to confirm.")
+    async def confirm_build(self, ctx: Context[BotT], build_id: int):
+        """Mark a submission as confirmed and publish it."""
+        async with self.bot.get_running_message(ctx) as sent_message:
+            build = await self.builds.confirm(build_id)
+
+            self.bot.dispatch("build_confirmed", build)
+
+            await edit_layout(
+                sent_message,
+                info_layout("Success", "Submission has been confirmed."),
+                allowed_mentions=no_mentions(),
+            )
+
+    @BuildCommandGroup.build_hybrid_group.command(name="deny")  # pyright: ignore[reportArgumentType]
+    @check_is_staff()
+    @check_is_owner_server()
+    @app_commands.rename(build_id="id")
+    @app_commands.describe(build_id="The ID of the build you want to deny.")
+    async def deny_build(self, ctx: Context[BotT], build_id: int):
+        """Mark a submission as denied."""
+        async with self.bot.get_running_message(ctx) as sent_message:
+            build = await self.builds.deny(build_id)
+
+            await self.bot.for_build(build).update_messages()
+
+            await edit_layout(
+                sent_message,
+                info_layout("Success", "Submission has been denied."),
+                allowed_mentions=no_mentions(),
+            )
+
+    @BuildCommandGroup.build_hybrid_group.command(name="debug")  # pyright: ignore[reportArgumentType]
+    @check_is_staff()
+    @app_commands.rename(build_id="id")
+    @app_commands.describe(build_id="The ID of the build whose debug details you want to see.")
     async def debug_build(self, ctx: Context[BotT], build_id: int):
-        """Displays a submission's debug info."""
+        """Display internal details for a build."""
         async with self.bot.get_running_message(ctx) as sent_message:
             build = await self.queries.get(build_id)
 

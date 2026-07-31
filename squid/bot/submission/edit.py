@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Literal, cast
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, flag
+from discord.ext.commands import Context, flag
 
-from squid.bot.submission.ui.components import DynamicBuildEditButton
+from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
 from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import (
@@ -21,19 +21,22 @@ from squid.bot.utils.converters import (
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
 from squid.bot.utils.sentinel import MISSING, MissingType
-from squid.builds.application import BuildEditPatch
+from squid.builds.application import BuildEditPatch, BuildService
+from squid.messages.application import MessageService
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
     """A cog with commands for editing builds."""
 
-    def __init__(self, bot: BotT):
-        self.bot = bot
-        self.builds = bot.services.builds
-        self.messages = bot.services.messages
+    bot: BotT
+    builds: BuildService
+    messages: MessageService
+
+    def register_edit_context_menu(self) -> None:
+        """Register the build edit context menu."""
         # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
         self.edit_ctx_menu = app_commands.ContextMenu(
             name="Edit Build",
@@ -41,16 +44,9 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
         self.bot.tree.add_command(self.edit_ctx_menu)
 
-    @commands.hybrid_group(name="edit")
-    @check_is_trusted_or_staff()
-    @check_is_owner_server()
-    async def edit_group(self, ctx: Context[BotT]):
-        """Edits a record in the database directly."""
-        await ctx.send_help("edit")
-
     @fix_converter_annotations
     class EditDoorFlags(commands.FlagConverter):
-        """Parameters information for the `/edit door` command."""
+        """Parameters for the `/build edit` command."""
 
         def to_patch(self) -> BuildEditPatch:
             """Convert command flags without mutating a live build."""
@@ -86,12 +82,12 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Door", "Skydoor", "Trapdoor"]), description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
         works_in: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
-        wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See the regulations (/docs) for the complete list.')
-        animated_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Symmetrical, Full Sync". See the regulations (/docs) for the complete list.')
-        component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See the regulations (/docs) for the complete list.')
+        wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See `/info docs` for the complete list.')
+        animated_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Symmetrical, Full Sync". See `/info docs` for the complete list.')
+        component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See `/info docs` for the complete list.')
         extra_user_info: str | None | MissingType = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
-        normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in gameticks. (1s = 20gt)')
-        normal_opening_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to open the door, in gameticks. (1s = 20gt)')
+        normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in game ticks (20 per second).')
+        normal_opening_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to open the door, in game ticks (20 per second).')
         date_of_creation: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The date the build was created.')
         creators: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='The in-game name of the creator(s).')
         locationality: Literal["Locational", "Locational with fixes", "Not locational"] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Locational", "Locational with fixes", "Not locational"]), description='Whether the build works everywhere, or only in certain locations.')
@@ -104,9 +100,11 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         command_to_get_to_build: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
         # fmt: on
 
-    @edit_group.command(name="door")
+    @BuildCommandGroup.build_hybrid_group.command(name="edit")  # pyright: ignore[reportArgumentType]
+    @check_is_trusted_or_staff()
+    @check_is_owner_server()
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):
-        """Edits a door record in the database directly."""
+        """Edit a build with the full field list."""
         await ctx.defer()
         async with RunningMessage(ctx) as sent_message:
             async with self.builds.edit(flags.build_id, flags.to_patch()) as edit:
@@ -187,9 +185,3 @@ class BuildEditCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert build is not None
         await BuildEditView(build, self.builds).send(interaction, ephemeral=True)
         return None
-
-
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_dynamic_items(DynamicBuildEditButton)
-    await bot.add_cog(BuildEditCog(bot))
