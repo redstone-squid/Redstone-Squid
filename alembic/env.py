@@ -37,7 +37,7 @@ register_entities(ALEMBIC_UTIL_ENTITIES, entity_types=MANAGED_ENTITY_TYPES)
 def database_url() -> URL:
     """Return the synchronous migration URL configured for this environment."""
     url = make_url(load_database_config().url.get_secret_value())
-    return url.set(drivername=f"{url.get_backend_name()}+psycopg2")
+    return url.set(drivername="postgresql+psycopg2")
 
 
 def include_object(

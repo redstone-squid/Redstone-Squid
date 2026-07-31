@@ -10,7 +10,7 @@
 
 2. **Configure environment variables:**
    ```bash
-   cp env.example .env
+   cp .env.example .env
    # Edit .env with your actual credentials
    ```
 
@@ -21,7 +21,7 @@
 
 4. **Check logs:**
    ```bash
-   docker compose logs -f redstone-squid
+   docker compose logs -f server
    ```
 
 ## Manual Docker Commands
@@ -50,15 +50,15 @@ To update the bot:
 git pull
 
 # Rebuild and restart
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## Stopping the Bot
 
 ```bash
 # Stop and remove containers
-docker-compose down
+docker compose down
 
 # Stop, remove containers, and remove volumes
-docker-compose down -v
+docker compose down -v
 ```

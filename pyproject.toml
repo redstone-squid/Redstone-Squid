@@ -14,7 +14,6 @@ dependencies = [
     "alembic>=1.18.5",
     "discord-py[speed]>=2.6.0,<3",
     "gspread>=6.1.4",
-    "python-dotenv>=1.0.1",
     "jishaku>=2.6.0",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",

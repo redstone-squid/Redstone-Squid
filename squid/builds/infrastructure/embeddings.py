@@ -52,7 +52,7 @@ class VecsBuildIndex:
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
         if self._connection is None:
-            logger.warning("No DB_CONNECTION configured; skipping build vector indexing.")
+            logger.warning("No SQUID_VECTOR_DATABASE_URL configured; skipping build vector indexing.")
             return
         await asyncio.to_thread(self._upsert, build_id, embedding)
 
