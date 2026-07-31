@@ -11,7 +11,6 @@ from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.core.errors import InvalidStateError
 
 
-@pytest.mark.unit
 async def test_build_lock_is_reentrant_only_for_owning_task() -> None:
     session = AsyncMock(spec=AsyncSession)
     result = Mock()
@@ -37,7 +36,6 @@ async def test_build_lock_is_reentrant_only_for_owning_task() -> None:
     assert session.execute.await_count == 2
 
 
-@pytest.mark.unit
 async def test_build_lock_rejects_release_from_another_task() -> None:
     session = AsyncMock(spec=AsyncSession)
     result = Mock()

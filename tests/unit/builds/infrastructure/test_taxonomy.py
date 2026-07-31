@@ -2,13 +2,10 @@
 
 from unittest.mock import AsyncMock, Mock
 
-import pytest
-
 from squid.builds.infrastructure.models import Restriction
 from squid.builds.infrastructure.taxonomy import BuildTagsManager
 
 
-@pytest.mark.unit
 class TestBuildTagsManager:
     """Test suite for BuildTagsManager restriction access."""
 
