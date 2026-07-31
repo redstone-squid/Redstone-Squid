@@ -80,6 +80,35 @@ def test_migrations_create_schema_without_drift(
                 ).scalars()
             )
             option_table = connection.execute(text("SELECT to_regclass('public.vote_session_options')")).scalar_one()
+            legacy_record_table = connection.execute(
+                text("SELECT to_regclass('public.smallest_door_records')")
+            ).scalar_one()
+            legacy_record_routines = set(
+                connection.execute(
+                    text(
+                        "SELECT proname FROM pg_proc "
+                        "JOIN pg_namespace ON pg_namespace.oid = pg_proc.pronamespace "
+                        "WHERE pg_namespace.nspname = 'public' "
+                        "AND proname IN ("
+                        "'enqueue_legacy_record_search_projection', "
+                        "'rebuild_smallest_door_records', "
+                        "'refresh_smallest_after_door_delete', "
+                        "'refresh_smallest_for_door_insert', "
+                        "'trg_refresh_smallest_door', "
+                        "'trg_refresh_smallest_door_from_builds'"
+                        ")"
+                    )
+                ).scalars()
+            )
+            retirement_rebuild_queued = connection.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM record_recompute_queue "
+                    "WHERE scope_key = 'door' "
+                    "AND reasons @> '[\"legacy_cache_retirement\"]'::jsonb"
+                    ")"
+                )
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -90,6 +119,9 @@ def test_migrations_create_schema_without_drift(
     assert expected_functions <= function_names
     assert trigger_names == expected_triggers
     assert option_table == "vote_session_options"
+    assert legacy_record_table is None
+    assert legacy_record_routines == set()
+    assert retirement_rebuild_queued is True
 
 
 def test_alembic_detects_managed_function_and_trigger_drift(

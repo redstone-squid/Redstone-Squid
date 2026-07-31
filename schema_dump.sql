@@ -183,34 +183,6 @@ $$;
 
 
 --
--- Name: enqueue_legacy_record_search_projection(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.enqueue_legacy_record_search_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    target_record_id bigint;
-    target_action text := 'upsert';
-BEGIN
-    target_record_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.record_id ELSE NEW.record_id END;
-    IF TG_OP = 'DELETE' THEN
-        target_action := 'delete';
-    END IF;
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('record', 'legacy-smallest:' || target_record_id::text, target_action, now())
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        enqueued_at = EXCLUDED.enqueued_at,
-        attempts = 0,
-        locked_at = NULL,
-        last_error = NULL;
-    RETURN NULL;
-END;
-$$;
-
-
---
 -- Name: enqueue_metadata_search_projection(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -484,260 +456,6 @@ $$;
 
 
 --
--- Name: rebuild_smallest_door_records(); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.rebuild_smallest_door_records()
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    -- 1. Take an exclusive lock so readers don’t see half a table.
-    LOCK TABLE public.smallest_door_records IN ACCESS EXCLUSIVE MODE;
-
-    -- 2. Wipe the current contents.
-    TRUNCATE TABLE public.smallest_door_records;
-
-    -- 3. Re-insert from scratch with the same query used during creation.
-    WITH base AS (
-        SELECT
-            b.id   AS build_id,
-            d.orientation,
-            d.door_width,
-            d.door_height,
-            COALESCE(d.door_depth, 1)               AS door_depth,
-            COALESCE(
-                ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                    FILTER (WHERE t.name IS NOT NULL),
-                ARRAY[]::text[]
-            ) AS types,
-            COALESCE(
-                ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                    FILTER (WHERE r.name IS NOT NULL),
-                ARRAY[]::text[]
-            ) AS restrictions,
-            b.width * b.height * COALESCE(b.depth, 1) AS volume
-        FROM   public.builds             b
-        JOIN   public.doors              d  ON d.build_id = b.id
-        LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-        LEFT   JOIN public.types         t  ON t.id = bt.type_id
-        LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-        LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-        WHERE  b.submission_status = 1
-          AND  b.category = 'Door'
-          AND  b.width IS NOT NULL
-          AND  b.height IS NOT NULL
-          AND  b.depth IS NOT NULL
-        GROUP  BY b.id, d.orientation, d.door_width, d.door_height, d.door_depth
-    ), exploded AS (
-        SELECT  b.*,
-                ps AS restriction_subset
-        FROM    base b
-        CROSS   JOIN LATERAL public.power_set_max(b.restrictions, 8) ps
-    ), ranked AS (
-        SELECT  *,
-                ROW_NUMBER() OVER (
-                    PARTITION BY types,
-                                 orientation, door_width,
-                                 door_height, door_depth,
-                                 restriction_subset
-                    ORDER BY volume, build_id
-                ) AS rn
-        FROM exploded
-    )
-    INSERT INTO public.smallest_door_records
-           (id, orientation, door_width, door_height, door_depth,
-            types, restrictions, volume, restriction_subset)
-    SELECT build_id, orientation, door_width, door_height,
-           door_depth, types, restrictions, volume, restriction_subset
-    FROM   ranked
-    WHERE  rn = 1;
-END;
-$$;
-
-
---
--- Name: refresh_smallest_after_door_delete(bigint); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.refresh_smallest_after_door_delete(IN p_build_id bigint)
-    LANGUAGE sql
-    AS $$
---------------------------------------------------------------------
---  A.  All (orientation,dims,types,subset) combos where the *old*
---      build was the record-holder.
---------------------------------------------------------------------
-WITH affected AS (
-    SELECT orientation,
-           door_width,
-           door_height,
-           door_depth,
-           types,
-           restriction_subset
-    FROM   public.smallest_door_records
-    WHERE  id = p_build_id
-),
-
---------------------------------------------------------------------
---  B.  Remove those (now stale) rows in one shot.
---------------------------------------------------------------------
-del AS (
-    DELETE FROM public.smallest_door_records s
-    USING affected a
-    WHERE s.orientation        = a.orientation
-      AND s.door_width         = a.door_width
-      AND s.door_height        = a.door_height
-      AND s.door_depth         = a.door_depth
-      AND s.types              = a.types
-      AND s.restriction_subset = a.restriction_subset
-    RETURNING a.*                                   -- feed step C
-),
-
---------------------------------------------------------------------
---  C.  Re-compute the winners for every combo we just deleted,
---      but using *all remaining* builds (p_build_id is gone).
---------------------------------------------------------------------
-base AS (
-    SELECT
-        b.id                                            AS build_id,
-        d.orientation,
-        d.door_width,
-        d.door_height,
-        COALESCE(d.door_depth, 1)                       AS door_depth,
-        COALESCE(
-            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                FILTER (WHERE t.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS types,
-        COALESCE(
-            ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                FILTER (WHERE r.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS restrictions,
-        b.width * b.height * b.depth AS volume
-    FROM   public.builds             b
-    JOIN   public.doors              d  ON d.build_id = b.id
-    LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-    LEFT   JOIN public.types         t  ON t.id = bt.type_id
-    LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-    LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-    WHERE  b.submission_status = 1
-      AND  b.category          = 'Door'
-      AND  b.width IS NOT NULL
-      AND  b.height IS NOT NULL
-      AND  b.depth IS NOT NULL
-      AND  b.id <> p_build_id                         -- <-- removed build
-    GROUP  BY b.id, d.orientation, d.door_width,
-              d.door_height, d.door_depth
-),
-candidates AS (
-    SELECT b.*, d.restriction_subset
-    FROM   base b
-    JOIN   del  d
-      ON   b.orientation = d.orientation
-     AND   b.door_width  = d.door_width
-     AND   b.door_height = d.door_height
-     AND   b.door_depth  = d.door_depth
-     AND   b.types       = d.types
-    WHERE  d.restriction_subset <@ b.restrictions      -- subset test
-),
-ranked AS (
-    SELECT DISTINCT ON
-           (orientation, door_width, door_height,
-            door_depth, types, restriction_subset)
-           build_id        AS id,
-           orientation, door_width, door_height,
-           door_depth, types, restrictions,
-           volume, restriction_subset
-    FROM   candidates
-    ORDER  BY orientation, door_width, door_height,
-             door_depth, types, restriction_subset,
-             volume, id
-)
-
---------------------------------------------------------------------
---  D.  Insert the new winners (if any).
---------------------------------------------------------------------
-INSERT INTO public.smallest_door_records
-       (id, orientation, door_width, door_height, door_depth,
-        types, restrictions, volume, restriction_subset)
-SELECT * FROM ranked;
-$$;
-
-
---
--- Name: refresh_smallest_for_door_insert(bigint); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.refresh_smallest_for_door_insert(IN p_build_id bigint)
-    LANGUAGE sql
-    AS $$
-WITH b AS (                               -- the changed build only
-    SELECT
-        b.id   AS build_id,
-        d.orientation,
-        d.door_width,
-        d.door_height,
-        COALESCE(d.door_depth, 1)               AS door_depth,
-        COALESCE(
-            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                FILTER (WHERE t.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS types,
-        COALESCE(
-            ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                FILTER (WHERE r.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS restrictions,
-        b.width * b.height * b.depth AS volume
-    FROM   public.builds             b
-    JOIN   public.doors              d  ON d.build_id = b.id
-    LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-    LEFT   JOIN public.types         t  ON t.id = bt.type_id
-    LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-    LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-    WHERE  b.id = p_build_id
-        AND  b.submission_status = 1
-        AND  b.category          = 'Door'
-        AND  b.width IS NOT NULL
-        AND  b.height IS NOT NULL
-        AND  b.depth IS NOT NULL
-    GROUP  BY b.id, d.orientation, d.door_width,
-              d.door_height, d.door_depth
-), subset AS (
-    SELECT
-        b.build_id, b.orientation, b.door_width,
-        b.door_height, b.door_depth,
-        b.types, b.restrictions,
-        ps AS restriction_subset, b.volume
-    FROM   b, LATERAL power_set_max(b.restrictions, 8) ps
-), ranked AS (            -- winner per (dims, types, subset)
-    SELECT DISTINCT ON
-           (orientation, door_width, door_height,
-            door_depth, types, restriction_subset)
-           build_id            AS id,
-           orientation, door_width, door_height,
-           door_depth, types, restrictions,
-           volume, restriction_subset
-    FROM   subset
-    ORDER  BY orientation, door_width, door_height, door_depth,
-             types, restriction_subset,
-             volume, id
-)
-INSERT INTO public.smallest_door_records AS s
-       (id, orientation, door_width, door_height, door_depth,
-        types, restrictions, volume, restriction_subset)
-SELECT * FROM ranked
-ON CONFLICT (orientation, door_width, door_height,
-             door_depth, types, restriction_subset)
-DO UPDATE
-    SET id            = EXCLUDED.id,
-        restrictions  = EXCLUDED.restrictions,
-        volume        = EXCLUDED.volume
-    WHERE s.volume > EXCLUDED.volume;   -- update only if we really won
-$$;
-
-
---
 -- Name: set_locked_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -866,54 +584,6 @@ BEGIN
     ON CONFLICT DO NOTHING;
 
     RETURN NULL;  -- AFTER trigger
-END;
-$$;
-
-
---
--- Name: trg_refresh_smallest_door(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.trg_refresh_smallest_door() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-
-    ELSIF TG_OP = 'INSERT' THEN
-        -- remove the stale rows for *this* build first
-        -- The reason why we need to delete the old winners even for INSERT is that
-        -- here, INSERT can also mean "insert a new type/restriction" for an existing door,
-        CALL public.refresh_smallest_after_door_delete(NEW.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    ELSE -- UPDATE
-        -- First remove the “old” winners, then add the “new” ones
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-
---
--- Name: trg_refresh_smallest_door_from_builds(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.trg_refresh_smallest_door_from_builds() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-    ELSE                               -- INSERT or UPDATE
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-        CALL public.refresh_smallest_for_door_insert(NEW.id);
-    END IF;
-    RETURN NULL;
 END;
 $$;
 
@@ -1760,53 +1430,6 @@ COMMENT ON TABLE public.server_settings IS 'Settings for a Discord server.';
 
 
 --
--- Name: smallest_door_records; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.smallest_door_records (
-    record_id bigint NOT NULL,
-    id bigint NOT NULL,
-    title text,
-    orientation text NOT NULL,
-    door_width integer NOT NULL,
-    door_height integer NOT NULL,
-    door_depth integer DEFAULT 1 NOT NULL,
-    types text[] NOT NULL,
-    restrictions text[] DEFAULT '{}'::text[] NOT NULL,
-    volume integer NOT NULL,
-    restriction_subset text[] NOT NULL
-);
-
-
---
--- Name: TABLE smallest_door_records; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.smallest_door_records IS 'A door that is the smallest in a specific category.
-
-This table is a cache for the smallest doors in each category up to 8 restrictions, built by using database triggers';
-
-
---
--- Name: smallest_door_records_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.smallest_door_records_record_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: smallest_door_records_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.smallest_door_records_record_id_seq OWNED BY public.smallest_door_records.record_id;
-
-
---
 -- Name: submissions_submission_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2270,13 +1893,6 @@ ALTER TABLE ONLY public.restrictions ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- Name: smallest_door_records record_id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records ALTER COLUMN record_id SET DEFAULT nextval('public.smallest_door_records_record_id_seq'::regclass);
-
-
---
 -- Name: types id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2657,22 +2273,6 @@ ALTER TABLE ONLY public.server_settings
 
 
 --
--- Name: smallest_door_records smallest_door_records_orientation_door_width_door_height_do_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_orientation_door_width_door_height_do_key UNIQUE (orientation, door_width, door_height, door_depth, types, restriction_subset);
-
-
---
--- Name: smallest_door_records smallest_door_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_pkey PRIMARY KEY (record_id);
-
-
---
 -- Name: builds submissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2883,27 +2483,6 @@ CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission
 
 
 --
--- Name: idx_smallest_door_records_dims; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_smallest_door_records_dims ON public.smallest_door_records USING btree (orientation, door_width, door_height, door_depth);
-
-
---
--- Name: idx_smallest_door_records_restrictions_gin; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_smallest_door_records_restrictions_gin ON public.smallest_door_records USING gin (restrictions);
-
-
---
--- Name: idx_smallest_door_records_types_gin; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_smallest_door_records_types_gin ON public.smallest_door_records USING gin (types);
-
-
---
 -- Name: record_computation_runs_one_active_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3065,13 +2644,6 @@ CREATE INDEX tag_definitions_lookup_idx ON public.tag_definitions USING btree (n
 
 
 --
--- Name: unq_smallest_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX unq_smallest_key ON public.smallest_door_records USING btree (orientation, door_width, door_height, door_depth, types, restriction_subset);
-
-
---
 -- Name: build_creators build_creators_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3083,13 +2655,6 @@ CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON
 --
 
 CREATE TRIGGER build_restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: build_restrictions build_restrictions_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_restrictions_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
 
 --
@@ -3107,13 +2672,6 @@ CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON pu
 
 
 --
--- Name: build_types build_types_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_types_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
-
-
---
 -- Name: build_versions build_versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3125,13 +2683,6 @@ CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON
 --
 
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: builds builds_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER builds_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door_from_builds();
 
 
 --
@@ -3153,13 +2704,6 @@ CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPD
 --
 
 CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: doors doors_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER doors_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
 
 --
@@ -3216,13 +2760,6 @@ CREATE TRIGGER restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON p
 --
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
-
-
---
--- Name: smallest_door_records smallest_door_records_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER smallest_door_records_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.smallest_door_records FOR EACH ROW EXECUTE FUNCTION public.enqueue_legacy_record_search_projection();
 
 
 --
@@ -3609,14 +3146,6 @@ ALTER TABLE ONLY public.search_document_facets
 
 ALTER TABLE ONLY public.search_embedding_queue
     ADD CONSTRAINT search_embedding_queue_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
-
-
---
--- Name: smallest_door_records smallest_door_records_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_id_fkey FOREIGN KEY (id) REFERENCES public.builds(id) ON DELETE CASCADE;
 
 
 --
