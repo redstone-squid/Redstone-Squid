@@ -1,0 +1,114 @@
+name: Schema Artifacts
+
+permissions: {}
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "alembic/**"
+      - "squid/persistence/**"
+      - ".github/workflows/schema-artifacts.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "alembic/**"
+      - "squid/persistence/**"
+      - ".github/workflows/schema-artifacts.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+concurrency:
+  group: schema-artifacts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.32"
+
+jobs:
+  generate:
+    name: Generate disposable database schema dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Commit schema_dump.sql after trusted pushes to master.
+    services:
+      postgres:
+        image: pgvector/pgvector@sha256:3e8b3adfd27b5707128f60956f62a793c3c9326ea8cfaf0eab7adccb5d700b21 # 0.8.1-pg17
+        env:
+          POSTGRES_DB: redstone_squid
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d redstone_squid"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install the project
+        run: uv sync --locked --dev
+
+      - name: Apply migrations to the disposable database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/redstone_squid
+        run: uv run --locked alembic upgrade head
+
+      - name: Export schema artifact
+        shell: bash
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER_ID" pg_dump \
+            --username=postgres \
+            --dbname=redstone_squid \
+            --schema-only \
+            --no-owner \
+            --no-privileges \
+            --exclude-table=public.alembic_version \
+            --restrict-key=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            --encoding=UTF8 > schema_dump.sql
+
+      - name: Commit refreshed schema dump
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- schema_dump.sql; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add schema_dump.sql
+          git commit -m "chore(schema): refresh disposable database dump [skip ci]"
+          gh auth setup-git
+          git push
+
+      - name: Require an up-to-date schema dump
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          if git diff --quiet -- schema_dump.sql; then
+            exit 0
+          fi
+
+          echo "schema_dump.sql does not match migrations applied to a disposable PostgreSQL database."
+          git diff -- schema_dump.sql
+          exit 1

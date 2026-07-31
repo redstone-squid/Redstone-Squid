@@ -11,3 +11,5 @@ The scripts in `migrations/` are used to provide additional information accompan
 `setup-claude-web-env.sh` bootstraps `just`, `uv`, project dependencies, and `prek` hooks in a Linux agent sandbox. It assumes the checkout is at `/home/user/Redstone-Squid`; override that with `REPO_DIR` when needed.
 
 `setup-codex-cloud-env.sh` prepares a new Codex Cloud environment. Configure it as the setup script with `bash scripts/setup-codex-cloud-env.sh`. Configure `codex-cloud-maintenance.sh` with `bash scripts/codex-cloud-maintenance.sh` as the maintenance script to refresh the locked dependencies when a cached environment resumes.
+
+`just dependency-report` exports a CycloneDX 1.5 software bill of materials from `uv.lock`. `just gha-analysis` analyzes GitHub Actions workflows with `zizmor` and requires an authenticated `gh` CLI. `just visualize-dependencies` writes an SVG dependency graph to `docs/dependencies.svg`.
