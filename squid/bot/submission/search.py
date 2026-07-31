@@ -191,7 +191,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="pending")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="pending")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
@@ -216,7 +216,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="view")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to see.")))
     async def view_build(self, ctx: Context[BotT], build_id: int):
@@ -254,7 +254,7 @@ class SearchCog[
             )
         return None
 
-    @BuildCommandGroup.build_hybrid_group.command(name="confirm")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="confirm")  # type: ignore
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")
@@ -273,7 +273,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="deny")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="deny")  # type: ignore
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")
@@ -292,7 +292,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="debug")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="debug")  # type: ignore
     @check_is_staff()
     @app_commands.rename(build_id="id")
     @app_commands.describe(

@@ -102,7 +102,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         command_to_get_to_build: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
         # fmt: on
 
-    @BuildCommandGroup.build_hybrid_group.command(name="edit")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="edit")  # type: ignore
     @check_is_trusted_or_staff()
     @check_is_owner_server()
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):

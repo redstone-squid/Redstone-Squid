@@ -89,7 +89,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         world_download_urls: list[str] = flag(name="world_download_links", default=_list_default, converter=ListConverter, description='Links to download the world.')
         # fmt: on
 
-    @BuildCommandGroup.build_hybrid_group.command(name="submit-advanced")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="submit-advanced")  # type: ignore
     async def submit_door(self, ctx: Context[BotT], *, flags: SubmitDoorFlags):
         """Submit a build with every field available at once.
 
@@ -132,7 +132,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             msg = t(locale, _("This command is only available as a slash command for now."))
             raise NotImplementedError(msg)
 
-    @BuildCommandGroup.build_hybrid_group.app_command.command(name="submit")
+    @BuildCommandGroup.build_hybrid_group.app_command.command(name="submit")  # type: ignore
     async def submit_form(
         self,
         interaction: discord.Interaction[BotT],
@@ -286,7 +286,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await self.builds.submit(build, submitter_id=message.author.id, ai_generated=True)
         await self.bot.for_build(build).post_for_voting(type="add")
 
-    @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # pyright: ignore[reportArgumentType]
+    @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
     @check_is_trusted_or_staff()
     @check_is_owner_server()
     async def recalc(self, ctx: Context[BotT], message: discord.Message):

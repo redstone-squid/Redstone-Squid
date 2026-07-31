@@ -33,7 +33,7 @@ def test_api_never_returns_a_server_error(case: schemathesis.Case) -> None:
     try:
         case.call_and_validate(
             headers={"Authorization": TEST_SYNERGY_SECRET},
-            checks=[schemathesis.checks.not_a_server_error],
+            checks=[schemathesis.checks.not_a_server_error],  # pyrefly: ignore
         )
     finally:
         gc.collect()
@@ -50,7 +50,7 @@ def test_api_never_errors_on_accept_language(case: schemathesis.Case, accept_lan
     try:
         case.call_and_validate(
             headers={"Authorization": TEST_SYNERGY_SECRET, "Accept-Language": accept_language},
-            checks=[schemathesis.checks.not_a_server_error],
+            checks=[schemathesis.checks.not_a_server_error],  # pyrefly: ignore
         )
     finally:
         gc.collect()

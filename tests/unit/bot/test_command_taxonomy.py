@@ -29,7 +29,7 @@ PUBLIC_COGS = (
     GiveRedstoner,
 )
 
-EXPECTED_PREFIX_COMMAND_TREE = {
+EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "account": ("link", "unlink"),
     "admin": ("records-gaps", "records-lookup", "records-rebuild", "records-title-issues"),
     "archive": (),
@@ -47,7 +47,7 @@ EXPECTED_PREFIX_COMMAND_TREE = {
 
 
 def _public_command_names() -> set[str]:
-    return {command.qualified_name for cog in PUBLIC_COGS for command in cog.__cog_commands__ if not command.hidden}
+    return {command.qualified_name for cog in PUBLIC_COGS for command in cog.__cog_commands__ if not command.hidden}  # type: ignore
 
 
 def _command(commands: Iterable[AnyCommand], qualified_name: str) -> AnyCommand:
