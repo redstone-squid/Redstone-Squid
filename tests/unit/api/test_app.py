@@ -55,11 +55,17 @@ class MockDatabaseManager:
 
 
 @pytest.fixture
-def client():
+def app_factory():
     database = MockDatabaseManager()
     services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    with TestClient(create_api_app(lambda _config: runtime, config=TEST_CONFIG)) as c:
+    return create_api_app(lambda _config: runtime, config=TEST_CONFIG), database
+
+
+@pytest.fixture
+def client(app_factory: tuple[FastAPI, MockDatabaseManager]):
+    app, database = app_factory
+    with TestClient(app) as c:
         yield c
     assert database.closed
 
@@ -116,11 +122,8 @@ def test_success_returns_verification_code(client: httpx.Client):
     assert resp.json() == TEST_VERIFICATION_CODE
 
 
-def test_internal_error_is_redacted_and_correlated() -> None:
-    database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda _config: runtime, config=TEST_CONFIG)
+def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
 
     @app.get("/boom")
     async def boom() -> None:
@@ -141,11 +144,8 @@ def test_internal_error_is_redacted_and_correlated() -> None:
     assert response.json()["error_id"] == response.headers["X-Error-ID"]
 
 
-def test_service_unavailable_is_safe_and_correlated() -> None:
-    database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda _config: runtime, config=TEST_CONFIG)
+def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
 
     @app.get("/unavailable")
     async def unavailable() -> None:
