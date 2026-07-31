@@ -28,15 +28,27 @@ pytest                    # same fast paths selected by pyproject.toml
 PostgreSQL integration tests require a working Docker daemon. Live Supabase, Discord, Mojang, OpenAI, and other
 third-party tests belong under `external` and must require an explicit opt-in; they are not part of `test-all`.
 
-On Linux or WSL, run the version parser fuzzer with:
+On Linux or WSL, run the fuzzers with:
 
 ```bash
-just fuzz-version
+just fuzz-version          # Minecraft version string parsing
+just fuzz-cursor           # search cursor codec decoding
+just fuzz-search-parser    # search query language parsing
 ```
 
-The command copies committed seeds into the ignored `.fuzz/` workspace so an evolving corpus does not dirty the
+Each command copies its committed seeds into the ignored `.fuzz/` workspace so an evolving corpus does not dirty the
 repository. A crash artifact must become a deterministic regression test or a minimized committed corpus seed before
 the bug is considered fixed.
+
+Fuzz targets are pure, synchronous, in-process functions that accept untrusted text directly from a Discord command
+or an API request: parsers and codecs, not the handlers around them. Handlers themselves are async and do I/O, which
+breaks the fast, deterministic, coverage-guided loop fuzzing depends on.
+
+`tests/unit/api/test_openapi_contract.py` covers handlers instead, using
+[Schemathesis](https://schemathesis.readthedocs.io/) to generate requests from the API's own OpenAPI schema and run
+them against the real ASGI app in-process (routing, dependency injection, header/body coercion included). It only
+asserts the app never answers with a 5xx; it runs as part of `just test` alongside every other unit test. Add every
+new route to that schema as the API grows.
 
 ## What to test
 

@@ -114,5 +114,17 @@ fuzz-version:
     cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
     uv run --group fuzz python -m tests.fuzz.fuzz_version_parser .fuzz/corpus/version_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/version_parser/
 
+[unix]
+fuzz-cursor:
+    mkdir -p .fuzz/corpus/cursor_codec .fuzz/artifacts/cursor_codec
+    cp tests/fuzz/corpus/cursor_codec/* .fuzz/corpus/cursor_codec/
+    uv run --group fuzz python -m tests.fuzz.fuzz_cursor_codec .fuzz/corpus/cursor_codec -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/cursor_codec/
+
+[unix]
+fuzz-search-parser:
+    mkdir -p .fuzz/corpus/search_parser .fuzz/artifacts/search_parser
+    cp tests/fuzz/corpus/search_parser/* .fuzz/corpus/search_parser/
+    uv run --group fuzz python -m tests.fuzz.fuzz_search_parser .fuzz/corpus/search_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/search_parser/
+
 backdate start_commit:
     git backdate --no-business-hours {{start_commit}}..
