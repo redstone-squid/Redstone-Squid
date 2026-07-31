@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Self, override
 
 import discord
 from discord import Interaction
-from discord.ext.commands import Cog, Context, hybrid_command
+from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
@@ -87,19 +87,28 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def give_redstoner(self, message: discord.Message):
         await self.give_redstoner_from_message(message)
 
-    @hybrid_command()
+    @hybrid_group(name="redstoner")
+    @check_is_owner_server()
+    @check_is_staff()
+    async def redstoner_group(self, ctx: Context[BotT]) -> None:
+        """Manage Redstoner role automation."""
+        await ctx.send_help("redstoner")
+
+    @redstoner_group.command(name="panel")
     @check_is_owner_server()
     @check_is_staff()
     async def abc(self, ctx: Context[BotT]):
+        """Post the Redstoner role controls."""
         view = ErrorHandledLayoutView(timeout=None)
         view.add_item(discord.ui.TextDisplay("Redstoner role controls"))
         view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
-    @hybrid_command(name="reload_redstoner")
+    @redstoner_group.command(name="resync")
     @check_is_owner_server()
     @check_is_staff()
     async def force_reload_message(self, ctx: Context[BotT], message: discord.Message):
+        """Reprocess a message for Redstoner role automation."""
         await self.give_redstoner_from_message(message)
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:

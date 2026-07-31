@@ -16,9 +16,14 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.bot = bot
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
-    @commands.hybrid_command()
+    @commands.hybrid_group(name="info")
+    async def info_group(self, ctx: Context[BotT]) -> None:
+        """Open useful Redstone Squid links."""
+        await ctx.send_help("info")
+
+    @info_group.command(name="invite")
     async def invite_link(self, ctx: Context[BotT]):
-        """Invite me to your other servers!"""
+        """Get a link to invite the bot to another server."""
         await ctx.send(
             view=link_layout(
                 "Invite Redstone Squid",
@@ -30,9 +35,9 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     # Note that the help text is replaced in the __init__ method
     # because the bot's name is not available at the time of class definition.
-    @commands.hybrid_command()
+    @info_group.command(name="source")
     async def source_code(self, ctx: Context[BotT]):
-        """Link to the bot's source code."""
+        """Open the bot's source code."""
         await ctx.send(
             view=link_layout(
                 "Source code",
@@ -42,9 +47,9 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command()
+    @info_group.command(name="form")
     async def google_forms(self, ctx: Context[BotT]):
-        """Links you to our record submission form. You want to use /submit instead."""
+        """Open the legacy submission form. Prefer `/build submit` for new builds."""
         BUILD_SUBMISSION_FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
         await ctx.send(
             view=link_layout(
@@ -56,9 +61,9 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command()
+    @info_group.command(name="docs")
     async def docs(self, ctx: Context[BotT]):
-        """Links you to our regulations."""
+        """Open the build rules and regulations."""
         await ctx.send(
             view=link_layout(
                 "Regulations",
