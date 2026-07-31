@@ -7,7 +7,7 @@ from typing import Self
 import vecs
 from openai import AsyncOpenAI, OpenAIError
 
-from squid.config import EmbeddingConfig
+from squid.config import EMBEDDING_DIMENSION, EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class OpenAIEmbeddingModel:
             return cls(None, config.model)
         return cls(
             AsyncOpenAI(
-                base_url=config.base_url,
-                api_key=config.api_key,
+                base_url=str(config.base_url),
+                api_key=config.api_key.get_secret_value(),
             ),
             config.model,
         )
@@ -47,13 +47,12 @@ class OpenAIEmbeddingModel:
 class VecsBuildIndex:
     """Store and query build vectors without blocking the event loop."""
 
-    def __init__(self, connection: str | None, *, dimension: int) -> None:
+    def __init__(self, connection: str | None) -> None:
         self._connection = connection
-        self._dimension = dimension
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
         if self._connection is None:
-            logger.warning("No DB_CONNECTION configured; skipping build vector indexing.")
+            logger.warning("No SQUID_VECTOR_DATABASE_URL configured; skipping build vector indexing.")
             return
         await asyncio.to_thread(self._upsert, build_id, embedding)
 
@@ -61,7 +60,7 @@ class VecsBuildIndex:
         assert self._connection is not None
         client = vecs.create_client(self._connection)
         try:
-            collection = client.get_or_create_collection(name="builds", dimension=self._dimension)
+            collection = client.get_or_create_collection(name="builds", dimension=EMBEDDING_DIMENSION)
             collection.upsert(records=[(str(build_id), embedding, {})])
         finally:
             client.disconnect()
@@ -76,7 +75,7 @@ class VecsBuildIndex:
         assert self._connection is not None
         client = vecs.create_client(self._connection)
         try:
-            collection = client.get_or_create_collection(name="builds", dimension=self._dimension)
+            collection = client.get_or_create_collection(name="builds", dimension=EMBEDDING_DIMENSION)
             result = collection.query(embedding, limit=1)
             return str(result[0]) if result else None
         finally:

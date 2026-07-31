@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
-    ARRAY,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -35,7 +34,7 @@ from squid.builds.domain import (
     RestrictionTypeLiteral,
     Status,
 )
-from squid.config import embedding_dimension_from_environment
+from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
@@ -150,7 +149,7 @@ class Build(Base, kw_only=True):
     )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(embedding_dimension_from_environment()),
+        VECTOR(EMBEDDING_DIMENSION),
         comment='This is not actually being used. See "vecs"."builds" instead',
         default=None,
     )
@@ -216,61 +215,6 @@ class Door(Build, kw_only=True):
     normal_closing_time: Mapped[int | None] = mapped_column(BigInteger)
     visible_opening_time: Mapped[int | None] = mapped_column(BigInteger)
     visible_closing_time: Mapped[int | None] = mapped_column(BigInteger)
-
-
-class SmallestDoor(Base):
-    """A door that is the smallest in a specific category.
-
-    This table is a cache for the smallest doors in each category up to 8 restrictions, built by using database triggers
-    """
-
-    __tablename__ = "smallest_door_records"
-    __table_args__ = (
-        UniqueConstraint(
-            "orientation",
-            "door_width",
-            "door_height",
-            "door_depth",
-            "types",
-            "restriction_subset",
-            name="smallest_door_records_orientation_door_width_door_height_do_key",
-        ),
-        Index(
-            "idx_smallest_door_records_dims",
-            "orientation",
-            "door_width",
-            "door_height",
-            "door_depth",
-        ),
-        Index("idx_smallest_door_records_restrictions_gin", "restrictions", postgresql_using="gin"),
-        Index("idx_smallest_door_records_types_gin", "types", postgresql_using="gin"),
-        Index(
-            "unq_smallest_key",
-            "orientation",
-            "door_width",
-            "door_height",
-            "door_depth",
-            "types",
-            "restriction_subset",
-            unique=True,
-        ),
-    )
-
-    record_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("builds.id", name="smallest_door_records_id_fkey", ondelete="CASCADE"),
-        init=False,
-    )
-    door_width: Mapped[int] = mapped_column(Integer, nullable=False)
-    door_height: Mapped[int] = mapped_column(Integer, nullable=False)
-    door_depth: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False)
-    types: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
-    restrictions: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'::text[]"))
-    restriction_subset: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
-    volume: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str | None] = mapped_column(Text)
 
 
 class Extender(Build, kw_only=True):

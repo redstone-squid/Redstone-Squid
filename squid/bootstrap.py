@@ -50,7 +50,11 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     version_service = VersionService(VersionRepository(db.async_session))
     embedding_service = BuildEmbeddingService(
         OpenAIEmbeddingModel.from_config(config.embeddings),
-        VecsBuildIndex(config.embeddings.database_connection, dimension=config.embeddings.dimension),
+        VecsBuildIndex(
+            config.embeddings.database_connection.get_secret_value()
+            if config.embeddings.database_connection is not None
+            else None
+        ),
     )
     build_repository = BuildRepository(db.async_session)
     build_locks = BuildLockRepository(db.async_session)
@@ -84,7 +88,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         refresh_search_index=partial(run_projection_batch, db.async_session),
         settings=SettingsService(SettingsRepository(db.async_session)),
         users=UserService(
-            UserRepository(db.async_session, config.verification_code_pepper),
+            UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
             get_minecraft_username,
             lambda: secrets.randbelow(900_000) + 100_000,
         ),
@@ -105,10 +109,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     )
 
 
-def create_application_runtime(
-    config: RuntimeConfig | None = None, db: DatabaseEngine | None = None
-) -> ApplicationRuntime:
+def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None = None) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
-    runtime_config = config or RuntimeConfig.from_environment()
-    database = db or DatabaseEngine(runtime_config.database)
-    return ApplicationRuntime(create_application_services(database, runtime_config), database.close, database.ping)
+    database = db or DatabaseEngine(config.database)
+    return ApplicationRuntime(create_application_services(database, config), database.close, database.ping)

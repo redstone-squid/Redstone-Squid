@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from squid.api.i18n import locale_for_request
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -22,12 +23,13 @@ from squid.core.errors import (
     SquidError,
     ValidationError,
 )
+from squid.core.i18n import _, translate
 
 logger = logging.getLogger(__name__)
 
 PROBLEM_DETAIL_MEDIA_TYPE = "application/problem+json"
-INTERNAL_ERROR_DETAIL = "An internal server error occurred."
-SERVICE_UNAVAILABLE_DETAIL = "A required service is temporarily unavailable. Please try again later."
+INTERNAL_ERROR_DETAIL = _("An internal server error occurred.")
+SERVICE_UNAVAILABLE_DETAIL = _("A required service is temporarily unavailable. Please try again later.")
 
 
 class ProblemDetail(BaseModel):
@@ -46,8 +48,10 @@ class ProblemDetail(BaseModel):
     error_id: str | None = None
 
 
-def _problem_response(problem: ProblemDetail) -> Response:
-    headers = {"X-Error-ID": problem.error_id} if problem.error_id is not None else None
+def _problem_response(problem: ProblemDetail, locale: str) -> Response:
+    headers = {"Content-Language": locale}
+    if problem.error_id is not None:
+        headers["X-Error-ID"] = problem.error_id
     return Response(
         status_code=problem.status,
         content=problem.model_dump_json(exclude_none=True),
@@ -81,18 +85,20 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, SquidError):
         return await handle_unexpected_error(request, exc)
 
+    locale = locale_for_request(request)
     status_code = _status_for_error(exc)
     if isinstance(exc, DomainError):
         return _problem_response(
             ProblemDetail(
-                title=exc.title,
+                title=exc.localized_title(locale),
                 status=status_code,
-                detail=exc.public_detail(),
+                detail=exc.localized_public_detail(locale),
                 instance=str(request.url),
                 code=exc.code,
                 resource=exc.resource,
                 context=exc.public_context or None,
-            )
+            ),
+            locale,
         )
 
     error_id = _new_error_id()
@@ -106,14 +112,15 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     service_unavailable = isinstance(exc, ServiceUnavailableError)
     return _problem_response(
         ProblemDetail(
-            title="Service unavailable" if service_unavailable else "Internal server error",
+            title=translate(locale, _("Service unavailable") if service_unavailable else _("Internal server error")),
             status=status_code,
-            detail=SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL,
+            detail=translate(locale, SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL),
             instance=str(request.url),
             code=exc.code if service_unavailable else ErrorCode.INTERNAL_ERROR,
             resource=exc.resource if service_unavailable else None,
             error_id=error_id,
-        )
+        ),
+        locale,
     )
 
 
@@ -122,6 +129,7 @@ async def handle_request_validation_error(request: Request, exc: Exception) -> R
     if not isinstance(exc, RequestValidationError):
         return await handle_unexpected_error(request, exc)
 
+    locale = locale_for_request(request)
     errors: list[JSONValue] = [
         {
             "location": [item if isinstance(item, int) else str(item) for item in error["loc"]],
@@ -132,13 +140,14 @@ async def handle_request_validation_error(request: Request, exc: Exception) -> R
     ]
     return _problem_response(
         ProblemDetail(
-            title="Invalid request",
+            title=translate(locale, _("Invalid request")),
             status=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail="The request did not pass validation.",
+            detail=translate(locale, _("The request did not pass validation.")),
             instance=str(request.url),
             code=ErrorCode.INVALID_REQUEST,
             context={"errors": errors},
-        )
+        ),
+        locale,
     )
 
 
@@ -147,10 +156,11 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
     if not isinstance(exc, StarletteHTTPException):
         return await handle_unexpected_error(request, exc)
 
+    locale = locale_for_request(request)
     try:
         title = HTTPStatus(exc.status_code).phrase
     except ValueError:
-        title = "HTTP error"
+        title = translate(locale, _("HTTP error"))
     return _problem_response(
         ProblemDetail(
             title=title,
@@ -158,23 +168,26 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
             detail=str(exc.detail),
             instance=str(request.url),
             code=ErrorCode.NOT_FOUND if exc.status_code == HTTPStatus.NOT_FOUND else ErrorCode.INVALID_REQUEST,
-        )
+        ),
+        locale,
     )
 
 
 async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     """Log and redact an unexpected exception."""
+    locale = locale_for_request(request)
     error_id = _new_error_id()
     logger.error("Unhandled HTTP exception [error_id=%s]", error_id, exc_info=exc)
     return _problem_response(
         ProblemDetail(
-            title="Internal server error",
+            title=translate(locale, _("Internal server error")),
             status=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=INTERNAL_ERROR_DETAIL,
+            detail=translate(locale, INTERNAL_ERROR_DETAIL),
             instance=str(request.url),
             code=ErrorCode.INTERNAL_ERROR,
             error_id=error_id,
-        )
+        ),
+        locale,
     )
 
 

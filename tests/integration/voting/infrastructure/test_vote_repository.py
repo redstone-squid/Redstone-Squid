@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 from squid.voting.infrastructure.repository import VoteRepository
 
-pytestmark = pytest.mark.integration
-
 _CREATE_SCHEMA = """
 CREATE TABLE vote_sessions (
     id BIGSERIAL PRIMARY KEY,

@@ -45,18 +45,43 @@ pip install -r requirements/base.txt requirements/dev.txt
 
 Alternatively, if you use `uv`, you can run `uv sync`. The requirements folder and `uv.lock` are kept in sync.
 
-### Credential Files
+### Configuration
 
-Google services requires a Google service account. You can read about google service accounts at https://cloud.google.com/iam/docs/understanding-service-accounts. Download the credentials JSON file and rename it `client_secret.json` and move it to the `Google` directory.
+Copy the example environment file and replace its required placeholders:
 
-Discord requires a discord bot account. You can learn how to make bot accounts at https://github.com/reactiflux/discord-irc/wiki/Creating-a-discord-bot-&-getting-a-token. You will need the token to be placed in a file called `.env` in the root directory with the following contents:
+```console
+cp .env.example .env
 ```
-BOT_TOKEN = <Replace this with your discord access token>
-```
 
-Supabase is the database used for this bot. You can sign up for a free account at https://supabase.com/. Once you have an account, you can create a new project.
+The combined launcher requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_PEPPER`,
+`SQUID_DISCORD_TOKEN`, and `SQUID_API_SECRET`. Exported environment variables take precedence over `.env`.
+Optional OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
 
-Database schema changes are managed by Alembic. After configuring `DATABASE_URL`, create or upgrade a database with:
+Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments must rename their settings:
+
+| Previous setting | Replacement |
+| --- | --- |
+| `DATABASE_URL` | `SQUID_DATABASE_URL` |
+| `VERIFICATION_CODE_PEPPER` | `SQUID_VERIFICATION_CODE_PEPPER` |
+| `BOT_TOKEN` | `SQUID_DISCORD_TOKEN` |
+| `SYNERGY_SECRET` | `SQUID_API_SECRET` |
+| `API_PORT` | `SQUID_API_PORT` |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | `SQUID_OPENAI_API_KEY` / `SQUID_OPENAI_BASE_URL` |
+| `EMBEDDING_OPENAI_API_KEY` / `EMBEDDING_OPENAI_BASE_URL` | `SQUID_EMBEDDING_API_KEY` / `SQUID_EMBEDDING_BASE_URL` |
+| `EMBEDDING_MODEL` | `SQUID_EMBEDDING_MODEL` |
+| `DB_CONNECTION` | `SQUID_VECTOR_DATABASE_URL` |
+| `CATBOX_USERHASH` | `SQUID_CATBOX_USER_HASH` |
+| `GOOGLE_CREDENTIALS` | `SQUID_GOOGLE_CREDENTIALS_JSON` |
+| `LOG_DIR` / `LOG_LEVEL` / `ROOT_LOG_LEVEL` | `SQUID_LOG_DIRECTORY` / `SQUID_LOG_LEVEL` / `SQUID_ROOT_LOG_LEVEL` |
+| `LOG_FILE` / `LOG_ACCESS_FILE` | `SQUID_BOT_LOG_FILE` / `SQUID_API_ACCESS_LOG_FILE` |
+
+`DB_DRIVER_SYNC`, `DB_DRIVER_ASYNC`, `EMBEDDING_DIMENSION`, `SUPABASE_URL`, and `SUPABASE_KEY` have no
+replacement. The application owns its PostgreSQL drivers, and vector dimension 1536 is fixed by the database schema.
+
+Google service-account credentials can be supplied as JSON through `SQUID_GOOGLE_CREDENTIALS_JSON` or by setting
+`SQUID_GOOGLE_CREDENTIALS_FILE` to an explicit path. Configure at most one.
+
+Database schema changes are managed by Alembic. After configuring `SQUID_DATABASE_URL`, create or upgrade a database with:
 
 ```console
 just db-upgrade
@@ -66,15 +91,10 @@ The baseline is portable PostgreSQL 15+ SQL and requires the
 [pgvector](https://github.com/pgvector/pgvector) extension. Supabase remains a supported PostgreSQL host, but the
 Supabase migration CLI is no longer used to apply application schema changes.
 
-To get the `DATABASE_URL`, click on the **Connect** button in the top of the Supabase dashboard and copy one of the connection strings (Direct connection, Transaction Pooler and Session Pooler all works, but for simplicity, use the Session pooler which supports IPv4 and overall just works nicely). The connection string should look like:
-```
-DATABASE_URL = postgresql://postgres.somerandomcharacters:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
-```
-`DB_DRIVER_SYNC` and `DB_DRIVER_ASYNC` is the name of the database driver to use for synchronous and asynchronous database access respectively. You can keep it as the default values if you are using Supabase, which is just a postgres db under the hood. If you are using a different database, you can change these values to match your database driver.
+To get the database URL from Supabase, click **Connect** and copy a PostgreSQL connection string. For example:
 
-Catbox is used as a free file hosting service.
 ```
-CATBOX_USERHASH = <Replace this with your catbox user hash>
+SQUID_DATABASE_URL=postgresql://postgres.example:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
 ```
 
 ### Running The Application

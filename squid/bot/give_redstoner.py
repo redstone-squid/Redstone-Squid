@@ -7,14 +7,16 @@ from typing import TYPE_CHECKING, Any, Self, override
 
 import discord
 from discord import Interaction
-from discord.ext.commands import Cog, Context, hybrid_command
+from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ui import Item
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
 from squid.community.domain import RedstonerDecisionKind
+from squid.core.i18n import _
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -27,6 +29,8 @@ class DynamicRemoveOwnRedstonerRoleButton[
     """A button that allows users to remove their own redstoner role."""
 
     def __init__(self):
+        # Not translated: this is a persistent button on a shared, public message (not
+        # rendered per-viewer), so there is no single "locale" to translate it into.
         super().__init__(
             discord.ui.Button(
                 label="I'm not a redstoner",
@@ -54,13 +58,21 @@ class DynamicRemoveOwnRedstonerRoleButton[
         if redstoner_role is None or redstoner_role not in member.roles:
             return
 
+        locale = await resolve_locale(interaction, interaction.client.services.settings)
         await member.remove_roles(redstoner_role)
         owner = interaction.client.get_user(interaction.client.owner_id)
         assert owner is not None
         redstoner_channel = interaction.client.get_channel(534945678850523138)  # redstoner-corner
         assert isinstance(redstoner_channel, GuildMessageable)
         await redstoner_channel.send(
-            view=text_layout(f"{owner.mention}, {member.mention} has removed their own redstoner role."),
+            view=text_layout(
+                t(
+                    locale,
+                    _("{owner}, {member} has removed their own redstoner role."),
+                    owner=owner.mention,
+                    member=member.mention,
+                )
+            ),
             allowed_mentions=discord.AllowedMentions(
                 everyone=False,
                 users=(owner, member),
@@ -72,7 +84,7 @@ class DynamicRemoveOwnRedstonerRoleButton[
 
         await member.add_roles(redstoner_role)
         await interaction.followup.send(
-            view=text_layout(f"{member.mention} — just kidding, here is your role back."),
+            view=text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
@@ -87,19 +99,29 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def give_redstoner(self, message: discord.Message):
         await self.give_redstoner_from_message(message)
 
-    @hybrid_command()
+    @hybrid_group(name="redstoner")
+    @check_is_owner_server()
+    @check_is_staff()
+    async def redstoner_group(self, ctx: Context[BotT]) -> None:
+        """Manage Redstoner role automation."""
+        await ctx.send_help("redstoner")
+
+    @redstoner_group.command(name="panel")
     @check_is_owner_server()
     @check_is_staff()
     async def abc(self, ctx: Context[BotT]):
+        """Post the Redstoner role controls."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         view = ErrorHandledLayoutView(timeout=None)
-        view.add_item(discord.ui.TextDisplay("Redstoner role controls"))
+        view.add_item(discord.ui.TextDisplay(t(locale, _("Redstoner role controls"))))
         view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
-    @hybrid_command(name="reload_redstoner")
+    @redstoner_group.command(name="resync")
     @check_is_owner_server()
     @check_is_staff()
     async def force_reload_message(self, ctx: Context[BotT], message: discord.Message):
+        """Reprocess a message for Redstoner role automation."""
         await self.give_redstoner_from_message(message)
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
@@ -113,9 +135,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if decision.kind is RedstonerDecisionKind.IGNORE:
             return
 
+        locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
             await message.channel.send(
-                view=text_layout(f"{decision.reason} in {message.jump_url}"),
+                view=text_layout(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url)),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -127,21 +150,26 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         redstoner_role = message.guild.get_role(433670432420397060)
         if redstoner_role is None:
             await message.channel.send(
-                view=text_layout("Could not find the redstoner role."),
+                view=text_layout(t(locale, _("Could not find the redstoner role."))),
                 allowed_mentions=no_mentions(),
             )
             return
         await member.add_roles(redstoner_role)
         await message.channel.send(
-            view=text_layout(f"Gave {member.mention} the redstoner role."),
+            view=text_layout(t(locale, _("Gave {member} the redstoner role."), member=member.mention)),
             allowed_mentions=no_mentions(),
         )
 
         view = ErrorHandledLayoutView(timeout=None)
         view.add_item(
             discord.ui.TextDisplay(
-                f"Hi {member.mention}, you received the {redstoner_role.mention} role after reaching "
-                f"15 upvotes in {decision.source_message_url}."
+                t(
+                    locale,
+                    _("Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."),
+                    member=member.mention,
+                    role=redstoner_role.mention,
+                    url=decision.source_message_url,
+                )
             )
         )
         view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))

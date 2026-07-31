@@ -67,6 +67,16 @@ docker-run: build
 generate-schema:
     pg_dump -h aws-0-us-west-1.pooler.supabase.com -U postgres.jnushtruzgnnmmxabsxi -d postgres -f schema_dump.sql --encoding=UTF8 --schema-only --no-owner --no-privileges
 
+# Export a CycloneDX SBOM from the locked dependency graph.
+dependency-report output="dependency-report.json":
+    uv export --locked --format cyclonedx1.5 --output-file "{{output}}"
+
+gha-analysis:
+    uvx zizmor --gh-token $(gh auth token) --persona=pedantic .
+
+visualize-dependencies output="docs/dependencies.svg":
+    uv tool run pipdeptree --python {{python}} --graph-output svg > "{{output}}"
+
 # Using https://github.com/seveibar/pgstrap, which dumps the schema per table for better readability, but this requires npm
 # Does not work on Windows: https://github.com/seveibar/pgstrap/issues/8
 [unix]
@@ -104,5 +114,29 @@ fuzz-version:
     cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
     uv run --group fuzz python -m tests.fuzz.fuzz_version_parser .fuzz/corpus/version_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/version_parser/
 
+[unix]
+fuzz-cursor:
+    mkdir -p .fuzz/corpus/cursor_codec .fuzz/artifacts/cursor_codec
+    cp tests/fuzz/corpus/cursor_codec/* .fuzz/corpus/cursor_codec/
+    uv run --group fuzz python -m tests.fuzz.fuzz_cursor_codec .fuzz/corpus/cursor_codec -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/cursor_codec/
+
+[unix]
+fuzz-search-parser:
+    mkdir -p .fuzz/corpus/search_parser .fuzz/artifacts/search_parser
+    cp tests/fuzz/corpus/search_parser/* .fuzz/corpus/search_parser/
+    uv run --group fuzz python -m tests.fuzz.fuzz_search_parser .fuzz/corpus/search_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/search_parser/
+
 backdate start_commit:
     git backdate --no-business-hours {{start_commit}}..
+
+i18n-extract:
+    uv run pybabel extract -F babel.cfg -o locales/squid.pot --sort-output --project=redstone-squid --version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])") --msgid-bugs-address=https://github.com/redstone-squid/Redstone-Squid/issues .
+
+i18n-update: i18n-extract
+    uv run pybabel update -i locales/squid.pot -d locales -D squid --no-fuzzy-matching
+
+i18n-init locale: i18n-extract
+    uv run pybabel init -i locales/squid.pot -d locales -D squid -l {{locale}}
+
+i18n-compile:
+    uv run pybabel compile -d locales -D squid --statistics

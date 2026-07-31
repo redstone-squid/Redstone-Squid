@@ -9,6 +9,8 @@ from squid.users.application import UserService
 from squid.users.domain import UserAccount, VerificationCode
 from squid.users.errors import AccountAlreadyLinkedError, InvalidVerificationCodeError, MinecraftAccountNotFoundError
 
+EXISTING_MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
+
 
 class FakeUserRepository:
     def __init__(self) -> None:
@@ -64,7 +66,7 @@ async def test_user_link_rejects_invalid_code() -> None:
 
 async def test_user_link_and_code_generation() -> None:
     repository = FakeUserRepository()
-    minecraft_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    minecraft_uuid = EXISTING_MINECRAFT_UUID
     repository.code = VerificationCode(minecraft_uuid, "Player")
     service = UserService(repository, username_lookup("Player"), lambda: 123456)
 
@@ -78,7 +80,7 @@ async def test_user_link_and_code_generation() -> None:
 
 async def test_user_link_rejects_a_different_existing_account() -> None:
     repository = FakeUserRepository()
-    existing_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    existing_uuid = EXISTING_MINECRAFT_UUID
     requested_uuid = UUID("22222222-2222-2222-2222-222222222222")
     repository.user = UserAccount(1, existing_uuid, "Existing")
     repository.code = VerificationCode(requested_uuid, "Requested")
@@ -92,7 +94,7 @@ async def test_user_link_rejects_a_different_existing_account() -> None:
 
 
 async def test_code_generation_rejects_unknown_minecraft_account() -> None:
-    minecraft_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    minecraft_uuid = EXISTING_MINECRAFT_UUID
     service = UserService(FakeUserRepository(), username_lookup(None), lambda: 123456)
 
     with pytest.raises(MinecraftAccountNotFoundError) as exc_info:

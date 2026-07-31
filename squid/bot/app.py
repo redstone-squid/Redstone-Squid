@@ -3,14 +3,13 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Final, Self, TypedDict, override
+from typing import Self, override
 
 import discord
 from discord import Webhook
 from discord.abc import Messageable
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
-from dotenv.main import StrPath
 from whenever import Instant
 
 from squid.bootstrap import create_application_runtime
@@ -19,43 +18,25 @@ from squid.bootstrap import create_application_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
+from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
 from squid.builds.domain import Build
-from squid.config import BotProcessConfig
+from squid.config import (
+    BotIdentityConfig,
+    BotProcessConfig,
+    BuildConfig,
+    CatboxConfig,
+    load_bot_process_config,
+)
 from squid.logging_config import configure_bot_logging
 from squid.runtime import ApplicationServices
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
-
-
-class BotConfig(TypedDict, total=False):
-    """Configuration for the Redstone Squid bot."""
-
-    prefix: str
-    """The command prefix for the bot. Defaults to `!` if not found in this config."""
-    bot_name: str
-    """The name of the bot, used in the help command."""
-    bot_version: str
-    """The version of the bot, used in the help command."""
-    owner_id: int
-    """The ID of the bot owner, used for commands that only the owner can use. e.g. `sync` which syncs the bot's commands with Discord."""
-    owner_server_id: int
-    """Select one "home" server where some commands are only available in this server. If not set, the bot will not restrict commands to a specific server."""
-    source_code_url: str
-    """The URL of the source code repository, used in the help command."""
-
-
-class ApplicationConfig(TypedDict, total=False):
-    """Configuration for the Redstone Squid system."""
-
-    dev_mode: bool
-    """Whether the bot is running in development mode, which changes some small behaviors to make development easier."""
-    dotenv_path: StrPath | None
-    """The path to the .env file, used to load environment variables. Use None for auto-detection, remove this key to disable loading .env file."""
-    bot_config: BotConfig
-    """Configuration for the bot."""
+DEFAULT_BOT_IDENTITY = BotIdentityConfig()
+DEFAULT_CATBOX_CONFIG = CatboxConfig()
+DEFAULT_BUILD_CONFIG = BuildConfig()
 
 
 class RedstoneSquid(Bot):
@@ -63,39 +44,34 @@ class RedstoneSquid(Bot):
         self,
         services: ApplicationServices,
         keep_database_active: Callable[[], Awaitable[None]],
-        config: BotConfig | None = None,
+        config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
+        *,
+        catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
+        build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
     ):
         self.services = services
         self._keep_database_active = keep_database_active
-        if config is None:
-            config = {}
-        description = ""
-        if config.get("bot_name"):
-            description += f"{config.get('bot_name')} "
-        if config.get("bot_version"):
-            description += f"v{config.get('bot_version')}"
-
-        prefix = config.get("prefix")
-        if prefix is None:
-            logger.info("No prefix found in config, using default '!'")
-            prefix = "!"
+        self.catbox_config = catbox_config
+        self.build_config = build_config
+        description = f"{config.bot_name} v{config.bot_version}".strip()
         super().__init__(
-            command_prefix=commands.when_mentioned_or(prefix),
-            owner_id=config.get("owner_id"),
+            command_prefix=commands.when_mentioned_or(config.prefix),
+            owner_id=config.owner_id,
             intents=discord.Intents.all(),
             description=description or None,
             tree_cls=SquidCommandTree,
         )
 
-        # Store bot configuration as instance attributes
-        self.bot_name = config.get("bot_name")
-        self.bot_version = config.get("bot_version")
-        self.owner_server_id = config.get("owner_server_id")
-        self.source_code_url = config.get("source_code_url")
+        self.bot_name = config.bot_name
+        self.bot_version = config.bot_version
+        self.owner_server_id = config.owner_server_id
+        self.source_code_url = config.source_code_url
 
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
+        await self.tree.set_translator(SquidAppCommandTranslator())
+
         # Load extensions in parallel to speed up bot startup
         extensions = [
             "squid.bot.misc_commands",
@@ -157,10 +133,14 @@ class RedstoneSquid(Bot):
         title: str = "Working",
         description: str = "Getting information...",
         delete_on_exit: bool = False,
+        locale: str | None = None,
     ) -> RunningMessage:
         """
         Returns a context manager which can be used to display a message that will be updated
         as the command progresses.
+
+        `title`/`description` are translated into `locale` (resolved via
+        `squid.bot.i18n.resolve_locale`) if given, else sent untranslated.
 
         Usage:
             ```python
@@ -175,6 +155,7 @@ class RedstoneSquid(Bot):
             title=title,
             description=description,
             delete_on_exit=delete_on_exit,
+            locale=locale,
         )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
@@ -182,30 +163,26 @@ class RedstoneSquid(Bot):
         return BuildHandler(self, build)
 
 
-DEFAULT_CONFIG: Final[ApplicationConfig] = {
-    "dev_mode": False,
-    "bot_config": {
-        "prefix": "!",
-        "bot_name": "Redstone Squid",
-    },
-}
-
-
-async def main(config: ApplicationConfig = DEFAULT_CONFIG):
+async def main(
+    process_config: BotProcessConfig | None = None,
+    identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
+) -> None:
     """Main entry point for the bot."""
-    process_config = BotProcessConfig.from_environment()
-    queue_listener = configure_bot_logging(config.get("dev_mode", False), process_config.logging)
+    resolved_config = process_config or load_bot_process_config()
+    queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
 
     try:
         async with (
-            create_application_runtime(process_config.runtime) as runtime,
+            create_application_runtime(resolved_config.runtime) as runtime,
             RedstoneSquid(
                 runtime.services,
                 runtime.keep_database_active,
-                config=config.get("bot_config"),
+                config=identity_config,
+                catbox_config=resolved_config.catbox,
+                build_config=resolved_config.build,
             ) as bot,
         ):
-            await bot.start(process_config.token)
+            await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
         queue_listener.stop()
 

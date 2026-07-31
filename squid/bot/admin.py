@@ -7,11 +7,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
-from rapidfuzz import process
 
-from squid.bot.utils.components import edit_layout, info_layout, link_layout, no_mentions, text_layout
+from squid.bot.i18n import resolve_locale, t
+from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
-from squid.builds.errors import AliasAlreadyAddedError
+from squid.core.i18n import _
 from squid.tags.domain import TagValueType
 
 if TYPE_CHECKING:
@@ -23,90 +23,19 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     def __init__(self, bot: BotT):
         self.bot = bot
-        self.builds = bot.services.builds
-        self.restrictions = bot.services.restrictions
         self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
-    @commands.hybrid_command(name="confirm")
-    @app_commands.describe(build_id="The ID of the build you want to confirm.")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def confirm_build(self, ctx: Context[BotT], build_id: int):
-        """Marks a submission as confirmed.
+    @commands.hybrid_group(name="tag")
+    async def tag_group(self, ctx: Context[BotT]) -> None:
+        """Propose, apply, and review build tags."""
+        await ctx.send_help("tag")
 
-        This posts the submission to all the servers which configured the bot."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            build = await self.builds.confirm(build_id)
-
-            self.bot.dispatch("build_confirmed", build)
-
-            await edit_layout(
-                sent_message,
-                info_layout("Success", "Submission has been confirmed."),
-                allowed_mentions=no_mentions(),
-            )
-
-    @commands.hybrid_command(name="deny")
-    @app_commands.describe(build_id="The ID of the build you want to deny.")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def deny_build(self, ctx: Context[BotT], build_id: int):
-        """Marks a submission as denied."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            build = await self.builds.deny(build_id)
-
-            await self.bot.for_build(build).update_messages()
-
-            await edit_layout(
-                sent_message,
-                info_layout("Success", "Submission has been denied."),
-                allowed_mentions=no_mentions(),
-            )
-
-    @commands.hybrid_command("add_alias")
-    @check_is_staff()
-    @check_is_owner_server()
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
-        """Add an alias for a restriction."""
-        async with self.bot.get_running_message(ctx) as sent_message:
-            try:
-                await self.restrictions.add_alias(restriction, alias)
-            except AliasAlreadyAddedError:
-                await edit_layout(
-                    sent_message,
-                    info_layout("Already added", "Alias already on this restriction."),
-                    allowed_mentions=no_mentions(),
-                )
-            else:
-                await edit_layout(
-                    sent_message,
-                    info_layout("Success", "Alias added."),
-                    allowed_mentions=no_mentions(),
-                )
-
-    @add_restriction_alias.autocomplete("restriction")
-    async def restriction_autocomplete(
-        self, _interaction: discord.Interaction[BotT], current: str
-    ) -> list[app_commands.Choice[str]]:
-        """Provide autocomplete for restriction names."""
-        if not current:
-            return []
-
-        restriction_names = await self.restrictions.names()
-        matches = process.extract(
-            current,
-            restriction_names,
-            limit=25,
-            score_cutoff=30,
-        )
-        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
-
-    @commands.hybrid_command(name="propose_tag")
+    @tag_group.command(name="propose")
     @app_commands.describe(
-        name="Public display name.",
-        value_type="Whether assignments carry a number, text, boolean, or no value.",
-        query_name="Optional filter/sort field, for example closing_delay.",
+        name=app_commands.locale_str(_("Public display name.")),
+        value_type=app_commands.locale_str(_("Whether the tag carries a number, text, yes/no value, or no value.")),
+        query_name=app_commands.locale_str(_("Optional search and sort field, for example closing_delay.")),
     )
     async def propose_tag(
         self,
@@ -115,24 +44,28 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         value_type: TagValueType = TagValueType.NONE,
         query_name: str | None = None,
     ) -> None:
-        """Propose a user showcase tag for staff review."""
+        """Propose a build tag for staff review."""
         definition = await self.tags.propose_showcase(
             name,
             value_type=value_type,
             query_name=query_name,
             created_by_discord_id=ctx.author.id,
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag proposed", f"Tag #{definition.id} is awaiting staff approval."),
+            view=info_layout(
+                t(locale, _("Tag proposed")),
+                t(locale, _("Tag #{id} is awaiting staff approval."), id=definition.id),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="tag_build")
+    @tag_group.command(name="apply")
     @app_commands.describe(
-        build_id="A build you submitted.",
-        tag_id="An approved user showcase tag.",
-        value="The tag value, omitted for plain tags.",
+        build_id=app_commands.locale_str(_("A build you submitted.")),
+        tag_id=app_commands.locale_str(_("An approved build tag.")),
+        value=app_commands.locale_str(_("The tag value, omitted for plain tags.")),
     )
     async def tag_build(
         self,
@@ -141,20 +74,24 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         tag_id: int,
         value: str | None = None,
     ) -> None:
-        """Attach an approved showcase tag to one of your builds."""
+        """Apply an approved tag to one of your builds."""
         tag = await self.tags.assign_showcase(
             build_id,
             tag_id,
             value,
             actor_discord_id=ctx.author.id,
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Build tagged", f"Attached **{tag.display_name}** to build #{build_id}."),
+            view=info_layout(
+                t(locale, _("Build tagged")),
+                t(locale, _("Attached **{name}** to build #{id}."), name=tag.display_name, id=build_id),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="pending_tags")
+    @tag_group.command(name="pending")
     @check_is_staff()
     @check_is_owner_server()
     async def pending_tags(self, ctx: Context[BotT]) -> None:
@@ -164,42 +101,58 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             f"**#{tag.id}** {tag.display_name} ({tag.value_type.value}; `{tag.query_name or 'no field'}`)"
             for tag in definitions
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Pending tags", body or "No tags are awaiting review."),
+            view=info_layout(
+                t(locale, _("Pending tags")),
+                body or t(locale, _("No tags are awaiting review.")),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="approve_tag")
+    @tag_group.command(name="approve")
     @check_is_staff()
     @check_is_owner_server()
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Publish a proposed showcase tag."""
         tag = await self.tags.approve(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag approved", f"Published **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag approved")),
+                t(locale, _("Published **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="reject_tag")
+    @tag_group.command(name="reject")
     @check_is_staff()
     @check_is_owner_server()
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Reject a proposed showcase tag."""
         tag = await self.tags.reject(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag rejected", f"Rejected **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag rejected")),
+                t(locale, _("Rejected **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="archive_tag")
+    @tag_group.command(name="archive")
     @check_is_staff()
     @check_is_owner_server()
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Archive a published tag."""
         tag = await self.tags.archive(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag archived", f"Archived **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag archived")),
+                t(locale, _("Archived **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -273,10 +226,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
+            locale = await resolve_locale(ctx, self.bot.services.settings)
+            scope = t(locale, _("globally")) if spec is None else t(locale, _("to the current guild"))
             await ctx.send(
-                view=text_layout(
-                    f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
-                ),
+                view=text_layout(t(locale, _("Synced {count} commands {scope}."), count=len(synced), scope=scope)),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -290,8 +243,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 ret += 1
 
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout(f"Synced the tree to {ret}/{len(guilds)}."),
+            view=text_layout(t(locale, _("Synced the tree to {synced}/{total}."), synced=ret, total=len(guilds))),
             allowed_mentions=no_mentions(),
         )
 
@@ -299,11 +253,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Build spreadsheet",
+                t(locale, _("Build spreadsheet")),
                 "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-                label="Open spreadsheet",
+                label=t(locale, _("Open spreadsheet")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -312,11 +267,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Database",
+                t(locale, _("Database")),
                 "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-                label="Open database",
+                label=t(locale, _("Open database")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -325,7 +281,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
-        async with self.bot.get_running_message(ctx, delete_on_exit=True):
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, delete_on_exit=True, locale=locale):
             msg = "This is a test error."
             raise ValueError(msg)
 

@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Self, override
+from typing import Any, Self, override
 from uuid import uuid4
 
 import discord
@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
 from squid.core.errors import DomainError, SquidError
+from squid.core.i18n import _, translate
 
 logger = logging.getLogger(__name__)
 
@@ -58,36 +59,79 @@ def mark_error_presented(error: BaseException) -> None:
     setattr(unwrap_error(error), _PRESENTED_ATTRIBUTE, True)
 
 
-def build_error_presentation(error: BaseException) -> ErrorPresentation:
-    """Classify an exception into safe Discord-facing text."""
+def _presentation_locale(interaction: "discord.Interaction[Any] | None") -> str | None:
+    """Best-effort Discord-native locale for error presentation.
+
+    Deliberately skips the admin-configured guild override (which requires a
+    database lookup): this runs on every error, including ones raised from
+    generic views/modals that don't carry a concrete bot type, so it stays
+    synchronous-cheap and safe to call with test doubles. Regular command
+    responses use the fully accurate `squid.bot.i18n.resolve_locale` instead.
+    """
+    if interaction is None:
+        return None
+    guild_locale = getattr(interaction, "guild_locale", None)
+    if guild_locale is not None:
+        return str(guild_locale)
+    locale = getattr(interaction, "locale", None)
+    return str(locale) if locale is not None else None
+
+
+def build_error_presentation(error: BaseException, locale: str | None = None) -> ErrorPresentation:
+    """Classify an exception into safe Discord-facing text, translated into `locale`."""
     error = unwrap_error(error)
     if isinstance(error, DomainError):
-        return ErrorPresentation(error.title, error.public_detail())
+        return ErrorPresentation(error.localized_title(locale), error.localized_public_detail(locale))
     if isinstance(error, commands.NoPrivateMessage):
-        return ErrorPresentation("Server only", "This command cannot be used in a private message.")
+        return ErrorPresentation(
+            translate(locale, _("Server only")),
+            translate(locale, _("This command cannot be used in a private message.")),
+        )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
-        return ErrorPresentation("Missing permission", "You do not have permission to use this command.")
+        return ErrorPresentation(
+            translate(locale, _("Missing permission")),
+            translate(locale, _("You do not have permission to use this command.")),
+        )
     if isinstance(error, commands.NotOwner):
-        return ErrorPresentation("Owner only", "Only the bot owner can use this command.")
-    if isinstance(error, commands.CommandOnCooldown):
-        return ErrorPresentation("Command on cooldown", f"Try again in {error.retry_after:.1f} seconds.")
-    if isinstance(error, app_commands.CommandOnCooldown):
-        return ErrorPresentation("Command on cooldown", f"Try again in {error.retry_after:.1f} seconds.")
+        return ErrorPresentation(
+            translate(locale, _("Owner only")),
+            translate(locale, _("Only the bot owner can use this command.")),
+        )
+    if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
+        return ErrorPresentation(
+            translate(locale, _("Command on cooldown")),
+            translate(locale, _("Try again in {seconds:.1f} seconds."), seconds=error.retry_after),
+        )
     if isinstance(error, commands.MaxConcurrencyReached):
-        return ErrorPresentation("Command already running", "Wait for the current operation to finish and try again.")
+        return ErrorPresentation(
+            translate(locale, _("Command already running")),
+            translate(locale, _("Wait for the current operation to finish and try again.")),
+        )
     if isinstance(error, commands.CheckFailure):
-        return ErrorPresentation("Command unavailable", str(error) or "You cannot use this command here.")
+        return ErrorPresentation(
+            translate(locale, _("Command unavailable")),
+            str(error) or translate(locale, _("You cannot use this command here.")),
+        )
     if isinstance(error, commands.UserInputError):
-        return ErrorPresentation("Invalid command input", str(error) or "Check the command arguments and try again.")
+        return ErrorPresentation(
+            translate(locale, _("Invalid command input")),
+            str(error) or translate(locale, _("Check the command arguments and try again.")),
+        )
     if isinstance(error, app_commands.TransformerError):
-        return ErrorPresentation("Invalid command input", "One of the command options is invalid.")
+        return ErrorPresentation(
+            translate(locale, _("Invalid command input")),
+            translate(locale, _("One of the command options is invalid.")),
+        )
     if isinstance(error, app_commands.CheckFailure):
-        return ErrorPresentation("Command unavailable", "You cannot use this command here.")
+        return ErrorPresentation(
+            translate(locale, _("Command unavailable")),
+            translate(locale, _("You cannot use this command here.")),
+        )
 
     error_id = uuid4().hex[:12]
     return ErrorPresentation(
-        "Something went wrong",
-        f"An unexpected error occurred. Reference: `{error_id}`",
+        translate(locale, _("Something went wrong")),
+        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=error_id),
         error_id,
     )
 
@@ -98,12 +142,13 @@ async def _handle_discord_error(
     *,
     surface: str,
     context: Mapping[str, object] | None = None,
+    locale: str | None = None,
 ) -> None:
     if is_error_presented(error):
         return
 
     original = unwrap_error(error)
-    presentation = build_error_presentation(original)
+    presentation = build_error_presentation(original, locale)
     if presentation.error_id is not None:
         application_context = original.context if isinstance(original, SquidError) else None
         logger.error(
@@ -151,6 +196,7 @@ async def handle_context_error[BotT: commands.Bot](
             "guild_id": context.guild.id if context.guild is not None else None,
             "channel_id": context.channel.id,
         },
+        locale=_presentation_locale(context.interaction),
     )
 
 
@@ -179,14 +225,22 @@ async def handle_interaction_error(
             "guild_id": interaction.guild_id,
             "channel_id": interaction.channel_id,
         },
+        locale=_presentation_locale(interaction),
     )
 
 
 async def handle_message_error(
     message: discord.Message,
     error: BaseException,
+    *,
+    locale: str | None = None,
 ) -> None:
-    """Render an exception into an existing progress message."""
+    """Render an exception into an existing progress message.
+
+    `locale` should be the locale the message was originally sent in (e.g.
+    `RunningMessage.locale`), since a bare message carries no locale info of
+    its own.
+    """
 
     async def respond(layout: StaticLayout) -> None:
         await edit_layout(message, layout, allowed_mentions=no_mentions())
@@ -196,6 +250,7 @@ async def handle_message_error(
         respond,
         surface="running_message",
         context={"channel_id": message.channel.id, "message_id": message.id},
+        locale=locale,
     )
 
 

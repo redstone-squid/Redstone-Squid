@@ -6,6 +6,7 @@ from discord import Message, Webhook
 from discord.abc import Messageable
 
 from squid.bot.utils.components import info_layout, no_mentions
+from squid.core.i18n import _, translate
 
 
 class RunningMessage:
@@ -15,19 +16,21 @@ class RunningMessage:
         self,
         ctx: Messageable | Webhook,
         *,
-        title: str = "Working",
-        description: str = "Getting information...",
+        title: str = _("Working"),
+        description: str = _("Getting information..."),
         delete_on_exit: bool = False,
+        locale: str | None = None,
     ):
         self.ctx = ctx
         self.title = title
         self.description = description
         self.delete_on_exit = delete_on_exit
+        self.locale = locale
         self.sent_message: Message
 
     async def __aenter__(self) -> Message:
         sent_message = await self.ctx.send(
-            view=info_layout(self.title, self.description),
+            view=info_layout(translate(self.locale, self.title), translate(self.locale, self.description)),
             allowed_mentions=no_mentions(),
         )
         if sent_message is None:
@@ -44,7 +47,7 @@ class RunningMessage:
         if exc_val is not None:
             from squid.bot.errors import handle_message_error
 
-            await handle_message_error(self.sent_message, exc_val)
+            await handle_message_error(self.sent_message, exc_val, locale=self.locale)
             return False
 
         # Handle normal exit

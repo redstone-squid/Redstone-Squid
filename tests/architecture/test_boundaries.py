@@ -15,6 +15,18 @@ def test_exception_model_is_transport_neutral() -> None:
     )
 
 
+def test_i18n_core_is_transport_neutral() -> None:
+    (
+        archrule("translation lookup stays independent from transport adapters")
+        .match("squid.core.i18n")
+        .should_not_import("discord*")
+        .should_not_import("fastapi*")
+        .should_not_import("squid.bot*")
+        .should_not_import("squid.api*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
 def test_domain_layers_are_framework_and_persistence_independent() -> None:
     (
         archrule("domain layers stay independent from frameworks and outer layers")
@@ -50,6 +62,23 @@ def test_transports_do_not_import_persistence_adapters() -> None:
             .should_not_import("squid.*.infrastructure*")
             .check("squid", only_direct_imports=True)
         )
+
+
+def test_application_modules_do_not_read_process_environment_directly() -> None:
+    violations: list[tuple[Path, int, str]] = []
+    for path in Path("squid").rglob("*.py"):
+        if path == Path("squid/config.py"):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os":
+                if node.attr in {"environ", "getenv"}:
+                    violations.append((path, node.lineno, f"os.{node.attr}"))
+            elif (isinstance(node, ast.Import) and any(alias.name == "dotenv" for alias in node.names)) or (
+                isinstance(node, ast.ImportFrom) and node.module == "dotenv"
+            ):
+                violations.append((path, node.lineno, "dotenv import"))
+
+    assert violations == []
 
 
 def test_voting_adapter_does_not_construct_database_service_locator() -> None:

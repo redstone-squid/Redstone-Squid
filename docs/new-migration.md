@@ -2,7 +2,7 @@
 
 Prerequisites:
 
-- Configure `DATABASE_URL` for a PostgreSQL 15+ database with pgvector installed.
+- Configure `SQUID_DATABASE_URL` for a PostgreSQL 15+ database with pgvector installed.
 - Upgrade your development database with `just db-upgrade`.
 
 Steps:

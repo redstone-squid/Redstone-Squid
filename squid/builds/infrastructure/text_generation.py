@@ -23,8 +23,8 @@ class OpenAITextGenerator:
             return cls(None)
         return cls(
             AsyncOpenAI(
-                base_url=config.base_url,
-                api_key=config.api_key,
+                base_url=str(config.base_url),
+                api_key=config.api_key.get_secret_value(),
             )
         )
 

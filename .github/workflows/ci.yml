@@ -122,6 +122,9 @@ jobs:
       - name: Install the project
         run: uv sync --locked --dev
 
+      - name: Compile translation catalogs
+        run: uv run --locked pybabel compile -d locales -D squid
+
       - name: Run unit and architecture tests
         env:
           HYPOTHESIS_PROFILE: ci

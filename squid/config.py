@@ -1,92 +1,248 @@
-"""Typed process configuration loaded at application boundaries."""
+"""Typed process configuration loaded and validated at application boundaries."""
 
-import os
+import json
+import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Self, cast
+
+from google.oauth2.service_account import Credentials
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.exceptions import SettingsError
+from sqlalchemy import make_url
 
 from squid.core.errors import ConfigurationError
 
-type Environment = Mapping[str, str]
+EMBEDDING_DIMENSION = 1536
+"""Vector dimension fixed by the application-owned PostgreSQL schema."""
 
 
-def _required(environment: Environment, name: str) -> str:
-    value = environment.get(name)
-    if value:
-        return value
-    msg = f"No {name} environment variable found."
-    raise ConfigurationError(msg, context={"field": name})
+def _empty_to_none(value: object) -> object:
+    return None if value == "" else value
 
 
-def _positive_int(environment: Environment, name: str, default: int) -> int:
-    raw_value = environment.get(name, str(default))
+def _validate_postgres_url(value: SecretStr | None) -> SecretStr | None:
+    if value is None:
+        return None
     try:
-        value = int(raw_value)
-    except ValueError as exc:
-        msg = f"{name} must be an integer."
-        raise ConfigurationError(msg, context={"field": name, "value": raw_value}) from exc
-    if value <= 0:
-        msg = f"{name} must be positive."
-        raise ConfigurationError(msg, context={"field": name, "value": raw_value})
+        url = make_url(value.get_secret_value())
+    except Exception as exc:
+        msg = "Must be a valid PostgreSQL URL."
+        raise ValueError(msg) from exc
+    if url.get_backend_name() not in {"postgres", "postgresql"}:
+        msg = "Must use the PostgreSQL backend."
+        raise ValueError(msg)
     return value
 
 
-@dataclass(frozen=True, slots=True)
-class DatabaseConfig:
+def _validate_log_level(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.upper()
+    if normalized not in logging.getLevelNamesMapping():
+        msg = "Must be a standard Python logging level."
+        raise ValueError(msg)
+    return normalized
+
+
+def _validate_relative_log_file(value: str | None) -> str | None:
+    if value is None or value == "":
+        return None
+    path = Path(value)
+    if path.anchor or ".." in path.parts:
+        msg = "Must be a relative path contained by the log directory."
+        raise ValueError(msg)
+    return value
+
+
+def _parse_google_credentials(raw_credentials: str) -> dict[str, object]:
+    credentials_info = json.loads(raw_credentials)
+    if not isinstance(credentials_info, dict):
+        msg = "Google credentials must contain a JSON object."
+        raise TypeError(msg)
+    return cast(dict[str, object], credentials_info)
+
+
+class _FrozenModel(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class DatabaseConfig(_FrozenModel):
     """Relational database connection configuration."""
 
-    url: str
-    sync_driver: str
-    async_driver: str
+    url: SecretStr
 
-    @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "DatabaseConfig":
-        return cls(
-            url=_required(environment, "DATABASE_URL"),
-            sync_driver=_required(environment, "DB_DRIVER_SYNC"),
-            async_driver=_required(environment, "DB_DRIVER_ASYNC"),
-        )
+    _validate_url = field_validator("url")(_validate_postgres_url)
 
 
-@dataclass(frozen=True, slots=True)
-class OpenAIConfig:
+class OpenAIConfig(_FrozenModel):
     """OpenAI-compatible text generation configuration."""
 
-    api_key: str | None
-    base_url: str
+    api_key: SecretStr | None = None
+    base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
 
-    @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "OpenAIConfig":
-        return cls(
-            api_key=environment.get("OPENAI_API_KEY"),
-            base_url=environment.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-        )
+    _empty_api_key = field_validator("api_key", mode="before")(_empty_to_none)
 
 
-@dataclass(frozen=True, slots=True)
-class EmbeddingConfig:
-    """Embedding provider and vector index configuration."""
+class EmbeddingProviderConfig(_FrozenModel):
+    """Environment-facing embedding provider configuration."""
 
-    api_key: str | None
-    base_url: str | None
+    api_key: SecretStr | None = None
+    base_url: AnyHttpUrl | None = None
+    model: str = Field(default="text-embedding-3-small", min_length=1)
+
+    _empty_api_key = field_validator("api_key", mode="before")(_empty_to_none)
+    _empty_base_url = field_validator("base_url", mode="before")(_empty_to_none)
+
+
+class VectorConfig(_FrozenModel):
+    """Optional external vector-index database configuration."""
+
+    database_url: SecretStr | None = None
+
+    _empty_database_url = field_validator("database_url", mode="before")(_empty_to_none)
+    _validate_database_url = field_validator("database_url")(_validate_postgres_url)
+
+
+class EmbeddingConfig(_FrozenModel):
+    """Resolved embedding provider and vector-index configuration."""
+
+    api_key: SecretStr | None
+    base_url: AnyHttpUrl
     model: str
-    dimension: int
-    database_connection: str | None
+    database_connection: SecretStr | None
 
+
+class VerificationConfig(_FrozenModel):
+    """Verification-code security configuration."""
+
+    code_pepper: SecretStr
+
+    @field_validator("code_pepper")
     @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "EmbeddingConfig":
-        return cls(
-            api_key=environment.get("EMBEDDING_OPENAI_API_KEY") or environment.get("OPENAI_API_KEY"),
-            base_url=environment.get("EMBEDDING_OPENAI_BASE_URL") or environment.get("OPENAI_BASE_URL"),
-            model=environment.get("EMBEDDING_MODEL", "text-embedding-3-small"),
-            dimension=_positive_int(environment, "EMBEDDING_DIMENSION", 1536),
-            database_connection=environment.get("DB_CONNECTION"),
-        )
+    def _require_pepper(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value():
+            msg = "Must not be empty."
+            raise ValueError(msg)
+        return value
 
 
-@dataclass(frozen=True, slots=True)
-class LoggingConfig:
-    """Shared logging environment configuration."""
+class DiscordConfig(_FrozenModel):
+    """Discord transport credentials."""
+
+    token: SecretStr
+
+    @field_validator("token")
+    @classmethod
+    def _require_token(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value():
+            msg = "Must not be empty."
+            raise ValueError(msg)
+        return value
+
+
+class ApiConfig(_FrozenModel):
+    """HTTP API transport configuration."""
+
+    secret: SecretStr
+    port: int = Field(default=8000, ge=1, le=65535)
+    log_file: str | None = None
+    access_log_file: str | None = None
+
+    _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
+    _validate_log_files = field_validator("log_file", "access_log_file")(_validate_relative_log_file)
+
+    @field_validator("secret")
+    @classmethod
+    def _require_secret(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value():
+            msg = "Must not be empty."
+            raise ValueError(msg)
+        return value
+
+
+class BotConfig(_FrozenModel):
+    """Discord-process-specific settings."""
+
+    log_file: str | None = "discord.log"
+
+    _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
+    _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
+
+
+class CatboxConfig(_FrozenModel):
+    """Optional Catbox account configuration."""
+
+    user_hash: SecretStr | None = None
+
+    _empty_user_hash = field_validator("user_hash", mode="before")(_empty_to_none)
+
+
+class GoogleConfig(_FrozenModel):
+    """Optional Google service-account credential configuration."""
+
+    credentials_json: SecretStr | None = Field(default=None, repr=False)
+    credentials_file: Path | None = None
+    _credentials_info: dict[str, object] | None = PrivateAttr(default=None)
+
+    _empty_credentials_json = field_validator("credentials_json", mode="before")(_empty_to_none)
+    _empty_credentials_file = field_validator("credentials_file", mode="before")(_empty_to_none)
+
+    @model_validator(mode="after")
+    def _load_credentials(self) -> Self:
+        if self.credentials_json is not None and self.credentials_file is not None:
+            msg = "Configure either credentials_json or credentials_file, not both."
+            raise ValueError(msg)
+
+        if self.credentials_json is None and self.credentials_file is None:
+            return self
+
+        try:
+            if self.credentials_json is not None:
+                raw_credentials = self.credentials_json.get_secret_value()
+            else:
+                assert self.credentials_file is not None
+                raw_credentials = self.credentials_file.read_text(encoding="utf-8")
+            typed_info = _parse_google_credentials(raw_credentials)
+            Credentials.from_service_account_info(typed_info)
+        except (OSError, TypeError, ValueError) as exc:
+            msg = "Must contain valid Google service-account credentials."
+            raise ValueError(msg) from exc
+
+        object.__setattr__(self, "_credentials_info", typed_info)
+        return self
+
+    @property
+    def credentials_info(self) -> Mapping[str, object] | None:
+        """Return validated service-account data without exposing it in model output."""
+        return self._credentials_info
+
+
+class LogConfig(_FrozenModel):
+    """Environment-facing shared logging configuration."""
+
+    level: str = "INFO"
+    root_level: str | None = None
+    directory: Path = Field(default_factory=lambda: Path.cwd() / "logs")
+
+    _validate_level = field_validator("level")(_validate_log_level)
+    _empty_root_level = field_validator("root_level", mode="before")(_empty_to_none)
+    _validate_root_level = field_validator("root_level")(_validate_log_level)
+
+
+class LoggingConfig(_FrozenModel):
+    """Resolved logging settings for one process."""
 
     level: str
     root_level: str
@@ -94,78 +250,221 @@ class LoggingConfig:
     log_file: str | None
     access_log_file: str | None
 
-    @classmethod
-    def from_environment(
-        cls,
-        environment: Environment = os.environ,
-        *,
-        default_root_level: str = "WARNING",
-        default_log_file: str | None = None,
-        default_access_log_file: str | None = None,
-    ) -> "LoggingConfig":
-        log_dir = environment.get("LOG_DIR")
-        return cls(
-            level=environment.get("LOG_LEVEL", "INFO"),
-            root_level=environment.get("ROOT_LOG_LEVEL", default_root_level),
-            directory=Path(log_dir) if log_dir else Path.cwd() / "logs",
-            log_file=environment.get("LOG_FILE", default_log_file),
-            access_log_file=environment.get("LOG_ACCESS_FILE", default_access_log_file),
-        )
+
+class BuildConfig(_FrozenModel):
+    """Optional source-build metadata displayed by the bot."""
+
+    commit_hash: str | None = None
+    commit_message: str | None = None
+
+    _empty_values = field_validator("commit_hash", "commit_message", mode="before")(_empty_to_none)
+
+    @model_validator(mode="after")
+    def _require_metadata_pair(self) -> Self:
+        if (self.commit_hash is None) != (self.commit_message is None):
+            msg = "commit_hash and commit_message must be configured together."
+            raise ValueError(msg)
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class RuntimeConfig:
+class BotIdentityConfig(_FrozenModel):
+    """Code-owned identity and policy values for the Discord bot."""
+
+    prefix: str = "!"
+    owner_id: int | None = 353089661175988224
+    owner_server_id: int | None = 433618741528625152
+    bot_name: str = "Redstone Squid"
+    bot_version: str = "1.5.7"
+    source_code_url: str = "https://github.com/redstone-squid/Redstone-Squid"
+
+
+class RuntimeConfig(_FrozenModel):
     """Infrastructure configuration for the application service graph."""
 
     database: DatabaseConfig
     openai: OpenAIConfig
     embeddings: EmbeddingConfig
-    verification_code_pepper: str
+    verification_code_pepper: SecretStr
 
-    @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "RuntimeConfig":
-        return cls(
-            database=DatabaseConfig.from_environment(environment),
-            openai=OpenAIConfig.from_environment(environment),
-            embeddings=EmbeddingConfig.from_environment(environment),
-            verification_code_pepper=environment.get("VERIFICATION_CODE_PEPPER", ""),
+
+class _ProcessSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SQUID_",
+        env_nested_delimiter="_",
+        env_nested_max_split=1,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+        validate_default=True,
+    )
+
+    database: DatabaseConfig
+    verification: VerificationConfig
+    openai: OpenAIConfig = OpenAIConfig()
+    embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
+    vector: VectorConfig = VectorConfig()
+    log: LogConfig = LogConfig()
+
+    @property
+    def runtime(self) -> RuntimeConfig:
+        """Return the resolved framework-neutral runtime settings."""
+        return RuntimeConfig(
+            database=self.database,
+            openai=self.openai,
+            embeddings=EmbeddingConfig(
+                api_key=self.embedding.api_key or self.openai.api_key,
+                base_url=self.embedding.base_url or self.openai.base_url,
+                model=self.embedding.model,
+                database_connection=self.vector.database_url,
+            ),
+            verification_code_pepper=self.verification.code_pepper,
         )
 
 
-@dataclass(frozen=True, slots=True)
-class BotProcessConfig:
-    """Secrets and infrastructure needed to start the Discord process."""
+class BotProcessConfig(_ProcessSettings):
+    """Validated configuration required by the Discord process."""
 
-    token: str
-    runtime: RuntimeConfig
-    logging: LoggingConfig
+    development_mode: bool = False
+    discord: DiscordConfig
+    bot: BotConfig = BotConfig()
+    catbox: CatboxConfig = CatboxConfig()
+    google: GoogleConfig = GoogleConfig()
+    build: BuildConfig = BuildConfig()
 
-    @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "BotProcessConfig":
-        return cls(
-            token=_required(environment, "BOT_TOKEN"),
-            runtime=RuntimeConfig.from_environment(environment),
-            logging=LoggingConfig.from_environment(environment, default_log_file="discord.log"),
+    @property
+    def logging(self) -> LoggingConfig:
+        return LoggingConfig(
+            level=self.log.level,
+            root_level=self.log.root_level or ("INFO" if self.development_mode else "WARNING"),
+            directory=self.log.directory,
+            log_file=self.bot.log_file,
+            access_log_file=None,
         )
 
 
-@dataclass(frozen=True, slots=True)
-class ApiProcessConfig:
-    """Secrets and infrastructure needed to start the HTTP API process."""
+class ApiProcessConfig(_ProcessSettings):
+    """Validated configuration required by the HTTP API process."""
 
-    synergy_secret: str
-    port: int
-    logging: LoggingConfig
+    api: ApiConfig
 
-    @classmethod
-    def from_environment(cls, environment: Environment = os.environ) -> "ApiProcessConfig":
-        return cls(
-            synergy_secret=_required(environment, "SYNERGY_SECRET"),
-            port=_positive_int(environment, "API_PORT", 8000),
-            logging=LoggingConfig.from_environment(environment, default_root_level="INFO"),
+    @property
+    def logging(self) -> LoggingConfig:
+        return LoggingConfig(
+            level=self.log.level,
+            root_level=self.log.root_level or "INFO",
+            directory=self.log.directory,
+            log_file=self.api.log_file,
+            access_log_file=self.api.access_log_file,
         )
 
 
-def embedding_dimension_from_environment(environment: Environment = os.environ) -> int:
-    """Read the schema-level vector dimension with the shared validation rules."""
-    return _positive_int(environment, "EMBEDDING_DIMENSION", 1536)
+class ApplicationConfig(BotProcessConfig):
+    """Complete configuration required by the combined application launcher."""
+
+    api: ApiConfig
+
+    def bot_process(self) -> BotProcessConfig:
+        """Project the combined settings into the Discord process."""
+        return BotProcessConfig.model_validate(
+            self.model_dump(
+                include={
+                    "database",
+                    "verification",
+                    "openai",
+                    "embedding",
+                    "vector",
+                    "log",
+                    "development_mode",
+                    "discord",
+                    "bot",
+                    "catbox",
+                    "google",
+                    "build",
+                }
+            )
+        )
+
+    def api_process(self) -> ApiProcessConfig:
+        """Project the combined settings into the HTTP API process."""
+        return ApiProcessConfig.model_validate(
+            self.model_dump(include={"database", "verification", "openai", "embedding", "vector", "log", "api"})
+        )
+
+
+def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationError:
+    if isinstance(exc, ValidationError):
+        issues: list[dict[str, str]] = []
+        for error in exc.errors(include_input=False, include_url=False):
+            location = ".".join(str(part) for part in error["loc"])
+            issues.append(
+                {
+                    "field": location,
+                    "message": str(error["msg"]),
+                    "type": str(error["type"]),
+                }
+            )
+    else:
+        issues = [{"field": "environment", "message": "Could not parse a configured value.", "type": "settings"}]
+
+    return ConfigurationError(
+        f"Application configuration has {len(issues)} error(s).",
+        context={"issues": cast(list[Mapping[str, Any]], issues)},
+        developer_action="Correct the listed SQUID_* settings and restart the process.",
+    )
+
+
+def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> ConfigT:
+    try:
+        return config_type()  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+
+
+def load_application_config() -> ApplicationConfig:
+    """Load and validate settings for the combined application launcher."""
+    return _load_settings(ApplicationConfig)
+
+
+def load_bot_process_config() -> BotProcessConfig:
+    """Load and validate settings for the standalone Discord process."""
+    return _load_settings(BotProcessConfig)
+
+
+def load_api_process_config() -> ApiProcessConfig:
+    """Load and validate settings for the standalone HTTP API process."""
+    return _load_settings(ApiProcessConfig)
+
+
+def load_database_config() -> DatabaseConfig:
+    """Load only the database settings needed by migration tooling."""
+
+    class DatabaseSettings(BaseSettings):
+        model_config = _ProcessSettings.model_config
+        database: DatabaseConfig
+
+    try:
+        return DatabaseSettings().database  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+
+
+__all__ = [
+    "EMBEDDING_DIMENSION",
+    "ApiProcessConfig",
+    "ApplicationConfig",
+    "BotIdentityConfig",
+    "BotProcessConfig",
+    "BuildConfig",
+    "CatboxConfig",
+    "DatabaseConfig",
+    "EmbeddingConfig",
+    "GoogleConfig",
+    "LoggingConfig",
+    "OpenAIConfig",
+    "RuntimeConfig",
+    "load_api_process_config",
+    "load_application_config",
+    "load_bot_process_config",
+    "load_database_config",
+]

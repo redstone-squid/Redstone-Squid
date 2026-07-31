@@ -12,12 +12,13 @@ license-files = ["LICENSE"]
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
     "alembic>=1.18.5",
+    "babel>=2.17.0",
     "discord-py[speed]>=2.6.0,<3",
     "gspread>=6.1.4",
-    "python-dotenv>=1.0.1",
     "jishaku>=2.6.0",
     "fastapi>=0.115.6",
     "uvicorn>=0.34.0",
+    "pydantic-settings>=2.14,<3",
     "openai>=1.58.1",
     "async-lru>=2.0.4",
     "markdown>=3.7",
@@ -55,9 +56,15 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
+    "schemathesis>=4.24.2",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
+]
+# Documentation tooling is installed only when building or publishing the site.
+docs = [
+    "mkdocstrings-python>=1.18,<2",
+    "zensical>=0.0.47,<0.1",
 ]
 
 [build-system]
@@ -227,7 +234,5 @@ filterwarnings = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
-  "unit: fast, self-contained tests",
-  "integration: tests that exercise a real infrastructure dependency",
   "external: opt-in tests that require live third-party services",
 ]

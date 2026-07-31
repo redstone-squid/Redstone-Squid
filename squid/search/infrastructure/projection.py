@@ -25,7 +25,6 @@ from squid.builds.infrastructure.models import (
     BuildVersion,
     Restriction,
     RestrictionAlias,
-    SmallestDoor,
     Type,
 )
 from squid.core.errors import DataIntegrityError
@@ -236,8 +235,6 @@ class SearchProjectionLoader:
         """Load the requested resource, returning None when its source was deleted."""
         if resource_kind == "build":
             return await self._build(int(source_key))
-        if resource_kind == "record" and source_key.startswith("legacy-smallest:"):
-            return await self._legacy_smallest(int(source_key.partition(":")[2]))
         if resource_kind == "record" and source_key.startswith("result:"):
             return await self._computed_record(int(source_key.partition(":")[2]))
         if resource_kind == "metadata":
@@ -404,42 +401,6 @@ class SearchProjectionLoader:
                 "versions": version_names,
             },
             facets=tuple(facets),
-        )
-
-    async def _legacy_smallest(self, record_id: int) -> SearchProjection | None:
-        record = await self._session.scalar(select(SmallestDoor).where(SmallestDoor.record_id == record_id))
-        if record is None:
-            return None
-        title = record.title or f"Smallest {record.door_width}x{record.door_height} {record.orientation}"
-        tags = tuple(dict.fromkeys((*record.types, *record.restriction_subset)))
-        return SearchProjection(
-            resource_kind="record",
-            source_key=f"legacy-smallest:{record.record_id}",
-            title=title,
-            subtitle="Legacy computed smallest-door record",
-            status="current",
-            tags=tags,
-            document_data={
-                "record_id": record.record_id,
-                "build_id": record.id,
-                "record_class": "smallest",
-                "legacy": True,
-                "volume": record.volume,
-                "restrictions": record.restriction_subset,
-                "types": record.types,
-            },
-            facets=(
-                ProjectionFacet("record_class", "smallest"),
-                ProjectionFacet("record_state", "current"),
-                ProjectionFacet("kind", "Door"),
-                ProjectionFacet("volume", Decimal(record.volume)),
-                ProjectionFacet("width", Decimal(record.door_width)),
-                ProjectionFacet("height", Decimal(record.door_height)),
-                ProjectionFacet("depth", Decimal(record.door_depth)),
-                *(ProjectionFacet("restriction", name) for name in record.restriction_subset),
-                *(ProjectionFacet("type", name) for name in record.types),
-                *(ProjectionFacet("pattern", name) for name in record.types),
-            ),
         )
 
     async def _computed_record(self, result_id: int) -> SearchProjection | None:

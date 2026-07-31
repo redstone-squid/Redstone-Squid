@@ -14,7 +14,9 @@ from discord.app_commands import Choice
 from discord.ext import commands
 from discord.ext.commands import Context, FlagConverter
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions
+from squid.core.i18n import _
 
 
 def fix_converter_annotations[F: type[FlagConverter]](cls: F) -> F:
@@ -40,7 +42,8 @@ class DimensionsConverter(commands.Converter[tuple[int | None, int | None, int |
         try:
             dims = parse_dimensions(argument)
         except ValueError as err:
-            msg = "Invalid dimensions"
+            locale = await resolve_locale(ctx, ctx.bot.services.settings)  # type: ignore[attr-defined]
+            msg = t(locale, _("Invalid dimensions"))
             raise commands.BadArgument(msg) from err
         else:
             return dims
@@ -96,7 +99,8 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
         try:
             return int(argument)
         except ValueError as err:
-            msg = "Invalid integer"
+            locale = await resolve_locale(ctx, ctx.bot.services.settings)  # type: ignore[attr-defined]
+            msg = t(locale, _("Invalid integer"))
             raise commands.BadArgument(msg) from err
 
     @override
@@ -106,5 +110,6 @@ class GameTickConverter(commands.Converter[int | None], app_commands.Transformer
         try:
             return int(value)
         except ValueError as err:
-            msg = "Invalid integer"
+            locale = await resolve_locale(interaction, interaction.client.services.settings)  # type: ignore[attr-defined]
+            msg = t(locale, _("Invalid integer"))
             raise ValueError(msg) from err

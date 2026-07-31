@@ -1,0 +1,1 @@
+When adding or changing GitHub Actions, always search online for the newest version and use the commit hash instead of version tags for security and immutability. (Use `gh` CLI to find the commit hash, searching won't give you helpful results.)

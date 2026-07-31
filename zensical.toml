@@ -1,0 +1,62 @@
+[project]
+site_name = "Redstone Squid"
+site_url = "https://redstone-squid.github.io/Redstone-Squid/"
+site_description = "A Discord bot for managing Minecraft redstone build submissions."
+repo_url = "https://github.com/redstone-squid/Redstone-Squid"
+repo_name = "redstone-squid/Redstone-Squid"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+site_dir = "site"
+
+[project.theme]
+language = "en"
+features = [
+    "content.action.edit",
+    "content.action.view",
+    "content.code.copy",
+    "navigation.footer",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.path",
+    "navigation.sections",
+    "navigation.top",
+    "search.highlight",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["."]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+heading_level = 3
+merge_init_into_class = true
+separate_signature = true
+show_root_full_path = false
+show_root_heading = true
+show_signature_annotations = true
+show_source = false
+show_symbol_type_heading = true
+signature_crossrefs = true

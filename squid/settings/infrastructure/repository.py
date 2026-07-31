@@ -119,6 +119,37 @@ class SettingsRepository:
                 setattr(row, _SETTING_TO_DB_KEY[cast(Setting, setting)], value)
             await repository.update(row)
 
+    async def get_locale(self, server_id: int) -> str | None:
+        """Get the server's admin-configured locale override, if any.
+
+        Args:
+            server_id: The server ID to look up.
+
+        Returns:
+            The configured locale tag, or None if unset or the server has no row.
+        """
+        async with self._session_factory() as session:
+            repository = _ServerSettingModelRepository(session=session)
+            row = await repository.get_one_or_none(server_id=server_id)
+            return row.locale if row is not None else None
+
+    async def set_locale(self, server_id: int, locale: str | None) -> None:
+        """Set or clear the server's admin-configured locale override.
+
+        Args:
+            server_id: The server ID to update.
+            locale: The locale tag to set, or None to clear the override.
+        """
+        async with self._session_factory() as session:
+            repository = _ServerSettingModelRepository(session=session, auto_commit=True)
+            row = await repository.get_one_or_none(server_id=server_id)
+            if row is None:
+                row = ServerSetting(server_id=server_id, locale=locale)
+                await repository.add(row)
+                return
+            row.locale = locale
+            await repository.update(row)
+
     async def on_guild_join(self, server_id: int) -> None:
         """Mark a server as joined, creating its settings row if needed.
 

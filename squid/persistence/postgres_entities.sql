@@ -233,44 +233,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.trg_refresh_smallest_door() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-
-    ELSIF TG_OP = 'INSERT' THEN
-        -- remove the stale rows for *this* build first
-        -- The reason why we need to delete the old winners even for INSERT is that
-        -- here, INSERT can also mean "insert a new type/restriction" for an existing door,
-        CALL public.refresh_smallest_after_door_delete(NEW.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    ELSE -- UPDATE
-        -- First remove the “old” winners, then add the “new” ones
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-CREATE FUNCTION public.trg_refresh_smallest_door_from_builds() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-    ELSE                               -- INSERT or UPDATE
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-        CALL public.refresh_smallest_for_door_insert(NEW.id);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
 CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -401,29 +363,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.enqueue_legacy_record_search_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    target_record_id bigint;
-    target_action text := 'upsert';
-BEGIN
-    target_record_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.record_id ELSE NEW.record_id END;
-    IF TG_OP = 'DELETE' THEN
-        target_action := 'delete';
-    END IF;
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('record', 'legacy-smallest:' || target_record_id::text, target_action, now())
-    ON CONFLICT (resource_kind, source_key) DO UPDATE
-    SET action = EXCLUDED.action,
-        enqueued_at = EXCLUDED.enqueued_at,
-        attempts = 0,
-        locked_at = NULL,
-        last_error = NULL;
-    RETURN NULL;
-END;
-$$;
-
 CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -459,15 +398,7 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER build_restrictions_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
-
-CREATE TRIGGER build_types_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
-
-CREATE TRIGGER builds_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door_from_builds();
-
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
-
-CREATE TRIGGER doors_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
 
@@ -506,8 +437,6 @@ CREATE TRIGGER types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.t
 CREATE TRIGGER users_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
-
-CREATE TRIGGER smallest_door_records_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.smallest_door_records FOR EACH ROW EXECUTE FUNCTION public.enqueue_legacy_record_search_projection();
 
 CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 

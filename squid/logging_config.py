@@ -11,13 +11,13 @@ from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
 
 DEFAULT_LOG_LEVEL = "INFO"
-"""Default log level for application loggers when LOG_LEVEL is not set."""
+"""Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
 
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
-"""Default root log level when ROOT_LOG_LEVEL is not set."""
+"""Default root log level when SQUID_ROOT_LOG_LEVEL is not set."""
 
 DEFAULT_LOG_DIR_NAME = "logs"
-"""Default directory used when LOG_DIR is not set."""
+"""Default directory used when SQUID_LOG_DIRECTORY is not set."""
 
 DEFAULT_DISCORD_LOG_FILE = "discord.log"
 """Default log file for the Discord bot process."""
@@ -89,24 +89,16 @@ def prepare_log_path(log_dir: Path, path_str: str | None) -> Path | None:
 
 def build_logging_config(
     *,
-    config: LoggingConfig | None = None,
-    root_level_name: str = DEFAULT_ROOT_LOG_LEVEL,
+    config: LoggingConfig,
     named_logger_levels: Mapping[str, str] | None = None,
-    default_log_file: str | None = None,
-    default_access_log_file: str | None = None,
     include_uvicorn_loggers: bool = False,
     use_queue: bool = False,
 ) -> dict[str, object]:
     """Build a logging configuration dictionary for dictConfig."""
-    resolved_config = config or LoggingConfig.from_environment(
-        default_root_level=root_level_name,
-        default_log_file=default_log_file,
-        default_access_log_file=default_access_log_file,
-    )
-    level = resolve_level(resolved_config.level)
-    root_level = resolve_level(resolved_config.root_level)
-    resolved_log_file = prepare_log_path(resolved_config.directory, resolved_config.log_file)
-    resolved_access_log_file = prepare_log_path(resolved_config.directory, resolved_config.access_log_file)
+    level = resolve_level(config.level)
+    root_level = resolve_level(config.root_level)
+    resolved_log_file = prepare_log_path(config.directory, config.log_file)
+    resolved_access_log_file = prepare_log_path(config.directory, config.access_log_file)
 
     handlers: dict[str, dict[str, object]] = {
         "console": {
@@ -210,9 +202,8 @@ def build_logging_config(
     }
 
 
-def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None = None) -> QueueListener:
+def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> QueueListener:
     """Configure logging for the Discord bot process."""
-    root_level_name = DEFAULT_LOG_LEVEL if dev_mode else DEFAULT_ROOT_LOG_LEVEL
     named_logger_levels = {
         "discord": DEFAULT_LOG_LEVEL,
         "squid": DEFAULT_LOG_LEVEL,
@@ -225,9 +216,7 @@ def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None =
     logging.config.dictConfig(
         build_logging_config(
             config=config,
-            root_level_name=root_level_name,
             named_logger_levels=named_logger_levels,
-            default_log_file=DEFAULT_DISCORD_LOG_FILE,
             use_queue=True,
         )
     )
@@ -243,12 +232,11 @@ def configure_bot_logging(dev_mode: bool = False, config: LoggingConfig | None =
     return queue_handler.listener
 
 
-def configure_api_logging(config: LoggingConfig | None = None) -> None:
+def configure_api_logging(config: LoggingConfig) -> None:
     """Configure logging for the FastAPI and uvicorn process."""
     logging.config.dictConfig(
         build_logging_config(
             config=config,
-            root_level_name=DEFAULT_LOG_LEVEL,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
         )

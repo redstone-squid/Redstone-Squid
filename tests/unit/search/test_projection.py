@@ -1,16 +1,30 @@
 """Tests for search projection normalization and typed facets."""
 
 from decimal import Decimal
+from typing import cast
+from unittest.mock import AsyncMock
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.search.infrastructure.projection import (
     ProjectionFacet,
     SearchProjection,
+    SearchProjectionLoader,
     build_facet_models,
     normalize_search_text,
     projection_source_hash,
 )
+
+
+@pytest.mark.asyncio
+async def test_loader_rejects_retired_legacy_record_keys() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    loader = SearchProjectionLoader(cast(AsyncSession, session))
+
+    assert await loader.load("record", "legacy-smallest:1") is None
+    session.scalar.assert_not_awaited()
 
 
 def test_normalize_collapses_case_and_whitespace() -> None:

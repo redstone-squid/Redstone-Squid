@@ -1,9 +1,8 @@
 """Defines how the help command works in the bot."""
 
-import os
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 import git
@@ -12,12 +11,18 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Context, Group
 from rapidfuzz import process
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import error_layout, help_layout, no_mentions, text_layout
+from squid.config import BuildConfig
+from squid.core.i18n import _
 
-MORE_INFORMATION = "Use `/help <command>` to get more information."
+if TYPE_CHECKING:
+    import squid.bot.app
+
+MORE_INFORMATION = _("Use `/help <command>` to get more information.")
 
 
-class HelpCog[BotT: commands.Bot](Cog):
+class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Show help for a command or a group of commands."""
 
     def __init__(self, bot: BotT):
@@ -26,7 +31,7 @@ class HelpCog[BotT: commands.Bot](Cog):
 
     # /help [command]
     @app_commands.command()
-    @app_commands.describe(command="The command to get help for.")
+    @app_commands.describe(command=app_commands.locale_str(_("The command to get help for.")))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show help for a command or a group of commands."""
         # We are using a hack to make this slash command:
@@ -38,8 +43,9 @@ class HelpCog[BotT: commands.Bot](Cog):
         #
         # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
         # and one message with the help information.
+        locale = await resolve_locale(interaction, interaction.client.services.settings)
         await interaction.response.send_message(
-            view=text_layout("Loading…"),
+            view=text_layout(t(locale, _("Loading…"))),
             ephemeral=True,
             delete_after=0,
             silent=True,
@@ -79,70 +85,83 @@ class Help(commands.MinimalHelpCommand):
     def __init__(self):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
 
+    @property
+    def _bot(self) -> "squid.bot.app.RedstoneSquid":
+        # discord.py's HelpCommand.context is generically typed as Context[Bot | AutoShardedBot];
+        # the bot is always the concrete RedstoneSquid at runtime.
+        return cast("squid.bot.app.RedstoneSquid", self.context.bot)
+
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = list(self.context.bot.commands)
 
         # We do not filter commands here, because it is too slow.
         # Every command needs to run its own checks even if the same check is used.
         # filtered_commands = await self.filter_commands(commands_, sort=True)
         desc = dedent(
-            f"""\
-            {self.context.bot.description}
-
-            Commands:{self.get_commands_brief_details(commands_)}
-
-            {MORE_INFORMATION}
-            """
+            t(
+                locale,
+                _("{description}\n\nCommands:{commands}\n\n{more_information}\n"),
+                description=self.context.bot.description,
+                commands=self.get_commands_brief_details(commands_, locale=locale),
+                more_information=t(locale, MORE_INFORMATION),
+            )
         )
         footer: str | None = None
         try:
             repo = git.Repo(search_parent_directories=True)
             footer = f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}"
         except git.InvalidGitRepositoryError:
-            # If the repo is not a git repository, we can still use environment variables if available
-            # Usually this is because the bot is running in a container
-            git_commit_hash = os.getenv("GIT_COMMIT_HASH")
-            git_commit_message = os.getenv("GIT_COMMIT_MESSAGE")
-            if git_commit_hash is not None and git_commit_message is not None:
-                footer = f"commit: {git_commit_hash[:7]}, message: {git_commit_message.strip()}"
+            build_config = getattr(self.context.bot, "build_config", None)
+            if (
+                isinstance(build_config, BuildConfig)
+                and build_config.commit_hash is not None
+                and build_config.commit_message is not None
+            ):
+                footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
         await self.get_destination().send(
-            view=help_layout("Help", desc, footer=footer),
+            view=help_layout(t(locale, _("Help")), desc, footer=footer),
             allowed_mentions=no_mentions(),
         )
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         await self.get_destination().send(
             view=help_layout(
-                f"Command Help - `{command.qualified_name}`",
-                f"{command.help or 'No details provided'}",
+                t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
+                command.help or t(locale, _("No details provided")),
             ),
             allowed_mentions=no_mentions(),
         )
 
     @staticmethod
     def get_commands_brief_details(
-        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
+        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False, locale: str | None = None
     ) -> list[str] | str:
         """
         Formats the prefix, command name and signature, and short doc for an iterable of commands.
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """
+        no_details = t(locale, _("No details provided"))
         details: list[str] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
-            details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or 'No details provided'}")
+            details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or no_details}")
         if return_as_list:
             return details
         return "".join(details)
 
     @staticmethod
-    def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or 'No details provided'}" for cog in cogs]
+    def get_cog_brief_details(
+        cogs: Sequence[Cog], return_as_list: bool = False, locale: str | None = None
+    ) -> list[str] | str:
+        no_details = t(locale, _("No details provided"))
+        details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or no_details}" for cog in cogs]
         if return_as_list:
             return details
         return "".join(details)
@@ -160,14 +179,17 @@ class Help(commands.MinimalHelpCommand):
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        command_details = self.get_commands_brief_details(list(commands_))
-        desc = f"""{group.cog.description}
-
-            Usable Subcommands: {command_details or "None"}
-
-            {MORE_INFORMATION}"""
+        locale = await resolve_locale(self.context, self._bot.services.settings)
+        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
+        desc = t(
+            locale,
+            _("{description}\n\nUsable Subcommands: {commands}\n\n{more_information}"),
+            description=group.cog.description,
+            commands=command_details or t(locale, _("None")),
+            more_information=t(locale, MORE_INFORMATION),
+        )
         await self.get_destination().send(
-            view=help_layout("Command Help", desc),
+            view=help_layout(t(locale, _("Command Help")), desc),
             allowed_mentions=no_mentions(),
         )
         return None
@@ -176,31 +198,40 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = cog.walk_commands()
-        command_details = self.get_commands_brief_details(list(commands_))
-        desc = f"""{cog.description}
-
-            Usable Subcommands:{command_details or "None"}
-
-            {MORE_INFORMATION}"""
+        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
+        desc = t(
+            locale,
+            _("{description}\n\nUsable Subcommands:{commands}\n\n{more_information}"),
+            description=cog.description,
+            commands=command_details or t(locale, _("None")),
+            more_information=t(locale, MORE_INFORMATION),
+        )
         await self.get_destination().send(
-            view=help_layout("Command Help", desc),
+            view=help_layout(t(locale, _("Command Help")), desc),
             allowed_mentions=no_mentions(),
         )
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        return f"Unable to find command `{string}`. Use /help to get a list of available commands."
+        locale = await resolve_locale(self.context, self._bot.services.settings)
+        return t(
+            locale,
+            _("Unable to find command `{name}`. Use /help to get a list of available commands."),
+            name=string,
+        )
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
+        locale = await resolve_locale(self.context, self._bot.services.settings)
         await self.get_destination().send(
-            view=error_layout("Error.", error),
+            view=error_layout(t(locale, _("Error.")), error),
             allowed_mentions=no_mentions(),
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: "squid.bot.app.RedstoneSquid"):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

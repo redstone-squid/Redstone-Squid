@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
-from squid.config import embedding_dimension_from_environment
+from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
@@ -68,7 +68,7 @@ class SearchDocument(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
     source_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(VECTOR(embedding_dimension_from_environment()), default=None)
+    embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
     embedding_model: Mapped[str | None] = mapped_column(Text, default=None)
     refreshed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now

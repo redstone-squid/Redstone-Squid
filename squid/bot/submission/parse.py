@@ -1,6 +1,5 @@
 """Functions for parsing user input."""
 
-import asyncio
 import json
 import logging
 import re
@@ -231,13 +230,3 @@ dispatcher: DispatchMapping = {  # type: ignore
     tuple[int | None, ...]: (format_dimensions, parse_dimensions),
     MutableMapping: (json.dumps, json.loads),
 }
-
-
-async def main():
-    import dotenv
-
-    dotenv.load_dotenv()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

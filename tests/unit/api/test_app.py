@@ -1,69 +1,19 @@
 """HTTP API transport tests."""
 
-import uuid
-from types import SimpleNamespace
-from typing import cast
-from unittest.mock import AsyncMock
-from uuid import UUID
-
 import httpx
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from squid.api.app import create_api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.core.errors import ErrorCode, InternalError
-from squid.runtime import ApplicationRuntime, ApplicationServices
-from squid.users.errors import MinecraftAccountNotFoundError, MinecraftServiceUnavailableError
-
-TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
-NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
-TEST_USER_NAME = "TestUser"
-TEST_VERIFICATION_CODE = 123_456
-TEST_SYNERGY_SECRET = "test-secret"
-
-
-class MockUserManager:
-    async def generate_verification_code(self, user_uuid: str | UUID) -> int:
-        if isinstance(user_uuid, str):
-            user_uuid = uuid.UUID(user_uuid)
-        if user_uuid == TEST_UUID:
-            return TEST_VERIFICATION_CODE
-        raise MinecraftAccountNotFoundError(user_uuid)
-
-
-class MockDatabaseManager:
-    def __init__(self) -> None:
-        self.closed = False
-
-    async def close(self) -> None:
-        self.closed = True
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def _patch_environment(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("SYNERGY_SECRET", TEST_SYNERGY_SECRET)
-
-
-@pytest.fixture
-def client():
-    database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    with TestClient(create_api_app(lambda: runtime)) as c:
-        yield c
-    assert database.closed
-
-
-# ---------------------------------------------------------------------------
-# Test cases
-# ---------------------------------------------------------------------------
+from squid.users.errors import MinecraftServiceUnavailableError
+from tests.unit.api.fakes import (
+    NONEXISTENT_UUID,
+    TEST_SYNERGY_SECRET,
+    TEST_UUID,
+    TEST_VERIFICATION_CODE,
+    MockDatabaseManager,
+)
 
 
 def test_missing_authorization_header_returns_422(client: httpx.Client):
@@ -113,11 +63,8 @@ def test_success_returns_verification_code(client: httpx.Client):
     assert resp.json() == TEST_VERIFICATION_CODE
 
 
-def test_internal_error_is_redacted_and_correlated() -> None:
-    database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda: runtime)
+def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
 
     @app.get("/boom")
     async def boom() -> None:
@@ -138,11 +85,8 @@ def test_internal_error_is_redacted_and_correlated() -> None:
     assert response.json()["error_id"] == response.headers["X-Error-ID"]
 
 
-def test_service_unavailable_is_safe_and_correlated() -> None:
-    database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    app: FastAPI = create_api_app(lambda: runtime)
+def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
 
     @app.get("/unavailable")
     async def unavailable() -> None:

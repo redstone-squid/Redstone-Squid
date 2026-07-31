@@ -26,15 +26,15 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ARG GIT_COMMIT_HASH=unknown
-ENV GIT_COMMIT_HASH=$GIT_COMMIT_HASH
+ENV SQUID_BUILD_COMMIT_HASH=$GIT_COMMIT_HASH
 ARG GIT_COMMIT_MESSAGE="no message"
-ENV GIT_COMMIT_MESSAGE=$GIT_COMMIT_MESSAGE
+ENV SQUID_BUILD_COMMIT_MESSAGE=$GIT_COMMIT_MESSAGE
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GIT_PYTHON_REFRESH=quiet \
-    LOG_DIR=/var/log/app \
+    SQUID_LOG_DIRECTORY=/var/log/app \
     XDG_CACHE_HOME=/var/lib/app/.cache
 
 WORKDIR /app
@@ -53,6 +53,9 @@ RUN adduser \
 
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
 COPY --chown=root:root . .
+
+# .po translation catalogs are tracked; compiled .mo binaries are gitignored build artifacts.
+RUN pybabel compile -d locales -D squid
 
 USER appuser
 

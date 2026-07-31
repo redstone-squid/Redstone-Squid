@@ -1,0 +1,1167 @@
+# Chinese (Simplified, China) translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
+"Squid/issues\n"
+"POT-Creation-Date: 2026-07-31 15:33+0800\n"
+"PO-Revision-Date: 2026-07-31 15:06+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_Hans_CN\n"
+"Language-Team: zh_Hans_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: squid/bot/submission/search_view.py:235
+#, python-brace-format
+msgid ""
+"\n"
+"**Metrics**\n"
+"{metrics}"
+msgstr ""
+"\n"
+"**指标**\n"
+"{metrics}"
+
+#: squid/bot/submission/search_view.py:246
+#, python-brace-format
+msgid ""
+"\n"
+"**Tags**\n"
+"{tags}"
+msgstr ""
+"\n"
+"**标签**\n"
+"{tags}"
+
+#: squid/bot/submission/records.py:58 squid/bot/submission/records.py:81
+#, python-brace-format
+msgid ""
+"\n"
+"…and {count} more."
+msgstr ""
+"\n"
+"……还有 {count} 个。"
+
+#: squid/bot/submission/search_view.py:62
+#, python-brace-format
+msgid ""
+"## Search results\n"
+"{lines}\n"
+"-# Page {page}"
+msgstr ""
+"## 搜索结果\n"
+"{lines}\n"
+"-# 第 {page} 页"
+
+#: squid/bot/submission/search_view.py:225
+#, python-brace-format
+msgid ""
+"**Build**\n"
+"{build_title} (`{build_id}`)\n"
+"**Class**\n"
+"{record_class} · {version_scope}"
+msgstr ""
+"**构造**\n"
+"{build_title} (`{build_id}`)\n"
+"**类别**\n"
+"{record_class} · {version_scope}"
+
+#: squid/bot/submission/search_view.py:243
+#, python-brace-format
+msgid ""
+"**Kind**\n"
+"{kind}"
+msgstr ""
+"**类型**\n"
+"{kind}"
+
+#: squid/bot/submission/search_view.py:239
+#, python-brace-format
+msgid ""
+"**Status**\n"
+"{status}"
+msgstr ""
+"**状态**\n"
+"{status}"
+
+#: squid/bot/admin.py:66
+msgid "A build you submitted."
+msgstr "你提交的构造。"
+
+#: squid/bot/submission/search.py:181
+msgid "A full or partial pattern name."
+msgstr "完整或部分的样式名称。"
+
+#: squid/core/errors.py:211
+msgid "A persistence operation failed."
+msgstr "持久化操作失败。"
+
+#: squid/core/errors.py:226
+msgid "A required service is temporarily unavailable."
+msgstr "所需的服务暂时不可用。"
+
+#: squid/api/errors.py:32
+msgid "A required service is temporarily unavailable. Please try again later."
+msgstr "所需的服务暂时不可用，请稍后再试。"
+
+#: squid/users/errors.py:43
+msgid "Account already linked"
+msgstr "账户已关联"
+
+#: squid/bot/submission/search.py:142
+msgid "Alias added."
+msgstr "别名已添加。"
+
+#: squid/builds/errors.py:70
+msgid "Alias already added"
+msgstr "别名已存在"
+
+#: squid/bot/submission/search.py:136
+msgid "Alias already on this restriction."
+msgstr "该别名已存在于此限制中。"
+
+#: squid/builds/errors.py:87
+msgid "Alias in use"
+msgstr "别名已被使用"
+
+#: squid/bot/submission/search.py:136
+msgid "Already added"
+msgstr "已添加"
+
+#: squid/core/errors.py:48
+msgid "An application error occurred."
+msgstr "发生了应用程序错误。"
+
+#: squid/bot/admin.py:67
+msgid "An approved build tag."
+msgstr "一个已批准的构造标签。"
+
+#: squid/core/errors.py:204
+msgid "An infrastructure dependency failed."
+msgstr "基础设施依赖项发生故障。"
+
+#: squid/core/errors.py:181
+msgid "An internal application error occurred."
+msgstr "发生了内部应用程序错误。"
+
+#: squid/api/errors.py:31
+msgid "An internal server error occurred."
+msgstr "发生了内部服务器错误。"
+
+#: squid/bot/errors.py:134
+#, python-brace-format
+msgid "An unexpected error occurred. Reference: `{error_id}`"
+msgstr "发生了意外错误。参考编号：`{error_id}`"
+
+#: squid/core/errors.py:190
+msgid "Application configuration is invalid."
+msgstr "应用程序配置无效。"
+
+#: squid/core/errors.py:49
+msgid "Application error"
+msgstr "应用程序错误"
+
+#: squid/core/errors.py:197
+msgid "Application state is invalid for this operation."
+msgstr "应用程序状态对此操作无效。"
+
+#: squid/bot/admin.py:154
+#, python-brace-format
+msgid "Archived **{name}**."
+msgstr "已归档 **{name}**。"
+
+#: squid/bot/verify.py:42
+msgid "Are you sure you want to unlink your Minecraft account?"
+msgstr "你确定要取消关联你的 Minecraft 账户吗？"
+
+#: squid/bot/admin.py:88
+#, python-brace-format
+msgid "Attached **{name}** to build #{id}."
+msgstr "已将 **{name}** 附加到构造 #{id}。"
+
+#: squid/bot/submission/search_view.py:189
+msgid "Back"
+msgstr "返回"
+
+#: squid/builds/errors.py:36
+msgid "Build busy"
+msgstr "构造正忙"
+
+#: squid/bot/submission/edit.py:152
+msgid "Build edit canceled by user"
+msgstr "构造编辑已被用户取消"
+
+#: squid/bot/submission/edit.py:144
+msgid "Build edit canceled due to inactivity."
+msgstr "由于长时间无操作，构造编辑已取消。"
+
+#: squid/bot/submission/edit.py:168
+msgid "Build edited successfully"
+msgstr "构造编辑成功"
+
+#: squid/builds/errors.py:18
+msgid "Build not found."
+msgstr "找不到该构造。"
+
+#: squid/bot/submission/submit.py:298
+msgid "Build recalculated."
+msgstr "构造已重新计算。"
+
+#: squid/bot/admin.py:259
+msgid "Build spreadsheet"
+msgstr "构造电子表格"
+
+#: squid/bot/submission/submit.py:124
+#, python-brace-format
+msgid ""
+"Build submitted successfully!\n"
+"The build ID is: {id}"
+msgstr ""
+"构造提交成功！\n"
+"构造 ID 为：{id}"
+
+#: squid/bot/admin.py:87
+msgid "Build tagged"
+msgstr "构造已标记"
+
+#: squid/bot/submission/ui/views.py:185
+msgid "Cancel"
+msgstr "取消"
+
+#: squid/bot/submission/edit.py:152
+msgid "Cancelled"
+msgstr "已取消"
+
+#: squid/bot/submission/records.py:130
+msgid "Canonical base key shown by search or records tooling."
+msgstr "由搜索或记录工具显示的规范基础键。"
+
+#: squid/users/errors.py:60
+msgid "Check the UUID and try again."
+msgstr "请检查 UUID 后重试。"
+
+#: squid/builds/errors.py:21
+msgid "Check the build ID and try again."
+msgstr "请检查构造 ID 后重试。"
+
+#: squid/bot/errors.py:118
+msgid "Check the command arguments and try again."
+msgstr "请检查命令参数后重试。"
+
+#: squid/bot/submission/records.py:132
+msgid ""
+"Comma-separated restriction IDs; large exact categories are saved for "
+"reuse."
+msgstr "以逗号分隔的限制 ID；较大的精确类别会被保存以便重复使用。"
+
+#: squid/bot/help.py:183 squid/bot/help.py:203
+msgid "Command Help"
+msgstr "命令帮助"
+
+#: squid/bot/help.py:126
+#, python-brace-format
+msgid "Command Help - `{name}`"
+msgstr "命令帮助 - `{name}`"
+
+#: squid/bot/errors.py:107
+msgid "Command already running"
+msgstr "命令已在运行中"
+
+#: squid/bot/errors.py:102
+msgid "Command on cooldown"
+msgstr "命令冷却中"
+
+#: squid/bot/errors.py:112 squid/bot/errors.py:127
+msgid "Command unavailable"
+msgstr "命令不可用"
+
+#: squid/bot/submission/ui/views.py:184
+msgid "Confirm"
+msgstr "确认"
+
+#: squid/bot/submission/ui/views.py:182
+msgid "Confirm this action?"
+msgstr "确认执行此操作吗？"
+
+#: squid/bot/settings.py:159
+msgid "Could not find that channel."
+msgstr "找不到该频道。"
+
+#: squid/bot/give_redstoner.py:153
+msgid "Could not find the redstoner role."
+msgstr "找不到红石玩家（redstoner）身份组。"
+
+#: squid/bot/settings.py:72
+msgid "Current Settings"
+msgstr "当前设置"
+
+#: squid/bot/admin.py:273
+msgid "Database"
+msgstr "数据库"
+
+#: squid/bot/submission/edit.py:159
+msgid "Editing"
+msgstr "编辑中"
+
+#: squid/bot/submission/edit.py:159
+msgid "Editing build..."
+msgstr "正在编辑构造……"
+
+#: squid/bot/settings.py:136 squid/bot/settings.py:149
+#: squid/bot/settings.py:159 squid/bot/settings.py:179
+#: squid/bot/settings.py:190 squid/bot/settings.py:207
+#: squid/bot/settings.py:244 squid/bot/submission/search.py:231
+#: squid/bot/submission/search.py:246 squid/bot/submission/search.py:310
+msgid "Error"
+msgstr "错误"
+
+#: squid/bot/help.py:221
+msgid "Error."
+msgstr "错误。"
+
+#: squid/bot/submission/search.py:69
+msgid "Field to sort by, such as width or closing_delay."
+msgstr "用于排序的字段，例如 width 或 closing_delay。"
+
+#: squid/core/errors.py:175
+msgid "Forbidden"
+msgstr "禁止访问"
+
+#: squid/bot/give_redstoner.py:159
+#, python-brace-format
+msgid "Gave {member} the redstoner role."
+msgstr "已将红石玩家身份组授予 {member}。"
+
+#: squid/users/errors.py:36
+msgid "Generate a new code and try again."
+msgstr "请生成新的验证码后重试。"
+
+#: squid/bot/utils/embeds.py:20
+msgid "Getting information..."
+msgstr "正在获取信息……"
+
+#: squid/api/errors.py:163
+msgid "HTTP error"
+msgstr "HTTP 错误"
+
+#: squid/bot/help.py:116
+msgid "Help"
+msgstr "帮助"
+
+#: squid/bot/submission/edit.py:123
+msgid "Here is a preview of the changes. Use the buttons to confirm or cancel."
+msgstr "以下是更改的预览，请使用按钮进行确认或取消。"
+
+#: squid/bot/submission/submit.py:113 squid/bot/submission/submit.py:209
+msgid ""
+"Here is a preview of the submission. Use `/build edit` if you have made a"
+" mistake."
+msgstr "以下是提交内容的预览。如果有误，请使用 `/build edit`。"
+
+#: squid/bot/give_redstoner.py:168
+#, python-brace-format
+msgid ""
+"Hi {member}, you received the {role} role after reaching 15 upvotes in "
+"{url}."
+msgstr "你好 {member}，你在 {url} 中获得了 15 个赞后，获得了 {role} 身份组。"
+
+#: squid/bot/settings.py:96
+#, python-brace-format
+msgid ""
+"ID: {id} \n"
+" Name: {name}"
+msgstr ""
+"ID：{id} \n"
+" 名称：{name}"
+
+#: squid/core/errors.py:182
+msgid "Internal error"
+msgstr "内部错误"
+
+#: squid/api/errors.py:115 squid/api/errors.py:183
+msgid "Internal server error"
+msgstr "内部服务器错误"
+
+#: squid/bot/errors.py:117 squid/bot/errors.py:122
+msgid "Invalid command input"
+msgstr "命令输入无效"
+
+#: squid/bot/utils/converters.py:46
+msgid "Invalid dimensions"
+msgstr "尺寸无效"
+
+#: squid/bot/utils/converters.py:103 squid/bot/utils/converters.py:114
+msgid "Invalid integer"
+msgstr "整数无效"
+
+#: squid/api/errors.py:143
+msgid "Invalid request"
+msgstr "请求无效"
+
+#: squid/core/errors.py:144
+msgid "Invalid value"
+msgstr "值无效"
+
+#: squid/users/errors.py:33
+msgid "Invalid verification code"
+msgstr "验证码无效"
+
+#: squid/bot/misc_commands.py:32
+msgid "Invite Redstone Squid"
+msgstr "邀请 Redstone Squid"
+
+#: squid/bot/misc_commands.py:34
+msgid "Invite bot"
+msgstr "邀请机器人"
+
+#: squid/bot/help.py:45
+msgid "Loading…"
+msgstr "加载中……"
+
+#: squid/users/errors.py:57
+msgid "Minecraft account not found."
+msgstr "找不到该 Minecraft 账户。"
+
+#: squid/bot/errors.py:92
+msgid "Missing permission"
+msgstr "缺少权限"
+
+#: squid/bot/submission/search_view.py:178
+msgid "Next"
+msgstr "下一页"
+
+#: squid/bot/submission/records.py:83
+msgid "No active record titles require taxonomy review."
+msgstr "没有需要分类审核的活跃记录标题。"
+
+#: squid/bot/submission/search.py:231 squid/bot/submission/search.py:246
+#: squid/bot/submission/search.py:310
+msgid "No build with that ID."
+msgstr "没有该 ID 对应的构造。"
+
+#: squid/bot/help.py:127 squid/bot/help.py:141 squid/bot/help.py:154
+msgid "No details provided"
+msgstr "未提供详细信息"
+
+#: squid/bot/submission/search.py:202
+msgid "No open submissions."
+msgstr "没有待处理的提交。"
+
+#: squid/bot/submission/search.py:190
+msgid "No patterns match that query."
+msgstr "没有匹配该查询的样式。"
+
+#: squid/bot/submission/search_view.py:57
+msgid "No results match this query."
+msgstr "没有匹配该查询的结果。"
+
+#: squid/bot/admin.py:108
+msgid "No tags are awaiting review."
+msgstr "没有待审核的标签。"
+
+#: squid/bot/submission/records.py:60
+msgid "No unresolved active record categories."
+msgstr "没有未解决的活跃记录类别。"
+
+#: squid/bot/help.py:179 squid/bot/help.py:199
+msgid "None"
+msgstr "无"
+
+#: squid/bot/errors.py:123
+msgid "One of the command options is invalid."
+msgstr "其中一个命令选项无效。"
+
+#: squid/bot/errors.py:98
+msgid "Only the bot owner can use this command."
+msgstr "只有机器人所有者才能使用此命令。"
+
+#: squid/bot/submission/search.py:215
+msgid "Open Records"
+msgstr "打开记录"
+
+#: squid/bot/admin.py:275
+msgid "Open database"
+msgstr "打开数据库"
+
+#: squid/bot/misc_commands.py:64
+msgid "Open form"
+msgstr "打开表单"
+
+#: squid/bot/misc_commands.py:49
+msgid "Open repository"
+msgstr "打开代码仓库"
+
+#: squid/bot/admin.py:261
+msgid "Open spreadsheet"
+msgstr "打开电子表格"
+
+#: squid/core/errors.py:160
+msgid "Operation conflict"
+msgstr "操作冲突"
+
+#: squid/bot/submission/records.py:95
+msgid "Optional database ID to also compute the pinned current-version records."
+msgstr "可选的数据库 ID，用于同时计算固定当前版本的记录。"
+
+#: squid/bot/submission/records.py:134
+msgid "Optional pinned version database ID."
+msgstr "可选的固定版本数据库 ID。"
+
+#: squid/bot/admin.py:38
+msgid "Optional search and sort field, for example closing_delay."
+msgstr "可选的搜索和排序字段，例如 closing_delay。"
+
+#: squid/bot/submission/records.py:45
+msgid "Optionally limit gaps to one build kind."
+msgstr "可选：将缺口限制为单一构造类型。"
+
+#: squid/bot/submission/records.py:69
+msgid "Optionally limit title diagnostics to one build kind."
+msgstr "可选：将标题诊断限制为单一构造类型。"
+
+#: squid/bot/submission/records.py:97
+msgid "Optionally rebuild just doors or extenders."
+msgstr "可选：仅重建门或延伸器。"
+
+#: squid/bot/errors.py:97
+msgid "Owner only"
+msgstr "仅限所有者"
+
+#: squid/bot/submission/search.py:104
+msgid "Part of a restriction name. Leave blank to list all restrictions."
+msgstr "限制名称的一部分。留空以列出所有限制。"
+
+#: squid/bot/submission/search.py:176 squid/bot/submission/search.py:190
+msgid "Patterns"
+msgstr "样式"
+
+#: squid/bot/admin.py:107
+msgid "Pending tags"
+msgstr "待处理标签"
+
+#: squid/core/errors.py:219
+msgid "Persisted data is inconsistent with application expectations."
+msgstr "持久化数据与应用程序预期不一致。"
+
+#: squid/core/errors.py:184
+msgid "Please try again later."
+msgstr "请稍后再试。"
+
+#: squid/bot/submission/search_view.py:167
+msgid "Previous"
+msgstr "上一页"
+
+#: squid/bot/admin.py:36
+msgid "Public display name."
+msgstr "公开显示名称。"
+
+#: squid/bot/admin.py:124
+#, python-brace-format
+msgid "Published **{name}**."
+msgstr "已发布 **{name}**。"
+
+#: squid/bot/misc_commands.py:77
+msgid "Read regulations"
+msgstr "阅读规章"
+
+#: squid/bot/version_tracking.py:35
+msgid "Recognized Java versions"
+msgstr "已识别的 Java 版本"
+
+#: squid/bot/submission/records.py:165
+#, python-brace-format
+msgid "Recomputed {definitions} definitions; {resolved} resolved."
+msgstr "已重新计算 {definitions} 个定义；已解决 {resolved} 个。"
+
+#: squid/bot/submission/records.py:162
+msgid "Record category materialized"
+msgstr "记录类别已具体化"
+
+#: squid/bot/submission/records.py:62
+msgid "Record evidence gaps"
+msgstr "记录证据缺口"
+
+#: squid/bot/submission/records.py:85
+msgid "Record title diagnostics"
+msgstr "记录标题诊断"
+
+#: squid/bot/submission/records.py:112
+msgid "Records rebuilt"
+msgstr "记录已重建"
+
+#: squid/bot/give_redstoner.py:116
+msgid "Redstoner role controls"
+msgstr "红石玩家身份组管理"
+
+#: squid/bot/misc_commands.py:75
+msgid "Regulations"
+msgstr "规章"
+
+#: squid/bot/admin.py:139
+#, python-brace-format
+msgid "Rejected **{name}**."
+msgstr "已拒绝 **{name}**。"
+
+#: squid/core/errors.py:136
+msgid "Request failed"
+msgstr "请求失败"
+
+#: squid/core/errors.py:152
+msgid "Resource not found"
+msgstr "找不到资源"
+
+#: squid/builds/errors.py:58
+#, python-brace-format
+msgid "Restriction '{name}' does not exist."
+msgstr "限制“{name}”不存在。"
+
+#: squid/builds/errors.py:52
+msgid "Restriction not found."
+msgstr "找不到该限制。"
+
+#: squid/bot/submission/search.py:116
+msgid "Restrictions"
+msgstr "限制"
+
+#: squid/bot/submission/records.py:149
+msgid "Restrictions must be comma-separated numeric IDs."
+msgstr "限制必须是以逗号分隔的数字 ID。"
+
+#: squid/bot/submission/edit.py:128
+msgid "Review the proposed build changes."
+msgstr "查看建议的构造更改。"
+
+#: squid/bot/submission/search.py:67
+msgid "Search records, builds, tags and fields, or everything."
+msgstr "搜索记录、构造、标签和字段，或搜索全部内容。"
+
+#: squid/bot/submission/search.py:66
+msgid "Search text and filters, e.g. `width:5`."
+msgstr "搜索文本和过滤条件，例如 `width:5`。"
+
+#: squid/bot/errors.py:87
+msgid "Server only"
+msgstr "仅限服务器"
+
+#: squid/api/errors.py:115 squid/core/errors.py:227
+msgid "Service unavailable"
+msgstr "服务不可用"
+
+#: squid/bot/settings.py:225
+msgid "Setting updated"
+msgstr "设置已更新"
+
+#: squid/bot/settings.py:169 squid/bot/settings.py:199
+#: squid/bot/settings.py:254
+msgid "Settings updated"
+msgstr "设置已更新"
+
+#: squid/bot/errors.py:133
+msgid "Something went wrong"
+msgstr "出了点问题"
+
+#: squid/bot/submission/search.py:70
+msgid "Sort low-to-high or high-to-low."
+msgstr "按从低到高或从高到低排序。"
+
+#: squid/bot/misc_commands.py:47
+msgid "Source code"
+msgstr "源代码"
+
+#: squid/bot/submission/search_view.py:200
+msgid "Stop"
+msgstr "停止"
+
+#: squid/bot/submission/submit.py:197
+msgid "Submission canceled by user."
+msgstr "提交已被用户取消。"
+
+#: squid/bot/submission/submit.py:190
+msgid "Submission canceled due to inactivity."
+msgstr "由于长时间无操作，提交已取消。"
+
+#: squid/bot/misc_commands.py:61
+msgid "Submission form"
+msgstr "提交表单"
+
+#: squid/bot/submission/search.py:272
+msgid "Submission has been confirmed."
+msgstr "提交已确认。"
+
+#: squid/bot/submission/search.py:291
+msgid "Submission has been denied."
+msgstr "提交已被拒绝。"
+
+#: squid/bot/misc_commands.py:63
+msgid "Submit a new record through the Google form."
+msgstr "通过 Google 表单提交新记录。"
+
+#: squid/bot/submission/edit.py:168 squid/bot/submission/search.py:142
+#: squid/bot/submission/search.py:272 squid/bot/submission/search.py:291
+#: squid/bot/submission/submit.py:123
+msgid "Success"
+msgstr "成功"
+
+#: squid/bot/admin.py:248
+#, python-brace-format
+msgid "Synced the tree to {synced}/{total}."
+msgstr "已同步命令树至 {synced}/{total}。"
+
+#: squid/bot/admin.py:232
+#, python-brace-format
+msgid "Synced {count} commands {scope}."
+msgstr "已{scope}同步 {count} 个命令。"
+
+#: squid/bot/admin.py:58
+#, python-brace-format
+msgid "Tag #{id} is awaiting staff approval."
+msgstr "标签 #{id} 正在等待管理员审批。"
+
+#: squid/bot/admin.py:123
+msgid "Tag approved"
+msgstr "标签已批准"
+
+#: squid/bot/admin.py:153
+msgid "Tag archived"
+msgstr "标签已归档"
+
+#: squid/bot/admin.py:57
+msgid "Tag proposed"
+msgstr "标签已提议"
+
+#: squid/bot/admin.py:138
+msgid "Tag rejected"
+msgstr "标签已拒绝"
+
+#: squid/builds/errors.py:69
+msgid "That alias is already on this restriction."
+msgstr "该别名已存在于此限制中。"
+
+#: squid/builds/errors.py:86
+msgid "That alias is already used by another restriction."
+msgstr "该别名已被另一个限制使用。"
+
+#: squid/bot/settings.py:244
+msgid "That language is not supported."
+msgstr "不支持该语言。"
+
+#: squid/bot/submission/search.py:299
+msgid "The ID of the build whose debug details you want to see."
+msgstr "你要查看调试详情的构造 ID。"
+
+#: squid/bot/submission/search.py:261
+msgid "The ID of the build you want to confirm."
+msgstr "你要确认的构造 ID。"
+
+#: squid/bot/submission/search.py:280
+msgid "The ID of the build you want to deny."
+msgstr "你要拒绝的构造 ID。"
+
+#: squid/bot/submission/search.py:221
+msgid "The ID of the build you want to see."
+msgstr "你要查看的构造 ID。"
+
+#: squid/users/errors.py:74
+msgid "The Minecraft account service is temporarily unavailable."
+msgstr "Minecraft 账户服务暂时不可用。"
+
+#: squid/versions/errors.py:19
+msgid "The Minecraft version catalog is empty."
+msgstr "Minecraft 版本目录为空。"
+
+#: squid/versions/errors.py:10
+msgid "The Minecraft version is invalid."
+msgstr "Minecraft 版本无效。"
+
+#: squid/bot/submission/search.py:125
+msgid "The additional name."
+msgstr "附加名称。"
+
+#: squid/builds/errors.py:10
+msgid "The build data is invalid."
+msgstr "构造数据无效。"
+
+#: squid/bot/settings.py:117
+msgid "The channel to send this type of message to"
+msgstr "用于发送此类消息的频道"
+
+#: squid/bot/verify.py:28
+msgid "The code you received by running /link in the game."
+msgstr "你在游戏中运行 /link 后收到的验证码。"
+
+#: squid/bot/help.py:31
+msgid "The command to get help for."
+msgstr "要获取帮助的命令。"
+
+#: squid/bot/settings.py:232
+msgid "The language the bot should respond in"
+msgstr "机器人应使用的回复语言"
+
+#: squid/bot/voting/vote.py:136
+msgid "The message is not from this guild."
+msgstr "该消息不是来自此服务器。"
+
+#: squid/messages/errors.py:10
+msgid "The message metadata is invalid."
+msgstr "消息元数据无效。"
+
+#: squid/bot/voting/vote.py:129
+msgid "The message to hold a deletion vote for."
+msgstr "要发起删除投票的消息。"
+
+#: squid/core/errors.py:159
+msgid "The operation conflicts with the current state."
+msgstr "该操作与当前状态冲突。"
+
+#: squid/api/errors.py:145
+msgid "The request did not pass validation."
+msgstr "请求未通过验证。"
+
+#: squid/core/errors.py:135
+msgid "The requested operation could not be completed."
+msgstr "请求的操作无法完成。"
+
+#: squid/core/errors.py:151
+msgid "The requested resource was not found."
+msgstr "找不到请求的资源。"
+
+#: squid/bot/submission/search.py:124
+msgid "The restriction to add another name for."
+msgstr "要为其添加别名的限制。"
+
+#: squid/bot/settings.py:190
+msgid "The roles must be from this server."
+msgstr "身份组必须来自此服务器。"
+
+#: squid/bot/settings.py:118
+msgid "The roles which will have this permission"
+msgstr "将拥有此权限的身份组"
+
+#: squid/core/errors.py:143
+msgid "The supplied value is invalid."
+msgstr "提供的值无效。"
+
+#: squid/bot/admin.py:68
+msgid "The tag value, omitted for plain tags."
+msgstr "标签的值，普通标签可省略。"
+
+#: squid/bot/submission/records.py:129
+msgid "The typed record family."
+msgstr "类型化的记录系列。"
+
+#: squid/users/errors.py:12
+msgid "The user data is invalid."
+msgstr "用户数据无效。"
+
+#: squid/users/errors.py:32
+msgid "The verification code is invalid or expired."
+msgstr "验证码无效或已过期。"
+
+#: squid/bot/submission/search_view.py:46
+msgid "These search controls belong to someone else."
+msgstr "这些搜索控件属于其他人。"
+
+#: squid/users/errors.py:42
+msgid "This Discord account is already linked to a different Minecraft account."
+msgstr "此 Discord 账户已关联到另一个 Minecraft 账户。"
+
+#: squid/builds/errors.py:35
+msgid "This build is currently being edited by someone else."
+msgstr "该构造目前正被其他人编辑。"
+
+#: squid/bot/errors.py:88
+msgid "This command cannot be used in a private message."
+msgstr "此命令不能在私信中使用。"
+
+#: squid/bot/submission/submit.py:132
+msgid "This command is only available as a slash command for now."
+msgstr "此命令目前仅支持以斜杠命令形式使用。"
+
+#: squid/bot/submission/edit.py:181 squid/bot/submission/edit.py:189
+msgid "This does not look like a build."
+msgstr "这看起来不像是一个构造。"
+
+#: squid/bot/submission/paginator.py:82
+msgid "This paginator belongs to someone else."
+msgstr "此分页器属于其他人。"
+
+#: squid/bot/submission/paginator.py:90
+msgid "This paginator is attached to a different channel."
+msgstr "此分页器已附加到另一个频道。"
+
+#: squid/bot/settings.py:255
+#, python-brace-format
+msgid "This server's language has been set to {language}."
+msgstr "此服务器的语言已设置为 {language}。"
+
+#: squid/bot/settings.py:207
+msgid "This setting is not supported."
+msgstr "不支持此设置。"
+
+#: squid/bot/submission/edit.py:143
+msgid "Timed out"
+msgstr "已超时"
+
+#: squid/messages/errors.py:18
+msgid "Tracked message not found."
+msgstr "找不到被追踪的消息。"
+
+#: squid/users/errors.py:77
+msgid "Try again in a few minutes."
+msgstr "请几分钟后重试。"
+
+#: squid/bot/errors.py:103
+#, python-brace-format
+msgid "Try again in {seconds:.1f} seconds."
+msgstr "请在 {seconds:.1f} 秒后重试。"
+
+#: squid/bot/help.py:212
+#, python-brace-format
+msgid ""
+"Unable to find command `{name}`. Use /help to get a list of available "
+"commands."
+msgstr "找不到命令 `{name}`。请使用 /help 获取可用命令列表。"
+
+#: squid/core/errors.py:167
+msgid "Unauthorized"
+msgstr "未授权"
+
+#: squid/core/errors.py:166
+msgid "Unauthorized."
+msgstr "未授权。"
+
+#: squid/users/errors.py:46
+msgid "Unlink the current account before linking a new one."
+msgstr "请先取消关联当前账户，再关联新账户。"
+
+#: squid/bot/submission/submit.py:160
+#, python-brace-format
+msgid "Unsupported content type: {content_type}"
+msgstr "不支持的内容类型：{content_type}"
+
+#: squid/bot/help.py:19
+msgid "Use `/help <command>` to get more information."
+msgstr "使用 `/help <command>` 获取更多信息。"
+
+#: squid/versions/errors.py:13
+msgid "Use a supported Minecraft version format and try again."
+msgstr "请使用受支持的 Minecraft 版本格式后重试。"
+
+#: squid/bot/submission/search.py:68
+msgid "Use keyword matching or smart meaning-based matching."
+msgstr "使用关键词匹配或基于语义的智能匹配。"
+
+#: squid/bot/submission/edit.py:119
+msgid "User confirming changes..."
+msgstr "用户正在确认更改……"
+
+#: squid/users/errors.py:20
+msgid "User not found."
+msgstr "找不到该用户。"
+
+#: squid/bot/version_tracking.py:48 squid/bot/version_tracking.py:65
+#, python-brace-format
+msgid "Version added successfully: {version}"
+msgstr "版本添加成功：{version}"
+
+#: squid/voting/errors.py:10
+msgid "Vote configuration is invalid."
+msgstr "投票配置无效。"
+
+#: squid/bot/errors.py:108
+msgid "Wait for the current operation to finish and try again."
+msgstr "请等待当前操作完成后重试。"
+
+#: squid/builds/errors.py:39
+msgid "Wait for the other edit to finish and try again."
+msgstr "请等待其他编辑完成后重试。"
+
+#: squid/bot/submission/edit.py:119
+msgid "Waiting"
+msgstr "等待中"
+
+#: squid/bot/admin.py:37
+msgid "Whether the tag carries a number, text, yes/no value, or no value."
+msgstr "该标签是否带有数字、文本、是/否值，或不带值。"
+
+#: squid/bot/utils/embeds.py:19
+msgid "Working"
+msgstr "处理中"
+
+#: squid/bot/settings.py:137
+msgid "You can only provide a channel or a list of roles, not both."
+msgstr "你只能提供一个频道或一组身份组，不能同时提供两者。"
+
+#: squid/bot/errors.py:113 squid/bot/errors.py:128
+msgid "You cannot use this command here."
+msgstr "你不能在此处使用此命令。"
+
+#: squid/bot/voting/vote.py:101
+msgid "You do not have a trusted role."
+msgstr "你没有受信任的身份组。"
+
+#: squid/core/errors.py:174
+msgid "You do not have permission to perform this action."
+msgstr "你没有权限执行此操作。"
+
+#: squid/bot/errors.py:93
+msgid "You do not have permission to use this command."
+msgstr "你没有权限使用此命令。"
+
+#: squid/bot/verify.py:60
+msgid ""
+"You don't have a Minecraft account linked to your Discord account, or the"
+" unlinking failed."
+msgstr "你的 Discord 账户没有关联 Minecraft 账户，或取消关联失败。"
+
+#: squid/bot/settings.py:150
+msgid "You must provide a channel for this setting."
+msgstr "此设置需要提供一个频道。"
+
+#: squid/bot/settings.py:180
+msgid "You must provide a list of roles for this setting."
+msgstr "此设置需要提供一组身份组。"
+
+#: squid/bot/verify.py:34
+msgid "Your Discord account has been linked with your Minecraft account."
+msgstr "你的 Discord 账户已与 Minecraft 账户关联。"
+
+#: squid/bot/verify.py:50
+msgid "Your Discord account has been unlinked from your Minecraft account."
+msgstr "你的 Discord 账户已与 Minecraft 账户取消关联。"
+
+#: squid/bot/settings.py:60 squid/bot/settings.py:98
+msgid "_Not found_"
+msgstr "_未找到_"
+
+#: squid/bot/settings.py:65 squid/bot/settings.py:92 squid/bot/settings.py:104
+msgid "_Not set_"
+msgstr "_未设置_"
+
+#: squid/bot/admin.py:230
+msgid "globally"
+msgstr "全局"
+
+#: squid/bot/admin.py:230
+msgid "to the current guild"
+msgstr "向当前服务器"
+
+#: squid/bot/submission/records.py:115
+#, python-brace-format
+msgid ""
+"{definitions} definitions; {resolved} resolved; {unresolved} awaiting "
+"evidence."
+msgstr "{definitions} 个定义；已解决 {resolved} 个；{unresolved} 个等待证据。"
+
+#: squid/bot/help.py:97
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Commands:{commands}\n"
+"\n"
+"{more_information}\n"
+msgstr ""
+"{description}\n"
+"\n"
+"命令：{commands}\n"
+"\n"
+"{more_information}\n"
+
+#: squid/bot/help.py:177
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Usable Subcommands: {commands}\n"
+"\n"
+"{more_information}"
+msgstr ""
+"{description}\n"
+"\n"
+"可用子命令：{commands}\n"
+"\n"
+"{more_information}"
+
+#: squid/bot/help.py:197
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Usable Subcommands:{commands}\n"
+"\n"
+"{more_information}"
+msgstr ""
+"{description}\n"
+"\n"
+"可用子命令：{commands}\n"
+"\n"
+"{more_information}"
+
+#: squid/bot/give_redstoner.py:87
+#, python-brace-format
+msgid "{member} — just kidding, here is your role back."
+msgstr "{member} — 开玩笑的，你的身份组还给你。"
+
+#: squid/bot/give_redstoner.py:71
+#, python-brace-format
+msgid "{owner}, {member} has removed their own redstoner role."
+msgstr "{owner}，{member} 已移除了自己的红石玩家身份组。"
+
+#: squid/bot/give_redstoner.py:141
+#, python-brace-format
+msgid "{reason} in {url}"
+msgstr "{reason}，位于 {url}"
+
+#: squid/bot/settings.py:89
+#, python-brace-format
+msgid "{setting} Channel Info"
+msgstr "{setting} 频道信息"
+
+#: squid/bot/settings.py:101
+#, python-brace-format
+msgid "{setting} Roles Info"
+msgstr "{setting} 身份组信息"
+
+#: squid/bot/settings.py:170
+#, python-brace-format
+msgid "{setting} channel has successfully been set."
+msgstr "{setting} 频道设置成功。"
+
+#: squid/bot/settings.py:56
+#, python-brace-format
+msgid "{setting} channel: _Not set_\n"
+msgstr "{setting} 频道：_未设置_\n"
+
+#: squid/bot/settings.py:61
+#, python-brace-format
+msgid "{setting} channel: {value}\n"
+msgstr "{setting} 频道：{value}\n"
+
+#: squid/bot/settings.py:226
+#, python-brace-format
+msgid "{setting} has been cleared."
+msgstr "{setting} 已被清除。"
+
+#: squid/bot/settings.py:200
+#, python-brace-format
+msgid "{setting} roles have successfully been set."
+msgstr "{setting} 身份组设置成功。"
+
+#: squid/bot/settings.py:66
+#, python-brace-format
+msgid "{setting} roles: {value}\n"
+msgstr "{setting} 身份组：{value}\n"
+
+#: squid/bot/settings.py:68
+#, python-brace-format
+msgid "{setting}: {value}\n"
+msgstr "{setting}：{value}\n"

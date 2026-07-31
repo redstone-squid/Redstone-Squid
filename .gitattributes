@@ -30,6 +30,7 @@
 *.tsv      text
 *.txt      text
 *.sql      text
+*.po       text diff=po
 *.epub     diff=astextplain
 
 # Graphics
@@ -106,6 +107,7 @@
 Dockerfile     text
 LICENSE        text
 alembic.ini    text
+babel.cfg      text
 justfile       text
 scripts/pre-push text
 tests/fuzz/corpus/** text

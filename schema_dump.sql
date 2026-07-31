@@ -2,8 +2,10 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 17.4
--- Dumped by pg_dump version 17.4
+\restrict 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+-- Dumped from database version 17.8 (Debian 17.8-1.pgdg12+1)
+-- Dumped by pg_dump version 17.8 (Debian 17.8-1.pgdg12+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -18,171 +20,38 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: auth; Type: SCHEMA; Schema: -; Owner: -
+-- Name: pg_trgm; Type: EXTENSION; Schema: -; Owner: -
 --
 
-CREATE SCHEMA auth;
-
-
---
--- Name: extensions; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
 
 --
--- Name: graphql; Type: SCHEMA; Schema: -; Owner: -
+-- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: -
 --
 
-CREATE SCHEMA graphql;
-
-
---
--- Name: graphql_public; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA graphql_public;
+COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
 
 
 --
--- Name: pgbouncer; Type: SCHEMA; Schema: -; Owner: -
+-- Name: unaccent; Type: EXTENSION; Schema: -; Owner: -
 --
 
-CREATE SCHEMA pgbouncer;
-
-
---
--- Name: pgsodium; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA pgsodium;
+CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
 
 
 --
--- Name: pgsodium; Type: EXTENSION; Schema: -; Owner: -
+-- Name: EXTENSION unaccent; Type: COMMENT; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS pgsodium WITH SCHEMA pgsodium;
-
-
---
--- Name: EXTENSION pgsodium; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pgsodium IS 'Pgsodium is a modern cryptography library for Postgres.';
-
-
---
--- Name: realtime; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA realtime;
-
-
---
--- Name: storage; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA storage;
-
-
---
--- Name: supabase_migrations; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA supabase_migrations;
-
-
---
--- Name: vault; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA vault;
-
-
---
--- Name: vecs; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA vecs;
-
-
---
--- Name: pg_graphql; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_graphql WITH SCHEMA graphql;
-
-
---
--- Name: EXTENSION pg_graphql; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pg_graphql IS 'pg_graphql: GraphQL support';
-
-
---
--- Name: pg_stat_statements; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions;
-
-
---
--- Name: EXTENSION pg_stat_statements; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pg_stat_statements IS 'track planning and execution statistics of all SQL statements executed';
-
-
---
--- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
-
-
---
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
-
-
---
--- Name: supabase_vault; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
-
-
---
--- Name: EXTENSION supabase_vault; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION supabase_vault IS 'Supabase Vault Extension';
-
-
---
--- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
-
-
---
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents';
 
 
 --
 -- Name: vector; Type: EXTENSION; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
 
 --
@@ -190,526 +59,6 @@ CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 --
 
 COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access methods';
-
-
---
--- Name: aal_level; Type: TYPE; Schema: auth; Owner: -
---
-
-CREATE TYPE auth.aal_level AS ENUM (
-    'aal1',
-    'aal2',
-    'aal3'
-);
-
-
---
--- Name: code_challenge_method; Type: TYPE; Schema: auth; Owner: -
---
-
-CREATE TYPE auth.code_challenge_method AS ENUM (
-    's256',
-    'plain'
-);
-
-
---
--- Name: factor_status; Type: TYPE; Schema: auth; Owner: -
---
-
-CREATE TYPE auth.factor_status AS ENUM (
-    'unverified',
-    'verified'
-);
-
-
---
--- Name: factor_type; Type: TYPE; Schema: auth; Owner: -
---
-
-CREATE TYPE auth.factor_type AS ENUM (
-    'totp',
-    'webauthn',
-    'phone'
-);
-
-
---
--- Name: one_time_token_type; Type: TYPE; Schema: auth; Owner: -
---
-
-CREATE TYPE auth.one_time_token_type AS ENUM (
-    'confirmation_token',
-    'reauthentication_token',
-    'recovery_token',
-    'email_change_token_new',
-    'email_change_token_current',
-    'phone_change_token'
-);
-
-
---
--- Name: action; Type: TYPE; Schema: realtime; Owner: -
---
-
-CREATE TYPE realtime.action AS ENUM (
-    'INSERT',
-    'UPDATE',
-    'DELETE',
-    'TRUNCATE',
-    'ERROR'
-);
-
-
---
--- Name: equality_op; Type: TYPE; Schema: realtime; Owner: -
---
-
-CREATE TYPE realtime.equality_op AS ENUM (
-    'eq',
-    'neq',
-    'lt',
-    'lte',
-    'gt',
-    'gte',
-    'in'
-);
-
-
---
--- Name: user_defined_filter; Type: TYPE; Schema: realtime; Owner: -
---
-
-CREATE TYPE realtime.user_defined_filter AS (
-	column_name text,
-	op realtime.equality_op,
-	value text
-);
-
-
---
--- Name: wal_column; Type: TYPE; Schema: realtime; Owner: -
---
-
-CREATE TYPE realtime.wal_column AS (
-	name text,
-	type_name text,
-	type_oid oid,
-	value jsonb,
-	is_pkey boolean,
-	is_selectable boolean
-);
-
-
---
--- Name: wal_rls; Type: TYPE; Schema: realtime; Owner: -
---
-
-CREATE TYPE realtime.wal_rls AS (
-	wal jsonb,
-	is_rls_enabled boolean,
-	subscription_ids uuid[],
-	errors text[]
-);
-
-
---
--- Name: email(); Type: FUNCTION; Schema: auth; Owner: -
---
-
-CREATE FUNCTION auth.email() RETURNS text
-    LANGUAGE sql STABLE
-    AS $$
-  select 
-  coalesce(
-    nullif(current_setting('request.jwt.claim.email', true), ''),
-    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email')
-  )::text
-$$;
-
-
---
--- Name: FUNCTION email(); Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON FUNCTION auth.email() IS 'Deprecated. Use auth.jwt() -> ''email'' instead.';
-
-
---
--- Name: jwt(); Type: FUNCTION; Schema: auth; Owner: -
---
-
-CREATE FUNCTION auth.jwt() RETURNS jsonb
-    LANGUAGE sql STABLE
-    AS $$
-  select 
-    coalesce(
-        nullif(current_setting('request.jwt.claim', true), ''),
-        nullif(current_setting('request.jwt.claims', true), '')
-    )::jsonb
-$$;
-
-
---
--- Name: role(); Type: FUNCTION; Schema: auth; Owner: -
---
-
-CREATE FUNCTION auth.role() RETURNS text
-    LANGUAGE sql STABLE
-    AS $$
-  select 
-  coalesce(
-    nullif(current_setting('request.jwt.claim.role', true), ''),
-    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
-  )::text
-$$;
-
-
---
--- Name: FUNCTION role(); Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON FUNCTION auth.role() IS 'Deprecated. Use auth.jwt() -> ''role'' instead.';
-
-
---
--- Name: uid(); Type: FUNCTION; Schema: auth; Owner: -
---
-
-CREATE FUNCTION auth.uid() RETURNS uuid
-    LANGUAGE sql STABLE
-    AS $$
-  select 
-  coalesce(
-    nullif(current_setting('request.jwt.claim.sub', true), ''),
-    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
-  )::uuid
-$$;
-
-
---
--- Name: FUNCTION uid(); Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON FUNCTION auth.uid() IS 'Deprecated. Use auth.jwt() -> ''sub'' instead.';
-
-
---
--- Name: grant_pg_cron_access(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.grant_pg_cron_access() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF EXISTS (
-    SELECT
-    FROM pg_event_trigger_ddl_commands() AS ev
-    JOIN pg_extension AS ext
-    ON ev.objid = ext.oid
-    WHERE ext.extname = 'pg_cron'
-  )
-  THEN
-    grant usage on schema cron to postgres with grant option;
-
-    alter default privileges in schema cron grant all on tables to postgres with grant option;
-    alter default privileges in schema cron grant all on functions to postgres with grant option;
-    alter default privileges in schema cron grant all on sequences to postgres with grant option;
-
-    alter default privileges for user supabase_admin in schema cron grant all
-        on sequences to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
-        on tables to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
-        on functions to postgres with grant option;
-
-    grant all privileges on all tables in schema cron to postgres with grant option;
-    revoke all on table cron.job from postgres;
-    grant select on table cron.job to postgres with grant option;
-  END IF;
-END;
-$$;
-
-
---
--- Name: FUNCTION grant_pg_cron_access(); Type: COMMENT; Schema: extensions; Owner: -
---
-
-COMMENT ON FUNCTION extensions.grant_pg_cron_access() IS 'Grants access to pg_cron';
-
-
---
--- Name: grant_pg_graphql_access(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.grant_pg_graphql_access() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $_$
-DECLARE
-    func_is_graphql_resolve bool;
-BEGIN
-    func_is_graphql_resolve = (
-        SELECT n.proname = 'resolve'
-        FROM pg_event_trigger_ddl_commands() AS ev
-        LEFT JOIN pg_catalog.pg_proc AS n
-        ON ev.objid = n.oid
-    );
-
-    IF func_is_graphql_resolve
-    THEN
-        -- Update public wrapper to pass all arguments through to the pg_graphql resolve func
-        DROP FUNCTION IF EXISTS graphql_public.graphql;
-        create or replace function graphql_public.graphql(
-            "operationName" text default null,
-            query text default null,
-            variables jsonb default null,
-            extensions jsonb default null
-        )
-            returns jsonb
-            language sql
-        as $$
-            select graphql.resolve(
-                query := query,
-                variables := coalesce(variables, '{}'),
-                "operationName" := "operationName",
-                extensions := extensions
-            );
-        $$;
-
-        -- This hook executes when `graphql.resolve` is created. That is not necessarily the last
-        -- function in the extension so we need to grant permissions on existing entities AND
-        -- update default permissions to any others that are created after `graphql.resolve`
-        grant usage on schema graphql to postgres, anon, authenticated, service_role;
-        grant select on all tables in schema graphql to postgres, anon, authenticated, service_role;
-        grant execute on all functions in schema graphql to postgres, anon, authenticated, service_role;
-        grant all on all sequences in schema graphql to postgres, anon, authenticated, service_role;
-        alter default privileges in schema graphql grant all on tables to postgres, anon, authenticated, service_role;
-        alter default privileges in schema graphql grant all on functions to postgres, anon, authenticated, service_role;
-        alter default privileges in schema graphql grant all on sequences to postgres, anon, authenticated, service_role;
-
-        -- Allow postgres role to allow granting usage on graphql and graphql_public schemas to custom roles
-        grant usage on schema graphql_public to postgres with grant option;
-        grant usage on schema graphql to postgres with grant option;
-    END IF;
-
-END;
-$_$;
-
-
---
--- Name: FUNCTION grant_pg_graphql_access(); Type: COMMENT; Schema: extensions; Owner: -
---
-
-COMMENT ON FUNCTION extensions.grant_pg_graphql_access() IS 'Grants access to pg_graphql';
-
-
---
--- Name: grant_pg_net_access(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.grant_pg_net_access() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM pg_event_trigger_ddl_commands() AS ev
-    JOIN pg_extension AS ext
-    ON ev.objid = ext.oid
-    WHERE ext.extname = 'pg_net'
-  )
-  THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM pg_roles
-      WHERE rolname = 'supabase_functions_admin'
-    )
-    THEN
-      CREATE USER supabase_functions_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION;
-    END IF;
-
-    GRANT USAGE ON SCHEMA net TO supabase_functions_admin, postgres, anon, authenticated, service_role;
-
-    IF EXISTS (
-      SELECT FROM pg_extension
-      WHERE extname = 'pg_net'
-      -- all versions in use on existing projects as of 2025-02-20
-      -- version 0.12.0 onwards don't need these applied
-      AND extversion IN ('0.2', '0.6', '0.7', '0.7.1', '0.8', '0.10.0', '0.11.0')
-    ) THEN
-      ALTER function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) SECURITY DEFINER;
-      ALTER function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) SECURITY DEFINER;
-
-      ALTER function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) SET search_path = net;
-      ALTER function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) SET search_path = net;
-
-      REVOKE ALL ON FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) FROM PUBLIC;
-      REVOKE ALL ON FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) FROM PUBLIC;
-
-      GRANT EXECUTE ON FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) TO supabase_functions_admin, postgres, anon, authenticated, service_role;
-      GRANT EXECUTE ON FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) TO supabase_functions_admin, postgres, anon, authenticated, service_role;
-    END IF;
-  END IF;
-END;
-$$;
-
-
---
--- Name: FUNCTION grant_pg_net_access(); Type: COMMENT; Schema: extensions; Owner: -
---
-
-COMMENT ON FUNCTION extensions.grant_pg_net_access() IS 'Grants access to pg_net';
-
-
---
--- Name: pgrst_ddl_watch(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.pgrst_ddl_watch() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-  cmd record;
-BEGIN
-  FOR cmd IN SELECT * FROM pg_event_trigger_ddl_commands()
-  LOOP
-    IF cmd.command_tag IN (
-      'CREATE SCHEMA', 'ALTER SCHEMA'
-    , 'CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO', 'ALTER TABLE'
-    , 'CREATE FOREIGN TABLE', 'ALTER FOREIGN TABLE'
-    , 'CREATE VIEW', 'ALTER VIEW'
-    , 'CREATE MATERIALIZED VIEW', 'ALTER MATERIALIZED VIEW'
-    , 'CREATE FUNCTION', 'ALTER FUNCTION'
-    , 'CREATE TRIGGER'
-    , 'CREATE TYPE', 'ALTER TYPE'
-    , 'CREATE RULE'
-    , 'COMMENT'
-    )
-    -- don't notify in case of CREATE TEMP table or other objects created on pg_temp
-    AND cmd.schema_name is distinct from 'pg_temp'
-    THEN
-      NOTIFY pgrst, 'reload schema';
-    END IF;
-  END LOOP;
-END; $$;
-
-
---
--- Name: pgrst_drop_watch(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.pgrst_drop_watch() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-  obj record;
-BEGIN
-  FOR obj IN SELECT * FROM pg_event_trigger_dropped_objects()
-  LOOP
-    IF obj.object_type IN (
-      'schema'
-    , 'table'
-    , 'foreign table'
-    , 'view'
-    , 'materialized view'
-    , 'function'
-    , 'trigger'
-    , 'type'
-    , 'rule'
-    )
-    AND obj.is_temporary IS false -- no pg_temp objects
-    THEN
-      NOTIFY pgrst, 'reload schema';
-    END IF;
-  END LOOP;
-END; $$;
-
-
---
--- Name: set_graphql_placeholder(); Type: FUNCTION; Schema: extensions; Owner: -
---
-
-CREATE FUNCTION extensions.set_graphql_placeholder() RETURNS event_trigger
-    LANGUAGE plpgsql
-    AS $_$
-    DECLARE
-    graphql_is_dropped bool;
-    BEGIN
-    graphql_is_dropped = (
-        SELECT ev.schema_name = 'graphql_public'
-        FROM pg_event_trigger_dropped_objects() AS ev
-        WHERE ev.schema_name = 'graphql_public'
-    );
-
-    IF graphql_is_dropped
-    THEN
-        create or replace function graphql_public.graphql(
-            "operationName" text default null,
-            query text default null,
-            variables jsonb default null,
-            extensions jsonb default null
-        )
-            returns jsonb
-            language plpgsql
-        as $$
-            DECLARE
-                server_version float;
-            BEGIN
-                server_version = (SELECT (SPLIT_PART((select version()), ' ', 2))::float);
-
-                IF server_version >= 14 THEN
-                    RETURN jsonb_build_object(
-                        'errors', jsonb_build_array(
-                            jsonb_build_object(
-                                'message', 'pg_graphql extension is not enabled.'
-                            )
-                        )
-                    );
-                ELSE
-                    RETURN jsonb_build_object(
-                        'errors', jsonb_build_array(
-                            jsonb_build_object(
-                                'message', 'pg_graphql is only available on projects running Postgres 14 onwards.'
-                            )
-                        )
-                    );
-                END IF;
-            END;
-        $$;
-    END IF;
-
-    END;
-$_$;
-
-
---
--- Name: FUNCTION set_graphql_placeholder(); Type: COMMENT; Schema: extensions; Owner: -
---
-
-COMMENT ON FUNCTION extensions.set_graphql_placeholder() IS 'Reintroduces placeholder function for graphql_public.graphql';
-
-
---
--- Name: get_auth(text); Type: FUNCTION; Schema: pgbouncer; Owner: -
---
-
-CREATE FUNCTION pgbouncer.get_auth(p_usename text) RETURNS TABLE(username text, password text)
-    LANGUAGE plpgsql SECURITY DEFINER
-    AS $_$
-  BEGIN
-      RAISE DEBUG 'PgBouncer auth request: %', p_usename;
-
-      RETURN QUERY
-      SELECT
-          rolname::text,
-          CASE WHEN rolvaliduntil < now()
-              THEN null
-              ELSE rolpassword::text
-          END
-      FROM pg_authid
-      WHERE rolname=$1 and rolcanlogin;
-  END;
-  $_$;
 
 
 --
@@ -729,6 +78,177 @@ BEGIN
         WHERE bvs.vote_session_id IS NULL AND dvs.vote_session_id IS NULL
     );
     RETURN NULL; -- Statement-level triggers do not use OLD or NEW
+END;
+$$;
+
+
+--
+-- Name: enqueue_build_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_build_id bigint;
+    target_action text := 'upsert';
+    target_kind text;
+BEGIN
+    IF TG_TABLE_NAME = 'builds' THEN
+        target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        target_kind := lower(CASE WHEN TG_OP = 'DELETE' THEN OLD.category ELSE NEW.category END);
+        IF TG_OP = 'DELETE' THEN
+            target_action := 'delete';
+        END IF;
+    ELSE
+        target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
+        SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
+    END IF;
+
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+    VALUES ('build', target_build_id::text, target_action, now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        attempts = 0,
+        locked_at = NULL,
+        last_error = NULL;
+
+    IF target_kind IN ('door', 'extender') THEN
+        INSERT INTO public.record_recompute_queue
+            (scope_key, build_kind, build_id, reasons, enqueued_at)
+        VALUES (
+            target_kind,
+            target_kind,
+            CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
+            '["source_change"]'::jsonb,
+            now()
+        )
+        ON CONFLICT (scope_key) DO UPDATE
+        SET build_id = EXCLUDED.build_id,
+            reasons = (
+                SELECT jsonb_agg(DISTINCT reason)
+                FROM jsonb_array_elements_text(
+                    record_recompute_queue.reasons || EXCLUDED.reasons
+                ) AS reason
+            ),
+            enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0,
+            locked_at = NULL,
+            last_error = NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+--
+-- Name: enqueue_computed_record_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_result_id bigint;
+BEGIN
+    IF TG_TABLE_NAME = 'record_results' THEN
+        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        VALUES (
+            'record',
+            'result:' || target_result_id::text,
+            CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END,
+            now()
+        )
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
+        target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now())
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSE
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'record', 'result:' || rr.id::text, 'upsert', now()
+        FROM public.record_results rr
+        WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+--
+-- Name: enqueue_metadata_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_metadata_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_id bigint;
+    target_kind text;
+    target_action text := 'upsert';
+BEGIN
+    target_kind := CASE TG_TABLE_NAME
+        WHEN 'restrictions' THEN 'restriction'
+        WHEN 'restriction_aliases' THEN 'restriction'
+        WHEN 'types' THEN 'type'
+        WHEN 'users' THEN 'creator'
+        WHEN 'versions' THEN 'version'
+    END;
+    IF TG_TABLE_NAME = 'restriction_aliases' THEN
+        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.restriction_id ELSE NEW.restriction_id END;
+    ELSE
+        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    END IF;
+    IF TG_OP = 'DELETE' AND TG_TABLE_NAME <> 'restriction_aliases' THEN
+        target_action := 'delete';
+    END IF;
+
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now())
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        attempts = 0,
+        locked_at = NULL,
+        last_error = NULL;
+
+    IF TG_TABLE_NAME IN ('restrictions', 'restriction_aliases') THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', br.build_id::text, 'upsert', now()
+        FROM public.build_restrictions br
+        WHERE br.restriction_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'types' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bt.build_id::text, 'upsert', now()
+        FROM public.build_types bt
+        WHERE bt.type_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'users' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bc.build_id::text, 'upsert', now()
+        FROM public.build_creators bc
+        WHERE bc.user_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    ELSIF TG_TABLE_NAME = 'versions' THEN
+        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        SELECT 'build', bv.build_id::text, 'upsert', now()
+        FROM public.build_versions bv
+        WHERE bv.version_id = target_id
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+    END IF;
+    RETURN NULL;
 END;
 $$;
 
@@ -777,6 +297,13 @@ CREATE TABLE public.messages (
     author_id bigint NOT NULL,
     vote_session_id bigint
 );
+
+
+--
+-- Name: TABLE messages; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.messages IS 'A message associated with a build or vote session.';
 
 
 --
@@ -830,28 +357,38 @@ $$;
 CREATE TABLE public.builds (
     id bigint NOT NULL,
     submission_status smallint NOT NULL,
-    edited_time timestamp with time zone DEFAULT (now() AT TIME ZONE 'utc'::text),
+    edited_time timestamp with time zone DEFAULT now(),
     record_category text,
     extra_info jsonb DEFAULT '{}'::jsonb NOT NULL,
     width integer,
     height integer,
     depth integer,
     completion_time text,
-    submission_time timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    submission_time timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     category text,
     submitter_id bigint NOT NULL,
     ai_generated boolean NOT NULL,
     original_message_id bigint,
     version_spec text,
-    embedding extensions.vector(1536),
+    embedding public.vector(1536),
     is_locked boolean DEFAULT false NOT NULL,
     locked_at timestamp with time zone,
+    completion_at timestamp with time zone,
+    completion_evidence text,
+    description text,
     CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
     CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
     CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
     CONSTRAINT submissions_build_height_check CHECK ((height > 0)),
     CONSTRAINT submissions_build_width_check CHECK ((width > 0))
 );
+
+
+--
+-- Name: TABLE builds; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.builds IS 'A build submitted by a user.';
 
 
 --
@@ -915,260 +452,6 @@ BEGIN
         );
     END LOOP;
 END;
-$$;
-
-
---
--- Name: rebuild_smallest_door_records(); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.rebuild_smallest_door_records()
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    -- 1. Take an exclusive lock so readers don’t see half a table.
-    LOCK TABLE public.smallest_door_records IN ACCESS EXCLUSIVE MODE;
-
-    -- 2. Wipe the current contents.
-    TRUNCATE TABLE public.smallest_door_records;
-
-    -- 3. Re-insert from scratch with the same query used during creation.
-    WITH base AS (
-        SELECT
-            b.id   AS build_id,
-            d.orientation,
-            d.door_width,
-            d.door_height,
-            COALESCE(d.door_depth, 1)               AS door_depth,
-            COALESCE(
-                ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                    FILTER (WHERE t.name IS NOT NULL),
-                ARRAY[]::text[]
-            ) AS types,
-            COALESCE(
-                ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                    FILTER (WHERE r.name IS NOT NULL),
-                ARRAY[]::text[]
-            ) AS restrictions,
-            b.width * b.height * COALESCE(b.depth, 1) AS volume
-        FROM   public.builds             b
-        JOIN   public.doors              d  ON d.build_id = b.id
-        LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-        LEFT   JOIN public.types         t  ON t.id = bt.type_id
-        LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-        LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-        WHERE  b.submission_status = 1
-          AND  b.category = 'Door'
-          AND  b.width IS NOT NULL
-          AND  b.height IS NOT NULL
-          AND  b.depth IS NOT NULL
-        GROUP  BY b.id, d.orientation, d.door_width, d.door_height, d.door_depth
-    ), exploded AS (
-        SELECT  b.*,
-                ps AS restriction_subset
-        FROM    base b
-        CROSS   JOIN LATERAL public.power_set_max(b.restrictions, 8) ps
-    ), ranked AS (
-        SELECT  *,
-                ROW_NUMBER() OVER (
-                    PARTITION BY types,
-                                 orientation, door_width,
-                                 door_height, door_depth,
-                                 restriction_subset
-                    ORDER BY volume, build_id
-                ) AS rn
-        FROM exploded
-    )
-    INSERT INTO public.smallest_door_records
-           (id, orientation, door_width, door_height, door_depth,
-            types, restrictions, volume, restriction_subset)
-    SELECT build_id, orientation, door_width, door_height,
-           door_depth, types, restrictions, volume, restriction_subset
-    FROM   ranked
-    WHERE  rn = 1;
-END;
-$$;
-
-
---
--- Name: refresh_smallest_after_door_delete(bigint); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.refresh_smallest_after_door_delete(IN p_build_id bigint)
-    LANGUAGE sql
-    AS $$
---------------------------------------------------------------------
---  A.  All (orientation,dims,types,subset) combos where the *old*
---      build was the record-holder.
---------------------------------------------------------------------
-WITH affected AS (
-    SELECT orientation,
-           door_width,
-           door_height,
-           door_depth,
-           types,
-           restriction_subset
-    FROM   public.smallest_door_records
-    WHERE  id = p_build_id
-),
-
---------------------------------------------------------------------
---  B.  Remove those (now stale) rows in one shot.
---------------------------------------------------------------------
-del AS (
-    DELETE FROM public.smallest_door_records s
-    USING affected a
-    WHERE s.orientation        = a.orientation
-      AND s.door_width         = a.door_width
-      AND s.door_height        = a.door_height
-      AND s.door_depth         = a.door_depth
-      AND s.types              = a.types
-      AND s.restriction_subset = a.restriction_subset
-    RETURNING a.*                                   -- feed step C
-),
-
---------------------------------------------------------------------
---  C.  Re-compute the winners for every combo we just deleted,
---      but using *all remaining* builds (p_build_id is gone).
---------------------------------------------------------------------
-base AS (
-    SELECT
-        b.id                                            AS build_id,
-        d.orientation,
-        d.door_width,
-        d.door_height,
-        COALESCE(d.door_depth, 1)                       AS door_depth,
-        COALESCE(
-            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                FILTER (WHERE t.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS types,
-        COALESCE(
-            ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                FILTER (WHERE r.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS restrictions,
-        b.width * b.height * b.depth AS volume
-    FROM   public.builds             b
-    JOIN   public.doors              d  ON d.build_id = b.id
-    LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-    LEFT   JOIN public.types         t  ON t.id = bt.type_id
-    LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-    LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-    WHERE  b.submission_status = 1
-      AND  b.category          = 'Door'
-      AND  b.width IS NOT NULL
-      AND  b.height IS NOT NULL
-      AND  b.depth IS NOT NULL
-      AND  b.id <> p_build_id                         -- <-- removed build
-    GROUP  BY b.id, d.orientation, d.door_width,
-              d.door_height, d.door_depth
-),
-candidates AS (
-    SELECT b.*, d.restriction_subset
-    FROM   base b
-    JOIN   del  d
-      ON   b.orientation = d.orientation
-     AND   b.door_width  = d.door_width
-     AND   b.door_height = d.door_height
-     AND   b.door_depth  = d.door_depth
-     AND   b.types       = d.types
-    WHERE  d.restriction_subset <@ b.restrictions      -- subset test
-),
-ranked AS (
-    SELECT DISTINCT ON
-           (orientation, door_width, door_height,
-            door_depth, types, restriction_subset)
-           build_id        AS id,
-           orientation, door_width, door_height,
-           door_depth, types, restrictions,
-           volume, restriction_subset
-    FROM   candidates
-    ORDER  BY orientation, door_width, door_height,
-             door_depth, types, restriction_subset,
-             volume, id
-)
-
---------------------------------------------------------------------
---  D.  Insert the new winners (if any).
---------------------------------------------------------------------
-INSERT INTO public.smallest_door_records
-       (id, orientation, door_width, door_height, door_depth,
-        types, restrictions, volume, restriction_subset)
-SELECT * FROM ranked;
-$$;
-
-
---
--- Name: refresh_smallest_for_door_insert(bigint); Type: PROCEDURE; Schema: public; Owner: -
---
-
-CREATE PROCEDURE public.refresh_smallest_for_door_insert(IN p_build_id bigint)
-    LANGUAGE sql
-    AS $$
-WITH b AS (                               -- the changed build only
-    SELECT
-        b.id   AS build_id,
-        d.orientation,
-        d.door_width,
-        d.door_height,
-        COALESCE(d.door_depth, 1)               AS door_depth,
-        COALESCE(
-            ARRAY_AGG(DISTINCT t.name ORDER BY t.name)
-                FILTER (WHERE t.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS types,
-        COALESCE(
-            ARRAY_AGG(DISTINCT r.name ORDER BY r.name)
-                FILTER (WHERE r.name IS NOT NULL),
-            ARRAY[]::text[]
-        ) AS restrictions,
-        b.width * b.height * b.depth AS volume
-    FROM   public.builds             b
-    JOIN   public.doors              d  ON d.build_id = b.id
-    LEFT   JOIN public.build_types   bt ON bt.build_id = b.id
-    LEFT   JOIN public.types         t  ON t.id = bt.type_id
-    LEFT   JOIN public.build_restrictions br ON br.build_id = b.id
-    LEFT   JOIN public.restrictions  r  ON r.id = br.restriction_id
-    WHERE  b.id = p_build_id
-        AND  b.submission_status = 1
-        AND  b.category          = 'Door'
-        AND  b.width IS NOT NULL
-        AND  b.height IS NOT NULL
-        AND  b.depth IS NOT NULL
-    GROUP  BY b.id, d.orientation, d.door_width,
-              d.door_height, d.door_depth
-), subset AS (
-    SELECT
-        b.build_id, b.orientation, b.door_width,
-        b.door_height, b.door_depth,
-        b.types, b.restrictions,
-        ps AS restriction_subset, b.volume
-    FROM   b, LATERAL power_set_max(b.restrictions, 8) ps
-), ranked AS (            -- winner per (dims, types, subset)
-    SELECT DISTINCT ON
-           (orientation, door_width, door_height,
-            door_depth, types, restriction_subset)
-           build_id            AS id,
-           orientation, door_width, door_height,
-           door_depth, types, restrictions,
-           volume, restriction_subset
-    FROM   subset
-    ORDER  BY orientation, door_width, door_height, door_depth,
-             types, restriction_subset,
-             volume, id
-)
-INSERT INTO public.smallest_door_records AS s
-       (id, orientation, door_width, door_height, door_depth,
-        types, restrictions, volume, restriction_subset)
-SELECT * FROM ranked
-ON CONFLICT (orientation, door_width, door_height,
-             door_depth, types, restriction_subset)
-DO UPDATE
-    SET id            = EXCLUDED.id,
-        restrictions  = EXCLUDED.restrictions,
-        volume        = EXCLUDED.volume
-    WHERE s.volume > EXCLUDED.volume;   -- update only if we really won
 $$;
 
 
@@ -1306,54 +589,6 @@ $$;
 
 
 --
--- Name: trg_refresh_smallest_door(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.trg_refresh_smallest_door() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-
-    ELSIF TG_OP = 'INSERT' THEN
-        -- remove the stale rows for *this* build first
-        -- The reason why we need to delete the old winners even for INSERT is that
-        -- here, INSERT can also mean "insert a new type/restriction" for an existing door,
-        CALL public.refresh_smallest_after_door_delete(NEW.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    ELSE -- UPDATE
-        -- First remove the “old” winners, then add the “new” ones
-        CALL public.refresh_smallest_after_door_delete(OLD.build_id);
-        CALL public.refresh_smallest_for_door_insert(NEW.build_id);
-
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-
---
--- Name: trg_refresh_smallest_door_from_builds(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.trg_refresh_smallest_door_from_builds() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-    ELSE                               -- INSERT or UPDATE
-        CALL public.refresh_smallest_after_door_delete(OLD.id);
-        CALL public.refresh_smallest_for_door_insert(NEW.id);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-
---
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1368,1419 +603,6 @@ $$;
 
 
 --
--- Name: apply_rls(jsonb, integer); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.apply_rls(wal jsonb, max_record_bytes integer DEFAULT (1024 * 1024)) RETURNS SETOF realtime.wal_rls
-    LANGUAGE plpgsql
-    AS $$
-declare
--- Regclass of the table e.g. public.notes
-entity_ regclass = (quote_ident(wal ->> 'schema') || '.' || quote_ident(wal ->> 'table'))::regclass;
-
--- I, U, D, T: insert, update ...
-action realtime.action = (
-    case wal ->> 'action'
-        when 'I' then 'INSERT'
-        when 'U' then 'UPDATE'
-        when 'D' then 'DELETE'
-        else 'ERROR'
-    end
-);
-
--- Is row level security enabled for the table
-is_rls_enabled bool = relrowsecurity from pg_class where oid = entity_;
-
-subscriptions realtime.subscription[] = array_agg(subs)
-    from
-        realtime.subscription subs
-    where
-        subs.entity = entity_;
-
--- Subscription vars
-roles regrole[] = array_agg(distinct us.claims_role::text)
-    from
-        unnest(subscriptions) us;
-
-working_role regrole;
-claimed_role regrole;
-claims jsonb;
-
-subscription_id uuid;
-subscription_has_access bool;
-visible_to_subscription_ids uuid[] = '{}';
-
--- structured info for wal's columns
-columns realtime.wal_column[];
--- previous identity values for update/delete
-old_columns realtime.wal_column[];
-
-error_record_exceeds_max_size boolean = octet_length(wal::text) > max_record_bytes;
-
--- Primary jsonb output for record
-output jsonb;
-
-begin
-perform set_config('role', null, true);
-
-columns =
-    array_agg(
-        (
-            x->>'name',
-            x->>'type',
-            x->>'typeoid',
-            realtime.cast(
-                (x->'value') #>> '{}',
-                coalesce(
-                    (x->>'typeoid')::regtype, -- null when wal2json version <= 2.4
-                    (x->>'type')::regtype
-                )
-            ),
-            (pks ->> 'name') is not null,
-            true
-        )::realtime.wal_column
-    )
-    from
-        jsonb_array_elements(wal -> 'columns') x
-        left join jsonb_array_elements(wal -> 'pk') pks
-            on (x ->> 'name') = (pks ->> 'name');
-
-old_columns =
-    array_agg(
-        (
-            x->>'name',
-            x->>'type',
-            x->>'typeoid',
-            realtime.cast(
-                (x->'value') #>> '{}',
-                coalesce(
-                    (x->>'typeoid')::regtype, -- null when wal2json version <= 2.4
-                    (x->>'type')::regtype
-                )
-            ),
-            (pks ->> 'name') is not null,
-            true
-        )::realtime.wal_column
-    )
-    from
-        jsonb_array_elements(wal -> 'identity') x
-        left join jsonb_array_elements(wal -> 'pk') pks
-            on (x ->> 'name') = (pks ->> 'name');
-
-for working_role in select * from unnest(roles) loop
-
-    -- Update `is_selectable` for columns and old_columns
-    columns =
-        array_agg(
-            (
-                c.name,
-                c.type_name,
-                c.type_oid,
-                c.value,
-                c.is_pkey,
-                pg_catalog.has_column_privilege(working_role, entity_, c.name, 'SELECT')
-            )::realtime.wal_column
-        )
-        from
-            unnest(columns) c;
-
-    old_columns =
-            array_agg(
-                (
-                    c.name,
-                    c.type_name,
-                    c.type_oid,
-                    c.value,
-                    c.is_pkey,
-                    pg_catalog.has_column_privilege(working_role, entity_, c.name, 'SELECT')
-                )::realtime.wal_column
-            )
-            from
-                unnest(old_columns) c;
-
-    if action <> 'DELETE' and count(1) = 0 from unnest(columns) c where c.is_pkey then
-        return next (
-            jsonb_build_object(
-                'schema', wal ->> 'schema',
-                'table', wal ->> 'table',
-                'type', action
-            ),
-            is_rls_enabled,
-            -- subscriptions is already filtered by entity
-            (select array_agg(s.subscription_id) from unnest(subscriptions) as s where claims_role = working_role),
-            array['Error 400: Bad Request, no primary key']
-        )::realtime.wal_rls;
-
-    -- The claims role does not have SELECT permission to the primary key of entity
-    elsif action <> 'DELETE' and sum(c.is_selectable::int) <> count(1) from unnest(columns) c where c.is_pkey then
-        return next (
-            jsonb_build_object(
-                'schema', wal ->> 'schema',
-                'table', wal ->> 'table',
-                'type', action
-            ),
-            is_rls_enabled,
-            (select array_agg(s.subscription_id) from unnest(subscriptions) as s where claims_role = working_role),
-            array['Error 401: Unauthorized']
-        )::realtime.wal_rls;
-
-    else
-        output = jsonb_build_object(
-            'schema', wal ->> 'schema',
-            'table', wal ->> 'table',
-            'type', action,
-            'commit_timestamp', to_char(
-                ((wal ->> 'timestamp')::timestamptz at time zone 'utc'),
-                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-            ),
-            'columns', (
-                select
-                    jsonb_agg(
-                        jsonb_build_object(
-                            'name', pa.attname,
-                            'type', pt.typname
-                        )
-                        order by pa.attnum asc
-                    )
-                from
-                    pg_attribute pa
-                    join pg_type pt
-                        on pa.atttypid = pt.oid
-                where
-                    attrelid = entity_
-                    and attnum > 0
-                    and pg_catalog.has_column_privilege(working_role, entity_, pa.attname, 'SELECT')
-            )
-        )
-        -- Add "record" key for insert and update
-        || case
-            when action in ('INSERT', 'UPDATE') then
-                jsonb_build_object(
-                    'record',
-                    (
-                        select
-                            jsonb_object_agg(
-                                -- if unchanged toast, get column name and value from old record
-                                coalesce((c).name, (oc).name),
-                                case
-                                    when (c).name is null then (oc).value
-                                    else (c).value
-                                end
-                            )
-                        from
-                            unnest(columns) c
-                            full outer join unnest(old_columns) oc
-                                on (c).name = (oc).name
-                        where
-                            coalesce((c).is_selectable, (oc).is_selectable)
-                            and ( not error_record_exceeds_max_size or (octet_length((c).value::text) <= 64))
-                    )
-                )
-            else '{}'::jsonb
-        end
-        -- Add "old_record" key for update and delete
-        || case
-            when action = 'UPDATE' then
-                jsonb_build_object(
-                        'old_record',
-                        (
-                            select jsonb_object_agg((c).name, (c).value)
-                            from unnest(old_columns) c
-                            where
-                                (c).is_selectable
-                                and ( not error_record_exceeds_max_size or (octet_length((c).value::text) <= 64))
-                        )
-                    )
-            when action = 'DELETE' then
-                jsonb_build_object(
-                    'old_record',
-                    (
-                        select jsonb_object_agg((c).name, (c).value)
-                        from unnest(old_columns) c
-                        where
-                            (c).is_selectable
-                            and ( not error_record_exceeds_max_size or (octet_length((c).value::text) <= 64))
-                            and ( not is_rls_enabled or (c).is_pkey ) -- if RLS enabled, we can't secure deletes so filter to pkey
-                    )
-                )
-            else '{}'::jsonb
-        end;
-
-        -- Create the prepared statement
-        if is_rls_enabled and action <> 'DELETE' then
-            if (select 1 from pg_prepared_statements where name = 'walrus_rls_stmt' limit 1) > 0 then
-                deallocate walrus_rls_stmt;
-            end if;
-            execute realtime.build_prepared_statement_sql('walrus_rls_stmt', entity_, columns);
-        end if;
-
-        visible_to_subscription_ids = '{}';
-
-        for subscription_id, claims in (
-                select
-                    subs.subscription_id,
-                    subs.claims
-                from
-                    unnest(subscriptions) subs
-                where
-                    subs.entity = entity_
-                    and subs.claims_role = working_role
-                    and (
-                        realtime.is_visible_through_filters(columns, subs.filters)
-                        or (
-                          action = 'DELETE'
-                          and realtime.is_visible_through_filters(old_columns, subs.filters)
-                        )
-                    )
-        ) loop
-
-            if not is_rls_enabled or action = 'DELETE' then
-                visible_to_subscription_ids = visible_to_subscription_ids || subscription_id;
-            else
-                -- Check if RLS allows the role to see the record
-                perform
-                    -- Trim leading and trailing quotes from working_role because set_config
-                    -- doesn't recognize the role as valid if they are included
-                    set_config('role', trim(both '"' from working_role::text), true),
-                    set_config('request.jwt.claims', claims::text, true);
-
-                execute 'execute walrus_rls_stmt' into subscription_has_access;
-
-                if subscription_has_access then
-                    visible_to_subscription_ids = visible_to_subscription_ids || subscription_id;
-                end if;
-            end if;
-        end loop;
-
-        perform set_config('role', null, true);
-
-        return next (
-            output,
-            is_rls_enabled,
-            visible_to_subscription_ids,
-            case
-                when error_record_exceeds_max_size then array['Error 413: Payload Too Large']
-                else '{}'
-            end
-        )::realtime.wal_rls;
-
-    end if;
-end loop;
-
-perform set_config('role', null, true);
-end;
-$$;
-
-
---
--- Name: broadcast_changes(text, text, text, text, text, record, record, text); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.broadcast_changes(topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text DEFAULT 'ROW'::text) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    -- Declare a variable to hold the JSONB representation of the row
-    row_data jsonb := '{}'::jsonb;
-BEGIN
-    IF level = 'STATEMENT' THEN
-        RAISE EXCEPTION 'function can only be triggered for each row, not for each statement';
-    END IF;
-    -- Check the operation type and handle accordingly
-    IF operation = 'INSERT' OR operation = 'UPDATE' OR operation = 'DELETE' THEN
-        row_data := jsonb_build_object('old_record', OLD, 'record', NEW, 'operation', operation, 'table', table_name, 'schema', table_schema);
-        PERFORM realtime.send (row_data, event_name, topic_name);
-    ELSE
-        RAISE EXCEPTION 'Unexpected operation type: %', operation;
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE EXCEPTION 'Failed to process the row: %', SQLERRM;
-END;
-
-$$;
-
-
---
--- Name: build_prepared_statement_sql(text, regclass, realtime.wal_column[]); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.build_prepared_statement_sql(prepared_statement_name text, entity regclass, columns realtime.wal_column[]) RETURNS text
-    LANGUAGE sql
-    AS $$
-      /*
-      Builds a sql string that, if executed, creates a prepared statement to
-      tests retrive a row from *entity* by its primary key columns.
-      Example
-          select realtime.build_prepared_statement_sql('public.notes', '{"id"}'::text[], '{"bigint"}'::text[])
-      */
-          select
-      'prepare ' || prepared_statement_name || ' as
-          select
-              exists(
-                  select
-                      1
-                  from
-                      ' || entity || '
-                  where
-                      ' || string_agg(quote_ident(pkc.name) || '=' || quote_nullable(pkc.value #>> '{}') , ' and ') || '
-              )'
-          from
-              unnest(columns) pkc
-          where
-              pkc.is_pkey
-          group by
-              entity
-      $$;
-
-
---
--- Name: cast(text, regtype); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime."cast"(val text, type_ regtype) RETURNS jsonb
-    LANGUAGE plpgsql IMMUTABLE
-    AS $$
-    declare
-      res jsonb;
-    begin
-      execute format('select to_jsonb(%L::'|| type_::text || ')', val)  into res;
-      return res;
-    end
-    $$;
-
-
---
--- Name: check_equality_op(realtime.equality_op, regtype, text, text); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.check_equality_op(op realtime.equality_op, type_ regtype, val_1 text, val_2 text) RETURNS boolean
-    LANGUAGE plpgsql IMMUTABLE
-    AS $$
-      /*
-      Casts *val_1* and *val_2* as type *type_* and check the *op* condition for truthiness
-      */
-      declare
-          op_symbol text = (
-              case
-                  when op = 'eq' then '='
-                  when op = 'neq' then '!='
-                  when op = 'lt' then '<'
-                  when op = 'lte' then '<='
-                  when op = 'gt' then '>'
-                  when op = 'gte' then '>='
-                  when op = 'in' then '= any'
-                  else 'UNKNOWN OP'
-              end
-          );
-          res boolean;
-      begin
-          execute format(
-              'select %L::'|| type_::text || ' ' || op_symbol
-              || ' ( %L::'
-              || (
-                  case
-                      when op = 'in' then type_::text || '[]'
-                      else type_::text end
-              )
-              || ')', val_1, val_2) into res;
-          return res;
-      end;
-      $$;
-
-
---
--- Name: is_visible_through_filters(realtime.wal_column[], realtime.user_defined_filter[]); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.is_visible_through_filters(columns realtime.wal_column[], filters realtime.user_defined_filter[]) RETURNS boolean
-    LANGUAGE sql IMMUTABLE
-    AS $_$
-    /*
-    Should the record be visible (true) or filtered out (false) after *filters* are applied
-    */
-        select
-            -- Default to allowed when no filters present
-            $2 is null -- no filters. this should not happen because subscriptions has a default
-            or array_length($2, 1) is null -- array length of an empty array is null
-            or bool_and(
-                coalesce(
-                    realtime.check_equality_op(
-                        op:=f.op,
-                        type_:=coalesce(
-                            col.type_oid::regtype, -- null when wal2json version <= 2.4
-                            col.type_name::regtype
-                        ),
-                        -- cast jsonb to text
-                        val_1:=col.value #>> '{}',
-                        val_2:=f.value
-                    ),
-                    false -- if null, filter does not match
-                )
-            )
-        from
-            unnest(filters) f
-            join unnest(columns) col
-                on f.column_name = col.name;
-    $_$;
-
-
---
--- Name: list_changes(name, name, integer, integer); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.list_changes(publication name, slot_name name, max_changes integer, max_record_bytes integer) RETURNS SETOF realtime.wal_rls
-    LANGUAGE sql
-    SET log_min_messages TO 'fatal'
-    AS $$
-      with pub as (
-        select
-          concat_ws(
-            ',',
-            case when bool_or(pubinsert) then 'insert' else null end,
-            case when bool_or(pubupdate) then 'update' else null end,
-            case when bool_or(pubdelete) then 'delete' else null end
-          ) as w2j_actions,
-          coalesce(
-            string_agg(
-              realtime.quote_wal2json(format('%I.%I', schemaname, tablename)::regclass),
-              ','
-            ) filter (where ppt.tablename is not null and ppt.tablename not like '% %'),
-            ''
-          ) w2j_add_tables
-        from
-          pg_publication pp
-          left join pg_publication_tables ppt
-            on pp.pubname = ppt.pubname
-        where
-          pp.pubname = publication
-        group by
-          pp.pubname
-        limit 1
-      ),
-      w2j as (
-        select
-          x.*, pub.w2j_add_tables
-        from
-          pub,
-          pg_logical_slot_get_changes(
-            slot_name, null, max_changes,
-            'include-pk', 'true',
-            'include-transaction', 'false',
-            'include-timestamp', 'true',
-            'include-type-oids', 'true',
-            'format-version', '2',
-            'actions', pub.w2j_actions,
-            'add-tables', pub.w2j_add_tables
-          ) x
-      )
-      select
-        xyz.wal,
-        xyz.is_rls_enabled,
-        xyz.subscription_ids,
-        xyz.errors
-      from
-        w2j,
-        realtime.apply_rls(
-          wal := w2j.data::jsonb,
-          max_record_bytes := max_record_bytes
-        ) xyz(wal, is_rls_enabled, subscription_ids, errors)
-      where
-        w2j.w2j_add_tables <> ''
-        and xyz.subscription_ids[1] is not null
-    $$;
-
-
---
--- Name: quote_wal2json(regclass); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.quote_wal2json(entity regclass) RETURNS text
-    LANGUAGE sql IMMUTABLE STRICT
-    AS $$
-      select
-        (
-          select string_agg('' || ch,'')
-          from unnest(string_to_array(nsp.nspname::text, null)) with ordinality x(ch, idx)
-          where
-            not (x.idx = 1 and x.ch = '"')
-            and not (
-              x.idx = array_length(string_to_array(nsp.nspname::text, null), 1)
-              and x.ch = '"'
-            )
-        )
-        || '.'
-        || (
-          select string_agg('' || ch,'')
-          from unnest(string_to_array(pc.relname::text, null)) with ordinality x(ch, idx)
-          where
-            not (x.idx = 1 and x.ch = '"')
-            and not (
-              x.idx = array_length(string_to_array(nsp.nspname::text, null), 1)
-              and x.ch = '"'
-            )
-          )
-      from
-        pg_class pc
-        join pg_namespace nsp
-          on pc.relnamespace = nsp.oid
-      where
-        pc.oid = entity
-    $$;
-
-
---
--- Name: send(jsonb, text, text, boolean); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.send(payload jsonb, event text, topic text, private boolean DEFAULT true) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  BEGIN
-    -- Set the topic configuration
-    EXECUTE format('SET LOCAL realtime.topic TO %L', topic);
-
-    -- Attempt to insert the message
-    INSERT INTO realtime.messages (payload, event, topic, private, extension)
-    VALUES (payload, event, topic, private, 'broadcast');
-  EXCEPTION
-    WHEN OTHERS THEN
-      -- Capture and notify the error
-      PERFORM pg_notify(
-          'realtime:system',
-          jsonb_build_object(
-              'error', SQLERRM,
-              'function', 'realtime.send',
-              'event', event,
-              'topic', topic,
-              'private', private
-          )::text
-      );
-  END;
-END;
-$$;
-
-
---
--- Name: subscription_check_filters(); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.subscription_check_filters() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-    /*
-    Validates that the user defined filters for a subscription:
-    - refer to valid columns that the claimed role may access
-    - values are coercable to the correct column type
-    */
-    declare
-        col_names text[] = coalesce(
-                array_agg(c.column_name order by c.ordinal_position),
-                '{}'::text[]
-            )
-            from
-                information_schema.columns c
-            where
-                format('%I.%I', c.table_schema, c.table_name)::regclass = new.entity
-                and pg_catalog.has_column_privilege(
-                    (new.claims ->> 'role'),
-                    format('%I.%I', c.table_schema, c.table_name)::regclass,
-                    c.column_name,
-                    'SELECT'
-                );
-        filter realtime.user_defined_filter;
-        col_type regtype;
-
-        in_val jsonb;
-    begin
-        for filter in select * from unnest(new.filters) loop
-            -- Filtered column is valid
-            if not filter.column_name = any(col_names) then
-                raise exception 'invalid column for filter %', filter.column_name;
-            end if;
-
-            -- Type is sanitized and safe for string interpolation
-            col_type = (
-                select atttypid::regtype
-                from pg_catalog.pg_attribute
-                where attrelid = new.entity
-                      and attname = filter.column_name
-            );
-            if col_type is null then
-                raise exception 'failed to lookup type for column %', filter.column_name;
-            end if;
-
-            -- Set maximum number of entries for in filter
-            if filter.op = 'in'::realtime.equality_op then
-                in_val = realtime.cast(filter.value, (col_type::text || '[]')::regtype);
-                if coalesce(jsonb_array_length(in_val), 0) > 100 then
-                    raise exception 'too many values for `in` filter. Maximum 100';
-                end if;
-            else
-                -- raises an exception if value is not coercable to type
-                perform realtime.cast(filter.value, col_type);
-            end if;
-
-        end loop;
-
-        -- Apply consistent order to filters so the unique constraint on
-        -- (subscription_id, entity, filters) can't be tricked by a different filter order
-        new.filters = coalesce(
-            array_agg(f order by f.column_name, f.op, f.value),
-            '{}'
-        ) from unnest(new.filters) f;
-
-        return new;
-    end;
-    $$;
-
-
---
--- Name: to_regrole(text); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.to_regrole(role_name text) RETURNS regrole
-    LANGUAGE sql IMMUTABLE
-    AS $$ select role_name::regrole $$;
-
-
---
--- Name: topic(); Type: FUNCTION; Schema: realtime; Owner: -
---
-
-CREATE FUNCTION realtime.topic() RETURNS text
-    LANGUAGE sql STABLE
-    AS $$
-select nullif(current_setting('realtime.topic', true), '')::text;
-$$;
-
-
---
--- Name: can_insert_object(text, text, uuid, jsonb); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.can_insert_object(bucketid text, name text, owner uuid, metadata jsonb) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  INSERT INTO "storage"."objects" ("bucket_id", "name", "owner", "metadata") VALUES (bucketid, name, owner, metadata);
-  -- hack to rollback the successful insert
-  RAISE sqlstate 'PT200' using
-  message = 'ROLLBACK',
-  detail = 'rollback successful insert';
-END
-$$;
-
-
---
--- Name: extension(text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.extension(name text) RETURNS text
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-_parts text[];
-_filename text;
-BEGIN
-	select string_to_array(name, '/') into _parts;
-	select _parts[array_length(_parts,1)] into _filename;
-	-- @todo return the last part instead of 2
-	return reverse(split_part(reverse(_filename), '.', 1));
-END
-$$;
-
-
---
--- Name: filename(text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.filename(name text) RETURNS text
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-_parts text[];
-BEGIN
-	select string_to_array(name, '/') into _parts;
-	return _parts[array_length(_parts,1)];
-END
-$$;
-
-
---
--- Name: foldername(text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.foldername(name text) RETURNS text[]
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-_parts text[];
-BEGIN
-	select string_to_array(name, '/') into _parts;
-	return _parts[1:array_length(_parts,1)-1];
-END
-$$;
-
-
---
--- Name: get_size_by_bucket(); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.get_size_by_bucket() RETURNS TABLE(size bigint, bucket_id text)
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    return query
-        select sum((metadata->>'size')::int) as size, obj.bucket_id
-        from "storage".objects as obj
-        group by obj.bucket_id;
-END
-$$;
-
-
---
--- Name: list_multipart_uploads_with_delimiter(text, text, text, integer, text, text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, next_key_token text DEFAULT ''::text, next_upload_token text DEFAULT ''::text) RETURNS TABLE(key text, id text, created_at timestamp with time zone)
-    LANGUAGE plpgsql
-    AS $_$
-BEGIN
-    RETURN QUERY EXECUTE
-        'SELECT DISTINCT ON(key COLLATE "C") * from (
-            SELECT
-                CASE
-                    WHEN position($2 IN substring(key from length($1) + 1)) > 0 THEN
-                        substring(key from 1 for length($1) + position($2 IN substring(key from length($1) + 1)))
-                    ELSE
-                        key
-                END AS key, id, created_at
-            FROM
-                storage.s3_multipart_uploads
-            WHERE
-                bucket_id = $5 AND
-                key ILIKE $1 || ''%'' AND
-                CASE
-                    WHEN $4 != '''' AND $6 = '''' THEN
-                        CASE
-                            WHEN position($2 IN substring(key from length($1) + 1)) > 0 THEN
-                                substring(key from 1 for length($1) + position($2 IN substring(key from length($1) + 1))) COLLATE "C" > $4
-                            ELSE
-                                key COLLATE "C" > $4
-                            END
-                    ELSE
-                        true
-                END AND
-                CASE
-                    WHEN $6 != '''' THEN
-                        id COLLATE "C" > $6
-                    ELSE
-                        true
-                    END
-            ORDER BY
-                key COLLATE "C" ASC, created_at ASC) as e order by key COLLATE "C" LIMIT $3'
-        USING prefix_param, delimiter_param, max_keys, next_key_token, bucket_id, next_upload_token;
-END;
-$_$;
-
-
---
--- Name: list_objects_with_delimiter(text, text, text, integer, text, text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.list_objects_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, start_after text DEFAULT ''::text, next_token text DEFAULT ''::text) RETURNS TABLE(name text, id uuid, metadata jsonb, updated_at timestamp with time zone)
-    LANGUAGE plpgsql
-    AS $_$
-BEGIN
-    RETURN QUERY EXECUTE
-        'SELECT DISTINCT ON(name COLLATE "C") * from (
-            SELECT
-                CASE
-                    WHEN position($2 IN substring(name from length($1) + 1)) > 0 THEN
-                        substring(name from 1 for length($1) + position($2 IN substring(name from length($1) + 1)))
-                    ELSE
-                        name
-                END AS name, id, metadata, updated_at
-            FROM
-                storage.objects
-            WHERE
-                bucket_id = $5 AND
-                name ILIKE $1 || ''%'' AND
-                CASE
-                    WHEN $6 != '''' THEN
-                    name COLLATE "C" > $6
-                ELSE true END
-                AND CASE
-                    WHEN $4 != '''' THEN
-                        CASE
-                            WHEN position($2 IN substring(name from length($1) + 1)) > 0 THEN
-                                substring(name from 1 for length($1) + position($2 IN substring(name from length($1) + 1))) COLLATE "C" > $4
-                            ELSE
-                                name COLLATE "C" > $4
-                            END
-                    ELSE
-                        true
-                END
-            ORDER BY
-                name COLLATE "C" ASC) as e order by name COLLATE "C" LIMIT $3'
-        USING prefix_param, delimiter_param, max_keys, next_token, bucket_id, start_after;
-END;
-$_$;
-
-
---
--- Name: operation(); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.operation() RETURNS text
-    LANGUAGE plpgsql STABLE
-    AS $$
-BEGIN
-    RETURN current_setting('storage.operation', true);
-END;
-$$;
-
-
---
--- Name: search(text, text, integer, integer, integer, text, text, text); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.search(prefix text, bucketname text, limits integer DEFAULT 100, levels integer DEFAULT 1, offsets integer DEFAULT 0, search text DEFAULT ''::text, sortcolumn text DEFAULT 'name'::text, sortorder text DEFAULT 'asc'::text) RETURNS TABLE(name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb)
-    LANGUAGE plpgsql STABLE
-    AS $_$
-declare
-  v_order_by text;
-  v_sort_order text;
-begin
-  case
-    when sortcolumn = 'name' then
-      v_order_by = 'name';
-    when sortcolumn = 'updated_at' then
-      v_order_by = 'updated_at';
-    when sortcolumn = 'created_at' then
-      v_order_by = 'created_at';
-    when sortcolumn = 'last_accessed_at' then
-      v_order_by = 'last_accessed_at';
-    else
-      v_order_by = 'name';
-  end case;
-
-  case
-    when sortorder = 'asc' then
-      v_sort_order = 'asc';
-    when sortorder = 'desc' then
-      v_sort_order = 'desc';
-    else
-      v_sort_order = 'asc';
-  end case;
-
-  v_order_by = v_order_by || ' ' || v_sort_order;
-
-  return query execute
-    'with folders as (
-       select path_tokens[$1] as folder
-       from storage.objects
-         where objects.name ilike $2 || $3 || ''%''
-           and bucket_id = $4
-           and array_length(objects.path_tokens, 1) <> $1
-       group by folder
-       order by folder ' || v_sort_order || '
-     )
-     (select folder as "name",
-            null as id,
-            null as updated_at,
-            null as created_at,
-            null as last_accessed_at,
-            null as metadata from folders)
-     union all
-     (select path_tokens[$1] as "name",
-            id,
-            updated_at,
-            created_at,
-            last_accessed_at,
-            metadata
-     from storage.objects
-     where objects.name ilike $2 || $3 || ''%''
-       and bucket_id = $4
-       and array_length(objects.path_tokens, 1) = $1
-     order by ' || v_order_by || ')
-     limit $5
-     offset $6' using levels, prefix, search, bucketname, limits, offsets;
-end;
-$_$;
-
-
---
--- Name: update_updated_at_column(); Type: FUNCTION; Schema: storage; Owner: -
---
-
-CREATE FUNCTION storage.update_updated_at_column() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW; 
-END;
-$$;
-
-
---
--- Name: secrets_encrypt_secret_secret(); Type: FUNCTION; Schema: vault; Owner: -
---
-
-CREATE FUNCTION vault.secrets_encrypt_secret_secret() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-		BEGIN
-		        new.secret = CASE WHEN new.secret IS NULL THEN NULL ELSE
-			CASE WHEN new.key_id IS NULL THEN NULL ELSE pg_catalog.encode(
-			  pgsodium.crypto_aead_det_encrypt(
-				pg_catalog.convert_to(new.secret, 'utf8'),
-				pg_catalog.convert_to((new.id::text || new.description::text || new.created_at::text || new.updated_at::text)::text, 'utf8'),
-				new.key_id::uuid,
-				new.nonce
-			  ),
-				'base64') END END;
-		RETURN new;
-		END;
-		$$;
-
-
---
--- Name: audit_log_entries; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.audit_log_entries (
-    instance_id uuid,
-    id uuid NOT NULL,
-    payload json,
-    created_at timestamp with time zone,
-    ip_address character varying(64) DEFAULT ''::character varying NOT NULL
-);
-
-
---
--- Name: TABLE audit_log_entries; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.audit_log_entries IS 'Auth: Audit trail for user actions.';
-
-
---
--- Name: flow_state; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.flow_state (
-    id uuid NOT NULL,
-    user_id uuid,
-    auth_code text NOT NULL,
-    code_challenge_method auth.code_challenge_method NOT NULL,
-    code_challenge text NOT NULL,
-    provider_type text NOT NULL,
-    provider_access_token text,
-    provider_refresh_token text,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    authentication_method text NOT NULL,
-    auth_code_issued_at timestamp with time zone
-);
-
-
---
--- Name: TABLE flow_state; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.flow_state IS 'stores metadata for pkce logins';
-
-
---
--- Name: identities; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.identities (
-    provider_id text NOT NULL,
-    user_id uuid NOT NULL,
-    identity_data jsonb NOT NULL,
-    provider text NOT NULL,
-    last_sign_in_at timestamp with time zone,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    email text GENERATED ALWAYS AS (lower((identity_data ->> 'email'::text))) STORED,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
-
-
---
--- Name: TABLE identities; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.identities IS 'Auth: Stores identities associated to a user.';
-
-
---
--- Name: COLUMN identities.email; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON COLUMN auth.identities.email IS 'Auth: Email is a generated column that references the optional email property in the identity_data';
-
-
---
--- Name: instances; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.instances (
-    id uuid NOT NULL,
-    uuid uuid,
-    raw_base_config text,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone
-);
-
-
---
--- Name: TABLE instances; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.instances IS 'Auth: Manages users across multiple sites.';
-
-
---
--- Name: mfa_amr_claims; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.mfa_amr_claims (
-    session_id uuid NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL,
-    authentication_method text NOT NULL,
-    id uuid NOT NULL
-);
-
-
---
--- Name: TABLE mfa_amr_claims; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.mfa_amr_claims IS 'auth: stores authenticator method reference claims for multi factor authentication';
-
-
---
--- Name: mfa_challenges; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.mfa_challenges (
-    id uuid NOT NULL,
-    factor_id uuid NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    verified_at timestamp with time zone,
-    ip_address inet NOT NULL,
-    otp_code text,
-    web_authn_session_data jsonb
-);
-
-
---
--- Name: TABLE mfa_challenges; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.mfa_challenges IS 'auth: stores metadata about challenge requests made';
-
-
---
--- Name: mfa_factors; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.mfa_factors (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    friendly_name text,
-    factor_type auth.factor_type NOT NULL,
-    status auth.factor_status NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL,
-    secret text,
-    phone text,
-    last_challenged_at timestamp with time zone,
-    web_authn_credential jsonb,
-    web_authn_aaguid uuid
-);
-
-
---
--- Name: TABLE mfa_factors; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.mfa_factors IS 'auth: stores metadata about factors';
-
-
---
--- Name: one_time_tokens; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.one_time_tokens (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    token_type auth.one_time_token_type NOT NULL,
-    token_hash text NOT NULL,
-    relates_to text NOT NULL,
-    created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    CONSTRAINT one_time_tokens_token_hash_check CHECK ((char_length(token_hash) > 0))
-);
-
-
---
--- Name: refresh_tokens; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.refresh_tokens (
-    instance_id uuid,
-    id bigint NOT NULL,
-    token character varying(255),
-    user_id character varying(255),
-    revoked boolean,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    parent character varying(255),
-    session_id uuid
-);
-
-
---
--- Name: TABLE refresh_tokens; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.refresh_tokens IS 'Auth: Store of tokens used to refresh JWT tokens once they expire.';
-
-
---
--- Name: refresh_tokens_id_seq; Type: SEQUENCE; Schema: auth; Owner: -
---
-
-CREATE SEQUENCE auth.refresh_tokens_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: refresh_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: auth; Owner: -
---
-
-ALTER SEQUENCE auth.refresh_tokens_id_seq OWNED BY auth.refresh_tokens.id;
-
-
---
--- Name: saml_providers; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.saml_providers (
-    id uuid NOT NULL,
-    sso_provider_id uuid NOT NULL,
-    entity_id text NOT NULL,
-    metadata_xml text NOT NULL,
-    metadata_url text,
-    attribute_mapping jsonb,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    name_id_format text,
-    CONSTRAINT "entity_id not empty" CHECK ((char_length(entity_id) > 0)),
-    CONSTRAINT "metadata_url not empty" CHECK (((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))),
-    CONSTRAINT "metadata_xml not empty" CHECK ((char_length(metadata_xml) > 0))
-);
-
-
---
--- Name: TABLE saml_providers; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.saml_providers IS 'Auth: Manages SAML Identity Provider connections.';
-
-
---
--- Name: saml_relay_states; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.saml_relay_states (
-    id uuid NOT NULL,
-    sso_provider_id uuid NOT NULL,
-    request_id text NOT NULL,
-    for_email text,
-    redirect_to text,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    flow_state_id uuid,
-    CONSTRAINT "request_id not empty" CHECK ((char_length(request_id) > 0))
-);
-
-
---
--- Name: TABLE saml_relay_states; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.saml_relay_states IS 'Auth: Contains SAML Relay State information for each Service Provider initiated login.';
-
-
---
--- Name: schema_migrations; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.schema_migrations (
-    version character varying(255) NOT NULL
-);
-
-
---
--- Name: TABLE schema_migrations; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.schema_migrations IS 'Auth: Manages updates to the auth system.';
-
-
---
--- Name: sessions; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.sessions (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    factor_id uuid,
-    aal auth.aal_level,
-    not_after timestamp with time zone,
-    refreshed_at timestamp without time zone,
-    user_agent text,
-    ip inet,
-    tag text
-);
-
-
---
--- Name: TABLE sessions; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.sessions IS 'Auth: Stores session data associated to a user.';
-
-
---
--- Name: COLUMN sessions.not_after; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON COLUMN auth.sessions.not_after IS 'Auth: Not after is a nullable column that contains a timestamp after which the session should be regarded as expired.';
-
-
---
--- Name: sso_domains; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.sso_domains (
-    id uuid NOT NULL,
-    sso_provider_id uuid NOT NULL,
-    domain text NOT NULL,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    CONSTRAINT "domain not empty" CHECK ((char_length(domain) > 0))
-);
-
-
---
--- Name: TABLE sso_domains; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.sso_domains IS 'Auth: Manages SSO email address domain mapping to an SSO Identity Provider.';
-
-
---
--- Name: sso_providers; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.sso_providers (
-    id uuid NOT NULL,
-    resource_id text,
-    created_at timestamp with time zone,
-    updated_at timestamp with time zone,
-    CONSTRAINT "resource_id not empty" CHECK (((resource_id = NULL::text) OR (char_length(resource_id) > 0)))
-);
-
-
---
--- Name: TABLE sso_providers; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.sso_providers IS 'Auth: Manages SSO identity provider information; see saml_providers for SAML.';
-
-
---
--- Name: COLUMN sso_providers.resource_id; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON COLUMN auth.sso_providers.resource_id IS 'Auth: Uniquely identifies a SSO provider according to a user-chosen resource ID (case insensitive), useful in infrastructure as code.';
-
-
---
--- Name: users; Type: TABLE; Schema: auth; Owner: -
---
-
-CREATE TABLE auth.users (
-    instance_id uuid,
-    id uuid NOT NULL,
-    aud character varying(255),
-    role character varying(255),
-    email character varying(255),
-    encrypted_password character varying(255),
-    email_confirmed_at timestamp with time zone,
-    invited_at timestamp with time zone,
-    confirmation_token character varying(255),
-    confirmation_sent_at timestamp with time zone,
-    recovery_token character varying(255),
-    recovery_sent_at timestamp with time zone,
-    email_change_token_new character varying(255),
-    email_change character varying(255),
-    email_change_sent_at timestamp with time zone,
-    last_sign_in_at timestamp with time zone,
-    raw_app_meta_data jsonb,
-    raw_user_meta_data jsonb,
-    is_super_admin boolean,
-    created_at timestamp without time zone,
-    updated_at timestamp with time zone,
-    phone text DEFAULT NULL::character varying,
-    phone_confirmed_at timestamp with time zone,
-    phone_change text DEFAULT ''::character varying,
-    phone_change_token character varying(255) DEFAULT ''::character varying,
-    phone_change_sent_at timestamp with time zone,
-    confirmed_at timestamp with time zone GENERATED ALWAYS AS (LEAST(email_confirmed_at, phone_confirmed_at)) STORED,
-    email_change_token_current character varying(255) DEFAULT ''::character varying,
-    email_change_confirm_status smallint DEFAULT 0,
-    banned_until timestamp with time zone,
-    reauthentication_token character varying(255) DEFAULT ''::character varying,
-    reauthentication_sent_at timestamp with time zone,
-    is_sso_user boolean DEFAULT false NOT NULL,
-    deleted_at timestamp with time zone,
-    is_anonymous boolean DEFAULT false NOT NULL,
-    CONSTRAINT users_email_change_confirm_status_check CHECK (((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2)))
-);
-
-
---
--- Name: TABLE users; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON TABLE auth.users IS 'Auth: Stores user login data within a secure schema.';
-
-
---
--- Name: COLUMN users.is_sso_user; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON COLUMN auth.users.is_sso_user IS 'Auth: Set this column to true when the account comes from SSO. These accounts can have duplicate emails.';
-
-
---
 -- Name: build_creators; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2788,6 +610,13 @@ CREATE TABLE public.build_creators (
     build_id bigint NOT NULL,
     user_id integer NOT NULL
 );
+
+
+--
+-- Name: TABLE build_creators; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_creators IS 'Association table between builds and their creators.';
 
 
 --
@@ -2799,6 +628,13 @@ CREATE TABLE public.build_edit_history (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     version smallint NOT NULL
 );
+
+
+--
+-- Name: TABLE build_edit_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_edit_history IS 'A version marker recorded when a build is edited.';
 
 
 --
@@ -2827,6 +663,13 @@ CREATE TABLE public.build_links (
 
 
 --
+-- Name: TABLE build_links; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_links IS 'A link associated with a build (image, video, world download).';
+
+
+--
 -- Name: build_restrictions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2834,6 +677,45 @@ CREATE TABLE public.build_restrictions (
     build_id bigint NOT NULL,
     restriction_id smallint NOT NULL
 );
+
+
+--
+-- Name: TABLE build_restrictions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_restrictions IS 'Association table between builds and their restrictions.';
+
+
+--
+-- Name: build_tag_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.build_tag_assignments (
+    build_id bigint NOT NULL,
+    tag_id bigint NOT NULL,
+    value_type text NOT NULL,
+    numeric_value numeric,
+    text_value text,
+    boolean_value boolean,
+    display_unit_key text,
+    display_order smallint,
+    evidence text,
+    provenance text NOT NULL,
+    created_by_discord_id bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT build_tag_assignments_finite_numeric_check CHECK (((numeric_value IS NULL) OR ((numeric_value)::text <> ALL (ARRAY['NaN'::text, 'Infinity'::text, '-Infinity'::text])))),
+    CONSTRAINT build_tag_assignments_order_check CHECK (((display_order IS NULL) OR (display_order >= 0))),
+    CONSTRAINT build_tag_assignments_provenance_check CHECK ((provenance = ANY (ARRAY['submitted'::text, 'inferred'::text, 'moderated'::text, 'legacy_import'::text]))),
+    CONSTRAINT build_tag_assignments_typed_value_check CHECK ((((value_type = 'none'::text) AND (num_nonnulls(numeric_value, text_value, boolean_value) = 0)) OR ((value_type = 'numeric'::text) AND (numeric_value IS NOT NULL) AND (num_nonnulls(text_value, boolean_value) = 0)) OR ((value_type = 'text'::text) AND (text_value IS NOT NULL) AND (num_nonnulls(numeric_value, boolean_value) = 0)) OR ((value_type = 'boolean'::text) AND (boolean_value IS NOT NULL) AND (num_nonnulls(numeric_value, text_value) = 0))))
+);
+
+
+--
+-- Name: TABLE build_tag_assignments; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_tag_assignments IS 'A typed tag value attached to one build.';
 
 
 --
@@ -2847,6 +729,13 @@ CREATE TABLE public.build_types (
 
 
 --
+-- Name: TABLE build_types; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_types IS 'Association table between builds and their types.';
+
+
+--
 -- Name: build_versions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2854,6 +743,13 @@ CREATE TABLE public.build_versions (
     build_id bigint NOT NULL,
     version_id smallint NOT NULL
 );
+
+
+--
+-- Name: TABLE build_versions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_versions IS 'Association table between builds and their versions.';
 
 
 --
@@ -2908,6 +804,44 @@ ALTER TABLE public.delete_log_vote_sessions ALTER COLUMN vote_session_id ADD GEN
 
 
 --
+-- Name: door_timing_variants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.door_timing_variants (
+    id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    label text DEFAULT 'default'::text NOT NULL,
+    opening_time bigint,
+    visible_opening_time bigint,
+    closing_time bigint,
+    visible_closing_time bigint,
+    opening_reset_time bigint,
+    closing_reset_time bigint
+);
+
+
+--
+-- Name: TABLE door_timing_variants; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.door_timing_variants IS 'A measured door timing variant used for lexicographic fastest records.';
+
+
+--
+-- Name: door_timing_variants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.door_timing_variants ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.door_timing_variants_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: doors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2934,11 +868,325 @@ CREATE TABLE public.entrances (
 
 
 --
+-- Name: extender_timing_variants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.extender_timing_variants (
+    id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    label text DEFAULT 'default'::text NOT NULL,
+    retraction_time bigint,
+    extension_time bigint,
+    retraction_reset_time bigint,
+    extension_reset_time bigint
+);
+
+
+--
+-- Name: TABLE extender_timing_variants; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.extender_timing_variants IS 'A measured piston-extender timing variant used for fastest records.';
+
+
+--
+-- Name: extender_timing_variants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.extender_timing_variants ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.extender_timing_variants_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: extenders; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.extenders (
-    build_id bigint NOT NULL
+    build_id bigint NOT NULL,
+    orientation text,
+    extension_length integer,
+    extender_type text
+);
+
+
+--
+-- Name: record_computation_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_computation_runs (
+    id bigint NOT NULL,
+    ruleset_id bigint NOT NULL,
+    build_kind text NOT NULL,
+    version_id smallint,
+    status text DEFAULT 'running'::text NOT NULL,
+    is_active boolean DEFAULT false NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    error text,
+    CONSTRAINT record_computation_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: TABLE record_computation_runs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_computation_runs IS 'An immutable attempt to calculate records for one build and version scope.';
+
+
+--
+-- Name: record_computation_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_computation_runs ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_computation_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_definition_facets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_definition_facets (
+    definition_id bigint NOT NULL,
+    facet_kind text NOT NULL,
+    facet_id integer NOT NULL,
+    display_order smallint DEFAULT 0 NOT NULL,
+    CONSTRAINT record_definition_facets_kind_check CHECK ((facet_kind = ANY (ARRAY['restriction'::text, 'type'::text, 'pattern'::text, 'category'::text])))
+);
+
+
+--
+-- Name: TABLE record_definition_facets; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_definition_facets IS 'A canonical taxonomy facet belonging to a record definition.';
+
+
+--
+-- Name: record_definitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_definitions (
+    id bigint NOT NULL,
+    ruleset_id bigint NOT NULL,
+    record_class text NOT NULL,
+    build_kind text NOT NULL,
+    version_scope text NOT NULL,
+    version_id smallint,
+    category_key text NOT NULL,
+    materialization_source text DEFAULT 'eager'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    title text NOT NULL,
+    subtitle text,
+    title_diagnostics jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT record_definitions_materialization_source_check CHECK ((materialization_source = ANY (ARRAY['eager'::text, 'seeded'::text, 'public_lookup'::text]))),
+    CONSTRAINT record_definitions_record_class_check CHECK ((record_class = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
+    CONSTRAINT record_definitions_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'current'::text])))
+);
+
+
+--
+-- Name: TABLE record_definitions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_definitions IS 'A stable identity for one record competition.';
+
+
+--
+-- Name: record_definitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_definitions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_definitions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_holder_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_holder_history (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    definition_id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    predecessor_id bigint,
+    held_from timestamp with time zone NOT NULL,
+    held_until timestamp with time zone,
+    metric_snapshot jsonb NOT NULL,
+    CONSTRAINT record_holder_history_interval_check CHECK (((held_until IS NULL) OR (held_until >= held_from)))
+);
+
+
+--
+-- Name: TABLE record_holder_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_holder_history IS 'A reconstructed interval in a definition''s beaten-record chronology.';
+
+
+--
+-- Name: record_holder_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_holder_history ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_holder_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_recompute_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_recompute_queue (
+    id bigint NOT NULL,
+    scope_key text NOT NULL,
+    build_kind text NOT NULL,
+    build_id bigint,
+    reasons jsonb DEFAULT '[]'::jsonb NOT NULL,
+    enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    locked_at timestamp with time zone,
+    last_error text
+);
+
+
+--
+-- Name: TABLE record_recompute_queue; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_recompute_queue IS 'A durable request to recompute an affected record scope.';
+
+
+--
+-- Name: record_recompute_queue_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_recompute_queue ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_recompute_queue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_result_holders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_result_holders (
+    result_id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    rank smallint DEFAULT 1 NOT NULL,
+    metric_snapshot jsonb NOT NULL,
+    title text NOT NULL,
+    subtitle text,
+    completion_at timestamp with time zone,
+    CONSTRAINT record_result_holders_rank_check CHECK ((rank > 0))
+);
+
+
+--
+-- Name: TABLE record_result_holders; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_result_holders IS 'A co-holder of a resolved computed record.';
+
+
+--
+-- Name: record_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_results (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    definition_id bigint NOT NULL,
+    status text NOT NULL,
+    gap_reasons jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provisional_build_id bigint,
+    history_complete boolean DEFAULT true NOT NULL,
+    computed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT record_results_status_check CHECK ((status = ANY (ARRAY['resolved'::text, 'unresolved'::text, 'no_candidate'::text])))
+);
+
+
+--
+-- Name: TABLE record_results; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_results IS 'The outcome for one definition in a computation run.';
+
+
+--
+-- Name: record_results_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_results ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_results_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_rulesets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_rulesets (
+    id bigint NOT NULL,
+    document_hash text NOT NULL,
+    calculator_version text NOT NULL,
+    formatter_version text NOT NULL,
+    activated_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE record_rulesets; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_rulesets IS 'An immutable version of the record calculators and title formatters.';
+
+
+--
+-- Name: record_rulesets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_rulesets ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_rulesets_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
 
@@ -2951,6 +1199,13 @@ CREATE TABLE public.restriction_aliases (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     alias text NOT NULL
 );
+
+
+--
+-- Name: TABLE restriction_aliases; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.restriction_aliases IS 'An alias for a restriction, allowing for alternative names.';
 
 
 --
@@ -2980,6 +1235,13 @@ CREATE TABLE public.restrictions (
 
 
 --
+-- Name: TABLE restrictions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.restrictions IS 'A restriction that can be applied to builds.';
+
+
+--
 -- Name: restrictions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3000,6 +1262,150 @@ ALTER SEQUENCE public.restrictions_id_seq OWNED BY public.restrictions.id;
 
 
 --
+-- Name: search_document_facets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_document_facets (
+    id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    field_name text NOT NULL,
+    ordinal smallint DEFAULT 0 NOT NULL,
+    text_value text,
+    numeric_value numeric,
+    timestamp_value timestamp with time zone,
+    boolean_value boolean,
+    CONSTRAINT search_document_facets_one_value_check CHECK ((num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1))
+);
+
+
+--
+-- Name: TABLE search_document_facets; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_document_facets IS 'A typed, indexed field value belonging to a search document.';
+
+
+--
+-- Name: search_document_facets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.search_document_facets ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.search_document_facets_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: search_documents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_documents (
+    id bigint NOT NULL,
+    resource_kind text NOT NULL,
+    source_key text NOT NULL,
+    title text NOT NULL,
+    subtitle text,
+    description text,
+    status text,
+    normalized_title text NOT NULL,
+    fuzzy_text text NOT NULL,
+    tags text[] DEFAULT '{}'::text[] NOT NULL,
+    title_vector tsvector,
+    description_vector tsvector,
+    combined_vector tsvector,
+    document_data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    source_hash text NOT NULL,
+    embedding public.vector(1536),
+    embedding_model text,
+    refreshed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE search_documents; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_documents IS 'An indexed projection of a searchable application resource.';
+
+
+--
+-- Name: search_documents_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.search_documents ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.search_documents_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: search_embedding_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_embedding_queue (
+    document_id bigint NOT NULL,
+    source_hash text NOT NULL,
+    enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    locked_at timestamp with time zone,
+    last_error text
+);
+
+
+--
+-- Name: TABLE search_embedding_queue; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a search document whose source hash changed.';
+
+
+--
+-- Name: search_projection_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_projection_queue (
+    id bigint NOT NULL,
+    resource_kind text NOT NULL,
+    source_key text NOT NULL,
+    action text DEFAULT 'upsert'::text NOT NULL,
+    enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    locked_at timestamp with time zone,
+    last_error text,
+    CONSTRAINT search_projection_queue_action_check CHECK ((action = ANY (ARRAY['upsert'::text, 'delete'::text])))
+);
+
+
+--
+-- Name: TABLE search_projection_queue; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_projection_queue IS 'A durable request to refresh or delete a projected search resource.';
+
+
+--
+-- Name: search_projection_queue_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.search_projection_queue ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.search_projection_queue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: server_settings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3017,41 +1423,10 @@ CREATE TABLE public.server_settings (
 
 
 --
--- Name: smallest_door_records; Type: TABLE; Schema: public; Owner: -
+-- Name: TABLE server_settings; Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE TABLE public.smallest_door_records (
-    record_id bigint NOT NULL,
-    id bigint NOT NULL,
-    title text,
-    orientation text NOT NULL,
-    door_width integer NOT NULL,
-    door_height integer NOT NULL,
-    door_depth integer DEFAULT 1 NOT NULL,
-    types text[] NOT NULL,
-    restrictions text[] DEFAULT '{}'::text[] NOT NULL,
-    volume integer NOT NULL,
-    restriction_subset text[] NOT NULL
-);
-
-
---
--- Name: smallest_door_records_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.smallest_door_records_record_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: smallest_door_records_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.smallest_door_records_record_id_seq OWNED BY public.smallest_door_records.record_id;
+COMMENT ON TABLE public.server_settings IS 'Settings for a Discord server.';
 
 
 --
@@ -3075,6 +1450,164 @@ ALTER SEQUENCE public.submissions_submission_id_seq OWNED BY public.builds.id;
 
 
 --
+-- Name: tag_aliases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_aliases (
+    tag_id bigint NOT NULL,
+    alias text NOT NULL,
+    normalized_alias text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE tag_aliases; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_aliases IS 'An alternate display name for a tag.';
+
+
+--
+-- Name: tag_applicabilities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_applicabilities (
+    tag_id bigint NOT NULL,
+    build_kind text NOT NULL
+);
+
+
+--
+-- Name: TABLE tag_applicabilities; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_applicabilities IS 'A build kind on which a tag may be used.';
+
+
+--
+-- Name: tag_definitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_definitions (
+    id bigint NOT NULL,
+    stable_key text NOT NULL,
+    display_name text NOT NULL,
+    normalized_name text NOT NULL,
+    query_name text,
+    authority text NOT NULL,
+    semantic_kind text NOT NULL,
+    restriction_type text,
+    value_type text NOT NULL,
+    record_operator text,
+    canonical_unit_key text,
+    default_display_unit_key text,
+    numeric_quantum numeric,
+    render_template text NOT NULL,
+    default_display_order smallint NOT NULL,
+    moderation_status text NOT NULL,
+    created_by_discord_id bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    archived_at timestamp with time zone,
+    CONSTRAINT tag_definitions_authority_check CHECK ((authority = ANY (ARRAY['official'::text, 'user'::text]))),
+    CONSTRAINT tag_definitions_display_order_check CHECK ((default_display_order >= 0)),
+    CONSTRAINT tag_definitions_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))),
+    CONSTRAINT tag_definitions_non_numeric_unit_check CHECK (((value_type = 'numeric'::text) OR ((canonical_unit_key IS NULL) AND (default_display_unit_key IS NULL) AND (numeric_quantum IS NULL)))),
+    CONSTRAINT tag_definitions_numeric_metadata_check CHECK ((((value_type = 'numeric'::text) = ((canonical_unit_key IS NOT NULL) OR (numeric_quantum IS NOT NULL))) OR ((value_type = 'numeric'::text) AND (canonical_unit_key IS NULL) AND (numeric_quantum IS NULL)))),
+    CONSTRAINT tag_definitions_numeric_quantum_check CHECK (((numeric_quantum IS NULL) OR (numeric_quantum > (0)::numeric))),
+    CONSTRAINT tag_definitions_query_name_format_check CHECK (((query_name IS NULL) OR (query_name ~ '^[a-z][a-z0-9_]{0,63}$'::text))),
+    CONSTRAINT tag_definitions_record_operator_check CHECK (((record_operator IS NULL) OR (record_operator = ANY (ARRAY['present'::text, 'exact'::text, 'at_most'::text, 'at_least'::text])))),
+    CONSTRAINT tag_definitions_record_operator_value_check CHECK ((((record_operator = 'present'::text) AND (value_type = 'none'::text)) OR ((record_operator = ANY (ARRAY['at_most'::text, 'at_least'::text])) AND (value_type = 'numeric'::text)) OR ((record_operator = 'exact'::text) AND (value_type <> 'none'::text)) OR (record_operator IS NULL))),
+    CONSTRAINT tag_definitions_restriction_type_check CHECK ((((semantic_kind = 'restriction'::text) AND (restriction_type IS NOT NULL)) OR ((semantic_kind <> 'restriction'::text) AND (restriction_type IS NULL)))),
+    CONSTRAINT tag_definitions_semantic_kind_check CHECK ((semantic_kind = ANY (ARRAY['restriction'::text, 'pattern'::text, 'showcase'::text]))),
+    CONSTRAINT tag_definitions_user_showcase_only_check CHECK (((authority = 'official'::text) OR ((semantic_kind = 'showcase'::text) AND (restriction_type IS NULL) AND (record_operator IS NULL)))),
+    CONSTRAINT tag_definitions_value_type_check CHECK ((value_type = ANY (ARRAY['none'::text, 'numeric'::text, 'text'::text, 'boolean'::text])))
+);
+
+
+--
+-- Name: TABLE tag_definitions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_definitions IS 'A canonical tag that may be assigned to builds.';
+
+
+--
+-- Name: tag_definitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tag_definitions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.tag_definitions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: tag_record_thresholds; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_record_thresholds (
+    tag_id bigint NOT NULL,
+    value_type text NOT NULL,
+    numeric_value numeric NOT NULL,
+    display_order integer NOT NULL,
+    CONSTRAINT tag_record_thresholds_numeric_check CHECK ((value_type = 'numeric'::text))
+);
+
+
+--
+-- Name: TABLE tag_record_thresholds; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_record_thresholds IS 'A staff-seeded eager threshold for a parameterized restriction.';
+
+
+--
+-- Name: tag_relations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_relations (
+    source_tag_id bigint NOT NULL,
+    relation_kind text NOT NULL,
+    target_tag_id bigint NOT NULL,
+    CONSTRAINT tag_relations_distinct_check CHECK ((source_tag_id <> target_tag_id)),
+    CONSTRAINT tag_relations_kind_check CHECK ((relation_kind = ANY (ARRAY['implies'::text, 'incompatible'::text])))
+);
+
+
+--
+-- Name: TABLE tag_relations; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_relations IS 'A semantic relationship between official restrictions.';
+
+
+--
+-- Name: tag_units; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_units (
+    key text NOT NULL,
+    dimension text NOT NULL,
+    symbol text NOT NULL,
+    aliases text[] NOT NULL,
+    scale_to_base numeric NOT NULL
+);
+
+
+--
+-- Name: TABLE tag_units; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_units IS 'A unit accepted by numeric tag inputs.';
+
+
+--
 -- Name: types; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3083,6 +1616,13 @@ CREATE TABLE public.types (
     build_category text,
     name text
 );
+
+
+--
+-- Name: TABLE types; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.types IS 'A build pattern.';
 
 
 --
@@ -3114,8 +1654,15 @@ CREATE TABLE public.users (
     discord_id bigint,
     minecraft_uuid uuid,
     ign text,
-    created_at timestamp without time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: TABLE users; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.users IS 'A user in the system, which can be linked to both Discord and Minecraft accounts.';
 
 
 --
@@ -3155,11 +1702,18 @@ CREATE TABLE public.verification_codes (
     id smallint NOT NULL,
     minecraft_uuid uuid NOT NULL,
     code text NOT NULL,
-    created timestamp without time zone DEFAULT now() NOT NULL,
-    expires timestamp without time zone DEFAULT (now() + '00:10:00'::interval) NOT NULL,
+    created timestamp with time zone DEFAULT now() NOT NULL,
+    expires timestamp with time zone DEFAULT (now() + '00:10:00'::interval) NOT NULL,
     username text NOT NULL,
     valid boolean DEFAULT true NOT NULL
 );
+
+
+--
+-- Name: TABLE verification_codes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.verification_codes IS 'A verification code for linking Minecraft accounts.';
 
 
 --
@@ -3196,6 +1750,13 @@ CREATE TABLE public.versions (
 
 
 --
+-- Name: TABLE versions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.versions IS 'A version of Minecraft that a build is compatible with.';
+
+
+--
 -- Name: versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3216,6 +1777,29 @@ ALTER SEQUENCE public.versions_id_seq OWNED BY public.versions.id;
 
 
 --
+-- Name: vote_session_options; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vote_session_options (
+    vote_session_id bigint NOT NULL,
+    emoji text NOT NULL,
+    choice text NOT NULL,
+    multiplier double precision DEFAULT 1.0 NOT NULL,
+    "position" smallint NOT NULL,
+    CONSTRAINT vote_session_options_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text]))),
+    CONSTRAINT vote_session_options_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision))),
+    CONSTRAINT vote_session_options_position_check CHECK (("position" >= 0))
+);
+
+
+--
+-- Name: TABLE vote_session_options; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.vote_session_options IS 'Ordered reaction options and positive weight multipliers captured for each vote session.';
+
+
+--
 -- Name: vote_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3227,9 +1811,25 @@ CREATE TABLE public.vote_sessions (
     kind text NOT NULL,
     fail_threshold smallint NOT NULL,
     pass_threshold smallint NOT NULL,
+    result text DEFAULT 'pending'::text NOT NULL,
     CONSTRAINT vote_sessions_fail_threshold_check CHECK ((fail_threshold < 0)),
-    CONSTRAINT vote_sessions_pass_threshold_check CHECK ((pass_threshold > 0))
+    CONSTRAINT vote_sessions_pass_threshold_check CHECK ((pass_threshold > 0)),
+    CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text])))
 );
+
+
+--
+-- Name: TABLE vote_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.vote_sessions IS 'A voting session for builds or log deletions.';
+
+
+--
+-- Name: COLUMN vote_sessions.result; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vote_sessions.result IS 'The result of the vote session.';
 
 
 --
@@ -3258,6 +1858,13 @@ CREATE TABLE public.votes (
 
 
 --
+-- Name: TABLE votes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.votes IS 'A vote cast in a vote session.';
+
+
+--
 -- Name: votes_vote_session_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3272,200 +1879,6 @@ ALTER TABLE public.votes ALTER COLUMN vote_session_id ADD GENERATED BY DEFAULT A
 
 
 --
--- Name: messages; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-)
-PARTITION BY RANGE (inserted_at);
-
-
---
--- Name: schema_migrations; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.schema_migrations (
-    version bigint NOT NULL,
-    inserted_at timestamp(0) without time zone
-);
-
-
---
--- Name: subscription; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.subscription (
-    id bigint NOT NULL,
-    subscription_id uuid NOT NULL,
-    entity regclass NOT NULL,
-    filters realtime.user_defined_filter[] DEFAULT '{}'::realtime.user_defined_filter[] NOT NULL,
-    claims jsonb NOT NULL,
-    claims_role regrole GENERATED ALWAYS AS (realtime.to_regrole((claims ->> 'role'::text))) STORED NOT NULL,
-    created_at timestamp without time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-
---
--- Name: subscription_id_seq; Type: SEQUENCE; Schema: realtime; Owner: -
---
-
-ALTER TABLE realtime.subscription ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME realtime.subscription_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: buckets; Type: TABLE; Schema: storage; Owner: -
---
-
-CREATE TABLE storage.buckets (
-    id text NOT NULL,
-    name text NOT NULL,
-    owner uuid,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    public boolean DEFAULT false,
-    avif_autodetection boolean DEFAULT false,
-    file_size_limit bigint,
-    allowed_mime_types text[],
-    owner_id text
-);
-
-
---
--- Name: COLUMN buckets.owner; Type: COMMENT; Schema: storage; Owner: -
---
-
-COMMENT ON COLUMN storage.buckets.owner IS 'Field is deprecated, use owner_id instead';
-
-
---
--- Name: migrations; Type: TABLE; Schema: storage; Owner: -
---
-
-CREATE TABLE storage.migrations (
-    id integer NOT NULL,
-    name character varying(100) NOT NULL,
-    hash character varying(40) NOT NULL,
-    executed_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
-);
-
-
---
--- Name: objects; Type: TABLE; Schema: storage; Owner: -
---
-
-CREATE TABLE storage.objects (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    bucket_id text,
-    name text,
-    owner uuid,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    last_accessed_at timestamp with time zone DEFAULT now(),
-    metadata jsonb,
-    path_tokens text[] GENERATED ALWAYS AS (string_to_array(name, '/'::text)) STORED,
-    version text,
-    owner_id text,
-    user_metadata jsonb
-);
-
-
---
--- Name: COLUMN objects.owner; Type: COMMENT; Schema: storage; Owner: -
---
-
-COMMENT ON COLUMN storage.objects.owner IS 'Field is deprecated, use owner_id instead';
-
-
---
--- Name: s3_multipart_uploads; Type: TABLE; Schema: storage; Owner: -
---
-
-CREATE TABLE storage.s3_multipart_uploads (
-    id text NOT NULL,
-    in_progress_size bigint DEFAULT 0 NOT NULL,
-    upload_signature text NOT NULL,
-    bucket_id text NOT NULL,
-    key text NOT NULL COLLATE pg_catalog."C",
-    version text NOT NULL,
-    owner_id text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    user_metadata jsonb
-);
-
-
---
--- Name: s3_multipart_uploads_parts; Type: TABLE; Schema: storage; Owner: -
---
-
-CREATE TABLE storage.s3_multipart_uploads_parts (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    upload_id text NOT NULL,
-    size bigint DEFAULT 0 NOT NULL,
-    part_number integer NOT NULL,
-    bucket_id text NOT NULL,
-    key text NOT NULL COLLATE pg_catalog."C",
-    etag text NOT NULL,
-    owner_id text,
-    version text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: schema_migrations; Type: TABLE; Schema: supabase_migrations; Owner: -
---
-
-CREATE TABLE supabase_migrations.schema_migrations (
-    version text NOT NULL,
-    statements text[],
-    name text
-);
-
-
---
--- Name: seed_files; Type: TABLE; Schema: supabase_migrations; Owner: -
---
-
-CREATE TABLE supabase_migrations.seed_files (
-    path text NOT NULL,
-    hash text NOT NULL
-);
-
-
---
--- Name: builds; Type: TABLE; Schema: vecs; Owner: -
---
-
-CREATE TABLE vecs.builds (
-    id character varying NOT NULL,
-    vec extensions.vector(1536) NOT NULL,
-    metadata jsonb DEFAULT '{}'::jsonb NOT NULL
-);
-
-
---
--- Name: refresh_tokens id; Type: DEFAULT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.refresh_tokens ALTER COLUMN id SET DEFAULT nextval('auth.refresh_tokens_id_seq'::regclass);
-
-
---
 -- Name: builds id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3477,13 +1890,6 @@ ALTER TABLE ONLY public.builds ALTER COLUMN id SET DEFAULT nextval('public.submi
 --
 
 ALTER TABLE ONLY public.restrictions ALTER COLUMN id SET DEFAULT nextval('public.restrictions_id_seq'::regclass);
-
-
---
--- Name: smallest_door_records record_id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records ALTER COLUMN record_id SET DEFAULT nextval('public.smallest_door_records_record_id_seq'::regclass);
 
 
 --
@@ -3512,182 +1918,6 @@ ALTER TABLE ONLY public.verification_codes ALTER COLUMN id SET DEFAULT nextval('
 --
 
 ALTER TABLE ONLY public.versions ALTER COLUMN id SET DEFAULT nextval('public.versions_id_seq'::regclass);
-
-
---
--- Name: mfa_amr_claims amr_id_pk; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_amr_claims
-    ADD CONSTRAINT amr_id_pk PRIMARY KEY (id);
-
-
---
--- Name: audit_log_entries audit_log_entries_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.audit_log_entries
-    ADD CONSTRAINT audit_log_entries_pkey PRIMARY KEY (id);
-
-
---
--- Name: flow_state flow_state_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.flow_state
-    ADD CONSTRAINT flow_state_pkey PRIMARY KEY (id);
-
-
---
--- Name: identities identities_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.identities
-    ADD CONSTRAINT identities_pkey PRIMARY KEY (id);
-
-
---
--- Name: identities identities_provider_id_provider_unique; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.identities
-    ADD CONSTRAINT identities_provider_id_provider_unique UNIQUE (provider_id, provider);
-
-
---
--- Name: instances instances_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.instances
-    ADD CONSTRAINT instances_pkey PRIMARY KEY (id);
-
-
---
--- Name: mfa_amr_claims mfa_amr_claims_session_id_authentication_method_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_amr_claims
-    ADD CONSTRAINT mfa_amr_claims_session_id_authentication_method_pkey UNIQUE (session_id, authentication_method);
-
-
---
--- Name: mfa_challenges mfa_challenges_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_challenges
-    ADD CONSTRAINT mfa_challenges_pkey PRIMARY KEY (id);
-
-
---
--- Name: mfa_factors mfa_factors_last_challenged_at_key; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_factors
-    ADD CONSTRAINT mfa_factors_last_challenged_at_key UNIQUE (last_challenged_at);
-
-
---
--- Name: mfa_factors mfa_factors_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_factors
-    ADD CONSTRAINT mfa_factors_pkey PRIMARY KEY (id);
-
-
---
--- Name: one_time_tokens one_time_tokens_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.one_time_tokens
-    ADD CONSTRAINT one_time_tokens_pkey PRIMARY KEY (id);
-
-
---
--- Name: refresh_tokens refresh_tokens_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (id);
-
-
---
--- Name: refresh_tokens refresh_tokens_token_unique; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_token_unique UNIQUE (token);
-
-
---
--- Name: saml_providers saml_providers_entity_id_key; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_providers
-    ADD CONSTRAINT saml_providers_entity_id_key UNIQUE (entity_id);
-
-
---
--- Name: saml_providers saml_providers_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_providers
-    ADD CONSTRAINT saml_providers_pkey PRIMARY KEY (id);
-
-
---
--- Name: saml_relay_states saml_relay_states_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_relay_states
-    ADD CONSTRAINT saml_relay_states_pkey PRIMARY KEY (id);
-
-
---
--- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.schema_migrations
-    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-
-
---
--- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.sessions
-    ADD CONSTRAINT sessions_pkey PRIMARY KEY (id);
-
-
---
--- Name: sso_domains sso_domains_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.sso_domains
-    ADD CONSTRAINT sso_domains_pkey PRIMARY KEY (id);
-
-
---
--- Name: sso_providers sso_providers_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.sso_providers
-    ADD CONSTRAINT sso_providers_pkey PRIMARY KEY (id);
-
-
---
--- Name: users users_phone_key; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.users
-    ADD CONSTRAINT users_phone_key UNIQUE (phone);
-
-
---
--- Name: users users_pkey; Type: CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 
 --
@@ -3723,6 +1953,14 @@ ALTER TABLE ONLY public.build_restrictions
 
 
 --
+-- Name: build_tag_assignments build_tag_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_tag_assignments
+    ADD CONSTRAINT build_tag_assignments_pkey PRIMARY KEY (build_id, tag_id);
+
+
+--
 -- Name: build_types build_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3755,6 +1993,22 @@ ALTER TABLE ONLY public.delete_log_vote_sessions
 
 
 --
+-- Name: door_timing_variants door_timing_variants_build_label_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.door_timing_variants
+    ADD CONSTRAINT door_timing_variants_build_label_key UNIQUE (build_id, label);
+
+
+--
+-- Name: door_timing_variants door_timing_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.door_timing_variants
+    ADD CONSTRAINT door_timing_variants_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: doors doors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3771,6 +2025,22 @@ ALTER TABLE ONLY public.entrances
 
 
 --
+-- Name: extender_timing_variants extender_timing_variants_build_label_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.extender_timing_variants
+    ADD CONSTRAINT extender_timing_variants_build_label_key UNIQUE (build_id, label);
+
+
+--
+-- Name: extender_timing_variants extender_timing_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.extender_timing_variants
+    ADD CONSTRAINT extender_timing_variants_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: extenders extenders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3784,6 +2054,110 @@ ALTER TABLE ONLY public.extenders
 
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_computation_runs record_computation_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_computation_runs
+    ADD CONSTRAINT record_computation_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_definition_facets record_definition_facets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definition_facets
+    ADD CONSTRAINT record_definition_facets_pkey PRIMARY KEY (definition_id, facet_kind, facet_id);
+
+
+--
+-- Name: record_definitions record_definitions_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definitions
+    ADD CONSTRAINT record_definitions_identity_key UNIQUE NULLS NOT DISTINCT (ruleset_id, record_class, build_kind, version_scope, version_id, category_key);
+
+
+--
+-- Name: record_definitions record_definitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definitions
+    ADD CONSTRAINT record_definitions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_holder_history record_holder_history_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_identity_key UNIQUE (run_id, definition_id, build_id, held_from);
+
+
+--
+-- Name: record_holder_history record_holder_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_recompute_queue record_recompute_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_recompute_queue
+    ADD CONSTRAINT record_recompute_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_recompute_queue record_recompute_queue_scope_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_recompute_queue
+    ADD CONSTRAINT record_recompute_queue_scope_key_key UNIQUE (scope_key);
+
+
+--
+-- Name: record_result_holders record_result_holders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_result_holders
+    ADD CONSTRAINT record_result_holders_pkey PRIMARY KEY (result_id, build_id);
+
+
+--
+-- Name: record_results record_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_results
+    ADD CONSTRAINT record_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: record_results record_results_run_definition_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_results
+    ADD CONSTRAINT record_results_run_definition_key UNIQUE (run_id, definition_id);
+
+
+--
+-- Name: record_rulesets record_rulesets_content_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_rulesets
+    ADD CONSTRAINT record_rulesets_content_key UNIQUE (document_hash, calculator_version, formatter_version);
+
+
+--
+-- Name: record_rulesets record_rulesets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_rulesets
+    ADD CONSTRAINT record_rulesets_pkey PRIMARY KEY (id);
 
 
 --
@@ -3808,6 +2182,62 @@ ALTER TABLE ONLY public.restrictions
 
 ALTER TABLE ONLY public.restrictions
     ADD CONSTRAINT restrictions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_document_facets search_document_facets_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_document_facets
+    ADD CONSTRAINT search_document_facets_identity_key UNIQUE (document_id, field_name, ordinal);
+
+
+--
+-- Name: search_document_facets search_document_facets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_document_facets
+    ADD CONSTRAINT search_document_facets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_documents search_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_documents
+    ADD CONSTRAINT search_documents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_documents search_documents_resource_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_documents
+    ADD CONSTRAINT search_documents_resource_key UNIQUE (resource_kind, source_key);
+
+
+--
+-- Name: search_embedding_queue search_embedding_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_embedding_queue
+    ADD CONSTRAINT search_embedding_queue_pkey PRIMARY KEY (document_id);
+
+
+--
+-- Name: search_projection_queue search_projection_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_projection_queue
+    ADD CONSTRAINT search_projection_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: search_projection_queue search_projection_queue_resource_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_projection_queue
+    ADD CONSTRAINT search_projection_queue_resource_key UNIQUE (resource_kind, source_key);
 
 
 --
@@ -3843,27 +2273,83 @@ ALTER TABLE ONLY public.server_settings
 
 
 --
--- Name: smallest_door_records smallest_door_records_orientation_door_width_door_height_do_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_orientation_door_width_door_height_do_key UNIQUE (orientation, door_width, door_height, door_depth, types, restriction_subset);
-
-
---
--- Name: smallest_door_records smallest_door_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_pkey PRIMARY KEY (record_id);
-
-
---
 -- Name: builds submissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.builds
     ADD CONSTRAINT submissions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tag_aliases tag_aliases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_aliases
+    ADD CONSTRAINT tag_aliases_pkey PRIMARY KEY (tag_id, normalized_alias);
+
+
+--
+-- Name: tag_applicabilities tag_applicabilities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_applicabilities
+    ADD CONSTRAINT tag_applicabilities_pkey PRIMARY KEY (tag_id, build_kind);
+
+
+--
+-- Name: tag_definitions tag_definitions_id_value_type_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_id_value_type_key UNIQUE (id, value_type);
+
+
+--
+-- Name: tag_definitions tag_definitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tag_definitions tag_definitions_query_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_query_name_key UNIQUE (query_name);
+
+
+--
+-- Name: tag_definitions tag_definitions_stable_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_stable_key_key UNIQUE (stable_key);
+
+
+--
+-- Name: tag_record_thresholds tag_record_thresholds_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_record_thresholds
+    ADD CONSTRAINT tag_record_thresholds_pkey PRIMARY KEY (tag_id, numeric_value);
+
+
+--
+-- Name: tag_relations tag_relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_relations
+    ADD CONSTRAINT tag_relations_pkey PRIMARY KEY (source_tag_id, relation_kind, target_tag_id);
+
+
+--
+-- Name: tag_units tag_units_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_units
+    ADD CONSTRAINT tag_units_pkey PRIMARY KEY (key);
 
 
 --
@@ -3923,6 +2409,22 @@ ALTER TABLE ONLY public.versions
 
 
 --
+-- Name: vote_session_options vote_session_options_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vote_session_options
+    ADD CONSTRAINT vote_session_options_pkey PRIMARY KEY (vote_session_id, emoji);
+
+
+--
+-- Name: vote_session_options vote_session_options_vote_session_id_position_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vote_session_options
+    ADD CONSTRAINT vote_session_options_vote_session_id_position_key UNIQUE (vote_session_id, "position");
+
+
+--
 -- Name: vote_sessions vote_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3939,379 +2441,24 @@ ALTER TABLE ONLY public.votes
 
 
 --
--- Name: messages messages_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+-- Name: build_tag_assignments_numeric_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY realtime.messages
-    ADD CONSTRAINT messages_pkey PRIMARY KEY (id, inserted_at);
+CREATE INDEX build_tag_assignments_numeric_idx ON public.build_tag_assignments USING btree (tag_id, numeric_value, build_id) WHERE (numeric_value IS NOT NULL);
 
 
 --
--- Name: subscription pk_subscription; Type: CONSTRAINT; Schema: realtime; Owner: -
+-- Name: build_tag_assignments_tag_build_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY realtime.subscription
-    ADD CONSTRAINT pk_subscription PRIMARY KEY (id);
+CREATE INDEX build_tag_assignments_tag_build_idx ON public.build_tag_assignments USING btree (tag_id, build_id);
 
 
 --
--- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+-- Name: build_tag_assignments_text_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY realtime.schema_migrations
-    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-
-
---
--- Name: buckets buckets_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.buckets
-    ADD CONSTRAINT buckets_pkey PRIMARY KEY (id);
-
-
---
--- Name: migrations migrations_name_key; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.migrations
-    ADD CONSTRAINT migrations_name_key UNIQUE (name);
-
-
---
--- Name: migrations migrations_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.migrations
-    ADD CONSTRAINT migrations_pkey PRIMARY KEY (id);
-
-
---
--- Name: objects objects_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.objects
-    ADD CONSTRAINT objects_pkey PRIMARY KEY (id);
-
-
---
--- Name: s3_multipart_uploads_parts s3_multipart_uploads_parts_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.s3_multipart_uploads_parts
-    ADD CONSTRAINT s3_multipart_uploads_parts_pkey PRIMARY KEY (id);
-
-
---
--- Name: s3_multipart_uploads s3_multipart_uploads_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.s3_multipart_uploads
-    ADD CONSTRAINT s3_multipart_uploads_pkey PRIMARY KEY (id);
-
-
---
--- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: supabase_migrations; Owner: -
---
-
-ALTER TABLE ONLY supabase_migrations.schema_migrations
-    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-
-
---
--- Name: seed_files seed_files_pkey; Type: CONSTRAINT; Schema: supabase_migrations; Owner: -
---
-
-ALTER TABLE ONLY supabase_migrations.seed_files
-    ADD CONSTRAINT seed_files_pkey PRIMARY KEY (path);
-
-
---
--- Name: builds builds_pkey; Type: CONSTRAINT; Schema: vecs; Owner: -
---
-
-ALTER TABLE ONLY vecs.builds
-    ADD CONSTRAINT builds_pkey PRIMARY KEY (id);
-
-
---
--- Name: audit_logs_instance_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX audit_logs_instance_id_idx ON auth.audit_log_entries USING btree (instance_id);
-
-
---
--- Name: confirmation_token_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX confirmation_token_idx ON auth.users USING btree (confirmation_token) WHERE ((confirmation_token)::text !~ '^[0-9 ]*$'::text);
-
-
---
--- Name: email_change_token_current_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX email_change_token_current_idx ON auth.users USING btree (email_change_token_current) WHERE ((email_change_token_current)::text !~ '^[0-9 ]*$'::text);
-
-
---
--- Name: email_change_token_new_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX email_change_token_new_idx ON auth.users USING btree (email_change_token_new) WHERE ((email_change_token_new)::text !~ '^[0-9 ]*$'::text);
-
-
---
--- Name: factor_id_created_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX factor_id_created_at_idx ON auth.mfa_factors USING btree (user_id, created_at);
-
-
---
--- Name: flow_state_created_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX flow_state_created_at_idx ON auth.flow_state USING btree (created_at DESC);
-
-
---
--- Name: identities_email_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX identities_email_idx ON auth.identities USING btree (email text_pattern_ops);
-
-
---
--- Name: INDEX identities_email_idx; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON INDEX auth.identities_email_idx IS 'Auth: Ensures indexed queries on the email column';
-
-
---
--- Name: identities_user_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX identities_user_id_idx ON auth.identities USING btree (user_id);
-
-
---
--- Name: idx_auth_code; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX idx_auth_code ON auth.flow_state USING btree (auth_code);
-
-
---
--- Name: idx_user_id_auth_method; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX idx_user_id_auth_method ON auth.flow_state USING btree (user_id, authentication_method);
-
-
---
--- Name: mfa_challenge_created_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX mfa_challenge_created_at_idx ON auth.mfa_challenges USING btree (created_at DESC);
-
-
---
--- Name: mfa_factors_user_friendly_name_unique; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX mfa_factors_user_friendly_name_unique ON auth.mfa_factors USING btree (friendly_name, user_id) WHERE (TRIM(BOTH FROM friendly_name) <> ''::text);
-
-
---
--- Name: mfa_factors_user_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX mfa_factors_user_id_idx ON auth.mfa_factors USING btree (user_id);
-
-
---
--- Name: one_time_tokens_relates_to_hash_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX one_time_tokens_relates_to_hash_idx ON auth.one_time_tokens USING hash (relates_to);
-
-
---
--- Name: one_time_tokens_token_hash_hash_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX one_time_tokens_token_hash_hash_idx ON auth.one_time_tokens USING hash (token_hash);
-
-
---
--- Name: one_time_tokens_user_id_token_type_key; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX one_time_tokens_user_id_token_type_key ON auth.one_time_tokens USING btree (user_id, token_type);
-
-
---
--- Name: reauthentication_token_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX reauthentication_token_idx ON auth.users USING btree (reauthentication_token) WHERE ((reauthentication_token)::text !~ '^[0-9 ]*$'::text);
-
-
---
--- Name: recovery_token_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX recovery_token_idx ON auth.users USING btree (recovery_token) WHERE ((recovery_token)::text !~ '^[0-9 ]*$'::text);
-
-
---
--- Name: refresh_tokens_instance_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX refresh_tokens_instance_id_idx ON auth.refresh_tokens USING btree (instance_id);
-
-
---
--- Name: refresh_tokens_instance_id_user_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX refresh_tokens_instance_id_user_id_idx ON auth.refresh_tokens USING btree (instance_id, user_id);
-
-
---
--- Name: refresh_tokens_parent_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX refresh_tokens_parent_idx ON auth.refresh_tokens USING btree (parent);
-
-
---
--- Name: refresh_tokens_session_id_revoked_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX refresh_tokens_session_id_revoked_idx ON auth.refresh_tokens USING btree (session_id, revoked);
-
-
---
--- Name: refresh_tokens_updated_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX refresh_tokens_updated_at_idx ON auth.refresh_tokens USING btree (updated_at DESC);
-
-
---
--- Name: saml_providers_sso_provider_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX saml_providers_sso_provider_id_idx ON auth.saml_providers USING btree (sso_provider_id);
-
-
---
--- Name: saml_relay_states_created_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX saml_relay_states_created_at_idx ON auth.saml_relay_states USING btree (created_at DESC);
-
-
---
--- Name: saml_relay_states_for_email_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX saml_relay_states_for_email_idx ON auth.saml_relay_states USING btree (for_email);
-
-
---
--- Name: saml_relay_states_sso_provider_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX saml_relay_states_sso_provider_id_idx ON auth.saml_relay_states USING btree (sso_provider_id);
-
-
---
--- Name: sessions_not_after_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX sessions_not_after_idx ON auth.sessions USING btree (not_after DESC);
-
-
---
--- Name: sessions_user_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX sessions_user_id_idx ON auth.sessions USING btree (user_id);
-
-
---
--- Name: sso_domains_domain_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX sso_domains_domain_idx ON auth.sso_domains USING btree (lower(domain));
-
-
---
--- Name: sso_domains_sso_provider_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX sso_domains_sso_provider_id_idx ON auth.sso_domains USING btree (sso_provider_id);
-
-
---
--- Name: sso_providers_resource_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX sso_providers_resource_id_idx ON auth.sso_providers USING btree (lower(resource_id));
-
-
---
--- Name: unique_phone_factor_per_user; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX unique_phone_factor_per_user ON auth.mfa_factors USING btree (user_id, phone);
-
-
---
--- Name: user_id_created_at_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX user_id_created_at_idx ON auth.sessions USING btree (user_id, created_at);
-
-
---
--- Name: users_email_partial_key; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE UNIQUE INDEX users_email_partial_key ON auth.users USING btree (email) WHERE (is_sso_user = false);
-
-
---
--- Name: INDEX users_email_partial_key; Type: COMMENT; Schema: auth; Owner: -
---
-
-COMMENT ON INDEX auth.users_email_partial_key IS 'Auth: A partial unique index that applies only when is_sso_user is false';
-
-
---
--- Name: users_instance_id_email_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX users_instance_id_email_idx ON auth.users USING btree (instance_id, lower((email)::text));
-
-
---
--- Name: users_instance_id_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX users_instance_id_idx ON auth.users USING btree (instance_id);
-
-
---
--- Name: users_is_anonymous_idx; Type: INDEX; Schema: auth; Owner: -
---
-
-CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
+CREATE INDEX build_tag_assignments_text_idx ON public.build_tag_assignments USING btree (tag_id, text_value, build_id) WHERE (text_value IS NOT NULL);
 
 
 --
@@ -4336,24 +2483,59 @@ CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission
 
 
 --
--- Name: idx_smallest_door_records_dims; Type: INDEX; Schema: public; Owner: -
+-- Name: record_computation_runs_one_active_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_smallest_door_records_dims ON public.smallest_door_records USING btree (orientation, door_width, door_height, door_depth);
-
-
---
--- Name: idx_smallest_door_records_restrictions_gin; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_smallest_door_records_restrictions_gin ON public.smallest_door_records USING gin (restrictions);
+CREATE UNIQUE INDEX record_computation_runs_one_active_idx ON public.record_computation_runs USING btree (build_kind, version_id) NULLS NOT DISTINCT WHERE is_active;
 
 
 --
--- Name: idx_smallest_door_records_types_gin; Type: INDEX; Schema: public; Owner: -
+-- Name: record_computation_runs_started_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_smallest_door_records_types_gin ON public.smallest_door_records USING gin (types);
+CREATE INDEX record_computation_runs_started_idx ON public.record_computation_runs USING btree (started_at);
+
+
+--
+-- Name: record_definition_facets_lookup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_definition_facets_lookup_idx ON public.record_definition_facets USING btree (facet_kind, facet_id);
+
+
+--
+-- Name: record_definitions_category_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_definitions_category_idx ON public.record_definitions USING btree (build_kind, record_class, category_key);
+
+
+--
+-- Name: record_holder_history_definition_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_holder_history_definition_idx ON public.record_holder_history USING btree (definition_id, held_from);
+
+
+--
+-- Name: record_recompute_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (enqueued_at) WHERE (locked_at IS NULL);
+
+
+--
+-- Name: record_result_holders_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_result_holders_build_idx ON public.record_result_holders USING btree (build_id);
+
+
+--
+-- Name: record_results_definition_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_results_definition_idx ON public.record_results USING btree (definition_id);
 
 
 --
@@ -4364,87 +2546,143 @@ CREATE INDEX restriction_aliases_restriction_id_idx ON public.restriction_aliase
 
 
 --
--- Name: unq_smallest_key; Type: INDEX; Schema: public; Owner: -
+-- Name: search_document_facets_boolean_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX unq_smallest_key ON public.smallest_door_records USING btree (orientation, door_width, door_height, door_depth, types, restriction_subset);
-
-
---
--- Name: ix_realtime_subscription_entity; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX ix_realtime_subscription_entity ON realtime.subscription USING btree (entity);
+CREATE INDEX search_document_facets_boolean_idx ON public.search_document_facets USING btree (field_name, boolean_value) WHERE (boolean_value IS NOT NULL);
 
 
 --
--- Name: subscription_subscription_id_entity_filters_key; Type: INDEX; Schema: realtime; Owner: -
+-- Name: search_document_facets_numeric_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX subscription_subscription_id_entity_filters_key ON realtime.subscription USING btree (subscription_id, entity, filters);
-
-
---
--- Name: bname; Type: INDEX; Schema: storage; Owner: -
---
-
-CREATE UNIQUE INDEX bname ON storage.buckets USING btree (name);
+CREATE INDEX search_document_facets_numeric_idx ON public.search_document_facets USING btree (field_name, numeric_value) WHERE (numeric_value IS NOT NULL);
 
 
 --
--- Name: bucketid_objname; Type: INDEX; Schema: storage; Owner: -
+-- Name: search_document_facets_text_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX bucketid_objname ON storage.objects USING btree (bucket_id, name);
-
-
---
--- Name: idx_multipart_uploads_list; Type: INDEX; Schema: storage; Owner: -
---
-
-CREATE INDEX idx_multipart_uploads_list ON storage.s3_multipart_uploads USING btree (bucket_id, key, created_at);
+CREATE INDEX search_document_facets_text_idx ON public.search_document_facets USING btree (field_name, text_value) WHERE (text_value IS NOT NULL);
 
 
 --
--- Name: idx_objects_bucket_id_name; Type: INDEX; Schema: storage; Owner: -
+-- Name: search_document_facets_timestamp_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_objects_bucket_id_name ON storage.objects USING btree (bucket_id, name COLLATE "C");
-
-
---
--- Name: name_prefix_search; Type: INDEX; Schema: storage; Owner: -
---
-
-CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_pattern_ops);
+CREATE INDEX search_document_facets_timestamp_idx ON public.search_document_facets USING btree (field_name, timestamp_value) WHERE (timestamp_value IS NOT NULL);
 
 
 --
--- Name: ix_vector_cosine_ops_hnsw_m16_efc64_5cae1b4; Type: INDEX; Schema: vecs; Owner: -
+-- Name: search_documents_combined_fts_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ix_vector_cosine_ops_hnsw_m16_efc64_5cae1b4 ON vecs.builds USING hnsw (vec extensions.vector_cosine_ops) WITH (m='16', ef_construction='64');
-
-
---
--- Name: build_restrictions build_restrictions_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_restrictions_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
+CREATE INDEX search_documents_combined_fts_idx ON public.search_documents USING gin (combined_vector);
 
 
 --
--- Name: build_types build_types_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
+-- Name: search_documents_description_fts_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE TRIGGER build_types_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
+CREATE INDEX search_documents_description_fts_idx ON public.search_documents USING gin (description_vector);
 
 
 --
--- Name: builds builds_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
+-- Name: search_documents_fuzzy_trgm_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE TRIGGER builds_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door_from_builds();
+CREATE INDEX search_documents_fuzzy_trgm_idx ON public.search_documents USING gin (fuzzy_text public.gin_trgm_ops);
+
+
+--
+-- Name: search_documents_scope_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_documents_scope_idx ON public.search_documents USING btree (resource_kind, status);
+
+
+--
+-- Name: search_documents_tags_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_documents_tags_idx ON public.search_documents USING gin (tags);
+
+
+--
+-- Name: search_documents_title_fts_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_documents_title_fts_idx ON public.search_documents USING gin (title_vector);
+
+
+--
+-- Name: search_embedding_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (enqueued_at) WHERE (locked_at IS NULL);
+
+
+--
+-- Name: search_projection_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (enqueued_at) WHERE (locked_at IS NULL);
+
+
+--
+-- Name: tag_aliases_normalized_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tag_aliases_normalized_idx ON public.tag_aliases USING btree (normalized_alias);
+
+
+--
+-- Name: tag_definitions_lookup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tag_definitions_lookup_idx ON public.tag_definitions USING btree (normalized_name, semantic_kind);
+
+
+--
+-- Name: build_creators build_creators_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_restrictions build_restrictions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_tag_assignments build_tag_assignments_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_tag_assignments_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_types build_types_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_versions build_versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: builds builds_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 
 --
@@ -4455,10 +2693,66 @@ CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON 
 
 
 --
--- Name: doors doors_refresh_smallest_door; Type: TRIGGER; Schema: public; Owner: -
+-- Name: door_timing_variants door_timing_variants_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER doors_refresh_smallest_door AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_smallest_door();
+CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: doors doors_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: extender_timing_variants extender_timing_variants_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER extender_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: extenders extenders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: record_computation_runs record_computation_runs_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+
+--
+-- Name: record_result_holders record_result_holders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_result_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_result_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+
+--
+-- Name: record_results record_results_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+
+--
+-- Name: restriction_aliases restriction_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER restriction_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restriction_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
+-- Name: restrictions restrictions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 
 --
@@ -4483,6 +2777,13 @@ CREATE TRIGGER trg_sync_on_tag_alias AFTER INSERT ON public.restriction_aliases 
 
 
 --
+-- Name: types types_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.types FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
 -- Name: messages update_messages_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4490,105 +2791,17 @@ CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR E
 
 
 --
--- Name: subscription tr_check_filters; Type: TRIGGER; Schema: realtime; Owner: -
+-- Name: users users_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER tr_check_filters BEFORE INSERT OR UPDATE ON realtime.subscription FOR EACH ROW EXECUTE FUNCTION realtime.subscription_check_filters();
-
-
---
--- Name: objects update_objects_updated_at; Type: TRIGGER; Schema: storage; Owner: -
---
-
-CREATE TRIGGER update_objects_updated_at BEFORE UPDATE ON storage.objects FOR EACH ROW EXECUTE FUNCTION storage.update_updated_at_column();
+CREATE TRIGGER users_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 
 --
--- Name: identities identities_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
+-- Name: versions versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY auth.identities
-    ADD CONSTRAINT identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-
---
--- Name: mfa_amr_claims mfa_amr_claims_session_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_amr_claims
-    ADD CONSTRAINT mfa_amr_claims_session_id_fkey FOREIGN KEY (session_id) REFERENCES auth.sessions(id) ON DELETE CASCADE;
-
-
---
--- Name: mfa_challenges mfa_challenges_auth_factor_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_challenges
-    ADD CONSTRAINT mfa_challenges_auth_factor_id_fkey FOREIGN KEY (factor_id) REFERENCES auth.mfa_factors(id) ON DELETE CASCADE;
-
-
---
--- Name: mfa_factors mfa_factors_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.mfa_factors
-    ADD CONSTRAINT mfa_factors_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-
---
--- Name: one_time_tokens one_time_tokens_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.one_time_tokens
-    ADD CONSTRAINT one_time_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-
---
--- Name: refresh_tokens refresh_tokens_session_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_session_id_fkey FOREIGN KEY (session_id) REFERENCES auth.sessions(id) ON DELETE CASCADE;
-
-
---
--- Name: saml_providers saml_providers_sso_provider_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_providers
-    ADD CONSTRAINT saml_providers_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
-
-
---
--- Name: saml_relay_states saml_relay_states_flow_state_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_relay_states
-    ADD CONSTRAINT saml_relay_states_flow_state_id_fkey FOREIGN KEY (flow_state_id) REFERENCES auth.flow_state(id) ON DELETE CASCADE;
-
-
---
--- Name: saml_relay_states saml_relay_states_sso_provider_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.saml_relay_states
-    ADD CONSTRAINT saml_relay_states_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
-
-
---
--- Name: sessions sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.sessions
-    ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
-
---
--- Name: sso_domains sso_domains_sso_provider_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
---
-
-ALTER TABLE ONLY auth.sso_domains
-    ADD CONSTRAINT sso_domains_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
+CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 
 --
@@ -4637,6 +2850,30 @@ ALTER TABLE ONLY public.build_restrictions
 
 ALTER TABLE ONLY public.build_restrictions
     ADD CONSTRAINT build_restrictions_restriction_id_fkey FOREIGN KEY (restriction_id) REFERENCES public.restrictions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: build_tag_assignments build_tag_assignments_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_tag_assignments
+    ADD CONSTRAINT build_tag_assignments_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: build_tag_assignments build_tag_assignments_definition_value_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_tag_assignments
+    ADD CONSTRAINT build_tag_assignments_definition_value_fkey FOREIGN KEY (tag_id, value_type) REFERENCES public.tag_definitions(id, value_type) ON DELETE RESTRICT;
+
+
+--
+-- Name: build_tag_assignments build_tag_assignments_display_unit_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_tag_assignments
+    ADD CONSTRAINT build_tag_assignments_display_unit_fkey FOREIGN KEY (display_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
 
 
 --
@@ -4704,6 +2941,14 @@ ALTER TABLE ONLY public.delete_log_vote_sessions
 
 
 --
+-- Name: door_timing_variants door_timing_variants_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.door_timing_variants
+    ADD CONSTRAINT door_timing_variants_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.doors(build_id) ON DELETE CASCADE;
+
+
+--
 -- Name: doors doors_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4717,6 +2962,14 @@ ALTER TABLE ONLY public.doors
 
 ALTER TABLE ONLY public.entrances
     ADD CONSTRAINT entrances_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: extender_timing_variants extender_timing_variants_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.extender_timing_variants
+    ADD CONSTRAINT extender_timing_variants_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.extenders(build_id) ON DELETE CASCADE;
 
 
 --
@@ -4752,6 +3005,126 @@ ALTER TABLE ONLY public.messages
 
 
 --
+-- Name: record_computation_runs record_computation_runs_ruleset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_computation_runs
+    ADD CONSTRAINT record_computation_runs_ruleset_id_fkey FOREIGN KEY (ruleset_id) REFERENCES public.record_rulesets(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_computation_runs record_computation_runs_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_computation_runs
+    ADD CONSTRAINT record_computation_runs_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_definition_facets record_definition_facets_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definition_facets
+    ADD CONSTRAINT record_definition_facets_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_definitions record_definitions_ruleset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definitions
+    ADD CONSTRAINT record_definitions_ruleset_id_fkey FOREIGN KEY (ruleset_id) REFERENCES public.record_rulesets(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_definitions record_definitions_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_definitions
+    ADD CONSTRAINT record_definitions_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_holder_history record_holder_history_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_holder_history record_holder_history_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_holder_history record_holder_history_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES public.record_holder_history(id) ON DELETE SET NULL;
+
+
+--
+-- Name: record_holder_history record_holder_history_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_holder_history
+    ADD CONSTRAINT record_holder_history_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_recompute_queue record_recompute_queue_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_recompute_queue
+    ADD CONSTRAINT record_recompute_queue_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_result_holders record_result_holders_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_result_holders
+    ADD CONSTRAINT record_result_holders_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_result_holders record_result_holders_result_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_result_holders
+    ADD CONSTRAINT record_result_holders_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.record_results(id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_results record_results_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_results
+    ADD CONSTRAINT record_results_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: record_results record_results_provisional_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_results
+    ADD CONSTRAINT record_results_provisional_build_id_fkey FOREIGN KEY (provisional_build_id) REFERENCES public.builds(id) ON DELETE SET NULL;
+
+
+--
+-- Name: record_results record_results_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_results
+    ADD CONSTRAINT record_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+
+
+--
 -- Name: restriction_aliases restriction_aliases_restriction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4760,11 +3133,75 @@ ALTER TABLE ONLY public.restriction_aliases
 
 
 --
--- Name: smallest_door_records smallest_door_records_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: search_document_facets search_document_facets_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.smallest_door_records
-    ADD CONSTRAINT smallest_door_records_id_fkey FOREIGN KEY (id) REFERENCES public.builds(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.search_document_facets
+    ADD CONSTRAINT search_document_facets_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: search_embedding_queue search_embedding_queue_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_embedding_queue
+    ADD CONSTRAINT search_embedding_queue_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_aliases tag_aliases_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_aliases
+    ADD CONSTRAINT tag_aliases_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_applicabilities tag_applicabilities_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_applicabilities
+    ADD CONSTRAINT tag_applicabilities_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_definitions tag_definitions_canonical_unit_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_canonical_unit_fkey FOREIGN KEY (canonical_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
+
+
+--
+-- Name: tag_definitions tag_definitions_display_unit_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_display_unit_fkey FOREIGN KEY (default_display_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
+
+
+--
+-- Name: tag_record_thresholds tag_record_thresholds_definition_value_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_record_thresholds
+    ADD CONSTRAINT tag_record_thresholds_definition_value_fkey FOREIGN KEY (tag_id, value_type) REFERENCES public.tag_definitions(id, value_type) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_relations tag_relations_source_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_relations
+    ADD CONSTRAINT tag_relations_source_fkey FOREIGN KEY (source_tag_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_relations tag_relations_target_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_relations
+    ADD CONSTRAINT tag_relations_target_fkey FOREIGN KEY (target_tag_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
 
 
 --
@@ -4776,6 +3213,14 @@ ALTER TABLE ONLY public.utilities
 
 
 --
+-- Name: vote_session_options vote_session_options_vote_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vote_session_options
+    ADD CONSTRAINT vote_session_options_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
 -- Name: votes votes_vote_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4784,619 +3229,8 @@ ALTER TABLE ONLY public.votes
 
 
 --
--- Name: objects objects_bucketId_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.objects
-    ADD CONSTRAINT "objects_bucketId_fkey" FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id);
-
-
---
--- Name: s3_multipart_uploads s3_multipart_uploads_bucket_id_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.s3_multipart_uploads
-    ADD CONSTRAINT s3_multipart_uploads_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id);
-
-
---
--- Name: s3_multipart_uploads_parts s3_multipart_uploads_parts_bucket_id_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.s3_multipart_uploads_parts
-    ADD CONSTRAINT s3_multipart_uploads_parts_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id);
-
-
---
--- Name: s3_multipart_uploads_parts s3_multipart_uploads_parts_upload_id_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
---
-
-ALTER TABLE ONLY storage.s3_multipart_uploads_parts
-    ADD CONSTRAINT s3_multipart_uploads_parts_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES storage.s3_multipart_uploads(id) ON DELETE CASCADE;
-
-
---
--- Name: audit_log_entries; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.audit_log_entries ENABLE ROW LEVEL SECURITY;
-
---
--- Name: flow_state; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.flow_state ENABLE ROW LEVEL SECURITY;
-
---
--- Name: identities; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.identities ENABLE ROW LEVEL SECURITY;
-
---
--- Name: instances; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.instances ENABLE ROW LEVEL SECURITY;
-
---
--- Name: mfa_amr_claims; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.mfa_amr_claims ENABLE ROW LEVEL SECURITY;
-
---
--- Name: mfa_challenges; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.mfa_challenges ENABLE ROW LEVEL SECURITY;
-
---
--- Name: mfa_factors; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.mfa_factors ENABLE ROW LEVEL SECURITY;
-
---
--- Name: one_time_tokens; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.one_time_tokens ENABLE ROW LEVEL SECURITY;
-
---
--- Name: refresh_tokens; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.refresh_tokens ENABLE ROW LEVEL SECURITY;
-
---
--- Name: saml_providers; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.saml_providers ENABLE ROW LEVEL SECURITY;
-
---
--- Name: saml_relay_states; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.saml_relay_states ENABLE ROW LEVEL SECURITY;
-
---
--- Name: schema_migrations; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.schema_migrations ENABLE ROW LEVEL SECURITY;
-
---
--- Name: sessions; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.sessions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: sso_domains; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.sso_domains ENABLE ROW LEVEL SECURITY;
-
---
--- Name: sso_providers; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.sso_providers ENABLE ROW LEVEL SECURITY;
-
---
--- Name: users; Type: ROW SECURITY; Schema: auth; Owner: -
---
-
-ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_creators Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_creators FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: build_edit_history Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_edit_history FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: build_links Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_links FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: build_restrictions Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_restrictions FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: build_types Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_types FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: build_versions Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.build_versions FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: builds Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.builds FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: doors Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.doors FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: entrances Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.entrances FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: extenders Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.extenders FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: messages Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.messages FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: restriction_aliases Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.restriction_aliases FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: restrictions Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.restrictions FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: server_settings Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.server_settings FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: types Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.types FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: users Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.users FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: utilities Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.utilities FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: versions Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.versions FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: vote_sessions Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.vote_sessions FOR INSERT TO authenticated, service_role WITH CHECK (true);
-
-
---
--- Name: votes Enable insert for authenticated users only; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable insert for authenticated users only" ON public.votes FOR INSERT TO authenticated WITH CHECK (true);
-
-
---
--- Name: build_creators Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.build_creators FOR SELECT USING (true);
-
-
---
--- Name: build_edit_history Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.build_edit_history FOR SELECT USING (true);
-
-
---
--- Name: build_restrictions Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.build_restrictions FOR SELECT USING (true);
-
-
---
--- Name: build_types Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.build_types FOR SELECT USING (true);
-
-
---
--- Name: build_versions Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.build_versions FOR SELECT USING (true);
-
-
---
--- Name: builds Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.builds FOR SELECT USING (true);
-
-
---
--- Name: doors Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.doors FOR SELECT USING (true);
-
-
---
--- Name: entrances Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.entrances FOR SELECT USING (true);
-
-
---
--- Name: extenders Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.extenders FOR SELECT USING (true);
-
-
---
--- Name: messages Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.messages FOR SELECT USING (true);
-
-
---
--- Name: restriction_aliases Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.restriction_aliases FOR SELECT USING (true);
-
-
---
--- Name: restrictions Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.restrictions FOR SELECT USING (true);
-
-
---
--- Name: types Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.types FOR SELECT USING (true);
-
-
---
--- Name: users Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.users FOR SELECT USING (true);
-
-
---
--- Name: utilities Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.utilities FOR SELECT USING (true);
-
-
---
--- Name: versions Enable read access for all users; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Enable read access for all users" ON public.versions FOR SELECT USING (true);
-
-
---
--- Name: build_creators; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_creators ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_edit_history; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_edit_history ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_links; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_links ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_restrictions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_restrictions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_types; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_types ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_versions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_versions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: build_vote_sessions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.build_vote_sessions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: builds; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.builds ENABLE ROW LEVEL SECURITY;
-
---
--- Name: delete_log_vote_sessions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.delete_log_vote_sessions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: doors; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.doors ENABLE ROW LEVEL SECURITY;
-
---
--- Name: entrances; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.entrances ENABLE ROW LEVEL SECURITY;
-
---
--- Name: extenders; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.extenders ENABLE ROW LEVEL SECURITY;
-
---
--- Name: messages; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-
---
--- Name: restriction_aliases; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.restriction_aliases ENABLE ROW LEVEL SECURITY;
-
---
--- Name: restrictions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.restrictions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: server_settings; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.server_settings ENABLE ROW LEVEL SECURITY;
-
---
--- Name: types; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.types ENABLE ROW LEVEL SECURITY;
-
---
--- Name: users; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-
---
--- Name: utilities; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.utilities ENABLE ROW LEVEL SECURITY;
-
---
--- Name: verification_codes; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.verification_codes ENABLE ROW LEVEL SECURITY;
-
---
--- Name: versions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.versions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: vote_sessions; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.vote_sessions ENABLE ROW LEVEL SECURITY;
-
---
--- Name: votes; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.votes ENABLE ROW LEVEL SECURITY;
-
---
--- Name: messages; Type: ROW SECURITY; Schema: realtime; Owner: -
---
-
-ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
-
---
--- Name: buckets; Type: ROW SECURITY; Schema: storage; Owner: -
---
-
-ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY;
-
---
--- Name: migrations; Type: ROW SECURITY; Schema: storage; Owner: -
---
-
-ALTER TABLE storage.migrations ENABLE ROW LEVEL SECURITY;
-
---
--- Name: objects; Type: ROW SECURITY; Schema: storage; Owner: -
---
-
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
---
--- Name: s3_multipart_uploads; Type: ROW SECURITY; Schema: storage; Owner: -
---
-
-ALTER TABLE storage.s3_multipart_uploads ENABLE ROW LEVEL SECURITY;
-
---
--- Name: s3_multipart_uploads_parts; Type: ROW SECURITY; Schema: storage; Owner: -
---
-
-ALTER TABLE storage.s3_multipart_uploads_parts ENABLE ROW LEVEL SECURITY;
-
---
--- Name: supabase_realtime; Type: PUBLICATION; Schema: -; Owner: -
---
-
-CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate');
-
-
---
--- Name: issue_graphql_placeholder; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER issue_graphql_placeholder ON sql_drop
-         WHEN TAG IN ('DROP EXTENSION')
-   EXECUTE FUNCTION extensions.set_graphql_placeholder();
-
-
---
--- Name: issue_pg_cron_access; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER issue_pg_cron_access ON ddl_command_end
-         WHEN TAG IN ('CREATE EXTENSION')
-   EXECUTE FUNCTION extensions.grant_pg_cron_access();
-
-
---
--- Name: issue_pg_graphql_access; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER issue_pg_graphql_access ON ddl_command_end
-         WHEN TAG IN ('CREATE FUNCTION')
-   EXECUTE FUNCTION extensions.grant_pg_graphql_access();
-
-
---
--- Name: issue_pg_net_access; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER issue_pg_net_access ON ddl_command_end
-         WHEN TAG IN ('CREATE EXTENSION')
-   EXECUTE FUNCTION extensions.grant_pg_net_access();
-
-
---
--- Name: pgrst_ddl_watch; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER pgrst_ddl_watch ON ddl_command_end
-   EXECUTE FUNCTION extensions.pgrst_ddl_watch();
-
-
---
--- Name: pgrst_drop_watch; Type: EVENT TRIGGER; Schema: -; Owner: -
---
-
-CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
-   EXECUTE FUNCTION extensions.pgrst_drop_watch();
-
-
---
 -- PostgreSQL database dump complete
 --
+
+\unrestrict 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 

@@ -1,6 +1,6 @@
 """SQLAlchemy server settings models."""
 
-from sqlalchemy import ARRAY, BigInteger, Boolean, text
+from sqlalchemy import ARRAY, BigInteger, Boolean, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from squid.persistence.base import Base
@@ -19,3 +19,5 @@ class ServerSetting(Base):
     staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
     trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
     in_server: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    locale: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    """Admin-configured language override, e.g. "en" or "zh-CN". Falls back to Discord's guild/user locale when unset."""

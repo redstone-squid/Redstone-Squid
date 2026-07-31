@@ -1,0 +1,1 @@
+status:confirmed AND (door OR "piston extender") NOT width>5
