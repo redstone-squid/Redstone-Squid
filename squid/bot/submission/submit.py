@@ -13,6 +13,7 @@ from discord.ext.commands import (
 )
 
 from squid.bot._types import GuildMessageable
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildSubmissionForm
@@ -23,6 +24,7 @@ from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import BuildInferenceInput, BuildInferenceService, BuildService, DoorSubmissionInput
 from squid.builds.domain import Build, Status
+from squid.core.i18n import _
 from squid.messages.application import MessageService
 
 if TYPE_CHECKING:
@@ -98,14 +100,18 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             interaction = ctx.interaction
             await interaction.response.defer()
             followup = interaction.followup
+            locale = await resolve_locale(ctx, self.bot.services.settings)
 
-            async with RunningMessage(followup) as message:
+            async with RunningMessage(followup, locale=locale) as message:
                 build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
                 build_handler = self.bot.for_build(build)
                 await followup.send(
                     view=StaticLayout(
                         discord.ui.TextDisplay(
-                            "Here is a preview of the submission. Use `/build edit` if you have made a mistake."
+                            t(
+                                locale,
+                                _("Here is a preview of the submission. Use `/build edit` if you have made a mistake."),
+                            )
                         ),
                         await build_handler.render_container(),
                     ),
@@ -114,15 +120,16 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 )
 
                 success_layout = info_layout(
-                    "Success",
-                    f"Build submitted successfully!\nThe build ID is: {build.id}",
+                    t(locale, _("Success")),
+                    t(locale, _("Build submitted successfully!\nThe build ID is: {id}"), id=build.id),
                 )
                 await asyncio.gather(
                     edit_layout(message, success_layout, allowed_mentions=no_mentions()),
                     build_handler.post_for_voting(),
                 )
         else:
-            msg = "This command is only available as a slash command for now."
+            locale = await resolve_locale(ctx, self.bot.services.settings)
+            msg = t(locale, _("This command is only available as a slash command for now."))
             raise NotImplementedError(msg)
 
     @BuildCommandGroup.build_hybrid_group.app_command.command(name="submit")
@@ -140,6 +147,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         Prefer this unless you need to set every field at once — see `/build submit-advanced`.
         """
         await interaction.response.defer()
+        locale = await resolve_locale(interaction, self.bot.services.settings)
 
         build = Build(ai_generated=False)
         attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
@@ -149,7 +157,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 return None
             assert attachment.content_type is not None
             if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
-                msg = f"Unsupported content type: {attachment.content_type}"
+                msg = t(locale, _("Unsupported content type: {content_type}"), content_type=attachment.content_type)
                 raise ValueError(msg)
 
             url = await upload_to_catbox(
@@ -179,14 +187,14 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await view.wait()
         if view.value is None:
             await followup.send(
-                view=text_layout("Submission canceled due to inactivity."),
+                view=text_layout(t(locale, _("Submission canceled due to inactivity."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
             return
         if view.value is False:
             await followup.send(
-                view=text_layout("Submission canceled by user."),
+                view=text_layout(t(locale, _("Submission canceled by user."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
@@ -196,7 +204,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             followup.send(
                 view=StaticLayout(
                     discord.ui.TextDisplay(
-                        "Here is a preview of the submission. Use `/build edit` if you have made a mistake."
+                        t(
+                            locale,
+                            _("Here is a preview of the submission. Use `/build edit` if you have made a mistake."),
+                        )
                     ),
                     await self.bot.for_build(build).render_container(),
                 ),
@@ -282,8 +293,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)
         await self.infer_build_from_message(message)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout("Build recalculated."),
+            view=text_layout(t(locale, _("Build recalculated."))),
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
