@@ -128,3 +128,15 @@ fuzz-search-parser:
 
 backdate start_commit:
     git backdate --no-business-hours {{start_commit}}..
+
+i18n-extract:
+    uv run pybabel extract -F babel.cfg -o locales/squid.pot --sort-output --msgid-bugs-address=https://github.com/redstone-squid/Redstone-Squid/issues .
+
+i18n-update: i18n-extract
+    uv run pybabel update -i locales/squid.pot -d locales -D squid --no-fuzzy-matching
+
+i18n-init locale: i18n-extract
+    uv run pybabel init -i locales/squid.pot -d locales -D squid -l {{locale}}
+
+i18n-compile:
+    uv run pybabel compile -d locales -D squid --statistics
