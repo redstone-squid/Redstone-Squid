@@ -56,6 +56,14 @@ class SettingsService:
         value: int | list[int] | None = [] if setting in ("Staff", "Trusted") else None
         await self._set(server_id, setting, value)
 
+    async def get_locale(self, server_id: int) -> str | None:
+        """Get the server's admin-configured locale override, if any."""
+        return await self._repository.get_locale(server_id)
+
+    async def set_locale(self, server_id: int, locale: str | None) -> None:
+        """Set or clear the server's admin-configured locale override."""
+        await self._repository.set_locale(server_id, locale)
+
     async def _set(self, server_id: int, setting: Setting, value: int | list[int] | None) -> None:
         settings = SettingOptions()
         settings[setting] = value  # type: ignore[literal-required, typeddict-item]

@@ -18,6 +18,7 @@ from squid.bootstrap import create_application_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
+from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
 from squid.builds.domain import Build
@@ -69,6 +70,8 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
+        await self.tree.set_translator(SquidAppCommandTranslator())
+
         # Load extensions in parallel to speed up bot startup
         extensions = [
             "squid.bot.misc_commands",
@@ -130,10 +133,14 @@ class RedstoneSquid(Bot):
         title: str = "Working",
         description: str = "Getting information...",
         delete_on_exit: bool = False,
+        locale: str | None = None,
     ) -> RunningMessage:
         """
         Returns a context manager which can be used to display a message that will be updated
         as the command progresses.
+
+        `title`/`description` are translated into `locale` (resolved via
+        `squid.bot.i18n.resolve_locale`) if given, else sent untranslated.
 
         Usage:
             ```python
@@ -148,6 +155,7 @@ class RedstoneSquid(Bot):
             title=title,
             description=description,
             delete_on_exit=delete_on_exit,
+            locale=locale,
         )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:

@@ -10,6 +10,7 @@ from squid.settings.domain import Setting, SettingOptions
 class FakeSettingsRepository:
     def __init__(self) -> None:
         self.values = SettingOptions()
+        self.locale: str | None = None
 
     async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:
         return {}
@@ -27,6 +28,12 @@ class FakeSettingsRepository:
     async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None:
         self.values.update(settings)
 
+    async def get_locale(self, server_id: int) -> str | None:
+        return self.locale
+
+    async def set_locale(self, server_id: int, locale: str | None) -> None:
+        self.locale = locale
+
     async def on_guild_join(self, server_id: int) -> None:
         return None
 
@@ -42,3 +49,12 @@ async def test_settings_clear_uses_shape_specific_empty_values() -> None:
     await service.clear(1, "Staff")
 
     assert repository.values == {"Vote": None, "Staff": []}
+
+
+async def test_settings_locale_round_trips() -> None:
+    repository = FakeSettingsRepository()
+    service = SettingsService(repository)
+
+    assert await service.get_locale(1) is None
+    await service.set_locale(1, "zh-CN")
+    assert await service.get_locale(1) == "zh-CN"
