@@ -70,10 +70,10 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                 allowed_mentions=no_mentions(),
             )
 
-    @settings_hybrid_group.command(name="search")
+    @settings_hybrid_group.command(name="get")
     @app_commands.rename(setting="type")
     @check_is_staff()
-    async def search_setting(self, ctx: Context[BotT], setting: Setting):
+    async def get_setting(self, ctx: Context[BotT], setting: Setting):
         """Show the server's current setting."""
         assert ctx.guild is not None
 

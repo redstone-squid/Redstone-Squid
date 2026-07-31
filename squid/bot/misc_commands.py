@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
-from squid.bot.utils.components import info_layout, link_layout, no_mentions
+from squid.bot.utils.components import link_layout, no_mentions
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
-        self.version_service = bot.services.versions
         self.source_code.help = f"Link to {self.bot.bot_name}'s source code."
 
     @commands.hybrid_command()
@@ -66,15 +65,6 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 "https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit",
                 label="Read regulations",
             ),
-            allowed_mentions=no_mentions(),
-        )
-
-    @commands.hybrid_command(name="versions")
-    async def versions(self, ctx: Context[BotT]):
-        """Shows a list of versions the bot recognizes."""
-        versions_human_readable = await self.version_service.list_display("Java", limit=20)  # TODO: pagination
-        await ctx.send(
-            view=info_layout("Recognized Java versions", ", ".join(versions_human_readable)),
             allowed_mentions=no_mentions(),
         )
 

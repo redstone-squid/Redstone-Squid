@@ -6,7 +6,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import discord
-from discord.ext.commands import Cog, Context, hybrid_command
+from discord import app_commands
+from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.components import no_mentions, text_layout
@@ -115,9 +116,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     await vote_session.target_message.delete()
         await vote_session.update_messages()
 
-    @hybrid_command(name="start_vote")
+    @hybrid_group(name="vote")
+    async def vote_group(self, ctx: Context[BotT]) -> None:
+        """Start and manage votes."""
+        await ctx.send_help("vote")
+
+    @vote_group.command(name="delete")
+    @app_commands.rename(target_message="message")
+    @app_commands.describe(target_message="The message to hold a deletion vote for.")
     async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
-        """Starts a vote to delete a specified message by providing its URL."""
+        """Start a vote to delete a message."""
         # Check if guild_id matches the current guild
         if ctx.guild != target_message.guild:
             await ctx.send(
