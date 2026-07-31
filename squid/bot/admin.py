@@ -24,11 +24,16 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
-    @commands.hybrid_command(name="propose_tag")
+    @commands.hybrid_group(name="tag")
+    async def tag_group(self, ctx: Context[BotT]) -> None:
+        """Propose, apply, and review build tags."""
+        await ctx.send_help("tag")
+
+    @tag_group.command(name="propose")
     @app_commands.describe(
         name="Public display name.",
-        value_type="Whether assignments carry a number, text, boolean, or no value.",
-        query_name="Optional filter/sort field, for example closing_delay.",
+        value_type="Whether the tag carries a number, text, yes/no value, or no value.",
+        query_name="Optional search and sort field, for example closing_delay.",
     )
     async def propose_tag(
         self,
@@ -37,7 +42,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         value_type: TagValueType = TagValueType.NONE,
         query_name: str | None = None,
     ) -> None:
-        """Propose a user showcase tag for staff review."""
+        """Propose a build tag for staff review."""
         definition = await self.tags.propose_showcase(
             name,
             value_type=value_type,
@@ -50,10 +55,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="tag_build")
+    @tag_group.command(name="apply")
     @app_commands.describe(
         build_id="A build you submitted.",
-        tag_id="An approved user showcase tag.",
+        tag_id="An approved build tag.",
         value="The tag value, omitted for plain tags.",
     )
     async def tag_build(
@@ -63,7 +68,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         tag_id: int,
         value: str | None = None,
     ) -> None:
-        """Attach an approved showcase tag to one of your builds."""
+        """Apply an approved tag to one of your builds."""
         tag = await self.tags.assign_showcase(
             build_id,
             tag_id,
@@ -76,7 +81,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="pending_tags")
+    @tag_group.command(name="pending")
     @check_is_staff()
     @check_is_owner_server()
     async def pending_tags(self, ctx: Context[BotT]) -> None:
@@ -92,7 +97,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="approve_tag")
+    @tag_group.command(name="approve")
     @check_is_staff()
     @check_is_owner_server()
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
@@ -103,7 +108,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="reject_tag")
+    @tag_group.command(name="reject")
     @check_is_staff()
     @check_is_owner_server()
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
@@ -114,7 +119,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.hybrid_command(name="archive_tag")
+    @tag_group.command(name="archive")
     @check_is_staff()
     @check_is_owner_server()
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:

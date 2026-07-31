@@ -1,7 +1,5 @@
 """Discord commands and maintenance workers for computed records."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, override
 
@@ -10,7 +8,7 @@ from discord.ext import commands, tasks
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
+from squid.bot.utils.permissions import check_is_owner_server, check_is_staff, check_is_trusted_or_staff
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
 
@@ -34,12 +32,14 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def cog_unload(self) -> None:
         self.process_maintenance.cancel()
 
-    @hybrid_group(name="records")
-    async def records_group(self, ctx: Context[BotT]) -> None:
-        """Inspect and recompute canonical records."""
-        await ctx.send_help("records")
+    @hybrid_group(name="admin")
+    @check_is_staff()
+    async def admin_group(self, ctx: Context[BotT]) -> None:
+        """Inspect and maintain internal bot data."""
+        await ctx.send_help("admin")
 
-    @records_group.command(name="gaps")
+    @admin_group.command(name="records-gaps")
+    @check_is_staff()
     @app_commands.describe(kind="Optionally limit gaps to one build kind.")
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
@@ -57,7 +57,8 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             description = "No unresolved active record categories."
         await ctx.send(view=info_layout("Record evidence gaps", description), allowed_mentions=no_mentions())
 
-    @records_group.command(name="title-gaps")
+    @admin_group.command(name="records-title-issues")
+    @check_is_staff()
     @check_is_owner_server()
     @check_is_trusted_or_staff()
     @app_commands.describe(kind="Optionally limit title diagnostics to one build kind.")
@@ -80,7 +81,8 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @records_group.command(name="rebuild")
+    @admin_group.command(name="records-rebuild")
+    @check_is_staff()
     @commands.is_owner()
     @app_commands.describe(
         current_version_id="Optional database ID to also compute the pinned current-version records.",
@@ -106,7 +108,8 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @records_group.command(name="lookup")
+    @admin_group.command(name="records-lookup")
+    @check_is_staff()
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind="The typed record family.",
