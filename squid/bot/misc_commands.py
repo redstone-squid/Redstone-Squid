@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING
 import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import link_layout, no_mentions
+from squid.core.i18n import _
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -24,11 +26,12 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @info_group.command(name="invite")
     async def invite_link(self, ctx: Context[BotT]):
         """Get a link to invite the bot to another server."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Invite Redstone Squid",
+                t(locale, _("Invite Redstone Squid")),
                 f"https://discordapp.com/oauth2/authorize?client_id={ctx.bot.user.id}&scope=bot&permissions=8",  # type: ignore
-                label="Invite bot",
+                label=t(locale, _("Invite bot")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -38,11 +41,12 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @info_group.command(name="source")
     async def source_code(self, ctx: Context[BotT]):
         """Open the bot's source code."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Source code",
+                t(locale, _("Source code")),
                 self.bot.source_code_url or "https://github.com/redstone-squid/Redstone-Squid",
-                label="Open repository",
+                label=t(locale, _("Open repository")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -51,12 +55,13 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def google_forms(self, ctx: Context[BotT]):
         """Open the legacy submission form. Prefer `/build submit` for new builds."""
         BUILD_SUBMISSION_FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Submission form",
+                t(locale, _("Submission form")),
                 BUILD_SUBMISSION_FORM_LINK,
-                description="Submit a new record through the Google form.",
-                label="Open form",
+                description=t(locale, _("Submit a new record through the Google form.")),
+                label=t(locale, _("Open form")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -64,11 +69,12 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @info_group.command(name="docs")
     async def docs(self, ctx: Context[BotT]):
         """Open the build rules and regulations."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Regulations",
+                t(locale, _("Regulations")),
                 "https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit",
-                label="Read regulations",
+                label=t(locale, _("Read regulations")),
             ),
             allowed_mentions=no_mentions(),
         )
