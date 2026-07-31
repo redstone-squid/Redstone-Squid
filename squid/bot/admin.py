@@ -8,8 +8,10 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_owner_server, check_is_staff
+from squid.core.i18n import _
 from squid.tags.domain import TagValueType
 
 if TYPE_CHECKING:
@@ -31,9 +33,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @tag_group.command(name="propose")
     @app_commands.describe(
-        name="Public display name.",
-        value_type="Whether the tag carries a number, text, yes/no value, or no value.",
-        query_name="Optional search and sort field, for example closing_delay.",
+        name=app_commands.locale_str(_("Public display name.")),
+        value_type=app_commands.locale_str(_("Whether the tag carries a number, text, yes/no value, or no value.")),
+        query_name=app_commands.locale_str(_("Optional search and sort field, for example closing_delay.")),
     )
     async def propose_tag(
         self,
@@ -49,17 +51,21 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             query_name=query_name,
             created_by_discord_id=ctx.author.id,
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag proposed", f"Tag #{definition.id} is awaiting staff approval."),
+            view=info_layout(
+                t(locale, _("Tag proposed")),
+                t(locale, _("Tag #{id} is awaiting staff approval."), id=definition.id),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
 
     @tag_group.command(name="apply")
     @app_commands.describe(
-        build_id="A build you submitted.",
-        tag_id="An approved build tag.",
-        value="The tag value, omitted for plain tags.",
+        build_id=app_commands.locale_str(_("A build you submitted.")),
+        tag_id=app_commands.locale_str(_("An approved build tag.")),
+        value=app_commands.locale_str(_("The tag value, omitted for plain tags.")),
     )
     async def tag_build(
         self,
@@ -75,8 +81,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             value,
             actor_discord_id=ctx.author.id,
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Build tagged", f"Attached **{tag.display_name}** to build #{build_id}."),
+            view=info_layout(
+                t(locale, _("Build tagged")),
+                t(locale, _("Attached **{name}** to build #{id}."), name=tag.display_name, id=build_id),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
@@ -91,8 +101,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             f"**#{tag.id}** {tag.display_name} ({tag.value_type.value}; `{tag.query_name or 'no field'}`)"
             for tag in definitions
         )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Pending tags", body or "No tags are awaiting review."),
+            view=info_layout(
+                t(locale, _("Pending tags")),
+                body or t(locale, _("No tags are awaiting review.")),
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
@@ -103,8 +117,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Publish a proposed showcase tag."""
         tag = await self.tags.approve(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag approved", f"Published **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag approved")),
+                t(locale, _("Published **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -114,8 +132,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Reject a proposed showcase tag."""
         tag = await self.tags.reject(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag rejected", f"Rejected **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag rejected")),
+                t(locale, _("Rejected **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -125,8 +147,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Archive a published tag."""
         tag = await self.tags.archive(tag_id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=info_layout("Tag archived", f"Archived **{tag.display_name}**."),
+            view=info_layout(
+                t(locale, _("Tag archived")),
+                t(locale, _("Archived **{name}**."), name=tag.display_name),
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -200,10 +226,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
+            locale = await resolve_locale(ctx, self.bot.services.settings)
+            scope = t(locale, _("globally")) if spec is None else t(locale, _("to the current guild"))
             await ctx.send(
-                view=text_layout(
-                    f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
-                ),
+                view=text_layout(t(locale, _("Synced {count} commands {scope}."), count=len(synced), scope=scope)),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -217,8 +243,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 ret += 1
 
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout(f"Synced the tree to {ret}/{len(guilds)}."),
+            view=text_layout(t(locale, _("Synced the tree to {synced}/{total}."), synced=ret, total=len(guilds))),
             allowed_mentions=no_mentions(),
         )
 
@@ -226,11 +253,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Build spreadsheet",
+                t(locale, _("Build spreadsheet")),
                 "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-                label="Open spreadsheet",
+                label=t(locale, _("Open spreadsheet")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -239,11 +267,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=link_layout(
-                "Database",
+                t(locale, _("Database")),
                 "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-                label="Open database",
+                label=t(locale, _("Open database")),
             ),
             allowed_mentions=no_mentions(),
         )
@@ -252,7 +281,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
-        async with self.bot.get_running_message(ctx, delete_on_exit=True):
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        async with self.bot.get_running_message(ctx, delete_on_exit=True, locale=locale):
             msg = "This is a test error."
             raise ValueError(msg)
 
