@@ -43,3 +43,23 @@ def test_semantic_errors_retain_builtin_compatibility() -> None:
     assert isinstance(InvalidBuildError(), ValueError)
     assert isinstance(InvalidStateError(), RuntimeError)
     assert isinstance(BuildNotFoundError(1), LookupError)
+
+
+def test_message_params_render_in_backend_and_public_detail() -> None:
+    from squid.builds.errors import RestrictionNotFoundError
+
+    error = RestrictionNotFoundError("no-pistons")
+
+    assert error.backend_detail() == "Restriction 'no-pistons' does not exist."
+    assert error.public_detail() == "Restriction 'no-pistons' does not exist."
+
+
+def test_localized_title_and_public_detail_fall_back_to_english() -> None:
+    from squid.builds.errors import BuildNotFoundError as _BuildNotFoundError
+
+    error = _BuildNotFoundError(42)
+
+    assert error.localized_title("en") == "Resource not found"
+    assert error.localized_public_detail("en") == "Build not found. Check the build ID and try again."
+    # Unsupported locale falls back to the English source text rather than erroring.
+    assert error.localized_public_detail("fr") == "Build not found. Check the build ID and try again."

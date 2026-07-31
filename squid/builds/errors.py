@@ -1,12 +1,13 @@
 """Build context errors."""
 
 from squid.core.errors import ConflictError, ErrorCode, NotFoundError, ValidationError
+from squid.core.i18n import _
 
 
 class InvalidBuildError(ValidationError):
     """Build data is invalid."""
 
-    default_message = "The build data is invalid."
+    default_message = _("The build data is invalid.")
     default_code = ErrorCode.INVALID_BUILD
     default_resource = "build"
 
@@ -14,10 +15,10 @@ class InvalidBuildError(ValidationError):
 class BuildNotFoundError(NotFoundError):
     """A build could not be found."""
 
-    default_message = "Build not found."
+    default_message = _("Build not found.")
     default_code = ErrorCode.BUILD_NOT_FOUND
     default_resource = "build"
-    default_end_user_action = "Check the build ID and try again."
+    default_end_user_action = _("Check the build ID and try again.")
 
     def __init__(self, build_id: int, message: str | None = None) -> None:
         super().__init__(
@@ -31,11 +32,11 @@ class BuildNotFoundError(NotFoundError):
 class BuildBusyError(ConflictError):
     """A build is already being edited."""
 
-    default_message = "This build is currently being edited by someone else."
-    default_title = "Build busy"
+    default_message = _("This build is currently being edited by someone else.")
+    default_title = _("Build busy")
     default_code = ErrorCode.BUILD_BUSY
     default_resource = "build"
-    default_end_user_action = "Wait for the other edit to finish and try again."
+    default_end_user_action = _("Wait for the other edit to finish and try again.")
 
     def __init__(self, build_id: int) -> None:
         super().__init__(
@@ -48,13 +49,14 @@ class BuildBusyError(ConflictError):
 class RestrictionNotFoundError(NotFoundError):
     """A restriction name or alias could not be found."""
 
-    default_message = "Restriction not found."
+    default_message = _("Restriction not found.")
     default_code = ErrorCode.RESTRICTION_NOT_FOUND
     default_resource = "restriction"
 
     def __init__(self, name: str) -> None:
         super().__init__(
-            f"Restriction '{name}' does not exist.",
+            _("Restriction '{name}' does not exist."),
+            message_params={"name": name},
             context={"name": name},
             public_context={"name": name},
         )
@@ -64,8 +66,8 @@ class RestrictionNotFoundError(NotFoundError):
 class AliasAlreadyAddedError(ConflictError):
     """An alias is already attached to the requested restriction."""
 
-    default_message = "That alias is already on this restriction."
-    default_title = "Alias already added"
+    default_message = _("That alias is already on this restriction.")
+    default_title = _("Alias already added")
     default_code = ErrorCode.ALIAS_ALREADY_ADDED
     default_resource = "restriction_alias"
 
@@ -81,8 +83,8 @@ class AliasAlreadyAddedError(ConflictError):
 class AliasInUseError(ConflictError):
     """An alias belongs to a different restriction."""
 
-    default_message = "That alias is already used by another restriction."
-    default_title = "Alias in use"
+    default_message = _("That alias is already used by another restriction.")
+    default_title = _("Alias in use")
     default_code = ErrorCode.ALIAS_IN_USE
     default_resource = "restriction_alias"
 

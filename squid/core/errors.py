@@ -4,6 +4,8 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
+from squid.core.i18n import _, translate
+
 type JSONValue = None | bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue]
 
 
@@ -43,8 +45,8 @@ class ErrorCode(StrEnum):
 class SquidError(Exception):
     """Base class for structured application failures."""
 
-    default_message: ClassVar[str] = "An application error occurred."
-    default_title: ClassVar[str] = "Application error"
+    default_message: ClassVar[str] = _("An application error occurred.")
+    default_title: ClassVar[str] = _("Application error")
     default_code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
     default_resource: ClassVar[str | None] = None
     default_developer_action: ClassVar[str | None] = None
@@ -58,6 +60,7 @@ class SquidError(Exception):
         resource: str | None = None,
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
+        message_params: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
         end_user_action: str | None = None,
         title: str | None = None,
@@ -68,6 +71,7 @@ class SquidError(Exception):
         self.resource = resource or self.default_resource
         self.context = dict(context or {})
         self.public_context = dict(public_context or {})
+        self.message_params = dict(message_params or {})
         self.developer_action = developer_action or self.default_developer_action
         self.end_user_action = end_user_action or self.default_end_user_action
         super().__init__(self.backend_detail())
@@ -76,17 +80,33 @@ class SquidError(Exception):
     def __str__(self) -> str:
         return self.backend_detail()
 
+    def _rendered_message(self) -> str:
+        return self.message.format(**self.message_params) if self.message_params else self.message
+
     def backend_detail(self) -> str:
-        """Return diagnostic text suitable for logs."""
+        """Return diagnostic (English) text suitable for logs."""
+        message = self._rendered_message()
         if self.developer_action:
-            return f"{self.message} {self.developer_action}"
-        return self.message
+            return f"{message} {self.developer_action}"
+        return message
 
     def public_detail(self) -> str:
-        """Return safe text suitable for users and API clients."""
+        """Return safe, untranslated (English) text suitable for users and API clients."""
+        message = self._rendered_message()
         if self.end_user_action:
-            return f"{self.message} {self.end_user_action}"
-        return self.message
+            return f"{message} {self.end_user_action}"
+        return message
+
+    def localized_title(self, locale: str | None) -> str:
+        """Return the error title translated into `locale`."""
+        return translate(locale, self.title)
+
+    def localized_public_detail(self, locale: str | None) -> str:
+        """Return safe user-facing text translated into `locale`."""
+        message = translate(locale, self.message, **self.message_params)
+        if self.end_user_action:
+            return f"{message} {translate(locale, self.end_user_action)}"
+        return message
 
     def with_context(
         self,
@@ -112,83 +132,83 @@ class SquidError(Exception):
 class DomainError(SquidError):
     """Base class for expected domain and user-caused failures."""
 
-    default_message = "The requested operation could not be completed."
-    default_title = "Request failed"
+    default_message = _("The requested operation could not be completed.")
+    default_title = _("Request failed")
     default_code = ErrorCode.DOMAIN_ERROR
 
 
 class ValidationError(DomainError, ValueError):
     """Input does not satisfy an application rule."""
 
-    default_message = "The supplied value is invalid."
-    default_title = "Invalid value"
+    default_message = _("The supplied value is invalid.")
+    default_title = _("Invalid value")
     default_code = ErrorCode.VALIDATION_ERROR
 
 
 class NotFoundError(DomainError, LookupError):
     """A requested resource does not exist."""
 
-    default_message = "The requested resource was not found."
-    default_title = "Resource not found"
+    default_message = _("The requested resource was not found.")
+    default_title = _("Resource not found")
     default_code = ErrorCode.NOT_FOUND
 
 
 class ConflictError(DomainError, RuntimeError):
     """An operation conflicts with current application state."""
 
-    default_message = "The operation conflicts with the current state."
-    default_title = "Operation conflict"
+    default_message = _("The operation conflicts with the current state.")
+    default_title = _("Operation conflict")
 
 
 class AuthenticationError(DomainError):
     """Authentication credentials are absent or invalid."""
 
-    default_message = "Unauthorized."
-    default_title = "Unauthorized"
+    default_message = _("Unauthorized.")
+    default_title = _("Unauthorized")
     default_code = ErrorCode.UNAUTHORIZED
 
 
 class AuthorizationError(DomainError):
     """The authenticated caller is not allowed to perform an operation."""
 
-    default_message = "You do not have permission to perform this action."
-    default_title = "Forbidden"
+    default_message = _("You do not have permission to perform this action.")
+    default_title = _("Forbidden")
 
 
 class InternalError(SquidError):
     """A failure whose diagnostic detail must not be exposed to callers."""
 
-    default_message = "An internal application error occurred."
-    default_title = "Internal error"
+    default_message = _("An internal application error occurred.")
+    default_title = _("Internal error")
     default_code = ErrorCode.INTERNAL_ERROR
-    default_end_user_action = "Please try again later."
+    default_end_user_action = _("Please try again later.")
 
 
 class ConfigurationError(InternalError, ValueError):
     """Application configuration is invalid or incomplete."""
 
-    default_message = "Application configuration is invalid."
+    default_message = _("Application configuration is invalid.")
     default_code = ErrorCode.CONFIGURATION_ERROR
 
 
 class InvalidStateError(InternalError, RuntimeError):
     """Internal objects are in an invalid state for the requested operation."""
 
-    default_message = "Application state is invalid for this operation."
+    default_message = _("Application state is invalid for this operation.")
     default_code = ErrorCode.INVALID_STATE
 
 
 class InfrastructureError(InternalError):
     """An infrastructure dependency failed."""
 
-    default_message = "An infrastructure dependency failed."
+    default_message = _("An infrastructure dependency failed.")
     default_code = ErrorCode.INFRASTRUCTURE_ERROR
 
 
 class PersistenceError(InfrastructureError):
     """A persistence operation failed."""
 
-    default_message = "A persistence operation failed."
+    default_message = _("A persistence operation failed.")
     default_code = ErrorCode.PERSISTENCE_ERROR
     default_resource = "database"
 
@@ -196,12 +216,12 @@ class PersistenceError(InfrastructureError):
 class DataIntegrityError(PersistenceError):
     """Persisted data violates application expectations."""
 
-    default_message = "Persisted data is inconsistent with application expectations."
+    default_message = _("Persisted data is inconsistent with application expectations.")
     default_code = ErrorCode.DATA_INTEGRITY_ERROR
 
 
 class ServiceUnavailableError(InfrastructureError):
     """An external service is temporarily unavailable."""
 
-    default_message = "A required service is temporarily unavailable."
-    default_title = "Service unavailable"
+    default_message = _("A required service is temporarily unavailable.")
+    default_title = _("Service unavailable")
