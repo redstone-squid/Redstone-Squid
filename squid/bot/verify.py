@@ -39,7 +39,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def unlink(self, ctx: Context[BotT]):
         """Unlink your minecraft account."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = ConfirmationView(t(locale, _("Are you sure you want to unlink your Minecraft account?")))
+        view = ConfirmationView(t(locale, _("Are you sure you want to unlink your Minecraft account?")), locale=locale)
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
         await view.wait()

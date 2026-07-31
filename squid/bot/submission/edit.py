@@ -120,7 +120,8 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                         allowed_mentions=no_mentions(),
                     )
                     view = ConfirmationView(
-                        t(locale, _("Here is a preview of the changes. Use the buttons to confirm or cancel."))
+                        t(locale, _("Here is a preview of the changes. Use the buttons to confirm or cancel.")),
+                        locale=locale,
                     )
                     controls = view.actions
                     view.clear_items()

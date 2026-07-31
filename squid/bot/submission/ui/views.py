@@ -10,6 +10,7 @@ from discord import Interaction
 from whenever import Instant
 
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
+from squid.bot.i18n import t
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
@@ -29,6 +30,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Build, BuildCategory, Status
+from squid.core.i18n import _
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -164,17 +166,23 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
 
 
 class ConfirmationView(ErrorHandledLayoutView):
-    """A simple Yes/No style pair of buttons for confirming an action."""
+    """A simple Yes/No style pair of buttons for confirming an action.
+
+    `prompt` should already be translated by the caller (it has the invocation
+    context this view doesn't); `locale` only covers this view's own button labels.
+    """
 
     actions = discord.ui.ActionRow()
 
-    def __init__(self, prompt: str = "Confirm this action?", timeout: int = 60):
+    def __init__(self, prompt: str | None = None, timeout: int = 60, *, locale: str | None = None):
         super().__init__(timeout=timeout)
         self.value = None
         controls = self.actions
         self.clear_items()
-        self.add_item(discord.ui.TextDisplay(prompt))
+        self.add_item(discord.ui.TextDisplay(prompt or t(locale, _("Confirm this action?"))))
         self.add_item(controls)
+        self.confirm.label = t(locale, _("Confirm"))
+        self.cancel.label = t(locale, _("Cancel"))
 
     @actions.button(label="Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
