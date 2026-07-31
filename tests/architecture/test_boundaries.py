@@ -15,6 +15,18 @@ def test_exception_model_is_transport_neutral() -> None:
     )
 
 
+def test_i18n_core_is_transport_neutral() -> None:
+    (
+        archrule("translation lookup stays independent from transport adapters")
+        .match("squid.core.i18n")
+        .should_not_import("discord*")
+        .should_not_import("fastapi*")
+        .should_not_import("squid.bot*")
+        .should_not_import("squid.api*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
 def test_domain_layers_are_framework_and_persistence_independent() -> None:
     (
         archrule("domain layers stay independent from frameworks and outer layers")

@@ -24,10 +24,13 @@ def _(message: str) -> str:
 
 @cache
 def _catalog(locale: str) -> gettext.NullTranslations:
+    # On-disk catalog directories follow gettext/babel's underscore convention
+    # (e.g. locales/zh_CN/), while `locale` elsewhere is the BCP-47 hyphenated
+    # form used by Discord and HTTP Accept-Language (e.g. "zh-CN").
     return gettext.translation(
         DOMAIN,
         localedir=LOCALES_DIR,
-        languages=[locale],
+        languages=[locale.replace("-", "_")],
         fallback=True,
     )
 
