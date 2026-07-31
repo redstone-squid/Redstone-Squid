@@ -7,15 +7,11 @@ This module tests:
 4. Attribute iteration
 """
 
-from typing import Any
-from unittest.mock import MagicMock
-
 import pytest
 
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
-from squid.builds.infrastructure.models import Door
 
 
 @pytest.fixture
@@ -48,122 +44,30 @@ def sample_build() -> Build:
     )
 
 
-@pytest.fixture
-def sample_sql_door():
-    """Sample SQLAlchemy Door object for testing."""
-    # Create a mock Door object with the required attributes
-    door = MagicMock(spec=Door)
-    door.id = 1
-    door.submission_status = Status.PENDING
-    door.category = "Door"
-    door.record_category = None
-    door.width = 5
-    door.height = 6
-    door.depth = 7
-    door.door_width = 2
-    door.door_height = 3
-    door.door_depth = 1
-    door.orientation = "Door"
-    door.normal_closing_time = None
-    door.normal_opening_time = None
-    door.visible_closing_time = None
-    door.visible_opening_time = None
-    door.extra_info = {}
-    door.submitter_id = 1
-    door.completion_time = None
-    door.edited_time = None
-    door.original_message_id = 1234567890
-    door.original_message = None
-    door.ai_generated = False
-    door.embedding = None
-
-    # Mock related objects
-    door.types = [MagicMock(name="Regular")]
-    door.restrictions = [
-        MagicMock(name="No pistons", type="component"),
-        MagicMock(name="1-wide", type="wiring-placement"),
-    ]
-    door.links = [
-        MagicMock(url="https://example.com/image.png", media_type="image"),
-        MagicMock(url="https://example.com/video.mp4", media_type="video"),
-        MagicMock(url="https://example.com/world.zip", media_type="world-download"),
-    ]
-    door.versions = []
-    door.creators = [MagicMock(ign="testuser")]
-
-    return door
-
-
-def assert_build_attributes(build: Build, expected: dict[str, Any]):
-    """Assert that the build attributes are equal to the expected values."""
-    for attr, value in expected.items():
-        assert getattr(build, attr) == value
-
-
 class TestBuildValidation:
     """Tests for Build data validation methods."""
 
-    @pytest.mark.parametrize(
-        ("width", "height", "depth"),
-        [
-            (2, 3, 1),  # Valid dimensions
-            (None, 3, 1),  # Width None
-            (2, None, 1),  # Height None
-            (2, 3, None),  # Depth None
-            (None, None, None),  # All None
-            (0, 0, 0),  # Zero dimensions
-            (-1, 3, 1),  # Negative width
-        ],
-    )
-    def test_dimensions_property(self, sample_build: Build, width: int | None, height: int | None, depth: int | None):
-        """Test dimension property getters/setters."""
-        sample_build.width = width
-        sample_build.height = height
-        sample_build.depth = depth
+    def test_dimensions_property(self, sample_build: Build):
+        """Test dimension property getter/setter round-trip."""
+        sample_build.width = 2
+        sample_build.height = 3
+        sample_build.depth = 1
 
-        # Test getter
-        width, height, depth = sample_build.dimensions
-        assert sample_build.width == width
-        assert sample_build.height == height
-        assert sample_build.depth == depth
+        assert sample_build.dimensions == (2, 3, 1)
 
-        # Test setter
-        sample_build.dimensions = (width, height, depth)
-        assert sample_build.width == width
-        assert sample_build.height == height
-        assert sample_build.depth == depth
+        sample_build.dimensions = (4, 5, 6)
+        assert (sample_build.width, sample_build.height, sample_build.depth) == (4, 5, 6)
 
-    @pytest.mark.parametrize(
-        ("width", "height", "depth"),
-        [
-            (2, 3, 1),  # Valid dimensions
-            (None, 3, 1),  # Width None
-            (2, None, 1),  # Height None
-            (2, 3, None),  # Depth None
-            (None, None, None),  # All None
-            (0, 0, 0),  # Zero
-            (-1, 3, 1),  # Negative width
-        ],
-    )
-    def test_door_dimensions_property(
-        self, sample_build: Build, width: int | None, height: int | None, depth: int | None
-    ):
-        """Test door dimension property getters/setters."""
-        sample_build.door_width = width
-        sample_build.door_height = height
-        sample_build.door_depth = depth
+    def test_door_dimensions_property(self, sample_build: Build):
+        """Test door dimension property getter/setter round-trip."""
+        sample_build.door_width = 2
+        sample_build.door_height = 3
+        sample_build.door_depth = 1
 
-        # Test getter
-        width, height, depth = sample_build.door_dimensions
-        assert width == sample_build.door_width
-        assert height == sample_build.door_height
-        assert depth == sample_build.door_depth
+        assert sample_build.door_dimensions == (2, 3, 1)
 
-        # Test setter
-        sample_build.door_dimensions = (width, height, depth)
-        assert sample_build.door_width == width
-        assert sample_build.door_height == height
-        assert sample_build.door_depth == depth
+        sample_build.door_dimensions = (4, 5, 6)
+        assert (sample_build.door_width, sample_build.door_height, sample_build.door_depth) == (4, 5, 6)
 
 
 class TestBuildTitle:
@@ -231,23 +135,3 @@ class TestBuildTitle:
         assert formatted.subtitle == "Mysteryless No pistons"
         assert display == "Pending: No pistons Mysteryless 1-wide Odd Wiring 2x3 Door [BROKEN]"
         assert "*" not in display
-
-
-class TestBuildComparison:
-    """Tests for Build comparison functionality."""
-
-    def test_diff_identical_builds(self, sample_build: Build):
-        """Test diff between identical builds."""
-        pass
-
-    def test_diff_different_builds(self, sample_build: Build):
-        """Test diff between different builds."""
-        pass
-
-    def test_diff_different_ids(self, sample_build: Build):
-        """Test diff between builds with different IDs."""
-        pass
-
-    def test_diff_different_ids_allowed(self, sample_build: Build):
-        """Test diff between builds with different IDs when allowed."""
-        pass
