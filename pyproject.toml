@@ -59,6 +59,11 @@ dev = [
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
 ]
+# Documentation tooling is installed only when building or publishing the site.
+docs = [
+    "mkdocstrings-python>=1.18,<2",
+    "zensical>=0.0.47,<0.1",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
