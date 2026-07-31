@@ -1,0 +1,1129 @@
+# English translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
+"Squid/issues\n"
+"POT-Creation-Date: 2026-07-31 15:33+0800\n"
+"PO-Revision-Date: 2026-07-31 15:05+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: squid/bot/submission/search_view.py:235
+#, python-brace-format
+msgid ""
+"\n"
+"**Metrics**\n"
+"{metrics}"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:246
+#, python-brace-format
+msgid ""
+"\n"
+"**Tags**\n"
+"{tags}"
+msgstr ""
+
+#: squid/bot/submission/records.py:58 squid/bot/submission/records.py:81
+#, python-brace-format
+msgid ""
+"\n"
+"…and {count} more."
+msgstr ""
+
+#: squid/bot/submission/search_view.py:62
+#, python-brace-format
+msgid ""
+"## Search results\n"
+"{lines}\n"
+"-# Page {page}"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:225
+#, python-brace-format
+msgid ""
+"**Build**\n"
+"{build_title} (`{build_id}`)\n"
+"**Class**\n"
+"{record_class} · {version_scope}"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:243
+#, python-brace-format
+msgid ""
+"**Kind**\n"
+"{kind}"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:239
+#, python-brace-format
+msgid ""
+"**Status**\n"
+"{status}"
+msgstr ""
+
+#: squid/bot/admin.py:66
+msgid "A build you submitted."
+msgstr ""
+
+#: squid/bot/submission/search.py:181
+msgid "A full or partial pattern name."
+msgstr ""
+
+#: squid/core/errors.py:211
+msgid "A persistence operation failed."
+msgstr ""
+
+#: squid/core/errors.py:226
+msgid "A required service is temporarily unavailable."
+msgstr ""
+
+#: squid/api/errors.py:32
+msgid "A required service is temporarily unavailable. Please try again later."
+msgstr ""
+
+#: squid/users/errors.py:43
+msgid "Account already linked"
+msgstr ""
+
+#: squid/bot/submission/search.py:142
+msgid "Alias added."
+msgstr ""
+
+#: squid/builds/errors.py:70
+msgid "Alias already added"
+msgstr ""
+
+#: squid/bot/submission/search.py:136
+msgid "Alias already on this restriction."
+msgstr ""
+
+#: squid/builds/errors.py:87
+msgid "Alias in use"
+msgstr ""
+
+#: squid/bot/submission/search.py:136
+msgid "Already added"
+msgstr ""
+
+#: squid/core/errors.py:48
+msgid "An application error occurred."
+msgstr ""
+
+#: squid/bot/admin.py:67
+msgid "An approved build tag."
+msgstr ""
+
+#: squid/core/errors.py:204
+msgid "An infrastructure dependency failed."
+msgstr ""
+
+#: squid/core/errors.py:181
+msgid "An internal application error occurred."
+msgstr ""
+
+#: squid/api/errors.py:31
+msgid "An internal server error occurred."
+msgstr ""
+
+#: squid/bot/errors.py:134
+#, python-brace-format
+msgid "An unexpected error occurred. Reference: `{error_id}`"
+msgstr ""
+
+#: squid/core/errors.py:190
+msgid "Application configuration is invalid."
+msgstr ""
+
+#: squid/core/errors.py:49
+msgid "Application error"
+msgstr ""
+
+#: squid/core/errors.py:197
+msgid "Application state is invalid for this operation."
+msgstr ""
+
+#: squid/bot/admin.py:154
+#, python-brace-format
+msgid "Archived **{name}**."
+msgstr ""
+
+#: squid/bot/verify.py:42
+msgid "Are you sure you want to unlink your Minecraft account?"
+msgstr ""
+
+#: squid/bot/admin.py:88
+#, python-brace-format
+msgid "Attached **{name}** to build #{id}."
+msgstr ""
+
+#: squid/bot/submission/search_view.py:189
+msgid "Back"
+msgstr ""
+
+#: squid/builds/errors.py:36
+msgid "Build busy"
+msgstr ""
+
+#: squid/bot/submission/edit.py:152
+msgid "Build edit canceled by user"
+msgstr ""
+
+#: squid/bot/submission/edit.py:144
+msgid "Build edit canceled due to inactivity."
+msgstr ""
+
+#: squid/bot/submission/edit.py:168
+msgid "Build edited successfully"
+msgstr ""
+
+#: squid/builds/errors.py:18
+msgid "Build not found."
+msgstr ""
+
+#: squid/bot/submission/submit.py:298
+msgid "Build recalculated."
+msgstr ""
+
+#: squid/bot/admin.py:259
+msgid "Build spreadsheet"
+msgstr ""
+
+#: squid/bot/submission/submit.py:124
+#, python-brace-format
+msgid ""
+"Build submitted successfully!\n"
+"The build ID is: {id}"
+msgstr ""
+
+#: squid/bot/admin.py:87
+msgid "Build tagged"
+msgstr ""
+
+#: squid/bot/submission/ui/views.py:185
+msgid "Cancel"
+msgstr ""
+
+#: squid/bot/submission/edit.py:152
+msgid "Cancelled"
+msgstr ""
+
+#: squid/bot/submission/records.py:130
+msgid "Canonical base key shown by search or records tooling."
+msgstr ""
+
+#: squid/users/errors.py:60
+msgid "Check the UUID and try again."
+msgstr ""
+
+#: squid/builds/errors.py:21
+msgid "Check the build ID and try again."
+msgstr ""
+
+#: squid/bot/errors.py:118
+msgid "Check the command arguments and try again."
+msgstr ""
+
+#: squid/bot/submission/records.py:132
+msgid ""
+"Comma-separated restriction IDs; large exact categories are saved for "
+"reuse."
+msgstr ""
+
+#: squid/bot/help.py:183 squid/bot/help.py:203
+msgid "Command Help"
+msgstr ""
+
+#: squid/bot/help.py:126
+#, python-brace-format
+msgid "Command Help - `{name}`"
+msgstr ""
+
+#: squid/bot/errors.py:107
+msgid "Command already running"
+msgstr ""
+
+#: squid/bot/errors.py:102
+msgid "Command on cooldown"
+msgstr ""
+
+#: squid/bot/errors.py:112 squid/bot/errors.py:127
+msgid "Command unavailable"
+msgstr ""
+
+#: squid/bot/submission/ui/views.py:184
+msgid "Confirm"
+msgstr ""
+
+#: squid/bot/submission/ui/views.py:182
+msgid "Confirm this action?"
+msgstr ""
+
+#: squid/bot/settings.py:159
+msgid "Could not find that channel."
+msgstr ""
+
+#: squid/bot/give_redstoner.py:153
+msgid "Could not find the redstoner role."
+msgstr ""
+
+#: squid/bot/settings.py:72
+msgid "Current Settings"
+msgstr ""
+
+#: squid/bot/admin.py:273
+msgid "Database"
+msgstr ""
+
+#: squid/bot/submission/edit.py:159
+msgid "Editing"
+msgstr ""
+
+#: squid/bot/submission/edit.py:159
+msgid "Editing build..."
+msgstr ""
+
+#: squid/bot/settings.py:136 squid/bot/settings.py:149
+#: squid/bot/settings.py:159 squid/bot/settings.py:179
+#: squid/bot/settings.py:190 squid/bot/settings.py:207
+#: squid/bot/settings.py:244 squid/bot/submission/search.py:231
+#: squid/bot/submission/search.py:246 squid/bot/submission/search.py:310
+msgid "Error"
+msgstr ""
+
+#: squid/bot/help.py:221
+msgid "Error."
+msgstr ""
+
+#: squid/bot/submission/search.py:69
+msgid "Field to sort by, such as width or closing_delay."
+msgstr ""
+
+#: squid/core/errors.py:175
+msgid "Forbidden"
+msgstr ""
+
+#: squid/bot/give_redstoner.py:159
+#, python-brace-format
+msgid "Gave {member} the redstoner role."
+msgstr ""
+
+#: squid/users/errors.py:36
+msgid "Generate a new code and try again."
+msgstr ""
+
+#: squid/bot/utils/embeds.py:20
+msgid "Getting information..."
+msgstr ""
+
+#: squid/api/errors.py:163
+msgid "HTTP error"
+msgstr ""
+
+#: squid/bot/help.py:116
+msgid "Help"
+msgstr ""
+
+#: squid/bot/submission/edit.py:123
+msgid "Here is a preview of the changes. Use the buttons to confirm or cancel."
+msgstr ""
+
+#: squid/bot/submission/submit.py:113 squid/bot/submission/submit.py:209
+msgid ""
+"Here is a preview of the submission. Use `/build edit` if you have made a"
+" mistake."
+msgstr ""
+
+#: squid/bot/give_redstoner.py:168
+#, python-brace-format
+msgid ""
+"Hi {member}, you received the {role} role after reaching 15 upvotes in "
+"{url}."
+msgstr ""
+
+#: squid/bot/settings.py:96
+#, python-brace-format
+msgid ""
+"ID: {id} \n"
+" Name: {name}"
+msgstr ""
+
+#: squid/core/errors.py:182
+msgid "Internal error"
+msgstr ""
+
+#: squid/api/errors.py:115 squid/api/errors.py:183
+msgid "Internal server error"
+msgstr ""
+
+#: squid/bot/errors.py:117 squid/bot/errors.py:122
+msgid "Invalid command input"
+msgstr ""
+
+#: squid/bot/utils/converters.py:46
+msgid "Invalid dimensions"
+msgstr ""
+
+#: squid/bot/utils/converters.py:103 squid/bot/utils/converters.py:114
+msgid "Invalid integer"
+msgstr ""
+
+#: squid/api/errors.py:143
+msgid "Invalid request"
+msgstr ""
+
+#: squid/core/errors.py:144
+msgid "Invalid value"
+msgstr ""
+
+#: squid/users/errors.py:33
+msgid "Invalid verification code"
+msgstr ""
+
+#: squid/bot/misc_commands.py:32
+msgid "Invite Redstone Squid"
+msgstr ""
+
+#: squid/bot/misc_commands.py:34
+msgid "Invite bot"
+msgstr ""
+
+#: squid/bot/help.py:45
+msgid "Loading…"
+msgstr ""
+
+#: squid/users/errors.py:57
+msgid "Minecraft account not found."
+msgstr ""
+
+#: squid/bot/errors.py:92
+msgid "Missing permission"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:178
+msgid "Next"
+msgstr ""
+
+#: squid/bot/submission/records.py:83
+msgid "No active record titles require taxonomy review."
+msgstr ""
+
+#: squid/bot/submission/search.py:231 squid/bot/submission/search.py:246
+#: squid/bot/submission/search.py:310
+msgid "No build with that ID."
+msgstr ""
+
+#: squid/bot/help.py:127 squid/bot/help.py:141 squid/bot/help.py:154
+msgid "No details provided"
+msgstr ""
+
+#: squid/bot/submission/search.py:202
+msgid "No open submissions."
+msgstr ""
+
+#: squid/bot/submission/search.py:190
+msgid "No patterns match that query."
+msgstr ""
+
+#: squid/bot/submission/search_view.py:57
+msgid "No results match this query."
+msgstr ""
+
+#: squid/bot/admin.py:108
+msgid "No tags are awaiting review."
+msgstr ""
+
+#: squid/bot/submission/records.py:60
+msgid "No unresolved active record categories."
+msgstr ""
+
+#: squid/bot/help.py:179 squid/bot/help.py:199
+msgid "None"
+msgstr ""
+
+#: squid/bot/errors.py:123
+msgid "One of the command options is invalid."
+msgstr ""
+
+#: squid/bot/errors.py:98
+msgid "Only the bot owner can use this command."
+msgstr ""
+
+#: squid/bot/submission/search.py:215
+msgid "Open Records"
+msgstr ""
+
+#: squid/bot/admin.py:275
+msgid "Open database"
+msgstr ""
+
+#: squid/bot/misc_commands.py:64
+msgid "Open form"
+msgstr ""
+
+#: squid/bot/misc_commands.py:49
+msgid "Open repository"
+msgstr ""
+
+#: squid/bot/admin.py:261
+msgid "Open spreadsheet"
+msgstr ""
+
+#: squid/core/errors.py:160
+msgid "Operation conflict"
+msgstr ""
+
+#: squid/bot/submission/records.py:95
+msgid "Optional database ID to also compute the pinned current-version records."
+msgstr ""
+
+#: squid/bot/submission/records.py:134
+msgid "Optional pinned version database ID."
+msgstr ""
+
+#: squid/bot/admin.py:38
+msgid "Optional search and sort field, for example closing_delay."
+msgstr ""
+
+#: squid/bot/submission/records.py:45
+msgid "Optionally limit gaps to one build kind."
+msgstr ""
+
+#: squid/bot/submission/records.py:69
+msgid "Optionally limit title diagnostics to one build kind."
+msgstr ""
+
+#: squid/bot/submission/records.py:97
+msgid "Optionally rebuild just doors or extenders."
+msgstr ""
+
+#: squid/bot/errors.py:97
+msgid "Owner only"
+msgstr ""
+
+#: squid/bot/submission/search.py:104
+msgid "Part of a restriction name. Leave blank to list all restrictions."
+msgstr ""
+
+#: squid/bot/submission/search.py:176 squid/bot/submission/search.py:190
+msgid "Patterns"
+msgstr ""
+
+#: squid/bot/admin.py:107
+msgid "Pending tags"
+msgstr ""
+
+#: squid/core/errors.py:219
+msgid "Persisted data is inconsistent with application expectations."
+msgstr ""
+
+#: squid/core/errors.py:184
+msgid "Please try again later."
+msgstr ""
+
+#: squid/bot/submission/search_view.py:167
+msgid "Previous"
+msgstr ""
+
+#: squid/bot/admin.py:36
+msgid "Public display name."
+msgstr ""
+
+#: squid/bot/admin.py:124
+#, python-brace-format
+msgid "Published **{name}**."
+msgstr ""
+
+#: squid/bot/misc_commands.py:77
+msgid "Read regulations"
+msgstr ""
+
+#: squid/bot/version_tracking.py:35
+msgid "Recognized Java versions"
+msgstr ""
+
+#: squid/bot/submission/records.py:165
+#, python-brace-format
+msgid "Recomputed {definitions} definitions; {resolved} resolved."
+msgstr ""
+
+#: squid/bot/submission/records.py:162
+msgid "Record category materialized"
+msgstr ""
+
+#: squid/bot/submission/records.py:62
+msgid "Record evidence gaps"
+msgstr ""
+
+#: squid/bot/submission/records.py:85
+msgid "Record title diagnostics"
+msgstr ""
+
+#: squid/bot/submission/records.py:112
+msgid "Records rebuilt"
+msgstr ""
+
+#: squid/bot/give_redstoner.py:116
+msgid "Redstoner role controls"
+msgstr ""
+
+#: squid/bot/misc_commands.py:75
+msgid "Regulations"
+msgstr ""
+
+#: squid/bot/admin.py:139
+#, python-brace-format
+msgid "Rejected **{name}**."
+msgstr ""
+
+#: squid/core/errors.py:136
+msgid "Request failed"
+msgstr ""
+
+#: squid/core/errors.py:152
+msgid "Resource not found"
+msgstr ""
+
+#: squid/builds/errors.py:58
+#, python-brace-format
+msgid "Restriction '{name}' does not exist."
+msgstr ""
+
+#: squid/builds/errors.py:52
+msgid "Restriction not found."
+msgstr ""
+
+#: squid/bot/submission/search.py:116
+msgid "Restrictions"
+msgstr ""
+
+#: squid/bot/submission/records.py:149
+msgid "Restrictions must be comma-separated numeric IDs."
+msgstr ""
+
+#: squid/bot/submission/edit.py:128
+msgid "Review the proposed build changes."
+msgstr ""
+
+#: squid/bot/submission/search.py:67
+msgid "Search records, builds, tags and fields, or everything."
+msgstr ""
+
+#: squid/bot/submission/search.py:66
+msgid "Search text and filters, e.g. `width:5`."
+msgstr ""
+
+#: squid/bot/errors.py:87
+msgid "Server only"
+msgstr ""
+
+#: squid/api/errors.py:115 squid/core/errors.py:227
+msgid "Service unavailable"
+msgstr ""
+
+#: squid/bot/settings.py:225
+msgid "Setting updated"
+msgstr ""
+
+#: squid/bot/settings.py:169 squid/bot/settings.py:199
+#: squid/bot/settings.py:254
+msgid "Settings updated"
+msgstr ""
+
+#: squid/bot/errors.py:133
+msgid "Something went wrong"
+msgstr ""
+
+#: squid/bot/submission/search.py:70
+msgid "Sort low-to-high or high-to-low."
+msgstr ""
+
+#: squid/bot/misc_commands.py:47
+msgid "Source code"
+msgstr ""
+
+#: squid/bot/submission/search_view.py:200
+msgid "Stop"
+msgstr ""
+
+#: squid/bot/submission/submit.py:197
+msgid "Submission canceled by user."
+msgstr ""
+
+#: squid/bot/submission/submit.py:190
+msgid "Submission canceled due to inactivity."
+msgstr ""
+
+#: squid/bot/misc_commands.py:61
+msgid "Submission form"
+msgstr ""
+
+#: squid/bot/submission/search.py:272
+msgid "Submission has been confirmed."
+msgstr ""
+
+#: squid/bot/submission/search.py:291
+msgid "Submission has been denied."
+msgstr ""
+
+#: squid/bot/misc_commands.py:63
+msgid "Submit a new record through the Google form."
+msgstr ""
+
+#: squid/bot/submission/edit.py:168 squid/bot/submission/search.py:142
+#: squid/bot/submission/search.py:272 squid/bot/submission/search.py:291
+#: squid/bot/submission/submit.py:123
+msgid "Success"
+msgstr ""
+
+#: squid/bot/admin.py:248
+#, python-brace-format
+msgid "Synced the tree to {synced}/{total}."
+msgstr ""
+
+#: squid/bot/admin.py:232
+#, python-brace-format
+msgid "Synced {count} commands {scope}."
+msgstr ""
+
+#: squid/bot/admin.py:58
+#, python-brace-format
+msgid "Tag #{id} is awaiting staff approval."
+msgstr ""
+
+#: squid/bot/admin.py:123
+msgid "Tag approved"
+msgstr ""
+
+#: squid/bot/admin.py:153
+msgid "Tag archived"
+msgstr ""
+
+#: squid/bot/admin.py:57
+msgid "Tag proposed"
+msgstr ""
+
+#: squid/bot/admin.py:138
+msgid "Tag rejected"
+msgstr ""
+
+#: squid/builds/errors.py:69
+msgid "That alias is already on this restriction."
+msgstr ""
+
+#: squid/builds/errors.py:86
+msgid "That alias is already used by another restriction."
+msgstr ""
+
+#: squid/bot/settings.py:244
+msgid "That language is not supported."
+msgstr ""
+
+#: squid/bot/submission/search.py:299
+msgid "The ID of the build whose debug details you want to see."
+msgstr ""
+
+#: squid/bot/submission/search.py:261
+msgid "The ID of the build you want to confirm."
+msgstr ""
+
+#: squid/bot/submission/search.py:280
+msgid "The ID of the build you want to deny."
+msgstr ""
+
+#: squid/bot/submission/search.py:221
+msgid "The ID of the build you want to see."
+msgstr ""
+
+#: squid/users/errors.py:74
+msgid "The Minecraft account service is temporarily unavailable."
+msgstr ""
+
+#: squid/versions/errors.py:19
+msgid "The Minecraft version catalog is empty."
+msgstr ""
+
+#: squid/versions/errors.py:10
+msgid "The Minecraft version is invalid."
+msgstr ""
+
+#: squid/bot/submission/search.py:125
+msgid "The additional name."
+msgstr ""
+
+#: squid/builds/errors.py:10
+msgid "The build data is invalid."
+msgstr ""
+
+#: squid/bot/settings.py:117
+msgid "The channel to send this type of message to"
+msgstr ""
+
+#: squid/bot/verify.py:28
+msgid "The code you received by running /link in the game."
+msgstr ""
+
+#: squid/bot/help.py:31
+msgid "The command to get help for."
+msgstr ""
+
+#: squid/bot/settings.py:232
+msgid "The language the bot should respond in"
+msgstr ""
+
+#: squid/bot/voting/vote.py:136
+msgid "The message is not from this guild."
+msgstr ""
+
+#: squid/messages/errors.py:10
+msgid "The message metadata is invalid."
+msgstr ""
+
+#: squid/bot/voting/vote.py:129
+msgid "The message to hold a deletion vote for."
+msgstr ""
+
+#: squid/core/errors.py:159
+msgid "The operation conflicts with the current state."
+msgstr ""
+
+#: squid/api/errors.py:145
+msgid "The request did not pass validation."
+msgstr ""
+
+#: squid/core/errors.py:135
+msgid "The requested operation could not be completed."
+msgstr ""
+
+#: squid/core/errors.py:151
+msgid "The requested resource was not found."
+msgstr ""
+
+#: squid/bot/submission/search.py:124
+msgid "The restriction to add another name for."
+msgstr ""
+
+#: squid/bot/settings.py:190
+msgid "The roles must be from this server."
+msgstr ""
+
+#: squid/bot/settings.py:118
+msgid "The roles which will have this permission"
+msgstr ""
+
+#: squid/core/errors.py:143
+msgid "The supplied value is invalid."
+msgstr ""
+
+#: squid/bot/admin.py:68
+msgid "The tag value, omitted for plain tags."
+msgstr ""
+
+#: squid/bot/submission/records.py:129
+msgid "The typed record family."
+msgstr ""
+
+#: squid/users/errors.py:12
+msgid "The user data is invalid."
+msgstr ""
+
+#: squid/users/errors.py:32
+msgid "The verification code is invalid or expired."
+msgstr ""
+
+#: squid/bot/submission/search_view.py:46
+msgid "These search controls belong to someone else."
+msgstr ""
+
+#: squid/users/errors.py:42
+msgid "This Discord account is already linked to a different Minecraft account."
+msgstr ""
+
+#: squid/builds/errors.py:35
+msgid "This build is currently being edited by someone else."
+msgstr ""
+
+#: squid/bot/errors.py:88
+msgid "This command cannot be used in a private message."
+msgstr ""
+
+#: squid/bot/submission/submit.py:132
+msgid "This command is only available as a slash command for now."
+msgstr ""
+
+#: squid/bot/submission/edit.py:181 squid/bot/submission/edit.py:189
+msgid "This does not look like a build."
+msgstr ""
+
+#: squid/bot/submission/paginator.py:82
+msgid "This paginator belongs to someone else."
+msgstr ""
+
+#: squid/bot/submission/paginator.py:90
+msgid "This paginator is attached to a different channel."
+msgstr ""
+
+#: squid/bot/settings.py:255
+#, python-brace-format
+msgid "This server's language has been set to {language}."
+msgstr ""
+
+#: squid/bot/settings.py:207
+msgid "This setting is not supported."
+msgstr ""
+
+#: squid/bot/submission/edit.py:143
+msgid "Timed out"
+msgstr ""
+
+#: squid/messages/errors.py:18
+msgid "Tracked message not found."
+msgstr ""
+
+#: squid/users/errors.py:77
+msgid "Try again in a few minutes."
+msgstr ""
+
+#: squid/bot/errors.py:103
+#, python-brace-format
+msgid "Try again in {seconds:.1f} seconds."
+msgstr ""
+
+#: squid/bot/help.py:212
+#, python-brace-format
+msgid ""
+"Unable to find command `{name}`. Use /help to get a list of available "
+"commands."
+msgstr ""
+
+#: squid/core/errors.py:167
+msgid "Unauthorized"
+msgstr ""
+
+#: squid/core/errors.py:166
+msgid "Unauthorized."
+msgstr ""
+
+#: squid/users/errors.py:46
+msgid "Unlink the current account before linking a new one."
+msgstr ""
+
+#: squid/bot/submission/submit.py:160
+#, python-brace-format
+msgid "Unsupported content type: {content_type}"
+msgstr ""
+
+#: squid/bot/help.py:19
+msgid "Use `/help <command>` to get more information."
+msgstr ""
+
+#: squid/versions/errors.py:13
+msgid "Use a supported Minecraft version format and try again."
+msgstr ""
+
+#: squid/bot/submission/search.py:68
+msgid "Use keyword matching or smart meaning-based matching."
+msgstr ""
+
+#: squid/bot/submission/edit.py:119
+msgid "User confirming changes..."
+msgstr ""
+
+#: squid/users/errors.py:20
+msgid "User not found."
+msgstr ""
+
+#: squid/bot/version_tracking.py:48 squid/bot/version_tracking.py:65
+#, python-brace-format
+msgid "Version added successfully: {version}"
+msgstr ""
+
+#: squid/voting/errors.py:10
+msgid "Vote configuration is invalid."
+msgstr ""
+
+#: squid/bot/errors.py:108
+msgid "Wait for the current operation to finish and try again."
+msgstr ""
+
+#: squid/builds/errors.py:39
+msgid "Wait for the other edit to finish and try again."
+msgstr ""
+
+#: squid/bot/submission/edit.py:119
+msgid "Waiting"
+msgstr ""
+
+#: squid/bot/admin.py:37
+msgid "Whether the tag carries a number, text, yes/no value, or no value."
+msgstr ""
+
+#: squid/bot/utils/embeds.py:19
+msgid "Working"
+msgstr ""
+
+#: squid/bot/settings.py:137
+msgid "You can only provide a channel or a list of roles, not both."
+msgstr ""
+
+#: squid/bot/errors.py:113 squid/bot/errors.py:128
+msgid "You cannot use this command here."
+msgstr ""
+
+#: squid/bot/voting/vote.py:101
+msgid "You do not have a trusted role."
+msgstr ""
+
+#: squid/core/errors.py:174
+msgid "You do not have permission to perform this action."
+msgstr ""
+
+#: squid/bot/errors.py:93
+msgid "You do not have permission to use this command."
+msgstr ""
+
+#: squid/bot/verify.py:60
+msgid ""
+"You don't have a Minecraft account linked to your Discord account, or the"
+" unlinking failed."
+msgstr ""
+
+#: squid/bot/settings.py:150
+msgid "You must provide a channel for this setting."
+msgstr ""
+
+#: squid/bot/settings.py:180
+msgid "You must provide a list of roles for this setting."
+msgstr ""
+
+#: squid/bot/verify.py:34
+msgid "Your Discord account has been linked with your Minecraft account."
+msgstr ""
+
+#: squid/bot/verify.py:50
+msgid "Your Discord account has been unlinked from your Minecraft account."
+msgstr ""
+
+#: squid/bot/settings.py:60 squid/bot/settings.py:98
+msgid "_Not found_"
+msgstr ""
+
+#: squid/bot/settings.py:65 squid/bot/settings.py:92 squid/bot/settings.py:104
+msgid "_Not set_"
+msgstr ""
+
+#: squid/bot/admin.py:230
+msgid "globally"
+msgstr ""
+
+#: squid/bot/admin.py:230
+msgid "to the current guild"
+msgstr ""
+
+#: squid/bot/submission/records.py:115
+#, python-brace-format
+msgid ""
+"{definitions} definitions; {resolved} resolved; {unresolved} awaiting "
+"evidence."
+msgstr ""
+
+#: squid/bot/help.py:97
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Commands:{commands}\n"
+"\n"
+"{more_information}\n"
+msgstr ""
+
+#: squid/bot/help.py:177
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Usable Subcommands: {commands}\n"
+"\n"
+"{more_information}"
+msgstr ""
+
+#: squid/bot/help.py:197
+#, python-brace-format
+msgid ""
+"{description}\n"
+"\n"
+"Usable Subcommands:{commands}\n"
+"\n"
+"{more_information}"
+msgstr ""
+
+#: squid/bot/give_redstoner.py:87
+#, python-brace-format
+msgid "{member} — just kidding, here is your role back."
+msgstr ""
+
+#: squid/bot/give_redstoner.py:71
+#, python-brace-format
+msgid "{owner}, {member} has removed their own redstoner role."
+msgstr ""
+
+#: squid/bot/give_redstoner.py:141
+#, python-brace-format
+msgid "{reason} in {url}"
+msgstr ""
+
+#: squid/bot/settings.py:89
+#, python-brace-format
+msgid "{setting} Channel Info"
+msgstr ""
+
+#: squid/bot/settings.py:101
+#, python-brace-format
+msgid "{setting} Roles Info"
+msgstr ""
+
+#: squid/bot/settings.py:170
+#, python-brace-format
+msgid "{setting} channel has successfully been set."
+msgstr ""
+
+#: squid/bot/settings.py:56
+#, python-brace-format
+msgid "{setting} channel: _Not set_\n"
+msgstr ""
+
+#: squid/bot/settings.py:61
+#, python-brace-format
+msgid "{setting} channel: {value}\n"
+msgstr ""
+
+#: squid/bot/settings.py:226
+#, python-brace-format
+msgid "{setting} has been cleared."
+msgstr ""
+
+#: squid/bot/settings.py:200
+#, python-brace-format
+msgid "{setting} roles have successfully been set."
+msgstr ""
+
+#: squid/bot/settings.py:66
+#, python-brace-format
+msgid "{setting} roles: {value}\n"
+msgstr ""
+
+#: squid/bot/settings.py:68
+#, python-brace-format
+msgid "{setting}: {value}\n"
+msgstr ""
