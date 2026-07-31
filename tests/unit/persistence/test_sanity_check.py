@@ -1,4 +1,10 @@
-"""Tests for checking database sanity checks functions correctly."""
+"""Tests for checking database sanity checks functions correctly.
+
+Uses an in-memory SQLite engine rather than the shared PostgreSQL testcontainer used elsewhere
+under tests/integration/: is_sane_database() is dialect-generic (this file skips the one
+PostgreSQL-specific ARRAY case on other dialects) and does not exercise PostgreSQL adapter
+behavior, so it lives under tests/unit/ and needs no Docker/database server.
+"""
 
 import contextlib
 from collections.abc import Generator
@@ -149,21 +155,28 @@ def db_session(db_engine: Engine) -> Generator[Session, None, None]:
     session.close()
 
 
+@contextlib.contextmanager
+def fresh_schema(engine: Engine, base: type[DeclarativeBase]) -> Generator[None, None, None]:
+    """Create all tables for `base` on `engine`, dropping any pre-existing ones first and after."""
+    with contextlib.suppress(NoSuchTableError):
+        base.metadata.drop_all(engine)
+
+    base.metadata.create_all(engine)
+
+    try:
+        yield
+    finally:
+        base.metadata.drop_all(engine)
+
+
 def test_sanity_check_passes_with_valid_tables(
     db_engine: Engine, base_and_sane_model: tuple[type[DeclarativeBase], type[DeclarativeBase]]
 ):
     """Test that database sanity check passes when tables and columns are properly created."""
     Base, SaneTestModel = base_and_sane_model
 
-    with contextlib.suppress(NoSuchTableError):
-        Base.metadata.drop_all(db_engine)
-
-    Base.metadata.create_all(db_engine)
-
-    try:
+    with fresh_schema(db_engine, Base):
         assert is_sane_database(Base, db_engine) is True, "Database should be considered sane with valid tables"
-    finally:
-        Base.metadata.drop_all(db_engine)
 
 
 def test_sanity_check_fails_with_missing_table(
@@ -184,14 +197,11 @@ def test_sanity_check_fails_with_missing_column(
     """Test that database sanity check fails when a required column is missing."""
     Base, SaneTestModel = base_and_sane_model
 
-    with contextlib.suppress(NoSuchTableError):
-        Base.metadata.drop_all(db_engine)
+    with fresh_schema(db_engine, Base):
+        with db_engine.connect() as connection:
+            connection.execute(text("ALTER TABLE sanity_check_test_1 DROP COLUMN name"))
 
-    Base.metadata.create_all(db_engine)
-    with db_engine.connect() as connection:
-        connection.execute(text("ALTER TABLE sanity_check_test_1 DROP COLUMN name"))
-
-    assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing columns"
+        assert is_sane_database(Base, db_engine) is False, "Database should not be considered sane with missing columns"
 
 
 def test_sanity_check_passes_with_relationships(
@@ -201,15 +211,8 @@ def test_sanity_check_passes_with_relationships(
     """Test that database sanity check correctly handles relationship tables."""
     Base, RelationTestModel, RelationTestModel2 = base_and_sane_relation_models
 
-    with contextlib.suppress(NoSuchTableError):
-        Base.metadata.drop_all(db_engine)
-
-    Base.metadata.create_all(db_engine)
-
-    try:
+    with fresh_schema(db_engine, Base):
         assert is_sane_database(Base, db_engine) is True, "Database should be considered sane with valid relationships"
-    finally:
-        Base.metadata.drop_all(db_engine)
 
 
 def test_sanity_check_passes_with_declarative_attributes(
@@ -218,17 +221,10 @@ def test_sanity_check_passes_with_declarative_attributes(
     """Test that database sanity check correctly handles models with declarative attributes."""
     Base, DeclarativeTestModel = base_and_sane_declarative_model
 
-    with contextlib.suppress(NoSuchTableError):
-        Base.metadata.drop_all(db_engine)
-
-    Base.metadata.create_all(db_engine)
-
-    try:
+    with fresh_schema(db_engine, Base):
         assert is_sane_database(Base, db_engine) is True, (
             "Database should be considered sane with declarative attributes"
         )
-    finally:
-        Base.metadata.drop_all(db_engine)
 
 
 def alter_table_sqlite(table_name: str, column_name: str, new_type: str) -> list[str]:
