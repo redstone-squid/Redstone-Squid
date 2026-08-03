@@ -1,6 +1,8 @@
 """A cog with commands to submit builds."""
 
 import asyncio
+import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
 import discord
@@ -15,6 +17,7 @@ from discord.ext.commands import (
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.message_adapter import to_tracked_message
+from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
@@ -25,11 +28,15 @@ from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import BuildInferenceInput, BuildInferenceService, BuildService, DoorSubmissionInput
 from squid.builds.domain import Build, Status
+from squid.core.errors import SquidError
 from squid.core.i18n import _
 from squid.messages.application import MessageService
+from squid.schematics.application import IngestedSchematic, IngestRequest
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+logger = logging.getLogger(__name__)
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
@@ -152,34 +159,44 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
         build = Build(ai_generated=False)
         attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
+        schematics = self.bot.services.schematics
 
-        async def _handle_attachment(attachment: discord.Attachment | None) -> tuple[str, str] | None:
+        async def _handle_attachment(
+            attachment: discord.Attachment | None,
+        ) -> tuple[AttachmentKind, str, bytes] | None:
             if attachment is None:
                 return None
-            assert attachment.content_type is not None
-            if not attachment.content_type.startswith("image") and not attachment.content_type.startswith("video"):
-                msg = t(locale, _("Unsupported content type: {content_type}"), content_type=attachment.content_type)
-                raise ValueError(msg)
-
-            url = await upload_to_catbox(
+            classified = classify_attachment(
                 attachment.filename,
-                await attachment.read(),
                 attachment.content_type,
-                self.bot.catbox_config,
+                attachment.size,
+                max_bytes=schematics.limits.max_upload_bytes,
             )
-            if attachment.content_type.startswith("image"):
-                return "image", url
-            return "video", url
+            data = await attachment.read()
+            url = await upload_to_catbox(classified.filename, data, classified.content_type, self.bot.catbox_config)
+            return classified.kind, url, data
 
         uploaded_media = await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
+        pending_schematics: list[tuple[str, bytes]] = []
         for uploaded in uploaded_media:
             if uploaded is None:
                 continue
-            kind, url = uploaded
+            kind, url, data = uploaded
             if kind == "image":
                 build.image_urls.append(url)
-            else:
+            elif kind == "video":
                 build.video_urls.append(url)
+            else:
+                build.schematic_urls.append(url)
+                pending_schematics.append((url, data))
+
+        # Prefilling is safe here: `build` was constructed empty a few lines above, so there is
+        # no human-declared value to overwrite. The modal shows these as editable defaults, and
+        # whatever the human submits wins from that point on.
+        analyses = await self._analyse_attachments(pending_schematics, uploader_id=interaction.user.id)
+        if analyses:
+            measured = analyses[0][1].analysis.metrics.dimensions
+            build.dimensions = (measured.width, measured.height, measured.length)
 
         view = BuildSubmissionForm(
             build,
@@ -209,7 +226,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             )
             return
 
+        self._note_dimension_mismatch(build, analyses)
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
+        await self._record_analyses(build, analyses, uploader_id=interaction.user.id)
+
         preview = StaticLayout(
             discord.ui.TextDisplay(
                 t(
@@ -224,6 +244,60 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),
+        )
+
+    async def _analyse_attachments(
+        self, pending: Sequence[tuple[str, bytes]], *, uploader_id: int
+    ) -> list[tuple[IngestRequest, IngestedSchematic]]:
+        """Analyze uploaded schematics, dropping any the engine cannot read.
+
+        A schematic is enrichment, not a prerequisite: a corrupt file, a missing engine, or a
+        crashed worker must leave the submission itself working, so every failure here is
+        logged and skipped rather than raised at the user mid-form.
+        """
+        schematics = self.bot.services.schematics
+        if not schematics.available:
+            return []
+
+        analysed: list[tuple[IngestRequest, IngestedSchematic]] = []
+        for filename, data in pending:
+            request = IngestRequest(data=data, filename=filename, uploaded_by_discord_id=uploader_id)
+            try:
+                analysed.append((request, await schematics.ingest(request)))
+            except SquidError:
+                logger.warning("Could not analyze the attached schematic %s.", filename, exc_info=True)
+        return analysed
+
+    async def _record_analyses(
+        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_id: int
+    ) -> None:
+        """Persist the analyses now that the build has an id. The first upload is primary."""
+        if build.id is None or not analyses:
+            return
+        schematics = self.bot.services.schematics
+        for index, (request, ingested) in enumerate(analyses):
+            try:
+                await schematics.record(build.id, ingested, request, primary=index == 0)
+            except SquidError:
+                logger.warning("Could not record the schematic analysis for build %s.", build.id, exc_info=True)
+
+    @staticmethod
+    def _note_dimension_mismatch(build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]]) -> None:
+        """Record, but never silently resolve, a disagreement between human and file.
+
+        The declared value wins: a schematic export is frequently cropped to the mechanism and
+        legitimately smaller than the build a person measured. Overwriting it would corrupt the
+        record, so the discrepancy is surfaced as visible evidence for the reviewers instead.
+        """
+        if not analyses:
+            return
+        measured = analyses[0][1].analysis.metrics.dimensions
+        declared = (build.width, build.height, build.depth)
+        if None in declared or declared == (measured.width, measured.height, measured.length):
+            return
+        build.extra_info["schematic_dimension_mismatch"] = (
+            f"Declared {declared[0]}x{declared[1]}x{declared[2]}, "
+            f"schematic measures {measured.width}x{measured.height}x{measured.length}"
         )
 
     @commands.Cog.listener("on_build_confirmed")
@@ -277,22 +351,36 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if build is None:
             return
 
+        pending_schematics: list[tuple[str, bytes]] = []
         for attachment in message.attachments:
-            if attachment.content_type is None:
+            # Previously this skipped every attachment Discord reported no content type for,
+            # which is exactly the set of schematics.
+            try:
+                classified = classify_attachment(
+                    attachment.filename,
+                    attachment.content_type,
+                    attachment.size,
+                    max_bytes=self.bot.services.schematics.limits.max_upload_bytes,
+                )
+            except SquidError:
+                logger.debug("Ignoring unsupported attachment %s in a scraped message.", attachment.filename)
                 continue
-            url = await upload_to_catbox(
-                attachment.filename,
-                await attachment.read(),
-                attachment.content_type,
-                self.bot.catbox_config,
-            )
-            if attachment.content_type.startswith("image"):
+
+            data = await attachment.read()
+            url = await upload_to_catbox(classified.filename, data, classified.content_type, self.bot.catbox_config)
+            if classified.kind == "image":
                 build.image_urls.append(url)
-            elif attachment.content_type.startswith("video"):
+            elif classified.kind == "video":
                 build.video_urls.append(url)
+            else:
+                build.schematic_urls.append(url)
+                pending_schematics.append((classified.filename, data))
+
+        analyses = await self._analyse_attachments(pending_schematics, uploader_id=message.author.id)
 
         # Order is important here.
         await self.builds.submit(build, submitter_id=message.author.id, ai_generated=True)
+        await self._record_analyses(build, analyses, uploader_id=message.author.id)
         await self.bot.for_build(build).post_for_voting(type="add")
 
     @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore

@@ -156,7 +156,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             "Visible Opening Time",
             "Visible Closing Time",
         }
-        resource_names = {"Server", "Coordinates", "Command", "World Download", "Videos"}
+        resource_names = {"Server", "Coordinates", "Command", "World Download", "Schematic", "Videos"}
         credit_names = {"Creators", "Date Of Completion"}
 
         def section(title: str, names: set[str]) -> CardSection:
@@ -222,6 +222,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                     media.append(image)
                     break
 
+        # Appended last so a generated render only becomes media[0] — the card's thumbnail —
+        # when the build has no real screenshot to show instead.
+        media.extend(self.build.render_urls)
+
         return media[:10]
 
     async def get_description(self) -> str | None:  # type: ignore
@@ -282,6 +286,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         if build.world_download_urls:
             fields["World Download"] = ", ".join(build.world_download_urls)
+        if build.schematic_urls:
+            fields["Schematic"] = ", ".join(build.schematic_urls)
         if build.video_urls:
             fields["Videos"] = ", ".join(build.video_urls)
 

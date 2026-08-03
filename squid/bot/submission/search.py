@@ -14,6 +14,7 @@ from rapidfuzz import process
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
@@ -50,6 +51,7 @@ class SearchCog[
 ](
     BuildEditCommands[BotT],
     BuildSubmitCommands[BotT],
+    BuildSchematicCommands[BotT],
 ):
     def __init__(self, bot: BotT):
         self.bot = bot
