@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
+from squid.bot.consent import UserDataConsentView
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.ui.components import get_text_input
 from squid.bot.submission.ui.views import (
@@ -88,6 +89,17 @@ def test_confirmation_view_contains_prompt_and_actions() -> None:
 
     assert view.to_components()[0]["content"] == "Proceed?"
     assert len(view.to_components()[1]["components"]) == 2
+
+
+def test_user_data_consent_view_discloses_storage_and_actions() -> None:
+    view = UserDataConsentView(123)
+    payload = view.to_components()
+
+    assert view.has_components_v2()
+    assert "Discord user ID, Minecraft UUID" in payload[0]["content"]
+    assert "stores no user account information" in payload[0]["content"]
+    assert [button["label"] for button in payload[1]["components"]] == ["Agree and link", "Cancel"]
+    assert view.consent is None
 
 
 def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:

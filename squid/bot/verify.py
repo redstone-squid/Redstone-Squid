@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
+from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.components import no_mentions, text_layout
@@ -28,8 +29,23 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
-        await self.user_service.link_minecraft_account(ctx.author.id, code)
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        consent_view = UserDataConsentView(ctx.author.id, locale=locale)
+        await ctx.send(
+            view=consent_view,
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+        await consent_view.wait()
+        if consent_view.consent is None:
+            await ctx.send(
+                view=text_layout(t(locale, _("Account linking cancelled. No user account information was stored."))),
+                ephemeral=ctx.interaction is not None,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        await self.user_service.link_minecraft_account(ctx.author.id, code, consent=consent_view.consent)
         await ctx.send(
             view=text_layout(t(locale, _("Your Discord account has been linked with your Minecraft account."))),
             allowed_mentions=no_mentions(),
