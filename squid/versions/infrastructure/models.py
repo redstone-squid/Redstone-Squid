@@ -1,6 +1,6 @@
 """SQLAlchemy Minecraft version models."""
 
-from sqlalchemy import SmallInteger, Text
+from sqlalchemy import Integer, SmallInteger, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from squid.persistence.base import Base
@@ -15,3 +15,7 @@ class Version(Base):
     major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    data_version: Mapped[int | None] = mapped_column(Integer, default=None)
+    """Minecraft's own numeric world-format version, needed to retarget a schematic at this
+    release. Nullable because Bedrock has no equivalent and Java releases predating the field
+    have none either."""
