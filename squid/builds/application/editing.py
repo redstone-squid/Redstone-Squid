@@ -45,6 +45,8 @@ class BuildEditPatch:
     image_urls: PatchValue[list[str]] = UNSET
     video_urls: PatchValue[list[str]] = UNSET
     world_download_urls: PatchValue[list[str]] = UNSET
+    schematic_urls: PatchValue[list[str]] = UNSET
+    render_urls: PatchValue[list[str]] = UNSET
     server_ip: PatchValue[str | None] = UNSET
     coordinates: PatchValue[str | None] = UNSET
     command_to_get_to_build: PatchValue[str | None] = UNSET
@@ -85,6 +87,8 @@ class BuildEditPatch:
             "image_urls",
             "video_urls",
             "world_download_urls",
+            "schematic_urls",
+            "render_urls",
             "completion_time",
             "extra_info",
             "ai_generated",

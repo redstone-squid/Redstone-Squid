@@ -100,6 +100,8 @@ class BuildMapper:
             image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
             video_urls=[link.url for link in sql_build.links if link.media_type == "video"],
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
+            schematic_urls=[link.url for link in sql_build.links if link.media_type == "schematic"],
+            render_urls=[link.url for link in sql_build.links if link.media_type == "render"],
             submitter_id=submitter_discord_id,
             completion_time=sql_build.completion_time,
             completion_at=sql_build.completion_at,

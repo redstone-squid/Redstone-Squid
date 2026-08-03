@@ -1,11 +1,31 @@
 """Build application ports."""
 
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from whenever import Instant
 
 from squid.builds.domain import Build
+
+
+@dataclass(frozen=True, slots=True)
+class BuildSchematicSummary:
+    """The handful of schematic facts a build card needs, in plain scalars.
+
+    Deliberately not the schematic read model: this is the whole of what `builds` is allowed to
+    know about schematics, so the two contexts stay decoupled and a change to the analysis
+    shape cannot ripple into build rendering.
+    """
+
+    width: int
+    height: int
+    length: int
+    block_count: int
+    palette_size: int
+    source_data_version: int | None = None
+    lattice_label: str | None = None
+    sign_texts: tuple[str, ...] = ()
 
 
 class BuildRepository(Protocol):
@@ -44,3 +64,13 @@ class DefaultVersionResolver(Protocol):
     """Resolve the default version used when a build omits compatibility."""
 
     async def newest(self, edition: Literal["Java", "Bedrock"]) -> str: ...
+
+
+class BuildSchematicSummaryProvider(Protocol):
+    """Supply machine-read schematic facts for a build, if it has any.
+
+    The single seam between `builds` and the schematic context. `BuildService` never learns
+    what a schematic is; it asks this and gets scalars or nothing.
+    """
+
+    async def summary_for(self, build_id: int) -> BuildSchematicSummary | None: ...

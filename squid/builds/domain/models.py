@@ -33,7 +33,10 @@ DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
 RestrictionTypeLiteral = Literal["wiring-placement", "animated", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
-MediaTypeLiteral = Literal["image", "video", "world-download"]
+# `build_links.media_type` is plain text with no CHECK constraint, so widening this needs no
+# schema change. `schematic` links point at the user-facing download of an uploaded file;
+# `render` links point at a generated preview image and are always replaceable.
+MediaTypeLiteral = Literal["image", "video", "world-download", "schematic", "render"]
 
 
 class UnknownRestrictions(TypedDict, total=False):
@@ -58,6 +61,10 @@ class Info(TypedDict, total=False):
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
     server_info: ServerInfo
+    # Set when an attached schematic measures differently from the declared dimensions. The
+    # declared value still wins — an export is often cropped to the mechanism — so this records
+    # the disagreement for reviewers rather than resolving it.
+    schematic_dimension_mismatch: str
 
 
 class Status(IntEnum):
@@ -197,6 +204,8 @@ class Build:
     image_urls: list[str] = field(default_factory=list)
     video_urls: list[str] = field(default_factory=list)
     world_download_urls: list[str] = field(default_factory=list)
+    schematic_urls: list[str] = field(default_factory=list)
+    render_urls: list[str] = field(default_factory=list)
 
     submitter_id: int | None = None
     # TODO: save the submitted time too

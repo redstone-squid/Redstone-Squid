@@ -58,6 +58,7 @@ class BuildService:
             image_urls=list(submission.image_urls),
             video_urls=list(submission.video_urls),
             world_download_urls=list(submission.world_download_urls),
+            schematic_urls=list(submission.schematic_urls),
             completion_time=submission.date_of_creation,
         )
         await self._set_restrictions(build, submission.restrictions)

@@ -268,6 +268,10 @@ class BuildRepository:
             all_links.extend([(url, "video") for url in build.video_urls])
         if build.world_download_urls:
             all_links.extend([(url, "world-download") for url in build.world_download_urls])
+        if build.schematic_urls:
+            all_links.extend([(url, "schematic") for url in build.schematic_urls])
+        if build.render_urls:
+            all_links.extend([(url, "render") for url in build.render_urls])
 
         for url, media_type in all_links:
             build_link = BuildLink(url=url, media_type=media_type)

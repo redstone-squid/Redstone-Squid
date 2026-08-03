@@ -28,4 +28,5 @@ class DoorSubmissionInput:
     image_urls: tuple[str, ...] = ()
     video_urls: tuple[str, ...] = ()
     world_download_urls: tuple[str, ...] = ()
+    schematic_urls: tuple[str, ...] = ()
     ai_generated: bool = False
