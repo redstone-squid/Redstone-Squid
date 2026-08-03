@@ -8,11 +8,11 @@ import discord
 import git
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Command, Context, Group
+from discord.ext.commands import Cog, Command, Group
 from rapidfuzz import process
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.utils.components import error_layout, help_layout, no_mentions, text_layout
+from squid.bot.utils.components import CardField, CardSection, error_layout, help_layout, no_mentions
 from squid.config import BuildConfig
 from squid.core.i18n import _
 
@@ -20,6 +20,21 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 MORE_INFORMATION = _("Use `/help <command>` to get more information.")
+
+
+def _command_section(
+    title: str,
+    commands_: Sequence[Command[Any, ..., Any]],
+    locale: str | None,
+) -> CardSection:
+    """Render a compact command category for the slash-help directory."""
+    return CardSection(
+        title,
+        tuple(
+            CardField(f"/{command.qualified_name}", command.short_doc or t(locale, _("No details provided")))
+            for command in commands_
+        ),
+    )
 
 
 class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -33,29 +48,61 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.command()
     @app_commands.describe(command=app_commands.locale_str(_("The command to get help for.")))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
-        """Show help for a command or a group of commands."""
-        # We are using a hack to make this slash command:
-        #
-        # The ctx.send_help method is supposed to be used in a prefix command and do not handle interactions,
-        # this means that we intentionally send an empty message to make discord think that the interaction is handled,
-        # and then we use ctx.send_help to send the help message, which just sends a message to the channel
-        # instead of replying to the interaction.
-        #
-        # The end result is that we sent two messages, one empty ephemeral message to handle the interaction,
-        # and one message with the help information.
+        """Show a grouped command directory or focused command details."""
         locale = await resolve_locale(interaction, interaction.client.services.settings)
-        await interaction.response.send_message(
-            view=text_layout(t(locale, _("Loading…"))),
-            ephemeral=True,
-            delete_after=0,
-            silent=True,
-            allowed_mentions=no_mentions(),
-        )
-        ctx = await self.bot.get_context(interaction, cls=Context[BotT])
         if command is not None:
-            await ctx.send_help(command)
+            target = self.bot.get_command(command)
+            if target is None:
+                cog = next(
+                    (item for item in self.bot.cogs.values() if item.qualified_name.casefold() == command.casefold()),
+                    None,
+                )
+                candidates = list(cog.walk_commands()) if cog is not None else []
+                if not candidates:
+                    await interaction.response.send_message(
+                        view=error_layout(
+                            t(locale, _("Command not found")),
+                            t(locale, _("No command named `{name}` is available."), name=command),
+                        ),
+                        allowed_mentions=no_mentions(),
+                    )
+                    return
+                assert cog is not None
+                layout = help_layout(
+                    t(locale, _("{name} commands"), name=cog.qualified_name),
+                    cog.description or t(locale, _("Commands in this area.")),
+                    sections=(_command_section(t(locale, _("Commands")), candidates, locale),),
+                    footer=t(locale, MORE_INFORMATION),
+                )
+            else:
+                children = list(target.commands) if isinstance(target, Group) else []
+                signature = f" {target.signature}" if target.signature else ""
+                layout = help_layout(
+                    f"/{target.qualified_name}{signature}",
+                    target.help or t(locale, _("No details provided")),
+                    sections=(_command_section(t(locale, _("Subcommands")), children, locale),) if children else (),
+                    footer=t(locale, _("Command names and options also autocomplete in Discord.")),
+                )
         else:
-            await ctx.send_help()
+            categories = {
+                t(locale, _("Build")): {"build"},
+                t(locale, _("Discover")): {"search", "patterns", "restrictions"},
+                t(locale, _("Account")): {"account", "redstoner"},
+                t(locale, _("Staff & setup")): {"admin", "settings", "tag", "vote", "version"},
+                t(locale, _("Information")): {"info", "archive"},
+            }
+            root_commands = [item for item in self.bot.commands if not item.hidden]
+            sections = tuple(
+                _command_section(title, [item for item in root_commands if item.name in names], locale)
+                for title, names in categories.items()
+            )
+            layout = help_layout(
+                t(locale, _("Redstone Squid help")),
+                t(locale, _("Choose a workflow, then use `/help command` for syntax and details.")),
+                sections=sections,
+                footer=t(locale, MORE_INFORMATION),
+            )
+        await interaction.response.send_message(view=layout, allowed_mentions=no_mentions())
 
     @help.autocomplete("command")
     async def command_autocomplete(

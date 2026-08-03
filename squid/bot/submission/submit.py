@@ -16,6 +16,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
@@ -43,7 +44,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @fix_converter_annotations
     class SubmitDoorFlags(commands.FlagConverter):
-        """Parameters for the `/build submit-advanced` command."""
+        """Parameters for the `/build submit-full` command."""
 
         def to_submission(self, submitter_id: int) -> DoorSubmissionInput:
             """Convert Discord flags to framework-neutral submission input."""
@@ -89,7 +90,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         world_download_urls: list[str] = flag(name="world_download_links", default=_list_default, converter=ListConverter, description='Links to download the world.')
         # fmt: on
 
-    @BuildCommandGroup.build_hybrid_group.command(name="submit-advanced")  # type: ignore
+    @BuildCommandGroup.build_hybrid_group.command(name="submit-full")  # type: ignore
     async def submit_door(self, ctx: Context[BotT], *, flags: SubmitDoorFlags):
         """Submit a build with every field available at once.
 
@@ -144,9 +145,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     ):
         """Submit a build with a guided form and optional attachments.
 
-        Prefer this unless you need to set every field at once — see `/build submit-advanced`.
+        Prefer this unless you need to set every field at once — see `/build submit-full`.
         """
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
 
         build = Build(ai_generated=False)
@@ -180,40 +181,48 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             else:
                 build.video_urls.append(url)
 
-        view = BuildSubmissionForm(build, self.builds)
-        followup = interaction.followup
-
-        await followup.send(view=view, allowed_mentions=no_mentions())
+        view = BuildSubmissionForm(
+            build,
+            self.builds,
+            author_id=interaction.user.id,
+            locale=locale,
+        )
+        workspace_message = await interaction.followup.send(
+            view=view,
+            ephemeral=True,
+            wait=True,
+            allowed_mentions=no_mentions(),
+        )
         await view.wait()
         if view.value is None:
-            await followup.send(
-                view=text_layout(t(locale, _("Submission canceled due to inactivity."))),
-                ephemeral=True,
+            await edit_layout(
+                workspace_message,
+                text_layout(t(locale, _("Submission expired. Nothing was saved."))),
                 allowed_mentions=no_mentions(),
             )
             return
         if view.value is False:
-            await followup.send(
-                view=text_layout(t(locale, _("Submission canceled by user."))),
-                ephemeral=True,
+            await edit_layout(
+                workspace_message,
+                text_layout(t(locale, _("Submission cancelled. Nothing was saved."))),
                 allowed_mentions=no_mentions(),
             )
             return
+
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
-        await asyncio.gather(
-            followup.send(
-                view=StaticLayout(
-                    discord.ui.TextDisplay(
-                        t(
-                            locale,
-                            _("Here is a preview of the submission. Use `/build edit` if you have made a mistake."),
-                        )
-                    ),
-                    await self.bot.for_build(build).render_container(),
-                ),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
+        preview = StaticLayout(
+            discord.ui.TextDisplay(
+                t(
+                    locale,
+                    _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
+                    id=build.id,
+                )
             ),
+            await self.bot.for_build(build).render_container(),
+            discord.ui.ActionRow(EphemeralBuildEditButton(build)),
+        )
+        await asyncio.gather(
+            edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),
         )
 

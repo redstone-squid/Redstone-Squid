@@ -191,7 +191,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="pending")  # type: ignore
+    @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
@@ -254,7 +254,7 @@ class SearchCog[
             )
         return None
 
-    @BuildCommandGroup.build_hybrid_group.command(name="confirm")  # type: ignore
+    @BuildCommandGroup.build_hybrid_group.command(name="approve")  # type: ignore
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")
@@ -273,7 +273,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
-    @BuildCommandGroup.build_hybrid_group.command(name="deny")  # type: ignore
+    @BuildCommandGroup.build_hybrid_group.command(name="reject")  # type: ignore
     @check_is_staff()
     @check_is_owner_server()
     @app_commands.rename(build_id="id")

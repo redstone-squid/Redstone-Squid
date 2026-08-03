@@ -9,6 +9,8 @@ import discord
 DISCORD_RED = 0xF04747
 DISCORD_YELLOW = 0xFAA61A
 DISCORD_GREEN = 0x43B581
+DISCORD_BLUE = 0x5865F2
+DISCORD_GREY = 0x4F545C
 MAX_DISPLAY_CHARACTERS = 4000
 
 
@@ -18,6 +20,14 @@ class CardField:
 
     name: str
     value: str
+
+
+@dataclass(frozen=True, slots=True)
+class CardSection:
+    """A titled group of related values rendered inside a card."""
+
+    title: str
+    fields: Sequence[CardField]
 
 
 class StaticLayout(discord.ui.LayoutView):
@@ -44,13 +54,19 @@ def card_container(
     *,
     accent_colour: int = DISCORD_GREEN,
     fields: Sequence[CardField] = (),
+    sections: Sequence[CardSection] = (),
     footer: str | None = None,
     media: Sequence[str] = (),
 ) -> discord.ui.Container[discord.ui.LayoutView]:
     """Create a purpose-built V2 card container."""
     footer_content = f"-# {footer}" if footer else ""
     field_content = "\n".join(f"**{field.name}**\n{field.value}" for field in fields)
-    fixed_length = len(title) + len(field_content) + len(footer_content) + 8
+    section_content = "\n\n".join(
+        f"### {section.title}\n" + "\n".join(f"**{field.name}:** {field.value}" for field in section.fields)
+        for section in sections
+        if section.fields
+    )
+    fixed_length = len(title) + len(field_content) + len(section_content) + len(footer_content) + 8
     description_budget = max(0, MAX_DISPLAY_CHARACTERS - fixed_length)
     body = truncate_display_text(description or "", description_budget)
 
@@ -65,6 +81,8 @@ def card_container(
         children = [discord.ui.TextDisplay(heading)]
     if field_content:
         children.extend((discord.ui.Separator(), discord.ui.TextDisplay(field_content)))
+    if section_content:
+        children.extend((discord.ui.Separator(), discord.ui.TextDisplay(section_content)))
     if len(media) > 1:
         children.append(discord.ui.MediaGallery(*(discord.MediaGalleryItem(url) for url in media[1:10])))
     if footer_content:
@@ -78,6 +96,7 @@ def card_layout(
     *,
     accent_colour: int = DISCORD_GREEN,
     fields: Sequence[CardField] = (),
+    sections: Sequence[CardSection] = (),
     footer: str | None = None,
     media: Sequence[str] = (),
 ) -> StaticLayout:
@@ -88,6 +107,7 @@ def card_layout(
             description,
             accent_colour=accent_colour,
             fields=fields,
+            sections=sections,
             footer=footer,
             media=media,
         )
@@ -114,8 +134,14 @@ def info_layout(title: str, description: str | None) -> StaticLayout:
     return card_layout(title, description, accent_colour=DISCORD_GREEN)
 
 
-def help_layout(title: str, description: str | None, *, footer: str | None = None) -> StaticLayout:
-    return card_layout(title, description, accent_colour=DISCORD_GREEN, footer=footer)
+def help_layout(
+    title: str,
+    description: str | None,
+    *,
+    sections: Sequence[CardSection] = (),
+    footer: str | None = None,
+) -> StaticLayout:
+    return card_layout(title, description, accent_colour=DISCORD_BLUE, sections=sections, footer=footer)
 
 
 def link_layout(title: str, url: str, *, description: str | None = None, label: str = "Open link") -> StaticLayout:

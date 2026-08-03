@@ -33,7 +33,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
     "admin": ("records-gaps", "records-lookup", "records-rebuild", "records-title-issues"),
     "archive": (),
-    "build": ("confirm", "debug", "deny", "edit", "pending", "recalc", "submit-advanced", "view"),
+    "build": ("approve", "debug", "edit", "queue", "recalc", "reject", "submit-full", "view"),
     "info": ("docs", "form", "invite", "source"),
     "patterns": ("list", "search"),
     "redstoner": ("panel", "resync"),
@@ -92,9 +92,9 @@ def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
     _assert_check_counts(
         search.__cog_commands__,
         {
-            "build confirm": 2,
+            "build approve": 2,
             "build debug": 1,
-            "build deny": 2,
+            "build reject": 2,
             "build edit": 2,
             "build recalc": 2,
         },

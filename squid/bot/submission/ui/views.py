@@ -1,7 +1,6 @@
 """Models and views for discord interactions."""
 
 import asyncio
-import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -10,7 +9,7 @@ from discord import Interaction
 from whenever import Instant
 
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
-from squid.bot.i18n import t
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
@@ -22,11 +21,18 @@ from squid.bot.submission.ui.components import (
     get_text_input,
 )
 from squid.bot.utils.components import (
+    DISCORD_BLUE,
+    DISCORD_YELLOW,
+    CardField,
+    CardSection,
     StaticLayout,
     card_container,
     edit_interaction_layout,
+    edit_layout,
+    error_layout,
     no_mentions,
 )
+from squid.bot.utils.permissions import is_trusted_or_staff
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Build, BuildCategory, Status
@@ -37,76 +43,181 @@ if TYPE_CHECKING:
     import squid.bot.submission.build_handler
 
 
+def _split_values(value: str) -> list[str]:
+    """Split a user-facing comma-separated list while ignoring empty values."""
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _format_dimensions(value: tuple[int | None, ...]) -> str:
+    """Format only dimensions that have actually been supplied."""
+    if not any(item is not None for item in value):
+        return ""
+    return " x ".join("?" if item is None else str(item) for item in value)
+
+
 class SubmissionModal(ErrorHandledModal):
-    def __init__(self, build: Build, builds: BuildService):
-        super().__init__(title="Submit Your Build")
+    """Collect the minimum useful build details without hiding a mini-language in a notes field."""
+
+    def __init__(
+        self,
+        build: Build,
+        builds: BuildService,
+        parent: "BuildSubmissionForm | None" = None,
+        *,
+        locale: str | None = None,
+    ) -> None:
+        super().__init__(title=t(locale, _("Build basics")))
         self.build = build
         self.builds = builds
+        self.parent = parent
+        self.locale = locale
 
-        # Door size
-        self.door_size = discord.ui.TextInput(placeholder="e.g. 2x2 (piston door)")
-
-        # Pattern
-        self.pattern = discord.ui.TextInput(placeholder="e.g. full lamp, funnel", required=False)
-
-        # Dimensions
-        self.dimensions = discord.ui.TextInput(placeholder="Width x Height x Depth", required=True)
-
-        # Versions
-        self.versions = discord.ui.TextInput(placeholder="e.g., 1.16.1, 1.17.3", required=False)
-
-        # Restrictions
-        self.restrictions = discord.ui.TextInput(
-            placeholder="e.g., Seamless, Full Flush",
+        self.door_size = discord.ui.TextInput(
+            placeholder=t(locale, _("For example: 2x2")),
+            default=_format_dimensions(build.door_dimensions),
+            required=True,
+        )
+        self.pattern = discord.ui.TextInput(
+            placeholder=t(locale, _("For example: regular, full lamp")),
+            default=", ".join(build.door_type),
+            required=False,
+        )
+        self.dimensions = discord.ui.TextInput(
+            placeholder=t(locale, _("Width x Height x Depth")),
+            default=_format_dimensions(build.dimensions),
+            required=False,
+        )
+        self.versions = discord.ui.TextInput(
+            placeholder=t(locale, _("For example: 1.20.4+")),
+            default=build.version_spec,
+            required=False,
+        )
+        self.creators = discord.ui.TextInput(
+            placeholder=t(locale, _("Minecraft names, comma separated")),
+            default=", ".join(build.creators_ign),
             required=False,
         )
 
-        # Additional Information
-        self.additional_info = discord.ui.TextInput(
+        self.add_item(discord.ui.Label(text=t(locale, _("Door opening size")), component=self.door_size))
+        self.add_item(discord.ui.Label(text=t(locale, _("Pattern")), component=self.pattern))
+        self.add_item(discord.ui.Label(text=t(locale, _("Overall build size")), component=self.dimensions))
+        self.add_item(discord.ui.Label(text=t(locale, _("Supported versions")), component=self.versions))
+        self.add_item(discord.ui.Label(text=t(locale, _("Creators")), component=self.creators))
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            door_dimensions = parse_hallway_dimensions(self.door_size.value)
+            dimensions = parse_dimensions(self.dimensions.value) if self.dimensions.value else (None, None, None)
+        except ValueError as error:
+            await interaction.response.send_message(
+                view=error_layout(t(self.locale, _("Check the dimensions")), str(error)),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        if door_dimensions[0] is None or door_dimensions[1] is None:
+            await interaction.response.send_message(
+                view=error_layout(
+                    t(self.locale, _("Door opening size required")),
+                    t(self.locale, _("Enter at least a width and height, such as `2x2`.")),
+                ),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        self.build.door_dimensions = door_dimensions
+        self.build.door_type = _split_values(self.pattern.value) or ["Regular"]
+        self.build.dimensions = dimensions
+        self.build.version_spec = self.versions.value.strip() or None
+        self.build.creators_ign = _split_values(self.creators.value)
+        if self.parent is None:
+            await interaction.response.defer()
+            return
+        self.parent.validation_error = None
+        self.parent.render()
+        await edit_interaction_layout(interaction, self.parent)
+
+
+class SubmissionDetailsModal(ErrorHandledModal):
+    """Collect optional restrictions, links, and notes in an explicit format."""
+
+    def __init__(self, parent: "BuildSubmissionForm") -> None:
+        super().__init__(title=t(parent.locale, _("Links and optional details")))
+        self.parent = parent
+        build = parent.build
+        restrictions = (
+            build.wiring_placement_restrictions
+            + build.animated_restrictions
+            + build.component_restrictions
+            + build.miscellaneous_restrictions
+        )
+        self.restrictions = discord.ui.TextInput(
+            placeholder=t(parent.locale, _("For example: Seamless, Observerless")),
+            default=", ".join(restrictions),
+            required=False,
+        )
+        self.image_urls = discord.ui.TextInput(
+            placeholder=t(parent.locale, _("Image links, comma separated")),
+            default=", ".join(build.image_urls),
+            required=False,
+        )
+        self.video_urls = discord.ui.TextInput(
+            placeholder=t(parent.locale, _("Video links, comma separated")),
+            default=", ".join(build.video_urls),
+            required=False,
+        )
+        self.world_urls = discord.ui.TextInput(
+            placeholder=t(parent.locale, _("World download links, comma separated")),
+            default=", ".join(build.world_download_urls),
+            required=False,
+        )
+        self.notes = discord.ui.TextInput(
+            placeholder=t(parent.locale, _("Anything staff should know")),
+            default=build.extra_info.get("user"),
             style=discord.TextStyle.paragraph,
             required=False,
         )
-
-        self.add_item(discord.ui.Label(text="Door Size", component=self.door_size))
-        self.add_item(discord.ui.Label(text="Pattern Type", component=self.pattern))
-        self.add_item(discord.ui.Label(text="Dimensions", component=self.dimensions))
-        self.add_item(discord.ui.Label(text="Restrictions", component=self.restrictions))
-        self.add_item(discord.ui.Label(text="Additional Information", component=self.additional_info))
+        self.add_item(discord.ui.Label(text=t(parent.locale, _("Restrictions")), component=self.restrictions))
+        self.add_item(discord.ui.Label(text=t(parent.locale, _("Images")), component=self.image_urls))
+        self.add_item(discord.ui.Label(text=t(parent.locale, _("Videos")), component=self.video_urls))
+        self.add_item(discord.ui.Label(text=t(parent.locale, _("World downloads")), component=self.world_urls))
+        self.add_item(discord.ui.Label(text=t(parent.locale, _("Notes")), component=self.notes))
 
     @override
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()  # type: ignore
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        image_urls = _split_values(self.image_urls.value)
+        video_urls = _split_values(self.video_urls.value)
+        world_urls = _split_values(self.world_urls.value)
+        invalid_urls = [
+            url for url in (*image_urls, *video_urls, *world_urls) if not url.startswith(("https://", "http://"))
+        ]
+        if invalid_urls:
+            await interaction.response.send_message(
+                view=error_layout(
+                    t(self.parent.locale, _("Check the links")),
+                    t(self.parent.locale, _("Every link must start with `https://` or `http://`.")),
+                ),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
 
-        self.build.door_dimensions = parse_hallway_dimensions(self.door_size.value)
-        self.build.door_type = self.pattern.value.split(", ") if self.pattern.value else ["Regular"]
-        self.build.dimensions = parse_dimensions(self.dimensions.value)
-        await self.builds.classify_restrictions(self.build, self.restrictions.value.split(", "))
-
-        # Extract IGN
-        ign_match = re.search(r"\bign:\s*([^,]+)(?:,|$)", self.additional_info.value, re.IGNORECASE)
-        if ign_match:
-            igns = ign_match.groups()
-            self.build.creators_ign = [ign.strip() for ign in igns]
-
-        # Extract video link
-        video_match = re.search(
-            r"\bvideo:\s*(https?://[^\s,]+)(?:,|$)",
-            self.additional_info.value,
-            re.IGNORECASE,
+        await self.parent.builds.classify_restrictions(
+            self.parent.build,
+            _split_values(self.restrictions.value),
         )
-        if video_match:
-            video_links = video_match.groups()
-            self.build.video_urls = [video_link.strip() for video_link in video_links]
-
-        # Extract download link
-        download_match = re.search(
-            r"\bdownload:\s*(https?://[^\s,]+)(?:,|$)",
-            self.additional_info.value,
-            re.IGNORECASE,
-        )
-        if download_match:
-            download_links = download_match.groups()
-            self.build.world_download_urls = [download_link.strip() for download_link in download_links]
+        self.parent.build.image_urls = image_urls
+        self.parent.build.video_urls = video_urls
+        self.parent.build.world_download_urls = world_urls
+        notes = self.notes.value.strip()
+        if notes:
+            self.parent.build.extra_info["user"] = notes
+        else:
+            self.parent.build.extra_info.pop("user", None)
+        await self.parent.refresh(interaction)
 
 
 class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
@@ -123,54 +234,143 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
 
     @override
     async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
-        # Update the build object with the new values
-        await asyncio.gather(*(item.on_modal_submit() for item in self.walk_children() if isinstance(item, BuildField)))
+        fields = [item for item in self.walk_children() if isinstance(item, BuildField)]
+        await asyncio.gather(*(item.on_modal_submit() for item in fields))
+        errors = [f"**{item.display_label}:** {item.validation_error}" for item in fields if item.validation_error]
+        self.parent.validation_error = "\n".join(errors) or None
         await self.parent.update(interaction)
 
 
 class BuildSubmissionForm(ErrorHandledLayoutView):
+    """A private, resumable workspace for a minimal build submission."""
+
     actions = discord.ui.ActionRow()
 
-    def __init__(self, build: Build, builds: BuildService, *, timeout: float | None = 180.0):
+    def __init__(
+        self,
+        build: Build,
+        builds: BuildService,
+        *,
+        author_id: int | None = None,
+        locale: str | None = None,
+        timeout: float | None = 300.0,
+    ) -> None:
         super().__init__(timeout=timeout)
-        # Assumptions
         build.submission_status = Status.PENDING
         build.category = BuildCategory.DOOR
+        build.door_type = build.door_type or ["Regular"]
 
         self.build = build
         self.builds = builds
-        self.value = None
+        self.author_id = author_id
+        self.locale = locale
+        self.validation_error: str | None = None
+        self.value: bool | None = None
+        self.edit_basics.label = t(locale, _("Edit basics"))
+        self.edit_details.label = t(locale, _("Add links & details"))
+        self.submit.label = t(locale, _("Submit for review"))
+        self.cancel.label = t(locale, _("Cancel"))
+        self.render()
+
+    @property
+    def is_ready(self) -> bool:
+        """Return whether the minimal builder-entered fields are present."""
+        width, height, _depth = self.build.door_dimensions
+        return self.build.door_orientation_type is not None and width is not None and height is not None
+
+    def render(self) -> None:
+        """Render the current draft and keep all actions in one message."""
         controls = self.actions
         self.clear_items()
-        self.add_item(discord.ui.TextDisplay("Use the select menus, then submit or cancel."))
-        self.add_item(discord.ui.ActionRow(DoorTypeSelect(self.build)))
-        self.add_item(discord.ui.ActionRow(DirectonalityLocationalitySelect(self.build)))
+        missing = []
+        if self.build.door_orientation_type is None:
+            missing.append(t(self.locale, _("door type")))
+        if not self.build.door_width or not self.build.door_height:
+            missing.append(t(self.locale, _("door opening size")))
+        guidance = self.validation_error
+        if guidance is None and missing:
+            guidance = t(self.locale, _("Required before review: {fields}."), fields=", ".join(missing))
+        if guidance is None:
+            guidance = t(self.locale, _("Ready to submit. Optional details can be added later."))
+
+        self.add_item(
+            card_container(
+                t(self.locale, _("Submit a build")),
+                guidance,
+                accent_colour=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
+                sections=(
+                    CardSection(
+                        t(self.locale, _("Basics")),
+                        (
+                            CardField(t(self.locale, _("Door type")), self.build.door_orientation_type or "—"),
+                            CardField(
+                                t(self.locale, _("Opening size")), _format_dimensions(self.build.door_dimensions) or "—"
+                            ),
+                            CardField(t(self.locale, _("Pattern")), ", ".join(self.build.door_type)),
+                            CardField(
+                                t(self.locale, _("Build size")), _format_dimensions(self.build.dimensions) or "—"
+                            ),
+                            CardField(t(self.locale, _("Versions")), self.build.version_spec or "—"),
+                            CardField(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
+                        ),
+                    ),
+                ),
+                footer=t(self.locale, _("Only the door type and opening size are required.")),
+            )
+        )
+        self.add_item(discord.ui.ActionRow(DoorTypeSelect(self.build, locale=self.locale)))
+        self.add_item(discord.ui.ActionRow(DirectonalityLocationalitySelect(self.build, locale=self.locale)))
         self.add_item(controls)
 
-    @actions.button(label="Submit", style=discord.ButtonStyle.primary)
-    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @override
+    async def interaction_check(self, interaction: Interaction, /) -> bool:
+        if self.author_id is None or interaction.user.id == self.author_id:
+            return True
+        await interaction.response.send_message(
+            t(self.locale, _("These submission controls belong to someone else.")),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+        return False
+
+    async def refresh(self, interaction: Interaction) -> None:
+        """Refresh the workspace after a select or modal changes the draft."""
+        self.validation_error = None
+        self.render()
+        await edit_interaction_layout(interaction, self)
+
+    @actions.button(label="Edit basics", style=discord.ButtonStyle.primary)
+    async def edit_basics(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_modal(SubmissionModal(self.build, self.builds, self, locale=self.locale))
+
+    @actions.button(label="Add links & details", style=discord.ButtonStyle.secondary)
+    async def edit_details(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_modal(SubmissionDetailsModal(self))
+
+    @actions.button(label="Submit for review", style=discord.ButtonStyle.success)
+    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if not self.is_ready:
+            self.validation_error = t(
+                self.locale,
+                _("Choose a door type and add an opening size such as `2x2` before submitting."),
+            )
+            self.render()
+            await edit_interaction_layout(interaction, self)
+            return
         await interaction.response.defer()
         self.build.submitter_id = interaction.user.id
         self.value = True
         self.stop()
 
-    @actions.button(label="Add more Information", custom_id="open_modal", style=discord.ButtonStyle.primary)
-    async def add_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(SubmissionModal(self.build, self.builds))
-
-    @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @actions.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         self.value = False
         self.stop()
 
 
 class ConfirmationView(ErrorHandledLayoutView):
-    """A simple Yes/No style pair of buttons for confirming an action.
-
-    `prompt` should already be translated by the caller (it has the invocation
-    context this view doesn't); `locale` only covers this view's own button labels.
-    """
+    """Ask the invoking user to confirm or cancel an action."""
 
     actions = discord.ui.ActionRow()
 
@@ -186,11 +386,13 @@ class ConfirmationView(ErrorHandledLayoutView):
 
     @actions.button(label="Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         self.value = True
         self.stop()
 
     @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         self.value = False
         self.stop()
 
@@ -209,6 +411,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         builds: BuildService,
         items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
         *,
+        locale: str | None = None,
         timeout: float = 300,
     ):
         """Initializes the BuildEditView.
@@ -221,6 +424,8 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         super().__init__(timeout=timeout)
         self.build = build
         self.builds = builds
+        self.locale = locale
+        self.validation_error: str | None = None
         if items is DEFAULT:
             items = [
                 get_text_input(build, "dimensions", placeholder="Width x Height x Depth", required=True),
@@ -237,25 +442,40 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
                 get_text_input(build, "image_urls", placeholder="any urls, comma separated"),
                 get_text_input(build, "video_urls", placeholder="any urls, comma separated"),
                 get_text_input(build, "world_download_urls", placeholder="any urls, comma separated"),
-                get_text_input(build, "extra_info", placeholder="TODO: Explain this format"),
                 get_text_input(build, "completion_time", placeholder="Any time format works"),
-                get_text_input(build, "ai_generated", placeholder="True/False"),
             ]
         self.items = items
         self.page = 1
-        self._max_pages = len(self.items) // 5 + 1
+        self._max_pages = max(1, (len(self.items) + 4) // 5)
         self.expiry_time = Instant.now().add(seconds=timeout)
+
+    async def can_edit(self, interaction: Interaction[BotT]) -> bool:
+        """Allow pending-build owners and trusted staff to edit."""
+        if self.build.submission_status is Status.PENDING and self.build.submitter_id == interaction.user.id:
+            return True
+        if interaction.guild_id is None:
+            return False
+        return await is_trusted_or_staff(interaction.client, interaction.guild_id, interaction.user.id)
+
+    async def _send_denial(self, interaction: Interaction[BotT], message: str) -> None:
+        layout = error_layout(t(self.locale, _("Cannot edit this build")), message)
+        if interaction.response.is_done():
+            await interaction.followup.send(view=layout, ephemeral=True, allowed_mentions=no_mentions())
+        else:
+            await interaction.response.send_message(view=layout, ephemeral=True, allowed_mentions=no_mentions())
 
     @override
     async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]
         if Instant.now() > self.expiry_time:
-            for item in self.walk_children():
-                if isinstance(item, discord.ui.Button | discord.ui.Select):
-                    item.disabled = True
-            await interaction.followup.send(
-                view=StaticLayout(discord.ui.TextDisplay("This edit session has expired. Your edits are not saved.")),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
+            await self._send_denial(
+                interaction,
+                t(self.locale, _("This edit session expired. Reopen the build to start again.")),
+            )
+            return False
+        if not await self.can_edit(interaction):
+            await self._send_denial(
+                interaction,
+                t(self.locale, _("Only the pending build's submitter or a trusted staff member can edit it.")),
             )
             return False
         return True
@@ -281,16 +501,23 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         self.previous_page.disabled = self.page == 1
         self.next_page.disabled = self.page == self._max_pages
 
-    async def send(self, interaction: discord.Interaction[BotT], ephemeral: bool = False) -> None:
+    async def send(self, interaction: discord.Interaction[BotT], ephemeral: bool = True) -> None:
+        self.locale = await resolve_locale(interaction, interaction.client.services.settings)
+        if not await self.can_edit(interaction):
+            await self._send_denial(
+                interaction,
+                t(self.locale, _("Only the pending build's submitter or a trusted staff member can edit it.")),
+            )
+            return
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=ephemeral)
+        self.open.label = t(self.locale, _("Edit this section"))
+        self.previous_page.label = t(self.locale, _("Previous"))
+        self.next_page.label = t(self.locale, _("Next"))
+        self.submit.label = t(self.locale, _("Review changes"))
         self._handle_button_states()
         await self._render(interaction)
-        await interaction.followup.send(
-            view=self,
-            ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
-        )
+        await interaction.followup.send(view=self, ephemeral=ephemeral, allowed_mentions=no_mentions())
 
     async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()
@@ -303,16 +530,31 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         return interaction.client.for_build(self.build)
 
     def summary_text(self) -> str:
-        summaries = [item.summary for item in self.items]
-        for i in range(5 * (self.page - 1), min(len(self.items), 5 * self.page)):
-            summaries[i] = f"**{summaries[i]}**"
+        start = 5 * (self.page - 1)
+        page_items = self.items[start : start + 5]
+        summaries = [f"{'•' if item.modified else '○'} {item.summary}" for item in page_items]
+        if self.validation_error:
+            summaries.insert(
+                0, t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
+            )
         return "\n".join(summaries)
 
     async def _render(self, interaction: discord.Interaction[BotT]) -> None:
         controls = self.actions
         self.clear_items()
-        self.add_item(discord.ui.TextDisplay(f"Page {self.page}/{self._max_pages}"))
-        self.add_item(card_container("Build Summary", self.summary_text()))
+        self.add_item(
+            card_container(
+                t(self.locale, _("Edit build")),
+                t(
+                    self.locale,
+                    _("Section {page} of {pages}. Filled dots have unsaved changes."),
+                    page=self.page,
+                    pages=self._max_pages,
+                ),
+                accent_colour=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
+                fields=(CardField(t(self.locale, _("Fields in this section")), self.summary_text()),),
+            )
+        )
         self.add_item(await self.get_handler(interaction).render_container())
         self.add_item(controls)
 
@@ -332,26 +574,47 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         self._handle_button_states()
         await self.update(interaction)
 
-    @actions.button(label="Submit", style=discord.ButtonStyle.primary)
-    async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
-        await interaction.response.defer()
-        patch = BuildEditPatch.from_attributes(
-            {item.attribute: item.actual_value for item in self.items if item.modified}
+    @actions.button(label="Review changes", style=discord.ButtonStyle.success)
+    async def submit(self, interaction: discord.Interaction[BotT], button: discord.ui.Button) -> None:
+        if self.validation_error:
+            await self.update(interaction)
+            return
+        changed = [item for item in self.items if item.modified]
+        if not changed:
+            self.validation_error = t(self.locale, _("No changes to review yet."))
+            await self.update(interaction)
+            return
+
+        changes = "\n".join(
+            f"**{item.display_label}:** `{item.original_string_value or '—'}` → `{item.current_string_value or '—'}`"
+            for item in changed
         )
+        confirmation = ConfirmationView(
+            t(self.locale, _("## Review changes\n{changes}\n\nApply these changes?"), changes=changes),
+            locale=self.locale,
+        )
+        await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
+        confirmation_message = await interaction.original_response()
+        await confirmation.wait()
+        await confirmation_message.delete()
+        if confirmation.value is not True:
+            return
+
+        patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
         if self.build.id is None:
             patch.apply(self.build)
             await self.builds.save(self.build)
         else:
             async with self.builds.edit(self.build.id, patch) as edit:
                 self.build = await edit.commit()
-        await interaction.followup.send(
-            view=StaticLayout(
-                discord.ui.TextDisplay("Submitted"),
-                await self.get_handler(interaction).render_container(),
-            ),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+            await interaction.client.for_build(self.build).update_messages()
+        self.stop()
+        success = StaticLayout(
+            discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),
+            await self.get_handler(interaction).render_container(),
         )
+        if interaction.message is not None:
+            await edit_layout(interaction.message, success, allowed_mentions=no_mentions())
 
 
 class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):

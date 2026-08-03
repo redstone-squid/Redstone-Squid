@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 from discord.utils import escape_markdown
@@ -67,11 +67,8 @@ class SearchResultsView(ErrorHandledLayoutView):
             body += f"\n{warning}"
         self.add_item(discord.ui.Container(discord.ui.TextDisplay(body), accent_colour=DISCORD_GREEN))
 
-        result_row = discord.ui.ActionRow()
-        for index, _hit in enumerate(self._page.hits):
-            result_row.add_item(SearchResultButton(self, index))
         if self._page.hits:
-            self.add_item(result_row)
+            self.add_item(discord.ui.ActionRow(SearchResultSelect(self)))
 
         controls = discord.ui.ActionRow()
         controls.add_item(SearchPreviousButton(self))
@@ -89,6 +86,9 @@ class SearchResultsView(ErrorHandledLayoutView):
             )
         )
         row = discord.ui.ActionRow()
+        build_id = _build_id(hit)
+        if build_id is not None:
+            row.add_item(SearchOpenBuildButton(self, build_id))
         row.add_item(SearchBackButton(self))
         row.add_item(SearchStopButton(self))
         self.add_item(row)
@@ -96,6 +96,11 @@ class SearchResultsView(ErrorHandledLayoutView):
     def hit_at(self, index: int) -> SearchHit:
         """Return a result on the current page."""
         return self._page.hits[index]
+
+    @property
+    def hits(self) -> tuple[SearchHit, ...]:
+        """Return the results currently displayed."""
+        return self._page.hits
 
     @property
     def can_go_back(self) -> bool:
@@ -148,17 +153,50 @@ class SearchResultsView(ErrorHandledLayoutView):
         self.stop()
 
 
-class SearchResultButton(discord.ui.Button[SearchResultsView]):
-    """Open one result without sending another message."""
+class SearchResultSelect(discord.ui.Select[SearchResultsView]):
+    """Choose a result by name rather than correlating numbered buttons."""
 
-    def __init__(self, view: SearchResultsView, index: int) -> None:
-        super().__init__(label=str(index + 1), style=discord.ButtonStyle.secondary)
+    def __init__(self, view: SearchResultsView) -> None:
+        options = [
+            discord.SelectOption(
+                label=hit.title[:100],
+                value=str(index),
+                description=_result_description(hit)[:100],
+            )
+            for index, hit in enumerate(view.hits)
+        ]
+        super().__init__(placeholder=t(view.locale, _("Choose a result to inspect")), options=options)
         self._search_view = view
-        self._index = index
 
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
-        self._search_view.render_detail(self._search_view.hit_at(self._index))
+        self._search_view.render_detail(self._search_view.hit_at(int(self.values[0])))
+        await edit_interaction_layout(interaction, self._search_view)
+
+
+class SearchOpenBuildButton(discord.ui.Button[SearchResultsView]):
+    def __init__(self, view: SearchResultsView, build_id: int) -> None:
+        super().__init__(label=t(view.locale, _("View build")), style=discord.ButtonStyle.primary)
+        self._search_view = view
+        self._build_id = build_id
+
+    @override
+    async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
+        client = cast(Any, interaction.client)
+        build = await client.services.build_queries.get(self._build_id)
+        if build is None:
+            await interaction.response.send_message(
+                t(self._search_view.locale, _("That build is no longer available.")),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+        self._search_view.clear_items()
+        self._search_view.add_item(await client.for_build(build).render_container())
+        row = discord.ui.ActionRow()
+        row.add_item(SearchBackButton(self._search_view))
+        row.add_item(SearchStopButton(self._search_view))
+        self._search_view.add_item(row)
         await edit_interaction_layout(interaction, self._search_view)
 
 
@@ -197,13 +235,29 @@ class SearchBackButton(discord.ui.Button[SearchResultsView]):
 
 class SearchStopButton(discord.ui.Button[SearchResultsView]):
     def __init__(self, view: SearchResultsView) -> None:
-        super().__init__(label=t(view.locale, _("Stop")), style=discord.ButtonStyle.danger)
+        super().__init__(label=t(view.locale, _("Close")), style=discord.ButtonStyle.secondary)
         self._search_view = view
 
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         self._search_view.disable_controls()
         await edit_interaction_layout(interaction, self._search_view)
+
+
+def _build_id(hit: SearchHit) -> int | None:
+    if isinstance(hit, RecordSearchHit):
+        return hit.build_id
+    if isinstance(hit, BuildSearchHit) and hit.source_id.isdigit():
+        return int(hit.source_id)
+    return None
+
+
+def _result_description(hit: SearchHit) -> str:
+    if isinstance(hit, RecordSearchHit):
+        return f"Record · {hit.record_class} · {hit.build_title}"
+    if isinstance(hit, BuildSearchHit):
+        return f"Build · {hit.status}"
+    return f"{hit.metadata_kind} · metadata"
 
 
 def _result_line(index: int, hit: SearchHit) -> str:

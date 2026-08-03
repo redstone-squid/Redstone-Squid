@@ -9,6 +9,7 @@ import pytest
 
 from squid.bot.consent import UserDataConsentView
 from squid.bot.submission.build_handler import BuildHandler
+from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.ui.components import get_text_input
 from squid.bot.submission.ui.views import (
     BuildEditView,
@@ -18,6 +19,8 @@ from squid.bot.submission.ui.views import (
 )
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildCategory, Status
+from squid.search.application import SearchService
+from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -80,8 +83,15 @@ def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:
     payload = form.to_components()
 
     assert form.has_components_v2()
-    assert [component["type"] for component in payload] == [10, 1, 1, 1]
-    assert len(payload[-1]["components"]) == 3
+    assert [component["type"] for component in payload] == [17, 1, 1, 1]
+    assert len(payload[-1]["components"]) == 4
+    assert "Only the door type and opening size are required" in str(payload)
+    assert [button["label"] for button in payload[-1]["components"]] == [
+        "Edit basics",
+        "Add links & details",
+        "Submit for review",
+        "Cancel",
+    ]
 
 
 def test_confirmation_view_contains_prompt_and_actions() -> None:
@@ -110,3 +120,50 @@ def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:
     assert all(component["type"] == discord.ComponentType.label.value for component in submission.to_components())
     assert edit.to_components()[0]["type"] == discord.ComponentType.label.value
     assert edit.to_components()[0]["component"]["type"] == discord.ComponentType.text_input.value
+
+
+def test_submission_requires_only_type_and_opening_size() -> None:
+    build = Build()
+    form = BuildSubmissionForm(build, cast(BuildService, object()))
+
+    assert form.is_ready is False
+    build.door_orientation_type = "Door"
+    build.door_dimensions = (2, 2, None)
+    assert form.is_ready is True
+
+
+def test_optional_edit_field_is_not_marked_required(display_build: Build) -> None:
+    field = get_text_input(display_build, "version_spec")
+
+    assert field.required is False
+
+
+def test_search_results_use_named_selection_and_direct_build_action() -> None:
+    record = RecordSearchHit(
+        "record-1",
+        "Smallest 2x2 door",
+        None,
+        7,
+        "Observerless 2x2 Door",
+        "smallest",
+        "Java 1.20+",
+    )
+    page = SearchPage(
+        (record, BuildSearchHit("8", "Fast door", "confirmed")),
+        next_cursor=None,
+        has_more=False,
+    )
+    view = SearchResultsView(
+        cast(SearchService, object()),
+        SearchRequest("door"),
+        page,
+        author_id=123,
+    )
+
+    payload = view.to_components()
+    select_options = payload[1]["components"][0]["options"]
+    assert [option["label"] for option in select_options] == ["Smallest 2x2 door", "Fast door"]
+    assert "Close" in str(payload)
+
+    view.render_detail(record)
+    assert "View build" in str(view.to_components())

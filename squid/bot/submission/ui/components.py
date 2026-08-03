@@ -11,8 +11,10 @@ from beartype.door import is_bearable
 from discord import Interaction, TextStyle
 from discord.ui import Item
 
+from squid.bot.i18n import t
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build
+from squid.core.i18n import _
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -25,45 +27,69 @@ logger = logging.getLogger(__name__)
 
 
 class DoorTypeSelect(discord.ui.Select):
-    def __init__(self, build: Build):
+    def __init__(self, build: Build, *, locale: str | None = None) -> None:
         self.build = build
-
-        options = [discord.SelectOption(label=door_type) for door_type in DOOR_ORIENTATION_NAMES]
+        self.locale = locale
+        options = [
+            discord.SelectOption(
+                label=t(locale, _(door_type)),
+                value=door_type,
+                default=build.door_orientation_type == door_type,
+            )
+            for door_type in DOOR_ORIENTATION_NAMES
+        ]
         super().__init__(
-            placeholder="Choose the door type",
+            placeholder=t(locale, _("Choose the door type (required)")),
             min_values=1,
             max_values=1,
             options=options,
         )
 
     @override
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
         self.build.door_orientation_type = data["values"][0]  # type: ignore
-        await interaction.response.defer()  # type: ignore
+        parent = self.view
+        if parent is not None and hasattr(parent, "refresh"):
+            await parent.refresh(interaction)  # type: ignore[reportUnknownMemberType]
+        else:
+            await interaction.response.defer()
 
 
 class DirectonalityLocationalitySelect(discord.ui.Select):
-    def __init__(self, build: Build):
+    def __init__(self, build: Build, *, locale: str | None = None) -> None:
         self.build = build
-
+        self.locale = locale
         options = [
-            discord.SelectOption(label="Directional"),
-            discord.SelectOption(label="Locational"),
+            discord.SelectOption(
+                label=t(locale, _("Directional")),
+                value="Directional",
+                description=t(locale, _("May depend on the direction it faces")),
+                default="Directional" in build.miscellaneous_restrictions,
+            ),
+            discord.SelectOption(
+                label=t(locale, _("Locational")),
+                value="Locational",
+                description=t(locale, _("May depend on its position in the world")),
+                default="Locational" in build.miscellaneous_restrictions,
+            ),
         ]
-
         super().__init__(
-            placeholder="Choose how reliable the the door is",
+            placeholder=t(locale, _("Optional location and direction limits")),
             min_values=0,
             max_values=2,
             options=options,
         )
 
     @override
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
         self.build.miscellaneous_restrictions = data["values"]
-        await interaction.response.defer()  # type: ignore
+        parent = self.view
+        if parent is not None and hasattr(parent, "refresh"):
+            await parent.refresh(interaction)  # type: ignore[reportUnknownMemberType]
+        else:
+            await interaction.response.defer()
 
 
 class BuildField[T](discord.ui.TextInput):
@@ -108,11 +134,11 @@ class BuildField[T](discord.ui.TextInput):
         except AttributeError as err:
             msg = f"Invalid attribute {attribute}"
             raise ValueError(msg) from err
-        if not is_bearable(value, attr_type):
+        if not is_bearable(value, attr_type):  # type: ignore[arg-type]
             logger.error("Invalid hint for %s: %s", attribute, attr_type)
 
         if required is None:
-            required = is_bearable(None, attr_type)
+            required = not is_bearable(None, attr_type)  # type: ignore[arg-type]
 
         if value is None:
             string_value = ""
@@ -123,6 +149,7 @@ class BuildField[T](discord.ui.TextInput):
         self.original_string_value = string_value
         self.current_string_value = string_value
         self.modified = False
+        self.validation_error: str | None = None
         self.build = build
         self.attribute = attribute
         self.attr_type = attr_type
@@ -142,6 +169,7 @@ class BuildField[T](discord.ui.TextInput):
 
     async def on_modal_submit(self) -> None:
         """Parse and retain the proposed value without mutating the build."""
+        self.validation_error = None
         if self.value == self.current_string_value:
             return
 
@@ -150,7 +178,9 @@ class BuildField[T](discord.ui.TextInput):
         self.current_string_value = self.value
         try:
             value = self.parser(self.value)
-        except Exception:
+        except Exception as error:
+            self.modified = False
+            self.validation_error = str(error) or t(None, _("Invalid value"))
             return
 
         self.actual_value = value

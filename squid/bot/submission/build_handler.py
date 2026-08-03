@@ -10,7 +10,11 @@ from discord.utils import escape_markdown
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.components import (
+    DISCORD_GREEN,
+    DISCORD_RED,
+    DISCORD_YELLOW,
     CardField,
+    CardSection,
     StaticLayout,
     card_container,
     edit_layout,
@@ -20,7 +24,6 @@ from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
 from squid.builds.domain.titles import format_build_display_title
-from squid.core.time import utcnow
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -144,12 +147,43 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Render the build card for composition into a larger V2 layout."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
-        fields = tuple(CardField(name, escape_markdown(value)) for name, value in self.get_metadata_fields().items())
+        metadata = self.get_metadata_fields()
+        performance_names = {
+            "Dimensions",
+            "Volume",
+            "Opening Time",
+            "Closing Time",
+            "Visible Opening Time",
+            "Visible Closing Time",
+        }
+        resource_names = {"Server", "Coordinates", "Command", "World Download", "Videos"}
+        credit_names = {"Creators", "Date Of Completion"}
+
+        def section(title: str, names: set[str]) -> CardSection:
+            return CardSection(
+                title,
+                tuple(CardField(name, escape_markdown(value)) for name, value in metadata.items() if name in names),
+            )
+
+        status_colours: dict[Status | None, int] = {
+            Status.PENDING: DISCORD_YELLOW,
+            Status.CONFIRMED: DISCORD_GREEN,
+            Status.DENIED: DISCORD_RED,
+        }
+        footer = f"Submission ID: {build.id}"
+        if build.edited_time is not None:
+            footer += f" • Updated <t:{int(build.edited_time.timestamp())}:R>"
         container = card_container(
             format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
-            fields=fields,
-            footer=f"Submission ID: {build.id} • Last Update {utcnow()}",
+            accent_colour=status_colours.get(build.submission_status, DISCORD_GREEN),
+            sections=(
+                section("Size & performance", performance_names),
+                section("Compatibility", {"Versions"}),
+                section("Credits", credit_names),
+                section("Resources", resource_names),
+            ),
+            footer=footer,
             media=await self._get_media_urls(),
         )
         if build.original_link is not None:

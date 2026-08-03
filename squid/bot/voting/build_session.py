@@ -160,13 +160,23 @@ class BuildVoteSession(AbstractVoteSession):
     async def update_messages(self):
         container = await self.bot.for_build(self.build).render_container()
         container.add_item(discord.ui.Separator())
-        container.add_item(
-            discord.ui.TextDisplay(
-                f"### Vote progress\n"
-                f"**Accept:** {self.upvotes}/{self.pass_threshold}\n"
-                f"**Deny:** {self.downvotes}/{-self.fail_threshold}"
+        if self.is_closed:
+            result_label = {
+                "approved": "Approved",
+                "denied": "Denied",
+                "cancelled": "Closed without a decision",
+            }[self.result]
+            vote_text = f"### Vote closed — {result_label}\n**Final score:** {self.net_votes:g}"
+        else:
+            approve_emoji = self.primary_emoji(VoteChoice.APPROVE)
+            deny_emoji = self.primary_emoji(VoteChoice.DENY)
+            vote_text = (
+                "### Vote in progress\n"
+                f"React with {approve_emoji} to **accept** or {deny_emoji} to **deny**. Votes are anonymous.\n"
+                f"**Accept:** {self.upvotes:g}/{self.pass_threshold}  •  "
+                f"**Deny:** {self.downvotes:g}/{-self.fail_threshold}"
             )
-        )
+        container.add_item(discord.ui.TextDisplay(vote_text))
         layout = StaticLayout(container)
         await asyncio.gather(
             *(edit_layout(message, layout, allowed_mentions=no_mentions()) for message in await self.fetch_messages())
