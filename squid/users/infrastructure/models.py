@@ -24,6 +24,10 @@ class User(Base):
     """The user's Mojang account UUID, if they have linked a Minecraft account."""
     created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), server_default=func.now(), default=None)
     """When this row was first inserted."""
+    consent_version: Mapped[str | None] = mapped_column(Text, default=None)
+    """The privacy notice version accepted by the user, or `None` for a legacy row."""
+    consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the user accepted the privacy notice, or `None` for a legacy row."""
 
 
 class VerificationCode(Base):

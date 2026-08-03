@@ -4,12 +4,14 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 import pytest
+from whenever import Instant
 
 from squid.users.application import UserService
-from squid.users.domain import UserAccount, VerificationCode
+from squid.users.domain import UserAccount, UserConsent, VerificationCode
 from squid.users.errors import AccountAlreadyLinkedError, InvalidVerificationCodeError, MinecraftAccountNotFoundError
 
 EXISTING_MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
+CONSENT = UserConsent("test-v1", Instant.from_utc(2026, 8, 3))
 
 
 class FakeUserRepository:
@@ -21,11 +23,12 @@ class FakeUserRepository:
     async def add(
         self,
         *,
+        consent: UserConsent,
         discord_id: int | None = None,
         minecraft_uuid: UUID | None = None,
         ign: str | None = None,
     ) -> UserAccount:
-        self.user = UserAccount(discord_id, minecraft_uuid, ign)
+        self.user = UserAccount(discord_id, minecraft_uuid, ign, consent)
         return self.user
 
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None:
@@ -61,7 +64,7 @@ async def test_user_link_rejects_invalid_code() -> None:
     service = UserService(FakeUserRepository(), username_lookup("Player"), lambda: 123456)
 
     with pytest.raises(InvalidVerificationCodeError, match="invalid or expired"):
-        await service.link_minecraft_account(1, "bad")
+        await service.link_minecraft_account(1, "bad", consent=CONSENT)
 
 
 async def test_user_link_and_code_generation() -> None:
@@ -70,10 +73,10 @@ async def test_user_link_and_code_generation() -> None:
     repository.code = VerificationCode(minecraft_uuid, "Player")
     service = UserService(repository, username_lookup("Player"), lambda: 123456)
 
-    await service.link_minecraft_account(1, "valid")
+    await service.link_minecraft_account(1, "valid", consent=CONSENT)
     generated = await service.generate_verification_code(minecraft_uuid)
 
-    assert repository.user == UserAccount(1, minecraft_uuid, "Player")
+    assert repository.user == UserAccount(1, minecraft_uuid, "Player", CONSENT)
     assert generated == 123456
     assert repository.created_code == "123456"
 
@@ -87,7 +90,7 @@ async def test_user_link_rejects_a_different_existing_account() -> None:
     service = UserService(repository, username_lookup("Requested"), lambda: 123456)
 
     with pytest.raises(AccountAlreadyLinkedError) as exc_info:
-        await service.link_minecraft_account(1, "valid")
+        await service.link_minecraft_account(1, "valid", consent=CONSENT)
 
     assert exc_info.value.context == {"discord_id": 1, "minecraft_uuid": str(existing_uuid)}
     assert exc_info.value.public_context == {}

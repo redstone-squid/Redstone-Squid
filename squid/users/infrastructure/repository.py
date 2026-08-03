@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.persistence.repository import BaseAsyncRepository
-from squid.users.domain import UserAccount, VerificationCode
+from squid.users.domain import UserAccount, UserConsent, VerificationCode
 from squid.users.errors import UserNotFoundError
 from squid.users.infrastructure.models import User
 from squid.users.infrastructure.models import VerificationCode as VerificationCodeModel
@@ -31,17 +31,29 @@ class UserRepository:
         self._verification_code_pepper = verification_code_pepper
 
     async def add(
-        self, *, discord_id: int | None = None, minecraft_uuid: uuid.UUID | None = None, ign: str | None = None
+        self,
+        *,
+        consent: UserConsent,
+        discord_id: int | None = None,
+        minecraft_uuid: uuid.UUID | None = None,
+        ign: str | None = None,
     ) -> UserAccount:
         """Insert a new user and return its primary key."""
         async with self._session_factory() as session:
-            user = User(discord_id=discord_id, ign=ign or "", minecraft_uuid=minecraft_uuid)  # FIXME: Allow empty IGN
+            user = User(
+                discord_id=discord_id,
+                ign=ign or "",  # FIXME: Allow empty IGN
+                minecraft_uuid=minecraft_uuid,
+                consent_version=consent.version,
+                consented_at=consent.granted_at,
+            )
             repository = _UserModelRepository(session=session, auto_commit=True)
             user = await repository.add(user)
             return UserAccount(
                 discord_id=user.discord_id,
                 minecraft_uuid=user.minecraft_uuid,
                 ign=user.ign,
+                consent=consent,
             )
 
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None:
@@ -51,7 +63,12 @@ class UserRepository:
             user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return None
-            return UserAccount(discord_id=discord_id, minecraft_uuid=user.minecraft_uuid, ign=user.ign)
+            consent = None
+            if user.consent_version is not None and user.consented_at is not None:
+                consent = UserConsent(version=user.consent_version, granted_at=user.consented_at)
+            return UserAccount(
+                discord_id=discord_id, minecraft_uuid=user.minecraft_uuid, ign=user.ign, consent=consent
+            )
 
     async def update(self, user: UserAccount) -> None:
         """Update the Minecraft details for an existing user."""
@@ -66,6 +83,9 @@ class UserRepository:
                 raise UserNotFoundError(user.discord_id) from exc
             stored_user.minecraft_uuid = user.minecraft_uuid
             stored_user.ign = user.ign or ""
+            if user.consent is not None:
+                stored_user.consent_version = user.consent.version
+                stored_user.consented_at = user.consent.granted_at
             await repository.update(stored_user)
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:

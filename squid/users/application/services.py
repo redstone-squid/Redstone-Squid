@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from squid.users.application.ports import UserRepository
-from squid.users.domain import UserAccount
+from squid.users.domain import UserAccount, UserConsent
 from squid.users.errors import (
     AccountAlreadyLinkedError,
     InvalidUserError,
@@ -27,16 +27,23 @@ class UserService:
         self._verification_code_factory = verification_code_factory
 
     async def add_user(
-        self, *, discord_id: int | None = None, minecraft_uuid: UUID | None = None, ign: str | None = None
+        self,
+        *,
+        consent: UserConsent,
+        discord_id: int | None = None,
+        minecraft_uuid: UUID | None = None,
+        ign: str | None = None,
     ) -> UserAccount:
         """Add a user with at least one identifying value."""
         if discord_id is None and minecraft_uuid is None and ign is None:
             msg = "At least one of discord_id, minecraft_uuid, or ign must be provided."
             raise InvalidUserError(msg)
-        return await self._repository.add(discord_id=discord_id, minecraft_uuid=minecraft_uuid, ign=ign)
+        return await self._repository.add(
+            consent=consent, discord_id=discord_id, minecraft_uuid=minecraft_uuid, ign=ign
+        )
 
-    async def link_minecraft_account(self, discord_id: int, code: str) -> None:
-        """Link a Discord user using a valid, unexpired verification code."""
+    async def link_minecraft_account(self, discord_id: int, code: str, *, consent: UserConsent) -> None:
+        """Link a Discord user with consent using a valid, unexpired verification code."""
         verification_code = await self._repository.get_valid_verification_code(code)
         if verification_code is None:
             raise InvalidVerificationCodeError
@@ -44,6 +51,7 @@ class UserService:
         user = await self._repository.get_by_discord_id(discord_id)
         if user is None:
             await self._repository.add(
+                consent=consent,
                 discord_id=discord_id,
                 minecraft_uuid=verification_code.minecraft_uuid,
                 ign=verification_code.username,
@@ -55,6 +63,7 @@ class UserService:
 
         user.minecraft_uuid = verification_code.minecraft_uuid
         user.ign = verification_code.username
+        user.consent = consent
         await self._repository.update(user)
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:

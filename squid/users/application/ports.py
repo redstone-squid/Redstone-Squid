@@ -3,14 +3,19 @@
 from typing import Protocol
 from uuid import UUID
 
-from squid.users.domain import UserAccount, VerificationCode
+from squid.users.domain import UserAccount, UserConsent, VerificationCode
 
 
 class UserRepository(Protocol):
     """Persistence operations required by :class:`UserService`."""
 
     async def add(
-        self, *, discord_id: int | None = None, minecraft_uuid: UUID | None = None, ign: str | None = None
+        self,
+        *,
+        consent: UserConsent,
+        discord_id: int | None = None,
+        minecraft_uuid: UUID | None = None,
+        ign: str | None = None,
     ) -> UserAccount: ...
 
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None: ...
