@@ -1,5 +1,6 @@
 """Composition root for framework-neutral application services."""
 
+import logging
 import secrets
 from functools import partial
 from importlib import resources
@@ -20,13 +21,19 @@ from squid.builds.infrastructure.taxonomy import BuildTagsManager
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
-from squid.config import RuntimeConfig
+from squid.config import RuntimeConfig, SchematicConfig
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.persistence.engine import DatabaseEngine
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.schematics.application import SchematicAnalyzer, SchematicService
+from squid.schematics.domain.models import SchematicLimits
+from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
+from squid.schematics.infrastructure.repository import SchematicRepository
+from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
+from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.search.application import CursorCodec, SearchQueryParser, SearchService
 from squid.search.infrastructure import PostgresSearchBackend
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
@@ -42,6 +49,43 @@ from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
 from squid.voting.infrastructure.repository import VoteRepository
+
+logger = logging.getLogger(__name__)
+
+
+def create_schematic_analyzer(config: SchematicConfig) -> SchematicAnalyzer:
+    """Choose the schematic analyzer this process can actually run.
+
+    The engine is an optional extra with no musl or linux-aarch64 wheels, so absence is a
+    supported deployment rather than a misconfiguration: the null analyzer raises one typed,
+    translated error from every method and the rest of the bot is unaffected.
+
+    Availability is decided with `find_spec`, never a trial import — loading a native extension
+    is expensive and an ABI-mismatched wheel can abort the interpreter. The real import happens
+    only in the worker child, where a failure is contained.
+    """
+    if not config.enabled:
+        return NullSchematicAnalyzer("Schematic support is switched off by configuration.")
+    if not engine_installed():
+        logger.info("The optional schematic engine is not installed; schematic features are disabled.")
+        return NullSchematicAnalyzer("The optional 'schematics' extra is not installed.")
+    return SchematicWorkerPool(config)
+
+
+def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> SchematicService:
+    """Assemble the schematic service over whichever analyzer this process can run."""
+    analyzer = create_schematic_analyzer(config)
+    return SchematicService(
+        analyzer,
+        SchematicRepository(db.async_session),
+        PostgresSchematicVersionResolver(db.async_session),
+        limits=SchematicLimits(
+            max_upload_bytes=config.max_upload_bytes,
+            max_inflated_bytes=config.max_inflated_bytes,
+            max_allocated_volume=config.max_allocated_volume,
+        ),
+        engine_installed=not isinstance(analyzer, NullSchematicAnalyzer),
+    )
 
 
 def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> ApplicationServices:
@@ -78,6 +122,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         messages=MessageService(MessageRepository(db.async_session)),
         records=RecordService(record_repository, record_repository, record_computation),
         record_computation=record_computation,
+        schematics=create_schematic_service(db, config.schematics),
         search=SearchService(
             PostgresSearchBackend(db.async_session, fields=search_fields),
             SearchQueryParser(),
@@ -112,4 +157,12 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
 def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None = None) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
     database = db or DatabaseEngine(config.database)
-    return ApplicationRuntime(create_application_services(database, config), database.close, database.ping)
+    services = create_application_services(database, config)
+
+    async def close_resources() -> None:
+        """Stop the schematic workers before the database, so an in-flight analysis that
+        wants to write its result still has a session to write it with."""
+        await services.schematics.aclose()
+        await database.close()
+
+    return ApplicationRuntime(services, close_resources, database.ping)

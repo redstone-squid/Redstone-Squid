@@ -9,6 +9,7 @@ from squid.builds.application import BuildInferenceService, BuildQueryService, B
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.messages.application import MessageService
 from squid.records.application import RecordComputationService, RecordService
+from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.settings.application import SettingsService
 from squid.tags.application import TagService
@@ -28,6 +29,7 @@ class ApplicationServices:
     messages: MessageService
     records: RecordService
     record_computation: RecordComputationService
+    schematics: SchematicService
     search: SearchService
     tags: TagService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
