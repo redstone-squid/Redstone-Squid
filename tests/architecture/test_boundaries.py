@@ -34,6 +34,7 @@ def test_domain_layers_are_framework_and_persistence_independent() -> None:
         .should_not_import("sqlalchemy*")
         .should_not_import("discord*")
         .should_not_import("fastapi*")
+        .should_not_import("nucleation*")
         .should_not_import("squid.*.application*")
         .should_not_import("squid.*.infrastructure*")
         .check("squid", only_direct_imports=True)
@@ -47,6 +48,7 @@ def test_application_layers_are_framework_and_infrastructure_independent() -> No
         .should_not_import("sqlalchemy*")
         .should_not_import("discord*")
         .should_not_import("fastapi*")
+        .should_not_import("nucleation*")
         .should_not_import("squid.*.infrastructure*")
         .check("squid", only_direct_imports=True)
     )
@@ -58,10 +60,56 @@ def test_transports_do_not_import_persistence_adapters() -> None:
             archrule("transports invoke application services")
             .match(transport)
             .should_not_import("sqlalchemy*")
+            .should_not_import("nucleation*")
             .should_not_import("squid.persistence*")
             .should_not_import("squid.*.infrastructure*")
             .check("squid", only_direct_imports=True)
         )
+
+
+def test_native_schematic_engine_stays_in_its_adapter() -> None:
+    (
+        archrule("only the schematic adapter may import the native engine")
+        .match("squid*")
+        .exclude("squid.schematics.infrastructure*")
+        .should_not_import("nucleation*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
+# The adapter modules are allowed to name the engine; everything else must not, including via
+# a string handed to importlib, which an import-graph rule would not see.
+ENGINE_REFERENCE_ALLOWLIST = frozenset(
+    {
+        Path("squid/schematics/infrastructure/capability.py"),
+        Path("squid/schematics/infrastructure/nucleation_adapter.py"),
+        Path("squid/schematics/infrastructure/worker_main.py"),
+    }
+)
+
+
+def test_no_module_outside_the_adapter_names_the_native_engine() -> None:
+    violations: list[tuple[Path, int, str]] = []
+    for path in Path("squid").rglob("*.py"):
+        if path in ENGINE_REFERENCE_ALLOWLIST:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                violations.extend(
+                    (path, node.lineno, alias.name)
+                    for alias in node.names
+                    if alias.name == "nucleation" or alias.name.startswith("nucleation.")
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("nucleation"):
+                violations.append((path, node.lineno, node.module))
+            elif (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and (node.value == "nucleation" or node.value.startswith("nucleation."))
+            ):
+                violations.append((path, node.lineno, f"string {node.value!r}"))
+
+    assert violations == []
 
 
 def test_application_modules_do_not_read_process_environment_directly() -> None:

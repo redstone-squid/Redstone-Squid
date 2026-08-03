@@ -10,6 +10,11 @@ import pytest
         ("squid.api.errors", ("squid.api.app", "squid.bootstrap")),
         ("squid.bot.utils.permissions", ("squid.bot.app",)),
         ("squid.bot.submission.ui.components", ("squid.bot.submission.ui.views",)),
+        # Importing the schematic domain or application layer must never drag in the native
+        # engine: it is optional, expensive to import, and absent on some deployments.
+        ("squid.schematics.domain", ("nucleation", "sqlalchemy", "discord")),
+        ("squid.schematics.application", ("nucleation", "sqlalchemy", "discord")),
+        ("squid.schematics.infrastructure.capability", ("nucleation",)),
     ],
 )
 def test_narrow_transport_imports_do_not_load_application_graph(

@@ -11,6 +11,9 @@ resolution-markers = [
 exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P7D"
 
+[options.exclude-newer-package]
+nucleation = "2026-08-02T00:00:00Z"
+
 [[package]]
 name = "advanced-alchemy"
 version = "1.11.0"
@@ -1791,6 +1794,17 @@ wheels = [
 ]
 
 [[package]]
+name = "nucleation"
+version = "0.9.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/1f/70392598d848de2a047b18bebbfb5e6be11276b3b375a2d655f3a27324a6/nucleation-0.9.2.tar.gz", hash = "sha256:1de32629c3373f1d7078d338403a6875bb40bc14a9fe59c44820f5be4529825f", size = 2122835, upload-time = "2026-08-01T02:56:45.264Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/d0/41ea4c6cebe6fb58b30ca5daf2b9375a0c767379513929d8d11c3b394311/nucleation-0.9.2-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:04e6b3d74fe7748db4542dba8f73db3d0f302c130c8354410905ce4d1ae98ff1", size = 12453387, upload-time = "2026-08-01T02:56:39.424Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/94/bdd4c99f0cbcfbd02bd2351b58d28af26bc00d31cc83868eebe6dd85c571/nucleation-0.9.2-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:eec165723e6f6726bcf4818f25c6c818f50f1db46049b5e25668124f9715cbd2", size = 15094905, upload-time = "2026-08-01T02:56:41.57Z" },
+    { url = "https://files.pythonhosted.org/packages/50/e8/ebaaa71496d3f2b2b826aa863d259a819d1f3fe999f2fd040ecc81d85229/nucleation-0.9.2-cp312-abi3-win_amd64.whl", hash = "sha256:8944d297cb4730ab3764dd91ab01fc83ed10c6437f426af1b5ad8f3e8265c943", size = 10228763, upload-time = "2026-08-01T02:56:43.531Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2689,11 +2703,17 @@ dependencies = [
     { name = "whenever" },
 ]
 
+[package.optional-dependencies]
+schematics = [
+    { name = "nucleation" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "basedpyright" },
     { name = "bump-my-version" },
     { name = "hypothesis" },
+    { name = "nucleation", marker = "platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "pip-tools" },
     { name = "prek" },
     { name = "pyrefly" },
@@ -2730,6 +2750,7 @@ requires-dist = [
     { name = "gspread", specifier = ">=6.1.4" },
     { name = "jishaku", specifier = ">=2.6.0" },
     { name = "markdown", specifier = ">=3.7" },
+    { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.9.2" },
     { name = "openai", specifier = ">=1.58.1" },
     { name = "pydantic-settings", specifier = ">=2.14,<3" },
     { name = "rapidfuzz", specifier = ">=3.13.0" },
@@ -2739,12 +2760,14 @@ requires-dist = [
     { name = "vecs", specifier = ">=0.4.5" },
     { name = "whenever", specifier = ">=0.10.3" },
 ]
+provides-extras = ["schematics"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "basedpyright", specifier = ">=1.24.0" },
     { name = "bump-my-version", specifier = ">=0.29.0" },
     { name = "hypothesis", specifier = ">=6.0.0" },
+    { name = "nucleation", marker = "platform_machine == 'arm64' or platform_machine == 'x86_64'", specifier = "==0.9.2" },
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "prek", specifier = ">=0.2.28" },
     { name = "pyrefly", specifier = ">=0.44.0" },

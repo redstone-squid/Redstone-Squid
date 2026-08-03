@@ -1,0 +1,1 @@
+"""Schematic domain unit tests."""

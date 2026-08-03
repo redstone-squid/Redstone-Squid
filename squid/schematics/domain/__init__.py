@@ -1,0 +1,51 @@
+"""Public schematic domain API."""
+
+from squid.schematics.domain.formats import (
+    SCHEMATIC_EXTENSIONS,
+    Container,
+    format_from_filename,
+    inflated_size_at_most,
+    sniff_container,
+    sniff_schematic_format,
+)
+from squid.schematics.domain.models import (
+    AnalyzerCapabilities,
+    AutostackLattice,
+    FingerprintPreset,
+    SchematicAnalysis,
+    SchematicComparison,
+    SchematicDimensions,
+    SchematicFingerprints,
+    SchematicFormat,
+    SchematicLimits,
+    SchematicMetrics,
+    SchematicSign,
+    SimulationResult,
+    SimulationSample,
+    Vector3,
+    VersionLossEntry,
+)
+
+__all__ = [
+    "SCHEMATIC_EXTENSIONS",
+    "AnalyzerCapabilities",
+    "AutostackLattice",
+    "Container",
+    "FingerprintPreset",
+    "SchematicAnalysis",
+    "SchematicComparison",
+    "SchematicDimensions",
+    "SchematicFingerprints",
+    "SchematicFormat",
+    "SchematicLimits",
+    "SchematicMetrics",
+    "SchematicSign",
+    "SimulationResult",
+    "SimulationSample",
+    "Vector3",
+    "VersionLossEntry",
+    "format_from_filename",
+    "inflated_size_at_most",
+    "sniff_container",
+    "sniff_schematic_format",
+]
