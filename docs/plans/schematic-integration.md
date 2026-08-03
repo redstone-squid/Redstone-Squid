@@ -1,9 +1,8 @@
 # Integrating Nucleation into Redstone-Squid
 
-> **Status.** Phase 0 landed in `schematics: add the bounded context and its architectural
-> boundary`. Phases 1-4 are not started. Everything below the status block is the plan as
-> approved, amended in place wherever building Phase 0 proved part of it wrong; those
-> amendments are called out where they occur rather than silently applied.
+> **Status.** Phases 0 and 1 have landed. Phases 2-4 are not started. Everything below the
+> status block is the plan as approved, amended in place wherever building it proved part of it
+> wrong; those amendments are called out where they occur rather than silently applied.
 
 ## Context
 
@@ -377,7 +376,7 @@ Zip archives are refused by `inflated_size_at_most` rather than having their dec
 sizes summed — those headers are attacker-written — which matches the plan's "world zips
 rejected in all phases" but puts a second refusal below `classify_attachment`.
 
-### Phase 1 — ingest + auto-metrics
+### Phase 1 — ingest + auto-metrics — **done**
 
 **New:** `nucleation_adapter.py`, `worker.py`, `worker_main.py`, `models.py`, `repository.py`,
 `mapping.py`, `version_resolver.py`, `application/{services,commands}.py`,
@@ -394,6 +393,48 @@ Also fix `docs/new-migration.md:10` — it says "update the SQLAlchemy models in
 `squid/db/schema.py`", **a path that no longer exists**. Correct it to
 "`squid/<context>/infrastructure/models.py`, then register the module in
 `squid/persistence/__init__.py`."
+
+**As built**, the following differ from the sketch above.
+
+- **A `wire.py` module was added** to `infrastructure/`. The frame format and the value
+  (de)serialisation are needed identically by the supervisor and the child, and putting them in
+  `worker.py` would have made `worker_main.py` import the asyncio supervisor it is supervised by.
+  Standard library only, no engine import.
+- **`analyze()` gained `source_format`** on the port. The service has already sniffed the bytes
+  *with the filename hint* by the time it calls the analyzer, and the adapter cannot see the
+  filename; passing the conclusion through beats re-deriving a worse one. `render()` likewise
+  gained `resource_pack`, and the port gained `aclose()` so `bootstrap` can close any analyzer
+  uniformly.
+- **`RLIMIT_NPROC` is deliberately not set.** It counts processes per real UID, not per process,
+  so on a busy host any value low enough to constrain a fork bomb also stops the engine's rayon
+  and wgpu pools from creating threads. `start_new_session=True` plus a process-*group* kill on
+  timeout covers runaway children properly; `RLIMIT_AS` covers memory. `RLIMIT_CPU` is set as a
+  cumulative backstop that recycles a worker, with the per-operation deadline as the real guard.
+- **`/build schematic *` stays registered without the engine** and answers "schematic support is
+  not enabled on this instance." The plan said never register it. A command that silently does
+  not exist is indistinguishable from a bot outage; one sentence is strictly more informative.
+  It is a mixin on `SearchCog` for the same reason `BuildEditCommands` is — the `build` group is
+  owned by `BuildCommandGroup`, so a separate cog cannot contribute subcommands to it.
+- **Two engine behaviours found by the integration tests, not by reading:**
+  `Diff.added()/removed()/changed()` return whole `Schematic` objects rather than counts, so
+  `edit_distance` uses `diff.distance()`; and **optional metadata accessors raise rather than
+  returning empty** when a format does not carry the field — `author()` on a Sponge `.schem`
+  throws `NucleationError.NotFound`. All optional metadata reads are guarded; the load-bearing
+  measurements are not.
+- **`convert` reports fidelity loss only for litematic output.** `to_litematic_for_version_json`
+  returns `{data_b64, loss}` atomically; other targets go through
+  `convert_to_data_version(target, source)` for the loss report and then re-encode. The engine
+  can only *write* litematic, Sponge `.schem`, and `.mcstructure`; legacy `.schematic` and
+  structure `.nbt` are read-only and are refused as download targets.
+- **Column docstrings do not reach the database.** `Base.__init_subclass__` extracts them but
+  they do not land on the mapped columns — pre-existing behaviour, `users` behaves identically —
+  so the migration carries table comments only. Not fixed here; noted so the next person does not
+  assume the new columns are self-documenting in Postgres.
+- **`versions.data_version` is seeded by `UPDATE`, not `INSERT`.** The version catalogue is
+  populated at runtime by the version-tracking task, so the migration annotates whichever Java
+  releases the database already knows and leaves the rest null. A missing entry resolves to "no
+  known data version" rather than a guess, because a wrong number produces a confidently wrong
+  conversion.
 
 ### Phase 2 — duplicate detection
 
