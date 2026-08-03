@@ -42,7 +42,7 @@ from squid.search.infrastructure.models import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
 from squid.tags.infrastructure.models import TagAlias, TagDefinition
-from squid.users.infrastructure.models import User
+from squid.users.infrastructure.models import CreatorAlias
 from squid.versions.infrastructure.models import Version
 
 
@@ -280,10 +280,10 @@ class SearchProjectionLoader:
         creators = tuple(
             (
                 await self._session.scalars(
-                    select(User)
-                    .join(BuildCreator, BuildCreator.user_id == User.id)
+                    select(CreatorAlias)
+                    .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
                     .where(BuildCreator.build_id == build_id)
-                    .order_by(User.ign)
+                    .order_by(CreatorAlias.name)
                 )
             ).all()
         )
@@ -346,7 +346,7 @@ class SearchProjectionLoader:
             restriction_names = official_restrictions
         if official_patterns:
             type_names = official_patterns
-        creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "ign")) is not None)
+        creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
         version_names = tuple(_version_name(version) for version in versions)
         dimensions = {
             name: value
@@ -531,17 +531,19 @@ class SearchProjectionLoader:
                 data={"type_id": source_id, "build_category": build_type.build_category},
             )
         if subtype == "creator":
-            creator = await self._session.get(User, source_id)
+            creator = await self._session.get(CreatorAlias, source_id)
             if creator is None:
                 return None
-            creator_name = _mapped_text(creator, "ign")
+            creator_name = _mapped_text(creator, "name")
             if creator_name is None:
                 return None
+            # The claiming account's identifiers stay out of the public index;
+            # only whether the credit has been claimed is searchable.
             return _metadata_projection(
                 source_key=f"creator:{source_id}",
                 title=creator_name,
                 subtype="creator",
-                data={"user_id": source_id, "discord_id": creator.discord_id},
+                data={"alias_id": source_id, "claimed": creator.user_id is not None},
             )
         if subtype == "version":
             version = await self._session.get(Version, source_id)

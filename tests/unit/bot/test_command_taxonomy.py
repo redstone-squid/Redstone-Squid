@@ -30,7 +30,7 @@ PUBLIC_COGS = (
 )
 
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
-    "account": ("link", "unlink"),
+    "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
     "admin": ("records-gaps", "records-lookup", "records-rebuild", "records-title-issues"),
     "archive": (),
     "build": ("confirm", "debug", "deny", "edit", "pending", "recalc", "submit-advanced", "view"),
@@ -109,5 +109,16 @@ def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
             "admin records-lookup": 1,
             "admin records-rebuild": 2,
             "admin records-title-issues": 3,
+        },
+    )
+
+    verify = VerifyCog.__new__(VerifyCog)
+    _assert_check_counts(
+        verify.__cog_commands__,
+        {
+            "account claim": 0,
+            "account claims": 2,
+            "account approve-claim": 2,
+            "account reject-claim": 2,
         },
     )

@@ -20,7 +20,7 @@ from squid.tags.domain import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
-from squid.users.infrastructure.models import User
+from squid.users.infrastructure.models import CreatorAlias, User
 from squid.versions.infrastructure.models import Version
 
 
@@ -35,11 +35,14 @@ class BuildMapper:
         creator_names = list(
             (
                 await session.scalars(
-                    select(User.ign)
-                    .join(BuildCreator, BuildCreator.user_id == User.id)
+                    select(CreatorAlias.name)
+                    .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
                     .where(BuildCreator.build_id == sql_build.id)
                 )
             ).all()
+        )
+        submitter_discord_id = await session.scalar(
+            select(User.discord_id).where(User.id == sql_build.submitter_user_id)
         )
         version_rows = (
             await session.scalars(
@@ -97,7 +100,7 @@ class BuildMapper:
             image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
             video_urls=[link.url for link in sql_build.links if link.media_type == "video"],
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
-            submitter_id=sql_build.submitter_id,
+            submitter_id=submitter_discord_id,
             completion_time=sql_build.completion_time,
             completion_at=sql_build.completion_at,
             completion_evidence=sql_build.completion_evidence,

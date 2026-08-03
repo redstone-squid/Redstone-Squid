@@ -135,7 +135,11 @@ class Build(Base, kw_only=True):
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     category: Mapped[BuildCategory | None] = mapped_column(Text)
-    submitter_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    submitter_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="builds_submitter_user_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+    )
     original_message_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -272,7 +276,7 @@ class Entrance(Build):
 
 
 class BuildCreator(Base):
-    """Association table between builds and their creators."""
+    """Association table between builds and the creator names credited on them."""
 
     __tablename__ = "build_creators"
     build_id: Mapped[int] = mapped_column(
@@ -281,9 +285,9 @@ class BuildCreator(Base):
         primary_key=True,
         init=False,
     )
-    user_id: Mapped[int] = mapped_column(
+    alias_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="build_creators_user_id_fkey"),
+        ForeignKey("creator_aliases.id", name="build_creators_alias_id_fkey", ondelete="RESTRICT"),
         primary_key=True,
     )
 

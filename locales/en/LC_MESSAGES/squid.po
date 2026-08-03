@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-07-31 15:33+0800\n"
+"POT-Creation-Date: 2026-08-03 04:02+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -40,6 +40,23 @@ msgstr ""
 msgid ""
 "\n"
 "…and {count} more."
+msgstr ""
+
+#: squid/bot/consent.py:30
+msgid ""
+"## Link account and store my information\n"
+"To link your accounts, Redstone Squid will store your Discord user ID, "
+"Minecraft UUID, and current Minecraft username. This information is used "
+"to identify you as a build creator and keep your Discord and Minecraft "
+"accounts linked.\n"
+"\n"
+"Linking also claims any existing build credit under your verified "
+"Minecraft username, so those builds are attributed to your account. "
+"Credits already claimed by someone else are left alone; you can ask staff"
+" to review them with `/account claim`.\n"
+"\n"
+"Selecting **Agree and link** records the notice version and time of your "
+"consent. Selecting **Cancel** stores no user account information."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:62
@@ -77,15 +94,19 @@ msgstr ""
 msgid "A build you submitted."
 msgstr ""
 
+#: squid/bot/verify.py:90
+msgid "A creator name credited on builds you worked on."
+msgstr ""
+
 #: squid/bot/submission/search.py:181
 msgid "A full or partial pattern name."
 msgstr ""
 
-#: squid/core/errors.py:211
+#: squid/core/errors.py:215
 msgid "A persistence operation failed."
 msgstr ""
 
-#: squid/core/errors.py:226
+#: squid/core/errors.py:230
 msgid "A required service is temporarily unavailable."
 msgstr ""
 
@@ -95,6 +116,14 @@ msgstr ""
 
 #: squid/users/errors.py:43
 msgid "Account already linked"
+msgstr ""
+
+#: squid/bot/verify.py:43
+msgid "Account linking cancelled. No user account information was stored."
+msgstr ""
+
+#: squid/bot/consent.py:44
+msgid "Agree and link"
 msgstr ""
 
 #: squid/bot/submission/search.py:142
@@ -117,7 +146,7 @@ msgstr ""
 msgid "Already added"
 msgstr ""
 
-#: squid/core/errors.py:48
+#: squid/core/errors.py:52
 msgid "An application error occurred."
 msgstr ""
 
@@ -125,11 +154,11 @@ msgstr ""
 msgid "An approved build tag."
 msgstr ""
 
-#: squid/core/errors.py:204
+#: squid/core/errors.py:208
 msgid "An infrastructure dependency failed."
 msgstr ""
 
-#: squid/core/errors.py:181
+#: squid/core/errors.py:185
 msgid "An internal application error occurred."
 msgstr ""
 
@@ -142,15 +171,15 @@ msgstr ""
 msgid "An unexpected error occurred. Reference: `{error_id}`"
 msgstr ""
 
-#: squid/core/errors.py:190
+#: squid/core/errors.py:194
 msgid "Application configuration is invalid."
 msgstr ""
 
-#: squid/core/errors.py:49
+#: squid/core/errors.py:53
 msgid "Application error"
 msgstr ""
 
-#: squid/core/errors.py:197
+#: squid/core/errors.py:201
 msgid "Application state is invalid for this operation."
 msgstr ""
 
@@ -159,8 +188,12 @@ msgstr ""
 msgid "Archived **{name}**."
 msgstr ""
 
-#: squid/bot/verify.py:42
+#: squid/bot/verify.py:63
 msgid "Are you sure you want to unlink your Minecraft account?"
+msgstr ""
+
+#: squid/users/errors.py:89
+msgid "Ask staff to review the claim if you believe the name is yours."
 msgstr ""
 
 #: squid/bot/admin.py:88
@@ -174,6 +207,11 @@ msgstr ""
 
 #: squid/builds/errors.py:36
 msgid "Build busy"
+msgstr ""
+
+#: squid/bot/verify.py:54
+#, python-brace-format
+msgid "Build credits under **{name}** are now attributed to your account."
 msgstr ""
 
 #: squid/bot/submission/edit.py:152
@@ -211,7 +249,7 @@ msgstr ""
 msgid "Build tagged"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:185
+#: squid/bot/consent.py:45 squid/bot/submission/ui/views.py:185
 msgid "Cancel"
 msgstr ""
 
@@ -223,7 +261,7 @@ msgstr ""
 msgid "Canonical base key shown by search or records tooling."
 msgstr ""
 
-#: squid/users/errors.py:60
+#: squid/users/errors.py:115
 msgid "Check the UUID and try again."
 msgstr ""
 
@@ -235,17 +273,30 @@ msgstr ""
 msgid "Check the command arguments and try again."
 msgstr ""
 
+#: squid/users/errors.py:75
+msgid "Check the spelling against the creator list on a build you worked on."
+msgstr ""
+
+#: squid/bot/verify.py:99
+#, python-brace-format
+msgid "Claim #{id} for **{name}** is awaiting staff approval."
+msgstr ""
+
+#: squid/users/errors.py:100
+msgid "Claim not found"
+msgstr ""
+
 #: squid/bot/submission/records.py:132
 msgid ""
 "Comma-separated restriction IDs; large exact categories are saved for "
 "reuse."
 msgstr ""
 
-#: squid/bot/help.py:183 squid/bot/help.py:203
+#: squid/bot/help.py:192 squid/bot/help.py:212
 msgid "Command Help"
 msgstr ""
 
-#: squid/bot/help.py:126
+#: squid/bot/help.py:135
 #, python-brace-format
 msgid "Command Help - `{name}`"
 msgstr ""
@@ -270,12 +321,29 @@ msgstr ""
 msgid "Confirm this action?"
 msgstr ""
 
+#: squid/users/errors.py:58
+msgid "Consent required"
+msgstr ""
+
 #: squid/bot/settings.py:159
 msgid "Could not find that channel."
 msgstr ""
 
 #: squid/bot/give_redstoner.py:153
 msgid "Could not find the redstoner role."
+msgstr ""
+
+#: squid/users/errors.py:86
+msgid "Creator name already claimed"
+msgstr ""
+
+#: squid/users/errors.py:72
+msgid "Creator name not found"
+msgstr ""
+
+#: squid/bot/verify.py:130
+#, python-brace-format
+msgid "Credited **{name}** to the claimant."
 msgstr ""
 
 #: squid/bot/settings.py:72
@@ -302,7 +370,7 @@ msgstr ""
 msgid "Error"
 msgstr ""
 
-#: squid/bot/help.py:221
+#: squid/bot/help.py:230
 msgid "Error."
 msgstr ""
 
@@ -310,7 +378,7 @@ msgstr ""
 msgid "Field to sort by, such as width or closing_delay."
 msgstr ""
 
-#: squid/core/errors.py:175
+#: squid/core/errors.py:179
 msgid "Forbidden"
 msgstr ""
 
@@ -331,7 +399,7 @@ msgstr ""
 msgid "HTTP error"
 msgstr ""
 
-#: squid/bot/help.py:116
+#: squid/bot/help.py:125
 msgid "Help"
 msgstr ""
 
@@ -359,7 +427,7 @@ msgid ""
 " Name: {name}"
 msgstr ""
 
-#: squid/core/errors.py:182
+#: squid/core/errors.py:186
 msgid "Internal error"
 msgstr ""
 
@@ -383,7 +451,7 @@ msgstr ""
 msgid "Invalid request"
 msgstr ""
 
-#: squid/core/errors.py:144
+#: squid/core/errors.py:148
 msgid "Invalid value"
 msgstr ""
 
@@ -399,11 +467,11 @@ msgstr ""
 msgid "Invite bot"
 msgstr ""
 
-#: squid/bot/help.py:45
+#: squid/bot/help.py:48
 msgid "Loading…"
 msgstr ""
 
-#: squid/users/errors.py:57
+#: squid/users/errors.py:112
 msgid "Minecraft account not found."
 msgstr ""
 
@@ -419,12 +487,20 @@ msgstr ""
 msgid "No active record titles require taxonomy review."
 msgstr ""
 
+#: squid/users/errors.py:71
+msgid "No build credits a creator by that name."
+msgstr ""
+
 #: squid/bot/submission/search.py:231 squid/bot/submission/search.py:246
 #: squid/bot/submission/search.py:310
 msgid "No build with that ID."
 msgstr ""
 
-#: squid/bot/help.py:127 squid/bot/help.py:141 squid/bot/help.py:154
+#: squid/bot/verify.py:117
+msgid "No creator credit claims are awaiting review."
+msgstr ""
+
+#: squid/bot/help.py:136 squid/bot/help.py:150 squid/bot/help.py:163
 msgid "No details provided"
 msgstr ""
 
@@ -434,6 +510,10 @@ msgstr ""
 
 #: squid/bot/submission/search.py:190
 msgid "No patterns match that query."
+msgstr ""
+
+#: squid/users/errors.py:99
+msgid "No pending claim matches that ID."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:57
@@ -448,7 +528,7 @@ msgstr ""
 msgid "No unresolved active record categories."
 msgstr ""
 
-#: squid/bot/help.py:179 squid/bot/help.py:199
+#: squid/bot/help.py:188 squid/bot/help.py:208
 msgid "None"
 msgstr ""
 
@@ -458,6 +538,10 @@ msgstr ""
 
 #: squid/bot/errors.py:98
 msgid "Only the bot owner can use this command."
+msgstr ""
+
+#: squid/bot/consent.py:52
+msgid "Only the person linking the account can answer this prompt."
 msgstr ""
 
 #: squid/bot/submission/search.py:215
@@ -480,7 +564,7 @@ msgstr ""
 msgid "Open spreadsheet"
 msgstr ""
 
-#: squid/core/errors.py:160
+#: squid/core/errors.py:164
 msgid "Operation conflict"
 msgstr ""
 
@@ -524,11 +608,11 @@ msgstr ""
 msgid "Pending tags"
 msgstr ""
 
-#: squid/core/errors.py:219
+#: squid/core/errors.py:223
 msgid "Persisted data is inconsistent with application expectations."
 msgstr ""
 
-#: squid/core/errors.py:184
+#: squid/core/errors.py:188
 msgid "Please try again later."
 msgstr ""
 
@@ -587,11 +671,16 @@ msgstr ""
 msgid "Rejected **{name}**."
 msgstr ""
 
-#: squid/core/errors.py:136
+#: squid/bot/verify.py:142
+#, python-brace-format
+msgid "Rejected the claim for **{name}**."
+msgstr ""
+
+#: squid/core/errors.py:140
 msgid "Request failed"
 msgstr ""
 
-#: squid/core/errors.py:152
+#: squid/core/errors.py:156
 msgid "Resource not found"
 msgstr ""
 
@@ -616,6 +705,10 @@ msgstr ""
 msgid "Review the proposed build changes."
 msgstr ""
 
+#: squid/users/errors.py:61
+msgid "Run /account link to review and accept the current notice."
+msgstr ""
+
 #: squid/bot/submission/search.py:67
 msgid "Search records, builds, tags and fields, or everything."
 msgstr ""
@@ -628,7 +721,7 @@ msgstr ""
 msgid "Server only"
 msgstr ""
 
-#: squid/api/errors.py:115 squid/core/errors.py:227
+#: squid/api/errors.py:115 squid/core/errors.py:231
 msgid "Service unavailable"
 msgstr ""
 
@@ -726,6 +819,10 @@ msgstr ""
 msgid "That alias is already used by another restriction."
 msgstr ""
 
+#: squid/users/errors.py:85
+msgid "That creator name is already claimed by another account."
+msgstr ""
+
 #: squid/bot/settings.py:244
 msgid "That language is not supported."
 msgstr ""
@@ -746,7 +843,7 @@ msgstr ""
 msgid "The ID of the build you want to see."
 msgstr ""
 
-#: squid/users/errors.py:74
+#: squid/users/errors.py:129
 msgid "The Minecraft account service is temporarily unavailable."
 msgstr ""
 
@@ -770,11 +867,11 @@ msgstr ""
 msgid "The channel to send this type of message to"
 msgstr ""
 
-#: squid/bot/verify.py:28
+#: squid/bot/verify.py:30
 msgid "The code you received by running /link in the game."
 msgstr ""
 
-#: squid/bot/help.py:31
+#: squid/bot/help.py:34
 msgid "The command to get help for."
 msgstr ""
 
@@ -794,7 +891,7 @@ msgstr ""
 msgid "The message to hold a deletion vote for."
 msgstr ""
 
-#: squid/core/errors.py:159
+#: squid/core/errors.py:163
 msgid "The operation conflicts with the current state."
 msgstr ""
 
@@ -802,11 +899,11 @@ msgstr ""
 msgid "The request did not pass validation."
 msgstr ""
 
-#: squid/core/errors.py:135
+#: squid/core/errors.py:139
 msgid "The requested operation could not be completed."
 msgstr ""
 
-#: squid/core/errors.py:151
+#: squid/core/errors.py:155
 msgid "The requested resource was not found."
 msgstr ""
 
@@ -822,7 +919,7 @@ msgstr ""
 msgid "The roles which will have this permission"
 msgstr ""
 
-#: squid/core/errors.py:143
+#: squid/core/errors.py:147
 msgid "The supplied value is invalid."
 msgstr ""
 
@@ -866,14 +963,6 @@ msgstr ""
 msgid "This does not look like a build."
 msgstr ""
 
-#: squid/bot/submission/paginator.py:82
-msgid "This paginator belongs to someone else."
-msgstr ""
-
-#: squid/bot/submission/paginator.py:90
-msgid "This paginator is attached to a different channel."
-msgstr ""
-
 #: squid/bot/settings.py:255
 #, python-brace-format
 msgid "This server's language has been set to {language}."
@@ -891,7 +980,7 @@ msgstr ""
 msgid "Tracked message not found."
 msgstr ""
 
-#: squid/users/errors.py:77
+#: squid/users/errors.py:132
 msgid "Try again in a few minutes."
 msgstr ""
 
@@ -900,18 +989,18 @@ msgstr ""
 msgid "Try again in {seconds:.1f} seconds."
 msgstr ""
 
-#: squid/bot/help.py:212
+#: squid/bot/help.py:221
 #, python-brace-format
 msgid ""
 "Unable to find command `{name}`. Use /help to get a list of available "
 "commands."
 msgstr ""
 
-#: squid/core/errors.py:167
+#: squid/core/errors.py:171
 msgid "Unauthorized"
 msgstr ""
 
-#: squid/core/errors.py:166
+#: squid/core/errors.py:170
 msgid "Unauthorized."
 msgstr ""
 
@@ -924,7 +1013,7 @@ msgstr ""
 msgid "Unsupported content type: {content_type}"
 msgstr ""
 
-#: squid/bot/help.py:19
+#: squid/bot/help.py:22
 msgid "Use `/help <command>` to get more information."
 msgstr ""
 
@@ -985,7 +1074,7 @@ msgstr ""
 msgid "You do not have a trusted role."
 msgstr ""
 
-#: squid/core/errors.py:174
+#: squid/core/errors.py:178
 msgid "You do not have permission to perform this action."
 msgstr ""
 
@@ -993,7 +1082,7 @@ msgstr ""
 msgid "You do not have permission to use this command."
 msgstr ""
 
-#: squid/bot/verify.py:60
+#: squid/bot/verify.py:81
 msgid ""
 "You don't have a Minecraft account linked to your Discord account, or the"
 " unlinking failed."
@@ -1007,11 +1096,17 @@ msgstr ""
 msgid "You must provide a list of roles for this setting."
 msgstr ""
 
-#: squid/bot/verify.py:34
-msgid "Your Discord account has been linked with your Minecraft account."
+#: squid/users/errors.py:57
+msgid ""
+"You need to accept the current privacy notice before claiming build "
+"credit."
 msgstr ""
 
 #: squid/bot/verify.py:50
+msgid "Your Discord account has been linked with your Minecraft account."
+msgstr ""
+
+#: squid/bot/verify.py:71
 msgid "Your Discord account has been unlinked from your Minecraft account."
 msgstr ""
 
@@ -1038,7 +1133,7 @@ msgid ""
 "evidence."
 msgstr ""
 
-#: squid/bot/help.py:97
+#: squid/bot/help.py:106
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -1048,7 +1143,7 @@ msgid ""
 "{more_information}\n"
 msgstr ""
 
-#: squid/bot/help.py:177
+#: squid/bot/help.py:186
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -1058,7 +1153,7 @@ msgid ""
 "{more_information}"
 msgstr ""
 
-#: squid/bot/help.py:197
+#: squid/bot/help.py:206
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -1127,3 +1222,10 @@ msgstr ""
 #, python-brace-format
 msgid "{setting}: {value}\n"
 msgstr ""
+
+#~ msgid "This paginator belongs to someone else."
+#~ msgstr ""
+
+#~ msgid "This paginator is attached to a different channel."
+#~ msgstr ""
+

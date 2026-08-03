@@ -22,6 +22,7 @@ from squid.tags.domain import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
+from squid.users.infrastructure.models import User
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
@@ -121,7 +122,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
     ) -> bool:
         async with self._session_factory.begin() as session:
             owned_build_id = await session.scalar(
-                select(Build.id).where(Build.id == build_id, Build.submitter_id == actor_discord_id)
+                select(Build.id)
+                .join(User, User.id == Build.submitter_user_id)
+                .where(Build.id == build_id, User.discord_id == actor_discord_id)
             )
             if owned_build_id is None:
                 return False

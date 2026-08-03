@@ -51,6 +51,61 @@ class AccountAlreadyLinkedError(ConflictError):
         self.minecraft_uuid = minecraft_uuid
 
 
+class ConsentRequiredError(ValidationError):
+    """An account must accept the current privacy notice before this action."""
+
+    default_message = _("You need to accept the current privacy notice before claiming build credit.")
+    default_title = _("Consent required")
+    default_code = ErrorCode.CONSENT_REQUIRED
+    default_resource = "user"
+    default_end_user_action = _("Run /account link to review and accept the current notice.")
+
+    def __init__(self, discord_id: int) -> None:
+        super().__init__(context={"discord_id": discord_id})
+        self.discord_id = discord_id
+
+
+class CreatorAliasNotFoundError(NotFoundError):
+    """No build credits a creator under the requested name."""
+
+    default_message = _("No build credits a creator by that name.")
+    default_title = _("Creator name not found")
+    default_code = ErrorCode.CREATOR_ALIAS_NOT_FOUND
+    default_resource = "creator_alias"
+    default_end_user_action = _("Check the spelling against the creator list on a build you worked on.")
+
+    def __init__(self, name: str) -> None:
+        super().__init__(context={"name": name}, public_context={"name": name})
+        self.name = name
+
+
+class AliasAlreadyClaimedError(ConflictError):
+    """A creator name is already credited to an account."""
+
+    default_message = _("That creator name is already claimed by another account.")
+    default_title = _("Creator name already claimed")
+    default_code = ErrorCode.ALIAS_ALREADY_CLAIMED
+    default_resource = "creator_alias"
+    default_end_user_action = _("Ask staff to review the claim if you believe the name is yours.")
+
+    def __init__(self, name: str) -> None:
+        super().__init__(context={"name": name}, public_context={"name": name})
+        self.name = name
+
+
+class ClaimNotFoundError(NotFoundError):
+    """No pending claim matches the requested identifier."""
+
+    default_message = _("No pending claim matches that ID.")
+    default_title = _("Claim not found")
+    default_code = ErrorCode.CLAIM_NOT_FOUND
+    default_resource = "creator_alias_claim"
+
+    def __init__(self, claim_id: int) -> None:
+        super().__init__(context={"claim_id": claim_id}, public_context={"claim_id": claim_id})
+        self.claim_id = claim_id
+
+
 class MinecraftAccountNotFoundError(NotFoundError):
     """A Minecraft UUID does not identify an account."""
 

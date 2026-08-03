@@ -7,7 +7,7 @@ from whenever import Instant
 from squid.builds.infrastructure.models import Build, BuildEditHistory, RestrictionAlias
 from squid.messages.infrastructure.models import Message
 from squid.persistence.types import InstantUTC
-from squid.users.infrastructure.models import User, VerificationCode
+from squid.users.infrastructure.models import CreatorAlias, CreatorAliasClaim, User, VerificationCode
 from squid.voting.infrastructure.models import VoteSession
 
 
@@ -19,7 +19,12 @@ from squid.voting.infrastructure.models import VoteSession
         (Build, "submission_time"),
         (BuildEditHistory, "created_at"),
         (Message, "updated_at"),
+        (CreatorAlias, "claimed_at"),
+        (CreatorAlias, "created_at"),
+        (CreatorAliasClaim, "created_at"),
+        (CreatorAliasClaim, "resolved_at"),
         (RestrictionAlias, "created_at"),
+        (User, "consented_at"),
         (User, "created_at"),
         (VerificationCode, "created"),
         (VerificationCode, "expires"),

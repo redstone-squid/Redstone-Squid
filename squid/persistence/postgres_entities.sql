@@ -309,7 +309,7 @@ BEGIN
         WHEN 'restrictions' THEN 'restriction'
         WHEN 'restriction_aliases' THEN 'restriction'
         WHEN 'types' THEN 'type'
-        WHEN 'users' THEN 'creator'
+        WHEN 'creator_aliases' THEN 'creator'
         WHEN 'versions' THEN 'version'
     END;
     IF TG_TABLE_NAME = 'restriction_aliases' THEN
@@ -344,11 +344,11 @@ BEGIN
         WHERE bt.type_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
-    ELSIF TG_TABLE_NAME = 'users' THEN
+    ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         SELECT 'build', bc.build_id::text, 'upsert', now()
         FROM public.build_creators bc
-        WHERE bc.user_id = target_id
+        WHERE bc.alias_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
@@ -434,7 +434,7 @@ CREATE TRIGGER restriction_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDA
 
 CREATE TRIGGER types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.types FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
-CREATE TRIGGER users_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+CREATE TRIGGER creator_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.creator_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 

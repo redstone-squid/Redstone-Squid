@@ -31,6 +31,9 @@ class UserDataConsentView(ErrorHandledLayoutView):
                         "To link your accounts, Redstone Squid will store your Discord user ID, Minecraft UUID, "
                         "and current Minecraft username. This information is used to identify you as a build creator "
                         "and keep your Discord and Minecraft accounts linked.\n\n"
+                        "Linking also claims any existing build credit under your verified Minecraft username, "
+                        "so those builds are attributed to your account. Credits already claimed by someone else "
+                        "are left alone; you can ask staff to review them with `/account claim`.\n\n"
                         "Selecting **Agree and link** records the notice version and time of your consent. "
                         "Selecting **Cancel** stores no user account information."
                     ),

@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -48,7 +49,8 @@ from squid.tags.infrastructure.models import (
 from squid.tags.infrastructure.models import (
     TagDefinition as SQLTagDefinition,
 )
-from squid.users.infrastructure.models import User
+from squid.users.domain import normalize_ign
+from squid.users.infrastructure.models import CreatorAlias, User
 from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
@@ -112,8 +114,11 @@ class BuildRepository:
                 msg = "Submitter ID must be set for new builds."
                 raise InvalidStateError(msg, context={"resource": "build"})
 
-            # Create new build - determine the right subclass
-            if build.category == BuildCategory.DOOR:
+            if build.category != BuildCategory.DOOR:
+                msg = f"Only doors are supported for now, got {build.category}."
+                raise InvalidBuildError(msg, context={"category": build.category})
+
+            async with self._session_factory() as session:
                 sql_build = Door(
                     submission_status=build.submission_status or Status.PENDING,
                     record_category=None,
@@ -125,7 +130,7 @@ class BuildRepository:
                     completion_evidence=build.completion_evidence,
                     description=build.description,
                     category=build.category,
-                    submitter_id=build.submitter_id,
+                    submitter_user_id=await self._get_or_create_account(session, build.submitter_id),
                     version_spec=build.version_spec,
                     ai_generated=build.ai_generated or False,
                     embedding=build.embedding,
@@ -141,11 +146,6 @@ class BuildRepository:
                     visible_opening_time=build.visible_opening_time,
                     visible_closing_time=build.visible_closing_time,
                 )
-            else:
-                msg = f"Only doors are supported for now, got {build.category}."
-                raise InvalidBuildError(msg, context={"category": build.category})
-
-            async with self._session_factory() as session:
                 await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
                 await session.flush()
@@ -189,7 +189,7 @@ class BuildRepository:
             sql_build.completion_at = build.completion_at
             sql_build.completion_evidence = build.completion_evidence
             sql_build.description = build.description
-            sql_build.submitter_id = build.submitter_id
+            sql_build.submitter_user_id = await self._get_or_create_account(session, build.submitter_id)
             sql_build.version_spec = build.version_spec
             sql_build.ai_generated = build.ai_generated or False
             sql_build.embedding = build.embedding
@@ -223,8 +223,8 @@ class BuildRepository:
         """Set up all relationships for the build using SQLAlchemy's relationship handling."""
         # Handle creators
         if build.creators_ign:
-            creators = await self._get_or_create_users(session, build.creators_ign)
-            sql_build.build_creators.extend(BuildCreator(user_id=user.id) for user in creators)
+            alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
+            sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
 
         # Handle restrictions
         all_restrictions = (
@@ -345,22 +345,62 @@ class BuildRepository:
         ]
 
     @staticmethod
-    async def _get_or_create_users(session: AsyncSession, igns: list[str]) -> list[User]:
-        """Get or create User objects for the given IGNs."""
-        users: list[User] = []
+    async def _get_or_create_account(session: AsyncSession, discord_id: int) -> int:
+        """Return the ``users.id`` for *discord_id*, creating a bare row if needed.
+
+        A submitter-only row holds nothing beyond the Discord snowflake the bot
+        already needs for ownership checks, so it carries no consent receipt;
+        the receipt covers the Minecraft link, which such a row does not have.
+        """
+        user_id = await session.scalar(select(User.id).where(User.discord_id == discord_id))
+        if user_id is not None:
+            return user_id
+        result = await session.execute(
+            pg_insert(User)
+            .values(discord_id=discord_id)
+            .on_conflict_do_nothing(index_elements=[User.discord_id])
+            .returning(User.id)
+        )
+        user_id = result.scalar_one_or_none()
+        if user_id is not None:
+            return user_id
+        # A concurrent submission inserted the same submitter first.
+        return (await session.execute(select(User.id).where(User.discord_id == discord_id))).scalar_one()
+
+    @staticmethod
+    async def _get_or_create_aliases(session: AsyncSession, igns: list[str]) -> list[int]:
+        """Return the creator alias IDs for *igns*, creating missing names.
+
+        Names are matched case-insensitively via the ``normalized_name``
+        generated column, so ``Foo`` and ``foo`` share one credit. The insert
+        relies on that column's unique constraint rather than a read-then-write,
+        so two submissions naming the same creator cannot race.
+        """
+        alias_ids: list[int] = []
+        seen: set[str] = set()
         for ign in igns:
-            stmt = select(User).where(User.ign == ign)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
+            name = ign.strip()
+            normalized = normalize_ign(name)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
 
-            if user is None:
-                user = User(ign=ign)
-                session.add(user)
-                await session.flush()  # Get the ID
+            alias_id = await session.scalar(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+            if alias_id is None:
+                result = await session.execute(
+                    pg_insert(CreatorAlias)
+                    .values(name=name)
+                    .on_conflict_do_nothing(index_elements=[CreatorAlias.normalized_name])
+                    .returning(CreatorAlias.id)
+                )
+                alias_id = result.scalar_one_or_none()
+            if alias_id is None:
+                alias_id = (
+                    await session.execute(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+                ).scalar_one()
+            alias_ids.append(alias_id)
 
-            users.append(user)
-
-        return users
+        return alias_ids
 
     @staticmethod
     async def _get_restrictions(
