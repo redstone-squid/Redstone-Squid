@@ -229,6 +229,51 @@ class GoogleConfig(_FrozenModel):
         return self._credentials_info
 
 
+class SchematicConfig(_FrozenModel):
+    """Schematic engine resource budgets and worker supervision settings.
+
+    Every field is reachable in a single `env_nested_delimiter` split, e.g.
+    `SQUID_SCHEMATIC_WORKERS`. Two-level names such as `schematic.worker.count` would not
+    resolve, because `_ProcessSettings` sets `env_nested_max_split=1`.
+    """
+
+    enabled: bool = True
+    """Whether to use the native engine at all, even when it is installed."""
+    workers: int = Field(default=2, ge=1, le=8)
+    """How many supervised worker subprocesses to run."""
+
+    max_upload_bytes: int = Field(default=2 * 1024 * 1024, ge=1)
+    """Largest attachment accepted, checked before the file is downloaded from Discord."""
+    max_inflated_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
+    """Largest inflated size accepted, enforced while streaming decompression."""
+    max_allocated_volume: int = Field(default=20_000_000, ge=1)
+    """Largest allocated bounding box accepted, checked in the worker right after loading."""
+    lattice_max_block_count: int = Field(default=200_000, ge=0)
+    """Block count above which repeating-structure detection is skipped as too expensive."""
+
+    parse_timeout_seconds: float = Field(default=5.0, gt=0)
+    compare_timeout_seconds: float = Field(default=15.0, gt=0)
+    convert_timeout_seconds: float = Field(default=15.0, gt=0)
+    render_timeout_seconds: float = Field(default=45.0, gt=0)
+    simulate_timeout_seconds: float = Field(default=90.0, gt=0)
+
+    worker_memory_limit_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
+    """`RLIMIT_AS` applied in the child before the engine is imported."""
+    worker_cpu_seconds: int = Field(default=900, ge=1)
+    """Cumulative `RLIMIT_CPU` backstop. Reaching it recycles the worker; the per-operation
+    deadline, not this, is what bounds a single request."""
+    worker_file_size_limit_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
+    """`RLIMIT_FSIZE` applied in the child. The worker exchanges bytes over pipes and has no
+    legitimate reason to write a large file."""
+
+    restart_backoff_seconds: float = Field(default=1.0, gt=0)
+    """Base delay for the exponential backoff between worker restarts."""
+    max_restarts_per_window: int = Field(default=5, ge=1)
+    restart_window_seconds: float = Field(default=60.0, gt=0)
+    """Crashing more than `max_restarts_per_window` times inside this window trips the circuit
+    breaker, so a payload a user keeps retrying cannot fork-bomb the host."""
+
+
 class LogConfig(_FrozenModel):
     """Environment-facing shared logging configuration."""
 
@@ -284,6 +329,7 @@ class RuntimeConfig(_FrozenModel):
     database: DatabaseConfig
     openai: OpenAIConfig
     embeddings: EmbeddingConfig
+    schematics: SchematicConfig
     verification_code_pepper: SecretStr
 
 
@@ -304,6 +350,7 @@ class _ProcessSettings(BaseSettings):
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     vector: VectorConfig = VectorConfig()
+    schematic: SchematicConfig = SchematicConfig()
     log: LogConfig = LogConfig()
 
     @property
@@ -318,6 +365,7 @@ class _ProcessSettings(BaseSettings):
                 model=self.embedding.model,
                 database_connection=self.vector.database_url,
             ),
+            schematics=self.schematic,
             verification_code_pepper=self.verification.code_pepper,
         )
 
@@ -374,6 +422,7 @@ class ApplicationConfig(BotProcessConfig):
                     "openai",
                     "embedding",
                     "vector",
+                    "schematic",
                     "log",
                     "development_mode",
                     "discord",
@@ -388,7 +437,9 @@ class ApplicationConfig(BotProcessConfig):
     def api_process(self) -> ApiProcessConfig:
         """Project the combined settings into the HTTP API process."""
         return ApiProcessConfig.model_validate(
-            self.model_dump(include={"database", "verification", "openai", "embedding", "vector", "log", "api"})
+            self.model_dump(
+                include={"database", "verification", "openai", "embedding", "vector", "schematic", "log", "api"}
+            )
         )
 
 
@@ -463,6 +514,7 @@ __all__ = [
     "LoggingConfig",
     "OpenAIConfig",
     "RuntimeConfig",
+    "SchematicConfig",
     "load_api_process_config",
     "load_application_config",
     "load_bot_process_config",
