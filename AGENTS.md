@@ -9,3 +9,7 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 - Do not `from __future__ import annotations`, use forward references in type hints instead.
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
+
+### Git Workflow
+- Commit completed changes unless the user explicitly asks not to.
+- Keep commits small, cohesive, and easy to review.
