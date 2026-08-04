@@ -368,11 +368,11 @@ nodejs-wheel-binaries==24.16.0 \
     --hash=sha256:db8a8a76ebd2b28ecbfc9ad464baa3707241b9e050a30e2efdf6f60c0f886502 \
     --hash=sha256:f1a3d8f7b4491cbbd023ba3fc4e901fcca2d9fb80d57f24ba3890de8b1dbac03
     # via basedpyright
-nucleation==0.10.0 ; platform_machine == 'arm64' or platform_machine == 'x86_64' \
-    --hash=sha256:5a25f1b3fb38dece6010e45608598d5e7dfe2f8ba49a7f276cafd4a62507eb2a \
-    --hash=sha256:63f80e90808306b1d2c62c84ebbec97c9a43f9b596ee2c3fd6f682a78d026227 \
-    --hash=sha256:6fe114998eea303ddcaf84f572bd14d738228a7da10cac457b68dc43884d1e77 \
-    --hash=sha256:ec59a558ab72edbaa0e5e1962a96017f9ff75baf04d96f6161e0c227ec73eb97
+nucleation==0.10.1 ; platform_machine == 'arm64' or platform_machine == 'x86_64' \
+    --hash=sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b \
+    --hash=sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba \
+    --hash=sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d \
+    --hash=sha256:a4b2ee2ff168c696da3d05ac619b77c73f33e659b0763cf969496f5e8e894d90
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661

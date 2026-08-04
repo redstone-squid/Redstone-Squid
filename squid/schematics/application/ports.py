@@ -145,6 +145,10 @@ class SchematicStore(Protocol):
         byte_size: int,
     ) -> StoredRender: ...
 
+    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
+        """Persist moderator-facing simulation evidence for one attachment."""
+        ...
+
 
 class SchematicResourcePackProvider(Protocol):
     """Lazy source for verified resource-pack bytes and their SHA-256 digest."""

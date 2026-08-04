@@ -17,10 +17,11 @@ from discord.ext.commands import Context
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.utils.components import StaticLayout, no_mentions, text_layout
+from squid.bot.utils.permissions import check_is_trusted_or_staff
 from squid.builds.application import BuildService
 from squid.core.i18n import _
 from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
-from squid.schematics.domain.models import SchematicFormat
+from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -51,7 +52,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         """Inspect, download, and convert a build's schematic."""
         await ctx.send_help("build schematic")
 
-    @schematic_group.command(name="info")
+    @schematic_group.command(name="info")  # type: ignore
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect.")))
     async def schematic_info(self, ctx: Context[BotT], build_id: int) -> None:
         """Show what the engine read out of the build's schematic."""
@@ -65,7 +66,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
-    @schematic_group.command(name="download")
+    @schematic_group.command(name="download")  # type: ignore
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to download.")),
         file_format=app_commands.locale_str(_("The file format to convert to.")),
@@ -97,7 +98,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
-    @schematic_group.command(name="convert")
+    @schematic_group.command(name="convert")  # type: ignore
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to convert.")),
         data_version=app_commands.locale_str(_("The Minecraft data version to target, e.g. 2586.")),
@@ -132,8 +133,56 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
+    @BuildCommandGroup.build_hybrid_group.command(name="measure-timing")  # type: ignore
+    @check_is_trusted_or_staff()
+    @app_commands.describe(
+        build_id=app_commands.locale_str(_("The submission ID whose schematic to simulate.")),
+        input_position=app_commands.locale_str(_("An input block as x y z, required when several exist.")),
+    )
+    async def measure_timing(
+        self,
+        ctx: Context[BotT],
+        build_id: int,
+        input_position: str | None = None,
+    ) -> None:
+        """Measure moderator-facing piston timing without changing the submitted value."""
+        await ctx.defer(ephemeral=True)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=True)
+        if stored is None:
+            return
+        position = _parse_position(input_position)
+        if input_position is not None and position is None:
+            await _say(
+                ctx, t(locale, _("Input position must contain three integers, for example `12 5 -3`.")), ephemeral=True
+            )
+            return
+        result = await self.schematics.measure_timing(build_id, input_position=position)
+        await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
+
+    @BuildCommandGroup.build_hybrid_group.command(name="detect-lattice")  # type: ignore
+    @check_is_trusted_or_staff()
+    @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
+    async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
+        """Show the repeating unit detected during schematic analysis."""
+        await ctx.defer(ephemeral=True)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=True)
+        if stored is None:
+            return
+        lattice = await self.schematics.detect_lattice(build_id)
+        if lattice is None:
+            await _say(ctx, t(locale, _("No repeating lattice was detected in this schematic.")), ephemeral=True)
+            return
+        await _say(ctx, _describe_lattice(lattice, locale=locale), ephemeral=True)
+
     async def _primary_or_explain(
-        self, ctx: Context[BotT], build_id: int, *, locale: str | None
+        self,
+        ctx: Context[BotT],
+        build_id: int,
+        *,
+        locale: str | None,
+        ephemeral: bool = False,
     ) -> StoredSchematic | None:
         """Fetch the build's primary schematic, explaining plainly when there is none.
 
@@ -142,17 +191,17 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         raised as errors.
         """
         if not self.schematics.available:
-            await _say(ctx, t(locale, _("Schematic support is not enabled on this instance.")))
+            await _say(ctx, t(locale, _("Schematic support is not enabled on this instance.")), ephemeral=ephemeral)
             return None
         stored = await self.schematics.primary_for_build(build_id)
         if stored is None:
-            await _say(ctx, t(locale, _("Build `{id}` has no schematic attached."), id=build_id))
+            await _say(ctx, t(locale, _("Build `{id}` has no schematic attached."), id=build_id), ephemeral=ephemeral)
             return None
         return stored
 
 
-async def _say(ctx: Context["squid.bot.app.RedstoneSquid"], message: str) -> None:
-    await ctx.send(view=text_layout(message), allowed_mentions=no_mentions())
+async def _say(ctx: Context["squid.bot.app.RedstoneSquid"], message: str, *, ephemeral: bool = False) -> None:
+    await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
 
 
 def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
@@ -178,6 +227,14 @@ def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
         lines.append(t(locale, _("**Declared author**: {author}"), author=metrics.declared_author))
     if stored.analysis.lattice is not None and stored.analysis.lattice.label:
         lines.append(t(locale, _("**Repeating unit**: {label}"), label=stored.analysis.lattice.label))
+    if stored.simulation_evidence is not None and stored.simulation_evidence.last_piston_tick is not None:
+        lines.append(
+            t(
+                locale,
+                _("**Simulated piston activity**: {ticks} gt (moderator evidence only)"),
+                ticks=stored.simulation_evidence.last_piston_tick + 1,
+            )
+        )
     if metrics.signs:
         joined = " / ".join(sign.text.replace("\n", " ") for sign in metrics.signs[:5])
         lines.append(t(locale, _("**Signs**: {text}"), text=joined))
@@ -192,3 +249,89 @@ def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
         )
     )
     return "\n".join(lines)
+
+
+def _parse_position(value: str | None) -> Vector3 | None:
+    if value is None:
+        return None
+    try:
+        parts = tuple(int(part) for part in value.replace(",", " ").split())
+    except ValueError:
+        return None
+    if len(parts) != 3:
+        return None
+    return parts
+
+
+def _describe_timing(result: SimulationResult, *, locale: str | None) -> str:
+    position = result.input_position or (0, 0, 0)
+    lines = [
+        t(locale, _("### Simulated timing evidence")),
+        t(
+            locale,
+            _("**Input**: ({x}, {y}, {z}) ({source})"),
+            x=position[0],
+            y=position[1],
+            z=position[2],
+            source=result.input_source or "unknown",
+        ),
+    ]
+    if result.last_piston_tick is not None:
+        lines.append(
+            t(
+                locale,
+                _("**Last piston movement**: tick {tick} ({duration} gt after input)"),
+                tick=result.last_piston_tick,
+                duration=result.last_piston_tick + 1,
+            )
+        )
+    else:
+        lines.append(t(locale, _("**Last piston movement**: none observed")))
+    lines.extend(
+        (
+            t(locale, _("**Settled**: {tick}"), tick=result.settled_tick if result.settled_tick is not None else "no"),
+            t(
+                locale,
+                _("**Evidence**: {changes} block changes; {pistons} piston events; {redstone} redstone events"),
+                changes=result.block_changes,
+                pistons=result.piston_events,
+                redstone=result.redstone_events,
+            ),
+            t(
+                locale,
+                _("**Integrity checks**: {status}"),
+                status="passed" if result.trustworthy else "inconclusive",
+            ),
+        )
+    )
+    lines.extend(f"- {note}" for note in result.notes)
+    lines.append(
+        t(
+            locale,
+            _("-# Moderator evidence only. This does not alter the human-declared or official record timing."),
+        )
+    )
+    return "\n".join(lines)
+
+
+def _describe_lattice(lattice: AutostackLattice, *, locale: str | None) -> str:
+    cell = tuple(high - low + 1 for low, high in zip(lattice.cell_min, lattice.cell_max, strict=True))
+    vectors = ", ".join(f"({x}, {y}, {z})" for x, y, z in lattice.vectors)
+    return "\n".join(
+        (
+            t(locale, _("### Detected repeating lattice")),
+            t(
+                locale,
+                _("**Repeating unit**: {width} x {height} x {length}"),
+                width=cell[0],
+                height=cell[1],
+                length=cell[2],
+            ),
+            t(locale, _("**Stack vector(s)**: {vectors}"), vectors=vectors),
+            t(locale, _("**Coverage**: {coverage:.1%}"), coverage=lattice.coverage),
+            t(
+                locale,
+                _("-# Structured expansion evidence only; it does not establish the valid expandable domain."),
+            ),
+        )
+    )

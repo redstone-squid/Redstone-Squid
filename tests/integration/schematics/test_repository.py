@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
-from squid.schematics.domain.models import FingerprintPreset, SchematicFormat
+from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SimulationResult
 from squid.schematics.infrastructure.repository import SchematicRepository
 from tests.unit.schematics.fakes import make_analysis
 
@@ -168,3 +168,28 @@ async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
     with pytest.raises(IntegrityError):
         await repository.put_file(b"\x00" * (2 * 1024 * 1024 + 1), source_format=SchematicFormat.LITEMATIC)
+
+
+async def test_simulation_evidence_round_trips_without_changing_the_analysis(
+    repository: SchematicRepository,
+) -> None:
+    digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
+    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    evidence = SimulationResult(
+        ticks_run=9,
+        settled_tick=9,
+        input_position=(7, 3, 0),
+        input_source="heuristic",
+        last_piston_tick=8,
+        block_changes=621,
+        piston_events=30,
+        redstone_events=60,
+        trustworthy=True,
+    )
+
+    await repository.record_simulation(schematic_id, evidence)
+
+    stored = await repository.get_primary(1)
+    assert stored is not None
+    assert stored.simulation_evidence == evidence
+    assert stored.analysis.metrics.block_count == make_analysis().metrics.block_count

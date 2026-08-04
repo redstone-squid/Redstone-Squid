@@ -8,7 +8,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from squid.core.errors import SquidError
-from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest
+from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
     SchematicResourcePackProvider,
@@ -25,10 +25,13 @@ from squid.schematics.application.queries import (
 from squid.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
+    AutostackLattice,
     FingerprintPreset,
     SchematicAnalysis,
     SchematicFormat,
     SchematicLimits,
+    SimulationResult,
+    Vector3,
     VersionLossEntry,
 )
 from squid.schematics.errors import (
@@ -408,6 +411,47 @@ class SchematicService:
                 )
 
         return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
+
+    async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
+        """Return the opportunistically detected repeating unit for a build."""
+        self._require_available()
+        stored = await self._store.get_primary(build_id)
+        if stored is None:
+            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+        return stored.analysis.lattice
+
+    async def measure_timing(
+        self,
+        build_id: int,
+        *,
+        input_position: Vector3 | None = None,
+        max_ticks: int = 200,
+    ) -> SimulationResult:
+        """Run and persist staff-facing timing evidence without editing the build timing."""
+        self._require_available()
+        capabilities = await self._analyzer.capabilities()
+        if not capabilities.can_simulate:
+            msg = "This schematic engine does not provide the verified tick simulator."
+            raise SchematicSupportUnavailableError(msg)
+        stored = await self._store.get_primary(build_id)
+        if stored is None:
+            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+        if stored.file_sha256 in self._poisoned:
+            msg = "This file has already crashed the schematic engine on this instance."
+            raise InvalidSchematicError(msg)
+        data = await self._store.get_file(stored.file_sha256)
+        if data is None:
+            raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
+        try:
+            result = await self._analyzer.simulate(
+                data,
+                request=SimulationRequest(input_position=input_position, max_ticks=max_ticks),
+            )
+        except SchematicWorkerCrashedError:
+            self._poisoned.add(stored.file_sha256)
+            raise
+        await self._store.record_simulation(stored.id, result)
+        return result
 
     async def aclose(self) -> None:
         """Release the analyzer's process-level resources at shutdown."""

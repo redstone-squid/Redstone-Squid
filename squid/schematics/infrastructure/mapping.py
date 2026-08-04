@@ -12,6 +12,8 @@ from squid.schematics.domain.models import (
     SchematicFormat,
     SchematicMetrics,
     SchematicSign,
+    SimulationResult,
+    SimulationSample,
     Vector3,
 )
 from squid.schematics.infrastructure.models import BuildSchematic
@@ -88,6 +90,7 @@ def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, 
             analysis_schema_version=row.analysis_schema_version,
             lattice=_lattice_from_json(row.lattice),
         ),
+        simulation_evidence=_simulation_from_json(row.simulation_evidence),
     )
 
 
@@ -118,6 +121,63 @@ def _lattice_from_json(payload: Mapping[str, Any] | None) -> AutostackLattice | 
         region_min=_vector(payload["region_min"]),
         region_max=_vector(payload["region_max"]),
         label=payload.get("label"),
+    )
+
+
+def simulation_to_json(result: SimulationResult) -> dict[str, Any]:
+    """Flatten persisted simulation evidence into JSON-safe values."""
+    return {
+        "ticks_run": result.ticks_run,
+        "settled_tick": result.settled_tick,
+        "input_position": list(result.input_position) if result.input_position is not None else None,
+        "input_source": result.input_source,
+        "last_piston_tick": result.last_piston_tick,
+        "block_changes": result.block_changes,
+        "piston_events": result.piston_events,
+        "redstone_events": result.redstone_events,
+        "trustworthy": result.trustworthy,
+        "samples": [
+            {
+                "tick": sample.tick,
+                "x": sample.x,
+                "y": sample.y,
+                "z": sample.z,
+                "powered": sample.powered,
+                "signal_strength": sample.signal_strength,
+            }
+            for sample in result.samples
+        ],
+        "notes": list(result.notes),
+    }
+
+
+def _simulation_from_json(payload: Mapping[str, Any] | None) -> SimulationResult | None:
+    if not payload:
+        return None
+    input_position = payload.get("input_position")
+    source = payload.get("input_source")
+    return SimulationResult(
+        ticks_run=int(payload["ticks_run"]),
+        settled_tick=int(payload["settled_tick"]) if payload.get("settled_tick") is not None else None,
+        input_position=_vector(input_position) if input_position is not None else None,
+        input_source=cast(Literal["insign", "heuristic", "manual"], source) if source else None,
+        last_piston_tick=(int(payload["last_piston_tick"]) if payload.get("last_piston_tick") is not None else None),
+        block_changes=int(payload.get("block_changes", 0)),
+        piston_events=int(payload.get("piston_events", 0)),
+        redstone_events=int(payload.get("redstone_events", 0)),
+        trustworthy=bool(payload.get("trustworthy", False)),
+        samples=tuple(
+            SimulationSample(
+                tick=int(sample["tick"]),
+                x=int(sample["x"]),
+                y=int(sample["y"]),
+                z=int(sample["z"]),
+                powered=bool(sample["powered"]),
+                signal_strength=int(sample["signal_strength"]),
+            )
+            for sample in cast(Sequence[Mapping[str, Any]], payload.get("samples", ()))
+        ),
+        notes=tuple(str(note) for note in cast(Sequence[object], payload.get("notes", ()))),
     )
 
 

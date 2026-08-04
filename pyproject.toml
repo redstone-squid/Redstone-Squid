@@ -42,7 +42,7 @@ dependencies = [
 #
 # Pinned exactly, not ranged: fingerprints and data-version loss reports are version-scoped
 # outputs we persist, so upgrading is a deliberate act that requires a backfill plan.
-schematics = ["nucleation==0.10.0"]
+schematics = ["nucleation==0.10.1"]
 
 [project.urls]
 "Source Code" = "https://github.com/redstone-squid/Redstone-Squid"
@@ -68,7 +68,7 @@ dev = [
     "schemathesis>=4.24.2",
     # Matches the 'schematics' extra so CI (x86_64 Linux) always exercises the real adapter
     # rather than only the fakes.
-    "nucleation==0.10.0 ; platform_machine == 'x86_64' or platform_machine == 'arm64'",
+    "nucleation==0.10.1 ; platform_machine == 'x86_64' or platform_machine == 'arm64'",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
@@ -93,7 +93,7 @@ exclude-newer = "7 days"
 # the global cutoff would pin us to a version several API generations behind the one this
 # integration targets. Carved out deliberately: the dependency is pinned exactly and its
 # wheel hashes are locked, and it is an optional extra that no default deployment installs.
-exclude-newer-package = { nucleation = "2026-08-04T00:00:00Z" }
+exclude-newer-package = { nucleation = "2026-08-05T00:00:00Z" }
 
 [tool.ruff]
 line-length = 120

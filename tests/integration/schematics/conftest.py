@@ -6,6 +6,7 @@ engine can produce exactly the shapes each test needs.
 """
 
 import base64
+import json
 from collections.abc import Callable
 
 import pytest
@@ -32,6 +33,35 @@ def periodic_door() -> Callable[..., bytes]:
         return base64.b64decode(schematic.to_litematic_b64())
 
     return build
+
+
+@pytest.fixture
+def piston_door() -> bytes:
+    """A button-driven piston scene with a deterministic full cycle."""
+    schematic = nucleation.Schematic.create("piston-door")
+    for x in range(6):
+        schematic.set_block(x, 0, 0, "minecraft:smooth_stone")
+    schematic.set_block(0, 1, 0, "minecraft:oak_button[face=floor,facing=east,powered=false]")
+    schematic.set_block(1, 1, 0, "minecraft:redstone_wire{simulate=true}")
+    schematic.set_block(2, 1, 0, "minecraft:redstone_wire{simulate=true}")
+    schematic.set_block(3, 1, 0, "minecraft:sticky_piston[facing=east,extended=false]")
+    schematic.set_block(4, 1, 0, "minecraft:stone")
+    return base64.b64decode(schematic.to_litematic_b64())
+
+
+@pytest.fixture
+def insign_piston_door(piston_door: bytes) -> bytes:
+    """A two-input scene whose Insign annotation identifies the door button."""
+    schematic = nucleation.Schematic.from_data(piston_door)
+    schematic.set_block(5, 1, 0, "minecraft:stone_button[face=floor,facing=east,powered=false]")
+    sign_nbt = {
+        "Text1": '{"text":"@io.door=rc([0,-1,-1],[0,-1,-1])"}',
+        "Text2": '{"text":"#io.door:type=\\"input\\""}',
+        "Text3": '{"text":"#io.door:data_type=\\"bool\\""}',
+        "Text4": '{"text":""}',
+    }
+    schematic.set_block_with_nbt(0, 2, 1, "minecraft:oak_sign[rotation=0]", json.dumps(sign_nbt))
+    return base64.b64decode(schematic.to_litematic_b64())
 
 
 @pytest.fixture(scope="session")

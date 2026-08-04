@@ -183,9 +183,18 @@ def encode_simulation(result: SimulationResult) -> Mapping[str, Any]:
 
 
 def decode_simulation(payload: Mapping[str, Any]) -> SimulationResult:
+    input_position = payload.get("input_position")
+    input_source = payload.get("input_source")
     return SimulationResult(
         ticks_run=int(payload["ticks_run"]),
         settled_tick=_optional_int(payload.get("settled_tick")),
+        input_position=_vector(input_position) if input_position is not None else None,
+        input_source=cast(Literal["insign", "heuristic", "manual"], input_source) if input_source else None,
+        last_piston_tick=_optional_int(payload.get("last_piston_tick")),
+        block_changes=int(payload.get("block_changes", 0)),
+        piston_events=int(payload.get("piston_events", 0)),
+        redstone_events=int(payload.get("redstone_events", 0)),
+        trustworthy=bool(payload.get("trustworthy", False)),
         samples=tuple(
             SimulationSample(
                 tick=int(sample["tick"]),

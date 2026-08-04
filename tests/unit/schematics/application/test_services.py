@@ -6,7 +6,13 @@ import zlib
 import pytest
 
 from squid.schematics.application import ConvertRequest, IngestRequest, SchematicService
-from squid.schematics.domain.models import FingerprintPreset, SchematicComparison, SchematicFormat, SchematicLimits
+from squid.schematics.domain.models import (
+    AutostackLattice,
+    FingerprintPreset,
+    SchematicComparison,
+    SchematicFormat,
+    SchematicLimits,
+)
 from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
@@ -313,3 +319,30 @@ async def test_render_worker_crash_is_not_retried() -> None:
     await store.record_analysis(8, store.records[0][1], analyzer.analysis, primary=True)
     assert await schematics.prepare_render(8) is None
     assert len(analyzer.render_calls) == 1
+
+
+async def test_measure_timing_persists_evidence_without_editing_a_build() -> None:
+    schematics, analyzer, store = service()
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+
+    result = await schematics.measure_timing(7, input_position=(12, 5, -3))
+
+    assert result is analyzer.simulation_output
+    assert analyzer.simulate_calls[0][1].input_position == (12, 5, -3)
+    assert store.simulations[1] is result
+
+
+async def test_detect_lattice_returns_the_persisted_highest_coverage_candidate() -> None:
+    lattice = AutostackLattice(
+        mode="1d",
+        vectors=((0, 3, 0),),
+        coverage=0.97,
+        cell_min=(0, 0, 0),
+        cell_max=(2, 2, 6),
+        region_min=(0, 0, 0),
+        region_max=(2, 11, 6),
+    )
+    schematics, _, _ = service(FakeSchematicAnalyzer(make_analysis(lattice=lattice)))
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+
+    assert await schematics.detect_lattice(7) == lattice

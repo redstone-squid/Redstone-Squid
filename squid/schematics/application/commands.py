@@ -64,7 +64,6 @@ class SimulationRequest:
     coordinate supplied by a moderator.
     """
 
-    input_position: Vector3
+    input_position: Vector3 | None = None
     watch_positions: tuple[Vector3, ...] = ()
     max_ticks: int = 200
-    settle_ticks: int = 4

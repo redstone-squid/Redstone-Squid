@@ -36,7 +36,9 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "build": (
         "approve",
         "debug",
+        "detect-lattice",
         "edit",
+        "measure-timing",
         "queue",
         "recalc",
         "reject",
@@ -107,8 +109,10 @@ def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
         {
             "build approve": 2,
             "build debug": 1,
+            "build detect-lattice": 1,
             "build reject": 2,
             "build edit": 2,
+            "build measure-timing": 1,
             "build recalc": 2,
         },
     )

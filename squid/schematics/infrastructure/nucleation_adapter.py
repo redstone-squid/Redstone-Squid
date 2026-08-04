@@ -88,7 +88,7 @@ def capabilities() -> AnalyzerCapabilities:
         available=True,
         analyzer_version=analyzer_version(),
         can_render=hasattr(nucleation, "Renderer"),
-        can_simulate=hasattr(nucleation, "MchprsWorld"),
+        can_simulate=hasattr(nucleation, "TickSimulation"),
     )
 
 
@@ -185,20 +185,145 @@ def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> byte
 
 
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
-    """Run the redstone simulator. Phase 4 gates this behind a fidelity experiment."""
-    msg = "Redstone simulation is not enabled yet."
-    raise InvalidSchematicError(msg, developer_action="Phase 4 gates simulation on a timing-fidelity experiment.")
+    """Actuate one input and collect moderator-facing piston timing evidence.
+
+    The 0.10.1 tick engine is distinct from the MCHPRS circuit evaluator: it models piston
+    movement and vanilla tick ordering and is conformance-tested against captured community
+    doors. A saved schematic is loaded in ``InWorld`` mode so placement does not spuriously
+    pulse every observer before the moderator presses the input.
+    """
+    schematic = _load(data)
+    try:
+        simulation = nucleation.TickSimulation.from_schematic(
+            schematic,
+            nucleation.TickSettleMode.InWorld,
+            0,
+            0,
+            0,
+            "",
+        )
+    except Exception as exc:
+        detail = _optional(lambda: str(nucleation.TickSimulation.last_error_detail()), "")
+        msg = detail or str(exc) or "The tick engine could not load this schematic."
+        raise InvalidSchematicError(msg, context={"engine_error": msg}) from exc
+
+    if int(simulation.changes_count()) != 0 or not bool(simulation.is_quiescent()):
+        msg = "This schematic was already active when loaded, so a timing would be unreliable."
+        raise InvalidSchematicError(msg, end_user_action="Save the build while it is completely at rest.")
+
+    snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
+    input_position, input_source = _resolve_simulation_input(schematic, snapshot, request.input_position)
+    simulation.use_block(*input_position)
+    settled = bool(simulation.run_until_quiescent(request.max_ticks))
+
+    summary = _json_array(simulation.events_summary_json(), "simulation event summary")
+    event_rows = [cast(Mapping[str, Any], row) for row in summary if isinstance(row, dict)]
+    piston_ticks = [int(row["tick"]) for row in event_rows if int(row.get("piston", 0)) > 0]
+    audit = _json_object(nucleation.TickSimulation.block_entity_audit_json(schematic), "block entity audit")
+    missing_block_entities = int(audit.get("missing_total", 0))
+    unsupported_contacts = int(simulation.piston_retract_contacts())
+    notes: list[str] = []
+    if not settled:
+        notes.append(f"The build did not settle within the {request.max_ticks} gt budget.")
+    if missing_block_entities:
+        notes.append(f"The file is missing {missing_block_entities} block entity record(s).")
+    if unsupported_contacts:
+        notes.append(f"The run encountered {unsupported_contacts} unsupported piston/entity contact(s).")
+
+    return SimulationResult(
+        ticks_run=int(simulation.tick_count()),
+        settled_tick=int(simulation.tick_count()) if settled else None,
+        input_position=input_position,
+        input_source=input_source,
+        last_piston_tick=max(piston_ticks) if piston_ticks else None,
+        block_changes=int(simulation.changes_count()),
+        piston_events=sum(int(row.get("piston", 0)) for row in event_rows),
+        redstone_events=sum(int(row.get("redstone", 0)) for row in event_rows),
+        trustworthy=settled and missing_block_entities == 0 and unsupported_contacts == 0 and bool(piston_ticks),
+        notes=tuple(notes),
+    )
 
 
 def autostack(data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
     """Repeat a detected unit cell along its period vectors and re-encode the result."""
     schematic = _load(data)
-    if not lattice.vectors or not counts:
-        msg = "Autostack needs at least one period vector and one repeat count."
+    if lattice.mode == "1d" and len(lattice.vectors) == 1 and len(counts) == 1:
+        x, y, z = lattice.vectors[0]
+        resized = nucleation.Autostack.resize_1d(schematic, x, y, z, counts[0])
+    elif lattice.mode == "2d" and len(lattice.vectors) == 2 and len(counts) == 2:
+        (x1, y1, z1), (x2, y2, z2) = lattice.vectors
+        resized = nucleation.Autostack.resize_2d(schematic, x1, y1, z1, x2, y2, z2, counts[0], counts[1])
+    else:
+        msg = "Autostack repeat counts must match the detected lattice dimensions."
         raise InvalidSchematicError(msg)
-    x, y, z = lattice.vectors[0]
-    nucleation.Autostack.resize_1d(schematic, x, y, z, counts[0])
-    return _export(schematic, SchematicFormat.LITEMATIC)
+    return _export(resized, SchematicFormat.LITEMATIC)
+
+
+_INPUT_BLOCK_NAMES = ("lever", "_button")
+
+
+def _resolve_simulation_input(
+    schematic: "nucleation.Schematic",
+    snapshot: Sequence[object],
+    manual: Vector3 | None,
+) -> tuple[Vector3, Literal["insign", "heuristic", "manual"]]:
+    """Choose one actuator without ever guessing between ambiguous controls."""
+    controls: dict[Vector3, str] = {}
+    for item in snapshot:
+        if not isinstance(item, dict):
+            continue
+        entry = cast(Mapping[str, Any], item)
+        state = str(entry.get("state", ""))
+        position = _vector(entry.get("pos"))
+        if position is not None and any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
+            controls[position] = state
+
+    compiled = _json_object(schematic.compile_insign_json(), "Insign annotations")
+    annotated = _insign_input_positions(compiled)
+    annotated_controls = sorted(position for position in annotated if position in controls)
+    if len(annotated_controls) == 1:
+        return annotated_controls[0], "insign"
+    if len(controls) == 1:
+        return next(iter(controls)), "heuristic"
+    if manual is not None:
+        if manual not in controls:
+            msg = "The manual input coordinate is not a lever or button in this schematic."
+            raise InvalidSchematicError(msg, context={"input_position": manual})
+        return manual, "manual"
+
+    if not controls:
+        msg = "This schematic has no Insign input annotation and no lever or button."
+        action = "Add an @io.* input sign or provide a schematic with an interactable input."
+    else:
+        msg = "This schematic has several possible inputs, so choosing one automatically would be unsafe."
+        action = 'Run the command again with input_position:"x y z".'
+    raise InvalidSchematicError(msg, end_user_action=action)
+
+
+def _insign_input_positions(compiled: Mapping[str, Any]) -> set[Vector3]:
+    positions: set[Vector3] = set()
+    for name, raw_region in compiled.items():
+        if not str(name).startswith("io.") or not isinstance(raw_region, dict):
+            continue
+        region = cast(Mapping[str, Any], raw_region)
+        metadata = region.get("metadata")
+        if not isinstance(metadata, dict) or str(metadata.get("type", "")).lower() != "input":
+            continue
+        for raw_position in cast(Sequence[object], region.get("positions", ())):
+            position = _vector(raw_position)
+            if position is not None:
+                positions.add(position)
+        for raw_box in cast(Sequence[object], region.get("bounding_boxes", ())):
+            if not isinstance(raw_box, list) or len(raw_box) != 2:
+                continue
+            low, high = _vector(raw_box[0]), _vector(raw_box[1])
+            if low is None or high is None:
+                continue
+            for x in range(min(low[0], high[0]), max(low[0], high[0]) + 1):
+                for y in range(min(low[1], high[1]), max(low[1], high[1]) + 1):
+                    for z in range(min(low[2], high[2]), max(low[2], high[2]) + 1):
+                        positions.add((x, y, z))
+    return positions
 
 
 def _load(data: bytes) -> "nucleation.Schematic":
@@ -322,7 +447,7 @@ def _lattice(candidate: object) -> AutostackLattice | None:
     if mode not in ("1d", "2d") or not vectors or None in (cell_min, cell_max, region_min, region_max):
         return None
     return AutostackLattice(
-        mode=cast(Literal["1d", "2d"], mode),
+        mode=mode,
         vectors=vectors,
         coverage=float(entry.get("coverage", 0.0)),
         cell_min=cast(Vector3, cell_min),

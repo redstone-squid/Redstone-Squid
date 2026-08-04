@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from squid.schematics.domain.models import SchematicAnalysis
+from squid.schematics.domain.models import SchematicAnalysis, SimulationResult
 
 type DuplicateTier = Literal["identical", "structural-match", "near"]
 
@@ -18,6 +18,7 @@ class StoredSchematic:
     is_primary: bool
     original_filename: str | None
     analysis: SchematicAnalysis
+    simulation_evidence: SimulationResult | None = None
 
 
 @dataclass(frozen=True, slots=True)

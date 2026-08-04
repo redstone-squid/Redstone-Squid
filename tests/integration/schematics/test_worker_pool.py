@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator, Callable
 import pytest
 
 from squid.config import SchematicConfig
+from squid.schematics.application.commands import SimulationRequest
 from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.errors import (
     InvalidSchematicError,
@@ -38,7 +39,8 @@ async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWor
 
     assert capabilities.available is True
     assert capabilities.analyzer_version is not None
-    assert capabilities.analyzer_version == "nucleation-0.10.0"
+    assert capabilities.analyzer_version == "nucleation-0.10.1"
+    assert capabilities.can_simulate is True
 
 
 async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
@@ -88,6 +90,40 @@ async def test_repeating_structure_detection_recovers_the_period(
 
     assert analysis.lattice is not None
     assert (4, 0, 0) in analysis.lattice.vectors
+
+
+async def test_autostack_round_trip_at_the_original_counts_preserves_the_build(
+    pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
+) -> None:
+    original = periodic_door()
+    analysis = await pool.analyze(original, limits=SchematicLimits(), with_lattice=True)
+    assert analysis.lattice is not None
+
+    resized = await pool.autostack(original, lattice=analysis.lattice, counts=(6, 1))
+    comparison = await pool.compare(original, resized, preset=FingerprintPreset.EXACT)
+
+    assert comparison.identical is True
+
+
+async def test_tick_simulation_moves_a_piston_and_settles(pool: SchematicWorkerPool, piston_door: bytes) -> None:
+    result = await pool.simulate(piston_door, request=SimulationRequest())
+
+    assert result.input_position == (0, 1, 0)
+    assert result.input_source == "heuristic"
+    assert result.settled_tick is not None
+    assert result.last_piston_tick is not None
+    assert result.piston_events > 0
+    assert result.trustworthy is True
+
+
+async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguous(
+    pool: SchematicWorkerPool, insign_piston_door: bytes
+) -> None:
+    result = await pool.simulate(insign_piston_door, request=SimulationRequest())
+
+    assert result.input_position == (0, 1, 0)
+    assert result.input_source == "insign"
+    assert result.piston_events > 0
 
 
 async def test_a_round_trip_through_another_format_preserves_the_build(

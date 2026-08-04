@@ -117,8 +117,15 @@ def test_a_simulation_result_survives_encoding_and_decoding() -> None:
     result = SimulationResult(
         ticks_run=40,
         settled_tick=32,
+        input_position=(1, 2, 3),
+        input_source="insign",
+        last_piston_tick=9,
+        block_changes=51,
+        piston_events=12,
+        redstone_events=24,
+        trustworthy=True,
         samples=(SimulationSample(tick=4, x=1, y=2, z=3, powered=True, signal_strength=15),),
-        notes=("propagation delay only",),
+        notes=("capture-backed",),
     )
 
     assert wire.decode_simulation(wire.encode_simulation(result)) == result

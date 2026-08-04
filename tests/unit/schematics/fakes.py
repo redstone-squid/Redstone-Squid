@@ -4,7 +4,7 @@ Kept free of the native engine so the whole unit suite runs on a machine without
 extra installed, which is the deployment the null analyzer exists to support.
 """
 
-from squid.schematics.application.commands import RenderRequest
+from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.queries import StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -21,7 +21,6 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
-from squid.schematics.errors import InvalidSchematicError
 
 
 def make_analysis(
@@ -69,12 +68,29 @@ class FakeSchematicAnalyzer:
         self.convert_calls: list[tuple[SchematicFormat, int | None]] = []
         self.compare_calls: list[tuple[bytes, bytes, FingerprintPreset, float | None]] = []
         self.render_calls: list[tuple[bytes, RenderRequest, bytes | None]] = []
+        self.simulate_calls: list[tuple[bytes, SimulationRequest]] = []
         self.render_output = b"\x89PNG\r\n\x1a\nrendered"
+        self.simulation_output = SimulationResult(
+            ticks_run=9,
+            settled_tick=9,
+            input_position=(7, 3, 0),
+            input_source="heuristic",
+            last_piston_tick=8,
+            block_changes=621,
+            piston_events=30,
+            redstone_events=60,
+            trustworthy=True,
+        )
         self.comparisons: dict[bytes, SchematicComparison] = {}
         self.closed = False
 
     async def capabilities(self) -> AnalyzerCapabilities:
-        return AnalyzerCapabilities(available=True, analyzer_version=self.analysis.analyzer_version, can_render=True)
+        return AnalyzerCapabilities(
+            available=True,
+            analyzer_version=self.analysis.analyzer_version,
+            can_render=True,
+            can_simulate=True,
+        )
 
     async def analyze(
         self,
@@ -115,8 +131,11 @@ class FakeSchematicAnalyzer:
             raise self.failure
         return self.render_output
 
-    async def simulate(self, data: bytes, *, request: object) -> SimulationResult:
-        raise InvalidSchematicError
+    async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
+        self.simulate_calls.append((data, request))
+        if self.failure is not None:
+            raise self.failure
+        return self.simulation_output
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
         return b"stacked"
@@ -133,6 +152,7 @@ class FakeSchematicStore:
         self.records: list[tuple[int, str, SchematicAnalysis, bool]] = []
         self.stored: list[StoredSchematic] = []
         self.renders: dict[tuple[int, str], StoredRender] = {}
+        self.simulations: dict[int, SimulationResult] = {}
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
         import hashlib
@@ -237,6 +257,9 @@ class FakeSchematicStore:
         render = StoredRender(schematic_id, recipe_hash, url, width, height, byte_size)
         self.renders[(schematic_id, recipe_hash)] = render
         return render
+
+    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
+        self.simulations[schematic_id] = result
 
 
 class FakeVersionResolver:

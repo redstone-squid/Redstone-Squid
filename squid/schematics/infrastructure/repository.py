@@ -13,8 +13,9 @@ from squid.schematics.domain.models import (
     SchematicAnalysis,
     SchematicFormat,
     SchematicMetrics,
+    SimulationResult,
 )
-from squid.schematics.infrastructure.mapping import to_row_values, to_stored_schematic
+from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
 from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile, SchematicRender
 
 _FINGERPRINT_COLUMNS = {
@@ -222,6 +223,16 @@ class SchematicRepository:
             await session.commit()
         assert row is not None
         return _stored_render(row)
+
+    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
+        """Replace the latest moderator-triggered evidence for one schematic."""
+        async with self._session_factory() as session:
+            await session.execute(
+                update(BuildSchematic)
+                .where(BuildSchematic.id == schematic_id)
+                .values(simulation_evidence=simulation_to_json(result))
+            )
+            await session.commit()
 
     @staticmethod
     def _joined() -> Select[tuple[BuildSchematic, str, int]]:

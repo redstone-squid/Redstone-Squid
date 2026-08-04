@@ -186,7 +186,7 @@ class SimulationSample:
 
 @dataclass(frozen=True, slots=True)
 class SimulationResult:
-    """Redstone simulation evidence.
+    """Piston-door timing evidence from the vanilla-accurate tick engine.
 
     This is moderator-facing evidence, never a record value: simulated timings must not
     populate a build's declared opening or closing time.
@@ -194,6 +194,13 @@ class SimulationResult:
 
     ticks_run: int
     settled_tick: int | None
+    input_position: Vector3 | None = None
+    input_source: Literal["insign", "heuristic", "manual"] | None = None
+    last_piston_tick: int | None = None
+    block_changes: int = 0
+    piston_events: int = 0
+    redstone_events: int = 0
+    trustworthy: bool = False
     samples: tuple[SimulationSample, ...] = ()
     notes: tuple[str, ...] = ()
 

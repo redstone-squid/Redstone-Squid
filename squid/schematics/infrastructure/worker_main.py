@@ -152,10 +152,13 @@ def _render_request(params: Mapping[str, Any]) -> RenderRequest:
 def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
     request = cast(Mapping[str, Any], params["request"])
     return SimulationRequest(
-        input_position=tuple(int(axis) for axis in request["input_position"]),  # type: ignore[arg-type]
+        input_position=(
+            tuple(int(axis) for axis in request["input_position"])  # type: ignore[arg-type]
+            if request.get("input_position") is not None
+            else None
+        ),
         watch_positions=tuple(tuple(int(axis) for axis in position) for position in request.get("watch_positions", ())),  # type: ignore[arg-type]
         max_ticks=int(request.get("max_ticks", 200)),
-        settle_ticks=int(request.get("settle_ticks", 4)),
     )
 
 

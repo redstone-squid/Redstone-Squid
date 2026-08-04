@@ -1,6 +1,6 @@
 # Integrating Nucleation into Redstone-Squid
 
-> **Status.** Phases 0-3 have landed. Phase 4 is not started. Everything below the
+> **Status.** Phases 0-4 have landed. Everything below the
 > status block is the plan as approved, amended in place wherever building it proved part of it
 > wrong; those amendments are called out where they occur rather than silently applied.
 
@@ -12,7 +12,7 @@ are opaque strings the bot never opens; build cards depend on users remembering 
 a screenshot; duplicate submissions are caught only by human memory.
 
 [Nucleation](https://github.com/Schem-at/Nucleation) is an MIT-licensed Rust schematic
-engine with native Python bindings (`nucleation==0.10.0` on PyPI, cp312-abi3 wheels built with
+engine with native Python bindings (`nucleation==0.10.1` on PyPI, cp312-abi3 wheels built with
 scikit-build-core and nanobind — its docs say PyO3, but the published wheel is not). It parses
 `.litematic` / `.schem` / `.mcstructure` / world files, computes translation- and
 rotation-invariant structural fingerprints, renders headless PNGs, simulates redstone via
@@ -170,7 +170,7 @@ class SchematicAnalysis:
     metrics: SchematicMetrics
     fingerprints: SchematicFingerprints
     lattice: AutostackLattice | None
-    analyzer_version: str          # "nucleation-0.10.0"
+    analyzer_version: str          # "nucleation-0.10.1"
     analysis_schema_version: int   # ours, bumped when we change what we compute
 ```
 
@@ -583,6 +583,34 @@ per-layer delta and direction for `TODO.md:10-13` — genuinely most of the per-
 expression — but **not** the valid expandable domain, which no static analysis can supply.
 Deliver it as structured evidence into the records workstream and stop there.
 
+**As built**, the gate was satisfied by a stronger experiment than the original three
+published-number spot checks. Nucleation 0.10.1 introduced `TickSimulation`, a
+vanilla-ordered tick engine distinct from the MCHPRS logic compiler, together with captured
+Minecraft traces for community 4x4 sliding, 6x6 sliding, fast 4x4 vault, and record 3x3 doors.
+Its upstream conformance tests compare those runs block-for-block and tick-for-tick. A local
+wheel experiment then loaded three of the shipped litematics in `InWorld` mode, verified they
+were quiescent before input, and reproduced complete piston runs ending after 9, 16, and 11 gt
+respectively, with zero unsupported piston/entity contacts. This is more direct evidence than
+comparing one derived number within ±1 gt, so Phase 4 uses `TickSimulation`; `MchprsWorld`
+remains unsuitable for door timing.
+
+- `/build measure-timing` and `/build detect-lattice` are trusted/staff-only and ephemeral.
+  Input selection prefers a single compiled Insign input, then exactly one lever/button, then
+  an explicit `x y z`; ambiguous automatic choices are refused. Simulation uses `InWorld`,
+  refuses a build already active at tick zero, runs to quiescence under the existing 200 gt / 90
+  second budgets, and records block, redstone, and piston activity plus integrity checks.
+- `simulation_evidence` is replaced on each staff run and displayed as moderator evidence. It
+  never writes `normal_opening_time` or `normal_closing_time`. The UI reports both the final
+  piston-activity tick and quiescence, rather than conflating button reset delay with motion.
+- Autostack analysis was already opportunistic during ingest. The command now gives the unit
+  dimensions, vectors, and coverage explicitly, and states that this does not establish the
+  valid expandable domain. Both 1D and 2D resizing retain the returned engine schematic (the
+  engine operation is functional, not in-place); an integration test resizes to the detected
+  original counts and requires exact fingerprint identity.
+- The dependency bump is deliberate. Old 0.10.0 fingerprints remain version-labelled and are
+  excluded from direct equality, while byte identity and metric-shortlisted comparison continue
+  to work until re-analysis backfills 0.10.1 fingerprints.
+
 ---
 
 ## Abuse and resource safety
@@ -609,7 +637,7 @@ on x86_64 is fine, but the same Dockerfile built on an arm64 host would fail
 
 ```toml
 [project.optional-dependencies]
-schematics = ["nucleation==0.10.0"]
+schematics = ["nucleation==0.10.1"]
 ```
 
 **Exact pin, not a range** — fingerprints and loss reports are version-scoped outputs we
@@ -629,7 +657,7 @@ installs it:
 
 ```toml
 [tool.uv]
-exclude-newer-package = { nucleation = "2026-08-02T00:00:00Z" }
+exclude-newer-package = { nucleation = "2026-08-05T00:00:00Z" }
 ```
 
 `infrastructure/capability.py` uses `importlib.util.find_spec("nucleation")`, **not** a

@@ -150,6 +150,8 @@ class BuildSchematic(Base, kw_only=True):
 
     lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     """The highest-coverage repeating unit cell found, if the build has one."""
+    simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    """Staff-triggered tick-engine evidence. It never changes the build's declared timing."""
 
     uploaded_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     analyzed_at: Mapped[Instant] = mapped_column(
