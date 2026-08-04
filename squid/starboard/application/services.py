@@ -1,0 +1,136 @@
+"""Starboard orchestration over framework-neutral ports."""
+
+from dataclasses import dataclass
+from math import isfinite
+
+from squid.reactions.application import RoleWeightPolicy
+from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
+from squid.starboard.application.ports import EntryPlan, PendingVote, StarboardRepository
+from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji, evaluate_vote
+
+
+@dataclass(frozen=True, slots=True)
+class StarboardVoteResult:
+    """Plans and source-reaction cleanup requested by one reaction."""
+
+    plans: tuple[EntryPlan, ...]
+    remove_reaction: bool = False
+
+
+class StarboardService:
+    """Authorize, weight, and atomically plan starboard entries."""
+
+    def __init__(self, repository: StarboardRepository) -> None:
+        self._repository = repository
+        self._emoji_cache: dict[int, frozenset[str]] = {}
+
+        async def multipliers(scope: WeightScope) -> tuple[RoleMultiplier, ...]:
+            configured = await self._repository.role_multipliers(scope.scope_id or 0)
+            return tuple(RoleMultiplier(scope, role_id, value) for role_id, value in configured.items())
+
+        self._weight_policy = RoleWeightPolicy(multipliers, staff_multiplier=1.0)
+
+    async def is_relevant_emoji(self, guild_id: int, emoji: str) -> bool:
+        configured = self._emoji_cache.get(guild_id)
+        if configured is None:
+            configured = await self._repository.relevant_emojis(guild_id)
+            self._emoji_cache[guild_id] = configured
+        return emoji in configured
+
+    async def record_vote(self, origin: OriginMessage, actor: ReactionActor, emoji: str) -> StarboardVoteResult:
+        pending: list[PendingVote] = []
+        remove_reaction = False
+        for config in await self._repository.configs_for_source(origin.guild_id, origin.channel_id):
+            verdict = evaluate_vote(config, origin, actor, emoji)
+            if verdict.action == "remove_reaction":
+                remove_reaction = remove_reaction or config.remove_invalid_reactions
+                continue
+            if verdict.action != "accept" or verdict.direction is None:
+                continue
+            scope = WeightScope(config.guild_id, "starboard", config.id)
+            role_weight = await self._weight_policy.calculate(actor, scope)
+            option = next(item for item in config.emojis if item.emoji == emoji)
+            assert role_weight is not None
+            pending.append(PendingVote(config, emoji, verdict.direction, role_weight * option.multiplier))
+        plans = await self._repository.record_votes(origin, actor.user_id, pending) if pending else ()
+        return StarboardVoteResult(tuple(plans), remove_reaction)
+
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> tuple[EntryPlan, ...]:
+        return tuple(await self._repository.withdraw_vote(origin_message_id, user_id, emoji))
+
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> tuple[EntryPlan, ...]:
+        return tuple(await self._repository.clear_votes(origin_message_id, emoji))
+
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> tuple[EntryPlan, ...]:
+        return tuple(await self._repository.refresh(origin_message_id, force=force))
+
+    async def mark_origin_deleted(self, origin_message_id: int) -> tuple[EntryPlan, ...]:
+        return tuple(await self._repository.mark_origin_deleted(origin_message_id))
+
+    async def create_starboard(
+        self, guild_id: int, channel_id: int, name: str = "main", *, required: float = 3.0
+    ) -> StarboardConfig:
+        config = StarboardConfig(
+            0,
+            guild_id,
+            channel_id,
+            name.strip(),
+            (StarboardEmoji("⭐", "up", position=0), StarboardEmoji("💩", "down", position=1)),
+            required=required,
+        )
+        created = await self._repository.create(config)
+        self.invalidate_cache(guild_id)
+        return created
+
+    async def delete_starboard(self, guild_id: int, name: str) -> bool:
+        deleted = await self._repository.delete(guild_id, name)
+        self.invalidate_cache(guild_id)
+        return deleted
+
+    async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
+        return tuple(await self._repository.list_for_guild(guild_id))
+
+    async def get(self, guild_id: int, name: str) -> StarboardConfig | None:
+        return await self._repository.get(guild_id, name)
+
+    async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
+        updated = await self._repository.update(guild_id, name, settings)
+        self.invalidate_cache(guild_id)
+        return updated
+
+    async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
+        StarboardConfig(
+            config.id,
+            config.guild_id,
+            config.channel_id,
+            config.name,
+            emojis,
+            required=config.required,
+            required_remove=config.required_remove,
+        )
+        await self._repository.set_emojis(config.id, emojis)
+        self.invalidate_cache(config.guild_id)
+
+    async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
+        if multiplier is not None and (not isfinite(multiplier) or multiplier <= 0):
+            msg = "Role multiplier must be finite and greater than zero."
+            raise ValueError(msg)
+        await self._repository.set_role_multiplier(config.id, role_id, multiplier)
+
+    async def mark_posted(self, plan: EntryPlan, message_id: int, channel_id: int) -> None:
+        await self._repository.mark_posted(plan.config.id, plan.origin.id, message_id, channel_id)
+
+    async def mark_rendered(self, plan: EntryPlan) -> None:
+        await self._repository.mark_rendered(plan.config.id, plan.origin.id, plan.entry.score)
+
+    async def mark_removed(self, plan: EntryPlan) -> None:
+        await self._repository.mark_removed(plan.config.id, plan.origin.id)
+
+    async def reset_deleted_post(self, posted_message_id: int) -> tuple[int, int] | None:
+        return await self._repository.reset_deleted_post(posted_message_id)
+
+    async def disable_channel(self, channel_id: int) -> None:
+        await self._repository.disable_channel(channel_id)
+
+    def invalidate_cache(self, guild_id: int) -> None:
+        self._emoji_cache.pop(guild_id, None)
