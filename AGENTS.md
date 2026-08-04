@@ -13,3 +13,16 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 ### Git Workflow
 - Commit completed changes unless the user explicitly asks not to.
 - Keep commits small, cohesive, and easy to review.
+
+### Upstream Reporting
+- **Report any nucleation bug or docs mismatch upstream** at
+  [Schem-at/Nucleation](https://github.com/Schem-at/Nucleation/issues), as well as working around
+  it here. The maintainer is responsive and has fixed every report so far, so a workaround left
+  unreported upstream is a workaround we keep forever.
+- Check the current upstream docs before filing — several early findings were doc bugs that have
+  since been corrected, and re-reporting a fixed one wastes everyone's time.
+- Include the exact version, a self-contained reproducer that runs against a clean install, and
+  what the wrong behaviour actually cost us. Findings from integration tests are worth more than
+  findings from reading, so say which it was.
+- Record the issue number in the workaround's code comment or in `docs/plans/`, so the workaround
+  can be removed when the fix lands.

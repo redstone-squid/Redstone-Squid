@@ -42,8 +42,11 @@ does not ship**. The wheel exposes the lower-level *generated (Diplomat) binding
 capability is there, but the shapes differ. Verified by running against `nucleation==0.9.2`:
 
 Reported upstream with reproducers: [Schem-at/Nucleation#3][n3] (the mismatch itself),
-[#4][n4] (`from_data`), [#5][n5] (`dimensions()`), [#6][n6] (fingerprint presets). Re-check
-these before assuming any row below still holds after a version bump.
+[#4][n4] (`from_data`), [#5][n5] (`dimensions()`), [#6][n6] (fingerprint presets) — all four
+now closed, with the Python docs rewritten. Phase 1 added [#7][n7] (Sponge reader drops
+`Metadata.Author`/`Description`) and [#8][n8] (`author()`/`description()` raise when absent).
+Re-check all of these before assuming any row below still holds after a version bump; #3-#6 in
+particular were fixed upstream, so the table records what 0.9.2 *ships*, not what is wrong.
 
 [n3]: https://github.com/Schem-at/Nucleation/issues/3
 [n4]: https://github.com/Schem-at/Nucleation/issues/4
@@ -415,12 +418,24 @@ Also fix `docs/new-migration.md:10` — it says "update the SQLAlchemy models in
   not exist is indistinguishable from a bot outage; one sentence is strictly more informative.
   It is a mixin on `SearchCog` for the same reason `BuildEditCommands` is — the `build` group is
   owned by `BuildCommandGroup`, so a separate cog cannot contribute subcommands to it.
-- **Two engine behaviours found by the integration tests, not by reading:**
+- **Two engine behaviours found by the integration tests, not by reading.**
   `Diff.added()/removed()/changed()` return whole `Schematic` objects rather than counts, so
-  `edit_distance` uses `diff.distance()`; and **optional metadata accessors raise rather than
-  returning empty** when a format does not carry the field — `author()` on a Sponge `.schem`
-  throws `NucleationError.NotFound`. All optional metadata reads are guarded; the load-bearing
-  measurements are not.
+  `edit_distance` uses `diff.distance()`. This one turned out to be *correctly documented*
+  upstream since the [#3][n3] rewrite (`# each a Schematic of those cells`) — the plan's
+  earlier reading of it was stale, not the engine.
+  Separately, **`author()` and `description()` raise `NotFound` when absent** while `name()`
+  and every numeric getter return a fallback, so a display-metadata read crashes on some
+  formats and not others. All optional metadata reads are guarded; the load-bearing
+  measurements are not. Reported as [#8][n8], along with the Sponge reader bug that causes it,
+  [#7][n7].
+
+  [#7][n7] is worth knowing about independently: the Sponge `.schem` **writer emits**
+  `Metadata.Author` and `Metadata.Description`, and its own **reader drops them**, so a
+  `.litematic → .schem` conversion silently loses attribution. Verified by locating both fields
+  in the written NBT.
+
+[n7]: https://github.com/Schem-at/Nucleation/issues/7
+[n8]: https://github.com/Schem-at/Nucleation/issues/8
 - **`convert` reports fidelity loss only for litematic output.** `to_litematic_for_version_json`
   returns `{data_b64, loss}` atomically; other targets go through
   `convert_to_data_version(target, source)` for the loss report and then re-encode. The engine

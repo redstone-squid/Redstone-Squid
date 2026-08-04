@@ -250,10 +250,15 @@ def _metrics(
 def _optional[T](read: "Callable[[], T]", missing: T) -> T:
     """Read one piece of optional metadata, treating "this format has no such field" as absent.
 
-    The engine signals a field a format simply does not carry by *raising* rather than
-    returning empty - a Sponge `.schem` has no author, and asking for one throws. Every caller
-    here is reading display metadata, so an absent field must not fail the whole analysis; the
-    load-bearing measurements above are deliberately left unguarded.
+    `author()` and `description()` *raise* `NotFound` when the metadata is absent, while
+    `name()` and every numeric getter return a fallback, so a display-metadata read is a crash
+    risk on some formats and not others. Reported upstream as
+    https://github.com/Schem-at/Nucleation/issues/8; the related Sponge reader bug that makes
+    `.schem` hit this path is https://github.com/Schem-at/Nucleation/issues/7. Remove this guard
+    once both land.
+
+    Every caller here is reading display metadata, so an absent field must not fail the whole
+    analysis; the load-bearing measurements above are deliberately left unguarded.
     """
     try:
         return read()
