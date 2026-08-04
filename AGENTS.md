@@ -11,8 +11,12 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
 
 ### Git Workflow
-- Commit completed changes unless the user explicitly asks not to.
-- Keep commits small, cohesive, and easy to review.
+- Always commit changes unless the user explicitly asks not to. Commit early and at each coherent milestone;
+  keep every commit small, cohesive, independently valid, and easy to review.
+- Write commit messages in Mitchell Hashimoto's style: use a concise, imperative, component-scoped subject
+  (for example, `builds: parse tick units in time strings`), then add a wrapped body for non-trivial changes
+  that explains the problem and its impact before describing the solution. Include relevant testing, tradeoffs,
+  or follow-up context when useful.
 
 ### Validation Workflow
 - During development, run the smallest test set that directly covers the changed behavior. Use
