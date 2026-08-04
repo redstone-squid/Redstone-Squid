@@ -48,11 +48,15 @@ class RedstoneSquid(Bot):
         *,
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
+        inference_model: str = "gpt-5.6-luna",
+        inference_reasoning_effort: str = "low",
     ):
         self.services = services
         self._keep_database_active = keep_database_active
         self.catbox_config = catbox_config
         self.build_config = build_config
+        self.inference_model = inference_model
+        self.inference_reasoning_effort = inference_reasoning_effort
         description = f"{config.bot_name} v{config.bot_version}".strip()
         super().__init__(
             command_prefix=commands.when_mentioned_or(config.prefix),
@@ -180,6 +184,8 @@ async def main(
                 config=identity_config,
                 catbox_config=resolved_config.catbox,
                 build_config=resolved_config.build,
+                inference_model=resolved_config.openai.chat_model,
+                inference_reasoning_effort=resolved_config.openai.reasoning_effort,
             ) as bot,
         ):
             await bot.start(resolved_config.discord.token.get_secret_value())

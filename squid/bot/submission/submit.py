@@ -19,6 +19,9 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.ingestion import ingest_message_bundle
+from squid.bot.submission.media import CatboxMirror
+from squid.bot.submission.message_context import BUILD_LOG_CHANNEL_IDS
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
@@ -28,7 +31,6 @@ from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_a
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import (
     BuildEditPatch,
-    BuildInferenceInput,
     BuildInferenceService,
     BuildService,
     DoorSubmissionInput,
@@ -412,59 +414,23 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if message.author.bot:
             return
 
-        build_logs = 726156829629087814
-        record_logs = 667401499554611210
-
-        if message.channel.id not in [build_logs, record_logs]:
+        if message.channel.id not in BUILD_LOG_CHANNEL_IDS:
             return
-
-        build = await self.inference.infer(
-            BuildInferenceInput(
-                author_name=message.author.display_name,
-                content=message.clean_content,
-                message_id=message.id,
-                author_id=message.author.id,
-                channel_id=message.channel.id,
-                server_id=message.guild.id if message.guild is not None else None,
-            ),
-            model="deepseek/deepseek-v3.2",
+        if not isinstance(message.channel, discord.TextChannel):
+            return
+        preceding = [item async for item in message.channel.history(before=message, limit=3)]
+        preceding.reverse()
+        builds = await ingest_message_bundle(
+            [message],
+            preceding,
+            self.bot.services,
+            model=self.bot.inference_model,
+            reasoning_effort=self.bot.inference_reasoning_effort,
+            mirror=CatboxMirror(self.bot.catbox_config),
         )
-        if build is None:
-            return
-
-        pending_schematics: list[tuple[str, bytes]] = []
-        for attachment in message.attachments:
-            # Previously this skipped every attachment Discord reported no content type for,
-            # which is exactly the set of schematics.
-            try:
-                classified = classify_attachment(
-                    attachment.filename,
-                    attachment.content_type,
-                    attachment.size,
-                    max_bytes=self.bot.services.schematics.limits.max_upload_bytes,
-                )
-            except SquidError:
-                logger.debug("Ignoring unsupported attachment %s in a scraped message.", attachment.filename)
-                continue
-
-            data = await attachment.read()
-            url = await upload_to_catbox(classified.filename, data, classified.content_type, self.bot.catbox_config)
-            if classified.kind == "image":
-                build.image_urls.append(url)
-            elif classified.kind == "video":
-                build.video_urls.append(url)
-            else:
-                build.schematic_urls.append(url)
-                pending_schematics.append((classified.filename, data))
-
-        analyses = await self._analyse_attachments(pending_schematics, uploader_id=message.author.id)
-
-        # Order is important here.
-        await self._note_schematic_duplicates(build, analyses)
-        await self.builds.submit(build, submitter_id=message.author.id, ai_generated=True)
-        await self._record_analyses(build, analyses, uploader_id=message.author.id)
-        await self.bot.for_build(build).post_for_voting(type="add")
-        self._schedule_schematic_render(build)
+        for build in builds:
+            await self.bot.for_build(build).post_for_voting(type="add")
+            self._schedule_schematic_render(build)
 
     @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
     @check_is_home_server_trusted_or_global_admin()

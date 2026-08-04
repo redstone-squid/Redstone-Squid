@@ -92,6 +92,8 @@ class OpenAIConfig(_FrozenModel):
 
     api_key: SecretStr | None = None
     base_url: AnyHttpUrl = AnyHttpUrl("https://api.openai.com/v1")
+    chat_model: str = Field(default="gpt-5.6-luna", min_length=1)
+    reasoning_effort: str = Field(default="low", min_length=1)
 
     _empty_api_key = field_validator("api_key", mode="before")(_empty_to_none)
 
