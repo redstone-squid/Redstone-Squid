@@ -1,0 +1,38 @@
+"""Reusable reaction weighting policies."""
+
+from collections.abc import Callable
+from math import isfinite
+from typing import override
+
+from squid.reactions.application.ports import RoleMultiplierProvider, WeightPolicy
+from squid.reactions.domain import ReactionActor, WeightScope
+
+type Eligibility = Callable[[ReactionActor, WeightScope], bool]
+
+
+class RoleWeightPolicy(WeightPolicy):
+    """Use the highest matching role multiplier with an optional staff fallback."""
+
+    def __init__(
+        self,
+        provider: RoleMultiplierProvider,
+        *,
+        eligibility: Eligibility | None = None,
+        staff_multiplier: float = 3.0,
+    ) -> None:
+        if not isfinite(staff_multiplier) or staff_multiplier <= 0:
+            msg = "Staff multiplier must be finite and greater than zero."
+            raise ValueError(msg)
+        self._provider = provider
+        self._eligibility = eligibility
+        self._staff_multiplier = staff_multiplier
+
+    @override
+    async def calculate(self, actor: ReactionActor, scope: WeightScope) -> float | None:
+        if self._eligibility is not None and not self._eligibility(actor, scope):
+            return None
+        multipliers = await self._provider(scope)
+        configured = [item.multiplier for item in multipliers if item.role_id in actor.role_ids]
+        if configured:
+            return max(configured)
+        return self._staff_multiplier if actor.is_staff else 1.0

@@ -9,6 +9,7 @@ from typing import Literal, TypeAlias
 
 from whenever import Instant
 
+from squid.reactions.domain import ReactionActor
 from squid.voting.errors import InvalidVoteConfigurationError
 
 VoteKindLiteral = Literal["build", "delete_log", "generic"]
@@ -73,15 +74,7 @@ class VoteSelection:
             raise InvalidVoteConfigurationError(msg)
 
 
-@dataclass(frozen=True, slots=True)
-class VoteActor:
-    """Framework-neutral member facts used to authorize and weight a vote."""
-
-    user_id: int
-    guild_id: int = 0
-    role_ids: frozenset[int] = frozenset()
-    is_staff: bool = False
-    is_trusted: bool = False
+VoteActor = ReactionActor
 
 
 @dataclass(frozen=True, slots=True)
