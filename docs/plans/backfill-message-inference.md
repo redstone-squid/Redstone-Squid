@@ -1,8 +1,21 @@
 # Backfill rework: grouped, contextual, multimodal build inference
 
-> **Status.** Approved, not yet started. Amend this document in place as building it proves
-> parts of it wrong, calling out the amendments where they occur rather than silently applying
-> them.
+> **Status.** Implemented on 2026-08-04. Focused unit, lint, formatting, type, and boundary
+> checks pass; the credentialed Discord/OpenAI dry-run remains an operational follow-up.
+
+## Implementation amendments
+
+- `confidence` remains part of the model contract but is not copied into `Build.extra_info`.
+  The domain's typed JSON shape has no durable confidence field, and persisting an undocumented
+  key would make the inference change leak into the storage contract.
+- The message table is keyed by Discord message ID, so one source message cannot be tracked to
+  every build when a bundle yields multiple builds. All primary messages are tracked to the
+  first inferred build. This preserves bundle-level rerun idempotency; representing the full
+  many-to-many provenance would require a migration and is outside this rework.
+- Attachment mirroring is performed once per bundle and the resulting media is attached to each
+  inferred build. The structured result deliberately contains source message IDs, not
+  attachment IDs, and `Build` has no transient multi-message provenance field from which the
+  ingestion layer could safely derive a narrower attachment set.
 
 ## Context
 
