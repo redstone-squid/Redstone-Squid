@@ -8,9 +8,9 @@ import discord
 from whenever import Instant
 
 from squid.bot._types import GuildMessageable
-from squid.bot.errors import ErrorHandledModal
+from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
 from squid.bot.message_adapter import to_tracked_message
-from squid.bot.utils.components import no_mentions
+from squid.bot.utils.components import edit_interaction_layout, edit_layout, no_mentions, text_layout
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.voting.domain import VoteOption, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -87,17 +87,17 @@ class PollModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
-        preview = "\n".join([f"## {draft.question}", *(f"{item.emoji} {item.label}" for item in options)])
         await interaction.response.send_message(
-            content=preview,
             view=PollConfirmation(self.cog, interaction.user.id, draft, options),
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
 
 
-class PollConfirmation(discord.ui.View):
+class PollConfirmation(ErrorHandledLayoutView):
     """Preview controls that publish, edit, or cancel a poll draft."""
+
+    actions = discord.ui.ActionRow()
 
     def __init__(self, cog: "VoteCog", owner_id: int, draft: PollDraft, options: tuple[VoteOption, ...]):
         super().__init__(timeout=900)
@@ -106,6 +106,11 @@ class PollConfirmation(discord.ui.View):
         self.draft = draft
         self.options = options
         self.published = False
+        controls = self.actions
+        self.clear_items()
+        preview = "\n".join([f"## {draft.question}", *(f"{item.emoji} {item.label}" for item in options)])
+        self.add_item(discord.ui.TextDisplay(preview))
+        self.add_item(controls)
 
     @override
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -114,7 +119,7 @@ class PollConfirmation(discord.ui.View):
         await interaction.response.send_message("This poll draft belongs to another member.", ephemeral=True)
         return False
 
-    @discord.ui.button(label="Publish", style=discord.ButtonStyle.success)
+    @actions.button(label="Publish", style=discord.ButtonStyle.success)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
         if self.published:
             await interaction.response.send_message("This poll has already been published.", ephemeral=True)
@@ -133,20 +138,22 @@ class PollConfirmation(discord.ui.View):
         )
         await interaction.response.defer(ephemeral=True)
         channel = cast(GuildMessageable, interaction.channel)
-        message = await channel.send("Publishing poll…", allowed_mentions=no_mentions())
+        message = await channel.send(view=text_layout("Publishing poll…"), allowed_mentions=no_mentions())
         await self.cog.bot.services.messages.track(
             to_tracked_message(message), purpose="vote", vote_session_id=session_id
         )
         session = await GenericVoteSession.from_id(self.cog.bot, session_id)
         assert session is not None
-        await message.edit(content=session.render(), allowed_mentions=no_mentions())
+        await edit_layout(message, text_layout(session.render()), allowed_mentions=no_mentions())
         await session.add_reactions(message)
-        await interaction.edit_original_response(content=f"Published: {message.jump_url}", view=None)
+        await interaction.edit_original_response(
+            view=text_layout(f"Published: {message.jump_url}"), allowed_mentions=no_mentions()
+        )
 
-    @discord.ui.button(label="Edit", style=discord.ButtonStyle.secondary)
+    @actions.button(label="Edit", style=discord.ButtonStyle.secondary)
     async def edit(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
         await interaction.response.send_modal(PollModal(self.cog, self.draft))
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
-        await interaction.response.edit_message(content="Poll cancelled.", view=None)
+        await edit_interaction_layout(interaction, text_layout("Poll cancelled."))

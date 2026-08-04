@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
-from squid.bot.utils.components import no_mentions
+from squid.bot.utils.components import edit_layout, no_mentions, text_layout
 from squid.voting.domain import VoteMessage, VoteSessionSnapshot
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ class GenericVoteSession:
     async def _update(self, location: VoteMessage) -> None:
         message = await self.bot.get_or_fetch_message(location.channel_id, location.id)
         if message is not None:
-            await message.edit(content=self.render(), allowed_mentions=no_mentions())
+            await edit_layout(message, text_layout(self.render()), allowed_mentions=no_mentions())
 
     def render(self) -> str:
         poll = self.snapshot.poll
