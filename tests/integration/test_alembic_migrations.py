@@ -56,6 +56,26 @@ def test_migrations_create_schema_without_drift(
 
     command.upgrade(config, "head")
     command.check(config)
+    command.downgrade(config, "d9f6a8b2c4e1")
+
+    downgrade_engine = create_engine(migration_database_url)
+    try:
+        with downgrade_engine.connect() as connection:
+            assert connection.execute(text("SELECT to_regclass('public.generic_vote_sessions')")).scalar_one() is None
+            option_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'vote_session_options'"
+                    )
+                ).scalars()
+            )
+            assert {"identifier", "guild_id", "label"}.isdisjoint(option_columns)
+    finally:
+        downgrade_engine.dispose()
+
+    command.upgrade(config, "head")
+    command.check(config)
 
     engine = create_engine(migration_database_url)
     try:

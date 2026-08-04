@@ -1,8 +1,12 @@
 """Public voting domain API."""
 
 from squid.voting.domain.models import (
+    DEFAULT_GENERIC_EMOJIS,
     DEFAULT_VOTE_OPTIONS,
     CastVoteResult,
+    EmojiPreset,
+    GenericPoll,
+    RoleWeight,
     StoredVoteMutation,
     VoteActor,
     VoteChange,
@@ -11,17 +15,24 @@ from squid.voting.domain.models import (
     VoteKindLiteral,
     VoteMessage,
     VoteOption,
+    VoteRefreshResult,
     VoteRejection,
+    VoteSelection,
     VoteSessionResultLiteral,
     VoteSessionSnapshot,
     VoteStatus,
     VoteTarget,
+    VoteVisibility,
     normalize_vote_options,
 )
 
 __all__ = [
+    "DEFAULT_GENERIC_EMOJIS",
     "DEFAULT_VOTE_OPTIONS",
     "CastVoteResult",
+    "EmojiPreset",
+    "GenericPoll",
+    "RoleWeight",
     "StoredVoteMutation",
     "VoteActor",
     "VoteChange",
@@ -30,10 +41,13 @@ __all__ = [
     "VoteKindLiteral",
     "VoteMessage",
     "VoteOption",
+    "VoteRefreshResult",
     "VoteRejection",
+    "VoteSelection",
     "VoteSessionResultLiteral",
     "VoteSessionSnapshot",
     "VoteStatus",
     "VoteTarget",
+    "VoteVisibility",
     "normalize_vote_options",
 ]

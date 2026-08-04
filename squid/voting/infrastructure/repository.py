@@ -1,31 +1,40 @@
 """SQLAlchemy voting repository."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import cast
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repository import BaseAsyncRepository
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
+    EmojiPreset,
+    GenericPoll,
+    RoleWeight,
     StoredVoteMutation,
     VoteChange,
     VoteChoice,
     VoteKindLiteral,
     VoteMessage,
     VoteOption,
+    VoteSelection,
     VoteSessionResultLiteral,
     VoteSessionSnapshot,
     VoteStatus,
     VoteTarget,
+    VoteVisibility,
     normalize_vote_options,
 )
 from squid.voting.infrastructure.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
+    GenericVoteSession,
+    GuildVoteEmoji,
+    GuildVoteRoleWeight,
     Vote,
     VoteSession,
     VoteSessionOption,
@@ -36,16 +45,12 @@ class _MessageModelRepository(BaseAsyncRepository[Message]):
     model_type = Message
 
 
-class _VoteModelRepository(BaseAsyncRepository[Vote]):
-    model_type = Vote
-
-
 class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
     model_type = VoteSession
 
 
 class VoteRepository:
-    """Store votes while serializing mutation and closure per session."""
+    """Store selections while serializing refresh, mutation, and closure per session."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
@@ -60,24 +65,15 @@ class VoteRepository:
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        options = normalize_vote_options(options)
+        options = normalize_vote_options(options, kind="build")
         async with self._session_factory.begin() as session:
-            vote_session_id = await self._create_session(
-                session,
-                author_id=author_id,
-                kind="build",
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
-                options=options,
+            session_id = await self._create_session(
+                session, author_id, "build", pass_threshold, fail_threshold, options
             )
             await session.execute(
-                insert(BuildVoteSession).values(
-                    vote_session_id=vote_session_id,
-                    build_id=build_id,
-                    changes=list(changes),
-                )
+                insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
             )
-            return vote_session_id
+            return session_id
 
     async def create_delete_log_session(
         self,
@@ -90,218 +86,428 @@ class VoteRepository:
         server_id: int,
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        options = normalize_vote_options(options)
+        options = normalize_vote_options(options, kind="delete_log")
         async with self._session_factory.begin() as session:
-            vote_session_id = await self._create_session(
-                session,
-                author_id=author_id,
-                kind="delete_log",
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
-                options=options,
+            session_id = await self._create_session(
+                session, author_id, "delete_log", pass_threshold, fail_threshold, options
             )
             await session.execute(
                 insert(DeleteLogVoteSession).values(
-                    vote_session_id=vote_session_id,
+                    vote_session_id=session_id,
                     target_message_id=message_id,
                     target_channel_id=channel_id,
                     target_server_id=server_id,
                 )
             )
-            return vote_session_id
+            return session_id
+
+    async def create_generic_session(
+        self,
+        *,
+        author_id: int,
+        guild_id: int,
+        question: str,
+        visibility: VoteVisibility,
+        deadline: Instant,
+        options: Sequence[VoteOption],
+    ) -> int:
+        options = normalize_vote_options(options, kind="generic")
+        async with self._session_factory.begin() as session:
+            session_id = await self._create_session(session, author_id, "generic", 32767, -32768, options)
+            await session.execute(
+                insert(GenericVoteSession).values(
+                    vote_session_id=session_id,
+                    guild_id=guild_id,
+                    question=question,
+                    visibility=visibility,
+                    deadline=deadline,
+                )
+            )
+            return session_id
 
     @staticmethod
     async def _create_session(
         session: AsyncSession,
-        *,
         author_id: int,
         kind: VoteKindLiteral,
         pass_threshold: int,
         fail_threshold: int,
         options: Sequence[VoteOption],
     ) -> int:
-        result = await session.execute(
-            insert(VoteSession)
-            .values(
-                status="open",
-                result="pending",
-                author_id=author_id,
-                kind=kind,
-                pass_threshold=pass_threshold,
-                fail_threshold=fail_threshold,
+        session_id = (
+            await session.execute(
+                insert(VoteSession)
+                .values(
+                    status="open",
+                    result="pending",
+                    author_id=author_id,
+                    kind=kind,
+                    pass_threshold=pass_threshold,
+                    fail_threshold=fail_threshold,
+                )
+                .returning(VoteSession.id)
             )
-            .returning(VoteSession.id)
-        )
-        vote_session_id = result.scalar_one()
+        ).scalar_one()
         await session.execute(
             insert(VoteSessionOption),
             [
                 {
-                    "vote_session_id": vote_session_id,
+                    "vote_session_id": session_id,
+                    "identifier": option.identifier,
+                    "guild_id": option.guild_id or 0,
                     "emoji": option.emoji,
                     "choice": option.choice.value,
+                    "label": option.label,
                     "multiplier": option.multiplier,
                     "position": position,
                 }
                 for position, option in enumerate(options)
             ],
         )
-        return vote_session_id
+        return session_id
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:
             row = await self._get_session_row(session, message_id)
-            if row is None:
-                return None
-            votes = await self._get_votes(session, row.id)
-            return await self._to_snapshot(session, row, votes)
+            return None if row is None else await self._to_snapshot(session, row)
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:
-            repository = _VoteSessionModelRepository(session=session)
-            row = await repository.get_one_or_none(id=vote_session_id)
-            if row is None:
-                return None
-            return await self._to_snapshot(session, row, await self._get_votes(session, row.id))
+            row = await _VoteSessionModelRepository(session=session).get_one_or_none(id=vote_session_id)
+            return None if row is None else await self._to_snapshot(session, row)
 
     async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
         async with self._session_factory() as session:
-            repository = _VoteSessionModelRepository(session=session)
-            rows = await repository.get_many(VoteSession.status == "open", VoteSession.kind == kind)
-            return [await self._to_snapshot(session, row, await self._get_votes(session, row.id)) for row in rows]
+            rows = await _VoteSessionModelRepository(session=session).get_many(
+                VoteSession.status == "open", VoteSession.kind == kind
+            )
+            return [await self._to_snapshot(session, row) for row in rows]
+
+    async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(VoteSession)
+                    .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
+                    .where(VoteSession.status == "open", GenericVoteSession.deadline <= now)
+                )
+            ).all()
+            return [await self._to_snapshot(session, row) for row in rows]
 
     async def cast_vote(
         self,
         message_id: int,
         user_id: int,
+        guild_id: int,
+        option_id: str,
+        emoji: str,
         desired_weight: float,
+        refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
         async with self._session_factory() as session, session.begin():
             row = await self._get_session_row(session, message_id, for_update=True)
             if row is None or row.status != "open":
                 return None
-
-            votes = await self._get_votes(session, row.id)
-            previous_weight = votes.get(user_id)
-            current_weight = None if previous_weight == desired_weight else desired_weight
-            if current_weight is None:
-                await session.execute(delete(Vote).where(Vote.vote_session_id == row.id, Vote.user_id == user_id))
-                votes.pop(user_id, None)
+            await self._apply_refresh(session, row.id, refreshed_weights or {})
+            previous = await session.scalar(select(Vote).where(Vote.vote_session_id == row.id, Vote.user_id == user_id))
+            previous_weight = previous.weight if previous is not None else None
+            toggled_off = previous is not None and previous.option_id == option_id
+            if toggled_off:
+                await session.delete(previous)
+                current_weight = None
             else:
                 await session.execute(
                     pg_insert(Vote)
-                    .values(vote_session_id=row.id, user_id=user_id, weight=current_weight)
+                    .values(
+                        vote_session_id=row.id,
+                        user_id=user_id,
+                        guild_id=guild_id,
+                        option_id=option_id,
+                        emoji=emoji,
+                        weight=desired_weight,
+                    )
                     .on_conflict_do_update(
                         index_elements=[Vote.vote_session_id, Vote.user_id],
-                        set_={"weight": current_weight},
+                        set_={
+                            "guild_id": guild_id,
+                            "option_id": option_id,
+                            "emoji": emoji,
+                            "weight": desired_weight,
+                        },
                     )
                 )
-                votes[user_id] = current_weight
-
-            net_votes = sum(votes.values())
-            result: VoteSessionResultLiteral = "pending"
-            just_closed = False
-            if net_votes >= row.pass_threshold:
-                result = "approved"
-                just_closed = True
-            elif net_votes <= row.fail_threshold:
-                result = "denied"
-                just_closed = True
-
-            if just_closed:
-                await session.execute(
-                    update(VoteSession)
-                    .where(VoteSession.id == row.id, VoteSession.status == "open")
-                    .values(status="closed", result=result)
-                )
-                row.status = "closed"
-                row.result = result
-
-            snapshot = await self._to_snapshot(session, row, votes)
+                current_weight = desired_weight
+            just_closed = await self._close_at_threshold(session, row)
             return StoredVoteMutation(
-                session=snapshot,
-                previous_weight=previous_weight,
-                current_weight=current_weight,
-                just_closed=just_closed,
+                await self._to_snapshot(session, row), previous_weight, current_weight, just_closed
             )
+
+    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
+        async with self._session_factory() as session, session.begin():
+            row = await session.scalar(select(VoteSession).where(VoteSession.id == vote_session_id).with_for_update())
+            if row is None:
+                return None
+            await self._apply_refresh(session, row.id, weights)
+            just_closed = row.status == "open" and await self._close_at_threshold(session, row)
+            return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
+
+    async def close(self, message_id: int) -> StoredVoteMutation | None:
+        async with self._session_factory() as session, session.begin():
+            row = await self._get_session_row(session, message_id, for_update=True)
+            return await self._close_row(session, row)
+
+    async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
+        """Close a session by aggregate ID for the deadline scheduler."""
+        async with self._session_factory() as session, session.begin():
+            row = await session.scalar(select(VoteSession).where(VoteSession.id == vote_session_id).with_for_update())
+            return await self._close_row(session, row)
+
+    @staticmethod
+    async def _close_row(session: AsyncSession, row: VoteSession | None) -> StoredVoteMutation | None:
+        if row is None or row.status != "open":
+            return None
+        row.status = "closed"
+        row.result = "cancelled"
+        return StoredVoteMutation(
+            session=await VoteRepository._to_snapshot(session, row),
+            previous_weight=None,
+            current_weight=None,
+            just_closed=True,
+        )
+
+    @staticmethod
+    async def _apply_refresh(session: AsyncSession, session_id: int, weights: dict[int, float]) -> None:
+        for user_id, weight in weights.items():
+            if weight <= 0:
+                await session.execute(delete(Vote).where(Vote.vote_session_id == session_id, Vote.user_id == user_id))
+            else:
+                await session.execute(
+                    update(Vote)
+                    .where(Vote.vote_session_id == session_id, Vote.user_id == user_id)
+                    .values(weight=weight)
+                )
+
+    @staticmethod
+    async def _close_at_threshold(session: AsyncSession, row: VoteSession) -> bool:
+        if row.kind == "generic":
+            return False
+        selections = (
+            await session.execute(
+                select(Vote.weight, VoteSessionOption.choice)
+                .join(
+                    VoteSessionOption,
+                    (VoteSessionOption.vote_session_id == Vote.vote_session_id)
+                    & (VoteSessionOption.identifier == Vote.option_id)
+                    & (VoteSessionOption.emoji == Vote.emoji)
+                    & or_(VoteSessionOption.guild_id == Vote.guild_id, VoteSessionOption.guild_id == 0),
+                )
+                .where(Vote.vote_session_id == row.id)
+            )
+        ).tuples()
+        net = sum(weight if choice == "approve" else -weight for weight, choice in selections)
+        result: VoteSessionResultLiteral = "pending"
+        if net >= row.pass_threshold:
+            result = "approved"
+        elif net <= row.fail_threshold:
+            result = "denied"
+        else:
+            return False
+        row.status = "closed"
+        row.result = result
+        return True
+
+    async def get_emoji_preset(self, guild_id: int, kind: VoteKindLiteral) -> EmojiPreset | None:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(GuildVoteEmoji)
+                    .where(GuildVoteEmoji.guild_id == guild_id, GuildVoteEmoji.kind == kind)
+                    .order_by(GuildVoteEmoji.position)
+                )
+            ).all()
+            if not rows:
+                return None
+            return EmojiPreset(
+                guild_id,
+                kind,
+                tuple(
+                    VoteOption(
+                        row.emoji,
+                        VoteChoice(row.choice),
+                        identifier=row.identifier,
+                        guild_id=guild_id,
+                        label=row.label,
+                        position=row.position,
+                    )
+                    for row in rows
+                ),
+            )
+
+    async def set_emoji_preset(self, preset: EmojiPreset) -> None:
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                delete(GuildVoteEmoji).where(
+                    GuildVoteEmoji.guild_id == preset.guild_id, GuildVoteEmoji.kind == preset.kind
+                )
+            )
+            await session.execute(
+                insert(GuildVoteEmoji),
+                [
+                    {
+                        "guild_id": preset.guild_id,
+                        "kind": preset.kind,
+                        "identifier": option.identifier,
+                        "emoji": option.emoji,
+                        "choice": option.choice.value,
+                        "label": option.label,
+                        "position": position,
+                    }
+                    for position, option in enumerate(preset.options)
+                ],
+            )
+
+    async def get_role_weights(self, guild_id: int, kind: VoteKindLiteral) -> Sequence[RoleWeight]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(GuildVoteRoleWeight).where(
+                        GuildVoteRoleWeight.guild_id == guild_id, GuildVoteRoleWeight.kind == kind
+                    )
+                )
+            ).all()
+            return [
+                RoleWeight(row.guild_id, cast(VoteKindLiteral, row.kind), row.role_id, row.multiplier) for row in rows
+            ]
+
+    async def set_role_weight(self, weight: RoleWeight) -> None:
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                pg_insert(GuildVoteRoleWeight)
+                .values(
+                    guild_id=weight.guild_id,
+                    kind=weight.kind,
+                    role_id=weight.role_id,
+                    multiplier=weight.multiplier,
+                )
+                .on_conflict_do_update(
+                    index_elements=[
+                        GuildVoteRoleWeight.guild_id,
+                        GuildVoteRoleWeight.kind,
+                        GuildVoteRoleWeight.role_id,
+                    ],
+                    set_={"multiplier": weight.multiplier},
+                )
+            )
+
+    async def remove_role_weight(self, guild_id: int, kind: VoteKindLiteral, role_id: int) -> None:
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                delete(GuildVoteRoleWeight).where(
+                    GuildVoteRoleWeight.guild_id == guild_id,
+                    GuildVoteRoleWeight.kind == kind,
+                    GuildVoteRoleWeight.role_id == role_id,
+                )
+            )
+
+    async def reset_configuration(self, guild_id: int, kind: VoteKindLiteral | None = None) -> None:
+        async with self._session_factory.begin() as session:
+            emoji = delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == guild_id)
+            weights = delete(GuildVoteRoleWeight).where(GuildVoteRoleWeight.guild_id == guild_id)
+            if kind is not None:
+                emoji = emoji.where(GuildVoteEmoji.kind == kind)
+                weights = weights.where(GuildVoteRoleWeight.kind == kind)
+            await session.execute(emoji)
+            await session.execute(weights)
 
     @staticmethod
     async def _get_session_row(
-        session: AsyncSession,
-        message_id: int,
-        *,
-        for_update: bool = False,
+        session: AsyncSession, message_id: int, *, for_update: bool = False
     ) -> VoteSession | None:
-        stmt = (
+        statement = (
             select(VoteSession)
             .join(Message, Message.vote_session_id == VoteSession.id)
             .where(Message.id == message_id, Message.purpose == "vote")
         )
         if for_update:
-            stmt = stmt.with_for_update(of=VoteSession)
-        repository = _VoteSessionModelRepository(session=session)
-        return await repository.get_one_or_none(statement=stmt)
+            statement = statement.with_for_update(of=VoteSession)
+        return await _VoteSessionModelRepository(session=session).get_one_or_none(statement=statement)
 
     @staticmethod
-    async def _get_votes(session: AsyncSession, vote_session_id: int) -> dict[int, float]:
-        repository = _VoteModelRepository(session=session)
-        votes = await repository.get_many(Vote.vote_session_id == vote_session_id)
-        return {vote.user_id: vote.weight for vote in votes}
-
-    @staticmethod
-    async def _to_snapshot(
-        session: AsyncSession,
-        row: VoteSession,
-        votes: Mapping[int, float],
-    ) -> VoteSessionSnapshot:
-        message_repository = _MessageModelRepository(session=session)
-        messages = await message_repository.get_many(
-            Message.vote_session_id == row.id,
-            order_by=(Message.id, False),
+    async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:
+        messages = await _MessageModelRepository(session=session).get_many(
+            Message.vote_session_id == row.id, order_by=(Message.id, False)
         )
         vote_messages = tuple(
-            VoteMessage(message.id, message.channel_id) for message in messages if message.channel_id is not None
+            VoteMessage(message.id, message.channel_id, message.server_id)
+            for message in messages
+            if message.channel_id is not None
         )
+        vote_rows = (
+            await session.scalars(select(Vote).where(Vote.vote_session_id == row.id).order_by(Vote.user_id))
+        ).all()
+        selections = tuple(
+            VoteSelection(vote.user_id, vote.guild_id, vote.option_id, vote.emoji, vote.weight) for vote in vote_rows
+        )
+        option_by_key = {(option.identifier, option.guild_id): option for option in row.options}
+        signed_votes: dict[int, float] = {}
+        for vote in vote_rows:
+            option = option_by_key.get((vote.option_id, vote.guild_id)) or option_by_key.get((vote.option_id, 0))
+            direction = -1 if option is not None and option.choice == "deny" else 1
+            signed_votes[vote.user_id] = vote.weight * direction
+
         target = VoteTarget()
-        kind = row.kind
-        if kind == "build":
-            result = await session.execute(
+        poll = None
+        if row.kind == "build":
+            build_id = await session.scalar(
                 select(BuildVoteSession.build_id).where(BuildVoteSession.vote_session_id == row.id)
             )
-            target = VoteTarget(build_id=result.scalar_one_or_none())
-        elif kind == "delete_log":
-            result = await session.execute(
-                select(
-                    DeleteLogVoteSession.target_message_id,
-                    DeleteLogVoteSession.target_channel_id,
-                    DeleteLogVoteSession.target_server_id,
-                ).where(DeleteLogVoteSession.vote_session_id == row.id)
-            )
-            target_row = result.tuples().one_or_none()
-            if target_row is not None:
-                target = VoteTarget(
-                    message_id=target_row[0],
-                    channel_id=target_row[1],
-                    server_id=target_row[2],
+            target = VoteTarget(build_id=build_id)
+        elif row.kind == "delete_log":
+            target_row = (
+                (
+                    await session.execute(
+                        select(
+                            DeleteLogVoteSession.target_message_id,
+                            DeleteLogVoteSession.target_channel_id,
+                            DeleteLogVoteSession.target_server_id,
+                        ).where(DeleteLogVoteSession.vote_session_id == row.id)
+                    )
                 )
+                .tuples()
+                .one_or_none()
+            )
+            if target_row is not None:
+                target = VoteTarget(message_id=target_row[0], channel_id=target_row[1], server_id=target_row[2])
+        elif row.kind == "generic":
+            generic = await session.scalar(
+                select(GenericVoteSession).where(GenericVoteSession.vote_session_id == row.id)
+            )
+            if generic is not None:
+                poll = GenericPoll(generic.question, generic.visibility, generic.guild_id, generic.deadline)
 
         return VoteSessionSnapshot(
             id=row.id,
             author_id=row.author_id,
-            kind=cast(VoteKindLiteral, kind),
+            kind=cast(VoteKindLiteral, row.kind),
             status=cast(VoteStatus, row.status),
             result=row.result,
             pass_threshold=row.pass_threshold,
             fail_threshold=row.fail_threshold,
-            votes=dict(votes),
+            votes=signed_votes,
             messages=vote_messages,
             options=tuple(
                 VoteOption(
-                    emoji=option.emoji,
-                    choice=VoteChoice(option.choice),
-                    multiplier=option.multiplier,
+                    option.emoji,
+                    VoteChoice(option.choice),
+                    option.multiplier,
+                    option.identifier,
+                    option.guild_id or None,
+                    option.label,
+                    option.position,
                 )
                 for option in row.options
             ),
             target=target,
+            selections=selections,
+            poll=poll,
         )

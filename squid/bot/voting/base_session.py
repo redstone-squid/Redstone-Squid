@@ -193,9 +193,11 @@ class AbstractVoteSession(ABC):
         return "pending"
 
     @final
-    def primary_emoji(self, choice: VoteChoice) -> str:
+    def primary_emoji(self, choice: VoteChoice, guild_id: int | None = None) -> str:
         """Return the first configured emoji for a vote choice."""
-        return next(option.emoji for option in self.options if option.choice is choice)
+        scoped = [option for option in self.options if option.guild_id == guild_id]
+        options = scoped or [option for option in self.options if option.guild_id is None]
+        return next(option.emoji for option in options if option.choice is choice)
 
     @abstractmethod
     async def send_message(self, channel: discord.abc.Messageable) -> discord.Message:

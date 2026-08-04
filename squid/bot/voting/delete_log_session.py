@@ -76,6 +76,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         assert self.target_message.guild is not None
+        self.options = (await self.bot.services.votes.emoji_preset(self.target_message.guild.id, self.kind)).options
         self.id = await self.bot.services.votes.start_delete_log_vote(
             author_id=self.author_id,
             pass_threshold=self.pass_threshold,
@@ -91,11 +92,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
             self.id,
         )
         await self.update_messages()
-        reaction_tasks = [
-            message.add_reaction(self.primary_emoji(choice))
-            for message in self._messages
-            for choice in (VoteChoice.APPROVE, VoteChoice.DENY)
-        ]
+        reaction_tasks = [message.add_reaction(option.emoji) for message in self._messages for option in self.options]
         with contextlib.suppress(discord.Forbidden):
             await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
 

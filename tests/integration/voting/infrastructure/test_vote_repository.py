@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 from squid.voting.infrastructure.repository import VoteRepository
@@ -22,13 +23,15 @@ CREATE TABLE vote_sessions (
 );
 CREATE TABLE vote_session_options (
     vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
+    identifier VARCHAR NOT NULL,
+    guild_id BIGINT NOT NULL DEFAULT 0,
     emoji VARCHAR NOT NULL,
-    choice VARCHAR NOT NULL,
+    choice VARCHAR NOT NULL CHECK (choice IN ('approve', 'deny', 'generic')),
+    label VARCHAR,
     multiplier DOUBLE PRECISION NOT NULL,
     position SMALLINT NOT NULL,
-    PRIMARY KEY (vote_session_id, emoji),
-    UNIQUE (vote_session_id, position),
-    CHECK (choice IN ('approve', 'deny')),
+    PRIMARY KEY (vote_session_id, guild_id, emoji),
+    UNIQUE (vote_session_id, guild_id, position),
     CHECK (
         multiplier > 0
         AND multiplier != 'Infinity'::double precision
@@ -47,6 +50,13 @@ CREATE TABLE build_vote_sessions (
     build_id BIGINT NOT NULL,
     changes JSONB NOT NULL
 );
+CREATE TABLE generic_vote_sessions (
+    vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
+    guild_id BIGINT NOT NULL,
+    question VARCHAR NOT NULL,
+    visibility VARCHAR NOT NULL,
+    deadline TIMESTAMPTZ NOT NULL
+);
 CREATE TABLE messages (
     id BIGINT PRIMARY KEY,
     server_id BIGINT NOT NULL,
@@ -61,14 +71,18 @@ CREATE TABLE messages (
 CREATE TABLE votes (
     vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
     user_id BIGINT,
-    weight DOUBLE PRECISION NOT NULL,
+    guild_id BIGINT NOT NULL,
+    option_id VARCHAR NOT NULL,
+    emoji VARCHAR NOT NULL,
+    weight DOUBLE PRECISION NOT NULL CHECK (weight > 0),
     PRIMARY KEY (vote_session_id, user_id)
 );
 """
 
 _DROP_SCHEMA = """
 DROP TABLE IF EXISTS
-    votes, messages, build_vote_sessions, delete_log_vote_sessions, vote_session_options, vote_sessions CASCADE;
+    votes, messages, generic_vote_sessions, build_vote_sessions, delete_log_vote_sessions,
+    vote_session_options, vote_sessions CASCADE;
 """
 
 
@@ -114,12 +128,12 @@ async def seed_delete_log_vote(
             text(
                 """
                 INSERT INTO vote_session_options
-                    (vote_session_id, emoji, choice, multiplier, position)
+                    (vote_session_id, identifier, guild_id, emoji, choice, multiplier, position)
                 VALUES
-                    (:vote_session_id, '👍', 'approve', 1.0, 0),
-                    (:vote_session_id, '✅', 'approve', 1.0, 1),
-                    (:vote_session_id, '👎', 'deny', 1.0, 2),
-                    (:vote_session_id, '❌', 'deny', 1.0, 3)
+                    (:vote_session_id, 'approve', 0, '👍', 'approve', 1.0, 0),
+                    (:vote_session_id, 'approve', 0, '✅', 'approve', 1.0, 1),
+                    (:vote_session_id, 'deny', 0, '👎', 'deny', 1.0, 2),
+                    (:vote_session_id, 'deny', 0, '❌', 'deny', 1.0, 3)
                 """
             ),
             {"vote_session_id": vote_session_id},
@@ -150,8 +164,15 @@ async def seed_delete_log_vote(
             await session.execute(
                 text(
                     """
-                    INSERT INTO votes (vote_session_id, user_id, weight)
-                    VALUES (:vote_session_id, :user_id, :weight)
+                    INSERT INTO votes (vote_session_id, user_id, guild_id, option_id, emoji, weight)
+                    VALUES (
+                        :vote_session_id,
+                        :user_id,
+                        503,
+                        CASE WHEN :weight < 0 THEN 'deny' ELSE 'approve' END,
+                        CASE WHEN :weight < 0 THEN '👎' ELSE '👍' END,
+                        abs(:weight)
+                    )
                     """
                 ),
                 [
@@ -322,16 +343,16 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
     )
     repository = VoteRepository(async_session_factory)
 
-    inserted = await repository.cast_vote(message_id, 7, 1.0)
-    replaced = await repository.cast_vote(message_id, 7, -1.0)
-    removed = await repository.cast_vote(message_id, 7, -1.0)
+    inserted = await repository.cast_vote(message_id, 7, 503, "approve", "👍", 1.0)
+    replaced = await repository.cast_vote(message_id, 7, 503, "deny", "👎", 1.0)
+    removed = await repository.cast_vote(message_id, 7, 503, "deny", "👎", 1.0)
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
     assert replaced is not None
-    assert (replaced.previous_weight, replaced.current_weight) == (1.0, -1.0)
+    assert (replaced.previous_weight, replaced.current_weight) == (1.0, 1.0)
     assert removed is not None
-    assert (removed.previous_weight, removed.current_weight) == (-1.0, None)
+    assert (removed.previous_weight, removed.current_weight) == (1.0, None)
     assert removed.session.votes == {}
 
 
@@ -351,7 +372,8 @@ async def test_cast_vote_closes_at_either_threshold(
     )
     repository = VoteRepository(async_session_factory)
 
-    mutation = await repository.cast_vote(message_id, 7, desired_weight)
+    option_id, emoji = ("approve", "👍") if desired_weight > 0 else ("deny", "👎")
+    mutation = await repository.cast_vote(message_id, 7, 503, option_id, emoji, abs(desired_weight))
 
     assert mutation is not None
     assert mutation.just_closed
@@ -370,8 +392,8 @@ async def test_concurrent_votes_report_exactly_one_closure(
     repository = VoteRepository(async_session_factory)
 
     results = await asyncio.gather(
-        repository.cast_vote(message_id, 7, 1.0),
-        repository.cast_vote(message_id, 8, 1.0),
+        repository.cast_vote(message_id, 7, 503, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 8, 503, "approve", "👍", 1.0),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -383,3 +405,50 @@ async def test_concurrent_votes_report_exactly_one_closure(
     assert snapshot is not None
     assert snapshot.status == "closed"
     assert len(snapshot.votes) == 1
+
+
+async def test_generic_poll_persists_choices_tallies_and_due_closure(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = VoteRepository(async_session_factory)
+    options = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=503, label="One"),
+        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=503, label="Two"),
+    )
+    deadline = Instant.now().subtract(seconds=1)
+    session_id = await repository.create_generic_session(
+        author_id=99,
+        guild_id=503,
+        question="Choose one",
+        visibility="anonymous_hidden",
+        deadline=deadline,
+        options=options,
+    )
+    message_id = 10_000 + session_id
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO messages (id, server_id, channel_id, author_id, purpose, vote_session_id)
+                VALUES (:message_id, 503, 502, 99, 'vote', :session_id)
+                """
+            ),
+            {"message_id": message_id, "session_id": session_id},
+        )
+
+    await repository.cast_vote(message_id, 7, 503, "one", "1️⃣", 3)
+    await repository.cast_vote(message_id, 8, 503, "two", "2️⃣", 1)
+    snapshot = await repository.get_by_message(message_id)
+
+    assert snapshot is not None
+    assert snapshot.poll is not None
+    assert snapshot.poll.question == "Choose one"
+    assert snapshot.raw_tallies() == {"one": 1, "two": 1}
+    assert snapshot.weighted_tallies() == {"one": 3, "two": 1}
+    assert [item.id for item in await repository.list_due(Instant.now())] == [session_id]
+
+    closed = await repository.close_by_id(session_id)
+    assert closed is not None
+    assert closed.just_closed
+    assert closed.session.status == "closed"
+    assert await repository.list_due(Instant.now()) == []

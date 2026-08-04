@@ -1,6 +1,6 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
 
-from typing import TYPE_CHECKING, Annotated, cast
+from typing import TYPE_CHECKING, Annotated, cast, override
 
 import discord
 from beartype.door import is_bearable
@@ -8,11 +8,14 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
 
 from squid.bot._types import GuildMessageable
+from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
 from squid.bot.utils.permissions import check_is_staff
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
+from squid.voting.domain import RoleWeight, VoteChoice, VoteKindLiteral, VoteOption
+from squid.voting.errors import InvalidVoteConfigurationError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -50,7 +53,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             settings = await self.settings_service.get_all(ctx.guild.id)
             desc = ""
             for setting, value in settings.items():
-                if is_bearable(setting, ScalarChannelSetting):
+                if is_bearable(setting, ScalarChannelSetting):  # pyright: ignore[reportArgumentType]
                     value = cast(int | None, value)
                     if value is None:
                         desc += t(locale, _("{setting} channel: _Not set_\n"), setting=setting)
@@ -59,7 +62,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     channel = cast(GuildMessageable | None, ctx.guild.get_channel(value))
                     display_value = channel.name if channel is not None else t(locale, _("_Not found_"))
                     desc += t(locale, _("{setting} channel: {value}\n"), setting=setting, value=display_value)
-                elif is_bearable(setting, ListRoleSetting):
+                elif is_bearable(setting, ListRoleSetting):  # pyright: ignore[reportArgumentType]
                     value = cast(list[int], value)
                     roles = [role for role in ctx.guild.roles if role.id in value]
                     display_value = ", ".join(role.name for role in roles) or t(locale, _("_Not set_"))
@@ -141,7 +144,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             return
 
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            if is_bearable(setting, ScalarChannelSetting):
+            if is_bearable(setting, ScalarChannelSetting):  # pyright: ignore[reportArgumentType]
                 if channel is None:
                     await edit_layout(
                         sent_message,
@@ -171,7 +174,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     ),
                     allowed_mentions=no_mentions(),
                 )
-            elif is_bearable(setting, ListRoleSetting):
+            elif is_bearable(setting, ListRoleSetting):  # pyright: ignore[reportArgumentType]
                 if roles is None:
                     await edit_layout(
                         sent_message,
@@ -256,6 +259,120 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                 ),
                 allowed_mentions=no_mentions(),
             )
+
+    @settings_hybrid_group.group(name="voting")
+    @check_is_staff()
+    async def voting_settings(self, ctx: Context[BotT]) -> None:
+        """Configure vote emojis and role multipliers."""
+        await ctx.send_help("settings voting")
+
+    @voting_settings.command(name="show")
+    async def show_voting(self, ctx: Context[BotT], kind: VoteKindLiteral = "build") -> None:
+        """Show effective voting configuration for a session kind."""
+        assert ctx.guild is not None
+        preset = await self.bot.services.votes.emoji_preset(ctx.guild.id, kind)
+        weights = await self.bot.services.votes.get_role_weights(ctx.guild.id, kind)
+        aliases = "\n".join(f"{option.choice.value}: {option.emoji}" for option in preset.options)
+        roles = "\n".join(f"<@&{weight.role_id}>: {weight.multiplier:g}x" for weight in weights) or "None"
+        await ctx.send(f"**{kind} emojis**\n{aliases}\n\n**Role multipliers**\n{roles}", ephemeral=True)
+
+    @voting_settings.command(name="emojis")
+    async def edit_voting_emojis(self, ctx: Context[BotT], kind: VoteKindLiteral) -> None:
+        """Open the emoji preset editor."""
+        assert ctx.guild is not None
+        if ctx.interaction is None:
+            await ctx.send("Use this as a slash command to open the emoji editor.")
+            return
+        preset = await self.bot.services.votes.emoji_preset(ctx.guild.id, kind)
+        value = "\n".join(f"{option.choice.value} | {option.emoji}" for option in preset.options)
+        await ctx.interaction.response.send_modal(VoteEmojiModal(self, kind, value))
+
+    @voting_settings.command(name="weight-set")
+    async def set_vote_weight(
+        self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role, multiplier: float
+    ) -> None:
+        """Set one role multiplier for a session kind."""
+        assert ctx.guild is not None
+        if role.guild != ctx.guild:
+            await ctx.send("That role is not from this server.", ephemeral=True)
+            return
+        try:
+            weight = RoleWeight(ctx.guild.id, kind, role.id, multiplier)
+        except InvalidVoteConfigurationError as error:
+            await ctx.send(str(error), ephemeral=True)
+            return
+        await self.bot.services.votes.set_role_weight(weight)
+        await ctx.send("Voting role weight updated.", ephemeral=True)
+
+    @voting_settings.command(name="weight-remove")
+    async def remove_vote_weight(self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role) -> None:
+        """Remove one role multiplier for a session kind."""
+        assert ctx.guild is not None
+        if role.guild != ctx.guild:
+            await ctx.send("That role is not from this server.", ephemeral=True)
+            return
+        await self.bot.services.votes.remove_role_weight(ctx.guild.id, kind, role.id)
+        await ctx.send("Voting role weight removed.", ephemeral=True)
+
+    @voting_settings.command(name="reset")
+    async def reset_voting(self, ctx: Context[BotT], kind: VoteKindLiteral | None = None) -> None:
+        """Reset voting configuration for one kind or the whole server."""
+        assert ctx.guild is not None
+        await self.bot.services.votes.reset_configuration(ctx.guild.id, kind)
+        await ctx.send("Voting configuration reset.", ephemeral=True)
+
+
+class VoteEmojiModal(ErrorHandledModal):
+    """Edit an ordered guild emoji preset as one choice/emoji pair per line."""
+
+    def __init__(self, cog: SettingsCog, kind: VoteKindLiteral, value: str):
+        super().__init__(title=f"{kind} vote emojis")
+        self.cog = cog
+        self.kind = kind
+        self.aliases = discord.ui.TextInput(
+            default=value,
+            style=discord.TextStyle.paragraph,
+            placeholder="approve | 👍\ndeny | 👎",
+            min_length=1,
+            max_length=1000,
+        )
+        self.add_item(discord.ui.Label(text="One `choice | emoji` per line", component=self.aliases))
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message("This editor requires a server.", ephemeral=True)
+            return
+        options: list[VoteOption] = []
+        try:
+            for position, line in enumerate(filter(None, (line.strip() for line in self.aliases.value.splitlines()))):
+                parts = [part.strip() for part in line.split("|", 1)]
+                if len(parts) != 2:
+                    msg = "Each line must use `choice | emoji`."
+                    raise InvalidVoteConfigurationError(msg)  # noqa: TRY301
+                choice_text, emoji = parts
+                choice = VoteChoice.GENERIC if self.kind == "generic" else VoteChoice(choice_text)
+                parsed = discord.PartialEmoji.from_str(emoji)
+                if parsed.is_custom_emoji():
+                    custom = interaction.guild.get_emoji(parsed.id or 0)
+                    if custom is None or not custom.is_usable():
+                        msg = f"The custom emoji {emoji} is inaccessible."
+                        raise InvalidVoteConfigurationError(msg)  # noqa: TRY301
+                options.append(
+                    VoteOption(
+                        emoji,
+                        choice,
+                        identifier=str(position + 1) if self.kind == "generic" else choice.value,
+                        guild_id=interaction.guild.id,
+                        label=f"Option {position + 1}" if self.kind == "generic" else None,
+                        position=position,
+                    )
+                )
+            await self.cog.bot.services.votes.set_emoji_preset(interaction.guild.id, self.kind, options)
+        except (InvalidVoteConfigurationError, ValueError) as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        await interaction.response.send_message("Voting emojis updated for new sessions.", ephemeral=True)
 
 
 async def setup(bot: "squid.bot.app.RedstoneSquid"):

@@ -3,11 +3,13 @@
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog, Context, hybrid_group
+from discord.ext import tasks
+from discord.ext.commands import Cog, Context, guild_only, hybrid_group
+from whenever import Instant
 
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
@@ -16,8 +18,11 @@ from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.bot.voting.delete_log_session import DeleteLogVoteSession
+from squid.bot.voting.generic_session import GenericVoteSession
+from squid.bot.voting.poll_wizard import PollModal
 from squid.core.i18n import _
-from squid.voting.domain import VoteActor
+from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
+from squid.voting.errors import InvalidVoteConfigurationError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -33,10 +38,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.vote_service = bot.services.votes
         self.builds = bot.services.builds
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        self.vote_service.set_actor_resolver(self)
+        self.close_due_polls.start()
+
+    @override
+    async def cog_unload(self) -> None:
+        self.close_due_polls.cancel()
 
     async def get_vote_session(
         self, message_id: int, *, status: Literal["open", "closed"] | None = None
-    ) -> AbstractVoteSession | None:
+    ) -> AbstractVoteSession | GenericVoteSession | None:
         """Gets a vote session from the database.
 
         Args:
@@ -50,6 +61,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return await BuildVoteSession.from_id(self.bot, snapshot.id)
         if snapshot.kind == "delete_log":
             return await DeleteLogVoteSession.from_id(self.bot, snapshot.id)
+        if snapshot.kind == "generic":
+            return await GenericVoteSession.from_id(self.bot, snapshot.id)
         logger.error("Unknown vote session kind: %s", snapshot.kind)
         msg = f"Unknown vote session kind: {snapshot.kind}"
         raise NotImplementedError(msg)
@@ -65,22 +78,33 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if vote_session is None:
             return
 
-        # Remove the user's reaction to keep votes anonymous
         channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
         message = await channel.fetch_message(payload.message_id)
-        user = self.bot.get_user(payload.user_id)
-        assert user is not None
-        remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
-        self._background_tasks.add(remove_reaction_task)
-        remove_reaction_task.add_done_callback(self._background_tasks.discard)
-
+        user = payload.member or self.bot.get_user(payload.user_id)
+        if user is None and payload.guild_id is not None:
+            guild = self.bot.get_guild(payload.guild_id)
+            if guild is not None:
+                with contextlib.suppress(discord.NotFound, discord.Forbidden):
+                    user = await guild.fetch_member(payload.user_id)
+        if user is None:
+            return
         if user.bot:
             return  # Ignore bot reactions
 
         emoji_name = str(payload.emoji)
-        if emoji_name not in {option.emoji for option in vote_session.options}:
+        snapshot = await self.vote_service.get_session(payload.message_id)
+        if snapshot is None:
+            return
+        guild_options = snapshot.options_for_guild(payload.guild_id or 0)
+        if emoji_name not in {option.emoji for option in guild_options}:
             return
         user_id = payload.user_id
+
+        anonymous = snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.visibility != "visible_live"
+        if anonymous:
+            remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
+            self._background_tasks.add(remove_reaction_task)
+            remove_reaction_task.add_done_callback(self._background_tasks.discard)
 
         staff = await is_staff(self.bot, payload.guild_id, user_id)
         trusted = False
@@ -90,9 +114,19 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 return
             trusted = await is_trusted_or_staff(self.bot, payload.guild_id, user_id)
 
+        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
+        member = guild.get_member(user_id) if guild is not None else None
+        actor = VoteActor(
+            user_id=user_id,
+            guild_id=payload.guild_id or 0,
+            role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
+            is_staff=staff,
+            is_trusted=trusted,
+        )
+        previous = next((selection for selection in snapshot.selections if selection.user_id == user_id), None)
         result = await self.vote_service.cast_vote(
             payload.message_id,
-            VoteActor(user_id=user_id, is_staff=staff, is_trusted=trusted),
+            actor,
             emoji_name,
         )
         if result.rejection == "not_eligible":
@@ -106,6 +140,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
 
         vote_session.apply_persisted_state(result.session)
+        if (
+            snapshot.kind == "generic"
+            and snapshot.poll is not None
+            and snapshot.poll.visibility == "visible_live"
+            and previous is not None
+            and previous.emoji != emoji_name
+        ):
+            with contextlib.suppress(discord.NotFound, discord.Forbidden):
+                await message.remove_reaction(previous.emoji, user)
         if result.just_closed:
             if isinstance(vote_session, BuildVoteSession):
                 build_id = result.session.target.build_id
@@ -119,10 +162,159 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     await vote_session.target_message.delete()
         await vote_session.update_messages()
 
+    @Cog.listener(name="on_raw_reaction_remove")
+    async def remove_visible_vote(self, payload: discord.RawReactionActionEvent) -> None:
+        """Synchronize reaction removal for polls that publicly retain reactions."""
+        snapshot = await self.vote_service.get_session(payload.message_id)
+        if (
+            snapshot is None
+            or snapshot.kind != "generic"
+            or snapshot.status != "open"
+            or snapshot.poll is None
+            or snapshot.poll.visibility != "visible_live"
+        ):
+            return
+        selection = next((item for item in snapshot.selections if item.user_id == payload.user_id), None)
+        if selection is None or selection.emoji != str(payload.emoji):
+            return
+        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
+        member = guild.get_member(payload.user_id) if guild is not None else None
+        if member is None or member.bot:
+            return
+        actor = await self._actor(member, snapshot.kind)
+        result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
+        if result.accepted and result.session is not None:
+            session = GenericVoteSession(self.bot, result.session)
+            await session.update_messages()
+
     @hybrid_group(name="vote")
     async def vote_group(self, ctx: Context[BotT]) -> None:
         """Start and manage votes."""
         await ctx.send_help("vote")
+
+    @vote_group.command(name="poll")
+    @guild_only()
+    async def poll(self, ctx: Context[BotT]) -> None:
+        """Create a multi-option poll through an ephemeral preview wizard."""
+        if ctx.interaction is None:
+            await ctx.send("Use the slash command `/vote poll` to open the poll editor.")
+            return
+        await ctx.interaction.response.send_modal(PollModal(self))
+
+    @vote_group.command(name="close")
+    @guild_only()
+    async def close_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
+        """Close a poll early as its creator or a configured staff member."""
+        assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
+        result = await self.vote_service.close(message.id, await self._actor(ctx.author, "generic"))
+        if not result.accepted or result.session is None:
+            await ctx.send(f"Could not close poll: {result.rejection}.", ephemeral=True)
+            return
+        await GenericVoteSession(self.bot, result.session).update_messages()
+        await ctx.send("Poll closed.", ephemeral=True)
+
+    @vote_group.command(name="refresh")
+    @guild_only()
+    async def refresh_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
+        """Refresh a poll's cached role weights."""
+        assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
+        snapshot = await self.vote_service.get_session(message.id)
+        if snapshot is None or snapshot.kind != "generic" or snapshot.poll is None:
+            await ctx.send("That message is not a poll.", ephemeral=True)
+            return
+        actor = await self._actor(ctx.author, "generic")
+        if snapshot.poll.guild_id != ctx.guild.id or (snapshot.author_id != actor.user_id and not actor.is_staff):
+            await ctx.send("Only the poll creator or staff can refresh it.", ephemeral=True)
+            return
+        result = await self.vote_service.refresh(message.id)
+        if result.session is not None:
+            await GenericVoteSession(self.bot, result.session).update_messages()
+        suffix = "" if result.complete else f" Some members could not be resolved: {result.unresolved_user_ids}."
+        await ctx.send(f"Poll weights refreshed.{suffix}", ephemeral=True)
+
+    async def parse_poll_options(self, interaction: discord.Interaction, value: str) -> tuple[VoteOption, ...]:
+        """Validate wizard option lines and fill missing aliases from the guild palette."""
+        if interaction.guild is None:
+            msg = "Polls can only be created in a server."
+            raise InvalidVoteConfigurationError(msg)
+        lines = [line.strip() for line in value.splitlines() if line.strip()]
+        if not 2 <= len(lines) <= 10:
+            msg = "Enter between 2 and 10 option lines."
+            raise InvalidVoteConfigurationError(msg)
+        palette = (await self.vote_service.emoji_preset(interaction.guild.id, "generic")).options
+        options: list[VoteOption] = []
+        for index, line in enumerate(lines):
+            if "|" in line:
+                emoji, label = (part.strip() for part in line.split("|", 1))
+            else:
+                if index >= len(palette):
+                    msg = "The configured generic emoji palette does not have enough entries for these options."
+                    raise InvalidVoteConfigurationError(msg)
+                emoji, label = palette[index].emoji, line
+            if not emoji or not label:
+                msg = "Each option needs a non-empty emoji and label."
+                raise InvalidVoteConfigurationError(msg)
+            parsed = discord.PartialEmoji.from_str(emoji)
+            if parsed.is_custom_emoji():
+                custom = interaction.guild.get_emoji(parsed.id or 0)
+                if custom is None or not custom.is_usable():
+                    msg = f"The custom emoji {emoji} is not accessible to this bot."
+                    raise InvalidVoteConfigurationError(msg)
+            options.append(
+                VoteOption(
+                    emoji,
+                    VoteChoice.GENERIC,
+                    identifier=str(index + 1),
+                    guild_id=interaction.guild.id,
+                    label=label,
+                    position=index,
+                )
+            )
+        if len({option.emoji for option in options}) != len(options):
+            msg = "Poll option emojis must be unique."
+            raise InvalidVoteConfigurationError(msg)
+        return tuple(options)
+
+    async def _actor(self, member: discord.Member, kind: VoteKindLiteral) -> VoteActor:
+        staff = await is_staff(self.bot, member.guild.id, member.id)
+        trusted = await is_trusted_or_staff(self.bot, member.guild.id, member.id) if kind == "delete_log" else False
+        return VoteActor(
+            member.id,
+            member.guild.id,
+            frozenset(role.id for role in member.roles),
+            is_staff=staff,
+            is_trusted=trusted,
+        )
+
+    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+        """Resolve current member facts for a service-level weight refresh."""
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return None
+        member = guild.get_member(user_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(user_id)
+            except (discord.NotFound, discord.Forbidden):
+                return None
+        return await self._actor(member, kind)
+
+    @tasks.loop(seconds=30)
+    async def close_due_polls(self) -> None:
+        """Finalize expired polls from persisted deadlines."""
+        try:
+            snapshots = await self.vote_service.close_due(Instant.now())
+            for snapshot in snapshots:
+                try:
+                    await GenericVoteSession(self.bot, snapshot).update_messages()
+                except Exception:
+                    logger.exception("Closed due poll %s but could not update its Discord message", snapshot.id)
+        except Exception:
+            logger.exception("Failed to scan and close due polls")
+
+    @close_due_polls.before_loop
+    async def before_close_due_polls(self) -> None:
+        await self.bot.wait_until_ready()
 
     @vote_group.command(name="delete")
     @app_commands.rename(target_message="message")

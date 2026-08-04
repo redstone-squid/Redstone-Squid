@@ -72,6 +72,12 @@ class BuildVoteSession(AbstractVoteSession):
     async def _async_init(self) -> None:
         """Track the vote session in the database."""
         assert self.build.id is not None
+        messages = await self.fetch_messages()
+        guild_ids = {message.guild.id for message in messages if message.guild is not None}
+        resolved_options: list[VoteOption] = []
+        for guild_id in guild_ids:
+            resolved_options.extend((await self.bot.services.votes.emoji_preset(guild_id, self.kind)).options)
+        self.options = tuple(resolved_options)
         if self.type == "add":
             changes: list[VoteChange] = [("submission_status", Status.PENDING, Status.CONFIRMED)]
         else:
@@ -88,7 +94,7 @@ class BuildVoteSession(AbstractVoteSession):
             options=self.options,
         )
         await track_vote_messages(
-            await self.fetch_messages(),
+            messages,
             self.bot.services.messages,
             self.id,
             build_id=self.build.id,
@@ -97,9 +103,11 @@ class BuildVoteSession(AbstractVoteSession):
         await self.update_messages()
 
         reaction_tasks = [
-            message.add_reaction(self.primary_emoji(choice))
+            message.add_reaction(option.emoji)
             for message in self._messages
-            for choice in (VoteChoice.APPROVE, VoteChoice.DENY)
+            if message.guild is not None
+            for option in self.options
+            if option.guild_id == message.guild.id
         ]
         with contextlib.suppress(discord.Forbidden):
             await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
@@ -158,29 +166,30 @@ class BuildVoteSession(AbstractVoteSession):
 
     @override
     async def update_messages(self):
-        container = await self.bot.for_build(self.build).render_container()
-        container.add_item(discord.ui.Separator())
-        if self.is_closed:
-            result_label = {
-                "approved": "Approved",
-                "denied": "Denied",
-                "cancelled": "Closed without a decision",
-            }[self.result]
-            vote_text = f"### Vote closed — {result_label}\n**Final score:** {self.net_votes:g}"
-        else:
-            approve_emoji = self.primary_emoji(VoteChoice.APPROVE)
-            deny_emoji = self.primary_emoji(VoteChoice.DENY)
-            vote_text = (
-                "### Vote in progress\n"
-                f"React with {approve_emoji} to **accept** or {deny_emoji} to **deny**. Votes are anonymous.\n"
-                f"**Accept:** {self.upvotes:g}/{self.pass_threshold}  •  "
-                f"**Deny:** {self.downvotes:g}/{-self.fail_threshold}"
-            )
-        container.add_item(discord.ui.TextDisplay(vote_text))
-        layout = StaticLayout(container)
-        await asyncio.gather(
-            *(edit_layout(message, layout, allowed_mentions=no_mentions()) for message in await self.fetch_messages())
-        )
+        async def update(message: discord.Message) -> None:
+            container = await self.bot.for_build(self.build).render_container()
+            container.add_item(discord.ui.Separator())
+            if self.is_closed:
+                result_label = {
+                    "approved": "Approved",
+                    "denied": "Denied",
+                    "cancelled": "Closed without a decision",
+                }[self.result]
+                vote_text = f"### Vote closed — {result_label}\n**Final score:** {self.net_votes:g}"
+            else:
+                guild_id = message.guild.id if message.guild is not None else None
+                approve_emoji = self.primary_emoji(VoteChoice.APPROVE, guild_id)
+                deny_emoji = self.primary_emoji(VoteChoice.DENY, guild_id)
+                vote_text = (
+                    "### Vote in progress\n"
+                    f"React with {approve_emoji} to **accept** or {deny_emoji} to **deny**. Votes are anonymous.\n"
+                    f"**Accept:** {self.upvotes:g}/{self.pass_threshold}  •  "
+                    f"**Deny:** {self.downvotes:g}/{-self.fail_threshold}"
+                )
+            container.add_item(discord.ui.TextDisplay(vote_text))
+            await edit_layout(message, StaticLayout(container), allowed_mentions=no_mentions())
+
+        await asyncio.gather(*(update(message) for message in await self.fetch_messages()))
 
     @classmethod
     async def get_open_vote_sessions(

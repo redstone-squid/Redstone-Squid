@@ -54,10 +54,22 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias", "search"),
     "search": (),
-    "settings": ("clear", "get", "list", "locale", "set"),
+    "settings": (
+        "clear",
+        "get",
+        "list",
+        "locale",
+        "set",
+        "voting",
+        "voting emojis",
+        "voting reset",
+        "voting show",
+        "voting weight-remove",
+        "voting weight-set",
+    ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
-    "vote": ("delete",),
+    "vote": ("close", "delete", "poll", "refresh"),
 }
 
 

@@ -1,7 +1,5 @@
 """SQLAlchemy voting models."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from sqlalchemy import (
@@ -10,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Identity,
+    Index,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -22,7 +21,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
-from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral
+from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral, VoteVisibility
 
 
 class VoteSession(Base, kw_only=True):
@@ -54,10 +53,10 @@ class VoteSession(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
-    votes: Mapped[list[Vote]] = relationship(
+    votes: Mapped[list["Vote"]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
-    options: Mapped[list[VoteSessionOption]] = relationship(
+    options: Mapped[list["VoteSessionOption"]] = relationship(
         back_populates="vote_session",
         default_factory=list,
         lazy="selectin",
@@ -72,8 +71,10 @@ class VoteSessionOption(Base, kw_only=True):
 
     __tablename__ = "vote_session_options"
     __table_args__ = (
-        UniqueConstraint("vote_session_id", "position", name="vote_session_options_vote_session_id_position_key"),
-        CheckConstraint("choice IN ('approve', 'deny')", name="vote_session_options_choice_check"),
+        UniqueConstraint(
+            "vote_session_id", "guild_id", "position", name="vote_session_options_vote_session_id_position_key"
+        ),
+        CheckConstraint("choice IN ('approve', 'deny', 'generic')", name="vote_session_options_choice_check"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="vote_session_options_multiplier_check",
@@ -92,8 +93,11 @@ class VoteSessionOption(Base, kw_only=True):
         ),
         primary_key=True,
     )
+    identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, server_default=text("0"))
     emoji: Mapped[str] = mapped_column(Text, primary_key=True)
     choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
@@ -145,10 +149,40 @@ class DeleteLogVoteSession(Base, kw_only=True):
     target_server_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
+class GenericVoteSession(Base, kw_only=True):
+    """Metadata for a user-created generic poll."""
+
+    __tablename__ = "generic_vote_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "visibility IN ('anonymous_live', 'visible_live', 'anonymous_hidden')",
+            name="generic_vote_sessions_visibility_check",
+        ),
+        Index("generic_vote_sessions_deadline_idx", "deadline"),
+    )
+    vote_session_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+    )
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("server_settings.server_id", ondelete="RESTRICT"), nullable=False
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[VoteVisibility] = mapped_column(Text, nullable=False)
+    deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+
+
 class Vote(Base):
     """A vote cast in a vote session."""
 
     __tablename__ = "votes"
+    __table_args__ = (
+        CheckConstraint(
+            "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
+            name="votes_weight_check",
+        ),
+    )
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(),
@@ -161,6 +195,48 @@ class Vote(Base):
         primary_key=True,
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    weight: Mapped[float] = mapped_column(Float, nullable=True)  # FIXME: Shouldn't be nullable
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    option_id: Mapped[str] = mapped_column(Text, nullable=False)
+    emoji: Mapped[str] = mapped_column(Text, nullable=False)
+    weight: Mapped[float] = mapped_column(Float, nullable=False)
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+
+
+class GuildVoteEmoji(Base, kw_only=True):
+    """One ordered emoji in a guild/session-kind preset."""
+
+    __tablename__ = "guild_vote_emojis"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "kind", "position", name="guild_vote_emojis_position_key"),
+        CheckConstraint("kind IN ('build', 'delete_log', 'generic')"),
+        CheckConstraint("choice IN ('approve', 'deny', 'generic')"),
+    )
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    emoji: Mapped[str] = mapped_column(Text, primary_key=True)
+    choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+
+class GuildVoteRoleWeight(Base, kw_only=True):
+    """A role multiplier scoped to one guild and session kind."""
+
+    __tablename__ = "guild_vote_role_weights"
+    __table_args__ = (
+        CheckConstraint("kind IN ('build', 'delete_log', 'generic')"),
+        CheckConstraint(
+            "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
+            name="guild_vote_role_weights_multiplier_check",
+        ),
+    )
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    multiplier: Mapped[float] = mapped_column(Float, nullable=False)
