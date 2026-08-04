@@ -1,0 +1,1 @@
+"""Bot authorization infrastructure adapters."""

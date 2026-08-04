@@ -11,10 +11,9 @@ class SettingOptions(TypedDict, total=False):
     First: int | None
     Builds: int | None
     Vote: int | None
-    Staff: list[int]
     Trusted: list[int]
 
 
 ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-ListRoleSetting = Literal["Staff", "Trusted"]
-Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Staff", "Trusted"]
+ListRoleSetting = Literal["Trusted"]
+Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Trusted"]

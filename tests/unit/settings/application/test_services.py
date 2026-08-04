@@ -16,8 +16,6 @@ class FakeSettingsRepository:
         return {}
 
     async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
-        if setting == "Staff":
-            return self.values.get("Staff", [])
         if setting == "Trusted":
             return self.values.get("Trusted", [])
         return cast(int | list[int] | None, self.values.get(setting))
@@ -46,9 +44,9 @@ async def test_settings_clear_uses_shape_specific_empty_values() -> None:
     service = SettingsService(repository)
 
     await service.clear(1, "Vote")
-    await service.clear(1, "Staff")
+    await service.clear(1, "Trusted")
 
-    assert repository.values == {"Vote": None, "Staff": []}
+    assert repository.values == {"Vote": None, "Trusted": []}
 
 
 async def test_settings_locale_round_trips() -> None:

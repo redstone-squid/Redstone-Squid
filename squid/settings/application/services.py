@@ -53,7 +53,7 @@ class SettingsService:
         await self._set(server_id, setting, role_ids)
 
     async def clear(self, server_id: int, setting: Setting) -> None:
-        value: int | list[int] | None = [] if setting in ("Staff", "Trusted") else None
+        value: int | list[int] | None = [] if setting == "Trusted" else None
         await self._set(server_id, setting, value)
 
     async def get_locale(self, server_id: int) -> str | None:

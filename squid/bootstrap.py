@@ -24,6 +24,8 @@ from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.permissions.application import AuthorizationService
+from squid.permissions.infrastructure.repository import GlobalAdministratorRepository
 from squid.persistence.engine import DatabaseEngine
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
@@ -143,6 +145,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
             embedding_service,
         ),
         messages=MessageService(MessageRepository(db.async_session)),
+        authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         records=RecordService(record_repository, record_repository, record_computation),
         record_computation=record_computation,
         schematics=create_schematic_service(db, config.schematics),

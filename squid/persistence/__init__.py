@@ -2,6 +2,7 @@
 
 from squid.builds.infrastructure import models as build_models
 from squid.messages.infrastructure import models as message_models
+from squid.permissions.infrastructure import models as permission_models
 from squid.records.infrastructure import models as record_models
 from squid.schematics.infrastructure import models as schematic_models
 from squid.search.infrastructure import models as search_models
@@ -14,6 +15,7 @@ from squid.voting.infrastructure import models as voting_models
 __all__ = [
     "build_models",
     "message_models",
+    "permission_models",
     "record_models",
     "schematic_models",
     "search_models",

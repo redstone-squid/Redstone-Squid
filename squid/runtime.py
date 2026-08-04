@@ -8,6 +8,7 @@ from typing import Self
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.messages.application import MessageService
+from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
@@ -27,6 +28,7 @@ class ApplicationServices:
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
+    authorization: AuthorizationService
     records: RecordService
     record_computation: RecordComputationService
     schematics: SchematicService

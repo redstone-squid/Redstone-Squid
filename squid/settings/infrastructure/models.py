@@ -16,7 +16,6 @@ class ServerSetting(Base):
     first_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
     builds_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     voting_channel_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
-    staff_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
     trusted_roles_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=True, default_factory=list)
     in_server: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     locale: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)

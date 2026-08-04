@@ -20,7 +20,6 @@ DbSettingKey = Literal[
     "first_channel_id",
     "builds_channel_id",
     "voting_channel_id",
-    "staff_roles_ids",
     "trusted_roles_ids",
 ]
 _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
@@ -29,7 +28,6 @@ _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "First": "first_channel_id",
     "Builds": "builds_channel_id",
     "Vote": "voting_channel_id",
-    "Staff": "staff_roles_ids",
     "Trusted": "trusted_roles_ids",
 }
 _DB_KEY_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in _SETTING_TO_DB_KEY.items()}
