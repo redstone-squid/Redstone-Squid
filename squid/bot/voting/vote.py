@@ -14,7 +14,7 @@ from whenever import Instant
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import is_staff, is_trusted_or_staff
+from squid.bot.utils.permissions import is_server_admin, is_trusted_or_global_admin
 from squid.bot.voting.base_session import AbstractVoteSession
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.bot.voting.delete_log_session import DeleteLogVoteSession
@@ -106,13 +106,13 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             self._background_tasks.add(remove_reaction_task)
             remove_reaction_task.add_done_callback(self._background_tasks.discard)
 
-        staff = await is_staff(self.bot, payload.guild_id, user_id)
+        staff = await is_server_admin(self.bot, payload.guild_id, user_id)
         trusted = False
         if isinstance(vote_session, DeleteLogVoteSession):
             if payload.guild_id is None:
                 # Voting in DMs is not implemented
                 return
-            trusted = await is_trusted_or_staff(self.bot, payload.guild_id, user_id)
+            trusted = await is_trusted_or_global_admin(self.bot, payload.guild_id, user_id)
 
         guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
         member = guild.get_member(user_id) if guild is not None else None
@@ -276,8 +276,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         return tuple(options)
 
     async def _actor(self, member: discord.Member, kind: VoteKindLiteral) -> VoteActor:
-        staff = await is_staff(self.bot, member.guild.id, member.id)
-        trusted = await is_trusted_or_staff(self.bot, member.guild.id, member.id) if kind == "delete_log" else False
+        staff = await is_server_admin(self.bot, member.guild.id, member.id)
+        trusted = (
+            await is_trusted_or_global_admin(self.bot, member.guild.id, member.id) if kind == "delete_log" else False
+        )
         return VoteActor(
             member.id,
             member.guild.id,

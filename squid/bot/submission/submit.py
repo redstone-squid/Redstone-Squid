@@ -24,7 +24,7 @@ from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.permissions import check_is_owner_server, check_is_trusted_or_staff
+from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_admin
 from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import (
     BuildEditPatch,
@@ -467,8 +467,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         self._schedule_schematic_render(build)
 
     @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
-    @check_is_trusted_or_staff()
-    @check_is_owner_server()
+    @check_is_home_server_trusted_or_global_admin()
     async def recalc(self, ctx: Context[BotT], message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)

@@ -3,13 +3,14 @@
 import logging
 from typing import TYPE_CHECKING, override
 
+import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import check_is_owner_server, check_is_staff, check_is_trusted_or_staff
+from squid.bot.utils.permissions import check_is_global_admin
 from squid.core.i18n import _
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
@@ -35,13 +36,77 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.process_maintenance.cancel()
 
     @hybrid_group(name="admin")
-    @check_is_staff()
+    @check_is_global_admin()
     async def admin_group(self, ctx: Context[BotT]) -> None:
         """Inspect and maintain internal bot data."""
         await ctx.send_help("admin")
 
+    @admin_group.group(name="global-admin")
+    @commands.is_owner()
+    async def global_admin_group(self, ctx: Context[BotT]) -> None:
+        """Manage bot-wide administrator access."""
+        await ctx.send_help("admin global-admin")
+
+    @global_admin_group.command(name="list")
+    async def list_global_admins(self, ctx: Context[BotT]) -> None:
+        """List users with bot-wide administrator access."""
+        administrators = await self.bot.services.authorization.list_global_administrators()
+        description = "\n".join(
+            f"<@{administrator.discord_id}> — granted by <@{administrator.granted_by_discord_id}>"
+            for administrator in administrators
+        )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        await ctx.send(
+            view=info_layout(
+                t(locale, _("Global administrators")),
+                description or t(locale, _("No global administrators are configured.")),
+            ),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
+    @global_admin_group.command(name="add")
+    async def add_global_admin(self, ctx: Context[BotT], user: discord.User) -> None:
+        """Grant a user bot-wide administrator access."""
+        if await self.bot.is_owner(user):
+            msg = "The bot owner already has every permission and is not stored as a global administrator."
+            raise commands.BadArgument(msg)
+        administrator = await self.bot.services.authorization.grant_global_administrator(
+            user.id, granted_by_discord_id=ctx.author.id
+        )
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        await ctx.send(
+            view=info_layout(
+                t(locale, _("Global administrator granted")),
+                t(
+                    locale,
+                    _("{user} now has bot-wide administrator access."),
+                    user=f"<@{administrator.discord_id}>",
+                ),
+            ),
+            allowed_mentions=no_mentions(),
+        )
+
+    @global_admin_group.command(name="remove")
+    async def remove_global_admin(self, ctx: Context[BotT], user: discord.User) -> None:
+        """Revoke a user's bot-wide administrator access."""
+        if await self.bot.is_owner(user):
+            msg = "The bot owner's implicit access cannot be removed."
+            raise commands.BadArgument(msg)
+        removed = await self.bot.services.authorization.revoke_global_administrator(user.id)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        description = (
+            t(locale, _("Removed bot-wide administrator access from {user}."), user=f"<@{user.id}>")
+            if removed
+            else t(locale, _("{user} was not a global administrator."), user=f"<@{user.id}>")
+        )
+        await ctx.send(
+            view=info_layout(t(locale, _("Global administrator removed")), description),
+            allowed_mentions=no_mentions(),
+        )
+
     @admin_group.command(name="records-gaps")
-    @check_is_staff()
+    @check_is_global_admin()
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
@@ -63,9 +128,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-title-issues")
-    @check_is_staff()
-    @check_is_owner_server()
-    @check_is_trusted_or_staff()
+    @check_is_global_admin()
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
     async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List canonical titles containing unknown or contradictory taxonomy."""
@@ -88,7 +151,6 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-rebuild")
-    @check_is_staff()
     @commands.is_owner()
     @app_commands.describe(
         current_version_id=app_commands.locale_str(
@@ -123,7 +185,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-lookup")
-    @check_is_staff()
+    @check_is_global_admin()
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind=app_commands.locale_str(_("The typed record family.")),

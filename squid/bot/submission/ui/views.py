@@ -32,7 +32,7 @@ from squid.bot.utils.components import (
     error_layout,
     no_mentions,
 )
-from squid.bot.utils.permissions import is_trusted_or_staff
+from squid.bot.utils.permissions import is_trusted_or_global_admin
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Build, BuildCategory, Status
@@ -455,7 +455,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
             return True
         if interaction.guild_id is None:
             return False
-        return await is_trusted_or_staff(interaction.client, interaction.guild_id, interaction.user.id)
+        return await is_trusted_or_global_admin(interaction.client, interaction.guild_id, interaction.user.id)
 
     async def _send_denial(self, interaction: Interaction[BotT], message: str) -> None:
         layout = error_layout(t(self.locale, _("Cannot edit this build")), message)

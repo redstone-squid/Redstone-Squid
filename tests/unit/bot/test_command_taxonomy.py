@@ -31,7 +31,16 @@ PUBLIC_COGS = (
 
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
-    "admin": ("records-gaps", "records-lookup", "records-rebuild", "records-title-issues"),
+    "admin": (
+        "global-admin",
+        "global-admin add",
+        "global-admin list",
+        "global-admin remove",
+        "records-gaps",
+        "records-lookup",
+        "records-rebuild",
+        "records-title-issues",
+    ),
     "archive": (),
     "build": (
         "approve",
@@ -91,6 +100,10 @@ def _assert_check_counts(commands: Iterable[AnyCommand], expected: dict[str, int
     assert {name: len(_command(commands, name).checks) for name in expected} == expected
 
 
+def _check_names(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
+    return {predicate.__qualname__.partition(".<locals>")[0] for predicate in _command(commands, qualified_name).checks}
+
+
 def test_public_prefix_command_tree_matches_taxonomy() -> None:
     assert _public_command_names() == _qualified_names(EXPECTED_PREFIX_COMMAND_TREE)
 
@@ -114,18 +127,18 @@ def test_search_modes_have_user_friendly_labels() -> None:
     ]
 
 
-def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
+def test_administrator_and_owner_checks_remain_on_sensitive_commands() -> None:
     search = SearchCog.__new__(SearchCog)
     _assert_check_counts(
         search.__cog_commands__,
         {
-            "build approve": 2,
+            "build approve": 1,
             "build debug": 1,
             "build detect-lattice": 1,
-            "build reject": 2,
-            "build edit": 2,
+            "build reject": 1,
+            "build edit": 1,
             "build measure-timing": 1,
-            "build recalc": 2,
+            "build recalc": 1,
         },
     )
 
@@ -136,8 +149,8 @@ def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
             "admin": 1,
             "admin records-gaps": 1,
             "admin records-lookup": 1,
-            "admin records-rebuild": 2,
-            "admin records-title-issues": 3,
+            "admin records-rebuild": 1,
+            "admin records-title-issues": 1,
         },
     )
 
@@ -146,8 +159,32 @@ def test_staff_and_owner_checks_remain_on_sensitive_commands() -> None:
         verify.__cog_commands__,
         {
             "account claim": 0,
-            "account claims": 2,
-            "account approve-claim": 2,
-            "account reject-claim": 2,
+            "account claims": 1,
+            "account approve-claim": 1,
+            "account reject-claim": 1,
         },
     )
+
+
+def test_sensitive_commands_use_the_intended_permission_tier() -> None:
+    search = SearchCog.__new__(SearchCog)
+    assert _check_names(search.__cog_commands__, "build approve") == {"check_is_global_admin"}
+    assert _check_names(search.__cog_commands__, "build edit") == {"check_is_home_server_trusted_or_global_admin"}
+    assert _check_names(search.__cog_commands__, "build measure-timing") == {"check_is_trusted_or_global_admin"}
+
+    settings = SettingsCog.__new__(SettingsCog)
+    assert _check_names(settings.__cog_commands__, "settings set") == {"check_is_server_admin"}
+
+    admin = Admin.__new__(Admin)
+    assert _check_names(admin.__cog_commands__, "tag approve") == {"check_is_global_admin"}
+    assert _check_names(admin.__cog_commands__, "archive") == {"check_is_server_admin"}
+
+    records = RecordCog.__new__(RecordCog)
+    assert _check_names(records.__cog_commands__, "admin global-admin") == {"is_owner"}
+    assert _check_names(records.__cog_commands__, "admin records-rebuild") == {"is_owner"}
+
+    redstoner = GiveRedstoner.__new__(GiveRedstoner)
+    assert _check_names(redstoner.__cog_commands__, "redstoner panel") == {
+        "check_is_home_server",
+        "check_is_server_admin",
+    }

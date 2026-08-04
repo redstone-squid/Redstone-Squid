@@ -88,7 +88,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 t(locale, _("Build")): {"build"},
                 t(locale, _("Discover")): {"search", "patterns", "restrictions"},
                 t(locale, _("Account")): {"account", "redstoner"},
-                t(locale, _("Staff & setup")): {"admin", "settings", "tag", "vote", "version"},
+                t(locale, _("Administration & setup")): {"admin", "settings", "tag", "vote", "version"},
                 t(locale, _("Information")): {"info", "archive"},
             }
             root_commands = [item for item in self.bot.commands if not item.hidden]

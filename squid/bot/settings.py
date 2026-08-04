@@ -11,7 +11,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
-from squid.bot.utils.permissions import check_is_staff
+from squid.bot.utils.permissions import check_is_server_admin
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
 from squid.voting.domain import RoleWeight, VoteChoice, VoteKindLiteral, VoteOption
@@ -27,7 +27,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         self.settings_service = bot.services.settings
 
     @hybrid_group(name="settings")
-    @check_is_staff()
+    @check_is_server_admin()
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context[BotT]):
         """Allows you to configure the bot for your server."""
@@ -44,7 +44,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.settings_service.guild_removed(guild.id)
 
     @settings_hybrid_group.command(name="list")
-    @check_is_staff()
+    @check_is_server_admin()
     async def show_server_settings(self, ctx: Context[BotT]):
         """Show all settings for this server."""
         assert ctx.guild is not None
@@ -78,7 +78,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="get")
     @app_commands.rename(setting="type")
-    @check_is_staff()
+    @check_is_server_admin()
     async def get_setting(self, ctx: Context[BotT], setting: Setting):
         """Show the server's current setting."""
         assert ctx.guild is not None
@@ -100,7 +100,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                             if channel is not None
                             else t(locale, _("_Not found_"))
                         )
-                case "Staff" | "Trusted":
+                case "Trusted":
                     title = t(locale, _("{setting} Roles Info"), setting=setting)
                     value = await self.settings_service.get(ctx.guild.id, setting)
                     roles = [role for role in ctx.guild.roles if role.id in value]
@@ -121,7 +121,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         roles=app_commands.locale_str(_("The roles which will have this permission")),
     )
     @app_commands.rename(setting="type")
-    @check_is_staff()
+    @check_is_server_admin()
     async def change_setting(
         self,
         ctx: Context[BotT],
@@ -214,7 +214,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="clear")
     @app_commands.rename(setting="type")
-    @check_is_staff()
+    @check_is_server_admin()
     async def clear_setting(self, ctx: Context[BotT], setting: Setting):
         """Set this setting to None."""
         assert ctx.guild is not None
@@ -236,7 +236,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     @app_commands.choices(
         language=[app_commands.Choice(name=tag, value=tag) for tag in sorted(SUPPORTED_LOCALES)],
     )
-    @check_is_staff()
+    @check_is_server_admin()
     async def set_locale(self, ctx: Context[BotT], language: str):
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
@@ -261,7 +261,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             )
 
     @settings_hybrid_group.group(name="voting")
-    @check_is_staff()
+    @check_is_server_admin()
     async def voting_settings(self, ctx: Context[BotT]) -> None:
         """Configure vote emojis and role multipliers."""
         await ctx.send_help("settings voting")

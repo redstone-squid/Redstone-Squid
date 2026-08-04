@@ -11,6 +11,12 @@ from discord import app_commands
 from discord.ext import commands
 
 from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
+from squid.bot.utils.permissions import (
+    GlobalAdministratorRequired,
+    HomeServerTrustedOrGlobalAdministratorRequired,
+    ServerAdministratorRequired,
+    TrustedOrGlobalAdministratorRequired,
+)
 from squid.core.errors import DomainError, SquidError
 from squid.core.i18n import _, translate
 
@@ -96,6 +102,31 @@ def build_error_presentation(error: BaseException, locale: str | None = None) ->
         return ErrorPresentation(
             translate(locale, _("Owner only")),
             translate(locale, _("Only the bot owner can use this command.")),
+        )
+    if isinstance(error, GlobalAdministratorRequired):
+        return ErrorPresentation(
+            translate(locale, _("Global administrator only")),
+            translate(locale, _("Only a global bot administrator can use this command.")),
+        )
+    if isinstance(error, ServerAdministratorRequired):
+        return ErrorPresentation(
+            translate(locale, _("Server administrator only")),
+            translate(locale, _("You need the Manage Server permission to use this command.")),
+        )
+    if isinstance(error, TrustedOrGlobalAdministratorRequired):
+        return ErrorPresentation(
+            translate(locale, _("Trusted role required")),
+            translate(locale, _("You need a configured Trusted role or global administrator access.")),
+        )
+    if isinstance(error, HomeServerTrustedOrGlobalAdministratorRequired):
+        return ErrorPresentation(
+            translate(locale, _("Command unavailable")),
+            translate(
+                locale,
+                _(
+                    "Trusted users can use this command in the bot's home server; global administrators can use it anywhere."
+                ),
+            ),
         )
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         return ErrorPresentation(
