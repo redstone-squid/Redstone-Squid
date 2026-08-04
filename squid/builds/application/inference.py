@@ -1,14 +1,17 @@
-"""Framework-neutral inference of build submissions from message text."""
+"""Framework-neutral inference of build submissions from contextual message bundles."""
 
 import asyncio
 import logging
-import re
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from html import escape
+from typing import Literal, Protocol, cast
+
+from pydantic import BaseModel, ConfigDict
 
 from squid.builds.domain import (
     Build,
+    BuildCategory,
     DoorOrientationLiteral,
     RestrictionTypeLiteral,
     UnknownRestrictions,
@@ -18,45 +21,115 @@ from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)
 
-_REQUIRED_FIELDS = frozenset(
-    {
-        "component_restriction",
-        "wiring_placement_restrictions",
-        "miscellaneous_restrictions",
-        "piston_door_type",
-        "door_orientation",
-        "door_width",
-        "door_height",
-        "door_depth",
-        "build_width",
-        "build_height",
-        "build_depth",
-        "opening_time",
-        "closing_time",
-        "creators",
-        "version",
-        "image",
-        "author_note",
-    }
-)
+
+class InferredBuild(BaseModel):
+    """One build described by some of the primary messages in a bundle."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_message_ids: list[int]
+    build_category: Literal["Piston Door", "Entrance", "Piston Extender", "Utility"] | None
+    component_restrictions: list[str]
+    wiring_placement_restrictions: list[str]
+    animated_restrictions: list[str]
+    miscellaneous_restrictions: list[str]
+    door_type: list[str]
+    door_orientation: Literal["Normal", "Skydoor", "Trapdoor"] | None
+    door_width: int | None
+    door_height: int | None
+    door_depth: int | None
+    build_width: int | None
+    build_height: int | None
+    build_depth: int | None
+    opening_time: str | None
+    closing_time: str | None
+    creators: list[str]
+    version_spec: str | None
+    author_note: str | None
+    confidence: Literal["high", "medium", "low"]
+
+
+class InferenceResult(BaseModel):
+    """Structured result for a message bundle, which may contain no builds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    builds: list[InferredBuild]
+
+
+@dataclass(frozen=True, slots=True)
+class ContextMessage:
+    """One normalized Discord message supplied to inference."""
+
+    message_id: int
+    author_name: str
+    author_id: int
+    content: str
+    timestamp: str
+    kind: Literal["primary", "reply_parent", "preceding"]
+    attachment_summary: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class InlineImage:
+    """Image bytes supplied inline to a multimodal model."""
+
+    data: bytes
+    content_type: str
+    source_message_id: int
+    origin: Literal["attachment", "video_frame"]
 
 
 @dataclass(frozen=True, slots=True)
 class BuildInferenceInput:
-    """Message facts required to infer a build, independent of Discord objects."""
+    """Contextual message facts required to infer builds, independent of Discord objects."""
 
-    author_name: str
-    content: str
-    message_id: int
-    author_id: int
+    primary: tuple[ContextMessage, ...]
+    context: tuple[ContextMessage, ...]
+    images: tuple[InlineImage, ...]
     channel_id: int
     server_id: int | None
 
+    @classmethod
+    def from_single_message(
+        cls,
+        *,
+        author_name: str,
+        content: str,
+        message_id: int,
+        author_id: int,
+        channel_id: int,
+        server_id: int | None,
+        timestamp: str = "",
+        attachment_summary: str = "",
+        images: Sequence[InlineImage] = (),
+    ) -> "BuildInferenceInput":
+        """Create the common one-primary-message form used by simple callers."""
+        message = ContextMessage(
+            message_id=message_id,
+            author_name=author_name,
+            author_id=author_id,
+            content=content,
+            timestamp=timestamp,
+            kind="primary",
+            attachment_summary=attachment_summary,
+        )
+        return cls((message,), (), tuple(images), channel_id, server_id)
 
-class TextGenerator(Protocol):
-    """Generate text from a prompt using an external model."""
 
-    async def generate(self, prompt: str, *, model: str) -> str | None: ...
+class StructuredGenerator(Protocol):
+    """Generate and validate a structured model response."""
+
+    async def generate[T: BaseModel](
+        self,
+        system: str,
+        user: str,
+        schema: type[T],
+        *,
+        model: str,
+        images: Sequence[InlineImage] = (),
+        reasoning_effort: str | None = None,
+    ) -> T | None: ...
 
 
 class BuildTaxonomy(Protocol):
@@ -80,65 +153,101 @@ class VersionResolver(Protocol):
 
 
 class BuildInferenceService:
-    """Orchestrate text generation and domain validation for inferred builds."""
+    """Orchestrate structured generation and domain validation for inferred builds."""
 
     def __init__(
         self,
-        generator: TextGenerator,
+        generator: StructuredGenerator,
         taxonomy: BuildTaxonomy,
         versions: VersionResolver,
-        prompt_template: str,
+        system_prompt: str,
     ) -> None:
         self._generator = generator
         self._taxonomy = taxonomy
         self._versions = versions
-        self._prompt_template = prompt_template
+        self._system_prompt = system_prompt
 
-    async def infer(self, source: BuildInferenceInput, *, model: str) -> Build | None:
-        """Infer a build from normalized message facts."""
-        prompt = self._prompt_template.format(
-            message=f"{source.author_name} wrote the following message:\n{source.content}"
+    async def infer(
+        self,
+        source: BuildInferenceInput,
+        *,
+        model: str,
+        reasoning_effort: str | None = None,
+    ) -> list[Build]:
+        """Infer zero or more builds from a normalized message bundle."""
+        result = await self._generator.generate(
+            self._system_prompt,
+            self._render_user_message(source),
+            InferenceResult,
+            model=model,
+            images=source.images,
+            reasoning_effort=reasoning_effort,
         )
-        output = await self._generator.generate(prompt, model=model)
-        if output is None:
-            return None
-        logger.debug("AI output: %s", output)
+        if result is None:
+            return []
 
-        variables = self._parse_output(output)
-        if variables is None:
-            return None
+        primary_by_id = {message.message_id: message for message in source.primary}
+        builds: list[Build] = []
+        for inferred in result.builds:
+            resolved = [
+                primary_by_id[message_id] for message_id in inferred.source_message_ids if message_id in primary_by_id
+            ]
+            resolved = list(dict.fromkeys(resolved))
+            if not resolved:
+                logger.debug(
+                    "Discarding inferred build with no valid primary source ids: %s", inferred.source_message_ids
+                )
+                continue
+            resolved.sort(key=lambda message: source.primary.index(message))
+            origin = resolved[0]
+            build = Build(
+                original_server_id=source.server_id,
+                original_channel_id=source.channel_id,
+                original_message_id=origin.message_id,
+                original_message_author_id=origin.author_id,
+                original_message="\n".join(message.content for message in resolved),
+                ai_generated=True,
+            )
+            await self._apply_taxonomy(build, inferred)
+            await self._apply_fields(build, inferred)
+            builds.append(build)
+        return builds
 
-        build = Build(
-            original_server_id=source.server_id,
-            original_channel_id=source.channel_id,
-            original_message_id=source.message_id,
-            original_message_author_id=source.author_id,
-            original_message=source.content,
-            ai_generated=True,
-        )
-        await self._apply_taxonomy(build, variables)
-        await self._apply_fields(build, variables)
-        return build
+    @staticmethod
+    def _render_user_message(source: BuildInferenceInput) -> str:
+        def render(message: ContextMessage) -> str:
+            attributes = {
+                "id": str(message.message_id),
+                "author": message.author_name,
+                "author_id": str(message.author_id),
+                "kind": message.kind,
+                "timestamp": message.timestamp,
+                "attachments": message.attachment_summary,
+            }
+            rendered_attributes = " ".join(f'{key}="{escape(value, quote=True)}"' for key, value in attributes.items())
+            return f"  <message {rendered_attributes}>{escape(message.content)}</message>"
 
-    async def _apply_taxonomy(self, build: Build, variables: dict[str, str | None]) -> None:
+        primary = "\n".join(render(message) for message in source.primary)
+        context = "\n".join(render(message) for message in source.context)
+        return f"<messages>\n <primary>\n{primary}\n </primary>\n <context>\n{context}\n </context>\n</messages>"
+
+    async def _apply_taxonomy(self, build: Build, inferred: InferredBuild) -> None:
         validations: list[Awaitable[tuple[list[str], list[str]]]] = []
         destinations: list[str] = []
-        restriction_fields: tuple[tuple[str, RestrictionTypeLiteral, str], ...] = (
-            ("component_restriction", "component", "component"),
-            ("wiring_placement_restrictions", "wiring-placement", "wiring"),
-            ("animated_restrictions", "animated", "animated"),
-            ("miscellaneous_restrictions", "miscellaneous", "miscellaneous"),
+        restriction_fields: tuple[tuple[list[str], RestrictionTypeLiteral, str], ...] = (
+            (inferred.component_restrictions, "component", "component"),
+            (inferred.wiring_placement_restrictions, "wiring-placement", "wiring"),
+            (inferred.animated_restrictions, "animated", "animated"),
+            (inferred.miscellaneous_restrictions, "miscellaneous", "miscellaneous"),
         )
-        for field, restriction_type, destination in restriction_fields:
-            value = variables.get(field)
-            if value is not None:
+        for values, restriction_type, destination in restriction_fields:
+            if values:
                 destinations.append(destination)
-                validations.append(self._taxonomy.validate_restrictions(value.split(", "), restriction_type))
+                validations.append(self._taxonomy.validate_restrictions(values, restriction_type))
 
-        door_types = variables["piston_door_type"]
-        if door_types is not None:
+        if inferred.door_type:
             destinations.append("door_types")
-            validations.append(self._taxonomy.validate_door_types(door_types.split(", ")))
+            validations.append(self._taxonomy.validate_door_types(inferred.door_type))
 
         results = await asyncio.gather(*validations)
         unknown = UnknownRestrictions()
@@ -160,53 +269,24 @@ class BuildInferenceService:
                 build.door_type = recognized
                 build.extra_info["unknown_patterns"] = unrecognized
 
-    async def _apply_fields(self, build: Build, variables: dict[str, str | None]) -> None:
-        orientation = variables["door_orientation"]
+    async def _apply_fields(self, build: Build, inferred: InferredBuild) -> None:
+        categories = {
+            "Piston Door": BuildCategory.DOOR,
+            "Entrance": BuildCategory.ENTRANCE,
+            "Piston Extender": BuildCategory.EXTENDER,
+            "Utility": BuildCategory.UTILITY,
+        }
+        build.category = categories[inferred.build_category] if inferred.build_category is not None else None
+        orientation = inferred.door_orientation
         build.door_orientation_type = (
             "Door" if orientation is None or orientation == "Normal" else cast(DoorOrientationLiteral, orientation)
         )
-        build.door_dimensions = (
-            self._optional_int(variables["door_width"]),
-            self._optional_int(variables["door_height"]),
-            self._optional_int(variables["door_depth"]),
-        )
-        build.dimensions = (
-            self._optional_int(variables["build_width"]),
-            self._optional_int(variables["build_height"]),
-            self._optional_int(variables["build_depth"]),
-        )
-        build.normal_opening_time = parse_time_string(variables["opening_time"])
-        build.normal_closing_time = parse_time_string(variables["closing_time"])
-        build.creators_ign = self._split(variables["creators"])
-        build.version_spec = variables["version"] or await self._versions.newest("Java")
+        build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
+        build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
+        build.normal_opening_time = parse_time_string(inferred.opening_time)
+        build.normal_closing_time = parse_time_string(inferred.closing_time)
+        build.creators_ign = inferred.creators
+        build.version_spec = inferred.version_spec or await self._versions.newest("Java")
         build.versions = await self._versions.resolve_spec(build.version_spec)
-        build.image_urls = self._split(variables["image"])
-        if variables["author_note"] is not None:
-            build.extra_info["user"] = variables["author_note"].replace("\\n", "\n")
-
-    @staticmethod
-    def _parse_output(output: str) -> dict[str, str | None] | None:
-        match = re.search(r"<target>(.*?)</target>", output, re.DOTALL)
-        if match is None:
-            return None
-
-        variables: dict[str, str | None] = {}
-        for line in match.group(1).strip().splitlines():
-            if not line.strip() or ":" not in line:
-                continue
-            key, raw_value = line.split(":", 1)
-            value = raw_value.strip()
-            variables[key.strip()] = None if value.lower() in {"none", "null", "unknown"} else value
-
-        if not _REQUIRED_FIELDS.issubset(variables):
-            logger.debug("Missing keys in AI output variables")
-            return None
-        return variables
-
-    @staticmethod
-    def _optional_int(value: str | None) -> int | None:
-        return int(value) if value else None
-
-    @staticmethod
-    def _split(value: str | None) -> list[str]:
-        return value.split(", ") if value else []
+        if inferred.author_note is not None:
+            build.extra_info["user"] = inferred.author_note
