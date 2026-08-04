@@ -156,6 +156,12 @@ class ReactionSubscriber(Protocol):
 dispatches to each subscriber in its own task with per-subscriber error isolation, so one
 subscriber raising cannot swallow another's work.
 
+> **Implementation amendment (2026-08-04).** Clear and clear-emoji payloads are not
+> `RawReactionActionEvent`s, so the subscriber surface has explicit callbacks and a
+> `ReactionClearEvent` union for those events. Message and REST member resolution are lazy and
+> memoised on `ReactionEvent`; otherwise every irrelevant reaction would incur network I/O
+> before voting or starboard emoji filters could reject it.
+
 Migrate `VoteCog` and `AdminCog` onto it in the same commit, behaviour-identical. Note the
 existing ordering coupling: `VoteCog` removes the reactor's reaction for anonymous sessions
 before anything else runs (`squid/bot/voting/vote.py:73`), so its subscriber must keep

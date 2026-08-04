@@ -19,6 +19,7 @@ from squid.bootstrap import create_application_runtime
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator
+from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
 from squid.builds.domain import Build
@@ -70,6 +71,7 @@ class RedstoneSquid(Bot):
         self.bot_version = config.bot_version
         self.owner_server_id = config.owner_server_id
         self.source_code_url = config.source_code_url
+        self.reactions = ReactionRouter(self)
 
     @override
     async def setup_hook(self) -> None:
@@ -78,6 +80,7 @@ class RedstoneSquid(Bot):
 
         # Load extensions in parallel to speed up bot startup
         extensions = [
+            "squid.bot.reactions",
             "squid.bot.misc_commands",
             "squid.bot.settings",
             "squid.bot.submission",

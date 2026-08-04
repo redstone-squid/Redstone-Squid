@@ -9,6 +9,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_global_admin, check_is_server_admin
 from squid.core.i18n import _
@@ -25,6 +26,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self.bot = bot
         self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
+        self.bot.reactions.subscribe(self)
+
+    async def cog_unload(self) -> None:
+        self.bot.reactions.unsubscribe(self)
 
     @commands.hybrid_group(name="tag")
     async def tag_group(self, ctx: Context[BotT]) -> None:
@@ -181,19 +186,16 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         if delete_original:
             await message.delete()
 
-    @commands.Cog.listener(name="on_raw_reaction_add")
-    async def remove_archived_message(self, payload: discord.RawReactionActionEvent):
-        if payload.emoji.name != "❌":
+    async def on_reaction_add(self, event: ReactionEvent) -> None:
+        payload = event.payload
+        if event.emoji != "❌":
             return
         assert self.bot.user is not None
         if payload.user_id == self.bot.user.id:
             return
-        channel = self.bot.get_channel(payload.channel_id)
-        if channel is None:
+        message = await event.message()
+        if message is None:
             return
-        if not isinstance(channel, discord.abc.Messageable):
-            return
-        message = await channel.fetch_message(payload.message_id)
         if message.author.id != self.bot.user.id:
             return
         header = message.content.splitlines()[0] if message.content else ""
@@ -204,6 +206,15 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         if author_id != payload.user_id:
             return
         await message.delete()
+
+    async def on_reaction_remove(self, event: ReactionEvent) -> None:
+        """Ignore removals from archived messages."""
+
+    async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
+        """Ignore clears from archived messages."""
+
+    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
+        """Ignore emoji clears from archived messages."""
 
     @commands.command(name="s", hidden=True)
     @commands.is_owner()

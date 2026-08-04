@@ -66,3 +66,16 @@ def test_bot_uses_components_v2_outside_archive_relay() -> None:
         violations.extend(visitor.violations)
 
     assert not violations, "\n".join(violations)
+
+
+def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
+    owners: list[str] = []
+    for path in BOT_ROOT.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        owners.extend(
+            str(path.relative_to(BOT_ROOT))
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("on_raw_reaction_")
+        )
+
+    assert owners == ["reactions.py"] * 4

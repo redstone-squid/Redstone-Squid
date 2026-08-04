@@ -13,6 +13,7 @@ from whenever import Instant
 
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import is_server_admin, is_trusted_or_global_admin
 from squid.bot.voting.base_session import AbstractVoteSession
@@ -39,10 +40,12 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.builds = bot.services.builds
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self.vote_service.set_actor_resolver(self)
+        self.bot.reactions.subscribe(self)
         self.close_due_polls.start()
 
     @override
     async def cog_unload(self) -> None:
+        self.bot.reactions.unsubscribe(self)
         self.close_due_polls.cancel()
 
     async def get_vote_session(
@@ -67,9 +70,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         msg = f"Unknown vote session kind: {snapshot.kind}"
         raise NotImplementedError(msg)
 
-    @Cog.listener(name="on_raw_reaction_add")
-    async def update_vote_sessions(self, payload: discord.RawReactionActionEvent):
+    async def on_reaction_add(self, event: ReactionEvent) -> None:
         """Handles reactions to update vote counts anonymously."""
+        payload = event.payload
         # This must be before the removal of the reaction to prevent the bot from removing its own reaction
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
@@ -78,16 +81,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if vote_session is None:
             return
 
-        channel = cast(GuildMessageable, self.bot.get_channel(payload.channel_id))
-        message = await channel.fetch_message(payload.message_id)
-        user = payload.member or self.bot.get_user(payload.user_id)
-        if user is None and payload.guild_id is not None:
-            guild = self.bot.get_guild(payload.guild_id)
-            if guild is not None:
-                with contextlib.suppress(discord.NotFound, discord.Forbidden):
-                    user = await guild.fetch_member(payload.user_id)
-        if user is None:
+        message = await event.message()
+        user = await event.resolve_member()
+        if message is None or user is None:
             return
+        channel = cast(GuildMessageable, message.channel)
         if user.bot:
             return  # Ignore bot reactions
 
@@ -162,9 +160,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     await vote_session.target_message.delete()
         await vote_session.update_messages()
 
-    @Cog.listener(name="on_raw_reaction_remove")
-    async def remove_visible_vote(self, payload: discord.RawReactionActionEvent) -> None:
+    async def on_reaction_remove(self, event: ReactionEvent) -> None:
         """Synchronize reaction removal for polls that publicly retain reactions."""
+        payload = event.payload
         snapshot = await self.vote_service.get_session(payload.message_id)
         if (
             snapshot is None
@@ -177,8 +175,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         selection = next((item for item in snapshot.selections if item.user_id == payload.user_id), None)
         if selection is None or selection.emoji != str(payload.emoji):
             return
-        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
-        member = guild.get_member(payload.user_id) if guild is not None else None
+        member = await event.resolve_member()
         if member is None or member.bot:
             return
         actor = await self._actor(member, snapshot.kind)
@@ -186,6 +183,12 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if result.accepted and result.session is not None:
             session = GenericVoteSession(self.bot, result.session)
             await session.update_messages()
+
+    async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
+        """Ignore reaction clears; vote sessions remove anonymous reactions eagerly."""
+
+    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
+        """Ignore emoji clears; vote sessions remove anonymous reactions eagerly."""
 
     @hybrid_group(name="vote")
     async def vote_group(self, ctx: Context[BotT]) -> None:
