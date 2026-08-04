@@ -14,6 +14,19 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - Commit completed changes unless the user explicitly asks not to.
 - Keep commits small, cohesive, and easy to review.
 
+### Validation Workflow
+- During development, run the smallest test set that directly covers the changed behavior. Use
+  `--no-cov` for these iterative runs when coverage reporting is enabled by default.
+- After the final edit, run the focused tests once more together with cheap relevant checks such
+  as `alembic heads` and `git diff --check`.
+- Run formatting, linting, and BasedPyright only over changed files or affected packages. If
+  verified commit hooks already enforce formatting or linting, let the hooks perform those checks;
+  do not assume hooks exist without confirming it.
+- Defer the full test suite to CI unless the change affects central behavior with a broad or
+  uncertain blast radius, CI is unavailable, or the user explicitly requests a full local run.
+- Do not rerun an unchanged check after it has passed unless a subsequent edit could affect its
+  result.
+
 ### Upstream Reporting
 - **Report any nucleation bug or docs mismatch upstream** at
   [Schem-at/Nucleation](https://github.com/Schem-at/Nucleation/issues), as well as working around
