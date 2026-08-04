@@ -1,5 +1,6 @@
 """Build domain entity and value objects."""
 
+import re
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
@@ -385,20 +386,49 @@ class Build:
         return attr_type
 
 
+_TIME_PATTERN = re.compile(r"[~≈]?\s*(?P<value>[+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?P<unit>[a-z][a-z\s_-]*)?")
+"""A number with an optional approximation marker and an optional unit."""
+
+_TICKS_PER_UNIT: Mapping[str, float] = {
+    # A bare number is seconds, which is how submissions and the inference prompt quote timings.
+    "": 20,
+    "s": 20,
+    "sec": 20,
+    "secs": 20,
+    "second": 20,
+    "seconds": 20,
+    "t": 1,
+    "gt": 1,
+    "tick": 1,
+    "ticks": 1,
+    "gametick": 1,
+    "gameticks": 1,
+    "rt": 2,
+    "redstonetick": 2,
+    "redstoneticks": 2,
+}
+
+
 def parse_time_string(time_string: str | None) -> int | None:
     """Parses a time string into an integer.
 
     Args:
-        time_string: The time string to parse.
+        time_string: The time string to parse, such as "1.5s", "~2 seconds", "21gt" or "3 redstone ticks".
+            A number without a unit is interpreted as seconds.
 
     Returns:
-        The time in ticks.
+        The time in game ticks, rounded to the nearest tick, or None if the string is not a recognized time.
     """
-    # TODO: parse "ticks"
     if time_string is None:
         return None
-    time_string = time_string.replace("s", "").replace("~", "").strip()
-    try:
-        return int(float(time_string) * 20)
-    except ValueError:
+
+    match = _TIME_PATTERN.fullmatch(time_string.strip().lower())
+    if match is None:
         return None
+
+    # Separators inside a unit are noise, so "game ticks", "game-ticks" and "gameticks" all collapse to one key.
+    unit = re.sub(r"[\s_-]+", "", match["unit"] or "")
+    ticks_per_unit = _TICKS_PER_UNIT.get(unit)
+    if ticks_per_unit is None:
+        return None
+    return round(float(match["value"]) * ticks_per_unit)
