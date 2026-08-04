@@ -111,6 +111,50 @@ def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
     assert config.duplicate_total_timeout_seconds == 12
 
 
+def test_schematic_render_settings_load_from_flat_environment_names(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pack_path = tmp_path / "vanilla.zip"
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_SCHEMATIC_RENDER_ENABLED="true",
+        SQUID_SCHEMATIC_RENDER_PACK_PATH=str(pack_path),
+        SQUID_SCHEMATIC_RENDER_WIDTH="640",
+        SQUID_SCHEMATIC_RENDER_HEIGHT="480",
+        SQUID_SCHEMATIC_RENDER_MAX_BLOCK_COUNT="12345",
+    )
+
+    config = load_bot_process_config().runtime.schematics
+
+    assert config.render_enabled is True
+    assert config.render_pack_path == pack_path
+    assert (config.render_width, config.render_height) == (640, 480)
+    assert config.render_max_block_count == 12345
+
+
+def test_enabled_schematic_rendering_requires_a_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_SCHEMATIC_RENDER_ENABLED="true")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "schematic" for issue in _issues(exc_info.value))
+
+
+def test_remote_schematic_render_pack_requires_a_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_SCHEMATIC_RENDER_PACK_URL="https://packs.example/vanilla.zip",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "schematic" for issue in _issues(exc_info.value))
+
+
 def test_process_loaders_require_only_their_own_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
     assert load_bot_process_config().discord.token.get_secret_value() == "discord-token"

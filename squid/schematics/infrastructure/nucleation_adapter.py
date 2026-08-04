@@ -66,6 +66,9 @@ _EXPORTERS: Mapping[SchematicFormat, str] = {
     SchematicFormat.MCSTRUCTURE: "mcstructure",
 }
 
+_RESOURCE_PACK_CACHE: dict[str, Any] = {}
+"""Engine resource-pack handles cached per persistent worker process by content digest."""
+
 
 def analyzer_version() -> str:
     """Return the identifier stamped onto every fingerprint this process produces.
@@ -173,7 +176,11 @@ def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> byte
     config.set_isometric(request.width, request.height)
     config.set_sphere_fit(request.sphere_fit)
     config.set_background(*request.background)
-    pack = nucleation.ResourcePack.from_bytes(resource_pack)
+    pack_digest = hashlib.sha256(resource_pack).hexdigest()
+    pack = _RESOURCE_PACK_CACHE.get(pack_digest)
+    if pack is None:
+        pack = nucleation.ResourcePack.from_bytes(resource_pack)
+        _RESOURCE_PACK_CACHE[pack_digest] = pack
     return base64.b64decode(nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config))
 
 

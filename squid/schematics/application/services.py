@@ -1,14 +1,27 @@
 """Schematic application services."""
 
 import asyncio
+import hashlib
+import json
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from squid.core.errors import SquidError
-from squid.schematics.application.commands import ConvertRequest, IngestRequest
-from squid.schematics.application.ports import SchematicAnalyzer, SchematicStore, SchematicVersionResolver
-from squid.schematics.application.queries import DuplicateCandidate, DuplicateTier, StoredSchematic
+from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest
+from squid.schematics.application.ports import (
+    SchematicAnalyzer,
+    SchematicResourcePackProvider,
+    SchematicStore,
+    SchematicVersionResolver,
+)
+from squid.schematics.application.queries import (
+    DuplicateCandidate,
+    DuplicateTier,
+    PreparedRender,
+    StoredRender,
+    StoredSchematic,
+)
 from squid.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -59,6 +72,11 @@ class SchematicService:
         duplicate_max_comparisons: int = 5,
         duplicate_result_limit: int = 3,
         duplicate_total_timeout_seconds: float = 15.0,
+        render_enabled: bool = False,
+        resource_pack: SchematicResourcePackProvider | None = None,
+        render_request: RenderRequest | None = None,
+        render_max_block_count: int = 400_000,
+        render_max_bounding_volume: int = 2_000_000,
     ) -> None:
         self._analyzer = analyzer
         self._store = store
@@ -70,6 +88,13 @@ class SchematicService:
         self._duplicate_max_comparisons = duplicate_max_comparisons
         self._duplicate_result_limit = duplicate_result_limit
         self._duplicate_total_timeout_seconds = duplicate_total_timeout_seconds
+        self._render_enabled = render_enabled
+        self._resource_pack = resource_pack
+        self._render_request = render_request or RenderRequest()
+        self._render_max_block_count = render_max_block_count
+        self._render_max_bounding_volume = render_max_bounding_volume
+        self._render_attempted: set[tuple[int, str]] = set()
+        self._render_warning_emitted = False
         self._poisoned: set[str] = set()
         """Digests of files that killed a worker. Re-analysing one would kill the next worker
         too, so this process refuses them outright rather than retrying."""
@@ -256,6 +281,106 @@ class SchematicService:
 
         return _rank_duplicates(found.values(), self._duplicate_result_limit)
 
+    async def prepare_render(self, build_id: int) -> PreparedRender | None:
+        """Render a primary schematic once, or return its recipe-matched cached URL.
+
+        Rendering is enrichment: disabled support, an oversized build, a bad pack, or a native
+        failure all return `None` so submission and voting continue unaffected.
+        """
+        if not self._render_enabled or self._resource_pack is None or not self._available:
+            self._warn_render_once("Schematic rendering is disabled or unavailable.")
+            return None
+        try:
+            capabilities = await self._analyzer.capabilities()
+            if not capabilities.can_render:
+                self._warn_render_once("The schematic engine has no rendering adapter.")
+                return None
+            pack_data, pack_sha256 = await self._resource_pack.load()
+        except SquidError:
+            self._warn_render_once("The configured schematic resource pack is unavailable.", exc_info=True)
+            return None
+
+        stored = await self._store.get_primary(build_id)
+        if stored is None:
+            return None
+        if stored.file_sha256 in self._poisoned:
+            return None
+        metrics = stored.analysis.metrics
+        if metrics.block_count > self._render_max_block_count:
+            logger.info(
+                "Skipping render for schematic %s: block count %s exceeds cap %s.",
+                stored.id,
+                metrics.block_count,
+                self._render_max_block_count,
+            )
+            return None
+        if metrics.bounding_volume > self._render_max_bounding_volume:
+            logger.info(
+                "Skipping render for schematic %s: bounding volume %s exceeds cap %s.",
+                stored.id,
+                metrics.bounding_volume,
+                self._render_max_bounding_volume,
+            )
+            return None
+
+        recipe_hash = _render_recipe_hash(stored, self._render_request, pack_sha256)
+        cached = await self._store.get_render(stored.id, recipe_hash)
+        if cached is not None:
+            return PreparedRender(
+                schematic_id=stored.id,
+                recipe_hash=recipe_hash,
+                width=cached.width,
+                height=cached.height,
+                cached_url=cached.url,
+            )
+
+        attempt = (stored.id, recipe_hash)
+        if attempt in self._render_attempted:
+            return None
+        self._render_attempted.add(attempt)
+        data = await self._store.get_file(stored.file_sha256)
+        if data is None:
+            return None
+        try:
+            png = await self._analyzer.render(data, request=self._render_request, resource_pack=pack_data)
+        except SchematicWorkerCrashedError:
+            self._poisoned.add(stored.file_sha256)
+            logger.warning("The schematic worker crashed while rendering build %s; skipping preview.", build_id)
+            return None
+        except SquidError:
+            logger.warning("Could not render the schematic for build %s; skipping preview.", build_id, exc_info=True)
+            return None
+        if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+            logger.warning("The schematic renderer returned a non-PNG payload for build %s.", build_id)
+            return None
+        return PreparedRender(
+            schematic_id=stored.id,
+            recipe_hash=recipe_hash,
+            width=self._render_request.width,
+            height=self._render_request.height,
+            png=png,
+        )
+
+    async def record_render(self, render: PreparedRender, url: str) -> StoredRender:
+        """Persist the uploaded URL for a freshly prepared render."""
+        if render.png is None:
+            msg = "Only a fresh render can be recorded."
+            raise ValueError(msg)
+        return await self._store.record_render(
+            render.schematic_id,
+            render.recipe_hash,
+            url,
+            width=render.width,
+            height=render.height,
+            byte_size=len(render.png),
+        )
+
+    def _warn_render_once(self, message: str, *, exc_info: bool = False) -> None:
+        if self._render_warning_emitted:
+            return
+        self._render_warning_emitted = True
+        logger.warning(message, exc_info=exc_info)
+
     async def convert(
         self, build_id: int, request: ConvertRequest, *, version_label: str | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
@@ -327,6 +452,18 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
     if len(losses) > limit:
         lines.append(f"- …and {len(losses) - limit} more.")
     return "\n".join(lines)
+
+
+def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sha256: str) -> str:
+    dimensions = stored.analysis.metrics.dimensions
+    recipe = {
+        "pack_sha256": pack_sha256,
+        "request": request.recipe_fields(),
+        "schematic_dimensions": [dimensions.width, dimensions.height, dimensions.length],
+        "analyzer_version": stored.analysis.analyzer_version,
+    }
+    encoded = json.dumps(recipe, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 _DUPLICATE_TIER_ORDER: dict[DuplicateTier, int] = {"identical": 0, "structural-match": 1, "near": 2}

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Self, cast
@@ -257,6 +258,25 @@ class SchematicConfig(_FrozenModel):
     render_timeout_seconds: float = Field(default=45.0, gt=0)
     simulate_timeout_seconds: float = Field(default=90.0, gt=0)
 
+    render_enabled: bool = False
+    """Whether analyzed primary schematics should receive generated preview images."""
+    render_pack_path: Path | None = None
+    """Operator-supplied resource-pack zip on the local filesystem."""
+    render_pack_url: AnyHttpUrl | None = None
+    """Operator-supplied resource-pack URL, fetched lazily and cached after verification."""
+    render_pack_sha256: str | None = None
+    """Expected lowercase SHA-256. Required for remote packs; local packs may derive it."""
+    render_cache_dir: Path = Field(
+        default_factory=lambda: (
+            Path(os.environ.get("XDG_CACHE_HOME", Path.cwd() / ".cache")) / "redstone-squid" / "schematics"
+        )
+    )
+    render_width: int = Field(default=768, ge=64, le=4096)
+    render_height: int = Field(default=768, ge=64, le=4096)
+    render_max_block_count: int = Field(default=400_000, ge=1)
+    render_max_bounding_volume: int = Field(default=2_000_000, ge=1)
+    render_background: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
     duplicate_metric_tolerance: float = Field(default=0.2, gt=0, le=1)
     """Relative block-count and dimension tolerance for the fuzzy SQL shortlist."""
     duplicate_near_distance: float = Field(default=1.0, gt=0)
@@ -283,6 +303,38 @@ class SchematicConfig(_FrozenModel):
     restart_window_seconds: float = Field(default=60.0, gt=0)
     """Crashing more than `max_restarts_per_window` times inside this window trips the circuit
     breaker, so a payload a user keeps retrying cannot fork-bomb the host."""
+
+    @field_validator("render_pack_sha256")
+    @classmethod
+    def _validate_render_pack_sha256(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if len(normalized) != 64 or any(character not in "0123456789abcdef" for character in normalized):
+            msg = "Must be a 64-character hexadecimal SHA-256 digest."
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator("render_background")
+    @classmethod
+    def _validate_render_background(cls, value: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        if any(channel < 0 or channel > 1 for channel in value):
+            msg = "Every background channel must be between 0 and 1."
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_render_source(self) -> Self:
+        if self.render_pack_path is not None and self.render_pack_url is not None:
+            msg = "Configure only one of render_pack_path and render_pack_url."
+            raise ValueError(msg)
+        if self.render_enabled and self.render_pack_path is None and self.render_pack_url is None:
+            msg = "Rendering requires render_pack_path or render_pack_url."
+            raise ValueError(msg)
+        if self.render_pack_url is not None and self.render_pack_sha256 is None:
+            msg = "Remote render packs require render_pack_sha256."
+            raise ValueError(msg)
+        return self
 
 
 class LogConfig(_FrozenModel):

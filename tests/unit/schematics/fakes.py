@@ -4,7 +4,8 @@ Kept free of the native engine so the whole unit suite runs on a machine without
 extra installed, which is the deployment the null analyzer exists to support.
 """
 
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.commands import RenderRequest
+from squid.schematics.application.queries import StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -67,11 +68,13 @@ class FakeSchematicAnalyzer:
         self.analyze_calls: list[tuple[bytes, SchematicFormat | None, bool]] = []
         self.convert_calls: list[tuple[SchematicFormat, int | None]] = []
         self.compare_calls: list[tuple[bytes, bytes, FingerprintPreset, float | None]] = []
+        self.render_calls: list[tuple[bytes, RenderRequest, bytes | None]] = []
+        self.render_output = b"\x89PNG\r\n\x1a\nrendered"
         self.comparisons: dict[bytes, SchematicComparison] = {}
         self.closed = False
 
     async def capabilities(self) -> AnalyzerCapabilities:
-        return AnalyzerCapabilities(available=True, analyzer_version=self.analysis.analyzer_version)
+        return AnalyzerCapabilities(available=True, analyzer_version=self.analysis.analyzer_version, can_render=True)
 
     async def analyze(
         self,
@@ -106,8 +109,11 @@ class FakeSchematicAnalyzer:
             SchematicComparison(preset=preset, identical=left == right, footprint_distance=0.0),
         )
 
-    async def render(self, data: bytes, *, request: object, resource_pack: bytes | None = None) -> bytes:
-        raise InvalidSchematicError
+    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+        self.render_calls.append((data, request, resource_pack))
+        if self.failure is not None:
+            raise self.failure
+        return self.render_output
 
     async def simulate(self, data: bytes, *, request: object) -> SimulationResult:
         raise InvalidSchematicError
@@ -126,6 +132,7 @@ class FakeSchematicStore:
         self.files: dict[str, bytes] = {}
         self.records: list[tuple[int, str, SchematicAnalysis, bool]] = []
         self.stored: list[StoredSchematic] = []
+        self.renders: dict[tuple[int, str], StoredRender] = {}
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
         import hashlib
@@ -214,8 +221,22 @@ class FakeSchematicStore:
             if low <= stored.analysis.metrics.block_count <= high and stored.build_id != exclude_build_id
         ][:limit]
 
-    async def record_render(self, schematic_id: int, recipe_hash: str, url: str) -> None:
-        return None
+    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
+        return self.renders.get((schematic_id, recipe_hash))
+
+    async def record_render(
+        self,
+        schematic_id: int,
+        recipe_hash: str,
+        url: str,
+        *,
+        width: int,
+        height: int,
+        byte_size: int,
+    ) -> StoredRender:
+        render = StoredRender(schematic_id, recipe_hash, url, width, height, byte_size)
+        self.renders[(schematic_id, recipe_hash)] = render
+        return render
 
 
 class FakeVersionResolver:

@@ -38,17 +38,36 @@ def litematic_bytes(payload: bytes = b"") -> bytes:
     return gzip.compress(body)
 
 
+class FakeResourcePack:
+    """Return deterministic operator-owned pack bytes without filesystem I/O."""
+
+    async def load(self) -> tuple[bytes, str]:
+        return b"resource-pack", "a" * 64
+
+
 def service(
     analyzer: FakeSchematicAnalyzer | None = None,
     store: FakeSchematicStore | None = None,
     *,
     limits: SchematicLimits | None = None,
     engine_installed: bool = True,
+    render_enabled: bool = False,
+    resource_pack: "FakeResourcePack | None" = None,
+    render_max_block_count: int = 400_000,
 ) -> tuple[SchematicService, FakeSchematicAnalyzer, FakeSchematicStore]:
     analyzer = analyzer or FakeSchematicAnalyzer()
     store = store or FakeSchematicStore()
     return (
-        SchematicService(analyzer, store, FakeVersionResolver(), limits=limits, engine_installed=engine_installed),
+        SchematicService(
+            analyzer,
+            store,
+            FakeVersionResolver(),
+            limits=limits,
+            engine_installed=engine_installed,
+            render_enabled=render_enabled,
+            resource_pack=resource_pack,
+            render_max_block_count=render_max_block_count,
+        ),
         analyzer,
         store,
     )
@@ -250,3 +269,47 @@ async def test_closing_the_service_closes_the_analyzer() -> None:
     await schematics.aclose()
 
     assert analyzer.closed is True
+
+
+async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+
+    prepared = await schematics.prepare_render(7)
+
+    assert prepared is not None
+    assert prepared.png == analyzer.render_output
+    assert analyzer.render_calls[0][2] == b"resource-pack"
+    await schematics.record_render(prepared, "https://cdn.example/render.png")
+
+    cached = await schematics.prepare_render(7)
+    assert cached is not None
+    assert cached.cached_url == "https://cdn.example/render.png"
+    assert len(analyzer.render_calls) == 1
+
+
+async def test_render_skips_a_schematic_over_the_block_cap() -> None:
+    analyzer = FakeSchematicAnalyzer(make_analysis(block_count=401))
+    schematics, _, _ = service(
+        analyzer,
+        render_enabled=True,
+        resource_pack=FakeResourcePack(),
+        render_max_block_count=400,
+    )
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+
+    assert await schematics.prepare_render(7) is None
+    assert analyzer.render_calls == []
+
+
+async def test_render_worker_crash_is_not_retried() -> None:
+    analyzer = FakeSchematicAnalyzer()
+    schematics, _, store = service(analyzer, render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    analyzer.failure = SchematicWorkerCrashedError(operation="render", exit_code=-9)
+
+    assert await schematics.prepare_render(7) is None
+    assert await schematics.prepare_render(7) is None
+    await store.record_analysis(8, store.records[0][1], analyzer.analysis, primary=True)
+    assert await schematics.prepare_render(8) is None
+    assert len(analyzer.render_calls) == 1

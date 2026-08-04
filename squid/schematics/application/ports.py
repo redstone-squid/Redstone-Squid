@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.queries import StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -132,7 +132,24 @@ class SchematicStore(Protocol):
         """Shortlist schematics of comparable size for pairwise near-duplicate ranking."""
         ...
 
-    async def record_render(self, schematic_id: int, recipe_hash: str, url: str) -> None: ...
+    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
+
+    async def record_render(
+        self,
+        schematic_id: int,
+        recipe_hash: str,
+        url: str,
+        *,
+        width: int,
+        height: int,
+        byte_size: int,
+    ) -> StoredRender: ...
+
+
+class SchematicResourcePackProvider(Protocol):
+    """Lazy source for verified resource-pack bytes and their SHA-256 digest."""
+
+    async def load(self) -> tuple[bytes, str]: ...
 
 
 class SchematicVersionResolver(Protocol):

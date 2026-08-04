@@ -1,6 +1,6 @@
 # Integrating Nucleation into Redstone-Squid
 
-> **Status.** Phases 0-2 have landed. Phases 3-4 are not started. Everything below the
+> **Status.** Phases 0-3 have landed. Phase 4 is not started. Everything below the
 > status block is the plan as approved, amended in place wherever building it proved part of it
 > wrong; those amendments are called out where they occur rather than silently applied.
 
@@ -526,6 +526,24 @@ rotation-stable transparent PNG that reads on both Discord themes. Recipe hash =
 `sha256(pack_sha256 + dims + projection + yaw/pitch/zoom + analyzer_version)`, so a config
 change invalidates cached renders and an identical request never re-renders.
 **Migration:** `schematic_renders`.
+
+**As built**, render settings are flat fields on `SchematicConfig` (`render_enabled`,
+`render_pack_path`, and so on), which keeps every value reachable through the verified
+single-split `SQUID_SCHEMATIC_RENDER_*` environment names. Remote packs require a configured
+SHA-256; local packs may derive it. The loader fetches lazily, verifies before caching, and
+retains verified bytes for the process lifetime.
+
+- The worker protocol continues sending pack bytes because any pool worker can receive the
+  request. Each persistent worker hashes those bytes and caches the parsed engine
+  `ResourcePack`, avoiding repeated native parsing without coupling the parent to an engine
+  handle or local worker filesystem path.
+- Submission rendering is a cog-owned background task started only after voting messages have
+  posted. Successful PNGs are uploaded to Catbox as replaceable derived artifacts, added to
+  `render_urls` under the build edit lock, and followed by `BuildHandler.update_messages()`.
+  Cog unload cancels and awaits outstanding renders.
+- The service checks cached recipes before its per-process attempt deny-set. Native crashes,
+  timeouts, invalid PNG output, and configured metric caps all degrade to a logged skip; an
+  uncached recipe is attempted at most once per process.
 
 ### Phase 4 — simulation + autostack (gated)
 

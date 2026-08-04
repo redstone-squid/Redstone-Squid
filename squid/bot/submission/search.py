@@ -1,8 +1,9 @@
 """Everything related to querying the database for information."""
 
+import asyncio
 import logging
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord import app_commands
@@ -61,7 +62,15 @@ class SearchCog[
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
         self.restrictions = bot.services.restrictions
+        self._schematic_render_tasks: set[asyncio.Task[None]] = set()
         self.register_edit_context_menu()
+
+    @override
+    async def cog_unload(self) -> None:
+        """Cancel background renders when the owning submission cog is unloaded."""
+        for task in self._schematic_render_tasks:
+            task.cancel()
+        await asyncio.gather(*self._schematic_render_tasks, return_exceptions=True)
 
     @commands.hybrid_command("search")
     @app_commands.describe(

@@ -29,3 +29,32 @@ class DuplicateCandidate:
     tier: DuplicateTier
     footprint_distance: float
     detail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredRender:
+    """A persisted, recipe-keyed rendered preview."""
+
+    schematic_id: int
+    recipe_hash: str
+    url: str
+    width: int
+    height: int
+    byte_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedRender:
+    """A cached URL or fresh PNG awaiting upload by the transport layer."""
+
+    schematic_id: int
+    recipe_hash: str
+    width: int
+    height: int
+    png: bytes | None = None
+    cached_url: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.png is None) == (self.cached_url is None):
+            msg = "A prepared render must contain exactly one of png and cached_url."
+            raise ValueError(msg)

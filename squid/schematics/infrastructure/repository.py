@@ -7,7 +7,7 @@ from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.queries import StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,
@@ -15,7 +15,7 @@ from squid.schematics.domain.models import (
     SchematicMetrics,
 )
 from squid.schematics.infrastructure.mapping import to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
+from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile, SchematicRender
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,
@@ -178,10 +178,50 @@ class SchematicRepository:
             statement = statement.where(BuildSchematic.build_id != exclude_build_id)
         return await self._fetch(statement.order_by(func.abs(BuildSchematic.block_count - blocks)).limit(limit))
 
-    async def record_render(self, schematic_id: int, recipe_hash: str, url: str) -> None:
-        """Record a rendered preview. Phase 3 introduces the table this will write to."""
-        msg = "Rendered previews are a Phase 3 feature; schematic_renders does not exist yet."
-        raise NotImplementedError(msg)
+    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(SchematicRender).where(
+                    and_(
+                        SchematicRender.build_schematic_id == schematic_id,
+                        SchematicRender.recipe_hash == recipe_hash,
+                    )
+                )
+            )
+        return _stored_render(row) if row is not None else None
+
+    async def record_render(
+        self,
+        schematic_id: int,
+        recipe_hash: str,
+        url: str,
+        *,
+        width: int,
+        height: int,
+        byte_size: int,
+    ) -> StoredRender:
+        """Upsert one derived preview so concurrent requests converge on one recipe row."""
+        statement = (
+            insert(SchematicRender)
+            .values(
+                build_schematic_id=schematic_id,
+                recipe_hash=recipe_hash,
+                url=url,
+                width=width,
+                height=height,
+                byte_size=byte_size,
+            )
+            .on_conflict_do_update(
+                index_elements=[SchematicRender.build_schematic_id, SchematicRender.recipe_hash],
+                set_={"url": url, "width": width, "height": height, "byte_size": byte_size},
+            )
+            .returning(SchematicRender)
+        )
+        async with self._session_factory() as session:
+            row = await session.scalar(statement)
+            await session.commit()
+        assert row is not None
+        return _stored_render(row)
 
     @staticmethod
     def _joined() -> Select[tuple[BuildSchematic, str, int]]:
@@ -197,6 +237,17 @@ class SchematicRepository:
             to_stored_schematic(row, source_format=SchematicFormat(source_format), byte_size=byte_size)
             for row, source_format, byte_size in rows
         ]
+
+
+def _stored_render(row: SchematicRender) -> StoredRender:
+    return StoredRender(
+        schematic_id=row.build_schematic_id,
+        recipe_hash=row.recipe_hash,
+        url=row.url,
+        width=row.width,
+        height=row.height,
+        byte_size=row.byte_size,
+    )
 
 
 def _dimension_within(value: int, span: int) -> ColumnElement[bool]:

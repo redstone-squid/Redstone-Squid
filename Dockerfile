@@ -4,6 +4,8 @@ ARG PYTHON_VERSION=3.12
 
 FROM python:${PYTHON_VERSION}-slim AS builder
 
+ARG WITH_SCHEMATICS=0
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_SYSTEM_PYTHON=1 \
@@ -21,9 +23,20 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-dev --no-editable
+    if [ "$WITH_SCHEMATICS" = "1" ]; then \
+      uv sync --locked --no-dev --no-editable --extra schematics; \
+    else \
+      uv sync --locked --no-dev --no-editable; \
+    fi
 
 FROM python:${PYTHON_VERSION}-slim AS runtime
+
+ARG WITH_SOFTWARE_GPU=0
+RUN if [ "$WITH_SOFTWARE_GPU" = "1" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 ARG GIT_COMMIT_HASH=unknown
 ENV SQUID_BUILD_COMMIT_HASH=$GIT_COMMIT_HASH
@@ -35,7 +48,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     GIT_PYTHON_REFRESH=quiet \
     SQUID_LOG_DIRECTORY=/var/log/app \
-    XDG_CACHE_HOME=/var/lib/app/.cache
+    XDG_CACHE_HOME=/var/lib/app/.cache \
+    WGPU_BACKEND=vulkan
 
 WORKDIR /app
 

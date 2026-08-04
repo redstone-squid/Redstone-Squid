@@ -28,10 +28,11 @@ from squid.persistence.engine import DatabaseEngine
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApplicationRuntime, ApplicationServices
-from squid.schematics.application import SchematicAnalyzer, SchematicService
+from squid.schematics.application import RenderRequest, SchematicAnalyzer, SchematicService
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.repository import SchematicRepository
+from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.search.application import CursorCodec, SearchQueryParser, SearchService
@@ -75,6 +76,14 @@ def create_schematic_analyzer(config: SchematicConfig) -> SchematicAnalyzer:
 def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> SchematicService:
     """Assemble the schematic service over whichever analyzer this process can run."""
     analyzer = create_schematic_analyzer(config)
+    resource_pack = None
+    if config.render_pack_path is not None or config.render_pack_url is not None:
+        resource_pack = ResourcePackLoader(
+            path=config.render_pack_path,
+            url=str(config.render_pack_url) if config.render_pack_url is not None else None,
+            expected_sha256=config.render_pack_sha256,
+            cache_dir=config.render_cache_dir,
+        )
     return SchematicService(
         analyzer,
         SchematicRepository(db.async_session),
@@ -90,6 +99,15 @@ def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> Sch
         duplicate_max_comparisons=config.duplicate_max_comparisons,
         duplicate_result_limit=config.duplicate_result_limit,
         duplicate_total_timeout_seconds=config.duplicate_total_timeout_seconds,
+        render_enabled=config.render_enabled,
+        resource_pack=resource_pack,
+        render_request=RenderRequest(
+            width=config.render_width,
+            height=config.render_height,
+            background=config.render_background,
+        ),
+        render_max_block_count=config.render_max_block_count,
+        render_max_bounding_volume=config.render_max_bounding_volume,
     )
 
 

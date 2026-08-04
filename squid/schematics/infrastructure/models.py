@@ -155,3 +155,29 @@ class BuildSchematic(Base, kw_only=True):
     analyzed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+class SchematicRender(Base, kw_only=True):
+    """A replaceable preview artifact keyed by the complete rendering recipe."""
+
+    __tablename__ = "schematic_renders"
+    __table_args__ = (
+        UniqueConstraint("build_schematic_id", "recipe_hash", name="schematic_renders_schematic_recipe_key"),
+        CheckConstraint("width > 0 AND height > 0 AND byte_size > 0", name="schematic_renders_sizes_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    build_schematic_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("build_schematics.id", name="schematic_renders_build_schematic_id_fkey", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipe_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    """SHA-256 of the pack, camera recipe, output dimensions, and analyzer version."""
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
