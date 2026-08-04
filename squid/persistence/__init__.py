@@ -7,6 +7,7 @@ from squid.records.infrastructure import models as record_models
 from squid.schematics.infrastructure import models as schematic_models
 from squid.search.infrastructure import models as search_models
 from squid.settings.infrastructure import models as setting_models
+from squid.starboard.infrastructure import models as starboard_models
 from squid.tags.infrastructure import models as tag_models
 from squid.users.infrastructure import models as user_models
 from squid.versions.infrastructure import models as version_models
@@ -20,6 +21,7 @@ __all__ = [
     "schematic_models",
     "search_models",
     "setting_models",
+    "starboard_models",
     "tag_models",
     "user_models",
     "version_models",

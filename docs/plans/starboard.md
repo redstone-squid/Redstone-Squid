@@ -221,6 +221,7 @@ starboard_origin_messages
   has_image     bool not null default false
   posted_at     timestamptz not null          # from the snowflake; drives age rules + analytics
   seen_at       timestamptz not null default now()
+  deleted_at    timestamptz                 # implementation amendment: represents origin deletion
 
 starboard_votes
   starboard_id      -> starboards.id on delete cascade
@@ -247,7 +248,22 @@ starboard_entries
   primary key (starboard_id, origin_message_id)
   unique (posted_message_id) where posted_message_id is not null
   index (starboard_id, score desc)
+
+starboard_role_multipliers                 # implementation amendment: omitted from the draft schema
+  starboard_id -> starboards.id on delete cascade
+  role_id      bigint
+  multiplier   double precision not null check (>0 and finite)
+  primary key (starboard_id, role_id)
 ```
+
+> **Implementation amendment (2026-08-04).** The draft exposed role-weight commands but omitted
+> their persistence table, so `starboard_role_multipliers` is included above. Origin messages
+> also need `deleted_at`; without it the service cannot retain the entry long enough to return a
+> `REMOVE` plan. The previously unspecified booleans default conservatively: self-votes, bot
+> authors, invalid-reaction removal, and author pings are off; edit/delete linking, attachment
+> display, reply context, jump links, and both autoreaction directions are on. Names/emojis,
+> ages, colours, positions, thresholds, and all multipliers receive database checks matching the
+> domain validation.
 
 Two schema choices worth defending:
 

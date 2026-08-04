@@ -1,0 +1,1 @@
+"""Weighted, configurable Discord starboards."""
