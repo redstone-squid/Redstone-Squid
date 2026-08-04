@@ -228,10 +228,18 @@ class SchematicWorkerPool:
         frame = await self._call("convert", params, (data,), self._config.convert_timeout_seconds)
         return _payload(frame), wire.decode_losses(_result(frame).get("losses"))
 
-    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison:
-        frame = await self._call(
-            "compare", {"preset": preset.value}, (left, right), self._config.compare_timeout_seconds
-        )
+    async def compare(
+        self,
+        left: bytes,
+        right: bytes,
+        *,
+        preset: FingerprintPreset,
+        timeout_seconds: float | None = None,
+    ) -> SchematicComparison:
+        timeout = self._config.compare_timeout_seconds
+        if timeout_seconds is not None:
+            timeout = min(timeout, timeout_seconds)
+        frame = await self._call("compare", {"preset": preset.value}, (left, right), timeout)
         return wire.decode_comparison(cast(Mapping[str, Any], _result(frame)["comparison"]))
 
     async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
@@ -277,10 +285,21 @@ class SchematicWorkerPool:
                 msg, developer_action="Check the squid.schematics.worker log for the crashing payload."
             )
 
-        async with self._available:
+        try:
+            await asyncio.wait_for(self._available.acquire(), timeout)
+        except TimeoutError:
+            raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
+
+        leased_at = asyncio.get_running_loop().time()
+        remaining = timeout - (leased_at - now)
+        if remaining <= 0:
+            self._available.release()
+            raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout)
+
+        try:
             worker = self._idle.popleft()
             try:
-                frame = await worker.request(operation, params, payloads, timeout)
+                frame = await worker.request(operation, params, payloads, remaining)
             except (SchematicWorkerCrashedError, SchematicTimeoutError):
                 loop_time = asyncio.get_running_loop().time()
                 self._breaker.record_failure(loop_time)
@@ -290,6 +309,8 @@ class SchematicWorkerPool:
                 raise
             finally:
                 self._idle.append(worker)
+        finally:
+            self._available.release()
 
         if not frame.header.get("ok", False):
             raise _translate(cast(Mapping[str, Any], frame.header.get("error", {})), operation)

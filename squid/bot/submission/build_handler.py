@@ -158,6 +158,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         }
         resource_names = {"Server", "Coordinates", "Command", "World Download", "Schematic", "Videos"}
         credit_names = {"Creators", "Date Of Completion"}
+        review_names = {"⚠ Possible duplicate"}
 
         def section(title: str, names: set[str]) -> CardSection:
             return CardSection(
@@ -178,6 +179,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             await self.get_description(),
             accent_colour=status_colours.get(build.submission_status, DISCORD_GREEN),
             sections=(
+                section("Review warnings", review_names),
                 section("Size & performance", performance_names),
                 section("Compatibility", {"Versions"}),
                 section("Credits", credit_names),
@@ -290,5 +292,15 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             fields["Schematic"] = ", ".join(build.schematic_urls)
         if build.video_urls:
             fields["Videos"] = ", ".join(build.video_urls)
+
+        if duplicates := build.extra_info.get("schematic_duplicates"):
+            labels = {
+                "identical": "byte-identical file",
+                "structural-match": "same structure, moved or rotated",
+                "near": "near structural match",
+            }
+            fields["⚠ Possible duplicate"] = "\n".join(
+                f"Build #{candidate['build_id']} ({labels[candidate['tier']]})" for candidate in duplicates
+            )
 
         return fields

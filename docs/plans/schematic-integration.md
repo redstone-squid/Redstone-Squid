@@ -1,6 +1,6 @@
 # Integrating Nucleation into Redstone-Squid
 
-> **Status.** Phases 0 and 1 have landed. Phases 2-4 are not started. Everything below the
+> **Status.** Phases 0-2 have landed. Phases 3-4 are not started. Everything below the
 > status block is the plan as approved, amended in place wherever building it proved part of it
 > wrong; those amendments are called out where they occur rather than silently applied.
 
@@ -12,7 +12,7 @@ are opaque strings the bot never opens; build cards depend on users remembering 
 a screenshot; duplicate submissions are caught only by human memory.
 
 [Nucleation](https://github.com/Schem-at/Nucleation) is an MIT-licensed Rust schematic
-engine with native Python bindings (`nucleation==0.9.2` on PyPI, cp312-abi3 wheels built with
+engine with native Python bindings (`nucleation==0.10.0` on PyPI, cp312-abi3 wheels built with
 scikit-build-core and nanobind — its docs say PyO3, but the published wheel is not). It parses
 `.litematic` / `.schem` / `.mcstructure` / world files, computes translation- and
 rotation-invariant structural fingerprints, renders headless PNGs, simulates redstone via
@@ -170,7 +170,7 @@ class SchematicAnalysis:
     metrics: SchematicMetrics
     fingerprints: SchematicFingerprints
     lattice: AutostackLattice | None
-    analyzer_version: str          # "nucleation-0.9.2"
+    analyzer_version: str          # "nucleation-0.10.0"
     analysis_schema_version: int   # ours, bumped when we change what we compute
 ```
 
@@ -451,7 +451,7 @@ Also fix `docs/new-migration.md:10` — it says "update the SQLAlchemy models in
   known data version" rather than a guess, because a wrong number produces a confidently wrong
   conversion.
 
-### Phase 2 — duplicate detection
+### Phase 2 — duplicate detection — **done**
 
 Phase 1 already *writes* fingerprints; this adds lookup and surfacing.
 
@@ -468,6 +468,27 @@ Surfaced as a "⚠ Possible duplicate of #1234 (moved/rotated)" field on the vot
 **Migration:** possibly one composite index `(analyzer_version, block_count)`.
 **Verify first:** whether `signature(preset)` is an LSH-style bucketable prefix or an opaque
 hash — if bucketable, step 3 becomes index-backed and far better.
+
+**As built**, the signature experiment returned a JSON document containing `count`, sorted
+dimensions, and a coarse block-category histogram. It is useful diagnostic metadata, but it is
+neither an LSH prefix nor more selective than the metric shortlist, so Phase 2 does not query it.
+
+- Byte identity is a reverse lookup on `file_sha256`, backed by the Phase 2 migration's new
+  index. Shape fingerprint equality, scoped to `analyzer_version`, is the moved/rotated tier.
+  Structural equality never becomes a verdict by itself.
+- Structural and metric shortlists are merged, deduplicated, ordered by relative block-count
+  and sorted-dimension distance, then capped at five worker comparisons. A stricter per-call
+  deadline is passed into the supervisor so queueing plus native work share the 15-second total
+  budget safely; timed-out or failed comparisons leave already-computed partial results intact.
+- Thresholds, shortlist size, result count, and total budget are flat `SchematicConfig` fields
+  reachable through `SQUID_SCHEMATIC_*`. At most three ranked warnings are persisted in the
+  build's `extra_info` before submission and shown in a dedicated "Review warnings" section of
+  the vote card.
+- Nucleation was deliberately bumped from 0.9.2 to 0.10.0 with the Phase 2 work. Existing 0.9.2
+  fingerprints remain labelled `nucleation-0.9.2` and are intentionally excluded from direct
+  fingerprint equality; byte matches still work across versions, and metric-shortlisted files
+  are compared from their bytes by the current engine. Re-analysis can backfill the direct index
+  without ever treating hashes from different engine versions as comparable.
 
 ### Phase 3 — rendered previews
 
@@ -570,7 +591,7 @@ on x86_64 is fine, but the same Dockerfile built on an arm64 host would fail
 
 ```toml
 [project.optional-dependencies]
-schematics = ["nucleation==0.9.2"]
+schematics = ["nucleation==0.10.0"]
 ```
 
 **Exact pin, not a range** — fingerprints and loss reports are version-scoped outputs we

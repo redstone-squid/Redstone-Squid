@@ -108,6 +108,18 @@ async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_anoth
     assert [match.build_id for match in matches] == [1]
 
 
+async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
+    repository: SchematicRepository,
+) -> None:
+    digest = await repository.put_file(b"shared", source_format=SchematicFormat.LITEMATIC)
+    await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    await repository.record_analysis(2, digest, make_analysis(), primary=True)
+
+    matches = await repository.find_file_matches(digest, exclude_build_id=2)
+
+    assert [match.build_id for match in matches] == [1]
+
+
 async def test_a_fingerprint_from_another_engine_version_never_matches(
     repository: SchematicRepository,
 ) -> None:

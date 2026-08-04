@@ -6,7 +6,7 @@ import zlib
 import pytest
 
 from squid.schematics.application import ConvertRequest, IngestRequest, SchematicService
-from squid.schematics.domain.models import SchematicFormat, SchematicLimits
+from squid.schematics.domain.models import FingerprintPreset, SchematicComparison, SchematicFormat, SchematicLimits
 from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
@@ -114,6 +114,74 @@ async def test_attach_records_the_analysis_against_the_build() -> None:
     build_id, _, analysis, primary = store.records[0]
     assert (build_id, primary) == (7, True)
     assert analysis.fingerprints.shape == "shape-hash"
+
+
+async def test_duplicate_detection_reports_a_byte_identical_file_without_comparing() -> None:
+    schematics, analyzer, _ = service()
+    request = IngestRequest(data=litematic_bytes(), filename="door.litematic")
+    await schematics.attach(7, request)
+
+    duplicate = await schematics.ingest(request)
+    matches = await schematics.find_duplicates(duplicate)
+
+    assert [(match.build_id, match.tier) for match in matches] == [(7, "identical")]
+    assert analyzer.compare_calls == []
+
+
+async def test_duplicate_detection_uses_shape_as_the_moved_or_rotated_identity() -> None:
+    schematics, analyzer, _ = service()
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="original.litematic"))
+
+    moved = await schematics.ingest(IngestRequest(data=litematic_bytes(b"\x00"), filename="moved.litematic"))
+    matches = await schematics.find_duplicates(moved)
+
+    assert [(match.build_id, match.tier) for match in matches] == [(7, "structural-match")]
+    assert analyzer.compare_calls == []
+
+
+async def test_duplicate_detection_compares_only_shortlisted_near_matches() -> None:
+    analyzer = FakeSchematicAnalyzer(make_analysis(shape="new-shape"))
+    schematics, _, store = service(analyzer)
+    candidate_data = b"candidate"
+    candidate_digest = await store.put_file(candidate_data, source_format=SchematicFormat.LITEMATIC)
+    await store.record_analysis(
+        7,
+        candidate_digest,
+        make_analysis(shape="old-shape", block_count=43),
+        primary=True,
+    )
+    analyzer.comparisons[candidate_data] = SchematicComparison(
+        preset=FingerprintPreset.SHAPE,
+        identical=False,
+        footprint_distance=0.5,
+        summary='{"changed":1}',
+    )
+
+    uploaded = await schematics.ingest(IngestRequest(data=litematic_bytes(), filename="new.litematic"))
+    matches = await schematics.find_duplicates(uploaded)
+
+    assert [(match.build_id, match.tier, match.footprint_distance) for match in matches] == [(7, "near", 0.5)]
+    assert matches[0].detail == '{"changed":1}'
+    assert len(analyzer.compare_calls) == 1
+    assert analyzer.compare_calls[0][2] is FingerprintPreset.SHAPE
+    assert analyzer.compare_calls[0][3] is not None
+
+
+async def test_duplicate_detection_discards_comparisons_beyond_the_near_threshold() -> None:
+    analyzer = FakeSchematicAnalyzer(make_analysis(shape="new-shape"))
+    schematics, _, store = service(analyzer)
+    candidate_data = b"candidate"
+    candidate_digest = await store.put_file(candidate_data, source_format=SchematicFormat.LITEMATIC)
+    await store.record_analysis(7, candidate_digest, make_analysis(shape="old-shape"), primary=True)
+    analyzer.comparisons[candidate_data] = SchematicComparison(
+        preset=FingerprintPreset.SHAPE,
+        identical=False,
+        footprint_distance=1.01,
+    )
+
+    uploaded = await schematics.ingest(IngestRequest(data=litematic_bytes(), filename="new.litematic"))
+
+    assert await schematics.find_duplicates(uploaded) == []
 
 
 async def test_record_attaches_an_analysis_produced_before_the_build_existed() -> None:

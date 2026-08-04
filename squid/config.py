@@ -257,6 +257,17 @@ class SchematicConfig(_FrozenModel):
     render_timeout_seconds: float = Field(default=45.0, gt=0)
     simulate_timeout_seconds: float = Field(default=90.0, gt=0)
 
+    duplicate_metric_tolerance: float = Field(default=0.2, gt=0, le=1)
+    """Relative block-count and dimension tolerance for the fuzzy SQL shortlist."""
+    duplicate_near_distance: float = Field(default=1.0, gt=0)
+    """Largest shape footprint distance surfaced as a near duplicate."""
+    duplicate_max_comparisons: int = Field(default=5, ge=0, le=25)
+    """Maximum pairwise engine comparisons for one submission."""
+    duplicate_result_limit: int = Field(default=3, ge=1, le=10)
+    """Maximum duplicate warnings retained on a build and shown to reviewers."""
+    duplicate_total_timeout_seconds: float = Field(default=15.0, gt=0)
+    """Wall-clock budget shared by all pairwise comparisons for one submission."""
+
     worker_memory_limit_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
     """`RLIMIT_AS` applied in the child before the engine is imported."""
     worker_cpu_seconds: int = Field(default=900, ge=1)

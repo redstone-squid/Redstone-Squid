@@ -54,6 +54,14 @@ class ServerInfo(TypedDict, total=False):
     command_to_build: str
 
 
+class SchematicDuplicateInfo(TypedDict):
+    """One machine-detected schematic resemblance retained for reviewers."""
+
+    build_id: int
+    tier: Literal["identical", "structural-match", "near"]
+    footprint_distance: float
+
+
 class Info(TypedDict, total=False):
     """A special JSON field in the database that stores various additional information about the build"""
 
@@ -65,6 +73,7 @@ class Info(TypedDict, total=False):
     # declared value still wins — an export is often cropped to the mechanism — so this records
     # the disagreement for reviewers rather than resolving it.
     schematic_dimension_mismatch: str
+    schematic_duplicates: list[SchematicDuplicateInfo]
 
 
 class Status(IntEnum):

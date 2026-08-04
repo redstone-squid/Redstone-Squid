@@ -73,6 +73,7 @@ class BuildSchematic(Base, kw_only=True):
             postgresql_where=text("is_primary"),
         ),
         Index("build_schematics_build_id_idx", "build_id"),
+        Index("build_schematics_file_sha256_idx", "file_sha256"),
         # Fingerprints are translation-invariant hashes: equality is the only predicate SQL
         # can answer about them, and near-duplicate ranking happens pairwise in the worker
         # over the shortlist these indexes produce.

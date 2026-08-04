@@ -78,6 +78,23 @@ async def test_build_handler_does_not_repeat_headline_component_restrictions(dis
     assert await handler.get_description() is None
 
 
+@pytest.mark.asyncio
+async def test_build_handler_surfaces_schematic_duplicate_evidence(display_build: Build) -> None:
+    display_build.extra_info["schematic_duplicates"] = [
+        {"build_id": 1234, "tier": "structural-match", "footprint_distance": 0.0}
+    ]
+    versions = SimpleNamespace(newest=AsyncMock(return_value="Java 1.20"))
+    bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
+
+    payload = (
+        await BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build).render_layout()
+    ).to_components()
+
+    assert "Review warnings" in str(payload)
+    assert "Possible duplicate" in str(payload)
+    assert "Build #1234 (same structure, moved or rotated)" in str(payload)
+
+
 def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:
     form = BuildSubmissionForm(display_build, cast(BuildService, object()))
     payload = form.to_components()

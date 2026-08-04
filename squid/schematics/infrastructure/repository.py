@@ -113,6 +113,19 @@ class SchematicRepository:
         )
         return found[0] if found else None
 
+    async def find_file_matches(
+        self,
+        sha256: str,
+        *,
+        exclude_build_id: int | None = None,
+        limit: int = 25,
+    ) -> list[StoredSchematic]:
+        """Find attachments pointing at the same content-addressed file."""
+        statement = self._joined().where(BuildSchematic.file_sha256 == sha256)
+        if exclude_build_id is not None:
+            statement = statement.where(BuildSchematic.build_id != exclude_build_id)
+        return await self._fetch(statement.limit(limit))
+
     async def find_fingerprint_matches(
         self,
         fingerprint: str,

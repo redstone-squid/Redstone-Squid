@@ -85,6 +85,11 @@ def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> Sch
             max_allocated_volume=config.max_allocated_volume,
         ),
         engine_installed=not isinstance(analyzer, NullSchematicAnalyzer),
+        duplicate_metric_tolerance=config.duplicate_metric_tolerance,
+        duplicate_near_distance=config.duplicate_near_distance,
+        duplicate_max_comparisons=config.duplicate_max_comparisons,
+        duplicate_result_limit=config.duplicate_result_limit,
+        duplicate_total_timeout_seconds=config.duplicate_total_timeout_seconds,
     )
 
 

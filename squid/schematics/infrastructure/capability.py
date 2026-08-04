@@ -70,7 +70,14 @@ class NullSchematicAnalyzer:
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
         raise self._unavailable()
 
-    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison:
+    async def compare(
+        self,
+        left: bytes,
+        right: bytes,
+        *,
+        preset: FingerprintPreset,
+        timeout_seconds: float | None = None,
+    ) -> SchematicComparison:
         raise self._unavailable()
 
     async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:

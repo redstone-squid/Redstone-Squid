@@ -89,6 +89,28 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
     assert config.runtime.embeddings.base_url == config.openai.base_url
 
 
+def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_SCHEMATIC_DUPLICATE_METRIC_TOLERANCE="0.15",
+        SQUID_SCHEMATIC_DUPLICATE_NEAR_DISTANCE="0.75",
+        SQUID_SCHEMATIC_DUPLICATE_MAX_COMPARISONS="4",
+        SQUID_SCHEMATIC_DUPLICATE_RESULT_LIMIT="2",
+        SQUID_SCHEMATIC_DUPLICATE_TOTAL_TIMEOUT_SECONDS="12",
+    )
+
+    config = load_bot_process_config().runtime.schematics
+
+    assert config.duplicate_metric_tolerance == 0.15
+    assert config.duplicate_near_distance == 0.75
+    assert config.duplicate_max_comparisons == 4
+    assert config.duplicate_result_limit == 2
+    assert config.duplicate_total_timeout_seconds == 12
+
+
 def test_process_loaders_require_only_their_own_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
     assert load_bot_process_config().discord.token.get_secret_value() == "discord-token"

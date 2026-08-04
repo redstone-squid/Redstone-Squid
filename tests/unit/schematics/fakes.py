@@ -28,7 +28,9 @@ def make_analysis(
     sha256: str = "0" * 64,
     dimensions: tuple[int, int, int] = (3, 4, 5),
     block_count: int = 42,
+    structural: str = "structural-hash",
     shape: str = "shape-hash",
+    exact: str = "exact-hash",
     analyzer_version: str = "nucleation-test",
     lattice: AutostackLattice | None = None,
     signs: tuple[SchematicSign, ...] = (),
@@ -49,7 +51,7 @@ def make_analysis(
             region_names=("Main",),
             signs=signs,
         ),
-        fingerprints=SchematicFingerprints(structural="structural-hash", shape=shape, exact="exact-hash"),
+        fingerprints=SchematicFingerprints(structural=structural, shape=shape, exact=exact),
         analyzer_version=analyzer_version,
         analysis_schema_version=1,
         lattice=lattice,
@@ -64,6 +66,8 @@ class FakeSchematicAnalyzer:
         self.failure = failure
         self.analyze_calls: list[tuple[bytes, SchematicFormat | None, bool]] = []
         self.convert_calls: list[tuple[SchematicFormat, int | None]] = []
+        self.compare_calls: list[tuple[bytes, bytes, FingerprintPreset, float | None]] = []
+        self.comparisons: dict[bytes, SchematicComparison] = {}
         self.closed = False
 
     async def capabilities(self) -> AnalyzerCapabilities:
@@ -88,8 +92,19 @@ class FakeSchematicAnalyzer:
         self.convert_calls.append((target, data_version))
         return b"converted", ()
 
-    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison:
-        return SchematicComparison(preset=preset, identical=left == right, footprint_distance=0.0)
+    async def compare(
+        self,
+        left: bytes,
+        right: bytes,
+        *,
+        preset: FingerprintPreset,
+        timeout_seconds: float | None = None,
+    ) -> SchematicComparison:
+        self.compare_calls.append((left, right, preset, timeout_seconds))
+        return self.comparisons.get(
+            right,
+            SchematicComparison(preset=preset, identical=left == right, footprint_distance=0.0),
+        )
 
     async def render(self, data: bytes, *, request: object, resource_pack: bytes | None = None) -> bytes:
         raise InvalidSchematicError
@@ -150,6 +165,17 @@ class FakeSchematicStore:
     async def get_primary(self, build_id: int) -> StoredSchematic | None:
         return next((s for s in self.stored if s.build_id == build_id and s.is_primary), None)
 
+    async def find_file_matches(
+        self,
+        sha256: str,
+        *,
+        exclude_build_id: int | None = None,
+        limit: int = 25,
+    ) -> list[StoredSchematic]:
+        return [
+            stored for stored in self.stored if stored.file_sha256 == sha256 and stored.build_id != exclude_build_id
+        ][:limit]
+
     async def find_fingerprint_matches(
         self,
         fingerprint: str,
@@ -159,10 +185,15 @@ class FakeSchematicStore:
         exclude_build_id: int | None = None,
         limit: int = 25,
     ) -> list[StoredSchematic]:
+        attribute = {
+            FingerprintPreset.STRUCTURAL: "structural",
+            FingerprintPreset.SHAPE: "shape",
+            FingerprintPreset.EXACT: "exact",
+        }[preset]
         return [
             stored
             for stored in self.stored
-            if stored.analysis.fingerprints.shape == fingerprint
+            if getattr(stored.analysis.fingerprints, attribute) == fingerprint
             and stored.analysis.analyzer_version == analyzer_version
             and stored.build_id != exclude_build_id
         ][:limit]
@@ -175,7 +206,13 @@ class FakeSchematicStore:
         limit: int = 25,
         exclude_build_id: int | None = None,
     ) -> list[StoredSchematic]:
-        return self.stored[:limit]
+        low = int(metrics.block_count * (1 - tolerance))
+        high = int(metrics.block_count * (1 + tolerance)) + 1
+        return [
+            stored
+            for stored in self.stored
+            if low <= stored.analysis.metrics.block_count <= high and stored.build_id != exclude_build_id
+        ][:limit]
 
     async def record_render(self, schematic_id: int, recipe_hash: str, url: str) -> None:
         return None

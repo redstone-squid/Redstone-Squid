@@ -1,15 +1,18 @@
 """Schematic application services."""
 
+import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from squid.core.errors import SquidError
 from squid.schematics.application.commands import ConvertRequest, IngestRequest
 from squid.schematics.application.ports import SchematicAnalyzer, SchematicStore, SchematicVersionResolver
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.queries import DuplicateCandidate, DuplicateTier, StoredSchematic
 from squid.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
+    FingerprintPreset,
     SchematicAnalysis,
     SchematicFormat,
     SchematicLimits,
@@ -51,12 +54,22 @@ class SchematicService:
         *,
         limits: SchematicLimits | None = None,
         engine_installed: bool = True,
+        duplicate_metric_tolerance: float = 0.2,
+        duplicate_near_distance: float = 1.0,
+        duplicate_max_comparisons: int = 5,
+        duplicate_result_limit: int = 3,
+        duplicate_total_timeout_seconds: float = 15.0,
     ) -> None:
         self._analyzer = analyzer
         self._store = store
         self._versions = versions
         self._limits = limits or SchematicLimits()
         self._available = engine_installed
+        self._duplicate_metric_tolerance = duplicate_metric_tolerance
+        self._duplicate_near_distance = duplicate_near_distance
+        self._duplicate_max_comparisons = duplicate_max_comparisons
+        self._duplicate_result_limit = duplicate_result_limit
+        self._duplicate_total_timeout_seconds = duplicate_total_timeout_seconds
         self._poisoned: set[str] = set()
         """Digests of files that killed a worker. Re-analysing one would kill the next worker
         too, so this process refuses them outright rather than retrying."""
@@ -137,6 +150,112 @@ class SchematicService:
     async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
         return await self._store.get_primary(build_id)
 
+    async def find_duplicates(
+        self,
+        ingested: IngestedSchematic,
+        *,
+        exclude_build_id: int | None = None,
+    ) -> list[DuplicateCandidate]:
+        """Find earlier submissions that are identical to or resemble an upload.
+
+        Cheap indexed facts decide only the two trustworthy tiers: content SHA-256 proves
+        byte identity, and a version-scoped shape fingerprint proves the same build under
+        translation or rotation. Structural hashes and metric ranges only make a shortlist;
+        every fuzzy verdict comes from loading both files and comparing them in the worker.
+        """
+        self._require_available()
+        analysis = ingested.analysis
+        found: dict[int, DuplicateCandidate] = {}
+
+        file_matches = await self._store.find_file_matches(
+            ingested.sha256,
+            exclude_build_id=exclude_build_id,
+            limit=25,
+        )
+        for stored in file_matches:
+            _retain_better(found, _duplicate_candidate(stored, tier="identical", distance=0.0))
+
+        shape_matches = await self._store.find_fingerprint_matches(
+            analysis.fingerprints.shape,
+            preset=FingerprintPreset.SHAPE,
+            analyzer_version=analysis.analyzer_version,
+            exclude_build_id=exclude_build_id,
+            limit=25,
+        )
+        for stored in shape_matches:
+            if stored.file_sha256 != ingested.sha256:
+                _retain_better(found, _duplicate_candidate(stored, tier="structural-match", distance=0.0))
+
+        if self._duplicate_max_comparisons == 0:
+            return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
+        structural_matches = await self._store.find_fingerprint_matches(
+            analysis.fingerprints.structural,
+            preset=FingerprintPreset.STRUCTURAL,
+            analyzer_version=analysis.analyzer_version,
+            exclude_build_id=exclude_build_id,
+            limit=25,
+        )
+        metric_matches = await self._store.find_metric_neighbours(
+            analysis.metrics,
+            tolerance=self._duplicate_metric_tolerance,
+            exclude_build_id=exclude_build_id,
+            limit=25,
+        )
+        fuzzy_by_schematic = {
+            stored.id: stored
+            for stored in (*structural_matches, *metric_matches)
+            if stored.build_id not in found and stored.file_sha256 != ingested.sha256
+        }
+        fuzzy = sorted(fuzzy_by_schematic.values(), key=lambda stored: _metric_distance(analysis, stored))
+
+        left = await self._store.get_file(ingested.sha256)
+        if left is None:
+            return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._duplicate_total_timeout_seconds
+        for stored in fuzzy[: self._duplicate_max_comparisons]:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            right = await self._store.get_file(stored.file_sha256)
+            if right is None:
+                continue
+            try:
+                comparison = await self._analyzer.compare(
+                    left,
+                    right,
+                    preset=FingerprintPreset.SHAPE,
+                    timeout_seconds=remaining,
+                )
+            except SquidError:
+                logger.warning(
+                    "Could not compare schematic %s with candidate %s; returning partial duplicate results.",
+                    ingested.sha256,
+                    stored.file_sha256,
+                    exc_info=True,
+                )
+                continue
+
+            if comparison.identical:
+                tier: DuplicateTier = "structural-match"
+            elif comparison.footprint_distance <= self._duplicate_near_distance:
+                tier = "near"
+            else:
+                continue
+            _retain_better(
+                found,
+                _duplicate_candidate(
+                    stored,
+                    tier=tier,
+                    distance=comparison.footprint_distance,
+                    detail=comparison.summary,
+                ),
+            )
+
+        return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
     async def convert(
         self, build_id: int, request: ConvertRequest, *, version_label: str | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
@@ -208,3 +327,55 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
     if len(losses) > limit:
         lines.append(f"- …and {len(losses) - limit} more.")
     return "\n".join(lines)
+
+
+_DUPLICATE_TIER_ORDER: dict[DuplicateTier, int] = {"identical": 0, "structural-match": 1, "near": 2}
+
+
+def _duplicate_candidate(
+    stored: StoredSchematic,
+    *,
+    tier: DuplicateTier,
+    distance: float,
+    detail: str | None = None,
+) -> DuplicateCandidate:
+    return DuplicateCandidate(
+        build_id=stored.build_id,
+        schematic_id=stored.id,
+        tier=tier,
+        footprint_distance=distance,
+        detail=detail,
+    )
+
+
+def _retain_better(found: dict[int, DuplicateCandidate], candidate: DuplicateCandidate) -> None:
+    existing = found.get(candidate.build_id)
+    if existing is None or (_DUPLICATE_TIER_ORDER[candidate.tier], candidate.footprint_distance) < (
+        _DUPLICATE_TIER_ORDER[existing.tier],
+        existing.footprint_distance,
+    ):
+        found[candidate.build_id] = candidate
+
+
+def _rank_duplicates(candidates: Iterable[DuplicateCandidate], limit: int) -> list[DuplicateCandidate]:
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            _DUPLICATE_TIER_ORDER[candidate.tier],
+            candidate.footprint_distance,
+            candidate.build_id,
+        ),
+    )[:limit]
+
+
+def _metric_distance(current: SchematicAnalysis, stored: StoredSchematic) -> float:
+    """Give the most similar metric candidate the scarce worker slots first."""
+    left = current.metrics
+    right = stored.analysis.metrics
+    block_scale = max(left.block_count, right.block_count, 1)
+    score = abs(left.block_count - right.block_count) / block_scale
+    left_dimensions = sorted((left.dimensions.width, left.dimensions.height, left.dimensions.length))
+    right_dimensions = sorted((right.dimensions.width, right.dimensions.height, right.dimensions.length))
+    for left_extent, right_extent in zip(left_dimensions, right_dimensions, strict=True):
+        score += abs(left_extent - right_extent) / max(left_extent, right_extent, 1)
+    return score

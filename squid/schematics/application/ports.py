@@ -47,7 +47,16 @@ class SchematicAnalyzer(Protocol):
         self, data: bytes, *, target: SchematicFormat, data_version: int | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]: ...
 
-    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison: ...
+    async def compare(
+        self,
+        left: bytes,
+        right: bytes,
+        *,
+        preset: FingerprintPreset,
+        timeout_seconds: float | None = None,
+    ) -> SchematicComparison:
+        """Compare two files, optionally under a stricter caller-owned deadline."""
+        ...
 
     async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes: ...
 
@@ -85,6 +94,16 @@ class SchematicStore(Protocol):
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]: ...
 
     async def get_primary(self, build_id: int) -> StoredSchematic | None: ...
+
+    async def find_file_matches(
+        self,
+        sha256: str,
+        *,
+        exclude_build_id: int | None = None,
+        limit: int = 25,
+    ) -> list[StoredSchematic]:
+        """Return builds attached to exactly the same uploaded bytes."""
+        ...
 
     async def find_fingerprint_matches(
         self,

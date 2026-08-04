@@ -227,6 +227,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             return
 
         self._note_dimension_mismatch(build, analyses)
+        await self._note_schematic_duplicates(build, analyses)
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
         await self._record_analyses(build, analyses, uploader_id=interaction.user.id)
 
@@ -280,6 +281,29 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 await schematics.record(build.id, ingested, request, primary=index == 0)
             except SquidError:
                 logger.warning("Could not record the schematic analysis for build %s.", build.id, exc_info=True)
+
+    async def _note_schematic_duplicates(
+        self,
+        build: Build,
+        analyses: Sequence[tuple[IngestRequest, IngestedSchematic]],
+    ) -> None:
+        """Retain duplicate evidence before the build row is persisted."""
+        if not analyses:
+            return
+        try:
+            duplicates = await self.bot.services.schematics.find_duplicates(analyses[0][1])
+        except SquidError:
+            logger.warning("Could not check the submitted schematic for duplicates.", exc_info=True)
+            return
+        if duplicates:
+            build.extra_info["schematic_duplicates"] = [
+                {
+                    "build_id": candidate.build_id,
+                    "tier": candidate.tier,
+                    "footprint_distance": candidate.footprint_distance,
+                }
+                for candidate in duplicates
+            ]
 
     @staticmethod
     def _note_dimension_mismatch(build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]]) -> None:
@@ -379,6 +403,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         analyses = await self._analyse_attachments(pending_schematics, uploader_id=message.author.id)
 
         # Order is important here.
+        await self._note_schematic_duplicates(build, analyses)
         await self.builds.submit(build, submitter_id=message.author.id, ai_generated=True)
         await self._record_analyses(build, analyses, uploader_id=message.author.id)
         await self.bot.for_build(build).post_for_voting(type="add")

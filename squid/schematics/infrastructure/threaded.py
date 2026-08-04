@@ -81,9 +81,18 @@ class ThreadedSchematicAnalyzer:
 
         return await asyncio.to_thread(engine.convert, data, target=target, data_version=data_version)
 
-    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison:
+    async def compare(
+        self,
+        left: bytes,
+        right: bytes,
+        *,
+        preset: FingerprintPreset,
+        timeout_seconds: float | None = None,
+    ) -> SchematicComparison:
         from squid.schematics.infrastructure import nucleation_adapter as engine
 
+        # Threads cannot be safely cancelled. The subprocess implementation enforces the
+        # caller's deadline; this development-only fallback retains its documented limitation.
         return await asyncio.to_thread(engine.compare, left, right, preset=preset)
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
