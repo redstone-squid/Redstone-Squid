@@ -44,7 +44,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             logger.warning("General channel %s is not messageable", self.general_channel_id)
             return
 
-        await asyncio.sleep(5)  # Wait a bit to ensure the member is already cached from on_member_join
+        await asyncio.sleep(30)  # Wait to ensure the member is already cached from on_member_join
         decision = self.service.resolve(message.system_content)
         if decision is None:
             logger.warning("Could not find member for welcome message: %s", message.system_content)
