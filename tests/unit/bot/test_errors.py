@@ -40,10 +40,12 @@ def test_domain_error_presentation_exposes_only_public_detail() -> None:
 
 
 def test_unexpected_error_presentation_redacts_diagnostic_detail() -> None:
-    presentation = build_error_presentation(InternalError("database password leaked"))
+    with patch("squid.bot.errors.correlation_id", return_value="b" * 32):
+        presentation = build_error_presentation(InternalError("database password leaked"))
 
     assert "database password leaked" not in presentation.detail
     assert presentation.error_id is not None
+    assert presentation.error_id == "b" * 32
     assert presentation.error_id in presentation.detail
 
 

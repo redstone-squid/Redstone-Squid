@@ -33,6 +33,15 @@ def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
     handle.shutdown.assert_called_once_with()
 
 
+def test_create_app_delegates_optional_instrumentation(mocker: MockerFixture) -> None:
+    config = mocker.Mock()
+    instrument = mocker.patch.object(api_app, "instrument_api_app")
+
+    api_app.create_api_app(config=config)
+
+    instrument.assert_called_once_with(mocker.ANY, config.observability)
+
+
 def test_missing_authorization_header_returns_422(client: httpx.Client):
     resp = client.post("/verify", json={"uuid": str(TEST_UUID)})
     assert resp.status_code == 422
@@ -80,8 +89,11 @@ def test_success_returns_verification_code(client: httpx.Client):
     assert resp.json() == TEST_VERIFICATION_CODE
 
 
-def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+def test_internal_error_is_redacted_and_correlated(
+    app_factory: tuple[FastAPI, MockDatabaseManager], mocker: MockerFixture
+) -> None:
     app, _database = app_factory
+    mocker.patch("squid.api.errors.correlation_id", return_value="a" * 32)
 
     @app.get("/boom")
     async def boom() -> None:
@@ -100,6 +112,7 @@ def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, M
     assert "Sensitive" not in response.text
     assert "secret" not in response.text
     assert response.json()["error_id"] == response.headers["X-Error-ID"]
+    assert response.json()["error_id"] == "a" * 32
 
 
 def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:

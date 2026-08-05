@@ -1,6 +1,6 @@
 # Observability for Redstone-Squid
 
-> **Status.** Phases 0-1 implemented on 2026-08-05. Phase 2 is the next unit of work.
+> **Status.** Phases 0-2 implemented on 2026-08-05. Phase 3 is the next unit of work.
 > The findings below are verified in-tree, not hypothetical: items 1, 2, and 5 are active
 > defects today, independent of whether any of this ships. Amend this document in place as
 > phases land, calling out where building it proved part of it wrong rather than silently
@@ -286,7 +286,7 @@ shared log volume; replacing the exporter is the remaining backend choice. The b
 can use the same published port or any external Collector URL. No `depends_on` was added, so the
 application remains independent of Collector availability.
 
-### Phase 2 — traces in the API process
+### Phase 2 — traces in the API process (implemented)
 
 Mostly free. `opentelemetry-instrumentation-fastapi` in `create_api_app`, plus the SQLAlchemy
 and aiohttp instrumentors. Then Decision 4: replace both error-ID generators with the trace ID.
@@ -296,6 +296,18 @@ Phase 2 no longer has that sequencing blocker.
 
 **Exit criterion:** a `/verify` request produces one trace with an HTTP span and its SQL child
 spans; a forced 500 returns an `X-Error-ID` that resolves to that trace.
+
+**Implementation notes (2026-08-05):** The process-owned API app is instrumented after its
+tracer provider is configured; SQLAlchemy and aiohttp client instrumentation is installed once
+with that provider before the runtime creates engines or clients. Disabled deployments still
+return before importing any instrumentor. An optional-extra integration test composes a real
+FastAPI server span with a SQLAlchemy child span and proves that the surfaced correlation ID is
+the same 32-character trace ID.
+
+The shared `correlation_id()` helper now owns both transport fallbacks. API problem details and
+`X-Error-ID`, as well as Discord's unexpected-error reference, use the active trace ID when a
+valid span exists and retain the prior 12-character local identifier when tracing is disabled
+or no span is active.
 
 ### Phase 3 — traces in the bot process
 

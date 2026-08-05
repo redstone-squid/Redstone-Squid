@@ -2,7 +2,6 @@
 
 import logging
 from http import HTTPStatus
-from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -24,6 +23,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import _, translate
+from squid.observability import correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +76,6 @@ def _status_for_error(error: SquidError) -> int:
     return HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-def _new_error_id() -> str:
-    return uuid4().hex[:12]
-
-
 async def handle_squid_error(request: Request, exc: Exception) -> Response:
     """Render a structured application exception."""
     if not isinstance(exc, SquidError):
@@ -101,7 +97,7 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
             locale,
         )
 
-    error_id = _new_error_id()
+    error_id = correlation_id()
     logger.error(
         "Application failure [error_id=%s code=%s context=%r]",
         error_id,
@@ -176,7 +172,7 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
 async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     """Log and redact an unexpected exception."""
     locale = locale_for_request(request)
-    error_id = _new_error_id()
+    error_id = correlation_id()
     logger.error("Unhandled HTTP exception [error_id=%s]", error_id, exc_info=exc)
     return _problem_response(
         ProblemDetail(

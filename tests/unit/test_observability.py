@@ -79,3 +79,18 @@ def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture
 
     with pytest.raises(RuntimeError, match="before this process forked"):
         configure_observability(enabled_config(), service_name="api")
+
+
+def test_correlation_id_uses_active_trace_id(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_id", return_value="a" * 32)
+
+    assert observability.correlation_id() == "a" * 32
+
+
+def test_correlation_id_has_a_local_fallback(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+
+    error_id = observability.correlation_id()
+
+    assert len(error_id) == 12
+    assert int(error_id, 16) >= 0

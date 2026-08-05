@@ -1,0 +1,1 @@
+"""Optional OpenTelemetry integration coverage."""

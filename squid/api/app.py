@@ -13,7 +13,7 @@ from squid.bootstrap import create_application_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.core.errors import AuthenticationError
 from squid.logging_config import configure_api_logging
-from squid.observability import configure_observability
+from squid.observability import configure_observability, instrument_api_app
 from squid.runtime import ApplicationRuntime, ApplicationServices
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime]
@@ -74,6 +74,8 @@ def create_api_app(
     api = FastAPI(lifespan=lifespan)
     register_exception_handlers(api)
     api.include_router(router)
+    if config is not None:
+        instrument_api_app(api, config.observability)
     return api
 
 

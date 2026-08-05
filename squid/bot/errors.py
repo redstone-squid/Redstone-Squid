@@ -4,7 +4,6 @@ import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Self, override
-from uuid import uuid4
 
 import discord
 from discord import app_commands
@@ -19,6 +18,7 @@ from squid.bot.utils.permissions import (
 )
 from squid.core.errors import DomainError, SquidError
 from squid.core.i18n import _, translate
+from squid.observability import correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ def build_error_presentation(error: BaseException, locale: str | None = None) ->
             translate(locale, _("You cannot use this command here.")),
         )
 
-    error_id = uuid4().hex[:12]
+    error_id = correlation_id()
     return ErrorPresentation(
         translate(locale, _("Something went wrong")),
         translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=error_id),
