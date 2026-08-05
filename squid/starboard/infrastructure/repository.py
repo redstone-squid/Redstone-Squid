@@ -153,6 +153,56 @@ class PostgresStarboardRepository:
             )
             return await self._refresh_locked(session, origin_message_id, starboard_ids, force=False)
 
+    async def recount_votes(
+        self, origin: OriginMessage, votes: Sequence[tuple[int, PendingVote]]
+    ) -> Sequence[EntryPlan]:
+        async with self._session_factory.begin() as session:
+            await self._lock(session, origin.id)
+            await session.execute(
+                pg_insert(StarboardOriginMessage)
+                .values(
+                    id=origin.id,
+                    guild_id=origin.guild_id,
+                    channel_id=origin.channel_id,
+                    author_id=origin.author_id,
+                    author_is_bot=origin.author_is_bot,
+                    is_nsfw=origin.is_nsfw,
+                    has_image=origin.has_image,
+                    posted_at=origin.posted_at,
+                    deleted_at=None,
+                )
+                .on_conflict_do_update(
+                    index_elements=[StarboardOriginMessage.id],
+                    set_={"seen_at": func.now(), "deleted_at": None, "has_image": origin.has_image},
+                )
+            )
+            starboard_ids = set(
+                await session.scalars(
+                    delete(StarboardVote)
+                    .where(StarboardVote.origin_message_id == origin.id)
+                    .returning(StarboardVote.starboard_id)
+                )
+            )
+            for user_id, vote in votes:
+                starboard_ids.add(vote.config.id)
+                await session.execute(
+                    pg_insert(StarboardVote).values(
+                        starboard_id=vote.config.id,
+                        origin_message_id=origin.id,
+                        user_id=user_id,
+                        emoji=vote.emoji,
+                        direction=vote.direction,
+                        weight=vote.weight,
+                        target_author_id=origin.author_id,
+                    )
+                )
+                await session.execute(
+                    pg_insert(StarboardEntryRow)
+                    .values(starboard_id=vote.config.id, origin_message_id=origin.id)
+                    .on_conflict_do_nothing()
+                )
+            return await self._refresh_locked(session, origin.id, starboard_ids, force=True, origin=origin)
+
     async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryPlan]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)

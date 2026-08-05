@@ -1,6 +1,6 @@
 """Starboard orchestration over framework-neutral ports."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 
 from squid.reactions.application import RoleWeightPolicy
@@ -58,6 +58,26 @@ class StarboardService:
     async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> tuple[EntryPlan, ...]:
         return tuple(await self._repository.withdraw_vote(origin_message_id, user_id, emoji))
 
+    async def recount(
+        self, origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]
+    ) -> tuple[EntryPlan, ...]:
+        configs = await self._repository.configs_for_source(origin.guild_id, origin.channel_id)
+        accepted: dict[tuple[int, int], tuple[int, PendingVote]] = {}
+        for actor, emoji in reactions:
+            for config in configs:
+                verdict = evaluate_vote(config, origin, actor, emoji)
+                if verdict.action != "accept" or verdict.direction is None:
+                    continue
+                scope = WeightScope(config.guild_id, "starboard", config.id)
+                role_weight = await self._weight_policy.calculate(actor, scope)
+                option = next(item for item in config.emojis if item.emoji == emoji)
+                assert role_weight is not None
+                accepted[(actor.user_id, config.id)] = (
+                    actor.user_id,
+                    PendingVote(config, emoji, verdict.direction, role_weight * option.multiplier),
+                )
+        return tuple(await self._repository.recount_votes(origin, tuple(accepted.values())))
+
     async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> tuple[EntryPlan, ...]:
         return tuple(await self._repository.clear_votes(origin_message_id, emoji))
 
@@ -94,6 +114,10 @@ class StarboardService:
         return await self._repository.get(guild_id, name)
 
     async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
+        current = await self._repository.get(guild_id, name)
+        if current is None:
+            return None
+        replace(current, **settings)  # type: ignore[arg-type]
         updated = await self._repository.update(guild_id, name, settings)
         self.invalidate_cache(guild_id)
         return updated
@@ -116,6 +140,9 @@ class StarboardService:
             msg = "Role multiplier must be finite and greater than zero."
             raise ValueError(msg)
         await self._repository.set_role_multiplier(config.id, role_id, multiplier)
+
+    async def get_role_multipliers(self, config: StarboardConfig) -> dict[int, float]:
+        return dict(await self._repository.role_multipliers(config.id))
 
     async def mark_posted(self, plan: EntryPlan, message_id: int, channel_id: int) -> None:
         await self._repository.mark_posted(plan.config.id, plan.origin.id, message_id, channel_id)
