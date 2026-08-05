@@ -3,20 +3,25 @@ from dataclasses import replace
 from math import inf, nan
 
 import pytest
+from whenever import Instant
 
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
+    EmojiPreset,
+    RoleWeight,
     StoredVoteMutation,
     VoteActor,
     VoteChange,
     VoteChoice,
     VoteKindLiteral,
+    VoteMessage,
     VoteOption,
     VoteSessionResultLiteral,
     VoteSessionSnapshot,
     VoteStatus,
     VoteTarget,
+    VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -37,7 +42,7 @@ def snapshot(
         pass_threshold=3,
         fail_threshold=-3,
         votes=votes or {},
-        messages=(),
+        messages=(VoteMessage(100, 200, 10),),
         options=DEFAULT_VOTE_OPTIONS,
         target=VoteTarget(build_id=42),
     )
@@ -46,10 +51,22 @@ def snapshot(
 class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
-        self.cast_calls: list[tuple[int, int, float]] = []
+        self.cast_calls: list[tuple[int, int, int, str, str, float, dict[int, float] | None]] = []
         self.mutation: StoredVoteMutation | None = None
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
+
+    async def create_generic_session(
+        self,
+        *,
+        author_id: int,
+        guild_id: int,
+        question: str,
+        visibility: VoteVisibility,
+        deadline: Instant,
+        options: Sequence[VoteOption],
+    ) -> int:
+        return 26
 
     async def create_build_session(
         self,
@@ -95,10 +112,44 @@ class FakeVoteRepository:
         self,
         message_id: int,
         user_id: int,
+        guild_id: int,
+        option_id: str,
+        emoji: str,
         desired_weight: float,
+        refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
-        self.cast_calls.append((message_id, user_id, desired_weight))
+        self.cast_calls.append((message_id, user_id, guild_id, option_id, emoji, desired_weight, refreshed_weights))
         return self.mutation
+
+    async def close(self, message_id: int) -> StoredVoteMutation | None:
+        return self.mutation
+
+    async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
+        return self.mutation
+
+    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
+        return self.mutation
+
+    async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
+        return []
+
+    async def get_emoji_preset(self, guild_id: int, kind: VoteKindLiteral) -> EmojiPreset | None:
+        return None
+
+    async def set_emoji_preset(self, preset: EmojiPreset) -> None:
+        pass
+
+    async def get_role_weights(self, guild_id: int, kind: VoteKindLiteral) -> Sequence[RoleWeight]:
+        return []
+
+    async def set_role_weight(self, weight: RoleWeight) -> None:
+        pass
+
+    async def remove_role_weight(self, guild_id: int, kind: VoteKindLiteral, role_id: int) -> None:
+        pass
+
+    async def reset_configuration(self, guild_id: int, kind: VoteKindLiteral | None = None) -> None:
+        pass
 
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
@@ -159,7 +210,8 @@ async def test_cast_vote_applies_choice_and_staff_weight(
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, expected_weight)]
+    option_id = "approve" if emoji == "👍" else "deny"
+    assert repository.cast_calls == [(100, 7, 10, option_id, emoji, abs(expected_weight), {})]
 
 
 async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
@@ -194,7 +246,7 @@ async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 3.0)]
+    assert repository.cast_calls == [(100, 7, 10, "approve", "👍", 3.0, {})]
 
 
 async def test_closed_vote_is_rejected_before_mutation() -> None:
@@ -280,7 +332,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 6.0)]
+    assert repository.cast_calls == [(100, 7, 10, "approve", "<:strong_yes:123>", 6.0, {})]
 
 
 async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:

@@ -1,7 +1,8 @@
 from collections.abc import AsyncGenerator
+from typing import cast
 
 import pytest
-from sqlalchemy import insert
+from sqlalchemy import Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -21,15 +22,18 @@ from squid.starboard.infrastructure.models import (
 )
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 
-TABLES = (
-    ServerSetting.__table__,
-    Starboard.__table__,
-    StarboardEmojiRow.__table__,
-    StarboardSource.__table__,
-    StarboardOriginMessage.__table__,
-    StarboardVote.__table__,
-    StarboardEntry.__table__,
-    StarboardRoleMultiplier.__table__,
+TABLES = cast(
+    tuple[Table, ...],
+    (
+        ServerSetting.__table__,
+        Starboard.__table__,
+        StarboardEmojiRow.__table__,
+        StarboardSource.__table__,
+        StarboardOriginMessage.__table__,
+        StarboardVote.__table__,
+        StarboardEntry.__table__,
+        StarboardRoleMultiplier.__table__,
+    ),
 )
 
 

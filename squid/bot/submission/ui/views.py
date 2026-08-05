@@ -459,7 +459,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
 
     async def _send_denial(self, interaction: Interaction[BotT], message: str) -> None:
         layout = error_layout(t(self.locale, _("Cannot edit this build")), message)
-        if interaction.response.is_done():
+        if interaction.response.is_done():  # pyrefly: ignore[no-matching-overload]
             await interaction.followup.send(view=layout, ephemeral=True, allowed_mentions=no_mentions())
         else:
             await interaction.response.send_message(view=layout, ephemeral=True, allowed_mentions=no_mentions())

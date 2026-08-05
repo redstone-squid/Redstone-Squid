@@ -285,7 +285,9 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             return
         preset = await self.bot.services.votes.emoji_preset(ctx.guild.id, kind)
         value = "\n".join(f"{option.choice.value} | {option.emoji}" for option in preset.options)
-        await ctx.interaction.response.send_modal(VoteEmojiModal(self, kind, value))
+        await ctx.interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
+            VoteEmojiModal(self, kind, value)
+        )
 
     @voting_settings.command(name="weight-set")
     async def set_vote_weight(

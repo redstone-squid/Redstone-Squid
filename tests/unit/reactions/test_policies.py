@@ -9,8 +9,8 @@ from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 async def test_role_policy_uses_highest_matching_multiplier() -> None:
     scope = WeightScope(10, "starboard", 5)
 
-    async def multipliers(requested: WeightScope) -> tuple[RoleMultiplier, ...]:
-        assert requested == scope
+    async def multipliers(scope: WeightScope) -> tuple[RoleMultiplier, ...]:
+        assert scope == WeightScope(10, "starboard", 5)
         return (RoleMultiplier(scope, 20, 1.5), RoleMultiplier(scope, 30, 2.5))
 
     policy = RoleWeightPolicy(multipliers, staff_multiplier=1)

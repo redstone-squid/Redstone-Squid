@@ -221,7 +221,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             author_id=interaction.user.id,
             locale=locale,
         )
-        workspace_message = await interaction.followup.send(
+        workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
             view=view,
             ephemeral=True,
             wait=True,

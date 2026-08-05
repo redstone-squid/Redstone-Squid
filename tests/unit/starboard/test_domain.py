@@ -22,12 +22,15 @@ NOW = Instant.parse_iso("2026-08-04T12:00:00Z")
 def config(**changes: object) -> StarboardConfig:
     return replace(
         StarboardConfig(1, 10, 20, "main", (StarboardEmoji("⭐", "up"), StarboardEmoji("💩", "down"))),
-        **changes,
+        **changes,  # pyrefly: ignore[bad-argument-type]
     )
 
 
 def origin(**changes: object) -> OriginMessage:
-    return replace(OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=NOW.subtract(seconds=60)), **changes)
+    return replace(
+        OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=NOW.subtract(seconds=60)),
+        **changes,  # pyrefly: ignore[bad-argument-type]
+    )
 
 
 @pytest.mark.parametrize(

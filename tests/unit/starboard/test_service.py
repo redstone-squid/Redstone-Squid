@@ -36,7 +36,7 @@ def make_config(**settings: object) -> StarboardConfig:
         "name": "main",
         "emojis": (StarboardEmoji("⭐", "up", 1.5),),
     }
-    values.update(settings)
+    values.update(settings)  # pyrefly: ignore[no-matching-overload]
     return StarboardConfig(**values)  # type: ignore[arg-type]
 
 

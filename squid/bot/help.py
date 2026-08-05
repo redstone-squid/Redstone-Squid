@@ -59,7 +59,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
                 candidates = list(cog.walk_commands()) if cog is not None else []
                 if not candidates:
-                    await interaction.response.send_message(
+                    await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
                         view=error_layout(
                             t(locale, _("Command not found")),
                             t(locale, _("No command named `{name}` is available."), name=command),

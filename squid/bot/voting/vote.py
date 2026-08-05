@@ -202,7 +202,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if ctx.interaction is None:
             await ctx.send("Use the slash command `/vote poll` to open the poll editor.")
             return
-        await ctx.interaction.response.send_modal(PollModal(self))
+        await ctx.interaction.response.send_modal(PollModal(self))  # pyrefly: ignore[no-matching-overload]
 
     @vote_group.command(name="close")
     @guild_only()

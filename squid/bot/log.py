@@ -38,7 +38,9 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         if first_log:
             timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
         if dm_owner:
-            owner = self.bot.get_user(self.bot.owner_id) or await self.bot.fetch_user(self.bot.owner_id)
+            owner_id = self.bot.owner_id
+            assert owner_id is not None
+            owner = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
             await owner.send(view=text_layout(timestamp_msg), allowed_mentions=no_mentions())
         logger.info("%s", timestamp_msg)
 
