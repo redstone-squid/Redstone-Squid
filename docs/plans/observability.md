@@ -1,6 +1,6 @@
 # Observability for Redstone-Squid
 
-> **Status.** Phase 0 implemented on 2026-08-05. Phase 1 is the next unit of work.
+> **Status.** Phases 0-1 implemented on 2026-08-05. Phase 2 is the next unit of work.
 > The findings below are verified in-tree, not hypothetical: items 1, 2, and 5 are active
 > defects today, independent of whether any of this ships. Amend this document in place as
 > phases land, calling out where building it proved part of it wrong rather than silently
@@ -248,7 +248,7 @@ tests now preserve lazy log templates and forbid future OTel imports in domain/a
 layers. Stable build, vote-session, schematic-format, and operation fields were added without
 adding Discord user identifiers.
 
-### Phase 1 — configuration and the process-init contract
+### Phase 1 — configuration and the process-init contract (implemented)
 
 1. `ObservabilityConfig` next to `LogConfig` in `squid/config.py`: OTLP endpoint, headers,
    sample ratio, service name, enable flag. Add `observability` to **both** include sets
@@ -266,13 +266,33 @@ adding Discord user identifiers.
 **Exit criterion:** telemetry configurable and fully inert when unset; both processes export a
 service-name resource attribute; test suite green with the extra uninstalled.
 
+**Implementation notes (2026-08-05):** `ObservabilityConfig.service_name` is the deployment
+base name; process entry points append `-api`, `-bot`, or `-worker`, resolving the ambiguity
+between the configured name and `configure_observability(..., service_name=...)`. The endpoint
+is a generic OTLP/HTTP base URL and the application appends `/v1/traces` (without duplicating an
+already-present signal path), matching the HTTP exporter's exact-endpoint behavior. Sampling is
+parent-based so Phase 4's propagated sampling decisions will be honored.
+
+The worker uses a narrow settings loader in `config.py` rather than receiving observability
+headers through argv. Workers inherit the deployment environment already, this keeps secrets
+out of process listings, and it avoids putting telemetry configuration into the application
+service graph. Programmatically constructed parent config does not override worker telemetry;
+worker settings remain an environment-owned process boundary, like a standalone worker launch.
+Guardrails are applied before the worker imports the SDK or starts its batch-export thread.
+
+The optional Compose profile pins the contrib Collector and uses its debug exporter as a
+backend-neutral validation sink. It accepts OTLP/HTTP traces and tails JSON log files from the
+shared log volume; replacing the exporter is the remaining backend choice. The bare-metal path
+can use the same published port or any external Collector URL. No `depends_on` was added, so the
+application remains independent of Collector availability.
+
 ### Phase 2 — traces in the API process
 
 Mostly free. `opentelemetry-instrumentation-fastapi` in `create_api_app`, plus the SQLAlchemy
 and aiohttp instrumentors. Then Decision 4: replace both error-ID generators with the trace ID.
 
-This phase should land alongside or after `docs/plans/rest-api.md` Phase 0, since the routes it
-would instrument do not exist yet.
+The required `docs/plans/rest-api.md` Phase 0 routes, including `/verify`, are now present, so
+Phase 2 no longer has that sequencing blocker.
 
 **Exit criterion:** a `/verify` request produces one trace with an HTTP span and its SQL child
 spans; a forced 500 returns an `X-Error-ID` that resolves to that trace.

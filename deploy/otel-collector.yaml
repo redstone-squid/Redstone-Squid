@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+  filelog:
+    include:
+      - /var/log/app/*.log
+      - /var/log/app/**/*.log
+    start_at: end
+    include_file_name: true
+    include_file_path: true
+    operators:
+      - type: json_parser
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+  resource/logs:
+    attributes:
+      - key: service.name
+        value: redstone-squid
+        action: insert
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    logs:
+      receivers: [filelog]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [debug]

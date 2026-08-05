@@ -15,6 +15,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
+      SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
     ports:
       - "8000:8000"
     volumes:
@@ -31,6 +34,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    profiles:
+      - observability
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4318:4318"
+    volumes:
+      - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./logs:/var/log/app:ro
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
