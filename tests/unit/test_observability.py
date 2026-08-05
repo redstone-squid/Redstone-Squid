@@ -74,8 +74,11 @@ def test_trace_endpoint_appends_signal_path(base: str, expected: str) -> None:
 
 
 def test_metrics_endpoint_uses_its_signal_path() -> None:
-    assert (  # pyright: ignore[reportPrivateUsage]
-        observability._signal_endpoint("http://collector:4318", "metrics") == "http://collector:4318/v1/metrics"
+    assert (
+        observability._signal_endpoint(  # pyright: ignore[reportPrivateUsage]
+            "http://collector:4318", "metrics"
+        )
+        == "http://collector:4318/v1/metrics"
     )
 
 
