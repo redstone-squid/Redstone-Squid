@@ -1,9 +1,10 @@
 # A REST API for Redstone-Squid
 
-> **Status.** Design approved, nothing implemented. Phase 0 is the next unit of work.
-> The blockers in "Findings" are pre-existing and verified in-tree; they are not hypothetical
-> risks, and three of them would surface as production incidents the moment the matching route
-> ships. Amend this document in place as phases land, calling out where building it proved part
+> **Status.** Design approved. The four prerequisite findings are resolved; the remaining Phase 0
+> configuration and import-surface work is the next unit of work.
+> The blockers in "Findings" were pre-existing and verified in-tree rather than hypothetical
+> risks, and three would have surfaced as production incidents with the matching route.
+> Amend this document in place as phases land, calling out where building it proved part
 > of it wrong rather than silently rewriting.
 
 ## Context
@@ -29,7 +30,7 @@ application services rather than growing a parallel data path.
   repositories; `tests/architecture/test_boundaries.py` enforces this.
 - **`squid/api/errors.py`** — RFC 9457 `application/problem+json`, locale-aware, with redaction and
   `X-Error-ID` correlation. Genuinely good; it needs declaring in OpenAPI, not replacing.
-- **`squid/core/errors.py::ErrorCode`** — a 40-value stable enum that is already the public error
+- **`squid/core/errors.py::ErrorCode`** — a stable enum that is already the public error
   vocabulary. New failure modes get enum members, not ad-hoc strings.
 - **The search context** — `squid/search/application/parser.py` (safe Lucene-subset grammar with
   positional errors and suggestions), `fields.py::DEFAULT_FIELD_REGISTRY`,
@@ -38,35 +39,40 @@ application services rather than growing a parallel data path.
 - **`tests/unit/api/test_openapi_contract.py`** — a schemathesis 4.x harness whose docstring
   already asks every new route to be registered.
 
-## Findings — pre-existing blockers
+## Findings — resolved prerequisites
 
-Verified in-tree during design. Each must be fixed before the route that would expose it.
+Verified in-tree during design and fixed before adding routes. The security/error fixes landed in
+`5bbdaf1`; the dead-query and recency fixes landed in `0fbe837`.
 
-1. **Anonymous pending-build disclosure.** `squid/search/infrastructure/repository.py:386`:
+1. **Resolved — anonymous pending-build disclosure.** The caller's `visible_statuses` policy is now
+   applied independently of the parsed query and included in the cursor binding. Previously,
+   `squid/search/infrastructure/repository.py:386` used:
 
    ```python
    def _requires_confirmed_default(scope, query) -> bool:
        return scope in {SearchScope.BUILDS, SearchScope.ALL} and not _references_field(query, "status")
    ```
 
-   The confirmed-only default *disables itself* when the query mentions `status`, and
-   `projection.py:362` indexes a `status` facet for every build regardless of state. Piping raw
-   user `q=` into this gives anonymous callers `?q=status:pending` over unreviewed submissions.
+   The confirmed-only default *disabled itself* when the query mentioned `status`, while
+   `projection.py:362` indexed a `status` facet for every build regardless of state. Piping raw
+   user `q=` into this would have given anonymous callers `?q=status:pending` over unreviewed
+   submissions.
 
-2. **Three bare `ValueError`s become 500s.** `InvalidCursorError(ValueError)`
+2. **Resolved — three bare `ValueError`s became 500s.** `InvalidCursorError(ValueError)`
    (`squid/search/application/cursor.py:14`), `SearchRequest.__post_init__`'s page-size check
-   (`squid/search/domain/models.py:53`), and `SearchService.suggest`'s limit check are not
-   `SquidError`s, so `_status_for_error` never sees them and `handle_unexpected_error` returns 500.
+   (`squid/search/domain/models.py:53`), and `SearchService.suggest`'s limit check were not
+   `SquidError`s, so `_status_for_error` could not see them and `handle_unexpected_error` returned 500.
 
-3. **`get_outdated_messages` is dead *and* broken.** `squid/persistence/postgres_entities.sql:39`
-   joins on `messages.submission_id`/`builds.submission_id` and compares
+3. **Resolved — `get_outdated_messages` was dead *and* broken.** The service, port, repository
+   method, and managed PostgreSQL function have been removed. It previously
+   joined on `messages.submission_id`/`builds.submission_id` and compared
    `messages.last_updated < builds.last_update` — none of those four columns exist (the live schema
-   has `messages.build_id`, `messages.updated_at`, `builds.id`, `builds.edited_time`). It has zero
-   callers, which is why nobody noticed. Do not build reconciliation on it; delete it.
+   has `messages.build_id`, `messages.updated_at`, `builds.id`, `builds.edited_time`). It had zero
+   callers, which is why nobody noticed.
 
-4. **No recency sort exists.** Only `width`, `height`, and `depth` carry `supports_sort=True`
-   (`squid/search/application/fields.py:111-113`). "Newest builds" — the first thing a frontend
-   needs — is not expressible.
+4. **Resolved — no recency sort existed.** `created_at` and `updated_at` are now sortable timestamp
+   fields, projected from `builds.submission_time` and `builds.edited_time`; migration
+   `a4c8e2f6b913` re-enqueues existing builds for backfill.
 
 Additionally, `CursorCodec` is seeded with `secrets.token_bytes(32)` per process
 (`squid/bootstrap.py:154`), so cursors are invalid across the bot/API process split, across
