@@ -9,6 +9,7 @@ from squid.bot.admin import Admin
 from squid.bot.give_redstoner import GiveRedstoner
 from squid.bot.misc_commands import Miscellaneous
 from squid.bot.settings import SettingsCog
+from squid.bot.starboard import StarboardCog
 from squid.bot.submission.records import RecordCog
 from squid.bot.submission.search import SearchCog
 from squid.bot.verify import VerifyCog
@@ -27,6 +28,7 @@ PUBLIC_COGS = (
     SettingsCog,
     Miscellaneous,
     GiveRedstoner,
+    StarboardCog,
 )
 
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
@@ -75,6 +77,22 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "voting show",
         "voting weight-remove",
         "voting weight-set",
+    ),
+    "starboard": (
+        "create",
+        "delete",
+        "edit",
+        "emoji",
+        "emoji add",
+        "emoji list",
+        "emoji remove",
+        "list",
+        "recount",
+        "show",
+        "weight",
+        "weight list",
+        "weight remove",
+        "weight set",
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
@@ -174,6 +192,9 @@ def test_sensitive_commands_use_the_intended_permission_tier() -> None:
 
     settings = SettingsCog.__new__(SettingsCog)
     assert _check_names(settings.__cog_commands__, "settings set") == {"check_is_server_admin"}
+
+    starboard = StarboardCog.__new__(StarboardCog)
+    assert _check_names(starboard.__cog_commands__, "starboard") == {"check_is_server_admin", "guild_only"}
 
     admin = Admin.__new__(Admin)
     assert _check_names(admin.__cog_commands__, "tag approve") == {"check_is_global_admin"}

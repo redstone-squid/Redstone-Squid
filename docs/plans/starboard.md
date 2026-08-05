@@ -1,6 +1,6 @@
 # Starboard, on a shared reaction kernel
 
-> **Status.** Approved, implementation in progress. Amend this document in place as building it
+> **Status.** Implemented on 2026-08-04. Amend this document in place as building it
 > proves parts of it wrong, calling out the amendments where they occur rather than silently
 > applying them.
 
@@ -403,6 +403,12 @@ Commits: `starboard: add configuration commands` and `starboard: weight stars by
   is covered by the Components V2 rule (see Step 0).
 - Per `CLAUDE.md`, run the focused set during development with `--no-cov`, then
   `just test`, `alembic heads`, and `git diff --check` at the end. Full integration to CI.
+
+> **Validation note (2026-08-04).** At the user's request, validation stayed serial and focused
+> for this 2-vCPU workspace rather than running `just test`: changed-file Ruff and BasedPyright,
+> starboard/reaction/voting/architecture unit tests, command taxonomy, the focused PostgreSQL
+> starboard repository tests, and the clean-schema Alembic drift test passed. `alembic heads`
+> reports the single head `7f2c9d4e6a81`; the full suite remains delegated to CI.
 
 ## Risks and open questions
 
