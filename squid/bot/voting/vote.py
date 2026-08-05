@@ -22,7 +22,7 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
 from squid.core.i18n import _
-from squid.observability import trace_span
+from squid.observability import record_histogram, trace_span
 from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -313,8 +313,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 "squid.background.close_due_polls",
                 {"squid.surface": "background_loop"},
             ):
-                snapshots = await self.vote_service.close_due(Instant.now())
+                now = Instant.now()
+                snapshots = await self.vote_service.close_due(now)
                 for snapshot in snapshots:
+                    if snapshot.poll is not None:
+                        record_histogram(
+                            "squid.vote.close.lag",
+                            max((now - snapshot.poll.deadline).total("seconds"), 0.0),
+                            attributes={"squid.vote.kind": snapshot.kind},
+                        )
                     try:
                         with trace_span(
                             "squid.vote.update_closed_messages",

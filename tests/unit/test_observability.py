@@ -73,6 +73,12 @@ def test_trace_endpoint_appends_signal_path(base: str, expected: str) -> None:
     assert observability._trace_endpoint(base) == expected  # pyright: ignore[reportPrivateUsage]
 
 
+def test_metrics_endpoint_uses_its_signal_path() -> None:
+    assert (  # pyright: ignore[reportPrivateUsage]
+        observability._signal_endpoint("http://collector:4318", "metrics") == "http://collector:4318/v1/metrics"
+    )
+
+
 def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture) -> None:
     observability._configured_pid = 100  # pyright: ignore[reportPrivateUsage]
     observability._configured_handle = ObservabilityHandle()  # pyright: ignore[reportPrivateUsage]

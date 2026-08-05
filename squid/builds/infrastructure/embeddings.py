@@ -8,6 +8,7 @@ import vecs
 from openai import AsyncOpenAI, OpenAIError
 
 from squid.config import EMBEDDING_DIMENSION, EmbeddingConfig
+from squid.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,19 @@ class OpenAIEmbeddingModel:
         if self._client is None:
             return None
         try:
-            response = await self._client.embeddings.create(input=text, model=self._model)
+            with trace_span(
+                "openai.embedding",
+                {"squid.provider.name": "openai-compatible", "squid.provider.operation": "embedding"},
+            ):
+                response = await self._client.embeddings.create(input=text, model=self._model)
         except OpenAIError:
+            add_counter(
+                "squid.provider.failures",
+                attributes={
+                    "squid.provider.name": "openai-compatible",
+                    "squid.provider.operation": "embedding",
+                },
+            )
             logger.debug("Failed to generate embedding.", exc_info=True)
             return None
         return response.data[0].embedding

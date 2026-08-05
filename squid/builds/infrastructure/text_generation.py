@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from squid.builds.application.inference import InlineImage
 from squid.config import OpenAIConfig
+from squid.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,23 @@ class OpenAITextGenerator:
         if reasoning_effort is not None:
             kwargs["reasoning_effort"] = reasoning_effort
         try:
-            completion = await self._client.chat.completions.parse(**kwargs)
+            with trace_span(
+                "openai.chat",
+                {"squid.provider.name": "openai-compatible", "squid.provider.operation": "inference"},
+            ):
+                completion = await self._client.chat.completions.parse(**kwargs)
             return cast(T | None, completion.choices[0].message.parsed)
         except openai.BadRequestError:
             logger.warning("Provider rejected strict structured output; retrying with JSON instructions")
+        except openai.OpenAIError:
+            add_counter(
+                "squid.provider.failures",
+                attributes={
+                    "squid.provider.name": "openai-compatible",
+                    "squid.provider.operation": "inference",
+                },
+            )
+            raise
 
         fallback_system = f"{system}\n\nReturn only JSON matching this schema:\n{schema.model_json_schema()}"
         fallback_kwargs = dict(kwargs)
@@ -73,7 +87,21 @@ class OpenAITextGenerator:
             {"role": "user", "content": content},
         ]
         fallback_kwargs.pop("response_format")
-        completion = await self._client.chat.completions.create(**fallback_kwargs)
+        try:
+            with trace_span(
+                "openai.chat.fallback",
+                {"squid.provider.name": "openai-compatible", "squid.provider.operation": "inference"},
+            ):
+                completion = await self._client.chat.completions.create(**fallback_kwargs)
+        except openai.OpenAIError:
+            add_counter(
+                "squid.provider.failures",
+                attributes={
+                    "squid.provider.name": "openai-compatible",
+                    "squid.provider.operation": "inference",
+                },
+            )
+            raise
         raw = completion.choices[0].message.content
         if raw is None:
             return None

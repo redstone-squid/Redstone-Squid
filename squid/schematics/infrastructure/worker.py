@@ -37,7 +37,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Self, cast
 
 from squid.config import SchematicConfig
-from squid.core.errors import InfrastructureError
+from squid.core.errors import DomainError, InfrastructureError
+from squid.observability import add_counter, inject_trace_context, record_histogram
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -75,6 +76,7 @@ class _Worker:
         self._stderr_pump: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self._next_id = 0
+        self._started_once = False
 
     async def request(
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
@@ -83,17 +85,21 @@ class _Worker:
         async with self._lock:
             process = await self._ensure_started()
             self._next_id += 1
-            frame = Frame({"id": self._next_id, "op": operation, "params": params}, tuple(payloads))
+            header: dict[str, Any] = {"id": self._next_id, "op": operation, "params": params}
+            inject_trace_context(header)
+            frame = Frame(header, tuple(payloads))
             assert process.stdin is not None and process.stdout is not None
             try:
                 process.stdin.write(frame.encode())
                 await asyncio.wait_for(process.stdin.drain(), timeout)
                 return await asyncio.wait_for(wire.read_frame(process.stdout), timeout)
             except TimeoutError:
-                await self._terminate()
+                exit_code = await self._terminate()
+                _record_worker_failure(exit_code, reason="timeout")
                 raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
             except (FrameStreamClosed, ConnectionResetError, BrokenPipeError):
                 exit_code = await self._terminate()
+                _record_worker_failure(exit_code, reason="crash")
                 raise SchematicWorkerCrashedError(operation=operation, exit_code=exit_code) from None
 
     async def _ensure_started(self) -> asyncio.subprocess.Process:
@@ -119,6 +125,9 @@ class _Worker:
             stderr=asyncio.subprocess.PIPE,
             start_new_session=os.name == "posix",
         )
+        if self._started_once:
+            add_counter("squid.schematic.worker.respawns")
+        self._started_once = True
         self._stderr_pump = asyncio.create_task(self._pump_stderr(self._process))
         return self._process
 
@@ -210,6 +219,28 @@ def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
             setattr(record, key, value)
     record.worker_pid = process_id
     return record
+
+
+def _record_worker_failure(exit_code: int | None, *, reason: str) -> None:
+    attributes: dict[str, str | int] = {"squid.worker.failure_reason": reason}
+    if exit_code is not None:
+        attributes["squid.worker.exit_code"] = exit_code
+    add_counter("squid.schematic.worker.crashes", attributes=attributes)
+
+    rlimit_signal = {
+        -value: limit
+        for value, limit in (
+            (getattr(signal, "SIGXCPU", 0), "cpu"),
+            (getattr(signal, "SIGXFSZ", 0), "file_size"),
+        )
+        if value
+    }.get(exit_code)
+    if rlimit_signal is not None:
+        assert exit_code is not None
+        add_counter(
+            "squid.schematic.worker.rlimit_kills",
+            attributes={"squid.worker.rlimit": rlimit_signal, "squid.worker.exit_code": exit_code},
+        )
 
 
 @dataclasses.dataclass(slots=True)
@@ -323,6 +354,26 @@ class SchematicWorkerPool:
         await self.aclose()
 
     async def _call(
+        self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
+    ) -> Frame:
+        started = asyncio.get_running_loop().time()
+        outcome = "ok"
+        try:
+            return await self._call_unmeasured(operation, params, payloads, timeout)
+        except DomainError:
+            outcome = "rejected"
+            raise
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            record_histogram(
+                "squid.schematic.operation.duration",
+                asyncio.get_running_loop().time() - started,
+                attributes={"squid.schematic.operation": operation, "squid.outcome": outcome},
+            )
+
+    async def _call_unmeasured(
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
     ) -> Frame:
         """Lease a worker, run one operation on it, and translate any failure it reports."""

@@ -1,6 +1,7 @@
 # Observability for Redstone-Squid
 
-> **Status.** Phases 0-3 implemented on 2026-08-05. Phase 4 is the next unit of work.
+> **Status.** Phases 0-4 implemented on 2026-08-05. Backend selection and the open operational
+> questions remain deployment work, not application instrumentation work.
 > The findings below are verified in-tree, not hypothetical: items 1, 2, and 5 are active
 > defects today, independent of whether any of this ships. Amend this document in place as
 > phases land, calling out where building it proved part of it wrong rather than silently
@@ -204,6 +205,11 @@ renaming an attribute after dashboards depend on it is the expensive mistake.
 | `squid.schematic.operation` | worker | One of the seven `wire.Operation` literals |
 | `squid.schematic.format` | worker | `SchematicFormat` value |
 | `squid.error.code` | all | The existing 40-value `ErrorCode` enum, unchanged |
+| `squid.provider.name`, `squid.provider.operation` | provider adapters | Stable provider family and workload |
+| `squid.vote.kind` | voting metrics | Build, delete-log, or generic |
+| `squid.worker.exit_code`, `squid.worker.failure_reason` | worker metrics | Process result and crash/timeout cause |
+| `squid.worker.rlimit` | worker metrics | CPU or file-size only when the signal is attributable |
+| `squid.outcome` | duration metrics | `ok`, `rejected`, or `error` |
 
 **Do not attach Discord user IDs as span or log attributes.** They are stable pseudonymous
 identifiers for real people, and a tracing backend has a different retention and access model
@@ -341,7 +347,7 @@ active, then preserves those captured IDs when the listener thread formats the r
 same preservation rule is ready for worker child records in Phase 4. Optional-extra integration
 coverage proves command spans and their structured log records share trace/span identifiers.
 
-### Phase 4 — the worker, and cross-process propagation
+### Phase 4 — the worker, and cross-process propagation (implemented)
 
 1. Inject `traceparent` into `wire.Frame.header` in the supervisor; extract it in
    `worker_main.py::handle` and start the worker span as a child of the caller's span. The
@@ -354,6 +360,26 @@ coverage proves command spans and their structured log records share trace/span 
 
 **Exit criterion:** one trace shows a Discord command, the render request, and the native
 operation inside the worker; a worker OOM is visible as a metric, not just a log line.
+
+**Implementation notes (2026-08-05):** The supervisor injects W3C `traceparent` into every
+request frame and the child extracts it around `handle`; missing or malformed context produces
+an independent valid span, preserving compatibility. Worker operation and known source/target
+format attributes are attached in the child. The trace filter captures IDs before JSON stderr
+serialization, and the Phase 0 parent reconstruction deliberately preserves them rather than
+replacing them with the supervisor task's context.
+
+The OTLP metrics pipeline shares the trace resource and uses `/v1/metrics`. It emits worker
+crash and respawn counters, attributable rlimit-kill counters, operation-duration histograms,
+provider-failure counters, and vote-close lag. FastAPI instrumentation supplies standard HTTP
+server metrics for API alerting, while aiohttp and httpx instrumentation cover provider child
+requests. Invalid schematic uploads are recorded as `rejected`, not operational errors.
+
+Building this proved the OOM portion of the exit criterion too strong: Linux reports SIGKILL
+for both OOM kills and supervisor deadline kills, so the application cannot label a SIGKILL as
+OOM without cgroup/kernel telemetry. CPU (`SIGXCPU`) and file-size (`SIGXFSZ`) rlimit kills are
+counted explicitly; all other deaths still increment the crash counter by exit code and reason.
+The eventual Collector/host deployment must add cgroup or kernel OOM metrics if distinguishing
+OOM from other SIGKILL events is operationally required.
 
 ## Non-goals and scope honesty
 

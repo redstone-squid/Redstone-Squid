@@ -34,6 +34,10 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
     logs:
       receivers: [filelog]
       processors: [memory_limiter, resource/logs, batch]

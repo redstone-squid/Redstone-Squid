@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover - Windows has no rlimits
 from squid.config import load_worker_observability_config
 from squid.core.errors import DomainError, SquidError
 from squid.logging_config import configure_worker_logging
-from squid.observability import configure_observability
+from squid.observability import configure_observability, extracted_trace_span
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     FingerprintPreset,
@@ -227,24 +227,34 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
             offset += int(size)
 
         request_id = header.get("id")
-        try:
-            result, output = handle(
-                str(header["op"]), cast(Mapping[str, Any], header.get("params", {})), tuple(payloads)
-            )
-            response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
-        except Exception as exc:
-            # A rejected upload is an ordinary outcome, not an incident: the supervisor
-            # re-raises it as a typed error and the user sees a translated message. Only
-            # failures we did not anticipate deserve a stderr traceback.
-            expected = isinstance(exc, DomainError)
-            logger.log(
-                logging.DEBUG if expected else logging.WARNING,
-                "Schematic operation %s failed: %s",
-                header.get("op"),
-                exc,
-                exc_info=not expected,
-            )
-            response = Frame({"id": request_id, "ok": False, "error": _error_payload(exc)})
+        operation = str(header["op"])
+        params = cast(Mapping[str, Any], header.get("params", {}))
+        attributes: dict[str, str] = {"squid.schematic.operation": operation}
+        schematic_format = params.get("source_format") or params.get("target")
+        if isinstance(schematic_format, str):
+            attributes["squid.schematic.format"] = schematic_format
+        with extracted_trace_span(f"schematic.worker {operation}", header, attributes) as span:
+            try:
+                result, output = handle(operation, params, tuple(payloads))
+                response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
+            except Exception as exc:
+                if isinstance(exc, SquidError):
+                    span.set_attribute("squid.error.code", exc.code.value)
+                # A rejected upload is an ordinary outcome, not an incident: the supervisor
+                # re-raises it as a typed error and the user sees a translated message. Only
+                # failures we did not anticipate deserve a stderr traceback.
+                expected = isinstance(exc, DomainError)
+                if not expected:
+                    span.set_error(exc)
+                logger.log(
+                    logging.DEBUG if expected else logging.WARNING,
+                    "Schematic operation %s failed: %s",
+                    operation,
+                    exc,
+                    exc_info=not expected,
+                    extra={"squid.schematic.operation": operation},
+                )
+                response = Frame({"id": request_id, "ok": False, "error": _error_payload(exc)})
 
         stdout.write(response.encode())
         stdout.flush()

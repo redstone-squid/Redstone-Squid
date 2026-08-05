@@ -1,16 +1,25 @@
+# pyright: reportPrivateUsage=false
 """Structured schematic worker logging tests."""
 
 import asyncio
 import io
 import json
 import logging
+import signal
 
+import pytest
 from pytest_mock import MockerFixture
 
 from squid.config import SchematicConfig
 from squid.schematics.infrastructure import worker as worker_module
 from squid.schematics.infrastructure import worker_main
-from squid.schematics.infrastructure.worker import _Worker, _worker_log_record  # pyright: ignore[reportPrivateUsage]
+from squid.schematics.infrastructure.wire import Frame
+from squid.schematics.infrastructure.worker import (
+    SchematicWorkerPool,
+    _record_worker_failure,
+    _Worker,
+    _worker_log_record,
+)
 
 
 def test_worker_log_record_preserves_child_identity_and_fields() -> None:
@@ -99,3 +108,85 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker:
     assert record.levelno == logging.DEBUG
     assert record.name == "squid.schematics.infrastructure.worker_main"
     warning.assert_called_once_with("[pid %s] %s", 2718, "native panic output")
+
+
+async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:
+    worker = _Worker(SchematicConfig())  # pyright: ignore[reportPrivateUsage]
+    stdout = asyncio.StreamReader()
+    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdin = mocker.Mock()
+    stdin.drain = mocker.AsyncMock()
+    process = mocker.Mock(stdin=stdin, stdout=stdout)
+    mocker.patch.object(worker, "_ensure_started", new=mocker.AsyncMock(return_value=process))
+    inject = mocker.patch.object(
+        worker_module,
+        "inject_trace_context",
+        side_effect=lambda header: header.update({"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"}),
+    )
+
+    await worker.request("capabilities", {}, (), 1.0)
+
+    inject.assert_called_once()
+    encoded = stdin.write.call_args.args[0]
+    assert b'"traceparent":"00-' in encoded
+
+
+def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixture) -> None:
+    header = {
+        "id": 1,
+        "op": "analyze",
+        "params": {"source_format": "litematic"},
+        "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01",
+    }
+    stdin = io.BytesIO(Frame(header).encode())
+    stdout = io.BytesIO()
+    mocker.patch.object(worker_main, "handle", return_value=({"analysis": {}}, b""))
+    context = mocker.MagicMock()
+    extract = mocker.patch.object(worker_main, "extracted_trace_span", return_value=context)
+
+    worker_main.serve(stdin, stdout)
+
+    extract.assert_called_once_with(
+        "schematic.worker analyze",
+        mocker.ANY,
+        {"squid.schematic.operation": "analyze", "squid.schematic.format": "litematic"},
+    )
+
+
+def test_attributable_rlimit_exit_records_crash_and_rlimit_metrics(mocker: MockerFixture) -> None:
+    sigxcpu = getattr(signal, "SIGXCPU", None)
+    if sigxcpu is None:
+        pytest.skip("CPU rlimit signals are POSIX-only")
+    add = mocker.patch.object(worker_module, "add_counter")
+
+    _record_worker_failure(-sigxcpu, reason="crash")  # pyright: ignore[reportPrivateUsage]
+
+    assert add.call_args_list == [
+        mocker.call(
+            "squid.schematic.worker.crashes",
+            attributes={"squid.worker.failure_reason": "crash", "squid.worker.exit_code": -sigxcpu},
+        ),
+        mocker.call(
+            "squid.schematic.worker.rlimit_kills",
+            attributes={"squid.worker.rlimit": "cpu", "squid.worker.exit_code": -sigxcpu},
+        ),
+    ]
+
+
+async def test_pool_records_operation_duration_and_outcome(mocker: MockerFixture) -> None:
+    pool = SchematicWorkerPool(SchematicConfig(workers=1))
+    mocker.patch.object(
+        pool,
+        "_call_unmeasured",
+        new=mocker.AsyncMock(return_value=Frame({"ok": True})),
+    )
+    histogram = mocker.patch.object(worker_module, "record_histogram")
+
+    await pool._call("capabilities", {}, (), 1.0)  # pyright: ignore[reportPrivateUsage]
+
+    histogram.assert_called_once()
+    assert histogram.call_args.args[0] == "squid.schematic.operation.duration"
+    assert histogram.call_args.kwargs["attributes"] == {
+        "squid.schematic.operation": "capabilities",
+        "squid.outcome": "ok",
+    }
