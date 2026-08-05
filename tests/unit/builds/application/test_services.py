@@ -155,10 +155,12 @@ async def test_edit_releases_lock_when_patch_application_fails(existing_build: B
 
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> None:
-    missing_service = build_service(FakeBuildRepository())
+    missing_locks = FakeBuildLocks()
+    missing_service = build_service(FakeBuildRepository(), missing_locks)
     with pytest.raises(BuildNotFoundError):
         async with missing_service.edit(42, BuildEditPatch()):
             pass
+    missing_locks.release.assert_awaited_once_with(42)
 
     busy_locks = FakeBuildLocks()
     busy_locks.acquire.return_value = False
@@ -166,6 +168,21 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> No
     with pytest.raises(BuildBusyError):
         async with busy_service.edit(42, BuildEditPatch()):
             pass
+
+
+async def test_edit_loads_build_only_after_acquiring_lease(existing_build: Build) -> None:
+    locks = FakeBuildLocks()
+    repository = FakeBuildRepository(existing_build)
+    original_get = repository.get_by_id
+
+    async def get_after_lock(build_id: int) -> Build | None:
+        locks.acquire.assert_awaited_once_with(42, blocking=False, timeout=30)
+        return await original_get(build_id)
+
+    repository.get_by_id = get_after_lock  # type: ignore[method-assign]
+
+    async with build_service(repository, locks).edit(42, BuildEditPatch()):
+        pass
 
 
 async def test_status_changes_and_cleanup_use_lock_manager(existing_build: Build) -> None:

@@ -203,9 +203,6 @@ class BuildEditLease:
         return self._build
 
     async def __aenter__(self) -> Self:
-        build = await self._repository.get_by_id(self._build_id)
-        if build is None:
-            raise BuildNotFoundError(self._build_id)
         acquired = await self._locks.acquire(
             self._build_id,
             blocking=self._blocking,
@@ -213,6 +210,10 @@ class BuildEditLease:
         )
         if not acquired:
             raise BuildBusyError(self._build_id)
+        build = await self._repository.get_by_id(self._build_id)
+        if build is None:
+            await self._locks.release(self._build_id)
+            raise BuildNotFoundError(self._build_id)
         self._build = build
         try:
             self._patch.apply(build)
