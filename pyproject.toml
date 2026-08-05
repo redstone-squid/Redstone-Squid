@@ -17,6 +17,7 @@ dependencies = [
     "gspread>=6.1.4",
     "jishaku>=2.6.0",
     "fastapi>=0.115.6",
+    "httpx>=0.28,<1",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.14,<3",
     "openai>=1.58.1",

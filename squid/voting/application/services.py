@@ -136,6 +136,27 @@ class VoteService:
     async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
         return await self._repository.list_open(kind)
 
+    async def cast_vote_by_session(
+        self,
+        vote_session_id: int,
+        actor: VoteActor,
+        option_id: str,
+    ) -> CastVoteResult:
+        """Cast a vote using transport-neutral session and option identifiers."""
+        snapshot = await self._repository.get_by_id(vote_session_id)
+        if snapshot is None:
+            return CastVoteResult(session=None, rejection="not_found")
+        message = next((item for item in snapshot.messages if item.guild_id == actor.guild_id), None)
+        if message is None:
+            return CastVoteResult(session=snapshot, rejection="wrong_guild")
+        option = next(
+            (item for item in snapshot.options_for_guild(message.guild_id) if item.identifier == option_id),
+            None,
+        )
+        if option is None:
+            return CastVoteResult(session=snapshot, rejection="invalid_option")
+        return await self.cast_vote(message.id, actor, option.emoji)
+
     async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:

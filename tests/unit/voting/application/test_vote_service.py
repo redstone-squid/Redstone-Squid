@@ -236,6 +236,56 @@ async def test_cast_vote_applies_choice_and_staff_weight(
     assert repository.cast_calls == [(100, 7, 10, option_id, emoji, abs(expected_weight), {})]
 
 
+async def test_cast_vote_by_session_resolves_guild_option_alias() -> None:
+    options = (
+        VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=10),
+        VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=10),
+    )
+    initial = replace(snapshot(), options=options)
+    repository = FakeVoteRepository(initial)
+    repository.mutation = StoredVoteMutation(
+        session=initial,
+        previous_weight=None,
+        current_weight=1.0,
+        just_closed=False,
+    )
+    service = VoteService(repository)
+
+    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=10), "approve")
+
+    assert result.accepted
+    assert repository.cast_calls == [(100, 7, 10, "approve", "<:yes:1>", 1.0, {})]
+
+
+async def test_cast_vote_by_session_rejects_missing_session() -> None:
+    service = VoteService(FakeVoteRepository(None))
+
+    result = await service.cast_vote_by_session(404, VoteActor(7, guild_id=10), "approve")
+
+    assert result.rejection == "not_found"
+    assert result.session is None
+
+
+async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
+    repository = FakeVoteRepository(snapshot())
+    service = VoteService(repository)
+
+    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=999), "approve")
+
+    assert result.rejection == "wrong_guild"
+    assert repository.cast_calls == []
+
+
+async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
+    repository = FakeVoteRepository(snapshot())
+    service = VoteService(repository)
+
+    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=10), "missing")
+
+    assert result.rejection == "invalid_option"
+    assert repository.cast_calls == []
+
+
 async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
     repository = FakeVoteRepository(snapshot(kind="delete_log"))
     service = VoteService(repository)
