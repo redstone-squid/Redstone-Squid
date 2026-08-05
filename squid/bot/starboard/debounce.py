@@ -4,6 +4,8 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from squid.observability import trace_span
+
 logger = logging.getLogger(__name__)
 type EntryKey = tuple[int, int]
 type RefreshCallback = Callable[[EntryKey, bool], Awaitable[None]]
@@ -36,6 +38,10 @@ class EntryDebouncer:
         force = key in self._force
         self._force.discard(key)
         try:
-            await self._callback(key, force)
+            with trace_span(
+                "squid.background.starboard_refresh",
+                {"squid.surface": "background_work"},
+            ):
+                await self._callback(key, force)
         except Exception:
             logger.exception("Failed to refresh starboard %s origin %s", *key)

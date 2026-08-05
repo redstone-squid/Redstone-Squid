@@ -1,5 +1,6 @@
 """Optional process-local observability setup tests."""
 
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -94,3 +95,25 @@ def test_correlation_id_has_a_local_fallback(mocker: MockerFixture) -> None:
 
     assert len(error_id) == 12
     assert int(error_id, 16) >= 0
+
+
+def test_trace_context_filter_adds_active_ids(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=("a" * 32, "b" * 16))
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+
+    assert observability.TraceContextFilter().filter(record) is True
+
+    assert vars(record)["trace_id"] == "a" * 32
+    assert vars(record)["span_id"] == "b" * 16
+
+
+def test_trace_context_filter_preserves_propagated_child_ids(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=("a" * 32, "b" * 16))
+    record = logging.LogRecord("squid.worker", logging.INFO, __file__, 1, "message", (), None)
+    vars(record)["trace_id"] = "c" * 32
+    vars(record)["span_id"] = "d" * 16
+
+    observability.TraceContextFilter().filter(record)
+
+    assert vars(record)["trace_id"] == "c" * 32
+    assert vars(record)["span_id"] == "d" * 16

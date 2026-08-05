@@ -18,7 +18,7 @@ from squid.bot.utils.permissions import (
 )
 from squid.core.errors import DomainError, SquidError
 from squid.core.i18n import _, translate
-from squid.observability import correlation_id
+from squid.observability import correlation_id, record_current_exception, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -289,13 +289,52 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
     """Application command tree with centralized error handling."""
 
     @override
+    async def _call(self, interaction: discord.Interaction[ClientT]) -> None:
+        if interaction.type is discord.InteractionType.autocomplete:
+            await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
+            return
+
+        command_name = _interaction_command_name(interaction.data)
+        attributes: dict[str, str | int] = {
+            "squid.command.name": command_name,
+            "squid.surface": "application_command",
+        }
+        if interaction.guild_id is not None:
+            attributes["squid.guild.id"] = interaction.guild_id
+        if interaction.channel_id is not None:
+            attributes["squid.channel.id"] = interaction.channel_id
+        with trace_span(f"discord.command {command_name}", attributes) as span:
+            await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
+            if interaction.command_failed:
+                span.set_error()
+
+    @override
     async def on_error(
         self,
         interaction: discord.Interaction[ClientT],
         error: app_commands.AppCommandError,
         /,
     ) -> None:
+        record_current_exception(error)
         await handle_interaction_error(interaction, error, surface="application_command")
+
+
+def _interaction_command_name(data: Mapping[str, Any] | None) -> str:
+    """Read a qualified command name from Discord's nested interaction payload."""
+    names: list[str] = []
+    current = data
+    while current is not None:
+        name = current.get("name")
+        if isinstance(name, str):
+            names.append(name)
+        options = current.get("options")
+        if not isinstance(options, list):
+            break
+        current = next(
+            (option for option in options if isinstance(option, Mapping) and option.get("type") in {1, 2}),
+            None,
+        )
+    return " ".join(names) or "unknown"
 
 
 class ErrorHandledLayoutView(discord.ui.LayoutView):

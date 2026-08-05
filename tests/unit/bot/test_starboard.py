@@ -1,5 +1,7 @@
 import asyncio
 
+from pytest_mock import MockerFixture
+
 from squid.bot.starboard.debounce import EntryDebouncer
 
 
@@ -30,3 +32,20 @@ async def test_starboard_debouncer_isolates_keys() -> None:
     await debouncer.drain()
 
     assert called == {(1, 2), (1, 3)}
+
+
+async def test_starboard_debouncer_traces_each_refresh(mocker: MockerFixture) -> None:
+    async def callback(key: tuple[int, int], force: bool) -> None:
+        pass
+
+    span_context = mocker.MagicMock()
+    trace = mocker.patch("squid.bot.starboard.debounce.trace_span", return_value=span_context)
+    debouncer = EntryDebouncer(callback, delay=0)
+
+    debouncer.schedule((1, 2))
+    await debouncer.drain()
+
+    trace.assert_called_once_with(
+        "squid.background.starboard_refresh",
+        {"squid.surface": "background_work"},
+    )

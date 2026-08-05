@@ -22,6 +22,7 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
 from squid.core.i18n import _
+from squid.observability import trace_span
 from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -308,12 +309,24 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def close_due_polls(self) -> None:
         """Finalize expired polls from persisted deadlines."""
         try:
-            snapshots = await self.vote_service.close_due(Instant.now())
-            for snapshot in snapshots:
-                try:
-                    await GenericVoteSession(self.bot, snapshot).update_messages()
-                except Exception:
-                    logger.exception("Closed due poll %s but could not update its Discord message", snapshot.id)
+            with trace_span(
+                "squid.background.close_due_polls",
+                {"squid.surface": "background_loop"},
+            ):
+                snapshots = await self.vote_service.close_due(Instant.now())
+                for snapshot in snapshots:
+                    try:
+                        with trace_span(
+                            "squid.vote.update_closed_messages",
+                            {"squid.vote.session_id": snapshot.id},
+                        ):
+                            await GenericVoteSession(self.bot, snapshot).update_messages()
+                    except Exception:
+                        logger.exception(
+                            "Closed due poll %s but could not update its Discord message",
+                            snapshot.id,
+                            extra={"squid.vote.session_id": snapshot.id},
+                        )
         except Exception:
             logger.exception("Failed to scan and close due polls")
 

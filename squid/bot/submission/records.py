@@ -12,6 +12,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import check_is_global_admin
 from squid.core.i18n import _
+from squid.observability import trace_span
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
 
@@ -236,8 +237,12 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def process_maintenance(self) -> None:
         """Drain bounded record and search projection work."""
         try:
-            await self.computation.process_queue()
-            await self.refresh_search_index()
+            with trace_span(
+                "squid.background.record_maintenance",
+                {"squid.surface": "background_loop"},
+            ):
+                await self.computation.process_queue()
+                await self.refresh_search_index()
         except Exception:
             logger.exception("Failed to process record/search maintenance work")
 

@@ -2,10 +2,14 @@
 
 from unittest.mock import patch
 
+import discord
 import pytest
+from discord import app_commands
 from discord.ext import commands
+from pytest_mock import MockerFixture
 
 from squid.bot.errors import (
+    SquidCommandTree,
     build_error_presentation,
     handle_interaction_error,
     handle_message_error,
@@ -60,6 +64,73 @@ def test_unexpected_error_presentation_redacts_diagnostic_detail() -> None:
 )
 def test_permission_errors_identify_the_required_tier(error: Exception, title: str) -> None:
     assert build_error_presentation(error).title == title
+
+
+async def test_application_command_span_excludes_user_id(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock()
+    interaction.type = discord.InteractionType.application_command
+    interaction.data = {
+        "name": "admin",
+        "options": [{"name": "records", "type": 1, "options": []}],
+    }
+    interaction.guild_id = 10
+    interaction.channel_id = 20
+    interaction.command_failed = False
+    base_call = mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    span = mocker.Mock()
+    span_context = mocker.MagicMock()
+    span_context.__enter__.return_value = span
+    trace = mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    base_call.assert_awaited_once_with(interaction)
+    attributes = trace.call_args.args[1]
+    assert attributes == {
+        "squid.command.name": "admin records",
+        "squid.surface": "application_command",
+        "squid.guild.id": 10,
+        "squid.channel.id": 20,
+    }
+    assert all("user" not in name for name in attributes)
+    span.set_error.assert_not_called()
+
+
+async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(
+        type=discord.InteractionType.application_command,
+        data={"name": "submit"},
+        guild_id=None,
+        channel_id=20,
+        command_failed=True,
+    )
+    mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    span = mocker.Mock()
+    span_context = mocker.MagicMock()
+    span_context.__enter__.return_value = span
+    mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    span.set_error.assert_called_once_with()
+
+
+async def test_application_command_error_records_exception_on_current_span(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock()
+    error = app_commands.AppCommandError("failed")
+    record = mocker.patch("squid.bot.errors.record_current_exception")
+    handle = mocker.patch("squid.bot.errors.handle_interaction_error", new=mocker.AsyncMock())
+
+    await tree.on_error(interaction, error)
+
+    record.assert_called_once_with(error)
+    handle.assert_awaited_once_with(interaction, error, surface="application_command")
 
 
 @pytest.mark.asyncio

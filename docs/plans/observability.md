@@ -1,6 +1,6 @@
 # Observability for Redstone-Squid
 
-> **Status.** Phases 0-2 implemented on 2026-08-05. Phase 3 is the next unit of work.
+> **Status.** Phases 0-3 implemented on 2026-08-05. Phase 4 is the next unit of work.
 > The findings below are verified in-tree, not hypothetical: items 1, 2, and 5 are active
 > defects today, independent of whether any of this ships. Amend this document in place as
 > phases land, calling out where building it proved part of it wrong rather than silently
@@ -309,7 +309,7 @@ The shared `correlation_id()` helper now owns both transport fallbacks. API prob
 valid span exists and retain the prior 12-character local identifier when tracing is disabled
 or no span is active.
 
-### Phase 3 — traces in the bot process
+### Phase 3 — traces in the bot process (implemented)
 
 The real work; no auto-instrumentation exists for discord.py.
 
@@ -326,6 +326,20 @@ work — a command, an interaction, a scheduled loop iteration.
 
 **Exit criterion:** a `/submit` invocation produces one trace covering command handling,
 inference, and database writes.
+
+**Implementation notes (2026-08-05):** `SquidCommandTree` wraps discord.py's dispatch boundary
+while deliberately excluding autocomplete traffic. The span name and attributes are derived
+from Discord's nested command payload before dispatch; `on_error` records the actual command
+exception while the root span remains current. Command completion marks failures that
+discord.py handles internally, and uncaught dispatch failures are recorded by the shared span
+context manager. No user ID is attached.
+
+Record/search maintenance, due-vote closure, per-session Discord refreshes, and debounced
+starboard work now have bounded spans with error outcomes. A trace-context filter is installed
+only when observability is enabled. It runs on the queue handler while bot context is still
+active, then preserves those captured IDs when the listener thread formats the record; the
+same preservation rule is ready for worker child records in Phase 4. Optional-extra integration
+coverage proves command spans and their structured log records share trace/span identifiers.
 
 ### Phase 4 — the worker, and cross-process propagation
 
