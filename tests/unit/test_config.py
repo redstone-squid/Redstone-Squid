@@ -89,6 +89,24 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
     assert config.runtime.embeddings.base_url == config.openai.base_url
 
 
+def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_COMMUNITY_REDSTONER_STARBOARD_AUTHOR_ID="1",
+        SQUID_COMMUNITY_REDSTONER_STARBOARD_CHANNEL_ID="2",
+        SQUID_COMMUNITY_WELCOME_CHANNEL_ID="3",
+        SQUID_COMMUNITY_WELCOME_RELAY_CHANNEL_ID="4",
+    )
+
+    config = load_bot_process_config().runtime.community
+
+    assert config.redstoner_starboard_author_id == 1
+    assert config.redstoner_starboard_channel_id == 2
+    assert config.welcome_channel_id == 3
+    assert config.welcome_relay_channel_id == 4
+
+
 def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

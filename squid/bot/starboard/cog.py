@@ -148,19 +148,11 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 await asyncio.sleep(0)
 
     async def _channel(self, channel_id: int) -> GuildMessageable | None:
-        channel = self.bot.get_channel(channel_id)
-        if channel is None:
-            with contextlib.suppress(discord.NotFound, discord.Forbidden):
-                channel = await self.bot.fetch_channel(channel_id)
+        channel = await self.bot.get_or_fetch_messageable_channel(channel_id)
         return channel if isinstance(channel, GuildMessageable) else None
 
     async def _message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        channel = await self._channel(channel_id)
-        if channel is None:
-            return None
-        with contextlib.suppress(discord.NotFound, discord.Forbidden):
-            return await channel.fetch_message(message_id)
-        return None
+        return await self.bot.get_or_fetch_message(channel_id, message_id, untrack_if_missing=False)
 
     @staticmethod
     def _unsafe_nsfw(source: discord.abc.Messageable, destination: GuildMessageable) -> bool:

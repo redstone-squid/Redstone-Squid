@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 import discord
 from discord.ext import commands
 
-from squid.bot._types import GuildMessageable
-
 if TYPE_CHECKING:
     import squid.bot.app
 
@@ -37,15 +35,9 @@ class ReactionEvent:
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
-            message: discord.Message | None = None
-            try:
-                channel = self._bot.get_channel(self.payload.channel_id)
-                if channel is None:
-                    channel = await self._bot.fetch_channel(self.payload.channel_id)
-                if isinstance(channel, GuildMessageable):
-                    message = await channel.fetch_message(self.payload.message_id)
-            except (discord.NotFound, discord.Forbidden):
-                pass
+            message = await self._bot.get_or_fetch_message(
+                self.payload.channel_id, self.payload.message_id, untrack_if_missing=False
+            )
             object.__setattr__(self, "_message", message)
             object.__setattr__(self, "_message_loaded", True)
             return message

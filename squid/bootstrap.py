@@ -170,13 +170,13 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         votes=VoteService(VoteRepository(db.async_session)),
         redstoner=RedstonerService(
             RedstonerPolicy(
-                starboard_author_id=700796664276844612,
-                starboard_channel_id=1332630008270684241,
+                starboard_author_id=config.community.redstoner_starboard_author_id,
+                starboard_channel_id=config.community.redstoner_starboard_channel_id,
             )
         ),
         welcome_relay=WelcomeRelayService(
             WelcomeRelayPolicy(
-                welcome_channel_id=1356094722531393680,
+                welcome_channel_id=config.community.welcome_channel_id,
                 forward_chance=1 / 10,
             )
         ),

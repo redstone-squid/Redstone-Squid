@@ -184,6 +184,15 @@ class BotConfig(_FrozenModel):
     _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
 
 
+class CommunityConfig(_FrozenModel):
+    """Discord channel and user IDs used by community automation."""
+
+    redstoner_starboard_author_id: int = 700796664276844612
+    redstoner_starboard_channel_id: int = 1332630008270684241
+    welcome_channel_id: int = 1356094722531393680
+    welcome_relay_channel_id: int = 433618741528625155
+
+
 class CatboxConfig(_FrozenModel):
     """Optional Catbox account configuration."""
 
@@ -395,6 +404,7 @@ class RuntimeConfig(_FrozenModel):
     openai: OpenAIConfig
     embeddings: EmbeddingConfig
     schematics: SchematicConfig
+    community: CommunityConfig
     verification_code_pepper: SecretStr
 
 
@@ -416,6 +426,7 @@ class _ProcessSettings(BaseSettings):
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     vector: VectorConfig = VectorConfig()
     schematic: SchematicConfig = SchematicConfig()
+    community: CommunityConfig = CommunityConfig()
     log: LogConfig = LogConfig()
 
     @property
@@ -431,6 +442,7 @@ class _ProcessSettings(BaseSettings):
                 database_connection=self.vector.database_url,
             ),
             schematics=self.schematic,
+            community=self.community,
             verification_code_pepper=self.verification.code_pepper,
         )
 
@@ -488,6 +500,7 @@ class ApplicationConfig(BotProcessConfig):
                     "embedding",
                     "vector",
                     "schematic",
+                    "community",
                     "log",
                     "development_mode",
                     "discord",
@@ -503,7 +516,17 @@ class ApplicationConfig(BotProcessConfig):
         """Project the combined settings into the HTTP API process."""
         return ApiProcessConfig.model_validate(
             self.model_dump(
-                include={"database", "verification", "openai", "embedding", "vector", "schematic", "log", "api"}
+                include={
+                    "database",
+                    "verification",
+                    "openai",
+                    "embedding",
+                    "vector",
+                    "schematic",
+                    "community",
+                    "log",
+                    "api",
+                }
             )
         )
 
@@ -573,6 +596,7 @@ __all__ = [
     "BotProcessConfig",
     "BuildConfig",
     "CatboxConfig",
+    "CommunityConfig",
     "DatabaseConfig",
     "EmbeddingConfig",
     "GoogleConfig",

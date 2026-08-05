@@ -1,6 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionRouter
 
@@ -90,3 +91,13 @@ async def test_event_resolves_member_once() -> None:
 
     assert await asyncio.gather(event.resolve_member(), event.resolve_member()) == [member, member]
     assert calls == 1
+
+
+async def test_event_resolves_message_once_without_untracking() -> None:
+    message = object()
+    fetch_message = AsyncMock(return_value=message)
+    bot = SimpleNamespace(get_or_fetch_message=fetch_message)
+    event = ReactionEvent(payload(), "⭐", None, bot)  # type: ignore[arg-type]
+
+    assert await asyncio.gather(event.message(), event.message()) == [message, message]
+    fetch_message.assert_awaited_once_with(20, 10, untrack_if_missing=False)

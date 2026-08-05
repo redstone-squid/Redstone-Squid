@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 import discord
 from discord import AllowedMentions
@@ -20,11 +20,10 @@ logger = logging.getLogger(__name__)
 class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Listens for built-in welcome messages and occasionally mirrors them elsewhere."""
 
-    general_channel_id: Final[int] = 433618741528625155
-
     def __init__(self, bot: BotT):
         self.bot = bot
         self.service = bot.services.welcome_relay
+        self.general_channel_id = bot.community_config.welcome_relay_channel_id
 
     @Cog.listener(name="on_message")
     async def maybe_forward_welcome_message(self, message: discord.Message):
@@ -36,9 +35,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         ):
             return
 
-        general_channel = self.bot.get_channel(self.general_channel_id)
-        if general_channel is None:
-            general_channel = await self.bot.fetch_channel(self.general_channel_id)
+        general_channel = await self.bot.get_or_fetch_messageable_channel(self.general_channel_id)
 
         if not isinstance(general_channel, GuildMessageable):
             logger.warning("General channel %s is not messageable", self.general_channel_id)

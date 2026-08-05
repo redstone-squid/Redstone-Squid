@@ -28,6 +28,7 @@ from squid.config import (
     BotProcessConfig,
     BuildConfig,
     CatboxConfig,
+    CommunityConfig,
     load_bot_process_config,
 )
 from squid.logging_config import configure_bot_logging
@@ -38,6 +39,7 @@ type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
 DEFAULT_BOT_IDENTITY = BotIdentityConfig()
 DEFAULT_CATBOX_CONFIG = CatboxConfig()
 DEFAULT_BUILD_CONFIG = BuildConfig()
+DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
 
 
 class RedstoneSquid(Bot):
@@ -49,6 +51,7 @@ class RedstoneSquid(Bot):
         *,
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
+        community_config: CommunityConfig = DEFAULT_COMMUNITY_CONFIG,
         inference_model: str = "gpt-5.6-luna",
         inference_reasoning_effort: str = "low",
     ):
@@ -56,6 +59,7 @@ class RedstoneSquid(Bot):
         self._keep_database_active = keep_database_active
         self.catbox_config = catbox_config
         self.build_config = build_config
+        self.community_config = community_config
         self.inference_model = inference_model
         self.inference_reasoning_effort = inference_reasoning_effort
         description = f"{config.bot_name} v{config.bot_version}".strip()
@@ -109,27 +113,37 @@ class RedstoneSquid(Bot):
         """Clean up dangling build locks in case some functions failed to release them."""
         await self.services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
 
-    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
+    async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
+        """Resolve a messageable channel from cache or Discord, if it is accessible."""
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden):
+                return None
+        if not isinstance(channel, MessageableChannel):
+            logger.warning("Channel %s is not messageable.", channel_id)
+            return None
+        return channel
+
+    async def get_or_fetch_message(
+        self, channel_id: int, message_id: int, *, untrack_if_missing: bool = True
+    ) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
 
         Raises:
-            ValueError: The channel is not a MessageableChannel and thus no message can exist in it.
             discord.HTTPException: Fetching the channel or message failed.
-            discord.Forbidden: The bot does not have permission to fetch the channel or message.
-            discord.NotFound: The channel or message was not found.
         """
-        channel = self.get_channel(channel_id)
+        channel = await self.get_or_fetch_messageable_channel(channel_id)
         if channel is None:
-            channel = await self.fetch_channel(channel_id)
-        if not isinstance(channel, MessageableChannel):
-            msg = "Channel is not a messageable channel."
-            raise TypeError(msg)
+            return None
         try:
             return await channel.fetch_message(message_id)
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
-            await self.services.messages.untrack(message_id)
+            if untrack_if_missing:
+                await self.services.messages.untrack(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -188,6 +202,7 @@ async def main(
                 config=identity_config,
                 catbox_config=resolved_config.catbox,
                 build_config=resolved_config.build,
+                community_config=resolved_config.community,
                 inference_model=resolved_config.openai.chat_model,
                 inference_reasoning_effort=resolved_config.openai.reasoning_effort,
             ) as bot,
