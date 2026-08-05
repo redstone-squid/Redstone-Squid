@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - Windows has no rlimits
     resource = None  # type: ignore[assignment]
 
 from squid.core.errors import DomainError, SquidError
+from squid.logging_config import configure_worker_logging
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     FingerprintPreset,
@@ -249,7 +250,7 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
 
 def main() -> None:
     """Install guardrails from the supervisor's environment, then serve requests."""
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_worker_logging()
     limits = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
     apply_guardrails(
         {

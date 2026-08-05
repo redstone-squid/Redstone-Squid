@@ -127,7 +127,12 @@ class _Worker:
         assert process.stderr is not None
         with contextlib.suppress(asyncio.CancelledError, ValueError):
             async for line in process.stderr:
-                worker_logger.warning("[pid %s] %s", process.pid, line.decode("utf-8", "replace").rstrip())
+                decoded = line.decode("utf-8", "replace").rstrip()
+                record = _worker_log_record(decoded, process.pid)
+                if record is None:
+                    worker_logger.warning("[pid %s] %s", process.pid, decoded)
+                else:
+                    worker_logger.handle(record)
 
     async def _terminate(self) -> int | None:
         """Kill the child and its whole group, returning its exit code if we can learn one."""
@@ -159,6 +164,52 @@ class _Worker:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), 2.0)
         await self._terminate()
+
+
+def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
+    """Rebuild one structured child log record, or reject an unstructured line."""
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    name = payload.get("name")
+    level_name = payload.get("levelname")
+    message = payload.get("message")
+    if not isinstance(name, str) or not isinstance(level_name, str) or not isinstance(message, str):
+        return None
+    level = logging.getLevelNamesMapping().get(level_name.upper())
+    if level is None:
+        return None
+
+    pathname = payload.get("pathname")
+    lineno = payload.get("lineno")
+    record = logging.LogRecord(
+        name=name,
+        level=level,
+        pathname=pathname if isinstance(pathname, str) else "",
+        lineno=lineno if isinstance(lineno, int) else 0,
+        msg=message,
+        args=(),
+        exc_info=None,
+    )
+    created = payload.get("created")
+    if isinstance(created, int | float):
+        record.created = float(created)
+        record.msecs = (record.created - int(record.created)) * 1000
+
+    exception_text = payload.get("exc_info")
+    if isinstance(exception_text, str):
+        record.exc_text = exception_text
+
+    reserved = record.__dict__.keys()
+    for key, value in payload.items():
+        if key not in reserved and key != "exc_info":
+            setattr(record, key, value)
+    record.worker_pid = process_id
+    return record
 
 
 @dataclasses.dataclass(slots=True)

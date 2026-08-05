@@ -39,10 +39,17 @@ DEFAULT_ACCESS_LOG_FORMAT = (
 )
 """Format for uvicorn access log records."""
 
+JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s"
+"""Fields emitted for structured application and worker logs."""
+
+JSON_ACCESS_LOG_FORMAT = f"{JSON_LOG_FORMAT} %(client_addr)s %(request_line)s %(status_code)s"
+"""Fields emitted for structured uvicorn access logs."""
+
 __all__ = [
     "build_logging_config",
     "configure_api_logging",
     "configure_bot_logging",
+    "configure_worker_logging",
     "prepare_log_path",
     "resolve_level",
 ]
@@ -93,6 +100,7 @@ def build_logging_config(
     named_logger_levels: Mapping[str, str] | None = None,
     include_uvicorn_loggers: bool = False,
     use_queue: bool = False,
+    development_mode: bool = False,
 ) -> dict[str, object]:
     """Build a logging configuration dictionary for dictConfig."""
     level = resolve_level(config.level)
@@ -100,11 +108,13 @@ def build_logging_config(
     resolved_log_file = prepare_log_path(config.directory, config.log_file)
     resolved_access_log_file = prepare_log_path(config.directory, config.access_log_file)
 
+    default_formatter = "default" if development_mode else "json"
+    access_formatter = "access" if development_mode else "json_access"
     handlers: dict[str, dict[str, object]] = {
         "console": {
             "class": "logging.StreamHandler",
             "level": level,
-            "formatter": "default",
+            "formatter": default_formatter,
             "stream": "ext://sys.stdout",
         },
     }
@@ -114,7 +124,7 @@ def build_logging_config(
         handlers["file"] = {
             "class": "logging.handlers.RotatingFileHandler",
             "level": level,
-            "formatter": "default",
+            "formatter": default_formatter,
             "filename": str(resolved_log_file),
             "maxBytes": DEFAULT_MAX_BYTES,
             "backupCount": DEFAULT_BACKUP_COUNT,
@@ -134,7 +144,7 @@ def build_logging_config(
         handlers["access_console"] = {
             "class": "logging.StreamHandler",
             "level": level,
-            "formatter": "access",
+            "formatter": access_formatter,
             "stream": "ext://sys.stdout",
         }
 
@@ -144,7 +154,7 @@ def build_logging_config(
         handlers["access_file"] = {
             "class": "logging.handlers.RotatingFileHandler",
             "level": level,
-            "formatter": "access",
+            "formatter": access_formatter,
             "filename": str(resolved_access_log_file),
             "maxBytes": DEFAULT_MAX_BYTES,
             "backupCount": DEFAULT_BACKUP_COUNT,
@@ -192,6 +202,14 @@ def build_logging_config(
                 "datefmt": DEFAULT_DATE_FORMAT,
                 "use_colors": False,
             },
+            "json": {
+                "()": "pythonjsonlogger.json.JsonFormatter",
+                "format": JSON_LOG_FORMAT,
+            },
+            "json_access": {
+                "()": "pythonjsonlogger.json.JsonFormatter",
+                "format": JSON_ACCESS_LOG_FORMAT,
+            },
         },
         "handlers": handlers,
         "loggers": loggers,
@@ -218,6 +236,7 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
             config=config,
             named_logger_levels=named_logger_levels,
             use_queue=True,
+            development_mode=dev_mode,
         )
     )
     queue_handler = logging.getHandlerByName("queue")
@@ -240,4 +259,29 @@ def configure_api_logging(config: LoggingConfig) -> None:
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
         )
+    )
+
+
+def configure_worker_logging() -> None:
+    """Configure JSON logging to stderr for a schematic worker child."""
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "json": {
+                    "()": "pythonjsonlogger.json.JsonFormatter",
+                    "format": JSON_LOG_FORMAT,
+                }
+            },
+            "handlers": {
+                "stderr": {
+                    "class": "logging.StreamHandler",
+                    "level": "DEBUG",
+                    "formatter": "json",
+                    "stream": "ext://sys.stderr",
+                }
+            },
+            "root": {"level": "DEBUG", "handlers": ["stderr"]},
+        }
     )

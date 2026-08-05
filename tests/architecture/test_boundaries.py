@@ -35,6 +35,7 @@ def test_domain_layers_are_framework_and_persistence_independent() -> None:
         .should_not_import("discord*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
+        .should_not_import("opentelemetry*")
         .should_not_import("squid.*.application*")
         .should_not_import("squid.*.infrastructure*")
         .check("squid", only_direct_imports=True)
@@ -49,6 +50,7 @@ def test_application_layers_are_framework_and_infrastructure_independent() -> No
         .should_not_import("discord*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
+        .should_not_import("opentelemetry*")
         .should_not_import("squid.*.infrastructure*")
         .check("squid", only_direct_imports=True)
     )
@@ -125,6 +127,25 @@ def test_application_modules_do_not_read_process_environment_directly() -> None:
                 isinstance(node, ast.ImportFrom) and node.module == "dotenv"
             ):
                 violations.append((path, node.lineno, "dotenv import"))
+
+    assert violations == []
+
+
+def test_logging_calls_keep_message_templates_stable() -> None:
+    """Keep log messages lazily formatted so aggregators can group by template."""
+    violations: list[tuple[Path, int]] = []
+    log_methods = {"debug", "info", "warning", "error", "exception", "critical", "log"}
+    for path in Path("squid").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr not in log_methods:
+                continue
+            message_index = 1 if node.func.attr == "log" else 0
+            if len(node.args) > message_index and any(
+                isinstance(item, ast.JoinedStr) for item in ast.walk(node.args[message_index])
+            ):
+                violations.append((path, node.lineno))
 
     assert violations == []
 
