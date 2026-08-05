@@ -19,6 +19,7 @@ BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
     "SQUID_VERIFICATION_CODE_PEPPER": "verification-pepper",
     "SQUID_CURSOR_SECRET": "cursor-secret-for-tests",
+    "SQUID_API_KEY_PEPPER": "api-key-pepper-for-tests",
 }
 
 
@@ -78,6 +79,7 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.bot_process().logging.root_level == "INFO"
     assert config.bot_process().logging.log_file == "bot/discord.log"
     assert config.api_process().api.port == 9000
+    assert config.api_process().api.key_pepper.get_secret_value() == "api-key-pepper-for-tests"
     assert config.api_process().logging.access_log_file == "access.log"
     assert config.build.commit_hash == "abcdef123456"
     for process_config in (config.bot_process(), config.api_process()):
@@ -264,6 +266,15 @@ def test_cursor_secret_requires_enough_entropy_material(monkeypatch: pytest.Monk
         load_bot_process_config()
 
     assert any(issue["field"] == "cursor.secret" for issue in _issues(exc_info.value))
+
+
+def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_KEY_PEPPER="too-short")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == "api.key_pepper" for issue in _issues(exc_info.value))
 
 
 def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch) -> None:

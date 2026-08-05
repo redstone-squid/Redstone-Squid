@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import inspect
 from whenever import Instant
 
+from squid.auth.infrastructure.models import ApiKey
 from squid.builds.infrastructure.models import Build, BuildEditHistory, RestrictionAlias
 from squid.messages.infrastructure.models import Message
 from squid.persistence.types import InstantUTC
@@ -14,6 +15,10 @@ from squid.voting.infrastructure.models import VoteSession
 @pytest.mark.parametrize(
     ("model", "column_name"),
     [
+        (ApiKey, "created_at"),
+        (ApiKey, "expires_at"),
+        (ApiKey, "revoked_at"),
+        (ApiKey, "last_used_at"),
         (Build, "edited_time"),
         (Build, "locked_at"),
         (Build, "submission_time"),

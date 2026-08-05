@@ -173,6 +173,7 @@ class ApiConfig(_FrozenModel):
     """HTTP API transport configuration."""
 
     secret: SecretStr
+    key_pepper: SecretStr
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
     access_log_file: str | None = None
@@ -186,6 +187,14 @@ class ApiConfig(_FrozenModel):
     def _require_secret(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value():
             msg = "Must not be empty."
+            raise ValueError(msg)
+        return value
+
+    @field_validator("key_pepper")
+    @classmethod
+    def _require_key_pepper(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value().encode()) < 16:
+            msg = "Must contain at least 16 bytes."
             raise ValueError(msg)
         return value
 
