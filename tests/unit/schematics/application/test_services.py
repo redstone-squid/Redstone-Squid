@@ -1,6 +1,7 @@
 """Schematic application service tests."""
 
 import gzip
+import logging
 import zlib
 
 import pytest
@@ -294,7 +295,7 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert len(analyzer.render_calls) == 1
 
 
-async def test_render_skips_a_schematic_over_the_block_cap() -> None:
+async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCaptureFixture) -> None:
     analyzer = FakeSchematicAnalyzer(make_analysis(block_count=401))
     schematics, _, _ = service(
         analyzer,
@@ -304,8 +305,13 @@ async def test_render_skips_a_schematic_over_the_block_cap() -> None:
     )
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
 
-    assert await schematics.prepare_render(7) is None
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+        assert await schematics.prepare_render(7) is None
+
     assert analyzer.render_calls == []
+    assert vars(caplog.records[-1])["squid.build.id"] == 7
+    assert vars(caplog.records[-1])["squid.schematic.format"] == "litematic"
+    assert vars(caplog.records[-1])["squid.schematic.operation"] == "render"
 
 
 async def test_render_worker_crash_is_not_retried() -> None:

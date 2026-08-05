@@ -1,6 +1,6 @@
 # Observability for Redstone-Squid
 
-> **Status.** Design drafted, nothing implemented. Phase 0 is the next unit of work.
+> **Status.** Phase 0 implemented on 2026-08-05. Phase 1 is the next unit of work.
 > The findings below are verified in-tree, not hypothetical: items 1, 2, and 5 are active
 > defects today, independent of whether any of this ships. Amend this document in place as
 > phases land, calling out where building it proved part of it wrong rather than silently
@@ -215,7 +215,7 @@ build or vote-session ID and join through the database.
 Each phase is independently valuable and independently shippable. Phases 0-1 are worth doing
 even if the rest is never built.
 
-### Phase 0 — structured logs, no OTel
+### Phase 0 — structured logs, no OTel (implemented)
 
 No new runtime dependency beyond a JSON formatter. No backend required.
 
@@ -230,12 +230,23 @@ No new runtime dependency beyond a JSON formatter. No backend required.
 3. Add a lint or test asserting no f-strings in logging calls, locking in Finding 3's
    discipline before it erodes.
 4. Add `extra={...}` at the ~15 call sites where a field is genuinely useful — the `build_id`
-   sites in `submission/submit.py:296-355` and `submission/ingestion.py:56-92`, the vote-session
+   sites in `bot/submission/submit.py:296-355` and `bot/submission/ingestion.py:56-92`, the vote-session
    sites in `voting/application/services.py:163-229`, and the schematic service sites in
    `schematics/application/services.py:261-357`.
 
 **Exit criterion:** `logs/discord.log` is JSON, a worker DEBUG record arrives in the parent as
 DEBUG, and `grep`-based debugging still works in development.
+
+**Implementation notes (2026-08-05):** Production bot, API, uvicorn access, and worker records
+use `python-json-logger`; bot development mode retains the human formatter. The API has no
+development-mode setting, so it remains structured in every current deployment rather than
+adding an unrelated configuration field. Worker exception tracebacks cross the stderr pipe as
+formatted text because a traceback object cannot be reconstructed across processes, while the
+level, logger, timestamp, source location, message, and structured fields remain first-class
+`LogRecord` data. Non-JSON native crash output still takes the warning fallback. Architecture
+tests now preserve lazy log templates and forbid future OTel imports in domain/application
+layers. Stable build, vote-session, schematic-format, and operation fields were added without
+adding Discord user identifiers.
 
 ### Phase 1 — configuration and the process-init contract
 
@@ -272,8 +283,8 @@ The real work; no auto-instrumentation exists for discord.py.
 
 1. A span around application-command invocation, started in a `CommandTree` wrapper and ended
    in `SquidCommandTree.on_error` (`bot/errors.py:288`) or on success.
-2. Spans for the background loops — `submission/records.py:242`, `voting/vote.py:316-318`,
-   `starboard/debounce.py:41` — each currently a bare `logger.exception` with no duration or
+2. Spans for the background loops — `bot/submission/records.py:242`, `bot/voting/vote.py:316-318`,
+   `bot/starboard/debounce.py:41` — each currently a bare `logger.exception` with no duration or
    outcome recorded.
 3. A trace-ID-injecting `logging.Filter`, so Phase 0's JSON records carry `trace_id`/`span_id`.
 

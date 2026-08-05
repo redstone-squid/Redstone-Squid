@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from dataclasses import replace
 from math import inf, nan
@@ -17,6 +18,7 @@ from squid.voting.domain import (
     VoteKindLiteral,
     VoteMessage,
     VoteOption,
+    VoteSelection,
     VoteSessionResultLiteral,
     VoteSessionSnapshot,
     VoteStatus,
@@ -152,6 +154,11 @@ class FakeVoteRepository:
         pass
 
 
+class MissingActorResolver:
+    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> None:
+        return None
+
+
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
     repository = FakeVoteRepository(None)
     service = VoteService(repository)
@@ -177,6 +184,21 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
     assert delete_session_id == 25
     assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
     assert repository.delete_create_calls == [(8, 4, -2, 100, 200, 300, DEFAULT_VOTE_OPTIONS)]
+
+
+async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:
+    initial = replace(
+        snapshot(),
+        selections=(VoteSelection(user_id=9, guild_id=10, option_id="approve", emoji="👍", weight=1.0),),
+    )
+    service = VoteService(FakeVoteRepository(initial), actor_resolver=MissingActorResolver())
+
+    with caplog.at_level(logging.WARNING, logger="squid.voting.application.services"):
+        await service.refresh(100)
+
+    record_fields = vars(caplog.records[-1])
+    assert record_fields["squid.vote.session_id"] == 12
+    assert "squid.user.id" not in record_fields
 
 
 @pytest.mark.parametrize(

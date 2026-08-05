@@ -8,7 +8,7 @@ from pytest_mock import MockerFixture
 
 from squid.config import SchematicConfig
 from squid.schematics.infrastructure import worker as worker_module
-from squid.schematics.infrastructure.worker import _Worker, _worker_log_record
+from squid.schematics.infrastructure.worker import _Worker, _worker_log_record  # pyright: ignore[reportPrivateUsage]
 
 
 def test_worker_log_record_preserves_child_identity_and_fields() -> None:
@@ -66,7 +66,7 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker:
     handle = mocker.patch.object(worker_module.worker_logger, "handle")
     warning = mocker.patch.object(worker_module.worker_logger, "warning")
 
-    await _Worker(SchematicConfig())._pump_stderr(process)
+    await _Worker(SchematicConfig())._pump_stderr(process)  # pyright: ignore[reportPrivateUsage]
 
     record = handle.call_args.args[0]
     assert record.levelno == logging.DEBUG

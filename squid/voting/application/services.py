@@ -160,7 +160,12 @@ class VoteService:
 
         refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=actor)
         if unresolved:
-            logger.warning("Vote session %s refresh retained cached weights for users %s", snapshot.id, unresolved)
+            logger.warning(
+                "Vote session %s refresh retained cached weights for users %s",
+                snapshot.id,
+                unresolved,
+                extra={"squid.vote.session_id": snapshot.id},
+            )
         try:
             mutation = await self._repository.cast_vote(
                 message_id,
@@ -194,7 +199,12 @@ class VoteService:
         weights, unresolved = await self._calculate_refresh(snapshot)
         mutation = await self._repository.refresh_weights(snapshot.id, weights)
         if unresolved:
-            logger.warning("Vote session %s refresh retained cached weights for users %s", snapshot.id, unresolved)
+            logger.warning(
+                "Vote session %s refresh retained cached weights for users %s",
+                snapshot.id,
+                unresolved,
+                extra={"squid.vote.session_id": snapshot.id},
+            )
         return VoteRefreshResult(
             mutation.session if mutation is not None else snapshot,
             tuple(unresolved),
@@ -226,7 +236,12 @@ class VoteService:
                 weights, unresolved = await self._calculate_refresh(snapshot)
                 await self._repository.refresh_weights(snapshot.id, weights)
                 if unresolved:
-                    logger.warning("Due poll %s retained unresolved cached weights for %s", snapshot.id, unresolved)
+                    logger.warning(
+                        "Due poll %s retained unresolved cached weights for %s",
+                        snapshot.id,
+                        unresolved,
+                        extra={"squid.vote.session_id": snapshot.id},
+                    )
             mutation = await self._repository.close_by_id(snapshot.id)
             if mutation is not None and mutation.just_closed:
                 closed.append(mutation.session)

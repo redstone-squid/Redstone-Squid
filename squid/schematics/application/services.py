@@ -263,6 +263,11 @@ class SchematicService:
                     ingested.sha256,
                     stored.file_sha256,
                     exc_info=True,
+                    extra={
+                        "squid.build.id": stored.build_id,
+                        "squid.schematic.format": ingested.analysis.metrics.source_format.value,
+                        "squid.schematic.operation": "compare",
+                    },
                 )
                 continue
 
@@ -315,6 +320,11 @@ class SchematicService:
                 stored.id,
                 metrics.block_count,
                 self._render_max_block_count,
+                extra={
+                    "squid.build.id": stored.build_id,
+                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
+                    "squid.schematic.operation": "render",
+                },
             )
             return None
         if metrics.bounding_volume > self._render_max_bounding_volume:
@@ -323,6 +333,11 @@ class SchematicService:
                 stored.id,
                 metrics.bounding_volume,
                 self._render_max_bounding_volume,
+                extra={
+                    "squid.build.id": stored.build_id,
+                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
+                    "squid.schematic.operation": "render",
+                },
             )
             return None
 
@@ -348,13 +363,38 @@ class SchematicService:
             png = await self._analyzer.render(data, request=self._render_request, resource_pack=pack_data)
         except SchematicWorkerCrashedError:
             self._poisoned.add(stored.file_sha256)
-            logger.warning("The schematic worker crashed while rendering build %s; skipping preview.", build_id)
+            logger.warning(
+                "The schematic worker crashed while rendering build %s; skipping preview.",
+                build_id,
+                extra={
+                    "squid.build.id": build_id,
+                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
+                    "squid.schematic.operation": "render",
+                },
+            )
             return None
         except SquidError:
-            logger.warning("Could not render the schematic for build %s; skipping preview.", build_id, exc_info=True)
+            logger.warning(
+                "Could not render the schematic for build %s; skipping preview.",
+                build_id,
+                exc_info=True,
+                extra={
+                    "squid.build.id": build_id,
+                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
+                    "squid.schematic.operation": "render",
+                },
+            )
             return None
         if not png.startswith(b"\x89PNG\r\n\x1a\n"):
-            logger.warning("The schematic renderer returned a non-PNG payload for build %s.", build_id)
+            logger.warning(
+                "The schematic renderer returned a non-PNG payload for build %s.",
+                build_id,
+                extra={
+                    "squid.build.id": build_id,
+                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
+                    "squid.schematic.operation": "render",
+                },
+            )
             return None
         return PreparedRender(
             schematic_id=stored.id,

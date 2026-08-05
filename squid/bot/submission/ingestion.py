@@ -89,7 +89,15 @@ async def ingest_message_bundle(
             try:
                 await services.schematics.record(build.id, ingested, request, primary=index == 0)
             except SquidError:
-                logger.warning("Could not record inferred schematic analysis for build %s", build.id, exc_info=True)
+                logger.warning(
+                    "Could not record inferred schematic analysis for build %s",
+                    build.id,
+                    exc_info=True,
+                    extra={
+                        "squid.build.id": build.id,
+                        "squid.schematic.format": ingested.analysis.metrics.source_format.value,
+                    },
+                )
 
     # The tracked-message table is keyed by Discord message id, so a source can identify the
     # bundle for idempotency but cannot point to multiple inferred builds.

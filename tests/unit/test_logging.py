@@ -158,6 +158,7 @@ class TestBuildLoggingConfig:
         logging.config.dictConfig(
             {
                 "version": 1,
+                "disable_existing_loggers": False,
                 "formatters": {"json": formatter_config["json"]},
                 "handlers": {"stream": {"class": "logging.StreamHandler", "formatter": "json"}},
             }

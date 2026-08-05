@@ -293,7 +293,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 try:
                     await self.bot.services.schematics.record_render(prepared, url)
                 except SquidError:
-                    logger.warning("Could not cache the rendered preview for build %s.", build_id, exc_info=True)
+                    logger.warning(
+                        "Could not cache the rendered preview for build %s.",
+                        build_id,
+                        exc_info=True,
+                        extra={"squid.build.id": build_id, "squid.schematic.operation": "render"},
+                    )
 
             current = await self.builds.get(build_id)
             if current is None:
@@ -304,7 +309,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                     current = await lease.commit()
             await self.bot.for_build(current).update_messages()
         except Exception:
-            logger.warning("Could not generate the schematic preview for build %s.", build_id, exc_info=True)
+            logger.warning(
+                "Could not generate the schematic preview for build %s.",
+                build_id,
+                exc_info=True,
+                extra={"squid.build.id": build_id, "squid.schematic.operation": "render"},
+            )
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_id: int
@@ -339,7 +349,15 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             try:
                 await schematics.record(build.id, ingested, request, primary=index == 0)
             except SquidError:
-                logger.warning("Could not record the schematic analysis for build %s.", build.id, exc_info=True)
+                logger.warning(
+                    "Could not record the schematic analysis for build %s.",
+                    build.id,
+                    exc_info=True,
+                    extra={
+                        "squid.build.id": build.id,
+                        "squid.schematic.format": ingested.analysis.metrics.source_format.value,
+                    },
+                )
 
     async def _note_schematic_duplicates(
         self,
@@ -352,7 +370,11 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         try:
             duplicates = await self.bot.services.schematics.find_duplicates(analyses[0][1])
         except SquidError:
-            logger.warning("Could not check the submitted schematic for duplicates.", exc_info=True)
+            logger.warning(
+                "Could not check the submitted schematic for duplicates.",
+                exc_info=True,
+                extra={"squid.schematic.format": analyses[0][1].analysis.metrics.source_format.value},
+            )
             return
         if duplicates:
             build.extra_info["schematic_duplicates"] = [
