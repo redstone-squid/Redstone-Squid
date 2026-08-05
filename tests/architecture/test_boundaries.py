@@ -150,6 +150,50 @@ def test_logging_calls_keep_message_templates_stable() -> None:
     assert violations == []
 
 
+def test_combined_launcher_does_not_configure_process_resources_before_fork() -> None:
+    """Telemetry and logging own threads, so only child entry points may initialize them."""
+    path = Path("app.py")
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    forbidden_imports: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            forbidden_imports.extend(
+                (node.lineno, alias.name)
+                for alias in node.names
+                if alias.name.startswith(("opentelemetry", "squid.observability", "squid.logging_config"))
+            )
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith(("opentelemetry", "squid.observability", "squid.logging_config"))
+        ):
+            forbidden_imports.append((node.lineno, node.module))
+
+    process_start = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "start"
+        and isinstance(node.func.value, ast.Call)
+        and isinstance(node.func.value.func, ast.Attribute)
+        and node.func.value.func.attr == "Process"
+    )
+    setup_calls = [
+        (node.lineno, node.func.id if isinstance(node.func, ast.Name) else node.func.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and node.lineno < process_start.lineno
+        and (
+            (isinstance(node.func, ast.Name) and node.func.id.startswith("configure_"))
+            or (isinstance(node.func, ast.Attribute) and node.func.attr.startswith("configure_"))
+        )
+    ]
+
+    assert forbidden_imports == []
+    assert setup_calls == []
+
+
 def test_voting_adapter_does_not_construct_database_service_locator() -> None:
     database_manager_calls = [
         (path, node.lineno)

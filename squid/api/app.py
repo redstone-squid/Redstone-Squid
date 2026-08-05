@@ -13,6 +13,7 @@ from squid.bootstrap import create_application_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.core.errors import AuthenticationError
 from squid.logging_config import configure_api_logging
+from squid.observability import configure_observability
 from squid.runtime import ApplicationRuntime, ApplicationServices
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime]
@@ -85,12 +86,16 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
 
     resolved_config = process_config or load_api_process_config()
     configure_api_logging(resolved_config.logging)
-    uvicorn.run(
-        create_api_app(config=resolved_config),
-        host="0.0.0.0",
-        port=resolved_config.api.port,
-        log_config=None,
-    )
+    observability = configure_observability(resolved_config.observability, service_name="api")
+    try:
+        uvicorn.run(
+            create_api_app(config=resolved_config),
+            host="0.0.0.0",
+            port=resolved_config.api.port,
+            log_config=None,
+        )
+    finally:
+        observability.shutdown()
 
 
 if __name__ == "__main__":

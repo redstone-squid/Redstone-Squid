@@ -3,7 +3,9 @@
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pytest_mock import MockerFixture
 
+from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.core.errors import ErrorCode, InternalError
 from squid.users.errors import MinecraftServiceUnavailableError
@@ -14,6 +16,21 @@ from tests.unit.api.fakes import (
     TEST_VERIFICATION_CODE,
     MockDatabaseManager,
 )
+
+
+def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
+    config = mocker.Mock()
+    config.api.port = 8123
+    handle = mocker.Mock()
+    mocker.patch.object(api_app, "configure_api_logging")
+    configure = mocker.patch.object(api_app, "configure_observability", return_value=handle)
+    run = mocker.patch("uvicorn.run")
+
+    api_app.main(config)
+
+    configure.assert_called_once_with(config.observability, service_name="api")
+    run.assert_called_once()
+    handle.shutdown.assert_called_once_with()
 
 
 def test_missing_authorization_header_returns_422(client: httpx.Client):

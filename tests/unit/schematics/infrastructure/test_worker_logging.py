@@ -1,6 +1,7 @@
 """Structured schematic worker logging tests."""
 
 import asyncio
+import io
 import json
 import logging
 
@@ -8,6 +9,7 @@ from pytest_mock import MockerFixture
 
 from squid.config import SchematicConfig
 from squid.schematics.infrastructure import worker as worker_module
+from squid.schematics.infrastructure import worker_main
 from squid.schematics.infrastructure.worker import _Worker, _worker_log_record  # pyright: ignore[reportPrivateUsage]
 
 
@@ -42,6 +44,31 @@ def test_worker_log_record_rejects_native_and_malformed_output() -> None:
     assert _worker_log_record("thread 'rayon-1' panicked at src/lib.rs:42", 2718) is None
     assert _worker_log_record(json.dumps(["not", "a", "record"]), 2718) is None
     assert _worker_log_record(json.dumps({"message": "missing identity"}), 2718) is None
+
+
+def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) -> None:
+    events: list[str] = []
+    handle = mocker.Mock()
+
+    mocker.patch.object(worker_main, "configure_worker_logging", side_effect=lambda: events.append("logging"))
+    mocker.patch.object(worker_main, "apply_guardrails", side_effect=lambda limits: events.append("guardrails"))
+    config = mocker.Mock()
+    mocker.patch.object(worker_main, "load_worker_observability_config", return_value=config)
+    configure = mocker.patch.object(
+        worker_main,
+        "configure_observability",
+        side_effect=lambda *args, **kwargs: events.append("observability") or handle,
+    )
+    mocker.patch.object(worker_main, "serve", side_effect=lambda stdin, stdout: events.append("serve"))
+    mocker.patch.object(worker_main.sys, "argv", ["worker_main"])
+    mocker.patch.object(worker_main.sys, "stdin", mocker.Mock(buffer=io.BytesIO()))
+    mocker.patch.object(worker_main.sys, "stdout", mocker.Mock(buffer=io.BytesIO()))
+
+    worker_main.main()
+
+    assert events == ["logging", "guardrails", "observability", "serve"]
+    configure.assert_called_once_with(config, service_name="worker")
+    handle.shutdown.assert_called_once_with()
 
 
 async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker: MockerFixture) -> None:

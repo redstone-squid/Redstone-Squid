@@ -1,0 +1,81 @@
+"""Optional process-local observability setup tests."""
+
+from collections.abc import Iterator
+
+import pytest
+from pytest_mock import MockerFixture
+
+from squid import observability
+from squid.config import ObservabilityConfig
+from squid.observability import ObservabilityHandle, configure_observability
+
+
+@pytest.fixture(autouse=True)
+def _reset_observability_state() -> Iterator[None]:
+    previous_pid = observability._configured_pid  # pyright: ignore[reportPrivateUsage]
+    previous_handle = observability._configured_handle  # pyright: ignore[reportPrivateUsage]
+    observability._configured_pid = None  # pyright: ignore[reportPrivateUsage]
+    observability._configured_handle = None  # pyright: ignore[reportPrivateUsage]
+    yield
+    observability._configured_pid = previous_pid  # pyright: ignore[reportPrivateUsage]
+    observability._configured_handle = previous_handle  # pyright: ignore[reportPrivateUsage]
+
+
+def enabled_config() -> ObservabilityConfig:
+    return ObservabilityConfig.model_validate({"enabled": True, "endpoint": "http://collector:4318"})
+
+
+def test_disabled_configuration_does_not_probe_optional_dependency(mocker: MockerFixture) -> None:
+    configure_sdk = mocker.patch.object(observability, "_configure_otel")
+
+    handle = configure_observability(ObservabilityConfig(), service_name="bot")
+    handle.shutdown()
+
+    configure_sdk.assert_not_called()
+
+
+def test_enabled_configuration_is_process_idempotent(mocker: MockerFixture) -> None:
+    shutdown = mocker.Mock()
+    configured = ObservabilityHandle(shutdown)
+    configure_sdk = mocker.patch.object(observability, "_configure_otel", return_value=configured)
+
+    first = configure_observability(enabled_config(), service_name="api")
+    second = configure_observability(enabled_config(), service_name="api")
+    first.shutdown()
+    second.shutdown()
+
+    assert first is second
+    configure_sdk.assert_called_once_with(enabled_config(), service_name="api")
+    shutdown.assert_called_once_with()
+
+
+def test_missing_optional_extra_degrades_to_warning(caplog: pytest.LogCaptureFixture, mocker: MockerFixture) -> None:
+    missing_extra = ModuleNotFoundError("No module named 'opentelemetry'", name="opentelemetry")
+    mocker.patch.object(observability, "_configure_otel", side_effect=missing_extra)
+
+    handle = configure_observability(enabled_config(), service_name="bot")
+
+    handle.shutdown()
+
+    assert "optional 'observability' extra is not installed" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("base", "expected"),
+    [
+        ("http://collector:4318", "http://collector:4318/v1/traces"),
+        ("https://example.test/otel/", "https://example.test/otel/v1/traces"),
+        ("https://example.test/v1/traces", "https://example.test/v1/traces"),
+    ],
+)
+def test_trace_endpoint_appends_signal_path(base: str, expected: str) -> None:
+    assert observability._trace_endpoint(base) == expected  # pyright: ignore[reportPrivateUsage]
+
+
+def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture) -> None:
+    observability._configured_pid = 100  # pyright: ignore[reportPrivateUsage]
+    observability._configured_handle = ObservabilityHandle()  # pyright: ignore[reportPrivateUsage]
+    mocker.patch.object(observability.os, "getpid", return_value=200)
+
+    with pytest.raises(RuntimeError, match="before this process forked"):
+        configure_observability(enabled_config(), service_name="api")

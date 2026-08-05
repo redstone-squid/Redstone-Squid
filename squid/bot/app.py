@@ -32,6 +32,7 @@ from squid.config import (
     load_bot_process_config,
 )
 from squid.logging_config import configure_bot_logging
+from squid.observability import configure_observability
 from squid.runtime import ApplicationServices
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,7 @@ async def main(
     """Main entry point for the bot."""
     resolved_config = process_config or load_bot_process_config()
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
+    observability = configure_observability(resolved_config.observability, service_name="bot")
 
     try:
         async with (
@@ -209,6 +211,7 @@ async def main(
         ):
             await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
+        observability.shutdown()
         queue_listener.stop()
 
 

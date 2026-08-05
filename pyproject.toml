@@ -44,6 +44,13 @@ dependencies = [
 # Pinned exactly, not ranged: fingerprints and data-version loss reports are version-scoped
 # outputs we persist, so upgrading is a deliberate act that requires a backfill plan.
 schematics = ["nucleation==0.10.1"]
+observability = [
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+    "opentelemetry-instrumentation-aiohttp-client>=0.65b0,<1",
+    "opentelemetry-instrumentation-fastapi>=0.65b0,<1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.65b0,<1",
+    "opentelemetry-sdk>=1.44,<2",
+]
 
 [project.urls]
 "Source Code" = "https://github.com/redstone-squid/Redstone-Squid"

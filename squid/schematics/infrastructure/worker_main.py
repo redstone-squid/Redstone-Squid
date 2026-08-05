@@ -27,8 +27,10 @@ try:
 except ImportError:  # pragma: no cover - Windows has no rlimits
     resource = None  # type: ignore[assignment]
 
+from squid.config import load_worker_observability_config
 from squid.core.errors import DomainError, SquidError
 from squid.logging_config import configure_worker_logging
+from squid.observability import configure_observability
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     FingerprintPreset,
@@ -259,7 +261,11 @@ def main() -> None:
             "file_size_bytes": int(limits.get("file_size_bytes", 64 * 1024 * 1024)),
         }
     )
-    serve(sys.stdin.buffer, sys.stdout.buffer)
+    observability = configure_observability(load_worker_observability_config(), service_name="worker")
+    try:
+        serve(sys.stdin.buffer, sys.stdout.buffer)
+    finally:
+        observability.shutdown()
 
 
 if __name__ == "__main__":

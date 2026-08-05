@@ -11,6 +11,7 @@ from squid.config import (
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
+    load_worker_observability_config,
 )
 from squid.core.errors import ConfigurationError
 
@@ -53,6 +54,11 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_API_ACCESS_LOG_FILE="access.log",
         SQUID_BUILD_COMMIT_HASH="abcdef123456",
         SQUID_BUILD_COMMIT_MESSAGE="configuration rewrite",
+        SQUID_OBSERVABILITY_ENABLED="true",
+        SQUID_OBSERVABILITY_ENDPOINT="http://collector.example:4318",
+        SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
+        SQUID_OBSERVABILITY_SAMPLE_RATIO="0.25",
+        SQUID_OBSERVABILITY_SERVICE_NAME="custom-squid",
     )
 
     config = load_application_config()
@@ -72,7 +78,62 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.api_process().api.port == 9000
     assert config.api_process().logging.access_log_file == "access.log"
     assert config.build.commit_hash == "abcdef123456"
+    for process_config in (config.bot_process(), config.api_process()):
+        assert process_config.observability.enabled is True
+        assert str(process_config.observability.endpoint) == "http://collector.example:4318/"
+        assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"
+        assert process_config.observability.sample_ratio == 0.25
+        assert process_config.observability.service_name == "custom-squid"
+        assert "secret-token" not in repr(process_config.observability)
     assert EMBEDDING_DIMENSION == 1536
+
+
+def test_observability_is_disabled_and_inert_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
+
+    config = load_bot_process_config().observability
+
+    assert config.enabled is False
+    assert config.endpoint is None
+    assert config.headers == {}
+    assert config.sample_ratio == 1.0
+
+
+def test_worker_loads_only_inherited_observability_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SQUID_OBSERVABILITY_ENABLED", "true")
+    monkeypatch.setenv("SQUID_OBSERVABILITY_ENDPOINT", "http://collector:4318/v1/traces")
+
+    config = load_worker_observability_config()
+
+    assert config.enabled is True
+    assert str(config.endpoint) == "http://collector:4318/v1/traces"
+
+
+@pytest.mark.parametrize("ratio", ["-0.1", "1.1"])
+def test_observability_sample_ratio_is_bounded(monkeypatch: pytest.MonkeyPatch, ratio: str) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_OBSERVABILITY_SAMPLE_RATIO=ratio,
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "observability.sample_ratio" for issue in _issues(exc_info.value))
+
+
+def test_enabled_observability_requires_an_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_OBSERVABILITY_ENABLED="true",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "observability" for issue in _issues(exc_info.value))
 
 
 def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -370,6 +370,34 @@ class LoggingConfig(_FrozenModel):
     access_log_file: str | None
 
 
+class ObservabilityConfig(_FrozenModel):
+    """Optional OTLP trace export settings shared by all application processes."""
+
+    enabled: bool = False
+    endpoint: AnyHttpUrl | None = None
+    headers: dict[str, SecretStr] = Field(default_factory=dict)
+    sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+    service_name: str = Field(default="redstone-squid", min_length=1)
+
+    _empty_endpoint = field_validator("endpoint", mode="before")(_empty_to_none)
+
+    @field_validator("service_name")
+    @classmethod
+    def _normalize_service_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            msg = "Must contain a non-whitespace service name."
+            raise ValueError(msg)
+        return normalized
+
+    @model_validator(mode="after")
+    def _require_endpoint_when_enabled(self) -> Self:
+        if self.enabled and self.endpoint is None:
+            msg = "Enabled observability requires an OTLP endpoint."
+            raise ValueError(msg)
+        return self
+
+
 class BuildConfig(_FrozenModel):
     """Optional source-build metadata displayed by the bot."""
 
@@ -428,6 +456,7 @@ class _ProcessSettings(BaseSettings):
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
     log: LogConfig = LogConfig()
+    observability: ObservabilityConfig = ObservabilityConfig()
 
     @property
     def runtime(self) -> RuntimeConfig:
@@ -502,6 +531,7 @@ class ApplicationConfig(BotProcessConfig):
                     "schematic",
                     "community",
                     "log",
+                    "observability",
                     "development_mode",
                     "discord",
                     "bot",
@@ -525,6 +555,7 @@ class ApplicationConfig(BotProcessConfig):
                     "schematic",
                     "community",
                     "log",
+                    "observability",
                     "api",
                 }
             )
@@ -588,6 +619,19 @@ def load_database_config() -> DatabaseConfig:
         raise _configuration_error(exc) from None
 
 
+def load_worker_observability_config() -> ObservabilityConfig:
+    """Load only inherited observability settings in a schematic worker child."""
+
+    class WorkerObservabilitySettings(BaseSettings):
+        model_config = _ProcessSettings.model_config
+        observability: ObservabilityConfig = ObservabilityConfig()
+
+    try:
+        return WorkerObservabilitySettings().observability  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+
+
 __all__ = [
     "EMBEDDING_DIMENSION",
     "ApiProcessConfig",
@@ -601,6 +645,7 @@ __all__ = [
     "EmbeddingConfig",
     "GoogleConfig",
     "LoggingConfig",
+    "ObservabilityConfig",
     "OpenAIConfig",
     "RuntimeConfig",
     "SchematicConfig",
@@ -608,4 +653,5 @@ __all__ = [
     "load_application_config",
     "load_bot_process_config",
     "load_database_config",
+    "load_worker_observability_config",
 ]
