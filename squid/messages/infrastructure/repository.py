@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from advanced_alchemy.exceptions import NotFoundError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -108,23 +108,6 @@ class MessageRepository:
                 return self._to_record(await repository.delete(message_id))
             except NotFoundError as exc:
                 raise MessageNotFoundError(message_id) from exc
-
-    async def get_outdated_messages(self, server_id: int) -> Sequence[MessageRecord]:
-        """Get outdated messages by calling the PostgreSQL function.
-
-        Args:
-            server_id: The server ID to check for outdated messages.
-
-        Returns:
-            A sequence of outdated Message objects.
-        """
-        # Call the PostgreSQL function that returns SETOF messages
-        # Since the function returns records matching the messages table,
-        # we can select from it and map to Message objects
-        stmt = select(Message).from_statement(select(func.get_outdated_messages(server_id)))
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            return [self._to_record(message) for message in result.scalars().all()]
 
     async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
         """Return messages for a build created by one Discord author."""

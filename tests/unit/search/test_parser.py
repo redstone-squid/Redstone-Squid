@@ -4,7 +4,14 @@ from decimal import Decimal
 
 import pytest
 
-from squid.search.application import FieldDefinition, FieldRegistry, FieldType, QuerySyntaxError, SearchQueryParser
+from squid.search.application import (
+    DEFAULT_FIELD_REGISTRY,
+    FieldDefinition,
+    FieldRegistry,
+    FieldType,
+    QuerySyntaxError,
+    SearchQueryParser,
+)
 from squid.search.domain import (
     BooleanExpression,
     BooleanOperator,
@@ -94,6 +101,20 @@ def test_parser_normalizes_alias_and_timestamp() -> None:
         "2026-07-30T00:00:00",
     )
     assert parsed.normalized == "completion_at>=2026-07-30T00:00:00"
+
+
+def test_default_registry_exposes_sortable_build_recency_fields() -> None:
+    created_at = DEFAULT_FIELD_REGISTRY.resolve("created_at")
+    updated_at = DEFAULT_FIELD_REGISTRY.resolve("updated_at")
+
+    assert created_at is not None
+    assert updated_at is not None
+    assert created_at.value_type is FieldType.TIMESTAMP
+    assert updated_at.value_type is FieldType.TIMESTAMP
+    assert created_at.supports_range
+    assert created_at.supports_sort
+    assert updated_at.supports_range
+    assert updated_at.supports_sort
 
 
 def test_parser_accepts_empty_query_for_filter_defaults() -> None:

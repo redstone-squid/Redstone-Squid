@@ -34,9 +34,6 @@ class FakeMessageRepository:
         msg = "not implemented by this test fake"
         raise LookupError(msg)
 
-    async def get_outdated_messages(self, server_id: int) -> Sequence[MessageRecord]:
-        return []
-
     async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
         return []
 

@@ -89,6 +89,9 @@ def test_migrations_create_schema_without_drift(
                     )
                 ).scalars()
             )
+            outdated_messages_function = connection.execute(
+                text("SELECT to_regprocedure('public.get_outdated_messages(bigint)')")
+            ).scalar_one()
             trigger_names = set(
                 connection.execute(
                     text(
@@ -137,6 +140,7 @@ def test_migrations_create_schema_without_drift(
     }
     expected_triggers = {entity.signature for entity in ALEMBIC_UTIL_ENTITIES if type(entity).__name__ == "PGTrigger"}
     assert expected_functions <= function_names
+    assert outdated_messages_function is None
     assert trigger_names == expected_triggers
     assert option_table == "vote_session_options"
     assert legacy_record_table is None

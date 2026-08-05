@@ -36,17 +36,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.get_outdated_messages(server_id_input bigint) RETURNS SETOF public.messages
-    LANGUAGE plpgsql
-    AS $$begin
-    return query select messages.*
-    from messages join builds
-    on (messages.submission_id = builds.submission_id)
-    where messages.last_updated < builds.last_update
-    and messages.server_id = server_id_input
-    and builds.submission_status = 1;  -- accepted
-  end;$$;
-
 CREATE FUNCTION public.get_quantified_version_names() RETURNS TABLE(id smallint, quantified_name text)
     LANGUAGE plpgsql
     AS $$

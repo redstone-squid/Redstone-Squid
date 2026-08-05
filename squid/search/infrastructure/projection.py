@@ -379,6 +379,10 @@ class SearchProjectionLoader:
                 facets.append(ProjectionFacet(name.removeprefix("normal_"), Decimal(value)))
         if build.completion_at is not None:
             facets.append(ProjectionFacet("completion_at", build.completion_at))
+        if build.submission_time is not None:
+            facets.append(ProjectionFacet("created_at", build.submission_time))
+        if build.edited_time is not None:
+            facets.append(ProjectionFacet("updated_at", build.edited_time))
         return SearchProjection(
             resource_kind="build",
             source_key=str(build.id),

@@ -114,6 +114,8 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("orientation", FieldType.TEXT),
         FieldDefinition("extender_length", FieldType.NUMBER, supports_range=True),
         FieldDefinition("completion_at", FieldType.TIMESTAMP, supports_range=True, aliases=("completion_date",)),
+        FieldDefinition("created_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
+        FieldDefinition("updated_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
         FieldDefinition("opening_time", FieldType.NUMBER, supports_range=True),
         FieldDefinition("visible_opening_time", FieldType.NUMBER, supports_range=True),
         FieldDefinition("closing_time", FieldType.NUMBER, supports_range=True),
