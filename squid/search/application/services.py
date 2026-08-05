@@ -2,6 +2,7 @@
 
 from typing import Protocol
 
+from squid.core.errors import ValidationError
 from squid.search.application.cursor import CursorCodec
 from squid.search.application.fields import FieldRegistry
 from squid.search.application.parser import SearchQueryParser
@@ -49,7 +50,7 @@ class SearchService:
         """Suggest indexed terms for a valid query."""
         if not 1 <= limit <= 25:
             msg = "suggestion limit must be between 1 and 25"
-            raise ValueError(msg)
+            raise ValidationError(msg, public_context={"field": "limit", "minimum": 1, "maximum": 25})
         parsed = await self._parse(query) if isinstance(query, str) else query
         return await self._backend.suggest(parsed, limit=limit)
 

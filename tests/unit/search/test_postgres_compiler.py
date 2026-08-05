@@ -90,10 +90,10 @@ def test_backend_predicate_defaults_builds_to_confirmed() -> None:
 
     assert "search_documents.resource_kind" in str(compiled)
     assert "search_documents.status" in str(compiled)
-    assert "confirmed" in compiled.params.values()
+    assert ["confirmed"] in compiled.params.values()
 
 
-def test_explicit_status_overrides_confirmed_default() -> None:
+def test_explicit_status_cannot_override_confirmed_visibility_default() -> None:
     parser = SearchQueryParser()
     backend = PostgresSearchBackend(async_sessionmaker())
     request = SearchRequest("status:denied", scope=SearchScope.BUILDS)
@@ -101,4 +101,20 @@ def test_explicit_status_overrides_confirmed_default() -> None:
     compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
 
     assert "denied" in compiled.params.values()
-    assert "confirmed" not in compiled.params.values()
+    assert ["confirmed"] in compiled.params.values()
+
+
+def test_explicit_visibility_policy_is_applied_independently_of_query() -> None:
+    parser = SearchQueryParser()
+    backend = PostgresSearchBackend(async_sessionmaker())
+    request = SearchRequest(
+        "status:denied",
+        scope=SearchScope.BUILDS,
+        visible_statuses=frozenset({"pending", "confirmed"}),
+    )
+
+    compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
+
+    parameters = compiled.params.values()
+    assert "denied" in parameters
+    assert any(set(value) == {"pending", "confirmed"} for value in parameters if isinstance(value, list))

@@ -2,6 +2,7 @@
 
 import pytest
 
+from squid.core.errors import ValidationError
 from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage, SearchRequest
 
 
@@ -21,5 +22,5 @@ def test_search_page_preserves_discriminated_hits() -> None:
 
 @pytest.mark.parametrize("page_size", [0, 51])
 def test_search_request_bounds_page_size(page_size: int) -> None:
-    with pytest.raises(ValueError, match="between 1 and 50"):
+    with pytest.raises(ValidationError, match="between 1 and 50"):
         SearchRequest("door", page_size=page_size)

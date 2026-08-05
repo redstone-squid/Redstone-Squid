@@ -1,5 +1,8 @@
 """Search application service tests."""
 
+import pytest
+
+from squid.core.errors import ValidationError
 from squid.search.application import CursorCodec, SearchQueryParser, SearchService, SearchSlice
 from squid.search.domain import (
     BuildSearchHit,
@@ -74,3 +77,6 @@ async def test_service_delegates_suggestions_and_bounds_limit(codec: CursorCodec
     service = SearchService(FakeSearchBackend(), SearchQueryParser(), codec)
 
     assert await service.suggest("dor", limit=1) == ("door",)
+
+    with pytest.raises(ValidationError, match="between 1 and 25"):
+        await service.suggest("dor", limit=0)

@@ -8,11 +8,14 @@ import math
 from dataclasses import asdict
 from typing import Literal, NoReturn, cast
 
+from squid.core.errors import ErrorCode, ValidationError
 from squid.search.domain.models import CursorPosition, SearchMode, SearchRequest, SearchScope
 
 
-class InvalidCursorError(ValueError):
+class InvalidCursorError(ValidationError):
     """Raised when a cursor is malformed, tampered with, or belongs to another request."""
+
+    default_code = ErrorCode.INVALID_CURSOR
 
 
 class CursorCodec:
@@ -64,6 +67,11 @@ class CursorCodec:
                 "mode": request.mode.value,
                 "query": " ".join(request.query.split()),
                 "scope": request.scope.value,
+                "visible_statuses": (
+                    None
+                    if request.visible_statuses is None
+                    else sorted(status.casefold() for status in request.visible_statuses)
+                ),
                 "sort": (
                     None
                     if request.sort is None

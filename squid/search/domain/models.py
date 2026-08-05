@@ -5,6 +5,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal, TypeAlias
 
+from squid.core.errors import ValidationError
+
 
 class SearchScope(StrEnum):
     """Resources included in a search."""
@@ -47,11 +49,12 @@ class SearchRequest:
     page_size: int = 5
     cursor: str | None = None
     sort: SearchSort | None = None
+    visible_statuses: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.page_size <= 50:
             msg = "page_size must be between 1 and 50"
-            raise ValueError(msg)
+            raise ValidationError(msg, public_context={"field": "page_size", "minimum": 1, "maximum": 50})
 
 
 @dataclass(frozen=True, slots=True)

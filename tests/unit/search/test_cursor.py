@@ -2,6 +2,7 @@
 
 import pytest
 
+from squid.core.errors import ErrorCode, ValidationError
 from squid.search.application import CursorCodec, InvalidCursorError
 from squid.search.domain import CursorPosition, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
@@ -29,8 +30,11 @@ def test_cursor_rejects_tampering(codec: CursorCodec) -> None:
     encoded = codec.encode(_position(request, codec))
     replacement = "A" if encoded[-1] != "A" else "B"
 
-    with pytest.raises(InvalidCursorError, match="signature"):
+    with pytest.raises(InvalidCursorError, match="signature") as exc_info:
         codec.decode(encoded[:-1] + replacement)
+
+    assert isinstance(exc_info.value, ValidationError)
+    assert exc_info.value.code is ErrorCode.INVALID_CURSOR
 
 
 def test_cursor_cannot_be_reused_for_another_request(codec: CursorCodec) -> None:
@@ -49,6 +53,17 @@ def test_cursor_cannot_be_reused_for_another_sort(codec: CursorCodec) -> None:
         codec.decode(
             cursor,
             request=SearchRequest("door", sort=SearchSort("width", SortDirection.DESCENDING)),
+        )
+
+
+def test_cursor_cannot_be_reused_with_another_visibility_policy(codec: CursorCodec) -> None:
+    original = SearchRequest("door", scope=SearchScope.BUILDS, visible_statuses=frozenset({"confirmed"}))
+    cursor = codec.encode(_position(original, codec))
+
+    with pytest.raises(InvalidCursorError, match="different search request"):
+        codec.decode(
+            cursor,
+            request=SearchRequest("door", scope=SearchScope.BUILDS, visible_statuses=frozenset({"pending"})),
         )
 
 

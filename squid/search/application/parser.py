@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import NoReturn
 
+from squid.core.errors import ErrorCode, ValidationError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry
 from squid.search.domain.query import (
     BooleanExpression,
@@ -19,11 +20,15 @@ from squid.search.domain.query import (
 )
 
 
-class QuerySyntaxError(ValueError):
+class QuerySyntaxError(ValidationError):
     """A user-correctable query error with source location and suggestions."""
 
     def __init__(self, message: str, position: int, *, suggestions: tuple[str, ...] = ()) -> None:
-        super().__init__(message)
+        super().__init__(
+            message,
+            code=ErrorCode.INVALID_QUERY,
+            public_context={"position": position, "suggestions": suggestions},
+        )
         self.message = message
         self.position = position
         self.suggestions = suggestions

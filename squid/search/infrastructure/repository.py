@@ -25,7 +25,6 @@ from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinit
 from squid.search.domain import (
     BuildSearchHit,
     CursorPosition,
-    FieldExpression,
     MetadataSearchHit,
     RecordSearchHit,
     SearchHit,
@@ -104,12 +103,15 @@ class PostgresSearchBackend(SearchBackend):
         *,
         compiler: PostgresSearchQueryCompiler | None = None,
     ) -> ColumnElement[bool]:
-        """Compile scope, visibility defaults, and the complete user predicate."""
+        """Compile scope, visibility policy, and the complete user predicate."""
         predicate = self._scope_predicate(request.scope) & (compiler or self._compiler).compile(query)
-        if self._requires_confirmed_default(request.scope, query):
+        visible_statuses = request.visible_statuses
+        if visible_statuses is None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
+            visible_statuses = frozenset({"confirmed"})
+        if visible_statuses is not None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
             predicate &= or_(
                 SearchDocument.resource_kind != "build",
-                func.lower(SearchDocument.status) == "confirmed",
+                func.lower(SearchDocument.status).in_(sorted(status.casefold() for status in visible_statuses)),
             )
         return predicate
 
@@ -382,10 +384,6 @@ class PostgresSearchBackend(SearchBackend):
             return SearchDocument.resource_kind.not_in(("record", "build"))
         return true()
 
-    @staticmethod
-    def _requires_confirmed_default(scope: SearchScope, query: SearchQuery) -> bool:
-        return scope in {SearchScope.BUILDS, SearchScope.ALL} and not _references_field(query, "status")
-
 
 def _ranking_text(query: SearchQuery) -> str:
     values: list[str] = []
@@ -395,22 +393,6 @@ def _ranking_text(query: SearchQuery) -> str:
         elif not isinstance(expression.value, bool | int | float):
             values.append(str(expression.value))
     return " ".join(values)
-
-
-def _references_field(query: SearchQuery, name: str) -> bool:
-    if query.expression is None:
-        return False
-    stack = [query.expression]
-    while stack:
-        expression = stack.pop()
-        if isinstance(expression, FieldExpression) and expression.field == name:
-            return True
-        operands = getattr(expression, "operands", ())
-        stack.extend(operands)
-        operand = getattr(expression, "operand", None)
-        if operand is not None:
-            stack.append(operand)
-    return False
 
 
 def _ranked_start(candidates: Sequence[RankedCandidate], cursor: CursorPosition | None) -> int:
