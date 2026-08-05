@@ -145,6 +145,22 @@ class TitleDiagnosticGap:
 
 
 @dataclass(frozen=True, slots=True)
+class ActiveRecord:
+    """Public read model for one result in an active computation run."""
+
+    id: int
+    definition_id: int
+    title: str
+    subtitle: str | None
+    record_class: str
+    build_kind: str
+    version_scope: str
+    status: str
+    holder_build_ids: tuple[int, ...]
+    computed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class RecordLookupRequest:
     """An exact category requested for persistent materialization."""
 

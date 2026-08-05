@@ -8,6 +8,7 @@ from decimal import Decimal
 from itertools import combinations, groupby, product
 
 from squid.records.application.models import (
+    ActiveRecord,
     CandidateFacet,
     CategoryCompetition,
     CategoryIdentity,
@@ -257,6 +258,14 @@ class RecordService:
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         """Return active canonical record titles requiring taxonomy review."""
         return await self._runs.list_title_gaps(kind=kind)
+
+    async def get(self, result_id: int) -> ActiveRecord | None:
+        """Return one currently active computed record result."""
+        return await self._runs.get_active_record(result_id)
+
+    async def list_page(self, *, after_id: int | None = None, limit: int = 21) -> Sequence[ActiveRecord]:
+        """Return active record results in descending result-ID order."""
+        return await self._runs.list_active_records(after_id=after_id, limit=limit)
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""

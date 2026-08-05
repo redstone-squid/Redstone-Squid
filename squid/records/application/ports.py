@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from squid.records.application.models import (
+    ActiveRecord,
     CategoryIdentity,
     ComputationBatch,
     RecordGap,
@@ -31,6 +32,10 @@ class RecordRunRepository(Protocol):
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
 
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
+
+    async def get_active_record(self, result_id: int) -> ActiveRecord | None: ...
+
+    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]: ...
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 

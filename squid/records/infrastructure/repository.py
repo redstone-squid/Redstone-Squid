@@ -18,6 +18,7 @@ from whenever import Instant
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
 from squid.records.application.models import (
+    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
@@ -281,6 +282,63 @@ class PostgresRecordRepository:
                     diagnostics=tuple(definition.title_diagnostics),
                 )
                 for definition in definitions
+            )
+
+    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
+        """Return an active result by its public result identifier."""
+        records = await self._active_records(result_id=result_id, after_id=None, limit=1)
+        return records[0] if records else None
+
+    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]:
+        """List active results using descending-ID keyset pagination."""
+        return await self._active_records(result_id=None, after_id=after_id, limit=limit)
+
+    async def _active_records(
+        self,
+        *,
+        result_id: int | None,
+        after_id: int | None,
+        limit: int,
+    ) -> tuple[ActiveRecord, ...]:
+        async with self._session_factory() as session:
+            statement = (
+                select(RecordResult, RecordDefinition)
+                .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
+                .join(RecordComputationRun, RecordComputationRun.id == RecordResult.run_id)
+                .where(RecordComputationRun.is_active.is_(True))
+            )
+            if result_id is not None:
+                statement = statement.where(RecordResult.id == result_id)
+            if after_id is not None:
+                statement = statement.where(RecordResult.id < after_id)
+            rows = (await session.execute(statement.order_by(RecordResult.id.desc()).limit(limit))).all()
+            if not rows:
+                return ()
+            result_ids = [result.id for result, _definition in rows]
+            holder_rows = (
+                await session.execute(
+                    select(RecordResultHolder.result_id, RecordResultHolder.build_id)
+                    .where(RecordResultHolder.result_id.in_(result_ids))
+                    .order_by(RecordResultHolder.result_id, RecordResultHolder.rank, RecordResultHolder.build_id)
+                )
+            ).all()
+            holders: dict[int, list[int]] = {}
+            for holder_result_id, build_id in holder_rows:
+                holders.setdefault(holder_result_id, []).append(build_id)
+            return tuple(
+                ActiveRecord(
+                    id=result.id,
+                    definition_id=definition.id,
+                    title=definition.title,
+                    subtitle=definition.subtitle,
+                    record_class=definition.record_class,
+                    build_kind=definition.build_kind,
+                    version_scope=definition.version_scope,
+                    status=result.status,
+                    holder_build_ids=tuple(holders.get(result.id, ())),
+                    computed_at=result.computed_at.py_datetime(),
+                )
+                for result, definition in rows
             )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
