@@ -13,6 +13,7 @@ from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.settings.application import SettingsService
+from squid.starboard.application import StarboardService
 from squid.tags.application import TagService
 from squid.users.application import UserService
 from squid.versions.application.services import VersionService
@@ -36,6 +37,7 @@ class ApplicationServices:
     tags: TagService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     settings: SettingsService
+    starboards: StarboardService
     users: UserService
     versions: VersionService
     votes: VoteService

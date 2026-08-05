@@ -43,6 +43,8 @@ from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.starboard.application import StarboardService
+from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.users.application import UserService
@@ -158,6 +160,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
         refresh_search_index=partial(run_projection_batch, db.async_session),
         settings=SettingsService(SettingsRepository(db.async_session)),
+        starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
         users=UserService(
             UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
             get_minecraft_username,
