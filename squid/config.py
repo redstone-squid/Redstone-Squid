@@ -141,6 +141,20 @@ class VerificationConfig(_FrozenModel):
         return value
 
 
+class CursorConfig(_FrozenModel):
+    """Shared signing material for opaque pagination cursors."""
+
+    secret: SecretStr
+
+    @field_validator("secret")
+    @classmethod
+    def _require_secret(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value().encode()) < 16:
+            msg = "Must contain at least 16 bytes."
+            raise ValueError(msg)
+        return value
+
+
 class DiscordConfig(_FrozenModel):
     """Discord transport credentials."""
 
@@ -434,6 +448,7 @@ class RuntimeConfig(_FrozenModel):
     schematics: SchematicConfig
     community: CommunityConfig
     verification_code_pepper: SecretStr
+    cursor_secret: SecretStr
 
 
 class _ProcessSettings(BaseSettings):
@@ -450,6 +465,7 @@ class _ProcessSettings(BaseSettings):
 
     database: DatabaseConfig
     verification: VerificationConfig
+    cursor: CursorConfig
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     vector: VectorConfig = VectorConfig()
@@ -473,6 +489,7 @@ class _ProcessSettings(BaseSettings):
             schematics=self.schematic,
             community=self.community,
             verification_code_pepper=self.verification.code_pepper,
+            cursor_secret=self.cursor.secret,
         )
 
 
@@ -525,6 +542,7 @@ class ApplicationConfig(BotProcessConfig):
                 include={
                     "database",
                     "verification",
+                    "cursor",
                     "openai",
                     "embedding",
                     "vector",
@@ -549,6 +567,7 @@ class ApplicationConfig(BotProcessConfig):
                 include={
                     "database",
                     "verification",
+                    "cursor",
                     "openai",
                     "embedding",
                     "vector",
@@ -641,6 +660,7 @@ __all__ = [
     "BuildConfig",
     "CatboxConfig",
     "CommunityConfig",
+    "CursorConfig",
     "DatabaseConfig",
     "EmbeddingConfig",
     "GoogleConfig",

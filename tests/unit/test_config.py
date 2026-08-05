@@ -18,6 +18,7 @@ from squid.core.errors import ConfigurationError
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
     "SQUID_VERIFICATION_CODE_PEPPER": "verification-pepper",
+    "SQUID_CURSOR_SECRET": "cursor-secret-for-tests",
 }
 
 
@@ -73,6 +74,7 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.runtime.embeddings.model == "embedding-model"
     assert config.runtime.embeddings.database_connection is not None
     assert config.runtime.embeddings.database_connection.get_secret_value() == "postgresql://vector.example/squid"
+    assert config.runtime.cursor_secret.get_secret_value() == "cursor-secret-for-tests"
     assert config.bot_process().logging.root_level == "INFO"
     assert config.bot_process().logging.log_file == "bot/discord.log"
     assert config.api_process().api.port == 9000
@@ -252,7 +254,16 @@ def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatc
 
     issues = _issues(exc_info.value)
     fields = {issue["field"] for issue in issues}
-    assert fields == {"database", "verification", "discord", "api"}
+    assert fields == {"database", "verification", "cursor", "discord", "api"}
+
+
+def test_cursor_secret_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_CURSOR_SECRET="too-short")
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "cursor.secret" for issue in _issues(exc_info.value))
 
 
 def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch) -> None:

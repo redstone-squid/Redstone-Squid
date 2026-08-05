@@ -154,7 +154,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         search=SearchService(
             PostgresSearchBackend(db.async_session, fields=search_fields),
             SearchQueryParser(),
-            CursorCodec(secrets.token_bytes(32)),
+            CursorCodec(config.cursor_secret.get_secret_value().encode()),
             search_fields,
         ),
         tags=TagService(PostgresTagDefinitionRepository(db.async_session)),

@@ -21,6 +21,7 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
     {
         "database": {"url": "postgresql://user:password@database.example/squid"},
         "verification": {"code_pepper": "verification-pepper"},
+        "cursor": {"secret": "cursor-secret-for-tests"},
         "api": {"secret": TEST_SYNERGY_SECRET},
     }
 )
