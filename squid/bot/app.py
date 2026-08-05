@@ -87,6 +87,7 @@ class RedstoneSquid(Bot):
             "squid.bot.log",
             "squid.bot.help",
             "squid.bot.voting.vote",
+            "squid.bot.starboard.cog",
             "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",

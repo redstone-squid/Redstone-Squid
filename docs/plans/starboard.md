@@ -364,6 +364,14 @@ pending tasks.
 Autoreact posts the configured emojis onto the new starboard post, spaced out, and must ignore
 `discord.Forbidden`.
 
+> **Implementation amendment (2026-08-04).** Rendering fetches the current Discord origin at
+> execution time instead of persisting message content and attachment URLs. A deleted origin
+> needs no render snapshot because linked entries resolve directly to `REMOVE`; with
+> `link_deletes` disabled, Discord's existing mirrored post is intentionally retained as the
+> frozen copy. `raw_count` counts both up- and down-vote rows, while score is the signed sum of
+> role weight × emoji multiplier. Starboard posts authored by this bot are always excluded from
+> origins, even when bot-authored origins are otherwise allowed, preventing autoreaction loops.
+
 Commit: `starboard: post and refresh starred messages`.
 
 ## Step 7 — Commands
@@ -376,6 +384,11 @@ wrapped in `_()` / `app_commands.locale_str` per `docs/i18n.md`.
 
 `recount` needs the advisory lock plus a per-guild cooldown; it pages through
 `message.reactions[…].users()` and rebuilds vote rows through `StarboardService.recount`.
+
+> **Implementation amendment (2026-08-04).** The generic edit command uses an explicit setting
+> whitelist and typed boolean/number parsing. Recount collects Discord reactors first, then
+> replaces all stored votes under the same per-origin PostgreSQL advisory lock used by live
+> mutations.
 
 Commits: `starboard: add configuration commands` and `starboard: weight stars by role`.
 
