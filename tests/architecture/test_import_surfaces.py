@@ -7,7 +7,9 @@ import pytest
 @pytest.mark.parametrize(
     ("module", "unexpected_modules"),
     [
-        ("squid.api.errors", ("squid.api.app", "squid.bootstrap")),
+        # Problem details are safe to reuse from route modules as long as the import does not
+        # initialize persistence or Discord transports.
+        ("squid.api.errors", ("sqlalchemy", "discord")),
         ("squid.bot.utils.permissions", ("squid.bot.app",)),
         ("squid.bot.submission.ui.components", ("squid.bot.submission.ui.views",)),
         # Importing the schematic domain or application layer must never drag in the native

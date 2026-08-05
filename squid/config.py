@@ -176,6 +176,7 @@ class ApiConfig(_FrozenModel):
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
     access_log_file: str | None = None
+    cors_origins: tuple[str, ...] = ()
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
     _validate_log_files = field_validator("log_file", "access_log_file")(_validate_relative_log_file)

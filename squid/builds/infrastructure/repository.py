@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -81,6 +82,37 @@ class BuildRepository:
             if sql_build is None:
                 return None
             return await self._mapper.to_domain(session, sql_build)
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        """Load several builds with one row query and preserve requested ordering."""
+        if not build_ids:
+            return []
+        async with self._session_factory() as session:
+            rows = (await session.scalars(select(SQLBuild).where(SQLBuild.id.in_(build_ids)))).unique().all()
+            by_id = {row.id: await self._mapper.to_domain(session, row) for row in rows}
+        return [by_id[build_id] for build_id in build_ids if build_id in by_id]
+
+    async def list_page(
+        self,
+        *,
+        statuses: frozenset[Status],
+        submitter_id: int | None,
+        after_id: int | None,
+        limit: int,
+    ) -> list[Build]:
+        """Load an authoritative keyset page for status and submitter views."""
+        if not statuses or limit <= 0:
+            return []
+        async with self._session_factory() as session:
+            statement = select(SQLBuild).where(SQLBuild.submission_status.in_(statuses))
+            if submitter_id is not None:
+                statement = statement.join(User, User.id == SQLBuild.submitter_user_id).where(
+                    User.discord_id == submitter_id
+                )
+            if after_id is not None:
+                statement = statement.where(SQLBuild.id < after_id)
+            rows = (await session.scalars(statement.order_by(desc(SQLBuild.id)).limit(limit))).unique().all()
+            return [await self._mapper.to_domain(session, row) for row in rows]
 
     async def get_by_message_id(self, message_id: int) -> Build | None:
         """

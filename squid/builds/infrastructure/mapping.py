@@ -107,6 +107,7 @@ class BuildMapper:
             completion_at=sql_build.completion_at,
             completion_evidence=sql_build.completion_evidence,
             description=sql_build.description,
+            submission_time=sql_build.submission_time,
             edited_time=sql_build.edited_time,
             original_server_id=original_message.server_id if original_message else None,
             original_channel_id=original_message.channel_id if original_message else None,

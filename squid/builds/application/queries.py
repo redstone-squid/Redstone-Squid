@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.builds.domain import Build
+from squid.builds.domain import Build, Status
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +20,17 @@ class BuildQueryRepository(Protocol):
     """Build persistence queries required by search workflows."""
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]: ...
+
+    async def list_page(
+        self,
+        *,
+        statuses: frozenset[Status],
+        submitter_id: int | None,
+        after_id: int | None,
+        limit: int,
+    ) -> list[Build]: ...
 
     async def get_pending(self) -> list[Build]: ...
 
@@ -58,6 +69,26 @@ class BuildQueryService:
 
     async def pending(self) -> Sequence[Build]:
         return await self._builds.get_pending()
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        """Load builds in the caller's requested order, omitting missing rows."""
+        return await self._builds.get_many(build_ids)
+
+    async def list_page(
+        self,
+        *,
+        statuses: frozenset[Status],
+        submitter_id: int | None = None,
+        after_id: int | None = None,
+        limit: int = 21,
+    ) -> list[Build]:
+        """List an authoritative descending-ID page under a visibility policy."""
+        return await self._builds.list_page(
+            statuses=statuses,
+            submitter_id=submitter_id,
+            after_id=after_id,
+            limit=limit,
+        )
 
     async def restrictions(self, query: str | None) -> list[RestrictionSearchItem]:
         return await self._metadata.search_restrictions(query)

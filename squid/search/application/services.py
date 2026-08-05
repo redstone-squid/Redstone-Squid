@@ -4,7 +4,7 @@ from typing import Protocol
 
 from squid.core.errors import ValidationError
 from squid.search.application.cursor import CursorCodec
-from squid.search.application.fields import FieldRegistry
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.search.application.parser import SearchQueryParser
 from squid.search.application.ports import SearchBackend
 from squid.search.domain import CursorPosition, SearchPage, SearchQuery, SearchRequest
@@ -53,6 +53,12 @@ class SearchService:
             raise ValidationError(msg, public_context={"field": "limit", "minimum": 1, "maximum": 25})
         parsed = await self._parse(query) if isinstance(query, str) else query
         return await self._backend.suggest(parsed, limit=limit)
+
+    async def fields(self) -> FieldRegistry:
+        """Return the effective public field registry used by query parsing."""
+        if self._fields is None:
+            return DEFAULT_FIELD_REGISTRY
+        return await self._fields.registry()
 
     async def _parse(self, query: str) -> SearchQuery:
         if self._fields is None:

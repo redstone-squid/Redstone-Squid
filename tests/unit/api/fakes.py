@@ -11,6 +11,8 @@ from fastapi import FastAPI
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
 from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
+from squid.search.domain import SearchPage
 from squid.users.errors import MinecraftAccountNotFoundError
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -44,9 +46,35 @@ class MockDatabaseManager:
         self.closed = True
 
 
+class MockBuildQueries:
+    async def get(self, _build_id: int):
+        return None
+
+    async def get_many(self, _build_ids: list[int]):
+        return []
+
+    async def list_page(self, **_kwargs: object):
+        return []
+
+
+class MockSearch:
+    async def search(self, _request: object) -> SearchPage:
+        return SearchPage(hits=(), next_cursor=None, has_more=False)
+
+    async def fields(self):
+        return DEFAULT_FIELD_REGISTRY
+
+
 def build_app() -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
-    services = cast(ApplicationServices, SimpleNamespace(users=MockUserManager()))
+    services = cast(
+        ApplicationServices,
+        SimpleNamespace(
+            users=MockUserManager(),
+            build_queries=MockBuildQueries(),
+            search=MockSearch(),
+        ),
+    )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
     return create_api_app(lambda _config: runtime, config=TEST_CONFIG), database

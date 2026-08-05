@@ -6,9 +6,13 @@ from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from squid.api.dependencies import get_services
 from squid.api.errors import register_exception_handlers
+from squid.api.v1 import TAGS_METADATA
+from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_application_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.core.errors import AuthenticationError
@@ -26,12 +30,6 @@ router = APIRouter()
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-async def get_services(request: Request) -> ApplicationServices:
-    """Return application services initialized during API startup."""
-    runtime = cast(ApplicationRuntime, request.app.state.runtime)
-    return runtime.services
 
 
 class User(BaseModel):
@@ -71,9 +69,27 @@ def create_api_app(
             app.state.runtime = runtime
             yield
 
-    api = FastAPI(lifespan=lifespan)
+    api = FastAPI(
+        title="Redstone Squid API",
+        version="1.0.0",
+        description="Versioned public API for the Redstone Squid build catalog.",
+        openapi_tags=TAGS_METADATA,
+        lifespan=lifespan,
+    )
     register_exception_handlers(api)
     api.include_router(router)
+    api.include_router(v1_router)
+    resolved_for_middleware = config
+    cors_origins = (
+        resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()
+    )
+    if cors_origins:
+        api.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(cors_origins),
+            allow_methods=["GET"],
+            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type"],
+        )
     if config is not None:
         instrument_api_app(api, config.observability)
     return api

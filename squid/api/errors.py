@@ -2,12 +2,12 @@
 
 import logging
 from http import HTTPStatus
+from typing import Any, Protocol, cast
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 from squid.api.i18n import locale_for_request
 from squid.core.errors import (
@@ -23,13 +23,25 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import _, translate
-from squid.observability import correlation_id
 
 logger = logging.getLogger(__name__)
 
 PROBLEM_DETAIL_MEDIA_TYPE = "application/problem+json"
 INTERNAL_ERROR_DETAIL = _("An internal server error occurred.")
 SERVICE_UNAVAILABLE_DETAIL = _("A required service is temporarily unavailable. Please try again later.")
+
+
+class ExceptionRegistrar(Protocol):
+    """Minimal exception-registration surface implemented by FastAPI."""
+
+    def add_exception_handler(self, exc_class_or_status_code: Any, handler: Any) -> None: ...
+
+
+def correlation_id() -> str:
+    """Load tracing support only when an error actually needs correlation."""
+    from squid.observability import correlation_id as active_correlation_id
+
+    return active_correlation_id()
 
 
 class ProblemDetail(BaseModel):
@@ -46,6 +58,18 @@ class ProblemDetail(BaseModel):
     resource: str | None = None
     context: dict[str, JSONValue] | None = None
     error_id: str | None = None
+
+
+def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata."""
+    return {
+        status: {
+            "model": ProblemDetail,
+            "content": {PROBLEM_DETAIL_MEDIA_TYPE: {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
+            "description": HTTPStatus(status).phrase,
+        }
+        for status in statuses
+    }
 
 
 def _problem_response(problem: ProblemDetail, locale: str) -> Response:
@@ -122,17 +146,19 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
 
 async def handle_request_validation_error(request: Request, exc: Exception) -> Response:
     """Render FastAPI request validation failures without submitted values."""
-    if not isinstance(exc, RequestValidationError):
+    errors_method = getattr(exc, "errors", None)
+    if not callable(errors_method):
         return await handle_unexpected_error(request, exc)
 
     locale = locale_for_request(request)
+    raw_errors = cast(list[dict[str, Any]], errors_method())
     errors: list[JSONValue] = [
         {
             "location": [item if isinstance(item, int) else str(item) for item in error["loc"]],
             "type": str(error["type"]),
             "message": str(error["msg"]),
         }
-        for error in exc.errors()
+        for error in raw_errors
     ]
     return _problem_response(
         ProblemDetail(
@@ -187,8 +213,10 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     )
 
 
-def register_exception_handlers(app: FastAPI) -> None:
+def register_exception_handlers(app: ExceptionRegistrar) -> None:
     """Register application-wide FastAPI exception handlers."""
+    from fastapi.exceptions import RequestValidationError
+
     app.add_exception_handler(SquidError, handle_squid_error)
     app.add_exception_handler(RequestValidationError, handle_request_validation_error)
     app.add_exception_handler(StarletteHTTPException, handle_http_error)

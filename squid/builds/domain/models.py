@@ -223,6 +223,7 @@ class Build:
     completion_at: Instant | None = None
     completion_evidence: str | None = None
     description: str | None = None
+    submission_time: Instant | None = None
     edited_time: Instant | None = None
 
     original_server_id: Final[int | None] = frozen_field(default=None)
