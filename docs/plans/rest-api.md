@@ -1,7 +1,8 @@
 # A REST API for Redstone-Squid
 
-> **Status.** Design approved. The four prerequisite findings are resolved; the remaining Phase 0
-> configuration and import-surface work is the next unit of work.
+> **Status.** Design approved. The four prerequisite findings and the cross-process observability
+> groundwork are complete; the remaining Phase 0 configuration and import-surface work is the
+> next unit of work.
 > The blockers in "Findings" were pre-existing and verified in-tree rather than hypothetical
 > risks, and three would have surfaced as production incidents with the matching route.
 > Amend this document in place as phases land, calling out where building it proved part
@@ -29,7 +30,7 @@ application services rather than growing a parallel data path.
   (`squid/api/app.py:30`) already hands all of them to any route. Transports never touch
   repositories; `tests/architecture/test_boundaries.py` enforces this.
 - **`squid/api/errors.py`** — RFC 9457 `application/problem+json`, locale-aware, with redaction and
-  `X-Error-ID` correlation. Genuinely good; it needs declaring in OpenAPI, not replacing.
+  trace-correlated `X-Error-ID`. Genuinely good; it needs declaring in OpenAPI, not replacing.
 - **`squid/core/errors.py::ErrorCode`** — a stable enum that is already the public error
   vocabulary. New failure modes get enum members, not ad-hoc strings.
 - **The search context** — `squid/search/application/parser.py` (safe Lucene-subset grammar with
@@ -387,6 +388,20 @@ class ApiConfig(_FrozenModel):          # add
 in `ApplicationConfig.bot_process()` and `.api_process()`. Keep the legacy `ApiConfig.secret` as a
 bootstrap credential mapped to a synthetic all-scopes principal, deprecated —
 `tests/unit/api/fakes.py` and the schemathesis harness depend on it.
+
+## Delivered groundwork — observability
+
+The observability plan's application instrumentation landed before this API surface. The API,
+Discord bot, and schematic worker now have optional per-process OpenTelemetry initialization;
+traces propagate into schematic workers, structured logs carry trace/span IDs, and API problem
+details reuse the active trace ID for `X-Error-ID`. OTLP traces and the focused operational metrics
+can be sent through the optional Collector in `compose.yml` without coupling the application to a
+backend. See `docs/plans/observability.md` for the implemented phases and remaining deployment
+decisions.
+
+This removes observability as a sequencing dependency for the REST API. It does not complete a
+REST phase: the Phase 0 cursor configuration and import-surface work below still comes next, and
+new routes must extend the existing trace and contract coverage as they land.
 
 ## Phases
 
