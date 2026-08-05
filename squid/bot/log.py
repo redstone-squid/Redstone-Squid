@@ -1,12 +1,15 @@
 """Logging for the bot."""
 
-from discord import User
+import logging
+
 from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
 from squid.bot.errors import handle_context_error
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.core.time import utcnow
+
+logger = logging.getLogger(__name__)
 
 
 class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
@@ -18,7 +21,6 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         if not self.bot.owner_id:
             msg = "Owner ID not set."
             raise RuntimeError(msg)
-        self.owner: User | None = self.bot.get_user(self.bot.owner_id)
 
     async def log(self, msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
         """
@@ -35,9 +37,10 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         timestamp_msg = utcnow() + msg
         if first_log:
             timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
-        if dm_owner and self.owner:
-            await self.owner.send(view=text_layout(timestamp_msg), allowed_mentions=no_mentions())
-        print(timestamp_msg)
+        if dm_owner:
+            owner = self.bot.get_user(self.bot.owner_id) or await self.bot.fetch_user(self.bot.owner_id)
+            await owner.send(view=text_layout(timestamp_msg), allowed_mentions=no_mentions())
+        logger.info("%s", timestamp_msg)
 
     # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
     # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.

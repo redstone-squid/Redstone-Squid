@@ -346,8 +346,6 @@ class SearchCog[
         else:
             return  # Bot was not mentioned
 
-        print(trimmed_content)
-
         # This should never happen, but just in case
         if ctx.invoked_parents or ctx.invoked_subcommand:  # pragma: no cover
             logger.warning("A CommandNotFound is being raised despite a subcommand being invoked.")
