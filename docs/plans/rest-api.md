@@ -1,12 +1,15 @@
 # A REST API for Redstone-Squid
 
-> **Status.** Implemented through Phase 7 on 2026-08-05. The four prerequisite findings,
+> **Status.** Implemented through Phase 8 on 2026-08-06. The four prerequisite findings,
 > cross-process observability groundwork, public reads, scoped service keys, durable Discord
-> reconciliation, Discord OAuth sessions, build writes, and weighted vote writes are complete.
-> The blockers in "Findings" were pre-existing and verified in-tree rather than hypothetical
-> risks, and three would have surfaced as production incidents with the matching route.
-> Amend this document in place as phases land, calling out where building it proved part
-> of it wrong rather than silently rewriting.
+> reconciliation, Discord OAuth sessions, build writes, weighted vote writes, and the full
+> resource model are complete. The blockers in "Findings" were pre-existing and verified in-tree
+> rather than hypothetical risks, and three would have surfaced as production incidents with the
+> matching route. Amend this document in place as phases land, calling out where building it
+> proved part of it wrong rather than silently rewriting.
+>
+> **Known gap.** Discord reconciliation of *deletes* is acknowledged and logged, not acted on;
+> see the implementation correction under "Decision: reconciliation uses an outbox table".
 
 ## Context
 
@@ -156,7 +159,7 @@ squid/sync/         # NEW context: discord reconciliation queue
 ## Resource model
 
 ```
-GET    /v1/builds                    ?q= | ?status=
+GET    /v1/builds                    ?q= | ?status=      (non-confirmed: admins only)
 GET    /v1/builds/{id}
 POST   /v1/builds                    DoorSubmissionInput
 PATCH  /v1/builds/{id}               BuildEditPatch
@@ -167,7 +170,7 @@ GET    /v1/search   /v1/search/fields  /v1/search/suggest
 GET    /v1/tags  /v1/tags/{id}  /v1/versions
 GET    /v1/vote-sessions/{id}
 POST   /v1/vote-sessions/{id}/votes
-GET    /v1/users/me  POST /v1/users/me/consent
+GET    /v1/users/me  POST /v1/users/me/consent  GET /v1/users/me/builds
 POST   /v1/verify                    (existing, moved under /v1, alias kept)
 ```
 
@@ -185,6 +188,17 @@ drifting summary shape — and `document_data` is a projection snapshot containi
 text. Collect hit ids, call `get_many(ids)`, render one `BuildSummary` in hit order. Hits whose
 build has vanished are dropped **and logged**; that log is the projection-staleness alarm.
 
+**Implementation correction — hydration is per resource kind, not universal.** `GET /v1/search`
+is cross-scope, and the rule above only actually argues for builds. Build hits are hydrated as
+described. Record hits are **not**: every field on `RecordSearchHit` is produced by record
+computation rather than submitted by a user, so there is no free text to leak, and hydrating them
+would cost one query per hit because `RecordService` has no id-batch read. Metadata hits are
+curated taxonomy rows and are served the same way. The union is discriminated on `resource_kind`
+and nests its payload (`build` / `record` / `metadata`) so a hit can never be mistaken for, or
+drift into, a resource summary. Build `description` is dropped from search output entirely — the
+projection falls back to `extra_info["user"]` when a build has no curated description
+(`squid/search/infrastructure/projection.py:323`), which redaction 3 forbids on the wire.
+
 Two narrow additions to `BuildQueryRepository` (`squid/builds/application/queries.py:22`):
 
 ```python
@@ -199,6 +213,19 @@ the search path offers *matching*. That split is what keeps "one grammar" honest
 Also add `created_at`/`updated_at` to `DEFAULT_FIELD_REGISTRY` with `supports_sort=True`, emit them
 as facets in `_build_projection`, and backfill via an enqueue migration (precedent:
 `alembic/versions/2026_07_30_1500-c9b2d861f540`).
+
+**Implementation detail — who may select a status.** The sketch named `?status=pending` without
+saying who could call it, which finding 1 makes the whole question. `status=confirmed` (and the
+default) is public; any other value requires `Principal.kind == "user"` *and*
+`AuthorizationService.is_global_administrator`, exactly the intersection in abstraction 4. A
+service key carries no `discord_id`, so it is rejected before the grant is even consulted — a
+leaked CI key cannot read unreviewed submissions. `status` is rejected alongside `q` rather than
+silently ignored, because the search path forces confirmed-only and would otherwise answer a
+different question than the one asked. Cursors bind the status, so a confirmed-view cursor cannot
+be replayed against the pending view.
+
+`GET /v1/users/me/builds` is the submitter's counterpart: every status, but only rows whose
+submitter matches the session's `discord_id`, with the id bound into the cursor.
 
 ## Decision: voting over HTTP uses a REST member resolver
 
@@ -430,6 +457,10 @@ new routes must extend the existing trace and contract coverage as they land.
   gated. Edit authorization is checked under the lease for the pending owner or a global admin.
 - **Phase 7 — implemented.** User-only weighted vote writes resolve live guild roles through
   Discord REST and are limited to 30 writes per principal per five minutes.
+- **Phase 8 — implemented.** The four resource-model routes that no earlier phase had claimed:
+  `GET /v1/search`, `GET /v1/search/suggest`, the admin-gated `GET /v1/builds?status=`, and
+  `GET /v1/users/me/builds`. This is what finally exercises `list_page`'s `submitter_id`
+  parameter and the "identity *and status*" half of the two-path split.
 
 ## Phases (original sequencing)
 
@@ -462,6 +493,9 @@ before any write route, user auth before votes.
   `BuildEditLease` context manager; `BUILD_BUSY` becomes 409, already mapped.
 - **Phase 7 — voting writes.** `DiscordRestActorResolver`, `cast_vote_by_session`,
   `POST /v1/vote-sessions/{id}/votes`.
+- **Phase 8 — resource-model completion.** Added after the fact: the routes listed under
+  "Resource model" that the original sequencing never assigned to a phase. Recorded here so the
+  gap between the two lists is visible rather than inferred.
 
 ## Critical files
 
