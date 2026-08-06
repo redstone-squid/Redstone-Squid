@@ -95,12 +95,21 @@ class MockVotes:
         return None
 
 
+class MockRecords:
+    async def get(self, _result_id: int):
+        return None
+
+    async def list_page(self, **_kwargs: object):
+        return ()
+
+
 def build_app() -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
     services = cast(
         ApplicationServices,
         SimpleNamespace(
+            api_keys=None,
             users=MockUserManager(),
             build_queries=MockBuildQueries(),
             search=MockSearch(),
@@ -108,6 +117,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
             versions=MockVersions(),
             schematics=MockSchematics(),
             votes=MockVotes(),
+            records=MockRecords(),
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
