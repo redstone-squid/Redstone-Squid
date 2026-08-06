@@ -133,11 +133,8 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
     assert result is existing_build
     assert existing_build.door_dimensions == (2, 3, 4)
     repository.save.assert_awaited_once_with(existing_build)
-    assert locks.acquire.await_args_list == [
-        ((42,), {"blocking": False, "timeout": 30}),
-        ((42,), {"blocking": True, "timeout": 30}),
-    ]
-    assert locks.release.await_count == 2
+    assert locks.acquire.await_args_list == [((42,), {"blocking": False, "timeout": 30})]
+    assert locks.release.await_count == 1
 
 
 async def test_edit_releases_lock_when_patch_application_fails(existing_build: Build) -> None:

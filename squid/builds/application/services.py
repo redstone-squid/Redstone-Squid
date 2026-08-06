@@ -115,7 +115,7 @@ class BuildService:
         return BuildEditLease(
             self._repository,
             self._locks,
-            self._persist,
+            self._persist_without_lock,
             build_id,
             patch,
             blocking=blocking,
@@ -141,14 +141,18 @@ class BuildService:
         return build
 
     async def _persist(self, build: Build) -> None:
+        if build.id is None:
+            await self._persist_without_lock(build)
+            return
+        async with self._locks.locked(build.id):
+            await self._persist_without_lock(build)
+
+    async def _persist_without_lock(self, build: Build) -> None:
+        """Persist a build when the caller already owns any required edit lease."""
         if not build.versions:
             build.versions = [await self._versions.newest("Java")]
         await self._embeddings.prepare(build)
-        if build.id is None:
-            await self._repository.save(build)
-        else:
-            async with self._locks.locked(build.id):
-                await self._repository.save(build)
+        await self._repository.save(build)
         await self._embeddings.index(build)
 
     async def _set_restrictions(self, build: Build, restrictions: Sequence[str]) -> None:
