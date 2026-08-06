@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.voting.domain import VoteOption, VoteSessionSnapshot
+from squid.voting.domain import VoteOption, VoteSelection, VoteSessionSnapshot
 
 
 class VoteOptionSummary(BaseModel):
@@ -45,6 +45,18 @@ class VotePollSummary(BaseModel):
     deadline: datetime
 
 
+class OwnVoteSelection(BaseModel):
+    """The authenticated caller's own ballot selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    option_id: str
+
+    @classmethod
+    def from_domain(cls, selection: VoteSelection) -> "OwnVoteSelection":
+        return cls(option_id=selection.option_id)
+
+
 class VoteSessionDetail(BaseModel):
     """A vote session with aggregate-only ballot data."""
 
@@ -60,9 +72,10 @@ class VoteSessionDetail(BaseModel):
     options: list[VoteOptionSummary]
     tallies: VoteTallies | None
     poll: VotePollSummary | None
+    own_selection: OwnVoteSelection | None
 
     @classmethod
-    def from_domain(cls, session: VoteSessionSnapshot) -> "VoteSessionDetail":
+    def from_domain(cls, session: VoteSessionSnapshot, *, caller_id: int | None = None) -> "VoteSessionDetail":
         options_by_id: dict[str, VoteOption] = {}
         for option in session.options:
             assert option.identifier is not None
@@ -80,6 +93,7 @@ class VoteSessionDetail(BaseModel):
                 net=session.net_votes,
             )
         poll = session.poll
+        own_selection = next((selection for selection in session.selections if selection.user_id == caller_id), None)
         return cls(
             id=session.id,
             kind=session.kind,
@@ -99,4 +113,5 @@ class VoteSessionDetail(BaseModel):
                     deadline=poll.deadline.to_stdlib(),
                 )
             ),
+            own_selection=OwnVoteSelection.from_domain(own_selection) if own_selection is not None else None,
         )

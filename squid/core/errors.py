@@ -189,6 +189,18 @@ class AuthorizationError(DomainError):
     default_title = _("Forbidden")
 
 
+class RateLimitedError(DomainError):
+    """A caller exceeded a bounded operation's abuse-control window."""
+
+    default_message = _("Too many requests. Please try again later.")
+    default_title = _("Too many requests")
+    default_code = ErrorCode.RATE_LIMITED
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(public_context={"retry_after": retry_after})
+        self.retry_after = retry_after
+
+
 class InternalError(SquidError):
     """A failure whose diagnostic detail must not be exposed to callers."""
 

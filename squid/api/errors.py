@@ -18,6 +18,7 @@ from squid.core.errors import (
     ErrorCode,
     JSONValue,
     NotFoundError,
+    RateLimitedError,
     ServiceUnavailableError,
     SquidError,
     ValidationError,
@@ -93,6 +94,8 @@ def _status_for_error(error: SquidError) -> int:
         return HTTPStatus.NOT_FOUND
     if isinstance(error, ConflictError):
         return HTTPStatus.CONFLICT
+    if isinstance(error, RateLimitedError):
+        return HTTPStatus.TOO_MANY_REQUESTS
     if isinstance(error, ValidationError):
         return HTTPStatus.BAD_REQUEST
     if isinstance(error, ServiceUnavailableError):
