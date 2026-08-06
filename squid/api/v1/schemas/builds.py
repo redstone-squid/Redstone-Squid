@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -9,6 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from squid.builds.domain import Build, Status
 
 type InputDimensions = tuple[int | None, int | None, int | None]
+
+
+class BuildStatusFilter(StrEnum):
+    """Moderation state selectable on the authoritative build collection."""
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    DENIED = "denied"
+
+    def to_domain(self) -> Status:
+        return Status[self.name]
 
 
 class DoorSubmission(BaseModel):

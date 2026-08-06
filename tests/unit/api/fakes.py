@@ -76,6 +76,11 @@ class MockSearch:
         return DEFAULT_FIELD_REGISTRY
 
 
+class MockAuthorization:
+    async def is_global_administrator(self, _discord_id: int) -> bool:
+        return False
+
+
 class MockTags:
     async def public_definitions(self):
         return ()
@@ -120,6 +125,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
             web_auth=None,
             users=MockUserManager(),
             build_queries=MockBuildQueries(),
+            authorization=MockAuthorization(),
             search=MockSearch(),
             tags=MockTags(),
             versions=MockVersions(),

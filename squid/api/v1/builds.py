@@ -1,26 +1,24 @@
-"""Build read routes."""
+"""Build read and write routes."""
 
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import CurrentPrincipal, CursorSigner, Services
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.security import Principal, Scope, require
-from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildSummary, DoorSubmission
+from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
+from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput
-from squid.builds.domain import Status
+from squid.builds.domain import Build, Status
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.runtime import ApplicationServices
+from squid.search.domain import SearchMode, SearchRequest, SearchScope
 from squid.users.errors import ConsentRequiredError
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/builds", tags=["builds"])
-_PUBLIC_STATUSES = frozenset({Status.CONFIRMED})
-_PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
 
 
@@ -87,35 +85,38 @@ async def get_build(build_id: int, services: Services) -> BuildDetail:
     return BuildDetail.from_domain(build)
 
 
-@router.get("", response_model=Page[BuildSummary], responses=responses(400, 422, 503))
+@router.get("", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
 async def list_builds(
     services: Services,
     signer: CursorSigner,
+    principal: CurrentPrincipal,
     q: Annotated[str | None, Query(max_length=1_000)] = None,
+    status: BuildStatusFilter | None = None,
     sort: Annotated[str | None, Query(max_length=80)] = None,
     page_size: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[BuildSummary]:
-    """Search public builds, or list the authoritative confirmed-build view."""
+    """Search public builds, or list one authoritative moderation-status view."""
     if q is not None:
-        request = SearchRequest(
-            query=q,
-            scope=SearchScope.BUILDS,
-            mode=SearchMode.LEXICAL,
-            page_size=page_size,
-            cursor=cursor,
-            sort=_parse_sort(sort),
-            visible_statuses=_PUBLIC_SEARCH_STATUSES,
+        if status is not None:
+            msg = "status cannot be combined with q"
+            raise ValidationError(msg, public_context={"field": "status"})
+        result = await services.search.search(
+            SearchRequest(
+                query=q,
+                scope=SearchScope.BUILDS,
+                mode=SearchMode.LEXICAL,
+                page_size=page_size,
+                cursor=cursor,
+                sort=parse_sort(sort),
+                visible_statuses=PUBLIC_SEARCH_STATUSES,
+            )
         )
-        result = await services.search.search(request)
-        hit_ids = [_build_id(hit.source_id) for hit in result.hits if hit.resource_kind == "build"]
-        builds = await services.build_queries.get_many(hit_ids)
-        found_ids = {build.id for build in builds}
-        missing = [build_id for build_id in hit_ids if build_id not in found_ids]
-        if missing:
-            logger.warning("Search projection referenced missing builds", extra={"build_ids": missing})
+        summaries = await hydrate_builds(services, result.hits)
         return Page(
-            items=[BuildSummary.from_domain(build) for build in builds],
+            items=[
+                summary for hit in result.hits if (summary := summaries.get(build_hit_id(hit.source_id))) is not None
+            ],
             next_cursor=result.next_cursor,
             has_more=result.has_more,
         )
@@ -126,14 +127,42 @@ async def list_builds(
             msg,
             public_context={"field": "sort"},
         )
-    binding = "builds:status=confirmed:id-desc"
-    after_id = _after_id(signer, cursor, binding)
+    effective = status or BuildStatusFilter.CONFIRMED
+    if effective is not BuildStatusFilter.CONFIRMED:
+        await _require_global_administrator(services, principal)
+    binding = f"builds:status={effective}:id-desc"
+    after_id = after_id_from_cursor(signer, cursor, binding)
     builds = await services.build_queries.list_page(
-        statuses=_PUBLIC_STATUSES,
+        statuses=frozenset({effective.to_domain()}),
         submitter_id=None,
         after_id=after_id,
         limit=page_size + 1,
     )
+    return keyset_page(signer, builds, page_size=page_size, binding=binding)
+
+
+async def _require_global_administrator(services: ApplicationServices, principal: Principal) -> None:
+    """Gate non-public moderation views on the human, not just the credential.
+
+    A service key carries no `discord_id` and so can never satisfy this, which keeps a leaked
+    key from reading unreviewed submissions (see finding 1 in docs/plans/rest-api.md).
+    """
+    if principal.kind != "user" or principal.discord_id is None:
+        if principal.kind == "anonymous":
+            raise AuthenticationError
+        raise AuthorizationError
+    if not await services.authorization.is_global_administrator(principal.discord_id):
+        raise AuthorizationError
+
+
+def keyset_page(
+    signer: CursorSigner,
+    builds: list[Build],
+    *,
+    page_size: int,
+    binding: str,
+) -> Page[BuildSummary]:
+    """Render one descending-ID page from a `limit + 1` overfetch."""
     has_more = len(builds) > page_size
     page_builds = builds[:page_size]
     next_cursor = None
@@ -147,26 +176,7 @@ async def list_builds(
     )
 
 
-def _parse_sort(value: str | None) -> SearchSort | None:
-    if value is None:
-        return None
-    direction = SortDirection.DESCENDING if value.startswith("-") else SortDirection.ASCENDING
-    field = value.removeprefix("-")
-    if not field:
-        msg = "sort field is required"
-        raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
-    return SearchSort(field, direction)
-
-
-def _build_id(source_id: str) -> int:
-    try:
-        return int(source_id)
-    except ValueError as error:
-        msg = "search returned an invalid build identifier"
-        raise ValidationError(msg) from error
-
-
-def _after_id(signer: CursorSigner, cursor: str | None, binding: str) -> int | None:
+def after_id_from_cursor(signer: CursorSigner, cursor: str | None, binding: str) -> int | None:
     if cursor is None:
         return None
     value = signer.decode(cursor, binding=binding).get("after_id")
