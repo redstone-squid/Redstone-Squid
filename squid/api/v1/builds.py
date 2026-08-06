@@ -3,21 +3,79 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from squid.api.dependencies import CursorSigner, Services
 from squid.api.errors import responses
 from squid.api.pagination import Page
-from squid.api.v1.schemas.builds import BuildDetail, BuildSummary
+from squid.api.security import Principal, Scope, require
+from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildSummary, DoorSubmission
+from squid.builds.application import BuildEditPatch, DoorSubmissionInput
 from squid.builds.domain import Status
-from squid.builds.errors import BuildNotFoundError
-from squid.core.errors import ErrorCode, ValidationError
+from squid.builds.errors import BuildNotFoundError, InvalidBuildError
+from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.users.errors import ConsentRequiredError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/builds", tags=["builds"])
 _PUBLIC_STATUSES = frozenset({Status.CONFIRMED})
 _PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
+UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
+
+
+@router.post("", response_model=BuildDetail, status_code=201, responses=responses(400, 401, 403, 422, 503))
+async def submit_build(submission: DoorSubmission, services: Services, principal: UserWriter) -> BuildDetail:
+    """Submit a door build for Discord moderation."""
+    _require_consented_user(principal)
+    if submission.category.casefold() != "door":
+        msg = "Only door submissions are supported."
+        raise InvalidBuildError(msg, public_context={"category": submission.category})
+    assert principal.discord_id is not None
+    build = await services.builds.submit_door(
+        DoorSubmissionInput(
+            submitter_id=principal.discord_id,
+            door_size=submission.door_size,
+            pattern=tuple(submission.pattern),
+            door_type=submission.door_type,
+            build_size=submission.build_size,
+            works_in=submission.works_in,
+            restrictions=tuple(submission.restrictions),
+            information_about_build=submission.information_about_build,
+            normal_closing_time=submission.normal_closing_time,
+            normal_opening_time=submission.normal_opening_time,
+            date_of_creation=submission.date_of_creation,
+            creators=tuple(submission.creators),
+            locationality=submission.locationality,
+            directionality=submission.directionality,
+            image_urls=tuple(submission.image_urls),
+            video_urls=tuple(submission.video_urls),
+            world_download_urls=tuple(submission.world_download_urls),
+            schematic_urls=tuple(submission.schematic_urls),
+            ai_generated=False,
+        )
+    )
+    return BuildDetail.from_domain(build)
+
+
+@router.patch("/{build_id}", response_model=BuildDetail, responses=responses(400, 401, 403, 404, 409, 422, 503))
+async def edit_build(
+    build_id: int,
+    changes: BuildPatch,
+    services: Services,
+    principal: UserWriter,
+) -> BuildDetail:
+    """Edit an owned pending build, or any build as a global administrator."""
+    _require_consented_user(principal)
+    patch = BuildEditPatch.from_attributes(changes.model_dump(exclude_unset=True))
+    assert principal.discord_id is not None
+    async with services.builds.edit(build_id, patch, blocking=False) as lease:
+        is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
+        is_admin = await services.authorization.is_global_administrator(principal.discord_id)
+        if not is_owner and not is_admin:
+            raise AuthorizationError
+        build = await lease.commit()
+    return BuildDetail.from_domain(build)
 
 
 @router.get("/{build_id}", response_model=BuildDetail, responses=responses(404, 422, 503))
@@ -116,3 +174,13 @@ def _after_id(signer: CursorSigner, cursor: str | None, binding: str) -> int | N
         msg = "cursor payload contains an invalid build identifier"
         raise ValidationError(msg, code=ErrorCode.INVALID_CURSOR)
     return value
+
+
+def _require_consented_user(principal: Principal) -> None:
+    if principal.kind != "user" or principal.discord_id is None:
+        raise AuthenticationError
+    if principal.consent_pending:
+        raise ConsentRequiredError(principal.discord_id).with_context(
+            public_context={"consent_url": "/v1/users/me/consent"},
+            end_user_action="Accept the current privacy notice and retry.",
+        )

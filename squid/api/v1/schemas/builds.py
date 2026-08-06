@@ -2,10 +2,107 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from squid.builds.domain import Build, Status
+
+type InputDimensions = tuple[int | None, int | None, int | None]
+
+
+class DoorSubmission(BaseModel):
+    """A user-authored door build submission."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str = "door"
+    door_size: InputDimensions
+    pattern: list[str] = Field(default_factory=lambda: ["Regular"], max_length=50)
+    door_type: Literal["Door", "Skydoor", "Trapdoor"] = "Door"
+    build_size: InputDimensions = (None, None, None)
+    works_in: str | None = Field(default=None, max_length=500)
+    restrictions: list[str] = Field(default_factory=list, max_length=100)
+    information_about_build: str | None = Field(default=None, max_length=10_000)
+    normal_closing_time: int | None = Field(default=None, ge=0)
+    normal_opening_time: int | None = Field(default=None, ge=0)
+    date_of_creation: str | None = Field(default=None, max_length=100)
+    creators: list[str] = Field(default_factory=list, max_length=100)
+    locationality: Literal["Locational", "Locational with fixes", "Not locational"] | None = None
+    directionality: Literal["Directional", "Directional with fixes", "Not directional"] | None = None
+    image_urls: list[str] = Field(default_factory=list, max_length=100)
+    video_urls: list[str] = Field(default_factory=list, max_length=100)
+    world_download_urls: list[str] = Field(default_factory=list, max_length=100)
+    schematic_urls: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def _positive_dimensions(self) -> Self:
+        for dimensions in (self.door_size, self.build_size):
+            if any(value is not None and value <= 0 for value in dimensions):
+                msg = "dimensions must be positive when supplied"
+                raise ValueError(msg)
+        return self
+
+
+class BuildPatch(BaseModel):
+    """A partial build edit which preserves omitted versus explicitly cleared fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version_spec: str | None = Field(default=None, max_length=500)
+    dimensions: InputDimensions | None = None
+    door_dimensions: InputDimensions | None = None
+    door_type: list[str] | None = Field(default=None, max_length=50)
+    door_orientation_type: str | None = Field(default=None, max_length=100)
+    wiring_placement_restrictions: list[str] | None = Field(default=None, max_length=100)
+    animated_restrictions: list[str] | None = Field(default=None, max_length=100)
+    component_restrictions: list[str] | None = Field(default=None, max_length=100)
+    miscellaneous_restrictions: list[str] | None = Field(default=None, max_length=100)
+    locationality: str | None = Field(default=None, max_length=100)
+    directionality: str | None = Field(default=None, max_length=100)
+    normal_closing_time: int | None = Field(default=None, ge=0)
+    normal_opening_time: int | None = Field(default=None, ge=0)
+    extra_user_info: str | None = Field(default=None, max_length=10_000)
+    creators_ign: list[str] | None = Field(default=None, max_length=100)
+    image_urls: list[str] | None = Field(default=None, max_length=100)
+    video_urls: list[str] | None = Field(default=None, max_length=100)
+    world_download_urls: list[str] | None = Field(default=None, max_length=100)
+    schematic_urls: list[str] | None = Field(default=None, max_length=100)
+    render_urls: list[str] | None = Field(default=None, max_length=100)
+    server_ip: str | None = Field(default=None, max_length=500)
+    coordinates: str | None = Field(default=None, max_length=500)
+    command_to_get_to_build: str | None = Field(default=None, max_length=2_000)
+    completion_time: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def _reject_invalid_clears(self) -> Self:
+        non_nullable = {
+            "dimensions",
+            "door_dimensions",
+            "door_type",
+            "wiring_placement_restrictions",
+            "animated_restrictions",
+            "component_restrictions",
+            "miscellaneous_restrictions",
+            "locationality",
+            "directionality",
+            "creators_ign",
+            "image_urls",
+            "video_urls",
+            "world_download_urls",
+            "schematic_urls",
+            "render_urls",
+        }
+        invalid = sorted(name for name in self.model_fields_set & non_nullable if getattr(self, name) is None)
+        if invalid:
+            msg = f"fields cannot be null: {', '.join(invalid)}"
+            raise ValueError(msg)
+        for name in self.model_fields_set & {"dimensions", "door_dimensions"}:
+            dimensions = getattr(self, name)
+            if dimensions is not None and any(value is not None and value <= 0 for value in dimensions):
+                msg = f"{name} must be positive when supplied"
+                raise ValueError(msg)
+        return self
 
 
 class Dimensions(BaseModel):
