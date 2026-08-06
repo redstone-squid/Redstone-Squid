@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
-from squid.api.dependencies import Services
+from squid.api.dependencies import CurrentPrincipal, Services
 from squid.api.errors import responses
 from squid.core.errors import AuthenticationError, ValidationError
 
@@ -59,10 +59,10 @@ async def discord_callback(
 
 
 @router.post("/logout", status_code=204, responses=responses(401, 403, 503))
-async def logout(request: Request, services: Services) -> Response:
+async def logout(request: Request, services: Services, principal: CurrentPrincipal) -> Response:
     """Revoke the current browser session and clear its cookies."""
     token = request.cookies.get("__Host-squid_session")
-    if token is None or services.web_auth is None:
+    if principal.kind != "user" or token is None or services.web_auth is None:
         raise AuthenticationError
     await services.web_auth.logout(token)
     response = Response(status_code=204)

@@ -54,11 +54,11 @@ class AccountAlreadyLinkedError(ConflictError):
 class ConsentRequiredError(ValidationError):
     """An account must accept the current privacy notice before this action."""
 
-    default_message = _("You need to accept the current privacy notice before claiming build credit.")
+    default_message = _("You need to accept the current privacy notice before completing this action.")
     default_title = _("Consent required")
     default_code = ErrorCode.CONSENT_REQUIRED
     default_resource = "user"
-    default_end_user_action = _("Run /account link to review and accept the current notice.")
+    default_end_user_action = _("Review and accept the current privacy notice, then try again.")
 
     def __init__(self, discord_id: int) -> None:
         super().__init__(context={"discord_id": discord_id})

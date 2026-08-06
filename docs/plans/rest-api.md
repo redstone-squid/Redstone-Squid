@@ -1,8 +1,8 @@
 # A REST API for Redstone-Squid
 
-> **Status.** Design approved. The four prerequisite findings and the cross-process observability
-> groundwork are complete; the remaining Phase 0 configuration and import-surface work is the
-> next unit of work.
+> **Status.** Implemented through Phase 7 on 2026-08-05. The four prerequisite findings,
+> cross-process observability groundwork, public reads, scoped service keys, durable Discord
+> reconciliation, Discord OAuth sessions, build writes, and weighted vote writes are complete.
 > The blockers in "Findings" were pre-existing and verified in-tree rather than hypothetical
 > risks, and three would have surfaced as production incidents with the matching route.
 > Amend this document in place as phases land, calling out where building it proved part
@@ -246,8 +246,11 @@ async def cast_vote_by_session(
     return await self.cast_vote(message.id, actor, option.emoji)
 ```
 
-The HTTP contract takes `option_id`, not `emoji` — `VoteOption.__post_init__` guarantees
-`identifier` is non-empty, and per-guild emoji aliasing should not be a client concern.
+The HTTP contract takes `guild_id` and `option_id`, not `emoji` — `VoteOption.__post_init__`
+guarantees `identifier` is non-empty, and per-guild emoji aliasing should not be a client concern.
+The approved sketch omitted `guild_id`; implementation proved it is required because one vote
+session can have messages and option aliases in multiple guilds, while OAuth `identify` supplies
+no authoritative guild context.
 
 Abuse controls: `Principal.kind == "user"` only (**service keys must never hold `votes:cast`** —
 one credential, unlimited ballots); membership proven by the bot-token lookup, not OAuth `guilds`
@@ -302,6 +305,12 @@ drop with a logged error.
 Fold the search-projection drain into this same loop and document that it runs only in the bot
 process — `refresh_search_index` is wired into `ApplicationServices` but its only caller is a bot
 cog, so an API-only deployment currently has a permanently frozen index.
+
+**Implementation correction.** A delete trigger fires after related message rows have cascaded,
+so a delete job no longer has the Discord message IDs needed to delete or untrack those messages.
+The reconciler acknowledges and logs these jobs; refresh jobs are fully durable. Deleting tracked
+Discord messages requires a future tombstone payload or a pre-delete message outbox and is not
+silently claimed as implemented here.
 
 The same migration drops `get_outdated_messages` and deletes `MessageService.get_outdated` and
 `MessageRepository.get_outdated_messages`.
@@ -403,7 +412,26 @@ This removes observability as a sequencing dependency for the REST API. It does 
 REST phase: the Phase 0 cursor configuration and import-surface work below still comes next, and
 new routes must extend the existing trace and contract coverage as they land.
 
-## Phases
+## Implementation result
+
+- **Phase 0 — implemented.** Typed query/cursor errors, shared cursor signing configuration, and
+  the dead outdated-message query removal are in place.
+- **Phase 1 — implemented.** Public build detail/list/search and field discovery use fixed DTOs,
+  hydration, authoritative visibility, shared pagination, CORS, and declared problem responses.
+- **Phase 2 — implemented.** Records, tags, versions, public aliases, schematic metadata/content,
+  and ballot-safe vote-session reads are registered under `/v1`.
+- **Phase 3 — implemented.** HMAC-peppered scoped API keys and the constant-time legacy bootstrap
+  credential produce service principals; `/verify` and `/v1/verify` share the scoped route.
+- **Phase 4 — implemented.** Database triggers enqueue build/vote refresh work, and the bot drains
+  both Discord reconciliation and search projection work every 15 seconds.
+- **Phase 5 — implemented.** Replica-safe PKCE state, server-side Discord exchange, opaque
+  revocable cookies, double-submit CSRF, consent gating, and `/v1/users/me` are live.
+- **Phase 6 — implemented.** User-only door submission and locked partial editing are consent
+  gated. Edit authorization is checked under the lease for the pending owner or a global admin.
+- **Phase 7 — implemented.** User-only weighted vote writes resolve live guild roles through
+  Discord REST and are limited to 30 writes per principal per five minutes.
+
+## Phases (original sequencing)
 
 Ordering is dependency-forced: error mapping before anything schemathesis touches, reconciliation
 before any write route, user auth before votes.
@@ -451,10 +479,10 @@ before any write route, user auth before votes.
 | `tests/architecture/test_import_surfaces.py:10` | assert intent, not importer names |
 | `tests/unit/api/test_openapi_contract.py` | every new route, every phase |
 
-New: `squid/api/{dependencies,security,pagination}.py`, `squid/api/v1/**`,
+New: `squid/api/{dependencies,security,pagination,rate_limit}.py`, `squid/api/v1/**`,
 `squid/core/pagination.py`, `squid/auth/**`, `squid/sync/**`,
 `squid/voting/infrastructure/discord_rest.py`, `squid/bot/sync/reconciler.py`, plus Alembic
-revisions on head `7f2c9d4e6a81`.
+revisions on head `d7f3a9c5e164`.
 
 ## Verification
 

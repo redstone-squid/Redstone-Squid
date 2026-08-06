@@ -54,8 +54,9 @@ cp .env.example .env
 ```
 
 The combined launcher requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_PEPPER`,
-`SQUID_DISCORD_TOKEN`, and `SQUID_API_SECRET`. Exported environment variables take precedence over `.env`.
-Optional OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
+`SQUID_DISCORD_TOKEN`, `SQUID_API_SECRET`, `SQUID_API_KEY_PEPPER`, `SQUID_API_SESSION_PEPPER`, and
+`SQUID_CURSOR_SECRET`. Exported environment variables take precedence over `.env`. Discord OAuth,
+REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
 
 Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments must rename their settings:
 
