@@ -172,6 +172,14 @@ def linked_service(repository: FakeUserRepository, username: str = "Player") -> 
     return UserService(repository, username_lookup(username), lambda: 123456)
 
 
+async def test_creator_alias_lookup_returns_credit_without_account_query() -> None:
+    repository = FakeUserRepository()
+    alias = repository.add_alias("Builder", user_id=42)
+    service = UserService(repository, username_lookup(None), lambda: 123456)
+
+    assert await service.get_creator_alias(" builder ") == alias
+
+
 async def test_user_link_rejects_invalid_code() -> None:
     service = UserService(FakeUserRepository(), username_lookup("Player"), lambda: 123456)
 

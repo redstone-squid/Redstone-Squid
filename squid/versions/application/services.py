@@ -19,6 +19,12 @@ class VersionService:
     async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
         return await self._repository.list(edition)
 
+    async def list_all(self) -> list[MinecraftVersion]:
+        """List recognized versions for both supported editions."""
+        java = await self.list_versions("Java")
+        bedrock = await self.list_versions("Bedrock")
+        return [*java, *bedrock]
+
     async def list_display(self, edition: Edition, *, limit: int = 20) -> list[str]:
         return [str(version) for version in (await self.list_versions(edition))[:limit]]
 

@@ -175,6 +175,13 @@ class SchematicService:
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
         return await self._store.list_for_build(build_id)
 
+    async def content(self, sha256: str) -> bytes:
+        """Return stored schematic bytes by digest."""
+        content = await self._store.get_file(sha256)
+        if content is None:
+            raise SchematicNotFoundError
+        return content
+
     async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
         return await self._store.get_primary(build_id)
 

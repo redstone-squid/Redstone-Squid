@@ -85,6 +85,20 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             return None if row is None else BuildMapper.tag_definition_to_domain(row)
 
     @override
+    async def approved(self) -> Sequence[TagDefinition]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(SQLTagDefinition)
+                    .where(SQLTagDefinition.moderation_status == TagModerationStatus.APPROVED)
+                    .order_by(
+                        SQLTagDefinition.default_display_order, SQLTagDefinition.display_name, SQLTagDefinition.id
+                    )
+                )
+            ).all()
+            return tuple(BuildMapper.tag_definition_to_domain(row) for row in rows)
+
+    @override
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
         async with self._session_factory.begin() as session:
             row = await session.get(SQLTagDefinition, tag_id, with_for_update=True)

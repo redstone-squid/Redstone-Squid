@@ -32,6 +32,10 @@ class UserService:
         """Return the account for *discord_id*, or ``None`` if there is none."""
         return await self._repository.get_by_discord_id(discord_id)
 
+    async def get_creator_alias(self, name: str) -> CreatorAlias | None:
+        """Return a creator credit by name without loading its linked account."""
+        return await self._repository.get_alias_by_name(name)
+
     async def link_minecraft_account(self, discord_id: int, code: str, *, consent: UserConsent) -> CreatorAlias | None:
         """Link a Discord user with consent using a valid, unexpired verification code.
 

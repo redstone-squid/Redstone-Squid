@@ -29,6 +29,8 @@ class TagDefinitionRepository(Protocol):
 
     async def get(self, tag_id: int) -> TagDefinition | None: ...
 
+    async def approved(self) -> Sequence[TagDefinition]: ...
+
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
 
     async def assign_showcase(
@@ -77,6 +79,17 @@ class TagService:
     async def pending(self) -> Sequence[TagDefinition]:
         """List user definitions awaiting staff review."""
         return await self._repository.pending()
+
+    async def public_definitions(self) -> Sequence[TagDefinition]:
+        """List tag definitions available to public search and build clients."""
+        return await self._repository.approved()
+
+    async def public_definition(self, tag_id: int) -> TagDefinition | None:
+        """Return an approved public tag definition by identifier."""
+        definition = await self._repository.get(tag_id)
+        if definition is None or definition.moderation_status is not TagModerationStatus.APPROVED:
+            return None
+        return definition
 
     async def approve(self, tag_id: int) -> TagDefinition:
         """Publish a pending tag."""

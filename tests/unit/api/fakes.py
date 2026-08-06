@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
 from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
 from squid.users.errors import MinecraftAccountNotFoundError
@@ -30,6 +31,9 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
 
 
 class MockUserManager:
+    async def get_creator_alias(self, _name: str):
+        return None
+
     async def generate_verification_code(self, user_uuid: str | UUID) -> int:
         if isinstance(user_uuid, str):
             user_uuid = uuid.UUID(user_uuid)
@@ -65,6 +69,32 @@ class MockSearch:
         return DEFAULT_FIELD_REGISTRY
 
 
+class MockTags:
+    async def public_definitions(self):
+        return ()
+
+    async def public_definition(self, _tag_id: int):
+        return None
+
+
+class MockVersions:
+    async def list_all(self):
+        return []
+
+
+class MockSchematics:
+    async def list_for_build(self, _build_id: int):
+        return []
+
+    async def content(self, _sha256: str):
+        raise SchematicNotFoundError
+
+
+class MockVotes:
+    async def get_session_by_id(self, _vote_session_id: int):
+        return None
+
+
 def build_app() -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
@@ -74,6 +104,10 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
             users=MockUserManager(),
             build_queries=MockBuildQueries(),
             search=MockSearch(),
+            tags=MockTags(),
+            versions=MockVersions(),
+            schematics=MockSchematics(),
+            votes=MockVotes(),
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())

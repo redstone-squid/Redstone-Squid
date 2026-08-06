@@ -27,6 +27,13 @@ async def test_version_service_honors_explicit_edition() -> None:
     assert version == MinecraftVersion("Bedrock", 1, 21, 4)
 
 
+async def test_version_service_lists_both_editions() -> None:
+    repository = FakeVersionRepository()
+    repository.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
+
+    assert await VersionService(repository).list_all() == repository.versions
+
+
 async def test_version_service_resolves_ranges_and_newest_version() -> None:
     repository = FakeVersionRepository()
     repository.versions = [

@@ -49,6 +49,11 @@ class FakeRepository:
     async def get(self, tag_id: int) -> TagDefinition | None:
         return self.definition if self.definition is not None and self.definition.id == tag_id else None
 
+    async def approved(self) -> tuple[TagDefinition, ...]:
+        if self.definition is None or self.definition.moderation_status is not TagModerationStatus.APPROVED:
+            return ()
+        return (self.definition,)
+
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
         if self.definition is None or tag_id != self.definition.id:
             return None
@@ -101,6 +106,25 @@ async def test_staff_moderation_retains_definition_identity() -> None:
 
     assert approved.moderation_status is TagModerationStatus.APPROVED
     assert archived.moderation_status is TagModerationStatus.ARCHIVED
+
+
+@pytest.mark.asyncio
+async def test_public_queries_only_return_approved_definitions() -> None:
+    repository = FakeRepository()
+    service = TagService(repository)
+    proposed = await service.propose_showcase(
+        "Compact",
+        value_type=TagValueType.NONE,
+        query_name=None,
+        created_by_discord_id=42,
+    )
+
+    assert await service.public_definitions() == ()
+    assert await service.public_definition(proposed.id) is None
+
+    approved = await service.approve(proposed.id)
+    assert await service.public_definitions() == (approved,)
+    assert await service.public_definition(proposed.id) == approved
 
 
 @pytest.mark.asyncio

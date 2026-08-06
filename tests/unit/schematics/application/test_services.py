@@ -90,6 +90,15 @@ async def test_ingest_stores_bytes_and_passes_the_sniffed_format_to_the_analyzer
     assert analyzer.analyze_calls == [(data, SchematicFormat.LITEMATIC, True)]
 
 
+async def test_content_returns_stored_bytes_and_reports_missing_digest() -> None:
+    schematics, _analyzer, store = service()
+    store.files["a" * 64] = b"stored"
+
+    assert await schematics.content("a" * 64) == b"stored"
+    with pytest.raises(SchematicNotFoundError):
+        await schematics.content("b" * 64)
+
+
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:
     schematics, analyzer, _ = service(limits=SchematicLimits(max_upload_bytes=8))
 

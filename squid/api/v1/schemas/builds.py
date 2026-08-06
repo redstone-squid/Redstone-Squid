@@ -64,8 +64,8 @@ class BuildSummary(BaseModel):
                 )
                 for assignment in build.tags
             ],
-            created_at=build.submission_time.py_datetime() if build.submission_time is not None else None,
-            updated_at=build.edited_time.py_datetime() if build.edited_time is not None else None,
+            created_at=build.submission_time.to_stdlib() if build.submission_time is not None else None,
+            updated_at=build.edited_time.to_stdlib() if build.edited_time is not None else None,
         )
 
 
