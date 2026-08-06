@@ -224,6 +224,11 @@ reportAny = false
 enableExperimentalFeatures = true  # For `TypeForm` support
 
 [tool.pyrefly]
+# The baseline holds exactly one class of error: `interaction.response` / `interaction.followup`
+# reported as `no-matching-overload`. Pyrefly <=1.1.1 resolves `CachedSlotProperty.__get__`'s
+# `owner` argument to the bare `type[Interaction]` instead of the parameterized one, because
+# `ClientT` carries a PEP 696 default. 1.2.0 fixes it; drop the baseline entirely once the
+# `exclude-newer` soak window lets us lock that release.
 baseline = "pyrefly-baseline.json"
 project-includes = ["squid/**/*.py", "tests/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]

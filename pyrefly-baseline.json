@@ -49,42 +49,6 @@
       "severity": "error"
     },
     {
-      "line": 143,
-      "column": 15,
-      "stop_line": 143,
-      "stop_column": 23,
-      "path": "squid/bot/submission/navigation_view.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `StopButton.callback` overrides parent class `Button` in an inconsistent manner\n  `StopButton.callback` has type `(self: StopButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]`, which is not assignable to `[ClientT: Client = Client](self: StopButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]`, the type of `Button.callback`\n  Signature mismatch:\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]: ...\n                                                              ^^^ return type\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]: ...\n                                                              ^^^^ return type",
-      "concise_description": "Class member `StopButton.callback` overrides parent class `Button` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "line": 164,
-      "column": 15,
-      "stop_line": 164,
-      "stop_column": 23,
-      "path": "squid/bot/submission/navigation_view.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `HomeButton.callback` overrides parent class `Button` in an inconsistent manner\n  `HomeButton.callback` has type `(self: HomeButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]`, which is not assignable to `[ClientT: Client = Client](self: HomeButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]`, the type of `Button.callback`\n  Signature mismatch:\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]: ...\n                                                              ^^^ return type\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]: ...\n                                                              ^^^^ return type",
-      "concise_description": "Class member `HomeButton.callback` overrides parent class `Button` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "line": 180,
-      "column": 15,
-      "stop_line": 180,
-      "stop_column": 23,
-      "path": "squid/bot/submission/navigation_view.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `BackButton.callback` overrides parent class `Button` in an inconsistent manner\n  `BackButton.callback` has type `(self: BackButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]`, which is not assignable to `[ClientT: Client = Client](self: BackButton[BaseViewT, ClientT], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]`, the type of `Button.callback`\n  Signature mismatch:\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]: ...\n                                                              ^^^ return type\n  ...on: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, None]: ...\n                                                              ^^^^ return type",
-      "concise_description": "Class member `BackButton.callback` overrides parent class `Button` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "line": 237,
       "column": 19,
       "stop_line": 237,
@@ -145,54 +109,6 @@
       "severity": "error"
     },
     {
-      "line": 229,
-      "column": 15,
-      "stop_line": 229,
-      "stop_column": 29,
-      "path": "squid/bot/submission/ui/components.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `DynamicBuildEditButton.from_custom_id` overrides parent class `DynamicItem` in an inconsistent manner\n  `DynamicBuildEditButton.from_custom_id` has type `(cls: type[DynamicBuildEditButton[BotT, V]], interaction: Interaction[BotT], item: Item[Any], match: Match[str], /) -> Coroutine[Unknown, Unknown, DynamicBuildEditButton[BotT, V]]`, which is not assignable to `[ClientT: Client = Client](cls: type[DynamicBuildEditButton[BotT, V]], interaction: Interaction[ClientT], item: Item[Any], match: Match[str], /) -> Coroutine[Unknown, Unknown, DynamicBuildEditButton[BotT, V]]`, the type of `DynamicItem.from_custom_id`\n  Signature mismatch:\n  expected: def from_custom_id(cls: type[DynamicBuildEditButton[BotT, V]], interaction: Interaction[ClientT], item: Item[Any], match: M...\n                                                                                                    ^^^^^ parameters\n  found:    def from_custom_id(cls: type[DynamicBuildEditButton[BotT, V]], interaction: Interaction[BotT], item: Item[Any], match: Matc...\n                                                                                                    ^^ parameters",
-      "concise_description": "Class member `DynamicBuildEditButton.from_custom_id` overrides parent class `DynamicItem` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "line": 237,
-      "column": 15,
-      "stop_line": 237,
-      "stop_column": 23,
-      "path": "squid/bot/submission/ui/components.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `DynamicBuildEditButton.callback` overrides parent class `DynamicItem` in an inconsistent manner\n  `DynamicBuildEditButton.callback` has type `(self: DynamicBuildEditButton[BotT, V], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, Any]`, which is not assignable to `[ClientT: Client = Client](self: DynamicBuildEditButton[BotT, V], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]`, the type of `DynamicItem.callback`\n  Signature mismatch:\n  expected: def callback(self: DynamicBuildEditButton[BotT, V], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]:...\n                                                                                         ^^^^^ parameters\n  found:    def callback(self: DynamicBuildEditButton[BotT, V], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, Any]: ...\n                                                                                         ^^ parameters",
-      "concise_description": "Class member `DynamicBuildEditButton.callback` overrides parent class `DynamicItem` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "line": 253,
-      "column": 15,
-      "stop_line": 253,
-      "stop_column": 23,
-      "path": "squid/bot/submission/ui/components.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `EphemeralBuildEditButton.callback` overrides parent class `Button` in an inconsistent manner\n  `EphemeralBuildEditButton.callback` has type `(self: EphemeralBuildEditButton[BotT, V], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, None]`, which is not assignable to `[ClientT: Client = Client](self: EphemeralBuildEditButton[BotT, V], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]`, the type of `Button.callback`\n  Signature mismatch:\n  ...n[BotT, V], interaction: Interaction[ClientT]) -> Coroutine[Unknown, Unknown, Any]: ...\n                                          ^^^^^ parameters                         ^^^ return type\n  ...n[BotT, V], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, None]: ...\n                                          ^^ parameters                         ^^^^ return type",
-      "concise_description": "Class member `EphemeralBuildEditButton.callback` overrides parent class `Button` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
-      "line": 236,
-      "column": 15,
-      "stop_line": 236,
-      "stop_column": 24,
-      "path": "squid/bot/submission/ui/views.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `EditModal.on_submit` overrides parent class `ErrorHandledModal` in an inconsistent manner\n  `EditModal.on_submit` has type `(self: EditModal[BotT], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, None]`, which is not assignable to `[ClientT: Client = Client](self: EditModal[BotT], interaction: Interaction[ClientT], /) -> Coroutine[Unknown, Unknown, None]`, the type of `ErrorHandledModal.on_submit`\n  Signature mismatch:\n  expected: def on_submit(self: EditModal[BotT], interaction: Interaction[ClientT], /) -> Coroutine[Unknown, Unknown, None]: ...\n                                                                          ^^^^^^^^^^^ parameters\n  found:    def on_submit(self: EditModal[BotT], interaction: Interaction[BotT]) -> Coroutine[Unknown, Unknown, None]: ...\n                                                                          ^^^^^ parameters",
-      "concise_description": "Class member `EditModal.on_submit` overrides parent class `ErrorHandledModal` in an inconsistent manner",
-      "severity": "error"
-    },
-    {
       "line": 463,
       "column": 19,
       "stop_line": 463,
@@ -214,18 +130,6 @@
       "name": "no-matching-overload",
       "description": "No matching overload found for function `discord.utils.CachedSlotProperty.__get__` called with arguments: (Interaction[BotT], type[Interaction])\n  Possible overloads:\n    (instance: None, owner: type[Interaction[BotT]]) -> CachedSlotProperty[Interaction[BotT], InteractionResponse[BotT]]\n    (instance: Interaction[BotT], owner: type[Interaction[BotT]]) -> InteractionResponse[BotT] [closest match]\n  Argument `type[Interaction]` is not assignable to parameter `owner` with type `type[Interaction[BotT]]` in function `discord.utils.CachedSlotProperty.__get__`",
       "concise_description": "No matching overload found for function `discord.utils.CachedSlotProperty.__get__` called with arguments: (Interaction[BotT], type[Interaction])",
-      "severity": "error"
-    },
-    {
-      "line": 468,
-      "column": 15,
-      "stop_line": 468,
-      "stop_column": 32,
-      "path": "squid/bot/submission/ui/views.py",
-      "code": -2,
-      "name": "bad-override",
-      "description": "Class member `BuildEditView.interaction_check` overrides parent class `ErrorHandledLayoutView` in an inconsistent manner\n  `BuildEditView.interaction_check` has type `(self: BuildEditView[BotT], interaction: Interaction[BotT], /) -> Coroutine[Unknown, Unknown, bool]`, which is not assignable to `[ClientT: Client = Client](self: BuildEditView[BotT], interaction: Interaction[ClientT], /) -> Coroutine[Unknown, Unknown, bool]`, the type of `ErrorHandledLayoutView.interaction_check`\n  Signature mismatch:\n  expected: def interaction_check(self: BuildEditView[BotT], interaction: Interaction[ClientT], /) -> Coroutine[Unknown, Unknown, bool]...\n                                                                                      ^^^^^ parameters\n  found:    def interaction_check(self: BuildEditView[BotT], interaction: Interaction[BotT], /) -> Coroutine[Unknown, Unknown, bool]: ...\n                                                                                      ^^ parameters",
-      "concise_description": "Class member `BuildEditView.interaction_check` overrides parent class `ErrorHandledLayoutView` in an inconsistent manner",
       "severity": "error"
     },
     {
@@ -322,18 +226,6 @@
       "name": "no-matching-overload",
       "description": "No matching overload found for function `discord.utils.CachedSlotProperty.__get__` called with arguments: (Interaction[BotT], type[Interaction])\n  Possible overloads:\n    (instance: None, owner: type[Interaction[BotT]]) -> CachedSlotProperty[Interaction[BotT], Webhook]\n    (instance: Interaction[BotT], owner: type[Interaction[BotT]]) -> Webhook [closest match]\n  Argument `type[Interaction]` is not assignable to parameter `owner` with type `type[Interaction[BotT]]` in function `discord.utils.CachedSlotProperty.__get__`",
       "concise_description": "No matching overload found for function `discord.utils.CachedSlotProperty.__get__` called with arguments: (Interaction[BotT], type[Interaction])",
-      "severity": "error"
-    },
-    {
-      "line": 77,
-      "column": 15,
-      "stop_line": 77,
-      "stop_column": 33,
-      "path": "squid/builds/infrastructure/text_generation.py",
-      "code": -2,
-      "name": "missing-attribute",
-      "description": "Object of class `AsyncStream` has no attribute `choices`",
-      "concise_description": "Object of class `AsyncStream` has no attribute `choices`",
       "severity": "error"
     }
   ]
