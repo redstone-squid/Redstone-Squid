@@ -29,7 +29,6 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.bot = bot
         self.records = bot.services.records
         self.computation = bot.services.record_computation
-        self.refresh_search_index = bot.services.refresh_search_index
         self.process_maintenance.start()
 
     @override
@@ -235,16 +234,15 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @tasks.loop(seconds=30)
     async def process_maintenance(self) -> None:
-        """Drain bounded record and search projection work."""
+        """Drain bounded record recomputation work."""
         try:
             with trace_span(
                 "squid.background.record_maintenance",
                 {"squid.surface": "background_loop"},
             ):
                 await self.computation.process_queue()
-                await self.refresh_search_index()
         except Exception:
-            logger.exception("Failed to process record/search maintenance work")
+            logger.exception("Failed to process record maintenance work")
 
     @process_maintenance.before_loop
     async def before_process_maintenance(self) -> None:

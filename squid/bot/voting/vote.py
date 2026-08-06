@@ -38,7 +38,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
-        self.builds = bot.services.builds
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
@@ -148,17 +147,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         ):
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
                 await message.remove_reaction(previous.emoji, user)
-        if result.just_closed:
-            if isinstance(vote_session, BuildVoteSession):
-                build_id = result.session.target.build_id
-                assert build_id is not None
-                if result.session.result == "approved":
-                    vote_session.build = await self.builds.confirm(build_id)
-                else:
-                    vote_session.build = await self.builds.deny(build_id)
-            elif isinstance(vote_session, DeleteLogVoteSession) and result.session.result == "approved":
-                with contextlib.suppress(discord.NotFound):
-                    await vote_session.target_message.delete()
         await vote_session.update_messages()
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
