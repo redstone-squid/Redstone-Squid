@@ -69,6 +69,9 @@ class MockSearch:
     async def search(self, _request: object) -> SearchPage:
         return SearchPage(hits=(), next_cursor=None, has_more=False)
 
+    async def suggest(self, _query: str, *, limit: int = 5) -> tuple[str, ...]:
+        return ()
+
     async def fields(self):
         return DEFAULT_FIELD_REGISTRY
 
