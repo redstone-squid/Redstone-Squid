@@ -32,6 +32,19 @@ class UserService:
         """Return the account for *discord_id*, or ``None`` if there is none."""
         return await self._repository.get_by_discord_id(discord_id)
 
+    async def get_or_create_account(self, discord_id: int) -> UserAccount:
+        """Resolve the minimal account identity established by OAuth login."""
+        return await self._repository.get_or_create_discord(discord_id)
+
+    async def grant_current_consent(self, discord_id: int) -> UserAccount:
+        """Record acceptance of the current privacy notice for an existing account."""
+        user = await self._repository.get_by_discord_id(discord_id)
+        if user is None:
+            raise UserNotFoundError(discord_id)
+        user.consent = UserConsent.grant_current()
+        await self._repository.update(user)
+        return user
+
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
         return await self._repository.get_alias_by_name(name)

@@ -30,6 +30,7 @@ class Principal:
     scopes: frozenset[Scope] = frozenset()
     discord_id: int | None = None
     user_id: int | None = None
+    consent_pending: bool = False
 
 
 ANONYMOUS = Principal(kind="anonymous", subject="anonymous", scopes=frozenset({Scope.BUILDS_READ}))
@@ -55,7 +56,26 @@ async def current_principal(
 ) -> Principal:
     """Authenticate a legacy bootstrap secret or an indexed API key."""
     if authorization is None:
-        return ANONYMOUS
+        session_token = request.cookies.get("__Host-squid_session")
+        web_auth = request.app.state.runtime.services.web_auth
+        if session_token is None or web_auth is None:
+            return ANONYMOUS
+        identity = await web_auth.authenticate(session_token)
+        if identity is None:
+            raise AuthenticationError
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            csrf_cookie = request.cookies.get("squid_csrf")
+            csrf_header = request.headers.get("X-CSRF-Token")
+            if csrf_cookie is None or csrf_header is None or not hmac.compare_digest(csrf_cookie, csrf_header):
+                raise AuthorizationError
+        return Principal(
+            kind="user",
+            subject=f"user:{identity.user_id}",
+            scopes=frozenset(Scope),
+            discord_id=identity.discord_id,
+            user_id=identity.user_id,
+            consent_pending=identity.consent_pending,
+        )
     config = request.app.state.config
     if hmac.compare_digest(authorization, config.api.secret.get_secret_value()):
         return Principal(

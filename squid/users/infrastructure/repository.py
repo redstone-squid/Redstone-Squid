@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -51,6 +52,7 @@ def _to_account(user: User) -> UserAccount:
         ign=user.ign,
         consent=consent,
         id=user.id,
+        created_at=user.created_at,
     )
 
 
@@ -112,6 +114,19 @@ class UserRepository:
             user = await repository.get_one_or_none(discord_id=discord_id)
             if user is None:
                 return None
+            return _to_account(user)
+
+    async def get_or_create_discord(self, discord_id: int) -> UserAccount:
+        """Return a Discord account, creating a consent-free identity row when absent."""
+        async with self._session_factory() as session:
+            statement = (
+                insert(User)
+                .values(discord_id=discord_id)
+                .on_conflict_do_update(index_elements=[User.discord_id], set_={"discord_id": discord_id})
+                .returning(User)
+            )
+            user = (await session.scalars(statement)).one()
+            await session.commit()
             return _to_account(user)
 
     async def update(self, user: UserAccount) -> None:

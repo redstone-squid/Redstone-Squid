@@ -20,6 +20,7 @@ BASE_ENVIRONMENT = {
     "SQUID_VERIFICATION_CODE_PEPPER": "verification-pepper",
     "SQUID_CURSOR_SECRET": "cursor-secret-for-tests",
     "SQUID_API_KEY_PEPPER": "api-key-pepper-for-tests",
+    "SQUID_API_SESSION_PEPPER": "session-pepper-for-tests",
 }
 
 

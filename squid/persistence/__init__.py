@@ -1,6 +1,7 @@
 """Shared SQLAlchemy infrastructure and model registration."""
 
 from squid.auth.infrastructure import models as auth_models
+from squid.auth.infrastructure import session_models as auth_session_models
 from squid.builds.infrastructure import models as build_models
 from squid.messages.infrastructure import models as message_models
 from squid.permissions.infrastructure import models as permission_models
@@ -17,6 +18,7 @@ from squid.voting.infrastructure import models as voting_models
 
 __all__ = [
     "auth_models",
+    "auth_session_models",
     "build_models",
     "message_models",
     "permission_models",

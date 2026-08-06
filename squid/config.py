@@ -174,6 +174,7 @@ class ApiConfig(_FrozenModel):
 
     secret: SecretStr
     key_pepper: SecretStr
+    session_pepper: SecretStr
     bot_token: SecretStr | None = None
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
@@ -192,13 +193,34 @@ class ApiConfig(_FrozenModel):
             raise ValueError(msg)
         return value
 
-    @field_validator("key_pepper")
+    @field_validator("key_pepper", "session_pepper")
     @classmethod
-    def _require_key_pepper(cls, value: SecretStr) -> SecretStr:
+    def _require_peppers(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value().encode()) < 16:
             msg = "Must contain at least 16 bytes."
             raise ValueError(msg)
         return value
+
+
+class OAuthConfig(_FrozenModel):
+    """Discord OAuth2 authorization-code configuration."""
+
+    discord_client_id: str | None = None
+    discord_client_secret: SecretStr | None = None
+    redirect_uri: AnyHttpUrl | None = None
+    session_ttl_hours: int = Field(default=336, ge=1)
+
+    _empty_client_id = field_validator("discord_client_id", mode="before")(_empty_to_none)
+    _empty_client_secret = field_validator("discord_client_secret", mode="before")(_empty_to_none)
+    _empty_redirect_uri = field_validator("redirect_uri", mode="before")(_empty_to_none)
+
+    @model_validator(mode="after")
+    def _require_complete_credentials(self) -> Self:
+        configured = (self.discord_client_id, self.discord_client_secret, self.redirect_uri)
+        if any(value is not None for value in configured) and not all(value is not None for value in configured):
+            msg = "Discord OAuth client ID, secret, and redirect URI must be configured together."
+            raise ValueError(msg)
+        return self
 
 
 class BotConfig(_FrozenModel):
@@ -463,6 +485,8 @@ class RuntimeConfig(_FrozenModel):
     cursor_secret: SecretStr
     api_key_pepper: SecretStr | None = None
     discord_bot_token: SecretStr | None = None
+    session_pepper: SecretStr | None = None
+    oauth: OAuthConfig | None = None
 
 
 class _ProcessSettings(BaseSettings):
@@ -532,6 +556,7 @@ class ApiProcessConfig(_ProcessSettings):
     """Validated configuration required by the HTTP API process."""
 
     api: ApiConfig
+    oauth: OAuthConfig = OAuthConfig()
 
     @property
     def runtime(self) -> RuntimeConfig:
@@ -540,6 +565,8 @@ class ApiProcessConfig(_ProcessSettings):
             update={
                 "api_key_pepper": self.api.key_pepper,
                 "discord_bot_token": self.api.bot_token,
+                "session_pepper": self.api.session_pepper,
+                "oauth": self.oauth,
             }
         )
 
@@ -558,6 +585,7 @@ class ApplicationConfig(BotProcessConfig):
     """Complete configuration required by the combined application launcher."""
 
     api: ApiConfig
+    oauth: OAuthConfig = OAuthConfig()
 
     def bot_process(self) -> BotProcessConfig:
         """Project the combined settings into the Discord process."""
@@ -599,6 +627,7 @@ class ApplicationConfig(BotProcessConfig):
                     "community",
                     "log",
                     "observability",
+                    "oauth",
                     "api",
                 }
             )
@@ -689,6 +718,7 @@ __all__ = [
     "EmbeddingConfig",
     "GoogleConfig",
     "LoggingConfig",
+    "OAuthConfig",
     "ObservabilityConfig",
     "OpenAIConfig",
     "RuntimeConfig",

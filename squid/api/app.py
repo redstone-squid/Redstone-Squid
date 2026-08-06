@@ -83,8 +83,9 @@ def create_api_app(
         api.add_middleware(
             CORSMiddleware,
             allow_origins=list(cors_origins),
-            allow_methods=["GET"],
-            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type"],
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PATCH"],
+            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type", "X-CSRF-Token"],
         )
     if config is not None:
         instrument_api_app(api, config.observability)

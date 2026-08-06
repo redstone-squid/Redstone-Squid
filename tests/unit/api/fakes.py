@@ -25,7 +25,11 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
         "database": {"url": "postgresql://user:password@database.example/squid"},
         "verification": {"code_pepper": "verification-pepper"},
         "cursor": {"secret": "cursor-secret-for-tests"},
-        "api": {"secret": TEST_SYNERGY_SECRET, "key_pepper": "api-key-pepper-for-tests"},
+        "api": {
+            "secret": TEST_SYNERGY_SECRET,
+            "key_pepper": "api-key-pepper-for-tests",
+            "session_pepper": "session-pepper-for-tests",
+        },
     }
 )
 
@@ -110,6 +114,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
         ApplicationServices,
         SimpleNamespace(
             api_keys=None,
+            web_auth=None,
             users=MockUserManager(),
             build_queries=MockBuildQueries(),
             search=MockSearch(),

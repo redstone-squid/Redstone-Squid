@@ -6,7 +6,8 @@ from functools import partial
 from importlib import resources
 
 from squid.auth.application import ApiKeyService
-from squid.auth.infrastructure import PostgresApiKeyRepository
+from squid.auth.application.web import DiscordOAuthService
+from squid.auth.infrastructure import PostgresApiKeyRepository, PostgresWebSessionRepository
 from squid.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -145,11 +146,26 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     )
     if vote_members is not None:
         vote_service.set_actor_resolver(vote_members)
+    user_service = UserService(
+        UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
+        get_minecraft_username,
+        lambda: secrets.randbelow(900_000) + 100_000,
+    )
     return ApplicationServices(
         builds=BuildService(build_repository, build_locks, restriction_repository, version_service, embedding_service),
         api_keys=(
             ApiKeyService(PostgresApiKeyRepository(db.async_session), config.api_key_pepper.get_secret_value())
             if config.api_key_pepper is not None
+            else None
+        ),
+        web_auth=(
+            DiscordOAuthService(
+                PostgresWebSessionRepository(db.async_session),
+                user_service,
+                config.oauth,
+                config.session_pepper.get_secret_value(),
+            )
+            if config.oauth is not None and config.session_pepper is not None
             else None
         ),
         build_inference=BuildInferenceService(
@@ -179,11 +195,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         refresh_search_index=partial(run_projection_batch, db.async_session),
         settings=SettingsService(SettingsRepository(db.async_session)),
         starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
-        users=UserService(
-            UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
-            get_minecraft_username,
-            lambda: secrets.randbelow(900_000) + 100_000,
-        ),
+        users=user_service,
         versions=version_service,
         votes=vote_service,
         vote_members=vote_members,
@@ -214,6 +226,8 @@ def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None 
         await services.schematics.aclose()
         if services.vote_members is not None:
             await services.vote_members.aclose()
+        if services.web_auth is not None:
+            await services.web_auth.aclose()
         await database.close()
 
     return ApplicationRuntime(services, close_resources, database.ping)

@@ -6,6 +6,7 @@ from types import TracebackType
 from typing import Self
 
 from squid.auth.application import ApiKeyService
+from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.messages.application import MessageService
@@ -29,6 +30,7 @@ class ApplicationServices:
 
     builds: BuildService
     api_keys: ApiKeyService | None
+    web_auth: DiscordOAuthService | None
     build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService

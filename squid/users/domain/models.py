@@ -63,6 +63,7 @@ class UserAccount:
     ign: str | None
     consent: UserConsent | None = None
     id: int | None = None
+    created_at: Instant | None = None
 
     @property
     def needs_consent_refresh(self) -> bool:
