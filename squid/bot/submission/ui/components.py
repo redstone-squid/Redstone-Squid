@@ -226,7 +226,7 @@ class DynamicBuildEditButton[
 
     @classmethod
     @override
-    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: re.Match[str], /
     ) -> Self:
         build = await interaction.client.services.builds.get(int(match.group(1)))
@@ -234,7 +234,7 @@ class DynamicBuildEditButton[
         return cls(build)
 
     @override
-    async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         # FIXME: circular import
         from squid.bot.submission.ui.views import BuildEditView
 
@@ -250,7 +250,7 @@ class EphemeralBuildEditButton[
         super().__init__(label="Edit", style=discord.ButtonStyle.secondary)
 
     @override
-    async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def callback(self, interaction: Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         from squid.bot.submission.ui.views import BuildEditView
 
         await BuildEditView(self.build, interaction.client.services.builds).send(interaction, ephemeral=True)

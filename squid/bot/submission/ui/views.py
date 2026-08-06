@@ -233,7 +233,7 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
             super().__init__(title=title, timeout=timeout)
 
     @override
-    async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def on_submit(self, interaction: discord.Interaction[BotT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         fields = [item for item in self.walk_children() if isinstance(item, BuildField)]
         await asyncio.gather(*(item.on_modal_submit() for item in fields))
         errors = [f"**{item.display_label}:** {item.validation_error}" for item in fields if item.validation_error]
@@ -465,7 +465,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
             await interaction.response.send_message(view=layout, ephemeral=True, allowed_mentions=no_mentions())
 
     @override
-    async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def interaction_check(self, interaction: Interaction[BotT], /) -> bool:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         if Instant.now() > self.expiry_time:
             await self._send_denial(
                 interaction,

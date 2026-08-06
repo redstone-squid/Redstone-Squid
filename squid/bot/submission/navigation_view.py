@@ -140,7 +140,7 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
         super().__init__(style=discord.ButtonStyle.danger, label="Stop")
 
     @override
-    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         """Disables all the items in the view."""
         parent = await resolve_parent(self._navigation_parent)
         for child in parent.walk_children():
@@ -161,7 +161,7 @@ class HomeButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
         super().__init__(label="Go Home", emoji=HOME)
 
     @override
-    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         """Edits the message with the root view."""
         parent = await resolve_parent(self._navigation_parent)
         await parent.update(interaction)
@@ -177,7 +177,7 @@ class BackButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
         self._navigation_parent = parent
 
     @override
-    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         """Edits the message with the parent view."""
         parent = await resolve_parent(self._navigation_parent)
         await parent.update(interaction)

@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import openai
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 
 from squid.builds.application.inference import InlineImage
@@ -92,7 +93,11 @@ class OpenAITextGenerator:
                 "openai.chat.fallback",
                 {"squid.provider.name": "openai-compatible", "squid.provider.operation": "inference"},
             ):
-                completion = await self._client.chat.completions.create(**fallback_kwargs)
+                # Splatting `dict[str, Any]` collapses overload resolution, so the checker also
+                # sees the streaming return. `stream` is never set here, so it is always a
+                # complete response.
+                raw_completion = await self._client.chat.completions.create(**fallback_kwargs)
+                completion = cast(ChatCompletion, raw_completion)
         except openai.OpenAIError:
             add_counter(
                 "squid.provider.failures",
