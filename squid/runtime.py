@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Self
 
+from squid.auth.application import ApiKeyService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.messages.application import MessageService
@@ -14,10 +15,12 @@ from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
+from squid.sync import DiscordSyncService
 from squid.tags.application import TagService
 from squid.users.application import UserService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
+from squid.voting.application.ports import InteractiveVoteActorResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +28,7 @@ class ApplicationServices:
     """Long-lived application services created by the process composition root."""
 
     builds: BuildService
+    api_keys: ApiKeyService | None
     build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService
@@ -41,6 +45,8 @@ class ApplicationServices:
     users: UserService
     versions: VersionService
     votes: VoteService
+    vote_members: InteractiveVoteActorResolver | None
+    discord_sync: DiscordSyncService
     redstoner: RedstonerService
     welcome_relay: WelcomeRelayService
 

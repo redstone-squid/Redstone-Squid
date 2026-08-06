@@ -30,6 +30,14 @@ class VoteActorResolver(Protocol):
     async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None: ...
 
 
+class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
+    """Resolve membership for an interactive transport and surface dependency failure."""
+
+    async def member(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None: ...
+
+    async def aclose(self) -> None: ...
+
+
 class VoteRepository(Protocol):
     """Persistence operations required by :class:`VoteService`."""
 

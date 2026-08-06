@@ -174,12 +174,14 @@ class ApiConfig(_FrozenModel):
 
     secret: SecretStr
     key_pepper: SecretStr
+    bot_token: SecretStr | None = None
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
     access_log_file: str | None = None
     cors_origins: tuple[str, ...] = ()
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
+    _empty_bot_token = field_validator("bot_token", mode="before")(_empty_to_none)
     _validate_log_files = field_validator("log_file", "access_log_file")(_validate_relative_log_file)
 
     @field_validator("secret")
@@ -459,6 +461,8 @@ class RuntimeConfig(_FrozenModel):
     community: CommunityConfig
     verification_code_pepper: SecretStr
     cursor_secret: SecretStr
+    api_key_pepper: SecretStr | None = None
+    discord_bot_token: SecretStr | None = None
 
 
 class _ProcessSettings(BaseSettings):
@@ -528,6 +532,16 @@ class ApiProcessConfig(_ProcessSettings):
     """Validated configuration required by the HTTP API process."""
 
     api: ApiConfig
+
+    @property
+    def runtime(self) -> RuntimeConfig:
+        """Return runtime settings including API-only credential adapters."""
+        return super().runtime.model_copy(
+            update={
+                "api_key_pepper": self.api.key_pepper,
+                "discord_bot_token": self.api.bot_token,
+            }
+        )
 
     @property
     def logging(self) -> LoggingConfig:

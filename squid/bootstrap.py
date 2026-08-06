@@ -5,6 +5,8 @@ import secrets
 from functools import partial
 from importlib import resources
 
+from squid.auth.application import ApiKeyService
+from squid.auth.infrastructure import PostgresApiKeyRepository
 from squid.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -45,6 +47,8 @@ from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.application import StarboardService
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.sync import DiscordSyncService
+from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.users.application import UserService
@@ -53,6 +57,7 @@ from squid.users.infrastructure.repository import UserRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
+from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.voting.infrastructure.repository import VoteRepository
 
 logger = logging.getLogger(__name__)
@@ -132,8 +137,21 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     record_repository = PostgresRecordRepository(db.async_session)
     record_computation = RecordComputationService(record_repository, record_repository)
     search_fields = PostgresFieldRegistryProvider(db.async_session)
+    vote_service = VoteService(VoteRepository(db.async_session))
+    vote_members = (
+        DiscordRestActorResolver(config.discord_bot_token.get_secret_value())
+        if config.discord_bot_token is not None
+        else None
+    )
+    if vote_members is not None:
+        vote_service.set_actor_resolver(vote_members)
     return ApplicationServices(
         builds=BuildService(build_repository, build_locks, restriction_repository, version_service, embedding_service),
+        api_keys=(
+            ApiKeyService(PostgresApiKeyRepository(db.async_session), config.api_key_pepper.get_secret_value())
+            if config.api_key_pepper is not None
+            else None
+        ),
         build_inference=BuildInferenceService(
             OpenAITextGenerator.from_config(config.openai),
             BuildTagsManager(db.async_session),
@@ -167,7 +185,9 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
             lambda: secrets.randbelow(900_000) + 100_000,
         ),
         versions=version_service,
-        votes=VoteService(VoteRepository(db.async_session)),
+        votes=vote_service,
+        vote_members=vote_members,
+        discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),
         redstoner=RedstonerService(
             RedstonerPolicy(
                 starboard_author_id=config.community.redstoner_starboard_author_id,
@@ -192,6 +212,8 @@ def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None 
         """Stop the schematic workers before the database, so an in-flight analysis that
         wants to write its result still has a session to write it with."""
         await services.schematics.aclose()
+        if services.vote_members is not None:
+            await services.vote_members.aclose()
         await database.close()
 
     return ApplicationRuntime(services, close_resources, database.ping)

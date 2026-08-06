@@ -42,17 +42,13 @@ def test_create_app_delegates_optional_instrumentation(mocker: MockerFixture) ->
     instrument.assert_called_once_with(mocker.ANY, config.observability)
 
 
-def test_missing_authorization_header_returns_422(client: httpx.Client):
+def test_missing_authorization_header_returns_401(client: httpx.Client):
     resp = client.post("/verify", json={"uuid": str(TEST_UUID)})
-    assert resp.status_code == 422
+    assert resp.status_code == 401
     assert resp.headers["content-type"].startswith(PROBLEM_DETAIL_MEDIA_TYPE)
     payload = resp.json()
-    assert payload["title"] == "Invalid request"
-    assert payload["code"] == ErrorCode.INVALID_REQUEST
-    assert payload["context"]["errors"] == [
-        {"location": ["header", "authorization"], "type": "missing", "message": "Field required"}
-    ]
-    assert "input" not in str(payload)
+    assert payload["title"] == "Unauthorized"
+    assert payload["code"] == ErrorCode.UNAUTHORIZED
 
 
 def test_wrong_authorization_header_returns_401(client: httpx.Client):
