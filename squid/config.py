@@ -3,7 +3,9 @@
 import json
 import logging
 import os
+import re
 from collections.abc import Mapping
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Literal, Self, cast, override
 
@@ -21,10 +23,12 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.exceptions import SettingsError
+from pydantic_settings.sources import PydanticBaseSettingsSource
 from sqlalchemy import make_url
 
 from squid.core.errors import ConfigurationError
 
+logger = logging.getLogger(__name__)
 EMBEDDING_DIMENSION = 1536
 """Vector dimension fixed by the application-owned PostgreSQL schema."""
 
@@ -539,6 +543,32 @@ class RuntimeConfig(_FrozenModel):
     oauth: OAuthConfig | None = None
 
 
+class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
+    """Discard audited environment-only keys before nested model validation."""
+
+    def __init__(self, settings_cls: type[BaseSettings], source: PydanticBaseSettingsSource) -> None:
+        super().__init__(settings_cls)
+        self._source = source
+
+    @override
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        return self._source.get_field_value(field, field_name)
+
+    @override
+    def __call__(self) -> dict[str, Any]:
+        filtered: dict[str, Any] = {}
+        for name, value in self._source().items():
+            field = self.settings_cls.model_fields.get(name)
+            if field is None:
+                continue
+            annotation = field.annotation
+            if isinstance(value, dict) and isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                allowed = {nested.casefold() for nested in annotation.model_fields}
+                value = {nested: item for nested, item in value.items() if nested.casefold() in allowed}
+            filtered[name] = value
+        return filtered
+
+
 class _ProcessSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SQUID_",
@@ -561,6 +591,24 @@ class _ProcessSettings(BaseSettings):
     community: CommunityConfig = CommunityConfig()
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
+
+    @classmethod
+    @override
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Filter only environment sources; explicit model input remains strict."""
+        return (
+            init_settings,
+            _FilteredEnvironmentSource(settings_cls, env_settings),
+            _FilteredEnvironmentSource(settings_cls, dotenv_settings),
+            file_secret_settings,
+        )
 
     @property
     def runtime(self) -> RuntimeConfig:
@@ -719,6 +767,58 @@ class ApplicationConfig(BotProcessConfig):
         )
 
 
+_DOTENV_KEY = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
+
+
+def _known_environment_keys() -> frozenset[str]:
+    """Return the global SQUID key contract shared by every process."""
+    keys: set[str] = set()
+    for name, field in ApplicationConfig.model_fields.items():
+        prefix = f"SQUID_{name.upper()}"
+        keys.add(prefix)
+        annotation = field.annotation
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            keys.update(f"{prefix}_{nested.upper()}" for nested in annotation.model_fields)
+    return frozenset(keys)
+
+
+def _configured_environment_keys() -> set[str]:
+    """Read configured key names without parsing or retaining their values."""
+    names = {name for name in os.environ if name.upper().startswith("SQUID_")}
+    dotenv = Path(".env")
+    try:
+        lines = dotenv.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return names
+    except OSError:
+        logger.warning("Could not audit SQUID key names in the dotenv file")
+        return names
+    for line in lines:
+        if match := _DOTENV_KEY.match(line):
+            name = match.group(1)
+            if name.upper().startswith("SQUID_"):
+                names.add(name)
+    return names
+
+
+def _audit_unknown_environment_keys() -> None:
+    """Warn about likely deployment typos while accepting sibling-process keys."""
+    known = _known_environment_keys()
+    unknown = sorted(name for name in _configured_environment_keys() if name.upper() not in known)
+    if not unknown:
+        return
+    suggestions = {
+        name: match[0] for name in unknown if (match := get_close_matches(name.upper(), known, n=1, cutoff=0.8))
+    }
+    logger.warning(
+        "Unknown SQUID configuration key names will be ignored",
+        extra={
+            "squid.config.unknown_keys": tuple(unknown),
+            "squid.config.suggestions": suggestions,
+        },
+    )
+
+
 def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationError:
     if isinstance(exc, ValidationError):
         issues: list[dict[str, str]] = []
@@ -742,6 +842,7 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
 
 
 def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> ConfigT:
+    _audit_unknown_environment_keys()
     try:
         return config_type()  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
@@ -775,6 +876,7 @@ def load_database_config() -> DatabaseConfig:
         model_config = _ProcessSettings.model_config
         database: DatabaseConfig
 
+    _audit_unknown_environment_keys()
     try:
         return DatabaseSettings().database  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
@@ -788,6 +890,7 @@ def load_worker_observability_config() -> ObservabilityConfig:
         model_config = _ProcessSettings.model_config
         observability: ObservabilityConfig = ObservabilityConfig()
 
+    _audit_unknown_environment_keys()
     try:
         return WorkerObservabilitySettings().observability  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:

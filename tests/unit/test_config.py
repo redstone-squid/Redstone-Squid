@@ -1,5 +1,6 @@
 """Typed startup configuration tests."""
 
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -243,6 +244,40 @@ def test_process_loaders_require_only_their_own_transport(monkeypatch: pytest.Mo
     monkeypatch.delenv("SQUID_DISCORD_TOKEN")
     monkeypatch.setenv("SQUID_API_SECRET", "api-secret")
     assert load_api_process_config().api.secret.get_secret_value() == "api-secret"
+
+
+def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret_value = "must-not-appear-in-diagnostics"
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_SCHEMATIC_WORKRES=secret_value,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="squid.config"):
+        load_bot_process_config()
+
+    record = next(record for record in caplog.records if record.getMessage().startswith("Unknown SQUID"))
+    assert record.__dict__["squid.config.unknown_keys"] == ("SQUID_SCHEMATIC_WORKRES",)
+    assert record.__dict__["squid.config.suggestions"] == {"SQUID_SCHEMATIC_WORKRES": "SQUID_SCHEMATIC_WORKERS"}
+    assert secret_value not in str(record.__dict__)
+
+
+def test_sibling_process_keys_in_shared_dotenv_are_not_reported_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
+    (tmp_path / ".env").write_text("SQUID_API_PORT=9000\nSQUID_WORKER_HEALTH_PORT=9001\n", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="squid.config"):
+        load_bot_process_config()
+
+    assert not any(record.getMessage().startswith("Unknown SQUID") for record in caplog.records)
 
 
 def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatch) -> None:
