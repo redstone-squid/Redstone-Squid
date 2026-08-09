@@ -23,6 +23,7 @@ from squid.schematics.application import SchematicJobService, SchematicService
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.search.application import SearchEmbeddingService
 from squid.voting.application import VoteService
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
 
@@ -39,6 +40,7 @@ class WorkerServices:
     events: DomainEventService
     schematics: SchematicService
     schematic_jobs: SchematicJobService
+    search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
 
     @classmethod
@@ -51,6 +53,7 @@ class WorkerServices:
             events=services.domain_events,
             schematics=services.schematics,
             schematic_jobs=services.schematic_jobs,
+            search_embeddings=services.search_embeddings,
             refresh_search_index=services.refresh_search_index,
         )
 
@@ -95,6 +98,11 @@ class DatabaseWorker:
             interval=event_interval,
         )
         self._supervisor.start_periodic(
+            self._process_search_embeddings,
+            name="search-embeddings",
+            interval=event_interval,
+        )
+        self._supervisor.start_periodic(
             self._process_records,
             name="record-maintenance",
             interval=maintenance_interval,
@@ -136,6 +144,7 @@ class DatabaseWorker:
             "core-domain-events",
             "schematic-jobs",
             "search-projections",
+            "search-embeddings",
             "record-maintenance",
             "due-votes",
             "stale-build-locks",
@@ -158,6 +167,15 @@ class DatabaseWorker:
         if failed:
             logger.warning(
                 "Search projection batch completed with failures",
+                extra={"squid.queue.succeeded": succeeded, "squid.queue.failed": failed},
+            )
+
+    async def _process_search_embeddings(self) -> None:
+        with trace_span("squid.worker.search_embeddings", {"squid.surface": "background_loop"}):
+            succeeded, failed = await self._services.search_embeddings.process_batch()
+        if failed:
+            logger.warning(
+                "Search embedding batch completed with failures",
                 extra={"squid.queue.succeeded": succeeded, "squid.queue.failed": failed},
             )
 

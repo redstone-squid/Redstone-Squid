@@ -18,7 +18,7 @@ from squid.builds.application import (
     BuildService,
     RestrictionService,
 )
-from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, VecsBuildIndex
+from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
 from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.queries import BuildMetadataRepository
 from squid.builds.infrastructure.repository import BuildRepository
@@ -45,8 +45,12 @@ from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.repository import SchematicRepository
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.search.application import CursorCodec, SearchQueryParser, SearchService
-from squid.search.infrastructure import PostgresSearchBackend
+from squid.search.application import CursorCodec, SearchEmbeddingService, SearchQueryParser, SearchService
+from squid.search.infrastructure import (
+    PostgresSearchBackend,
+    PostgresSearchEmbeddingQueue,
+    PostgresSemanticCandidateProvider,
+)
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
@@ -135,11 +139,7 @@ def create_application_services(
         resource_stack.push_async_callback(embedding_model.aclose)
     embedding_service = BuildEmbeddingService(
         embedding_model,
-        VecsBuildIndex(
-            config.embeddings.database_connection.get_secret_value()
-            if config.embeddings.database_connection is not None
-            else None
-        ),
+        PostgresBuildIndex(db.async_session),
     )
     build_repository = BuildRepository(db.async_session)
     build_locks = BuildLockRepository(db.async_session)
@@ -212,10 +212,18 @@ def create_application_services(
         schematics=schematic_service,
         schematic_jobs=schematic_jobs,
         search=SearchService(
-            PostgresSearchBackend(db.async_session, fields=search_fields),
+            PostgresSearchBackend(
+                db.async_session,
+                fields=search_fields,
+                semantic_provider=PostgresSemanticCandidateProvider(db.async_session, embedding_model),
+            ),
             SearchQueryParser(),
             CursorCodec(config.cursor_secret.get_secret_value().encode()),
             search_fields,
+        ),
+        search_embeddings=SearchEmbeddingService(
+            embedding_model,
+            PostgresSearchEmbeddingQueue(db.async_session),
         ),
         tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
         refresh_search_index=partial(run_projection_batch, db.async_session),

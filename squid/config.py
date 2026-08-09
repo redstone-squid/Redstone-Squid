@@ -109,15 +109,6 @@ class EmbeddingProviderConfig(_FrozenModel):
     _empty_base_url = field_validator("base_url", mode="before")(_empty_to_none)
 
 
-class VectorConfig(_FrozenModel):
-    """Optional external vector-index database configuration."""
-
-    database_url: SecretStr | None = None
-
-    _empty_database_url = field_validator("database_url", mode="before")(_empty_to_none)
-    _validate_database_url = field_validator("database_url")(_validate_postgres_url)
-
-
 class ObjectStorageConfig(_FrozenModel):
     """Content-addressed binary artifact storage configuration."""
 
@@ -156,12 +147,11 @@ class ObjectStorageConfig(_FrozenModel):
 
 
 class EmbeddingConfig(_FrozenModel):
-    """Resolved embedding provider and vector-index configuration."""
+    """Resolved embedding provider configuration."""
 
     api_key: SecretStr | None
     base_url: AnyHttpUrl
     model: str
-    database_connection: SecretStr | None
 
 
 class VerificationConfig(_FrozenModel):
@@ -566,7 +556,6 @@ class _ProcessSettings(BaseSettings):
     cursor: CursorConfig
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
-    vector: VectorConfig = VectorConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
@@ -583,7 +572,6 @@ class _ProcessSettings(BaseSettings):
                 api_key=self.embedding.api_key or self.openai.api_key,
                 base_url=self.embedding.base_url or self.openai.base_url,
                 model=self.embedding.model,
-                database_connection=self.vector.database_url,
             ),
             schematics=self.schematic,
             object_storage=self.storage,

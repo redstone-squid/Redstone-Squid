@@ -115,7 +115,7 @@ class ClaimedRowQueue:
                         .where(*claim_filter)
                         .values(
                             attempts=attempts,
-                            claimed_at=None,
+                            **{self._claimed_at.key: None},
                             last_error=error[:4000],
                             dead_at=func.now(),
                         )
@@ -128,7 +128,7 @@ class ClaimedRowQueue:
                 .where(*claim_filter)
                 .values(
                     attempts=attempts,
-                    claimed_at=None,
+                    **{self._claimed_at.key: None},
                     last_error=error[:4000],
                     **{self._ready_at.key: func.now() + retry_delay(attempts)},
                 )

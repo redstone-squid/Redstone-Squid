@@ -1,12 +1,13 @@
-"""External embedding-model and vector-index adapters."""
+"""Embedding-provider and PostgreSQL vector-index adapters."""
 
-import asyncio
 import logging
 from typing import Self
 
-import vecs
 from openai import AsyncOpenAI, OpenAIError
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.builds.infrastructure.models import Build
 from squid.config import EMBEDDING_DIMENSION, EmbeddingConfig
 from squid.observability import add_counter, trace_span
 
@@ -41,6 +42,11 @@ class OpenAIEmbeddingModel:
         if self._client is not None and self._owns_client:
             await self._client.close()
 
+    @property
+    def model_name(self) -> str:
+        """Return the provider model used to version persisted vectors."""
+        return self._model
+
     async def embed(self, text: str) -> list[float] | None:
         if self._client is None:
             return None
@@ -60,42 +66,37 @@ class OpenAIEmbeddingModel:
             )
             logger.debug("Failed to generate embedding.", exc_info=True)
             return None
-        return response.data[0].embedding
+        embedding = response.data[0].embedding
+        if len(embedding) != EMBEDDING_DIMENSION:
+            logger.error(
+                "Embedding provider returned the wrong vector dimension",
+                extra={"squid.embedding.dimension": len(embedding), "squid.embedding.expected": EMBEDDING_DIMENSION},
+            )
+            return None
+        return embedding
 
 
-class VecsBuildIndex:
-    """Store and query build vectors without blocking the event loop."""
+class PostgresBuildIndex:
+    """Store and query build vectors in the authoritative PostgreSQL row."""
 
-    def __init__(self, connection: str | None) -> None:
-        self._connection = connection
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
-        if self._connection is None:
-            logger.warning("No SQUID_VECTOR_DATABASE_URL configured; skipping build vector indexing.")
-            return
-        await asyncio.to_thread(self._upsert, build_id, embedding)
-
-    def _upsert(self, build_id: int, embedding: list[float]) -> None:
-        assert self._connection is not None
-        client = vecs.create_client(self._connection)
-        try:
-            collection = client.get_or_create_collection(name="builds", dimension=EMBEDDING_DIMENSION)
-            collection.upsert(records=[(str(build_id), embedding, {})])
-        finally:
-            client.disconnect()
+        if len(embedding) != EMBEDDING_DIMENSION:
+            msg = f"Build embedding must contain exactly {EMBEDDING_DIMENSION} values."
+            raise ValueError(msg)
+        async with self._session_factory.begin() as session:
+            await session.execute(update(Build).where(Build.id == build_id).values(embedding=embedding))
 
     async def find_nearest(self, embedding: list[float]) -> int | None:
-        if self._connection is None:
+        if len(embedding) != EMBEDDING_DIMENSION:
             return None
-        result = await asyncio.to_thread(self._find_nearest, embedding)
-        return int(result) if result is not None else None
-
-    def _find_nearest(self, embedding: list[float]) -> str | None:
-        assert self._connection is not None
-        client = vecs.create_client(self._connection)
-        try:
-            collection = client.get_or_create_collection(name="builds", dimension=EMBEDDING_DIMENSION)
-            result = collection.query(embedding, limit=1)
-            return str(result[0]) if result else None
-        finally:
-            client.disconnect()
+        statement = (
+            select(Build.id)
+            .where(Build.embedding.is_not(None))
+            .order_by(Build.embedding.cosine_distance(embedding))
+            .limit(1)
+        )
+        async with self._session_factory() as session:
+            return await session.scalar(statement)

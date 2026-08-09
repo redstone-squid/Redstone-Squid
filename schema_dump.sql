@@ -62,6 +62,20 @@ COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access met
 
 
 --
+-- Name: bump_discord_sync_generation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bump_discord_sync_generation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.generation := OLD.generation + 1;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: delete_orphaned_build_vote_sessions_after_builds_delete(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -78,6 +92,59 @@ BEGIN
         WHERE bvs.vote_session_id IS NULL AND dvs.vote_session_id IS NULL
     );
     RETURN NULL; -- Statement-level triggers do not use OLD or NEW
+END;
+$$;
+
+
+--
+-- Name: emit_domain_event(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.emit_domain_event() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_type text;
+    target_kind text;
+    target_id bigint;
+    target_payload jsonb;
+    new_event_id bigint;
+BEGIN
+    -- Unlike discord_sync_queue, this log records transitions, so an UPDATE that
+    -- rewrites a column to the value it already held must not produce an event.
+    IF TG_TABLE_NAME = 'builds' THEN
+        IF OLD.submission_status IS NOT DISTINCT FROM NEW.submission_status THEN RETURN NULL; END IF;
+        target_kind := 'build';
+        target_id := NEW.id;
+        IF NEW.submission_status = 1 THEN
+            target_type := 'build.confirmed';
+        ELSIF NEW.submission_status = 2 THEN
+            target_type := 'build.denied';
+        ELSE
+            RETURN NULL;
+        END IF;
+        target_payload := jsonb_build_object(
+            'previous_status', OLD.submission_status,
+            'status', NEW.submission_status
+        );
+    ELSE
+        IF OLD.status IS NOT DISTINCT FROM NEW.status OR NEW.status <> 'closed' THEN RETURN NULL; END IF;
+        target_kind := 'vote_session';
+        target_id := NEW.id;
+        target_type := 'vote_session.closed';
+        target_payload := jsonb_build_object('kind', NEW.kind, 'result', NEW.result);
+    END IF;
+
+    INSERT INTO public.domain_events (event_type, aggregate_kind, aggregate_id, payload, occurred_at)
+    VALUES (target_type, target_kind, target_id, target_payload, now())
+    RETURNING id INTO new_event_id;
+
+    INSERT INTO public.domain_event_deliveries
+        (event_id, consumer, available_at, claimed_at, attempts, last_error)
+    SELECT new_event_id, c.name, now(), NULL, 0, NULL
+    FROM public.domain_event_consumers c;
+
+    RETURN NULL;
 END;
 $$;
 
@@ -213,12 +280,13 @@ BEGIN
     END IF;
 
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, enqueued_at, claimed_at, attempts, last_error)
-    VALUES (target_kind, target_key::text, target_action, now(), NULL, 0, NULL)
+        (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (target_kind, target_key::text, target_action, now(), NULL, NULL, 0, NULL)
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
         claimed_at = NULL,
+        dead_at = NULL,
         attempts = 0,
         last_error = NULL;
     RETURN NULL;
@@ -373,6 +441,11 @@ CREATE TABLE public.builds (
     completion_evidence text,
     description text,
     submitter_user_id integer NOT NULL,
+    lock_token uuid,
+    lock_expires_at timestamp with time zone,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT builds_lock_lease_complete CHECK (((is_locked AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)) OR ((NOT is_locked) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)))),
+    CONSTRAINT builds_revision_positive CHECK ((revision > 0)),
     CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
     CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
     CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
@@ -392,7 +465,7 @@ COMMENT ON TABLE public.builds IS 'A build submitted by a user.';
 -- Name: COLUMN builds.embedding; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.builds.embedding IS 'This is not actually being used. See "vecs"."builds" instead';
+COMMENT ON COLUMN public.builds.embedding IS 'Application-owned semantic vector stored in the authoritative build row.';
 
 
 --
@@ -412,6 +485,31 @@ CREATE FUNCTION public.get_unsent_builds(server_id_input bigint) RETURNS SETOF p
       )
     and submission_status = 1;  -- accepted
   end;
+$$;
+
+
+--
+-- Name: initialize_discord_message_projection(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.initialize_discord_message_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    current_generation bigint;
+BEGIN
+    IF NEW.projection_resource_kind IS NULL OR NEW.projection_source_key IS NULL THEN
+        RETURN NEW;
+    END IF;
+    SELECT generation INTO current_generation
+    FROM public.discord_sync_queue
+    WHERE resource_kind = NEW.projection_resource_kind
+      AND source_key = NEW.projection_source_key;
+    NEW.desired_action := 'refresh';
+    NEW.desired_revision := COALESCE(current_generation, 1);
+    NEW.applied_revision := NEW.desired_revision;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -448,6 +546,24 @@ BEGIN
             ARRAY[]::text[]
         );
     END LOOP;
+END;
+$$;
+
+
+--
+-- Name: project_discord_message_desired_state(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.project_discord_message_desired_state() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    UPDATE public.messages
+    SET desired_action = NEW.action,
+        desired_revision = NEW.generation
+    WHERE projection_resource_kind = NEW.resource_kind
+      AND projection_source_key = NEW.source_key;
+    RETURN NULL;
 END;
 $$;
 
@@ -569,7 +685,8 @@ BEGIN
     ),
     changed AS (
         UPDATE builds b
-        SET    extra_info = a.new_extra
+        SET    extra_info = a.new_extra,
+               revision = b.revision + 1
         FROM   affected a
         WHERE  b.id = a.id
         RETURNING b.id
@@ -1012,6 +1129,8 @@ CREATE TABLE public.discord_sync_queue (
     claimed_at timestamp with time zone,
     attempts integer DEFAULT 0 NOT NULL,
     last_error text,
+    dead_at timestamp with time zone,
+    generation bigint DEFAULT 1 NOT NULL,
     CONSTRAINT discord_sync_queue_action_check CHECK ((action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
     CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text])))
 );
@@ -1030,6 +1149,79 @@ COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh on
 
 ALTER TABLE public.discord_sync_queue ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME public.discord_sync_queue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: domain_event_consumers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.domain_event_consumers (
+    name text NOT NULL
+);
+
+
+--
+-- Name: TABLE domain_event_consumers; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.domain_event_consumers IS 'A registered reader of the event log.';
+
+
+--
+-- Name: domain_event_deliveries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.domain_event_deliveries (
+    event_id bigint NOT NULL,
+    consumer text NOT NULL,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claimed_at timestamp with time zone,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    dead_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE domain_event_deliveries; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.domain_event_deliveries IS 'One consumer''s outstanding delivery of one event.';
+
+
+--
+-- Name: domain_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.domain_events (
+    id bigint NOT NULL,
+    event_type text NOT NULL,
+    aggregate_kind text NOT NULL,
+    aggregate_id bigint NOT NULL,
+    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE domain_events; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.domain_events IS 'One state transition, recorded once and never coalesced.';
+
+
+--
+-- Name: domain_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.domain_events ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.domain_events_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1266,7 +1458,16 @@ CREATE TABLE public.messages (
     purpose text NOT NULL,
     content text,
     author_id bigint NOT NULL,
-    vote_session_id bigint
+    vote_session_id bigint,
+    projection_resource_kind text,
+    projection_source_key text,
+    desired_action text DEFAULT 'refresh'::text NOT NULL,
+    desired_revision bigint DEFAULT 1 NOT NULL,
+    applied_revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT messages_desired_action_check CHECK ((desired_action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
+    CONSTRAINT messages_projection_identity_complete CHECK (((projection_resource_kind IS NULL) = (projection_source_key IS NULL))),
+    CONSTRAINT messages_projection_resource_kind_check CHECK (((projection_resource_kind IS NULL) OR (projection_resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text])))),
+    CONSTRAINT messages_projection_revisions_valid CHECK (((desired_revision > 0) AND (applied_revision > 0) AND (applied_revision <= desired_revision)))
 );
 
 
@@ -1656,11 +1857,16 @@ ALTER SEQUENCE public.restrictions_id_seq OWNED BY public.restrictions.id;
 
 CREATE TABLE public.schematic_files (
     sha256 text NOT NULL,
-    data bytea NOT NULL,
+    data bytea,
     byte_size integer NOT NULL,
     source_format text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 2097152)))
+    object_key text,
+    storage_state text DEFAULT 'ready'::text NOT NULL,
+    verified_at timestamp with time zone,
+    CONSTRAINT schematic_files_has_storage_location CHECK (((data IS NOT NULL) OR (object_key IS NOT NULL))),
+    CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 2097152))),
+    CONSTRAINT schematic_files_storage_state_check CHECK ((storage_state = ANY (ARRAY['pending'::text, 'verified'::text, 'ready'::text])))
 );
 
 
@@ -1668,12 +1874,59 @@ CREATE TABLE public.schematic_files (
 -- Name: TABLE schematic_files; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.schematic_files IS 'Schematic bytes, content-addressed by SHA-256.
+COMMENT ON TABLE public.schematic_files IS 'Relational metadata for a content-addressed schematic artifact.';
 
-Held in Postgres rather than an object host because these bytes are re-read on every
-re-render, diff, and duplicate check; the alternative is an HTTP fetch of an
-attacker-influenced URL on each one. Content addressing also means a byte-identical
-resubmission is recognised before any analysis runs.';
+
+--
+-- Name: schematic_jobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schematic_jobs (
+    id bigint NOT NULL,
+    operation text NOT NULL,
+    params jsonb NOT NULL,
+    input_keys text[] NOT NULL,
+    result jsonb,
+    result_object_key text,
+    attempts integer DEFAULT 0 NOT NULL,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claimed_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    dead_at timestamp with time zone,
+    expires_at timestamp with time zone,
+    last_error text,
+    error_kind text,
+    error_context jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT schematic_jobs_operation_check CHECK ((operation = ANY (ARRAY['capabilities'::text, 'analyze'::text, 'convert'::text, 'compare'::text, 'render'::text, 'simulate'::text, 'autostack'::text]))),
+    CONSTRAINT schematic_jobs_single_terminal_state CHECK (((completed_at IS NULL) OR (dead_at IS NULL)))
+);
+
+
+--
+-- Name: TABLE schematic_jobs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.schematic_jobs IS 'A durable request for the worker-owned native schematic engine.';
+
+
+--
+-- Name: schematic_jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.schematic_jobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: schematic_jobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.schematic_jobs_id_seq OWNED BY public.schematic_jobs.id;
 
 
 --
@@ -1814,7 +2067,8 @@ CREATE TABLE public.search_embedding_queue (
     enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
     locked_at timestamp with time zone,
-    last_error text
+    last_error text,
+    dead_at timestamp with time zone
 );
 
 
@@ -2608,6 +2862,13 @@ ALTER TABLE ONLY public.restrictions ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Name: schematic_jobs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_jobs ALTER COLUMN id SET DEFAULT nextval('public.schematic_jobs_id_seq'::regclass);
+
+
+--
 -- Name: schematic_renders id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2776,6 +3037,30 @@ ALTER TABLE ONLY public.discord_sync_queue
 
 ALTER TABLE ONLY public.discord_sync_queue
     ADD CONSTRAINT discord_sync_queue_resource_key UNIQUE (resource_kind, source_key);
+
+
+--
+-- Name: domain_event_consumers domain_event_consumers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_consumers
+    ADD CONSTRAINT domain_event_consumers_pkey PRIMARY KEY (name);
+
+
+--
+-- Name: domain_event_deliveries domain_event_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_deliveries
+    ADD CONSTRAINT domain_event_deliveries_pkey PRIMARY KEY (event_id, consumer);
+
+
+--
+-- Name: domain_events domain_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_events
+    ADD CONSTRAINT domain_events_pkey PRIMARY KEY (id);
 
 
 --
@@ -3024,6 +3309,14 @@ ALTER TABLE ONLY public.restrictions
 
 ALTER TABLE ONLY public.schematic_files
     ADD CONSTRAINT schematic_files_pkey PRIMARY KEY (sha256);
+
+
+--
+-- Name: schematic_jobs schematic_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_jobs
+    ADD CONSTRAINT schematic_jobs_pkey PRIMARY KEY (id);
 
 
 --
@@ -3464,6 +3757,13 @@ CREATE INDEX build_tag_assignments_text_idx ON public.build_tag_assignments USIN
 
 
 --
+-- Name: builds_embedding_hnsw_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX builds_embedding_hnsw_idx ON public.builds USING hnsw (embedding public.vector_cosine_ops) WHERE (embedding IS NOT NULL);
+
+
+--
 -- Name: creator_alias_claims_one_pending_per_user; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3474,7 +3774,21 @@ CREATE UNIQUE INDEX creator_alias_claims_one_pending_per_user ON public.creator_
 -- Name: discord_sync_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (enqueued_at) WHERE (claimed_at IS NULL);
+CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (enqueued_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
+
+
+--
+-- Name: domain_event_deliveries_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX domain_event_deliveries_ready_idx ON public.domain_event_deliveries USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
+
+
+--
+-- Name: domain_events_aggregate_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (aggregate_kind, aggregate_id);
 
 
 --
@@ -3503,6 +3817,13 @@ CREATE INDEX idx_builds_record_category ON public.builds USING btree (record_cat
 --
 
 CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission_time DESC);
+
+
+--
+-- Name: messages_projection_pending_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX messages_projection_pending_idx ON public.messages USING btree (desired_revision) WHERE ((projection_resource_kind IS NOT NULL) AND (desired_revision > applied_revision));
 
 
 --
@@ -3569,6 +3890,27 @@ CREATE INDEX restriction_aliases_restriction_id_idx ON public.restriction_aliase
 
 
 --
+-- Name: schematic_files_storage_state_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX schematic_files_storage_state_idx ON public.schematic_files USING btree (storage_state, created_at);
+
+
+--
+-- Name: schematic_jobs_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX schematic_jobs_expiry_idx ON public.schematic_jobs USING btree (expires_at) WHERE (expires_at IS NOT NULL);
+
+
+--
+-- Name: schematic_jobs_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX schematic_jobs_ready_idx ON public.schematic_jobs USING btree (available_at) WHERE ((completed_at IS NULL) AND (dead_at IS NULL));
+
+
+--
 -- Name: search_document_facets_boolean_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3611,6 +3953,13 @@ CREATE INDEX search_documents_description_fts_idx ON public.search_documents USI
 
 
 --
+-- Name: search_documents_embedding_hnsw_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_documents_embedding_hnsw_idx ON public.search_documents USING hnsw (embedding public.vector_cosine_ops) WHERE (embedding IS NOT NULL);
+
+
+--
 -- Name: search_documents_fuzzy_trgm_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3642,7 +3991,7 @@ CREATE INDEX search_documents_title_fts_idx ON public.search_documents USING gin
 -- Name: search_embedding_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (enqueued_at) WHERE (locked_at IS NULL);
+CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (enqueued_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
 
 
 --
@@ -3793,6 +4142,13 @@ CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON
 
 
 --
+-- Name: builds builds_emit_domain_event; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER builds_emit_domain_event AFTER UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
+
+
+--
 -- Name: builds builds_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3818,6 +4174,20 @@ CREATE TRIGGER creator_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE O
 --
 
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
+
+
+--
+-- Name: discord_sync_queue discord_sync_queue_bump_generation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER discord_sync_queue_bump_generation BEFORE UPDATE OF enqueued_at ON public.discord_sync_queue FOR EACH ROW WHEN ((old.enqueued_at IS DISTINCT FROM new.enqueued_at)) EXECUTE FUNCTION public.bump_discord_sync_generation();
+
+
+--
+-- Name: discord_sync_queue discord_sync_queue_project_desired_state; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE OF generation, action ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.project_discord_message_desired_state();
 
 
 --
@@ -3874,6 +4244,13 @@ CREATE TRIGGER extenders_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE O
 --
 
 CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: messages messages_initialize_discord_projection; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER messages_initialize_discord_projection BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.initialize_discord_message_projection();
 
 
 --
@@ -3951,6 +4328,13 @@ CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR E
 --
 
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
+-- Name: vote_sessions vote_sessions_emit_domain_event; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 
 
 --
@@ -4168,6 +4552,22 @@ ALTER TABLE ONLY public.delete_log_vote_sessions
 
 
 --
+-- Name: domain_event_deliveries domain_event_deliveries_consumer_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_deliveries
+    ADD CONSTRAINT domain_event_deliveries_consumer_fkey FOREIGN KEY (consumer) REFERENCES public.domain_event_consumers(name) ON DELETE CASCADE;
+
+
+--
+-- Name: domain_event_deliveries domain_event_deliveries_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_deliveries
+    ADD CONSTRAINT domain_event_deliveries_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.domain_events(id) ON DELETE CASCADE;
+
+
+--
 -- Name: door_timing_variants door_timing_variants_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4252,7 +4652,7 @@ ALTER TABLE ONLY public.messages
 --
 
 ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT public_messages_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+    ADD CONSTRAINT public_messages_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE SET NULL;
 
 
 --

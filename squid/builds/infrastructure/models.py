@@ -124,6 +124,13 @@ class Build(Base, kw_only=True):
             postgresql_where=text("record_category IS NOT NULL"),
         ),
         Index("idx_builds_submission_time", desc("submission_time")),
+        Index(
+            "builds_embedding_hnsw_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_where=text("embedding IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
@@ -157,7 +164,7 @@ class Build(Base, kw_only=True):
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
         VECTOR(EMBEDDING_DIMENSION),
-        comment='This is not actually being used. See "vecs"."builds" instead',
+        comment="Application-owned semantic vector stored in the authoritative build row.",
         default=None,
     )
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

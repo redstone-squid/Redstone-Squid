@@ -50,7 +50,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_EMBEDDING_API_KEY="embedding-key",
         SQUID_EMBEDDING_BASE_URL="https://embedding.example/v1",
         SQUID_EMBEDDING_MODEL="embedding-model",
-        SQUID_VECTOR_DATABASE_URL="postgresql://vector.example/squid",
         SQUID_LOG_DIRECTORY=str(tmp_path),
         SQUID_BOT_LOG_FILE="bot/discord.log",
         SQUID_API_LOG_FILE="api.log",
@@ -74,8 +73,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.runtime.embeddings.api_key.get_secret_value() == "embedding-key"
     assert str(config.runtime.embeddings.base_url) == "https://embedding.example/v1"
     assert config.runtime.embeddings.model == "embedding-model"
-    assert config.runtime.embeddings.database_connection is not None
-    assert config.runtime.embeddings.database_connection.get_secret_value() == "postgresql://vector.example/squid"
     assert config.runtime.cursor_secret.get_secret_value() == "cursor-secret-for-tests"
     assert config.bot_process().logging.root_level == "INFO"
     assert config.bot_process().logging.log_file == "bot/discord.log"

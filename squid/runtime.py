@@ -18,7 +18,7 @@ from squid.messages.application import MessageService
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicService
-from squid.search.application import SearchService
+from squid.search.application import SearchEmbeddingService, SearchService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
 from squid.sync import DiscordSyncService
@@ -48,6 +48,7 @@ class ApplicationServices:
     schematics: SchematicService
     schematic_jobs: SchematicJobService
     search: SearchService
+    search_embeddings: SearchEmbeddingService
     tags: TagService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     settings: SettingsService

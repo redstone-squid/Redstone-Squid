@@ -205,6 +205,7 @@ class SearchProjectionStore:
                 enqueued_at=func.now(),
                 attempts=0,
                 locked_at=None,
+                dead_at=None,
                 last_error=None,
             )
             await self._session.execute(
@@ -215,6 +216,7 @@ class SearchProjectionStore:
                         "enqueued_at": func.now(),
                         "attempts": 0,
                         "locked_at": None,
+                        "dead_at": None,
                         "last_error": None,
                     },
                     where=SearchEmbeddingQueueItem.source_hash != embedding_statement.excluded.source_hash,

@@ -1,6 +1,12 @@
 """Public search application API."""
 
 from squid.search.application.cursor import CursorCodec, InvalidCursorError
+from squid.search.application.embeddings import (
+    SearchEmbeddingJob,
+    SearchEmbeddingModel,
+    SearchEmbeddingQueue,
+    SearchEmbeddingService,
+)
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.search.application.parser import QuerySyntaxError, SearchQueryParser
 from squid.search.application.ports import SearchBackend, SearchQueryCompiler, SearchSlice
@@ -28,6 +34,10 @@ __all__ = [
     "RankingBranch",
     "SearchBackend",
     "SearchDocumentOrder",
+    "SearchEmbeddingJob",
+    "SearchEmbeddingModel",
+    "SearchEmbeddingQueue",
+    "SearchEmbeddingService",
     "SearchFieldRegistryProvider",
     "SearchQueryCompiler",
     "SearchQueryParser",

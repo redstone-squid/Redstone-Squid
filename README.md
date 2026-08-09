@@ -70,14 +70,14 @@ Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments mus
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` | `SQUID_OPENAI_API_KEY` / `SQUID_OPENAI_BASE_URL` |
 | `EMBEDDING_OPENAI_API_KEY` / `EMBEDDING_OPENAI_BASE_URL` | `SQUID_EMBEDDING_API_KEY` / `SQUID_EMBEDDING_BASE_URL` |
 | `EMBEDDING_MODEL` | `SQUID_EMBEDDING_MODEL` |
-| `DB_CONNECTION` | `SQUID_VECTOR_DATABASE_URL` |
 | `CATBOX_USERHASH` | `SQUID_CATBOX_USER_HASH` |
 | `GOOGLE_CREDENTIALS` | `SQUID_GOOGLE_CREDENTIALS_JSON` |
 | `LOG_DIR` / `LOG_LEVEL` / `ROOT_LOG_LEVEL` | `SQUID_LOG_DIRECTORY` / `SQUID_LOG_LEVEL` / `SQUID_ROOT_LOG_LEVEL` |
 | `LOG_FILE` / `LOG_ACCESS_FILE` | `SQUID_BOT_LOG_FILE` / `SQUID_API_ACCESS_LOG_FILE` |
 
-`DB_DRIVER_SYNC`, `DB_DRIVER_ASYNC`, `EMBEDDING_DIMENSION`, `SUPABASE_URL`, and `SUPABASE_KEY` have no
-replacement. The application owns its PostgreSQL drivers, and vector dimension 1536 is fixed by the database schema.
+`DB_DRIVER_SYNC`, `DB_DRIVER_ASYNC`, `DB_CONNECTION`, `EMBEDDING_DIMENSION`, `SUPABASE_URL`, and `SUPABASE_KEY`
+have no replacement. The application owns its PostgreSQL drivers and pgvector index; vector dimension 1536 is fixed
+by the database schema.
 
 Google service-account credentials can be supplied as JSON through `SQUID_GOOGLE_CREDENTIALS_JSON` or by setting
 `SQUID_GOOGLE_CREDENTIALS_FILE` to an explicit path. Configure at most one.

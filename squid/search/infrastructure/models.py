@@ -47,6 +47,13 @@ class SearchDocument(Base, kw_only=True):
         ),
         Index("search_documents_tags_idx", "tags", postgresql_using="gin"),
         Index("search_documents_scope_idx", "resource_kind", "status"),
+        Index(
+            "search_documents_embedding_hnsw_idx",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_where=text("embedding IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -160,7 +167,11 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
 
     __tablename__ = "search_embedding_queue"
     __table_args__ = (
-        Index("search_embedding_queue_ready_idx", "enqueued_at", postgresql_where=text("locked_at IS NULL")),
+        Index(
+            "search_embedding_queue_ready_idx",
+            "enqueued_at",
+            postgresql_where=text("locked_at IS NULL AND dead_at IS NULL"),
+        ),
     )
 
     document_id: Mapped[int] = mapped_column(
@@ -174,4 +185,5 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
