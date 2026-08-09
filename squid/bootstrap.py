@@ -6,6 +6,8 @@ from contextlib import AsyncExitStack
 from functools import partial
 from importlib import resources
 
+from squid.artifacts import ArtifactStore
+from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
 from squid.auth.application.web import DiscordOAuthService
 from squid.auth.infrastructure import PostgresApiKeyRepository, PostgresWebSessionRepository
@@ -86,7 +88,11 @@ def create_schematic_analyzer(config: SchematicConfig) -> SchematicAnalyzer:
     return SchematicWorkerPool(config)
 
 
-def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> SchematicService:
+def create_schematic_service(
+    db: DatabaseEngine,
+    config: SchematicConfig,
+    artifacts: ArtifactStore,
+) -> SchematicService:
     """Assemble the schematic service over whichever analyzer this process can run."""
     analyzer = create_schematic_analyzer(config)
     resource_pack = None
@@ -99,7 +105,7 @@ def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> Sch
         )
     return SchematicService(
         analyzer,
-        SchematicRepository(db.async_session),
+        SchematicRepository(db.async_session, artifacts),
         PostgresSchematicVersionResolver(db.async_session),
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,
@@ -167,7 +173,8 @@ def create_application_services(
     text_generator = OpenAITextGenerator.from_config(config.openai)
     if resource_stack is not None:
         resource_stack.push_async_callback(text_generator.aclose)
-    schematic_service = create_schematic_service(db, config.schematics)
+    artifacts = create_artifact_store(config.object_storage)
+    schematic_service = create_schematic_service(db, config.schematics, artifacts)
     if resource_stack is not None:
         resource_stack.push_async_callback(schematic_service.aclose)
     web_auth = (

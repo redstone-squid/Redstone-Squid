@@ -18,6 +18,7 @@ from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
 from squid.records.application import RecordComputationService
 from squid.runtime import ApplicationServices, BackgroundTaskSupervisor
+from squid.schematics.application import SchematicService
 from squid.voting.application import VoteService
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
 
@@ -32,6 +33,7 @@ class WorkerServices:
     votes: VoteService
     records: RecordComputationService
     events: DomainEventService
+    schematics: SchematicService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
 
     @classmethod
@@ -42,6 +44,7 @@ class WorkerServices:
             votes=services.votes,
             records=services.record_computation,
             events=services.domain_events,
+            schematics=services.schematics,
             refresh_search_index=services.refresh_search_index,
         )
 
@@ -94,6 +97,11 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
+            self._maintain_artifacts,
+            name="artifact-maintenance",
+            interval=maintenance_interval,
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -112,6 +120,7 @@ class DatabaseWorker:
             "record-maintenance",
             "due-votes",
             "stale-build-locks",
+            "artifact-maintenance",
         }
         return required <= self._supervisor.last_success.keys()
 
@@ -147,6 +156,15 @@ class DatabaseWorker:
     async def _clean_stale_build_locks(self) -> None:
         with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
             await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
+
+    async def _maintain_artifacts(self) -> None:
+        with trace_span("squid.worker.artifact_maintenance", {"squid.surface": "background_loop"}):
+            migrated, recovered = await self._services.schematics.maintain_storage()
+        if migrated or recovered:
+            logger.info(
+                "Schematic artifact maintenance completed",
+                extra={"squid.artifacts.migrated": migrated, "squid.artifacts.recovered": recovered},
+            )
 
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:

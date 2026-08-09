@@ -6,12 +6,14 @@ fingerprint indexes — are all database semantics rather than Python ones.
 """
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.persistence.base import Base
 from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SimulationResult
 from squid.schematics.infrastructure.repository import SchematicRepository
@@ -44,9 +46,11 @@ async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEng
 
 @pytest.fixture
 def repository(
-    schematic_tables: AsyncEngine, async_session_factory: async_sessionmaker[AsyncSession]
+    schematic_tables: AsyncEngine,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
 ) -> SchematicRepository:
-    return SchematicRepository(async_session_factory)
+    return SchematicRepository(async_session_factory, LocalArtifactStore(tmp_path / "objects"))
 
 
 async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
@@ -59,6 +63,54 @@ async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
 
     assert first == second
     assert await repository.get_file(first) == b"schematic-bytes"
+
+
+async def test_new_payload_reaches_ready_only_after_object_verification(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    digest = await repository.put_file(b"verified", source_format=SchematicFormat.LITEMATIC)
+
+    async with async_session_factory() as session:
+        state = (
+            await session.execute(
+                text(
+                    "SELECT storage_state, data IS NULL, object_key IS NOT NULL, verified_at IS NOT NULL "
+                    "FROM schematic_files WHERE sha256 = :digest"
+                ),
+                {"digest": digest},
+            )
+        ).one()
+
+    assert state == ("ready", True, True, True)
+
+
+async def test_worker_maintenance_moves_legacy_inline_payloads(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    import hashlib
+
+    data = b"legacy-inline"
+    digest = hashlib.sha256(data).hexdigest()
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            text(
+                "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                "VALUES (:digest, :data, :byte_size, 'litematic')"
+            ),
+            {"digest": digest, "data": data, "byte_size": len(data)},
+        )
+
+    assert await repository.maintain_storage() == (1, 0)
+    assert await repository.get_file(digest) == data
+    async with async_session_factory() as session:
+        state = (
+            await session.execute(
+                text("SELECT data IS NULL, object_key IS NOT NULL, storage_state FROM schematic_files")
+            )
+        ).one()
+    assert state == (True, True, "ready")
 
 
 async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(

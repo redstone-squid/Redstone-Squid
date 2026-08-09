@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Self, cast, override
+from typing import Any, Literal, Self, cast, override
 
 from google.oauth2.service_account import Credentials
 from pydantic import (
@@ -116,6 +116,43 @@ class VectorConfig(_FrozenModel):
 
     _empty_database_url = field_validator("database_url", mode="before")(_empty_to_none)
     _validate_database_url = field_validator("database_url")(_validate_postgres_url)
+
+
+class ObjectStorageConfig(_FrozenModel):
+    """Content-addressed binary artifact storage configuration."""
+
+    backend: Literal["local", "s3"] = "local"
+    local_directory: Path = Field(default_factory=lambda: Path.cwd() / ".data" / "objects")
+    bucket: str | None = None
+    endpoint: AnyHttpUrl | None = None
+    access_key: SecretStr | None = None
+    secret_key: SecretStr | None = None
+    region: str = "us-east-1"
+    prefix: str = "redstone-squid"
+    addressing_style: Literal["auto", "path", "virtual"] = "path"
+    connect_timeout_seconds: float = Field(default=5.0, gt=0)
+    read_timeout_seconds: float = Field(default=30.0, gt=0)
+    max_attempts: int = Field(default=3, ge=1, le=10)
+
+    _empty_bucket = field_validator("bucket", mode="before")(_empty_to_none)
+    _empty_endpoint = field_validator("endpoint", mode="before")(_empty_to_none)
+    _empty_access_key = field_validator("access_key", mode="before")(_empty_to_none)
+    _empty_secret_key = field_validator("secret_key", mode="before")(_empty_to_none)
+
+    @model_validator(mode="after")
+    def _validate_backend(self) -> Self:
+        if self.backend == "s3" and self.bucket is None:
+            msg = "The S3 storage backend requires a bucket."
+            raise ValueError(msg)
+        if (self.access_key is None) != (self.secret_key is None):
+            msg = "Object-storage access_key and secret_key must be configured together."
+            raise ValueError(msg)
+        normalized_prefix = self.prefix.strip("/")
+        if ".." in normalized_prefix.split("/"):
+            msg = "Object-storage prefix must not contain path traversal."
+            raise ValueError(msg)
+        object.__setattr__(self, "prefix", normalized_prefix)
+        return self
 
 
 class EmbeddingConfig(_FrozenModel):
@@ -494,6 +531,7 @@ class RuntimeConfig(_FrozenModel):
     openai: OpenAIConfig
     embeddings: EmbeddingConfig
     schematics: SchematicConfig
+    object_storage: ObjectStorageConfig
     community: CommunityConfig
     verification_code_pepper: SecretStr
     cursor_secret: SecretStr
@@ -521,6 +559,7 @@ class _ProcessSettings(BaseSettings):
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     vector: VectorConfig = VectorConfig()
+    storage: ObjectStorageConfig = ObjectStorageConfig()
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
     log: LogConfig = LogConfig()
@@ -539,6 +578,7 @@ class _ProcessSettings(BaseSettings):
                 database_connection=self.vector.database_url,
             ),
             schematics=self.schematic,
+            object_storage=self.storage,
             community=self.community,
             verification_code_pepper=self.verification.code_pepper,
             cursor_secret=self.cursor.secret,

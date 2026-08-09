@@ -182,6 +182,10 @@ class SchematicService:
             raise SchematicNotFoundError
         return content
 
+    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
+        """Backfill and recover artifact state from the database worker."""
+        return await self._store.maintain_storage(limit=limit)
+
     async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
         return await self._store.get_primary(build_id)
 

@@ -9,8 +9,10 @@ x-app: &app
   environment:
     SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
     SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
+    SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
   volumes:
     - ./logs:/var/log/app
+    - squid-objects:/var/lib/app/objects
   stop_grace_period: 20s
 
 services:
@@ -83,3 +85,6 @@ services:
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ./logs:/var/log/app:ro
+
+volumes:
+  squid-objects:

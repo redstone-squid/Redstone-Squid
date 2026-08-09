@@ -24,6 +24,7 @@ dependencies = [
     "async-lru>=2.0.4",
     "markdown>=3.7",
     "beautifulsoup4>=4.12.3",
+    "boto3>=1.43.48,<2",
     "vecs>=0.4.5",
     "gitpython>=3.1.31",
     "beartype>=0.19.0",

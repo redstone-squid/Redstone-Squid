@@ -27,27 +27,33 @@ kilobytes, so this is generous by three orders of magnitude."""
 
 
 class SchematicFile(Base):
-    """Schematic bytes, content-addressed by SHA-256.
-
-    Held in Postgres rather than an object host because these bytes are re-read on every
-    re-render, diff, and duplicate check; the alternative is an HTTP fetch of an
-    attacker-influenced URL on each one. Content addressing also means a byte-identical
-    resubmission is recognised before any analysis runs.
-    """
+    """Relational metadata for a content-addressed schematic artifact."""
 
     __tablename__ = "schematic_files"
     __table_args__ = (
         CheckConstraint(f"byte_size > 0 AND byte_size <= {MAX_SCHEMATIC_BYTES}", name="schematic_files_size_bounded"),
+        CheckConstraint(
+            "storage_state IN ('pending', 'verified', 'ready')",
+            name="schematic_files_storage_state_check",
+        ),
+        CheckConstraint(
+            "data IS NOT NULL OR object_key IS NOT NULL",
+            name="schematic_files_has_storage_location",
+        ),
+        Index("schematic_files_storage_state_idx", "storage_state", "created_at"),
     )
 
     sha256: Mapped[str] = mapped_column(Text, primary_key=True)
     """Lowercase hex SHA-256 of `data`, and the identity of this row."""
-    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    """The uploaded file exactly as received, uncompressed and unmodified."""
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     """Size of `data`. Stored so size predicates never have to detoast the bytes."""
     source_format: Mapped[str] = mapped_column(Text, nullable=False)
     """The format the content sniffer identified, e.g. `litematic`."""
+    data: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
+    """Legacy inline payload retained only until the worker copies it to object storage."""
+    object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    storage_state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'ready'"), default="ready")
+    verified_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

@@ -164,6 +164,10 @@ class FakeSchematicStore:
     async def get_file(self, sha256: str) -> bytes | None:
         return self.files.get(sha256)
 
+    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
+        del limit
+        return 0, 0
+
     async def record_analysis(
         self,
         build_id: int,
