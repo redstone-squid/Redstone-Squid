@@ -183,6 +183,50 @@ $$;
 
 
 --
+-- Name: enqueue_discord_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_discord_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_kind text;
+    target_key bigint;
+    target_action text := 'refresh';
+BEGIN
+    IF TG_TABLE_NAME = 'vote_sessions' THEN
+        target_kind := 'vote_session';
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        IF TG_OP = 'DELETE' THEN target_action := 'delete'; END IF;
+    ELSIF TG_TABLE_NAME = 'votes' THEN
+        target_kind := 'vote_session';
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.vote_session_id ELSE NEW.vote_session_id END;
+        IF NOT EXISTS (SELECT 1 FROM public.vote_sessions WHERE id = target_key) THEN RETURN NULL; END IF;
+    ELSIF TG_TABLE_NAME = 'builds' THEN
+        target_kind := 'build';
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        IF TG_OP = 'DELETE' THEN target_action := 'delete'; END IF;
+    ELSE
+        target_kind := 'build';
+        target_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
+        IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
+    END IF;
+
+    INSERT INTO public.discord_sync_queue
+        (resource_kind, source_key, action, enqueued_at, claimed_at, attempts, last_error)
+    VALUES (target_kind, target_key::text, target_action, now(), NULL, 0, NULL)
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        claimed_at = NULL,
+        attempts = 0,
+        last_error = NULL;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: enqueue_metadata_search_projection(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -198,7 +242,7 @@ BEGIN
         WHEN 'restrictions' THEN 'restriction'
         WHEN 'restriction_aliases' THEN 'restriction'
         WHEN 'types' THEN 'type'
-        WHEN 'users' THEN 'creator'
+        WHEN 'creator_aliases' THEN 'creator'
         WHEN 'versions' THEN 'version'
     END;
     IF TG_TABLE_NAME = 'restriction_aliases' THEN
@@ -233,11 +277,11 @@ BEGIN
         WHERE bt.type_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
-    ELSIF TG_TABLE_NAME = 'users' THEN
+    ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         SELECT 'build', bc.build_id::text, 'upsert', now()
         FROM public.build_creators bc
-        WHERE bc.user_id = target_id
+        WHERE bc.alias_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
@@ -278,57 +322,6 @@ END;
 $$;
 
 
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
---
--- Name: messages; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.messages (
-    server_id bigint NOT NULL,
-    build_id bigint,
-    channel_id bigint,
-    id bigint NOT NULL,
-    updated_at timestamp with time zone,
-    purpose text NOT NULL,
-    content text,
-    author_id bigint NOT NULL,
-    vote_session_id bigint
-);
-
-
---
--- Name: TABLE messages; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.messages IS 'A message associated with a build or vote session.';
-
-
---
--- Name: COLUMN messages.purpose; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.messages.purpose IS 'The reason why the message is stored in the database';
-
-
---
--- Name: get_outdated_messages(bigint); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.get_outdated_messages(server_id_input bigint) RETURNS SETOF public.messages
-    LANGUAGE plpgsql
-    AS $$begin
-    return query select messages.*
-    from messages join builds
-    on (messages.submission_id = builds.submission_id)
-    where messages.last_updated < builds.last_update
-    and messages.server_id = server_id_input
-    and builds.submission_status = 1;  -- accepted
-  end;$$;
-
-
 --
 -- Name: get_quantified_version_names(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -350,6 +343,10 @@ END;
 $$;
 
 
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
 --
 -- Name: builds; Type: TABLE; Schema: public; Owner: -
 --
@@ -366,7 +363,6 @@ CREATE TABLE public.builds (
     completion_time text,
     submission_time timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     category text,
-    submitter_id bigint NOT NULL,
     ai_generated boolean NOT NULL,
     original_message_id bigint,
     version_spec text,
@@ -376,6 +372,7 @@ CREATE TABLE public.builds (
     completion_at timestamp with time zone,
     completion_evidence text,
     description text,
+    submitter_user_id integer NOT NULL,
     CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
     CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
     CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
@@ -603,12 +600,53 @@ $$;
 
 
 --
+-- Name: api_keys; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.api_keys (
+    id bigint NOT NULL,
+    key_id text NOT NULL,
+    secret_hash bytea NOT NULL,
+    label text NOT NULL,
+    scopes text[] DEFAULT '{}'::text[] NOT NULL,
+    owner_user_id integer,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    last_used_at timestamp with time zone,
+    last_used_ip inet
+);
+
+
+--
+-- Name: TABLE api_keys; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.api_keys IS 'A revocable high-entropy credential used by an API service client.';
+
+
+--
+-- Name: api_keys_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.api_keys ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.api_keys_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: build_creators; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.build_creators (
     build_id bigint NOT NULL,
-    user_id integer NOT NULL
+    alias_id integer NOT NULL
 );
 
 
@@ -616,7 +654,7 @@ CREATE TABLE public.build_creators (
 -- Name: TABLE build_creators; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.build_creators IS 'Association table between builds and their creators.';
+COMMENT ON TABLE public.build_creators IS 'Association table between builds and the creator names credited on them.';
 
 
 --
@@ -684,6 +722,75 @@ CREATE TABLE public.build_restrictions (
 --
 
 COMMENT ON TABLE public.build_restrictions IS 'Association table between builds and their restrictions.';
+
+
+--
+-- Name: build_schematics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.build_schematics (
+    id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    file_sha256 text NOT NULL,
+    is_primary boolean NOT NULL,
+    original_filename text,
+    width integer NOT NULL,
+    height integer NOT NULL,
+    length integer NOT NULL,
+    allocated_width integer NOT NULL,
+    allocated_height integer NOT NULL,
+    allocated_length integer NOT NULL,
+    block_count integer NOT NULL,
+    bounding_volume bigint NOT NULL,
+    entity_count integer NOT NULL,
+    palette_size integer NOT NULL,
+    region_names text[] NOT NULL,
+    source_data_version integer,
+    declared_name text,
+    declared_author text,
+    signs jsonb NOT NULL,
+    fingerprint_structural text,
+    fingerprint_shape text,
+    fingerprint_exact text,
+    signature_structural text,
+    analyzer_version text NOT NULL,
+    analysis_schema_version smallint NOT NULL,
+    lattice jsonb,
+    uploaded_by_discord_id bigint,
+    analyzed_at timestamp with time zone DEFAULT now() NOT NULL,
+    simulation_evidence jsonb
+);
+
+
+--
+-- Name: TABLE build_schematics; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_schematics IS 'One analyzed schematic attached to a build.
+
+Metrics and fingerprints are denormalised onto this row so duplicate shortlisting is a
+plain indexed query. Fingerprints are only comparable within the `analyzer_version` that
+produced them, so every identity index carries that column and every lookup filters on it;
+an engine upgrade therefore becomes a visible backfill rather than a silent regression.';
+
+
+--
+-- Name: build_schematics_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.build_schematics_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: build_schematics_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.build_schematics_id_seq OWNED BY public.build_schematics.id;
 
 
 --
@@ -778,6 +885,95 @@ ALTER TABLE public.build_vote_sessions ALTER COLUMN vote_session_id ADD GENERATE
 
 
 --
+-- Name: creator_alias_claims; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.creator_alias_claims (
+    id integer NOT NULL,
+    alias_id integer NOT NULL,
+    user_id integer NOT NULL,
+    status text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    resolved_at timestamp with time zone,
+    resolved_by_discord_id bigint,
+    CONSTRAINT creator_alias_claims_resolution_complete CHECK (((status = 'pending'::text) = (resolved_at IS NULL))),
+    CONSTRAINT creator_alias_claims_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))
+);
+
+
+--
+-- Name: TABLE creator_alias_claims; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.creator_alias_claims IS 'A user''s request to be credited under a creator alias, pending staff review.';
+
+
+--
+-- Name: creator_alias_claims_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.creator_alias_claims_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: creator_alias_claims_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.creator_alias_claims_id_seq OWNED BY public.creator_alias_claims.id;
+
+
+--
+-- Name: creator_aliases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.creator_aliases (
+    id integer NOT NULL,
+    name text NOT NULL,
+    normalized_name text GENERATED ALWAYS AS (lower(btrim(name))) STORED NOT NULL,
+    user_id integer,
+    claimed_at timestamp with time zone,
+    claim_method text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT creator_aliases_claim_complete CHECK (((user_id IS NULL) = (claimed_at IS NULL))),
+    CONSTRAINT creator_aliases_claim_method_check CHECK (((claim_method IS NULL) OR (claim_method = ANY (ARRAY['verified_ign'::text, 'staff_approved'::text, 'migrated'::text])))),
+    CONSTRAINT creator_aliases_claim_method_complete CHECK (((user_id IS NULL) = (claim_method IS NULL)))
+);
+
+
+--
+-- Name: TABLE creator_aliases; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.creator_aliases IS 'A creator name credited on a build, optionally claimed by an account.';
+
+
+--
+-- Name: creator_aliases_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.creator_aliases_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: creator_aliases_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.creator_aliases_id_seq OWNED BY public.creator_aliases.id;
+
+
+--
 -- Name: delete_log_vote_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -795,6 +991,45 @@ CREATE TABLE public.delete_log_vote_sessions (
 
 ALTER TABLE public.delete_log_vote_sessions ALTER COLUMN vote_session_id ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME public.delete_log_vote_sessions_vote_session_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: discord_sync_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discord_sync_queue (
+    id bigint NOT NULL,
+    resource_kind text NOT NULL,
+    source_key text NOT NULL,
+    action text DEFAULT 'refresh'::text NOT NULL,
+    enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
+    claimed_at timestamp with time zone,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    CONSTRAINT discord_sync_queue_action_check CHECK ((action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
+    CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text])))
+);
+
+
+--
+-- Name: TABLE discord_sync_queue; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh one Discord-rendered resource.';
+
+
+--
+-- Name: discord_sync_queue_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.discord_sync_queue ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.discord_sync_queue_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -913,6 +1148,160 @@ CREATE TABLE public.extenders (
     extension_length integer,
     extender_type text
 );
+
+
+--
+-- Name: generic_vote_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.generic_vote_sessions (
+    vote_session_id bigint NOT NULL,
+    guild_id bigint NOT NULL,
+    question text NOT NULL,
+    visibility text NOT NULL,
+    deadline timestamp with time zone NOT NULL,
+    CONSTRAINT generic_vote_sessions_visibility_check CHECK ((visibility = ANY (ARRAY['anonymous_live'::text, 'visible_live'::text, 'anonymous_hidden'::text])))
+);
+
+
+--
+-- Name: TABLE generic_vote_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.generic_vote_sessions IS 'Metadata for a user-created generic poll.';
+
+
+--
+-- Name: global_administrators; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.global_administrators (
+    discord_id bigint NOT NULL,
+    granted_by_discord_id bigint NOT NULL,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE global_administrators; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.global_administrators IS 'An active bot-wide administrator grant.';
+
+
+--
+-- Name: global_administrators_discord_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.global_administrators_discord_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: global_administrators_discord_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.global_administrators_discord_id_seq OWNED BY public.global_administrators.discord_id;
+
+
+--
+-- Name: guild_vote_emojis; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.guild_vote_emojis (
+    guild_id bigint NOT NULL,
+    kind text NOT NULL,
+    identifier text NOT NULL,
+    emoji text NOT NULL,
+    choice text NOT NULL,
+    label text,
+    "position" smallint NOT NULL,
+    CONSTRAINT guild_vote_emojis_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text, 'generic'::text]))),
+    CONSTRAINT guild_vote_emojis_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text])))
+);
+
+
+--
+-- Name: TABLE guild_vote_emojis; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.guild_vote_emojis IS 'One ordered emoji in a guild/session-kind preset.';
+
+
+--
+-- Name: guild_vote_role_weights; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.guild_vote_role_weights (
+    guild_id bigint NOT NULL,
+    kind text NOT NULL,
+    role_id bigint NOT NULL,
+    multiplier double precision NOT NULL,
+    CONSTRAINT guild_vote_role_weights_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT guild_vote_role_weights_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision)))
+);
+
+
+--
+-- Name: TABLE guild_vote_role_weights; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.guild_vote_role_weights IS 'A role multiplier scoped to one guild and session kind.';
+
+
+--
+-- Name: messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.messages (
+    server_id bigint NOT NULL,
+    build_id bigint,
+    channel_id bigint,
+    id bigint NOT NULL,
+    updated_at timestamp with time zone,
+    purpose text NOT NULL,
+    content text,
+    author_id bigint NOT NULL,
+    vote_session_id bigint
+);
+
+
+--
+-- Name: TABLE messages; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.messages IS 'A message associated with a build or vote session.';
+
+
+--
+-- Name: COLUMN messages.purpose; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.purpose IS 'The reason why the message is stored in the database';
+
+
+--
+-- Name: oauth_states; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_states (
+    state text NOT NULL,
+    code_verifier text NOT NULL,
+    redirect_to text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+--
+-- Name: TABLE oauth_states; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.oauth_states IS 'One-time OAuth PKCE state shared across API replicas.';
 
 
 --
@@ -1262,6 +1651,75 @@ ALTER SEQUENCE public.restrictions_id_seq OWNED BY public.restrictions.id;
 
 
 --
+-- Name: schematic_files; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schematic_files (
+    sha256 text NOT NULL,
+    data bytea NOT NULL,
+    byte_size integer NOT NULL,
+    source_format text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 2097152)))
+);
+
+
+--
+-- Name: TABLE schematic_files; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.schematic_files IS 'Schematic bytes, content-addressed by SHA-256.
+
+Held in Postgres rather than an object host because these bytes are re-read on every
+re-render, diff, and duplicate check; the alternative is an HTTP fetch of an
+attacker-influenced URL on each one. Content addressing also means a byte-identical
+resubmission is recognised before any analysis runs.';
+
+
+--
+-- Name: schematic_renders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schematic_renders (
+    id bigint NOT NULL,
+    build_schematic_id bigint NOT NULL,
+    recipe_hash text NOT NULL,
+    url text NOT NULL,
+    width integer NOT NULL,
+    height integer NOT NULL,
+    byte_size integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT schematic_renders_sizes_positive CHECK (((width > 0) AND (height > 0) AND (byte_size > 0)))
+);
+
+
+--
+-- Name: TABLE schematic_renders; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.schematic_renders IS 'A replaceable preview artifact keyed by the complete rendering recipe.';
+
+
+--
+-- Name: schematic_renders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.schematic_renders_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: schematic_renders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.schematic_renders_id_seq OWNED BY public.schematic_renders.id;
+
+
+--
 -- Name: search_document_facets; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1418,7 +1876,6 @@ CREATE TABLE public.server_settings (
     voting_channel_id bigint,
     in_server boolean DEFAULT true NOT NULL,
     trusted_roles_ids bigint[],
-    staff_roles_ids bigint[],
     locale text
 );
 
@@ -1428,6 +1885,200 @@ CREATE TABLE public.server_settings (
 --
 
 COMMENT ON TABLE public.server_settings IS 'Settings for a Discord server.';
+
+
+--
+-- Name: starboard_emojis; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_emojis (
+    starboard_id bigint NOT NULL,
+    emoji text NOT NULL,
+    direction text NOT NULL,
+    multiplier double precision DEFAULT 1.0 NOT NULL,
+    "position" smallint NOT NULL,
+    CONSTRAINT starboard_emojis_direction_check CHECK ((direction = ANY (ARRAY['up'::text, 'down'::text]))),
+    CONSTRAINT starboard_emojis_emoji_check CHECK ((btrim(emoji) <> ''::text)),
+    CONSTRAINT starboard_emojis_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision))),
+    CONSTRAINT starboard_emojis_position_check CHECK (("position" >= 0))
+);
+
+
+--
+-- Name: TABLE starboard_emojis; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_emojis IS 'An ordered upvote or downvote emoji for a starboard.';
+
+
+--
+-- Name: starboard_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_entries (
+    starboard_id bigint NOT NULL,
+    origin_message_id bigint NOT NULL,
+    posted_message_id bigint,
+    posted_channel_id bigint,
+    score double precision DEFAULT 0.0 NOT NULL,
+    raw_count integer DEFAULT 0 NOT NULL,
+    last_rendered_score double precision,
+    first_posted_at timestamp with time zone,
+    updated_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE starboard_entries; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_entries IS 'The materialized-post state for one source message on one starboard.';
+
+
+--
+-- Name: starboard_origin_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_origin_messages (
+    id bigint NOT NULL,
+    guild_id bigint NOT NULL,
+    channel_id bigint NOT NULL,
+    author_id bigint NOT NULL,
+    author_is_bot boolean NOT NULL,
+    is_nsfw boolean DEFAULT false NOT NULL,
+    has_image boolean DEFAULT false NOT NULL,
+    posted_at timestamp with time zone NOT NULL,
+    seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE starboard_origin_messages; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_origin_messages IS 'A source message that has been evaluated by at least one starboard.';
+
+
+--
+-- Name: starboard_role_multipliers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_role_multipliers (
+    starboard_id bigint NOT NULL,
+    role_id bigint NOT NULL,
+    multiplier double precision NOT NULL,
+    CONSTRAINT starboard_role_multipliers_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision)))
+);
+
+
+--
+-- Name: TABLE starboard_role_multipliers; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_role_multipliers IS 'A role multiplier scoped to one starboard.';
+
+
+--
+-- Name: starboard_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_sources (
+    starboard_id bigint NOT NULL,
+    guild_id bigint NOT NULL,
+    channel_id bigint DEFAULT 0 NOT NULL,
+    approved_by bigint,
+    approved_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE starboard_sources; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_sources IS 'A guild or channel whose messages feed a starboard.';
+
+
+--
+-- Name: starboard_votes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboard_votes (
+    starboard_id bigint NOT NULL,
+    origin_message_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    emoji text NOT NULL,
+    direction text NOT NULL,
+    weight double precision NOT NULL,
+    target_author_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT starboard_votes_direction_check CHECK ((direction = ANY (ARRAY['up'::text, 'down'::text]))),
+    CONSTRAINT starboard_votes_weight_check CHECK (((weight > (0)::double precision) AND (weight <> 'Infinity'::double precision) AND (weight <> 'NaN'::double precision)))
+);
+
+
+--
+-- Name: TABLE starboard_votes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboard_votes IS 'One member''s current weighted reaction to one message on one starboard.';
+
+
+--
+-- Name: starboards; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.starboards (
+    id bigint NOT NULL,
+    guild_id bigint NOT NULL,
+    channel_id bigint NOT NULL,
+    name text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    required double precision DEFAULT 3.0 NOT NULL,
+    required_remove double precision DEFAULT 0.0 NOT NULL,
+    self_vote boolean DEFAULT false NOT NULL,
+    allow_bots boolean DEFAULT false NOT NULL,
+    require_image boolean DEFAULT false NOT NULL,
+    min_age_seconds integer DEFAULT 0 NOT NULL,
+    max_age_seconds integer DEFAULT 0 NOT NULL,
+    autoreact_upvote boolean DEFAULT true NOT NULL,
+    autoreact_downvote boolean DEFAULT true NOT NULL,
+    remove_invalid_reactions boolean DEFAULT false NOT NULL,
+    link_edits boolean DEFAULT true NOT NULL,
+    link_deletes boolean DEFAULT true NOT NULL,
+    display_emoji text DEFAULT '⭐'::text NOT NULL,
+    colour bigint DEFAULT 4415105 NOT NULL,
+    jump_to_message boolean DEFAULT true NOT NULL,
+    attachments_list boolean DEFAULT true NOT NULL,
+    replied_to boolean DEFAULT true NOT NULL,
+    ping_author boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT starboards_age_check CHECK (((min_age_seconds >= 0) AND (max_age_seconds >= 0) AND ((max_age_seconds = 0) OR (min_age_seconds <= max_age_seconds)))),
+    CONSTRAINT starboards_colour_check CHECK (((colour >= 0) AND (colour <= 16777215))),
+    CONSTRAINT starboards_name_check CHECK ((btrim(name) <> ''::text)),
+    CONSTRAINT starboards_thresholds_check CHECK (((required > required_remove) AND (required <> 'Infinity'::double precision) AND (required <> '-Infinity'::double precision) AND (required <> 'NaN'::double precision) AND (required_remove <> 'Infinity'::double precision) AND (required_remove <> '-Infinity'::double precision) AND (required_remove <> 'NaN'::double precision)))
+);
+
+
+--
+-- Name: TABLE starboards; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.starboards IS 'A named weighted-message board owned by one Discord guild.';
+
+
+--
+-- Name: starboards_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.starboards ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.starboards_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 --
@@ -1655,7 +2306,11 @@ CREATE TABLE public.users (
     discord_id bigint,
     minecraft_uuid uuid,
     ign text,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    consent_version text,
+    consented_at timestamp with time zone,
+    CONSTRAINT users_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
+    CONSTRAINT users_minecraft_link_requires_consent CHECK (((minecraft_uuid IS NULL) OR (consent_version IS NOT NULL) OR (created_at < '2026-08-04 00:00:00+00'::timestamp with time zone)))
 );
 
 
@@ -1663,7 +2318,7 @@ CREATE TABLE public.users (
 -- Name: TABLE users; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.users IS 'A user in the system, which can be linked to both Discord and Minecraft accounts.';
+COMMENT ON TABLE public.users IS 'An account we hold a relationship with, linking Discord and Minecraft identities.';
 
 
 --
@@ -1746,7 +2401,8 @@ CREATE TABLE public.versions (
     edition text NOT NULL,
     major_version smallint NOT NULL,
     minor_version smallint NOT NULL,
-    patch_number smallint NOT NULL
+    patch_number smallint NOT NULL,
+    data_version integer
 );
 
 
@@ -1787,7 +2443,10 @@ CREATE TABLE public.vote_session_options (
     choice text NOT NULL,
     multiplier double precision DEFAULT 1.0 NOT NULL,
     "position" smallint NOT NULL,
-    CONSTRAINT vote_session_options_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text]))),
+    identifier text NOT NULL,
+    guild_id bigint DEFAULT 0 NOT NULL,
+    label text,
+    CONSTRAINT vote_session_options_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text, 'generic'::text]))),
     CONSTRAINT vote_session_options_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision))),
     CONSTRAINT vote_session_options_position_check CHECK (("position" >= 0))
 );
@@ -1854,7 +2513,11 @@ ALTER TABLE public.vote_sessions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDE
 CREATE TABLE public.votes (
     vote_session_id bigint NOT NULL,
     user_id bigint NOT NULL,
-    weight double precision
+    weight double precision NOT NULL,
+    guild_id bigint DEFAULT 0 NOT NULL,
+    option_id text NOT NULL,
+    emoji text NOT NULL,
+    CONSTRAINT votes_weight_check CHECK (((weight > (0)::double precision) AND (weight <> 'Infinity'::double precision) AND (weight <> 'NaN'::double precision)))
 );
 
 
@@ -1880,6 +2543,36 @@ ALTER TABLE public.votes ALTER COLUMN vote_session_id ADD GENERATED BY DEFAULT A
 
 
 --
+-- Name: web_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.web_sessions (
+    id uuid NOT NULL,
+    token_hash bytea NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_at timestamp with time zone,
+    user_agent text
+);
+
+
+--
+-- Name: TABLE web_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.web_sessions IS 'A revocable opaque browser session.';
+
+
+--
+-- Name: build_schematics id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics ALTER COLUMN id SET DEFAULT nextval('public.build_schematics_id_seq'::regclass);
+
+
+--
 -- Name: builds id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1887,10 +2580,38 @@ ALTER TABLE ONLY public.builds ALTER COLUMN id SET DEFAULT nextval('public.submi
 
 
 --
+-- Name: creator_alias_claims id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_alias_claims ALTER COLUMN id SET DEFAULT nextval('public.creator_alias_claims_id_seq'::regclass);
+
+
+--
+-- Name: creator_aliases id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_aliases ALTER COLUMN id SET DEFAULT nextval('public.creator_aliases_id_seq'::regclass);
+
+
+--
+-- Name: global_administrators discord_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.global_administrators ALTER COLUMN discord_id SET DEFAULT nextval('public.global_administrators_discord_id_seq'::regclass);
+
+
+--
 -- Name: restrictions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.restrictions ALTER COLUMN id SET DEFAULT nextval('public.restrictions_id_seq'::regclass);
+
+
+--
+-- Name: schematic_renders id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_renders ALTER COLUMN id SET DEFAULT nextval('public.schematic_renders_id_seq'::regclass);
 
 
 --
@@ -1922,11 +2643,19 @@ ALTER TABLE ONLY public.versions ALTER COLUMN id SET DEFAULT nextval('public.ver
 
 
 --
+-- Name: api_keys api_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: build_creators build_creators_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.build_creators
-    ADD CONSTRAINT build_creators_pkey PRIMARY KEY (build_id, user_id);
+    ADD CONSTRAINT build_creators_pkey PRIMARY KEY (build_id, alias_id);
 
 
 --
@@ -1951,6 +2680,22 @@ ALTER TABLE ONLY public.build_links
 
 ALTER TABLE ONLY public.build_restrictions
     ADD CONSTRAINT build_restrictions_pkey PRIMARY KEY (build_id, restriction_id);
+
+
+--
+-- Name: build_schematics build_schematics_build_file_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics
+    ADD CONSTRAINT build_schematics_build_file_key UNIQUE (build_id, file_sha256);
+
+
+--
+-- Name: build_schematics build_schematics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics
+    ADD CONSTRAINT build_schematics_pkey PRIMARY KEY (id);
 
 
 --
@@ -1986,11 +2731,51 @@ ALTER TABLE ONLY public.build_vote_sessions
 
 
 --
+-- Name: creator_alias_claims creator_alias_claims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_alias_claims
+    ADD CONSTRAINT creator_alias_claims_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: creator_aliases creator_aliases_normalized_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_aliases
+    ADD CONSTRAINT creator_aliases_normalized_name_key UNIQUE (normalized_name);
+
+
+--
+-- Name: creator_aliases creator_aliases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_aliases
+    ADD CONSTRAINT creator_aliases_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: delete_log_vote_sessions delete_log_vote_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.delete_log_vote_sessions
     ADD CONSTRAINT delete_log_vote_sessions_pkey PRIMARY KEY (vote_session_id);
+
+
+--
+-- Name: discord_sync_queue discord_sync_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discord_sync_queue
+    ADD CONSTRAINT discord_sync_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: discord_sync_queue discord_sync_queue_resource_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discord_sync_queue
+    ADD CONSTRAINT discord_sync_queue_resource_key UNIQUE (resource_kind, source_key);
 
 
 --
@@ -2050,11 +2835,59 @@ ALTER TABLE ONLY public.extenders
 
 
 --
+-- Name: generic_vote_sessions generic_vote_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.generic_vote_sessions
+    ADD CONSTRAINT generic_vote_sessions_pkey PRIMARY KEY (vote_session_id);
+
+
+--
+-- Name: global_administrators global_administrators_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.global_administrators
+    ADD CONSTRAINT global_administrators_pkey PRIMARY KEY (discord_id);
+
+
+--
+-- Name: guild_vote_emojis guild_vote_emojis_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.guild_vote_emojis
+    ADD CONSTRAINT guild_vote_emojis_pkey PRIMARY KEY (guild_id, kind, emoji);
+
+
+--
+-- Name: guild_vote_emojis guild_vote_emojis_position_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.guild_vote_emojis
+    ADD CONSTRAINT guild_vote_emojis_position_key UNIQUE (guild_id, kind, "position");
+
+
+--
+-- Name: guild_vote_role_weights guild_vote_role_weights_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.guild_vote_role_weights
+    ADD CONSTRAINT guild_vote_role_weights_pkey PRIMARY KEY (guild_id, kind, role_id);
+
+
+--
 -- Name: messages messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_states oauth_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_states
+    ADD CONSTRAINT oauth_states_pkey PRIMARY KEY (state);
 
 
 --
@@ -2186,6 +3019,30 @@ ALTER TABLE ONLY public.restrictions
 
 
 --
+-- Name: schematic_files schematic_files_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_files
+    ADD CONSTRAINT schematic_files_pkey PRIMARY KEY (sha256);
+
+
+--
+-- Name: schematic_renders schematic_renders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_renders
+    ADD CONSTRAINT schematic_renders_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schematic_renders schematic_renders_schematic_recipe_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_renders
+    ADD CONSTRAINT schematic_renders_schematic_recipe_key UNIQUE (build_schematic_id, recipe_hash);
+
+
+--
 -- Name: search_document_facets search_document_facets_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2271,6 +3128,62 @@ ALTER TABLE ONLY public.server_settings
 
 ALTER TABLE ONLY public.server_settings
     ADD CONSTRAINT server_settings_smallest_channel_id_key UNIQUE (smallest_channel_id);
+
+
+--
+-- Name: starboard_emojis starboard_emojis_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_emojis
+    ADD CONSTRAINT starboard_emojis_pkey PRIMARY KEY (starboard_id, emoji);
+
+
+--
+-- Name: starboard_entries starboard_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_entries
+    ADD CONSTRAINT starboard_entries_pkey PRIMARY KEY (starboard_id, origin_message_id);
+
+
+--
+-- Name: starboard_origin_messages starboard_origin_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_origin_messages
+    ADD CONSTRAINT starboard_origin_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: starboard_role_multipliers starboard_role_multipliers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_role_multipliers
+    ADD CONSTRAINT starboard_role_multipliers_pkey PRIMARY KEY (starboard_id, role_id);
+
+
+--
+-- Name: starboard_sources starboard_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_sources
+    ADD CONSTRAINT starboard_sources_pkey PRIMARY KEY (starboard_id, guild_id, channel_id);
+
+
+--
+-- Name: starboard_votes starboard_votes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_votes
+    ADD CONSTRAINT starboard_votes_pkey PRIMARY KEY (starboard_id, origin_message_id, user_id);
+
+
+--
+-- Name: starboards starboards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboards
+    ADD CONSTRAINT starboards_pkey PRIMARY KEY (id);
 
 
 --
@@ -2378,6 +3291,22 @@ ALTER TABLE ONLY public.build_edit_history
 
 
 --
+-- Name: users users_discord_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_discord_id_key UNIQUE (discord_id);
+
+
+--
+-- Name: users users_minecraft_uuid_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_minecraft_uuid_key UNIQUE (minecraft_uuid);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2414,7 +3343,7 @@ ALTER TABLE ONLY public.versions
 --
 
 ALTER TABLE ONLY public.vote_session_options
-    ADD CONSTRAINT vote_session_options_pkey PRIMARY KEY (vote_session_id, emoji);
+    ADD CONSTRAINT vote_session_options_pkey PRIMARY KEY (vote_session_id, guild_id, emoji);
 
 
 --
@@ -2422,7 +3351,7 @@ ALTER TABLE ONLY public.vote_session_options
 --
 
 ALTER TABLE ONLY public.vote_session_options
-    ADD CONSTRAINT vote_session_options_vote_session_id_position_key UNIQUE (vote_session_id, "position");
+    ADD CONSTRAINT vote_session_options_vote_session_id_position_key UNIQUE (vote_session_id, guild_id, "position");
 
 
 --
@@ -2439,6 +3368,78 @@ ALTER TABLE ONLY public.vote_sessions
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_pkey PRIMARY KEY (vote_session_id, user_id);
+
+
+--
+-- Name: web_sessions web_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.web_sessions
+    ADD CONSTRAINT web_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: web_sessions web_sessions_token_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.web_sessions
+    ADD CONSTRAINT web_sessions_token_hash_key UNIQUE (token_hash);
+
+
+--
+-- Name: api_keys_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX api_keys_active ON public.api_keys USING btree (key_id) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: api_keys_key_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX api_keys_key_id_key ON public.api_keys USING btree (key_id);
+
+
+--
+-- Name: build_schematics_block_count_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_schematics_block_count_idx ON public.build_schematics USING btree (block_count);
+
+
+--
+-- Name: build_schematics_build_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_schematics_build_id_idx ON public.build_schematics USING btree (build_id);
+
+
+--
+-- Name: build_schematics_file_sha256_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_schematics_file_sha256_idx ON public.build_schematics USING btree (file_sha256);
+
+
+--
+-- Name: build_schematics_fingerprint_shape_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_schematics_fingerprint_shape_idx ON public.build_schematics USING btree (fingerprint_shape, analyzer_version) WHERE (fingerprint_shape IS NOT NULL);
+
+
+--
+-- Name: build_schematics_fingerprint_structural_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_schematics_fingerprint_structural_idx ON public.build_schematics USING btree (fingerprint_structural, analyzer_version) WHERE (fingerprint_structural IS NOT NULL);
+
+
+--
+-- Name: build_schematics_one_primary_per_build; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX build_schematics_one_primary_per_build ON public.build_schematics USING btree (build_id) WHERE is_primary;
 
 
 --
@@ -2460,6 +3461,27 @@ CREATE INDEX build_tag_assignments_tag_build_idx ON public.build_tag_assignments
 --
 
 CREATE INDEX build_tag_assignments_text_idx ON public.build_tag_assignments USING btree (tag_id, text_value, build_id) WHERE (text_value IS NOT NULL);
+
+
+--
+-- Name: creator_alias_claims_one_pending_per_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX creator_alias_claims_one_pending_per_user ON public.creator_alias_claims USING btree (alias_id, user_id) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: discord_sync_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (enqueued_at) WHERE (claimed_at IS NULL);
+
+
+--
+-- Name: generic_vote_sessions_deadline_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX generic_vote_sessions_deadline_idx ON public.generic_vote_sessions USING btree (deadline);
 
 
 --
@@ -2631,6 +3653,48 @@ CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue
 
 
 --
+-- Name: starboard_emojis_position_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX starboard_emojis_position_key ON public.starboard_emojis USING btree (starboard_id, "position");
+
+
+--
+-- Name: starboard_entries_posted_message_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX starboard_entries_posted_message_key ON public.starboard_entries USING btree (posted_message_id) WHERE (posted_message_id IS NOT NULL);
+
+
+--
+-- Name: starboard_entries_score_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX starboard_entries_score_idx ON public.starboard_entries USING btree (starboard_id, score DESC);
+
+
+--
+-- Name: starboard_votes_origin_message_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX starboard_votes_origin_message_idx ON public.starboard_votes USING btree (origin_message_id);
+
+
+--
+-- Name: starboard_votes_target_author_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX starboard_votes_target_author_created_idx ON public.starboard_votes USING btree (starboard_id, target_author_id, created_at);
+
+
+--
+-- Name: starboards_guild_name_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX starboards_guild_name_key ON public.starboards USING btree (guild_id, lower(name));
+
+
+--
 -- Name: tag_aliases_normalized_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2645,10 +3709,38 @@ CREATE INDEX tag_definitions_lookup_idx ON public.tag_definitions USING btree (n
 
 
 --
+-- Name: web_sessions_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX web_sessions_active_idx ON public.web_sessions USING btree (expires_at) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: build_creators build_creators_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_creators_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
 -- Name: build_creators build_creators_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_links build_links_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_links_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_links FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
+-- Name: build_restrictions build_restrictions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_restrictions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
@@ -2659,10 +3751,24 @@ CREATE TRIGGER build_restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDAT
 
 
 --
+-- Name: build_tag_assignments build_tag_assignments_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_tag_assignments_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
 -- Name: build_tag_assignments build_tag_assignments_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER build_tag_assignments_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: build_types build_types_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_types_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
@@ -2673,10 +3779,24 @@ CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON pu
 
 
 --
+-- Name: build_versions build_versions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_versions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
 -- Name: build_versions build_versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: builds builds_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
@@ -2687,10 +3807,24 @@ CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.
 
 
 --
+-- Name: creator_aliases creator_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER creator_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.creator_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
 -- Name: builds delete_orphaned_build_vote_sessions_after_builds; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
+
+
+--
+-- Name: door_timing_variants door_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER door_timing_variants_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
@@ -2701,6 +3835,13 @@ CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPD
 
 
 --
+-- Name: doors doors_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER doors_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
 -- Name: doors doors_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2708,10 +3849,24 @@ CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.d
 
 
 --
+-- Name: extender_timing_variants extender_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER extender_timing_variants_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
 -- Name: extender_timing_variants extender_timing_variants_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER extender_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: extenders extenders_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER extenders_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
@@ -2792,17 +3947,48 @@ CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR E
 
 
 --
--- Name: users users_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER users_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
-
-
---
 -- Name: versions versions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
+-- Name: vote_sessions vote_sessions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
+-- Name: votes votes_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
+-- Name: api_keys api_keys_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: api_keys api_keys_owner_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: build_creators build_creators_alias_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_creators
+    ADD CONSTRAINT build_creators_alias_id_fkey FOREIGN KEY (alias_id) REFERENCES public.creator_aliases(id) ON DELETE RESTRICT;
 
 
 --
@@ -2811,14 +3997,6 @@ CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON publi
 
 ALTER TABLE ONLY public.build_creators
     ADD CONSTRAINT build_creators_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
-
-
---
--- Name: build_creators build_creators_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_creators
-    ADD CONSTRAINT build_creators_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -2851,6 +4029,22 @@ ALTER TABLE ONLY public.build_restrictions
 
 ALTER TABLE ONLY public.build_restrictions
     ADD CONSTRAINT build_restrictions_restriction_id_fkey FOREIGN KEY (restriction_id) REFERENCES public.restrictions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: build_schematics build_schematics_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics
+    ADD CONSTRAINT build_schematics_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: build_schematics build_schematics_file_sha256_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics
+    ADD CONSTRAINT build_schematics_file_sha256_fkey FOREIGN KEY (file_sha256) REFERENCES public.schematic_files(sha256) ON DELETE RESTRICT;
 
 
 --
@@ -2934,6 +4128,38 @@ ALTER TABLE ONLY public.builds
 
 
 --
+-- Name: builds builds_submitter_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.builds
+    ADD CONSTRAINT builds_submitter_user_id_fkey FOREIGN KEY (submitter_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: creator_alias_claims creator_alias_claims_alias_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_alias_claims
+    ADD CONSTRAINT creator_alias_claims_alias_id_fkey FOREIGN KEY (alias_id) REFERENCES public.creator_aliases(id) ON DELETE CASCADE;
+
+
+--
+-- Name: creator_alias_claims creator_alias_claims_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_alias_claims
+    ADD CONSTRAINT creator_alias_claims_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: creator_aliases creator_aliases_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.creator_aliases
+    ADD CONSTRAINT creator_aliases_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: delete_log_vote_sessions delete_log_vote_sessions_vote_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2979,6 +4205,38 @@ ALTER TABLE ONLY public.extender_timing_variants
 
 ALTER TABLE ONLY public.extenders
     ADD CONSTRAINT extenders_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: generic_vote_sessions generic_vote_sessions_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.generic_vote_sessions
+    ADD CONSTRAINT generic_vote_sessions_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: generic_vote_sessions generic_vote_sessions_vote_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.generic_vote_sessions
+    ADD CONSTRAINT generic_vote_sessions_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: guild_vote_emojis guild_vote_emojis_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.guild_vote_emojis
+    ADD CONSTRAINT guild_vote_emojis_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
+
+
+--
+-- Name: guild_vote_role_weights guild_vote_role_weights_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.guild_vote_role_weights
+    ADD CONSTRAINT guild_vote_role_weights_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
 
 
 --
@@ -3134,6 +4392,14 @@ ALTER TABLE ONLY public.restriction_aliases
 
 
 --
+-- Name: schematic_renders schematic_renders_build_schematic_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schematic_renders
+    ADD CONSTRAINT schematic_renders_build_schematic_id_fkey FOREIGN KEY (build_schematic_id) REFERENCES public.build_schematics(id) ON DELETE CASCADE;
+
+
+--
 -- Name: search_document_facets search_document_facets_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3147,6 +4413,86 @@ ALTER TABLE ONLY public.search_document_facets
 
 ALTER TABLE ONLY public.search_embedding_queue
     ADD CONSTRAINT search_embedding_queue_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_emojis starboard_emojis_starboard_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_emojis
+    ADD CONSTRAINT starboard_emojis_starboard_id_fkey FOREIGN KEY (starboard_id) REFERENCES public.starboards(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_entries starboard_entries_origin_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_entries
+    ADD CONSTRAINT starboard_entries_origin_message_id_fkey FOREIGN KEY (origin_message_id) REFERENCES public.starboard_origin_messages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_entries starboard_entries_starboard_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_entries
+    ADD CONSTRAINT starboard_entries_starboard_id_fkey FOREIGN KEY (starboard_id) REFERENCES public.starboards(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_origin_messages starboard_origin_messages_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_origin_messages
+    ADD CONSTRAINT starboard_origin_messages_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_role_multipliers starboard_role_multipliers_starboard_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_role_multipliers
+    ADD CONSTRAINT starboard_role_multipliers_starboard_id_fkey FOREIGN KEY (starboard_id) REFERENCES public.starboards(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_sources starboard_sources_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_sources
+    ADD CONSTRAINT starboard_sources_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_sources starboard_sources_starboard_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_sources
+    ADD CONSTRAINT starboard_sources_starboard_id_fkey FOREIGN KEY (starboard_id) REFERENCES public.starboards(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_votes starboard_votes_origin_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_votes
+    ADD CONSTRAINT starboard_votes_origin_message_id_fkey FOREIGN KEY (origin_message_id) REFERENCES public.starboard_origin_messages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboard_votes starboard_votes_starboard_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboard_votes
+    ADD CONSTRAINT starboard_votes_starboard_id_fkey FOREIGN KEY (starboard_id) REFERENCES public.starboards(id) ON DELETE CASCADE;
+
+
+--
+-- Name: starboards starboards_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.starboards
+    ADD CONSTRAINT starboards_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
 
 
 --
@@ -3227,6 +4573,14 @@ ALTER TABLE ONLY public.vote_session_options
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: web_sessions web_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.web_sessions
+    ADD CONSTRAINT web_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
