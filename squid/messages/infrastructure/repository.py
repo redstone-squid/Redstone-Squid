@@ -116,6 +116,13 @@ class MessageRepository:
             result = await session.execute(stmt)
             return [self._to_record(message) for message in result.scalars().all()]
 
+    async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
+        """Return every tracked message serving one purpose for a build."""
+        stmt = select(Message).where(Message.build_id == build_id, Message.purpose == purpose)
+        async with self._session_factory() as session:
+            result = await session.execute(stmt)
+            return [self._to_record(message) for message in result.scalars().all()]
+
     @staticmethod
     def _to_record(message: Message) -> MessageRecord:
         return MessageRecord(

@@ -37,6 +37,9 @@ class FakeMessageRepository:
     async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
         return []
 
+    async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
+        return []
+
 
 async def test_message_service_requires_vote_session_id() -> None:
     service = MessageService(FakeMessageRepository())

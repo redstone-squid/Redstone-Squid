@@ -50,3 +50,11 @@ class MessageService:
     async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
         """Return messages for a build created by one Discord author."""
         return await self._repository.list_for_build(build_id, author_id)
+
+    async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
+        """Return every tracked message serving one purpose for a build.
+
+        Unlike :meth:`list_for_build` this is not scoped to an author, because callers
+        use it to decide whether a message has already been posted at all.
+        """
+        return await self._repository.list_for_build_purpose(build_id, purpose)
