@@ -2,6 +2,7 @@
 
 import logging
 import secrets
+from contextlib import AsyncExitStack
 from functools import partial
 from importlib import resources
 
@@ -123,12 +124,20 @@ def create_schematic_service(db: DatabaseEngine, config: SchematicConfig) -> Sch
     )
 
 
-def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> ApplicationServices:
+def create_application_services(
+    db: DatabaseEngine,
+    config: RuntimeConfig,
+    *,
+    resource_stack: AsyncExitStack | None = None,
+) -> ApplicationServices:
     """Create application services from process-level infrastructure."""
     restriction_repository = RestrictionRepository(db.async_session)
     version_service = VersionService(VersionRepository(db.async_session))
+    embedding_model = OpenAIEmbeddingModel.from_config(config.embeddings)
+    if resource_stack is not None:
+        resource_stack.push_async_callback(embedding_model.aclose)
     embedding_service = BuildEmbeddingService(
-        OpenAIEmbeddingModel.from_config(config.embeddings),
+        embedding_model,
         VecsBuildIndex(
             config.embeddings.database_connection.get_secret_value()
             if config.embeddings.database_connection is not None
@@ -148,11 +157,31 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
     )
     if vote_members is not None:
         vote_service.set_actor_resolver(vote_members)
+        if resource_stack is not None:
+            resource_stack.push_async_callback(vote_members.aclose)
     user_service = UserService(
         UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
         get_minecraft_username,
         lambda: secrets.randbelow(900_000) + 100_000,
     )
+    text_generator = OpenAITextGenerator.from_config(config.openai)
+    if resource_stack is not None:
+        resource_stack.push_async_callback(text_generator.aclose)
+    schematic_service = create_schematic_service(db, config.schematics)
+    if resource_stack is not None:
+        resource_stack.push_async_callback(schematic_service.aclose)
+    web_auth = (
+        DiscordOAuthService(
+            PostgresWebSessionRepository(db.async_session),
+            user_service,
+            config.oauth,
+            config.session_pepper.get_secret_value(),
+        )
+        if config.oauth is not None and config.session_pepper is not None
+        else None
+    )
+    if resource_stack is not None and web_auth is not None:
+        resource_stack.push_async_callback(web_auth.aclose)
     return ApplicationServices(
         builds=BuildService(build_repository, build_locks, restriction_repository, version_service, embedding_service),
         api_keys=(
@@ -160,18 +189,9 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
             if config.api_key_pepper is not None
             else None
         ),
-        web_auth=(
-            DiscordOAuthService(
-                PostgresWebSessionRepository(db.async_session),
-                user_service,
-                config.oauth,
-                config.session_pepper.get_secret_value(),
-            )
-            if config.oauth is not None and config.session_pepper is not None
-            else None
-        ),
+        web_auth=web_auth,
         build_inference=BuildInferenceService(
-            OpenAITextGenerator.from_config(config.openai),
+            text_generator,
             BuildTagsManager(db.async_session),
             version_service,
             resources.files("squid.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8"),
@@ -186,7 +206,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         records=RecordService(record_repository, record_repository, record_computation),
         record_computation=record_computation,
-        schematics=create_schematic_service(db, config.schematics),
+        schematics=schematic_service,
         search=SearchService(
             PostgresSearchBackend(db.async_session, fields=search_fields),
             SearchQueryParser(),
@@ -221,16 +241,9 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
 def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None = None) -> ApplicationRuntime:
     """Create the process-owned infrastructure and application service graph."""
     database = db or DatabaseEngine(config.database)
-    services = create_application_services(database, config)
-
-    async def close_resources() -> None:
-        """Stop the schematic workers before the database, so an in-flight analysis that
-        wants to write its result still has a session to write it with."""
-        await services.schematics.aclose()
-        if services.vote_members is not None:
-            await services.vote_members.aclose()
-        if services.web_auth is not None:
-            await services.web_auth.aclose()
-        await database.close()
-
-    return ApplicationRuntime(services, close_resources, database.ping)
+    resource_stack = AsyncExitStack()
+    # Registered first so LIFO shutdown keeps the database alive until every adapter
+    # that may finish an in-flight write has closed.
+    resource_stack.push_async_callback(database.close)
+    services = create_application_services(database, config, resource_stack=resource_stack)
+    return ApplicationRuntime(services, resource_stack.aclose, database.ping, database.ping)

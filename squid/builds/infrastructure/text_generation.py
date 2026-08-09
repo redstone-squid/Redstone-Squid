@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class OpenAITextGenerator:
     """Generate structured responses through an OpenAI-compatible chat API."""
 
-    def __init__(self, client: AsyncOpenAI | None) -> None:
+    def __init__(self, client: AsyncOpenAI | None, *, owns_client: bool = False) -> None:
         self._client = client
+        self._owns_client = owns_client
 
     @classmethod
     def from_config(cls, config: OpenAIConfig) -> "OpenAITextGenerator":
@@ -30,7 +31,15 @@ class OpenAITextGenerator:
         if not config.api_key:
             logger.warning("No OpenAI API key found; build inference is disabled.")
             return cls(None)
-        return cls(AsyncOpenAI(base_url=str(config.base_url), api_key=config.api_key.get_secret_value()))
+        return cls(
+            AsyncOpenAI(base_url=str(config.base_url), api_key=config.api_key.get_secret_value()),
+            owns_client=True,
+        )
+
+    async def aclose(self) -> None:
+        """Close the internally-owned provider client."""
+        if self._client is not None and self._owns_client:
+            await self._client.close()
 
     async def generate[T: BaseModel](
         self,

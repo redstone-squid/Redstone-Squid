@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 class OpenAIEmbeddingModel:
     """Generate vectors through an OpenAI-compatible embeddings API."""
 
-    def __init__(self, client: AsyncOpenAI | None, model: str) -> None:
+    def __init__(self, client: AsyncOpenAI | None, model: str, *, owns_client: bool = False) -> None:
         self._client = client
         self._model = model
+        self._owns_client = owns_client
 
     @classmethod
     def from_config(cls, config: EmbeddingConfig) -> Self:
@@ -32,7 +33,13 @@ class OpenAIEmbeddingModel:
                 api_key=config.api_key.get_secret_value(),
             ),
             config.model,
+            owns_client=True,
         )
+
+    async def aclose(self) -> None:
+        """Close the internally-owned provider client."""
+        if self._client is not None and self._owns_client:
+            await self._client.close()
 
     async def embed(self, text: str) -> list[float] | None:
         if self._client is None:
