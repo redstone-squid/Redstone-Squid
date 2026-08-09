@@ -37,14 +37,13 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
 
     @Cog.listener("on_command")
     async def log_command_usage(self, ctx: Context[BotT]):
-        """Logs command usage to stdout and to the owner of the bot via DM."""
+        """Log low-cardinality command usage without stable human identifiers."""
         assert ctx.command is not None
         logger.info(
             "Discord command invoked",
             extra={
                 "squid.command.name": ctx.command.qualified_name,
-                "squid.discord.guild_id": ctx.guild.id if ctx.guild is not None else None,
-                "squid.discord.user_id": ctx.author.id,
+                "squid.guild.id": ctx.guild.id if ctx.guild is not None else None,
                 "squid.discord.interaction": ctx.interaction is not None,
             },
         )
