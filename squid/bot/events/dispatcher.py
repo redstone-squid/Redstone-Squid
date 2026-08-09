@@ -1,9 +1,9 @@
 """Drain the domain-event log for the Discord consumer."""
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, override
 
-from discord.ext import tasks
 from discord.ext.commands import Cog
 
 from squid.bot.events.handlers import DomainEventHandler, build_handler_registry
@@ -25,21 +25,27 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
         self.handlers: dict[str, tuple[DomainEventHandler, ...]] = build_handler_registry(bot)
-        self.process_domain_events.start()
+        self._task: asyncio.Task[None] | None = None
+
+    @override
+    async def cog_load(self) -> None:
+        self._task = self.bot.background_tasks.start_periodic(
+            self.process_domain_events,
+            name="discord-domain-events",
+            interval=15,
+        )
 
     @override
     async def cog_unload(self) -> None:
-        self.process_domain_events.cancel()
+        if self._task is not None:
+            await self.bot.background_tasks.cancel(self._task)
 
-    @tasks.loop(seconds=15)
     async def process_domain_events(self) -> None:
         """Dispatch bounded transition work to its handlers."""
-        try:
-            with trace_span("squid.background.domain_events", {"squid.surface": "background_loop"}):
-                for delivery in await self.bot.services.domain_events.claim(CONSUMER):
-                    await self._process(delivery)
-        except Exception:
-            logger.exception("Failed to process domain events")
+        await self.bot.wait_until_ready()
+        with trace_span("squid.background.domain_events", {"squid.surface": "background_loop"}):
+            for delivery in await self.bot.services.domain_events.claim(CONSUMER):
+                await self._process(delivery)
 
     async def _process(self, delivery: DomainEventDelivery) -> None:
         handlers = self.handlers.get(delivery.event.event_type)
@@ -65,7 +71,3 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
             return
         await self.bot.services.domain_events.complete(delivery)
-
-    @process_domain_events.before_loop
-    async def before_process_domain_events(self) -> None:
-        await self.bot.wait_until_ready()

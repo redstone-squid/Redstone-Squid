@@ -68,9 +68,7 @@ class SearchCog[
     @override
     async def cog_unload(self) -> None:
         """Cancel background renders when the owning submission cog is unloaded."""
-        for task in self._schematic_render_tasks:
-            task.cancel()
-        await asyncio.gather(*self._schematic_render_tasks, return_exceptions=True)
+        await self.bot.background_tasks.cancel(*self._schematic_render_tasks)
 
     @commands.hybrid_command("search")
     @app_commands.describe(

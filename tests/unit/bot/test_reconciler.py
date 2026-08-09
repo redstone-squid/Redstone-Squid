@@ -1,7 +1,7 @@
 """Desired Discord projection reconciler tests."""
 
 from typing import Literal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from whenever import Instant
 
@@ -27,6 +27,25 @@ def _cog() -> tuple[ReconciliationCog, AsyncMock]:
     bot = AsyncMock()
     cog.bot = bot
     return cog, bot
+
+
+async def test_reconciler_starts_only_after_cog_registration_and_is_awaited_on_unload() -> None:
+    task = Mock()
+    bot = Mock()
+    bot.background_tasks.start_periodic.return_value = task
+    bot.background_tasks.cancel = AsyncMock()
+    cog = ReconciliationCog(bot)
+
+    bot.background_tasks.start_periodic.assert_not_called()
+    await cog.cog_load()
+    bot.background_tasks.start_periodic.assert_called_once_with(
+        cog.process_reconciliation,
+        name="discord-reconciliation",
+        interval=15,
+    )
+
+    await cog.cog_unload()
+    bot.background_tasks.cancel.assert_awaited_once_with(task)
 
 
 async def test_refresh_marks_only_the_rendered_generation_before_acknowledging() -> None:

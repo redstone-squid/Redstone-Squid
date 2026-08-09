@@ -151,7 +151,13 @@ class DatabaseWorker:
             "artifact-maintenance",
             "schematic-job-cleanup",
         }
-        return required <= self._supervisor.last_success.keys()
+        longest_interval = max(
+            self._config.event_interval_seconds,
+            self._config.maintenance_interval_seconds,
+            self._config.schematic_job_interval_seconds,
+            300,
+        )
+        return self._supervisor.is_healthy(required, max_age_seconds=longest_interval * 3)
 
     async def _process_events(self) -> None:
         with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):

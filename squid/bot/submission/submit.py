@@ -267,7 +267,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Start rendering only after voting messages exist, without delaying submission."""
         if build.id is None:
             return
-        task = asyncio.create_task(self._render_schematic_preview(build.id))
+        task = self.bot.background_tasks.start(
+            self._render_schematic_preview(build.id),
+            name=f"schematic-preview-{build.id}",
+        )
         self._schematic_render_tasks.add(task)
         task.add_done_callback(self._schematic_render_tasks.discard)
 

@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
 from discord import app_commands
@@ -28,20 +28,20 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-_background_tasks: set[asyncio.Task[Any]] = set()
 
 
 class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
-        self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
 
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
+        await self.bot.background_tasks.cancel(*self._background_tasks)
 
     async def get_vote_session(
         self, message_id: int, *, status: Literal["open", "closed"] | None = None
@@ -95,7 +95,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         anonymous = snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.visibility != "visible_live"
         if anonymous:
-            remove_reaction_task = asyncio.create_task(message.remove_reaction(payload.emoji, user))
+            remove_reaction_task = self.bot.background_tasks.start(
+                message.remove_reaction(payload.emoji, user),
+                name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
+            )
             self._background_tasks.add(remove_reaction_task)
             remove_reaction_task.add_done_callback(self._background_tasks.discard)
 

@@ -1,11 +1,11 @@
 """Apply durable desired Discord message projections."""
 
+import asyncio
 import contextlib
 import logging
 from typing import TYPE_CHECKING, override
 
 import discord
-from discord.ext import tasks
 from discord.ext.commands import Cog
 
 from squid.bot.voting.build_session import BuildVoteSession
@@ -25,21 +25,27 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self.process_reconciliation.start()
+        self._task: asyncio.Task[None] | None = None
+
+    @override
+    async def cog_load(self) -> None:
+        self._task = self.bot.background_tasks.start_periodic(
+            self.process_reconciliation,
+            name="discord-reconciliation",
+            interval=15,
+        )
 
     @override
     async def cog_unload(self) -> None:
-        self.process_reconciliation.cancel()
+        if self._task is not None:
+            await self.bot.background_tasks.cancel(self._task)
 
-    @tasks.loop(seconds=15)
     async def process_reconciliation(self) -> None:
         """Drain bounded Discord refresh work."""
-        try:
-            with trace_span("squid.background.reconciliation", {"squid.surface": "background_loop"}):
-                for job in await self.bot.services.discord_sync.claim():
-                    await self._process_job(job)
-        except Exception:
-            logger.exception("Failed to process reconciliation work")
+        await self.bot.wait_until_ready()
+        with trace_span("squid.background.reconciliation", {"squid.surface": "background_loop"}):
+            for job in await self.bot.services.discord_sync.claim():
+                await self._process_job(job)
 
     async def _process_job(self, job: SyncJob) -> None:
         try:
@@ -103,7 +109,3 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             session = await GenericVoteSession.from_id(self.bot, vote_session_id)
         if session is not None:
             await session.update_messages()
-
-    @process_reconciliation.before_loop
-    async def before_process_reconciliation(self) -> None:
-        await self.bot.wait_until_ready()

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable, Collection, Coroutine
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Self
@@ -106,6 +106,18 @@ class BackgroundTaskSupervisor:
         """Return a snapshot of successful periodic-job heartbeats."""
         return dict(self._last_success)
 
+    def is_healthy(self, required: Collection[str], *, max_age_seconds: float) -> bool:
+        """Return whether every required job completed successfully within the allowed age."""
+        if max_age_seconds <= 0:
+            msg = "Background heartbeat age must be positive."
+            raise ValueError(msg)
+        now = Instant.now()
+        return all(
+            (last_success := self._last_success.get(name)) is not None
+            and (now - last_success).total("seconds") <= max_age_seconds
+            for name in required
+        )
+
     def start(self, coroutine: Coroutine[Any, Any, None], *, name: str) -> asyncio.Task[None]:
         """Start one owned task while this supervisor is accepting work."""
         if self._closing:
@@ -149,6 +161,13 @@ class BackgroundTaskSupervisor:
                 await asyncio.gather(*tasks, return_exceptions=True)
         except TimeoutError:
             logger.exception("Background tasks did not stop before the shutdown deadline")
+
+    async def cancel(self, *tasks: asyncio.Task[Any]) -> None:
+        """Cancel and await a feature's owned tasks without closing the process supervisor."""
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run_periodic(
         self,

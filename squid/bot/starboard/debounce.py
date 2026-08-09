@@ -5,6 +5,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from squid.observability import trace_span
+from squid.runtime import BackgroundTaskSupervisor
 
 logger = logging.getLogger(__name__)
 type EntryKey = tuple[int, int]
@@ -14,9 +15,16 @@ type RefreshCallback = Callable[[EntryKey, bool], Awaitable[None]]
 class EntryDebouncer:
     """Coalesce bursts into one delayed refresh per starboard entry."""
 
-    def __init__(self, callback: RefreshCallback, *, delay: float = 2.0) -> None:
+    def __init__(
+        self,
+        callback: RefreshCallback,
+        *,
+        delay: float = 2.0,
+        supervisor: BackgroundTaskSupervisor | None = None,
+    ) -> None:
         self._callback = callback
         self._delay = delay
+        self._supervisor = supervisor
         self._tasks: dict[EntryKey, asyncio.Task[None]] = {}
         self._force: set[EntryKey] = set()
 
@@ -25,7 +33,13 @@ class EntryDebouncer:
             self._force.add(key)
         if key in self._tasks:
             return
-        task = asyncio.create_task(self._run(key))
+        if self._supervisor is None:
+            task = asyncio.create_task(self._run(key))
+        else:
+            task = self._supervisor.start(
+                self._run(key),
+                name=f"starboard-refresh-{key[0]}-{key[1]}",
+            )
         self._tasks[key] = task
         task.add_done_callback(lambda _task: self._tasks.pop(key, None))
 

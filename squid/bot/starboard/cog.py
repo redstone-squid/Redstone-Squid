@@ -33,7 +33,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
         self.service = bot.services.starboards
-        self._debouncer = EntryDebouncer(self._refresh_key)
+        self._debouncer = EntryDebouncer(self._refresh_key, supervisor=bot.background_tasks)
         self.bot.reactions.subscribe(self)
 
     @override

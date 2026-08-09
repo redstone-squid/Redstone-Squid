@@ -40,6 +40,23 @@ async def test_background_task_supervisor_cancels_and_awaits_periodic_work() -> 
     supervisor.start_periodic(operation, name="test-job", interval=60)
     await entered.wait()
 
+    assert supervisor.is_healthy({"test-job"}, max_age_seconds=1) is False
     await supervisor.close()
 
     assert cancelled.is_set()
+
+
+async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() -> None:
+    completed = asyncio.Event()
+
+    async def operation() -> None:
+        completed.set()
+
+    supervisor = BackgroundTaskSupervisor()
+    supervisor.start_periodic(operation, name="heartbeat", interval=60)
+    await completed.wait()
+    await asyncio.sleep(0)
+
+    assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
+    assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
+    await supervisor.close()

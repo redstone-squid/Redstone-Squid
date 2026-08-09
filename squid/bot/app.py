@@ -34,7 +34,7 @@ from squid.config import (
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability
-from squid.runtime import ApplicationServices
+from squid.runtime import ApplicationServices, BackgroundTaskSupervisor
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -42,6 +42,7 @@ DEFAULT_BOT_IDENTITY = BotIdentityConfig()
 DEFAULT_CATBOX_CONFIG = CatboxConfig()
 DEFAULT_BUILD_CONFIG = BuildConfig()
 DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
+CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"})
 
 
 class RedstoneSquid(Bot):
@@ -83,7 +84,19 @@ class RedstoneSquid(Bot):
         self.bot_version = config.bot_version
         self.owner_server_id = config.owner_server_id
         self.source_code_url = config.source_code_url
+        self.background_tasks = BackgroundTaskSupervisor()
         self.reactions = ReactionRouter(self)
+
+    def is_operational(self) -> bool:
+        """Return whether Discord and every critical bot-owned job are healthy."""
+        return self.is_ready() and self.background_tasks.is_healthy(CRITICAL_BOT_JOBS, max_age_seconds=60)
+
+    @override
+    async def close(self) -> None:
+        """Stop gateway-triggered and background work before application resources close."""
+        await self.reactions.close()
+        await self.background_tasks.close()
+        await super().close()
 
     @override
     async def setup_hook(self) -> None:
@@ -217,7 +230,7 @@ async def main(
 
             async def bot_ready() -> bool:
                 await runtime.ready()
-                return bot.is_ready()
+                return bot.is_operational()
 
             async with bot, ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port):
                 await bot.start(resolved_config.discord.token.get_secret_value())
