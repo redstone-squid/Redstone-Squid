@@ -55,6 +55,9 @@ class LocalArtifactStore:
         except FileNotFoundError:
             return
 
+    async def aclose(self) -> None:
+        """Release resources owned by the adapter."""
+
     def _path(self, key: str) -> Path:
         normalized = PurePosixPath(key)
         if (
@@ -161,6 +164,10 @@ class S3ArtifactStore:
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._client.delete_object, Bucket=self._bucket, Key=self._key(key))
+
+    async def aclose(self) -> None:
+        """Close the SDK connection pool."""
+        await asyncio.to_thread(self._client.close)
 
     def _key(self, key: str) -> str:
         normalized = PurePosixPath(key)

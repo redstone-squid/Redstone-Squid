@@ -214,7 +214,9 @@ class _ServiceGraph:
 
     @cached_property
     def artifacts(self) -> ArtifactStore:
-        return create_artifact_store(self.config.object_storage)
+        store = create_artifact_store(self.config.object_storage)
+        self.resources.push_async_callback(store.aclose)
+        return store
 
     @cached_property
     def schematic_jobs(self) -> SchematicJobService:
@@ -369,6 +371,7 @@ def create_worker_services(
     graph = _ServiceGraph(db, config, resources_stack)
     return WorkerServices(
         builds=graph.builds,
+        artifacts=graph.artifacts,
         votes=graph.votes,
         records=graph.record_computation,
         events=DomainEventService(PostgresDomainEventRepository(db.async_session)),

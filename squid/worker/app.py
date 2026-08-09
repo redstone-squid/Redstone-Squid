@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable
 
 from whenever import Instant
 
-from squid.artifacts.infrastructure import create_artifact_store
 from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_worker_process_config
 from squid.health import ProcessHealthServer
@@ -198,7 +197,6 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
 
     try:
         async with create_worker_runtime(resolved_config.runtime) as runtime:
-            artifacts = create_artifact_store(resolved_config.runtime.object_storage)
             schematic_config = resolved_config.runtime.schematics
             if schematic_config.enabled and engine_installed():
                 native_analyzer = SchematicWorkerPool(schematic_config)
@@ -206,7 +204,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
             schematic_jobs = SchematicJobRunner(
                 runtime.services.schematic_jobs,
-                artifacts,
+                runtime.services.artifacts,
                 native_analyzer,
                 schematic_config,
             )

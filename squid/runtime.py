@@ -9,6 +9,7 @@ from typing import Any, Self
 
 from whenever import Instant
 
+from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
@@ -81,6 +82,7 @@ class WorkerServices:
     """Capabilities exposed to transport-neutral background jobs."""
 
     builds: BuildService
+    artifacts: ArtifactStore
     votes: VoteService
     records: RecordComputationService
     events: DomainEventService
