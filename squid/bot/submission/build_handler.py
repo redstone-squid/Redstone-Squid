@@ -20,7 +20,6 @@ from squid.bot.utils.components import (
     edit_layout,
     no_mentions,
 )
-from squid.bot.utils.web import get_website_preview
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
 from squid.builds.domain.titles import format_build_display_title
@@ -204,9 +203,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 media.append(url)
                 continue
             try:
-                preview = await get_website_preview(url)
+                preview = await self.bot.media_previews.get(url)
             except Exception:
-                logger.warning("Could not resolve build media preview for %s", url, exc_info=True)
+                logger.warning("Could not resolve a build media preview", exc_info=True)
                 continue
             image = preview["image"]
             if isinstance(image, str):
@@ -215,9 +214,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         if not media:
             for url in self.build.video_urls:
                 try:
-                    preview = await get_website_preview(url)
+                    preview = await self.bot.media_previews.get(url)
                 except Exception:
-                    logger.warning("Could not resolve build video preview for %s", url, exc_info=True)
+                    logger.warning("Could not resolve a build video preview", exc_info=True)
                     continue
                 image = preview["image"]
                 if isinstance(image, str):

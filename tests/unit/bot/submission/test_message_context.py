@@ -1,11 +1,15 @@
 """Message bundle assembly primitives."""
 
+import io
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import cast
+from unittest.mock import AsyncMock
 
 import discord
+import pytest
 
+from squid.bot.submission import message_context
 from squid.bot.submission.message_context import collect_images, group_messages
 
 
@@ -70,3 +74,22 @@ async def test_collect_images_respects_count_and_byte_caps() -> None:
     assert len(count_limited) == 1
     assert count_limited[0].source_message_id == 1
     assert len(byte_limited) == 1
+
+
+async def test_video_preview_uses_downloaded_bytes_not_a_remote_ffmpeg_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attachment = FakeAttachment()
+    attachment.filename = "door.mp4"
+    attachment.content_type = "video/mp4"
+    attachment.url = "https://127.0.0.1/private-video"
+    attachment.read = AsyncMock(return_value=b"downloaded-video")  # type: ignore[method-assign]
+    message = FakeImageMessage(1)
+    message.attachments = [attachment]
+    extract = AsyncMock(return_value=io.BytesIO(b"png-frame"))
+    monkeypatch.setattr(message_context, "extract_first_frame", extract)
+
+    images = await collect_images(cast(list[discord.Message], [message]))
+
+    extract.assert_awaited_once_with(b"downloaded-video")
+    assert images[0].data == b"png-frame"

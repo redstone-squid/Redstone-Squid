@@ -51,6 +51,9 @@ class FakeResourcePack:
     async def load(self) -> tuple[bytes, str]:
         return b"resource-pack", "a" * 64
 
+    async def aclose(self) -> None:
+        """Release no resources in the in-memory provider."""
+
 
 def service(
     analyzer: FakeSchematicAnalyzer | None = None,

@@ -62,7 +62,7 @@ from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.users.application import UserService
-from squid.users.infrastructure.mojang import get_minecraft_username
+from squid.users.infrastructure.mojang import MojangClient
 from squid.users.infrastructure.repository import UserRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
@@ -156,9 +156,12 @@ def create_application_services(
         vote_service.set_actor_resolver(vote_members)
         if resource_stack is not None:
             resource_stack.push_async_callback(vote_members.aclose)
+    mojang = MojangClient()
+    if resource_stack is not None:
+        resource_stack.push_async_callback(mojang.aclose)
     user_service = UserService(
         UserRepository(db.async_session, config.verification_code_pepper.get_secret_value()),
-        get_minecraft_username,
+        mojang.get_username,
         lambda: secrets.randbelow(900_000) + 100_000,
     )
     text_generator = OpenAITextGenerator.from_config(config.openai)

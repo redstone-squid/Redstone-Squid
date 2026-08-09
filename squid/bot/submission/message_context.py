@@ -154,10 +154,15 @@ async def collect_images(
             try:
                 if classified.kind == "image":
                     data = await attachment.read()
+                    if len(data) > max_bytes:
+                        continue
                     content_type = classified.content_type
                     origin: Literal["attachment", "video_frame"] = "attachment"
                 else:
-                    data = (await extract_first_frame(attachment.url)).getvalue()
+                    video_data = await attachment.read()
+                    if len(video_data) > max_bytes:
+                        continue
+                    data = (await extract_first_frame(video_data)).getvalue()
                     content_type = "image/png"
                     origin = "video_frame"
             except (discord.HTTPException, OSError, RuntimeError):

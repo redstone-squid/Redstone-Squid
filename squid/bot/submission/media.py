@@ -2,8 +2,7 @@
 
 from typing import Protocol
 
-from squid.bot.utils.uploads import upload_to_catbox
-from squid.config import CatboxConfig
+from squid.bot.utils.uploads import CatboxClient
 
 
 class MediaMirror(Protocol):
@@ -15,9 +14,9 @@ class MediaMirror(Protocol):
 class CatboxMirror:
     """Mirror media through the existing Catbox uploader."""
 
-    def __init__(self, config: CatboxConfig) -> None:
-        self._config = config
+    def __init__(self, client: CatboxClient) -> None:
+        self._client = client
 
     async def upload(self, filename: str, data: bytes, content_type: str) -> str:
         """Upload bytes and return their public URL."""
-        return await upload_to_catbox(filename, data, content_type, self._config)
+        return await self._client.upload(filename, data, content_type)

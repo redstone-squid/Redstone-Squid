@@ -505,8 +505,10 @@ class SchematicService:
         return result
 
     async def aclose(self) -> None:
-        """Release the analyzer's process-level resources at shutdown."""
+        """Release analyzer and resource-pack process resources at shutdown."""
         await self._analyzer.aclose()
+        if self._resource_pack is not None:
+            await self._resource_pack.aclose()
 
     async def bytes_for(self, sha256: str) -> bytes:
         """Return stored schematic bytes, or raise if they are gone."""

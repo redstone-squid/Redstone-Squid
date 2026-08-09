@@ -157,6 +157,8 @@ class SchematicResourcePackProvider(Protocol):
 
     async def load(self) -> tuple[bytes, str]: ...
 
+    async def aclose(self) -> None: ...
+
 
 class SchematicVersionResolver(Protocol):
     """Translation between Minecraft version labels and numeric data versions."""

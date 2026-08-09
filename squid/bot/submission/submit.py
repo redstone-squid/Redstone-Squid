@@ -26,7 +26,6 @@ from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, n
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_admin
-from squid.bot.utils.uploads import upload_to_catbox
 from squid.builds.application import (
     BuildEditPatch,
     BuildInferenceService,
@@ -188,7 +187,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 max_bytes=schematics.limits.max_upload_bytes,
             )
             data = await attachment.read()
-            url = await upload_to_catbox(classified.filename, data, classified.content_type, self.bot.catbox_config)
+            if classified.kind == "schematic":
+                return classified.kind, classified.filename, data
+            url = await self.bot.catbox.upload(classified.filename, data, classified.content_type)
             return classified.kind, url, data
 
         uploaded_media = await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
@@ -202,7 +203,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             elif kind == "video":
                 build.video_urls.append(url)
             else:
-                build.schematic_urls.append(url)
                 pending_schematics.append((url, data))
 
         # Prefilling is safe here: `build` was constructed empty a few lines above, so there is
@@ -284,12 +284,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if url is None:
                 assert prepared.png is not None
                 url = _validated_artifact_url(
-                    await upload_to_catbox(
-                        f"build-{build_id}-render.png",
-                        prepared.png,
-                        "image/png",
-                        self.bot.catbox_config,
-                    )
+                    await self.bot.catbox.upload(f"build-{build_id}-render.png", prepared.png, "image/png")
                 )
                 try:
                     await self.bot.services.schematics.record_render(prepared, url)
@@ -424,7 +419,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             self.bot.services,
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
-            mirror=CatboxMirror(self.bot.catbox_config),
+            mirror=CatboxMirror(self.bot.catbox),
         )
         for build in builds:
             await self.bot.for_build(build).post_for_voting(type="add")

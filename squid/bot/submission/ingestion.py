@@ -38,7 +38,7 @@ async def ingest_message_bundle(
     if not builds or dry_run:
         return builds
 
-    media_urls: dict[str, list[str]] = {"image": [], "video": [], "schematic": []}
+    media_urls: dict[str, list[str]] = {"image": [], "video": []}
     pending_schematics: list[tuple[IngestRequest, IngestedSchematic]] = []
     uploader_id = primary[0].author.id
     for message in primary:
@@ -51,22 +51,28 @@ async def ingest_message_bundle(
                     max_bytes=services.schematics.limits.max_upload_bytes,
                 )
                 data = await attachment.read()
-                url = await mirror.upload(classified.filename, data, classified.content_type)
             except (SquidError, discord.HTTPException, OSError):
-                logger.warning("Could not mirror inferred attachment %s", attachment.filename, exc_info=True)
+                logger.warning("Could not read inferred attachment %s", attachment.filename, exc_info=True)
                 continue
-            media_urls[classified.kind].append(url)
-            if classified.kind == "schematic" and services.schematics.available:
+            if classified.kind == "schematic":
+                if not services.schematics.available:
+                    continue
                 request = IngestRequest(data=data, filename=classified.filename, uploaded_by_discord_id=uploader_id)
                 try:
                     pending_schematics.append((request, await services.schematics.ingest(request)))
                 except SquidError:
                     logger.warning("Could not analyze inferred schematic %s", classified.filename, exc_info=True)
+                continue
+            try:
+                url = await mirror.upload(classified.filename, data, classified.content_type)
+            except OSError:
+                logger.warning("Could not mirror inferred attachment %s", attachment.filename, exc_info=True)
+                continue
+            media_urls[classified.kind].append(url)
 
     for build in builds:
         build.image_urls.extend(media_urls["image"])
         build.video_urls.extend(media_urls["video"])
-        build.schematic_urls.extend(media_urls["schematic"])
         if pending_schematics:
             try:
                 duplicates = await services.schematics.find_duplicates(pending_schematics[0][1])

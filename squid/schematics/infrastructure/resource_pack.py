@@ -23,6 +23,7 @@ class ResourcePackLoader:
         url: str | None,
         expected_sha256: str | None,
         cache_dir: Path,
+        session: aiohttp.ClientSession | None = None,
     ) -> None:
         self._path = path
         self._url = url
@@ -30,6 +31,8 @@ class ResourcePackLoader:
         self._cache_dir = cache_dir
         self._loaded: tuple[bytes, str] | None = None
         self._lock = asyncio.Lock()
+        self._session = session
+        self._owns_session = session is None
 
     async def load(self) -> tuple[bytes, str]:
         """Return the verified pack, fetching a configured URL only on first use."""
@@ -75,8 +78,15 @@ class ResourcePackLoader:
         if cached_data is not None and hashlib.sha256(cached_data).hexdigest() == self._expected_sha256:
             return cached_data
 
+        session = self._session
+        if session is None:
+            session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=60, connect=5, sock_read=45),
+                raise_for_status=False,
+            )
+            self._session = session
         try:
-            async with aiohttp.ClientSession(trust_env=True) as session, session.get(self._url) as response:
+            async with session.get(self._url, allow_redirects=False) as response:
                 response.raise_for_status()
                 if response.content_length is not None and response.content_length > MAX_RESOURCE_PACK_BYTES:
                     raise SchematicRenderUnavailableError(PACK_TOO_LARGE_MESSAGE)
@@ -103,3 +113,9 @@ class ResourcePackLoader:
                 context={"cache_path": str(cached), "error": str(exc)},
             ) from exc
         return data
+
+    async def aclose(self) -> None:
+        """Close the reusable HTTP session when this loader owns it."""
+        if self._owns_session and self._session is not None:
+            await self._session.close()
+        self._session = None

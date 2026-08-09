@@ -22,6 +22,8 @@ from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.uploads import CatboxClient
+from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.domain import Build
 from squid.config import (
     BotIdentityConfig,
@@ -59,7 +61,6 @@ class RedstoneSquid(Bot):
         development_mode: bool = False,
     ):
         self.services = services
-        self.catbox_config = catbox_config
         self.build_config = build_config
         self.community_config = community_config
         self.inference_model = inference_model
@@ -86,6 +87,8 @@ class RedstoneSquid(Bot):
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
         self.reactions = ReactionRouter(self)
+        self.catbox = CatboxClient(catbox_config)
+        self.media_previews = MediaPreviewClient()
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -96,6 +99,8 @@ class RedstoneSquid(Bot):
         """Stop gateway-triggered and background work before application resources close."""
         await self.reactions.close()
         await self.background_tasks.close()
+        await self.catbox.aclose()
+        await self.media_previews.aclose()
         await super().close()
 
     @override
