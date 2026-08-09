@@ -80,3 +80,26 @@ async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() ->
     assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
     assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
     await supervisor.close()
+
+
+async def test_background_task_supervisor_bounds_feature_cancellation() -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def stubborn_operation() -> None:
+        entered.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            await release.wait()
+
+    supervisor = BackgroundTaskSupervisor(shutdown_timeout=0.01)
+    task = supervisor.start(stubborn_operation(), name="stubborn")
+    await entered.wait()
+
+    await supervisor.cancel(task)
+
+    assert task.done() is False
+    release.set()
+    await task
+    await supervisor.close()

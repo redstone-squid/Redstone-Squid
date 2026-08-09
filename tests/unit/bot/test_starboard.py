@@ -49,3 +49,20 @@ async def test_starboard_debouncer_traces_each_refresh(mocker: MockerFixture) ->
         "squid.background.starboard_refresh",
         {"squid.surface": "background_work"},
     )
+
+
+async def test_starboard_debouncer_cancels_pending_work_on_close() -> None:
+    called = False
+
+    async def callback(key: tuple[int, int], force: bool) -> None:
+        nonlocal called
+        called = True
+
+    debouncer = EntryDebouncer(callback, delay=60)
+    debouncer.schedule((1, 2), force=True)
+
+    await debouncer.close()
+    debouncer.schedule((1, 3))
+    await asyncio.sleep(0)
+
+    assert called is False

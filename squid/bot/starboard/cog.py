@@ -39,7 +39,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
-        await self._debouncer.drain()
+        await self._debouncer.close()
 
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         payload = event.payload

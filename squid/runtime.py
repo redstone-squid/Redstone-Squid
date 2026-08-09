@@ -183,18 +183,27 @@ class BackgroundTaskSupervisor:
             task.cancel()
         if not tasks:
             return
-        try:
-            async with asyncio.timeout(self._shutdown_timeout):
-                await asyncio.gather(*tasks, return_exceptions=True)
-        except TimeoutError:
-            logger.exception("Background tasks did not stop before the shutdown deadline")
+        done, pending = await asyncio.wait(tasks, timeout=self._shutdown_timeout)
+        if done:
+            await asyncio.gather(*done, return_exceptions=True)
+        if pending:
+            logger.error(
+                "Background tasks did not stop before the shutdown deadline", extra={"squid.tasks": len(pending)}
+            )
 
     async def cancel(self, *tasks: asyncio.Task[Any]) -> None:
         """Cancel and await a feature's owned tasks without closing the process supervisor."""
         for task in tasks:
             task.cancel()
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            done, pending = await asyncio.wait(tasks, timeout=self._shutdown_timeout)
+            if done:
+                await asyncio.gather(*done, return_exceptions=True)
+            if pending:
+                logger.error(
+                    "Feature background tasks did not stop before the shutdown deadline",
+                    extra={"squid.tasks": len(pending)},
+                )
 
     async def _run_periodic(
         self,
