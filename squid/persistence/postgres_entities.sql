@@ -414,12 +414,13 @@ BEGIN
     END IF;
 
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, enqueued_at, claimed_at, attempts, last_error)
-    VALUES (target_kind, target_key::text, target_action, now(), NULL, 0, NULL)
+        (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (target_kind, target_key::text, target_action, now(), NULL, NULL, 0, NULL)
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
         claimed_at = NULL,
+        dead_at = NULL,
         attempts = 0,
         last_error = NULL;
     RETURN NULL;

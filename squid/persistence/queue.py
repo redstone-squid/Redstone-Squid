@@ -2,9 +2,10 @@
 
 Two outbox tables — `discord_sync_queue` and `domain_event_deliveries` — are drained
 the same way: claim a bounded batch with `FOR UPDATE SKIP LOCKED`, stamp a claim
-timestamp that doubles as a fencing token, then either delete the row or release it
-with exponential backoff. The subtle parts are the reclaim predicate, the fencing
-comparison, and the backoff ceiling, so they are defined once here.
+timestamp that doubles as a fencing token, then either delete the row, release it
+with exponential backoff, or retain it as a dead letter. The subtle parts are the
+reclaim predicate, fencing comparison, and backoff ceiling, so they are defined once
+here.
 
 Two other queues deliberately do not use this. `SearchProjectionStore` runs inside a
 caller-owned session and hands back live ORM rows that the projector mutates in the
@@ -60,15 +61,17 @@ class ClaimedRowQueue:
         *,
         ready_at: InstrumentedAttribute[Instant],
         claimed_at: InstrumentedAttribute[Instant | None],
+        dead_at: InstrumentedAttribute[Instant | None],
     ) -> None:
         self._session_factory = session_factory
         self._model = model
         self._ready_at = ready_at
         self._claimed_at = claimed_at
+        self._dead_at = dead_at
 
     def reclaimable(self) -> ColumnElement[bool]:
         """Match rows this worker may claim now."""
-        return reclaimable(self._claimed_at)
+        return self._dead_at.is_(None) & reclaimable(self._claimed_at)
 
     async def stamp(self, rows: tuple[Any, ...], session: AsyncSession) -> Instant:
         """Take ownership of freshly selected rows and return the claim token."""
@@ -97,9 +100,9 @@ class ClaimedRowQueue:
         error: str,
         max_attempts: int,
     ) -> bool:
-        """Release a failed row for retry, or drop it at the attempt ceiling.
+        """Release a failed row for retry, or dead-letter it at the attempt ceiling.
 
-        Returns whether the row was dropped.
+        Returns whether the row was dead-lettered by this worker.
         """
         attempts += 1
         claim_filter = (*identity, self._claimed_at == claimed_at)
@@ -107,7 +110,16 @@ class ClaimedRowQueue:
             if attempts >= max_attempts:
                 result = cast(
                     CursorResult[Any],
-                    await session.execute(delete(self._model).where(*claim_filter)),
+                    await session.execute(
+                        update(self._model)
+                        .where(*claim_filter)
+                        .values(
+                            attempts=attempts,
+                            claimed_at=None,
+                            last_error=error[:4000],
+                            dead_at=func.now(),
+                        )
+                    ),
                 )
                 await session.commit()
                 return bool(result.rowcount)

@@ -52,10 +52,10 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             else:
                 await self._refresh_vote(int(job.source_key))
         except Exception as error:
-            dropped = await self.bot.services.discord_sync.fail(job, error)
-            if dropped:
+            dead_lettered = await self.bot.services.discord_sync.fail(job, error)
+            if dead_lettered:
                 logger.exception(
-                    "Dropped Discord reconciliation job after repeated failures",
+                    "Dead-lettered Discord reconciliation job after repeated failures",
                     extra={"resource_kind": job.resource_kind, "source_key": job.source_key},
                 )
             return

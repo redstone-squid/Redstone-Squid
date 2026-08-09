@@ -54,10 +54,10 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             for handler in handlers:
                 await handler.handle(delivery.event)
         except Exception as error:
-            dropped = await self.bot.services.domain_events.fail(delivery, error)
-            if dropped:
+            dead_lettered = await self.bot.services.domain_events.fail(delivery, error)
+            if dead_lettered:
                 logger.exception(
-                    "Dropped a domain event after repeated handler failures",
+                    "Dead-lettered a domain event after repeated handler failures",
                     extra={
                         "squid.event.id": delivery.event.id,
                         "squid.event.type": delivery.event.event_type,

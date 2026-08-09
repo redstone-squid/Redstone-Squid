@@ -42,7 +42,11 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
 
     __tablename__ = "domain_event_deliveries"
     __table_args__ = (
-        Index("domain_event_deliveries_ready_idx", "available_at", postgresql_where=text("claimed_at IS NULL")),
+        Index(
+            "domain_event_deliveries_ready_idx",
+            "available_at",
+            postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
+        ),
     )
 
     event_id: Mapped[int] = mapped_column(
@@ -55,5 +59,6 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

@@ -20,6 +20,7 @@ class PostgresDiscordSyncQueue:
             DiscordSyncQueueItem,
             ready_at=DiscordSyncQueueItem.enqueued_at,
             claimed_at=DiscordSyncQueueItem.claimed_at,
+            dead_at=DiscordSyncQueueItem.dead_at,
         )
 
     async def claim(self, *, limit: int) -> tuple[SyncJob, ...]:

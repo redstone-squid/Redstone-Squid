@@ -69,8 +69,8 @@ class DomainEventService:
         return await self._repository.complete(delivery)
 
     async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
-        """Retry a failed delivery with backoff, or drop it at the attempt ceiling.
+        """Retry a failed delivery with backoff, or dead-letter it at the attempt ceiling.
 
-        Returns whether the delivery was dropped.
+        Returns whether the delivery was dead-lettered.
         """
         return await self._repository.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)

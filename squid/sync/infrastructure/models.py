@@ -16,7 +16,11 @@ class DiscordSyncQueueItem(Base, kw_only=True):
         CheckConstraint("resource_kind IN ('build', 'vote_session')", name="discord_sync_queue_resource_kind_check"),
         CheckConstraint("action IN ('refresh', 'delete')", name="discord_sync_queue_action_check"),
         UniqueConstraint("resource_kind", "source_key", name="discord_sync_queue_resource_key"),
-        Index("discord_sync_queue_ready_idx", "enqueued_at", postgresql_where=text("claimed_at IS NULL")),
+        Index(
+            "discord_sync_queue_ready_idx",
+            "enqueued_at",
+            postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -27,5 +31,6 @@ class DiscordSyncQueueItem(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

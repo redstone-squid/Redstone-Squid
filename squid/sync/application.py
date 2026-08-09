@@ -54,8 +54,8 @@ class DiscordSyncService:
         return await self._repository.complete(job)
 
     async def fail(self, job: SyncJob, error: Exception) -> bool:
-        """Retry failed work with backoff, or drop it at the attempt ceiling.
+        """Retry failed work with backoff, or dead-letter it at the attempt ceiling.
 
-        Returns whether the job was dropped.
+        Returns whether the job was dead-lettered.
         """
         return await self._repository.fail(job, str(error)[:4000], max_attempts=self._max_attempts)

@@ -18,6 +18,7 @@ class PostgresDomainEventRepository:
             DomainEventDeliveryRecord,
             ready_at=DomainEventDeliveryRecord.available_at,
             claimed_at=DomainEventDeliveryRecord.claimed_at,
+            dead_at=DomainEventDeliveryRecord.dead_at,
         )
 
     async def claim(self, *, consumer: str, limit: int) -> tuple[DomainEventDelivery, ...]:

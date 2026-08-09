@@ -19,6 +19,7 @@ CREATE TABLE discord_sync_queue (
     action TEXT NOT NULL DEFAULT 'refresh',
     enqueued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
+    dead_at TIMESTAMPTZ,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     UNIQUE (resource_kind, source_key)
@@ -37,6 +38,7 @@ CREATE TABLE domain_event_deliveries (
     consumer TEXT REFERENCES domain_event_consumers(name) ON DELETE CASCADE,
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
+    dead_at TIMESTAMPTZ,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     PRIMARY KEY (event_id, consumer)
@@ -163,7 +165,7 @@ async def test_failing_backs_the_row_off_instead_of_dropping_it(
     assert await queue.claim(limit=10) == ()
 
 
-async def test_failing_at_the_attempt_ceiling_drops_the_row(
+async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(async_session_factory)
@@ -179,7 +181,14 @@ async def test_failing_at_the_attempt_ceiling_drops_the_row(
     )
 
     assert await queue.fail(ceiling_job, "boom", max_attempts=8) is True
-    assert await _count(async_session_factory, "discord_sync_queue") == 0
+    async with async_session_factory() as session:
+        attempts, claimed_at, dead, error = (
+            await session.execute(
+                text("SELECT attempts, claimed_at, dead_at IS NOT NULL, last_error FROM discord_sync_queue")
+            )
+        ).one()
+    assert (attempts, claimed_at, dead, error) == (8, None, True, "boom")
+    assert await queue.claim(limit=10) == ()
 
 
 # --- domain_event_deliveries -------------------------------------------------
@@ -223,7 +232,7 @@ async def test_a_stale_delivery_token_cannot_acknowledge(
     assert await _count(async_session_factory, "domain_event_deliveries") == 1
 
 
-async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_drops_it(
+async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_dead_letters_it(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
@@ -244,4 +253,11 @@ async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_drops_it(
         event=retried.event, consumer=retried.consumer, attempts=7, claimed_at=retried.claimed_at
     )
     assert await repository.fail(ceiling, "boom", max_attempts=8) is True
-    assert await _count(async_session_factory, "domain_event_deliveries") == 0
+    async with async_session_factory() as session:
+        attempts, claimed_at, dead, error = (
+            await session.execute(
+                text("SELECT attempts, claimed_at, dead_at IS NOT NULL, last_error FROM domain_event_deliveries")
+            )
+        ).one()
+    assert (attempts, claimed_at, dead, error) == (8, None, True, "boom")
+    assert await repository.claim(consumer="discord", limit=10) == ()
