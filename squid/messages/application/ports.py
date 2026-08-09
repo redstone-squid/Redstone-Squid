@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind
 
 
 class MessageRepository(Protocol):
@@ -33,3 +33,14 @@ class MessageRepository(Protocol):
     async def list_for_build_purpose(
         self, build_id: int, purpose: MessagePurposeLiteral
     ) -> Sequence[MessageRecord]: ...
+
+    async def list_projection(
+        self, resource_kind: ProjectionResourceKind, source_key: str
+    ) -> Sequence[MessageRecord]: ...
+
+    async def mark_projection_applied(
+        self,
+        resource_kind: ProjectionResourceKind,
+        source_key: str,
+        generation: int,
+    ) -> None: ...

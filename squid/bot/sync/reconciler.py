@@ -1,8 +1,10 @@
-"""Drain durable Discord and search-projection reconciliation work."""
+"""Apply durable desired Discord message projections."""
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, override
 
+import discord
 from discord.ext import tasks
 from discord.ext.commands import Cog
 
@@ -42,14 +44,17 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def _process_job(self, job: SyncJob) -> None:
         try:
             if job.action == "delete":
-                logger.warning(
-                    "Cannot remove an untracked Discord resource after database deletion",
-                    extra={"resource_kind": job.resource_kind, "source_key": job.source_key},
-                )
+                await self._delete_projection(job)
             elif job.resource_kind == "build":
                 await self._refresh_build(int(job.source_key))
             else:
                 await self._refresh_vote(int(job.source_key))
+            if job.action == "refresh":
+                await self.bot.services.messages.mark_projection_applied(
+                    job.resource_kind,
+                    job.source_key,
+                    job.generation,
+                )
         except Exception as error:
             dead_lettered = await self.bot.services.discord_sync.fail(job, error)
             if dead_lettered:
@@ -59,6 +64,21 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
             return
         await self.bot.services.discord_sync.complete(job)
+
+    async def _delete_projection(self, job: SyncJob) -> None:
+        """Delete retained Discord targets and their tracking rows idempotently."""
+        targets = await self.bot.services.messages.list_projection(job.resource_kind, job.source_key)
+        for target in targets:
+            if target.channel_id is not None:
+                message = await self.bot.get_or_fetch_message(
+                    target.channel_id,
+                    target.id,
+                    untrack_if_missing=False,
+                )
+                if message is not None:
+                    with contextlib.suppress(discord.NotFound):
+                        await message.delete()
+            await self.bot.services.messages.untrack(target.id)
 
     async def _refresh_build(self, build_id: int) -> None:
         build = await self.bot.services.build_queries.get(build_id)

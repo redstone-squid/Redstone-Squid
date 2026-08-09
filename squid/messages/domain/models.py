@@ -6,6 +6,7 @@ from typing import Literal
 from whenever import Instant
 
 MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
+ProjectionResourceKind = Literal["build", "vote_session"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,3 +33,8 @@ class MessageRecord:
     build_id: int | None
     vote_session_id: int | None
     updated_at: Instant | None
+    projection_resource_kind: ProjectionResourceKind | None = None
+    projection_source_key: str | None = None
+    desired_action: Literal["refresh", "delete"] = "refresh"
+    desired_revision: int = 1
+    applied_revision: int = 1

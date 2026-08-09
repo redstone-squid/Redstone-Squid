@@ -1,14 +1,14 @@
 """SQLAlchemy tracked message repository."""
 
 from collections.abc import Sequence
-from typing import cast
+from typing import Literal, cast
 
 from advanced_alchemy.exceptions import NotFoundError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repository import BaseAsyncRepository
@@ -50,6 +50,15 @@ class MessageRepository:
         """
         async with self._session_factory() as session:
             repository = _MessageModelRepository(session=session, auto_commit=True)
+            projection_resource_kind: ProjectionResourceKind | None = None
+            projection_source_key: str | None = None
+            if purpose != "build_original_message":
+                if vote_session_id is not None:
+                    projection_resource_kind = "vote_session"
+                    projection_source_key = str(vote_session_id)
+                elif build_id is not None:
+                    projection_resource_kind = "build"
+                    projection_source_key = str(build_id)
             await repository.add(
                 Message(
                     id=message_id,
@@ -60,6 +69,8 @@ class MessageRepository:
                     content=content,
                     build_id=build_id,
                     vote_session_id=vote_session_id,
+                    projection_resource_kind=projection_resource_kind,
+                    projection_source_key=projection_source_key,
                 )
             )
 
@@ -123,6 +134,35 @@ class MessageRepository:
             result = await session.execute(stmt)
             return [self._to_record(message) for message in result.scalars().all()]
 
+    async def list_projection(self, resource_kind: ProjectionResourceKind, source_key: str) -> Sequence[MessageRecord]:
+        """Return actual Discord targets retained for one desired resource."""
+        statement = select(Message).where(
+            Message.projection_resource_kind == resource_kind,
+            Message.projection_source_key == source_key,
+        )
+        async with self._session_factory() as session:
+            rows = (await session.scalars(statement)).all()
+            return [self._to_record(message) for message in rows]
+
+    async def mark_projection_applied(
+        self,
+        resource_kind: ProjectionResourceKind,
+        source_key: str,
+        generation: int,
+    ) -> None:
+        """Fence acknowledgement on the exact desired generation that was rendered."""
+        statement = (
+            update(Message)
+            .where(
+                Message.projection_resource_kind == resource_kind,
+                Message.projection_source_key == source_key,
+                Message.desired_revision == generation,
+            )
+            .values(applied_revision=generation)
+        )
+        async with self._session_factory.begin() as session:
+            await session.execute(statement)
+
     @staticmethod
     def _to_record(message: Message) -> MessageRecord:
         return MessageRecord(
@@ -135,4 +175,9 @@ class MessageRepository:
             build_id=message.build_id,
             vote_session_id=message.vote_session_id,
             updated_at=message.updated_at,
+            projection_resource_kind=cast(ProjectionResourceKind | None, message.projection_resource_kind),
+            projection_source_key=message.projection_source_key,
+            desired_action=cast(Literal["refresh", "delete"], message.desired_action),
+            desired_revision=message.desired_revision,
+            applied_revision=message.applied_revision,
         )

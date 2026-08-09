@@ -18,6 +18,7 @@ class SyncJob:
     resource_kind: ResourceKind
     source_key: str
     action: SyncAction
+    generation: int
     attempts: int
     claimed_at: Instant
 

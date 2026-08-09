@@ -32,5 +32,6 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

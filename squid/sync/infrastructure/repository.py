@@ -46,6 +46,7 @@ class PostgresDiscordSyncQueue:
                     resource_kind=cast(ResourceKind, row.resource_kind),
                     source_key=row.source_key,
                     action=cast(SyncAction, row.action),
+                    generation=row.generation,
                     attempts=row.attempts,
                     claimed_at=claimed_at,
                 )

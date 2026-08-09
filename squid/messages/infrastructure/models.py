@@ -1,6 +1,6 @@
 """SQLAlchemy tracked message models."""
 
-from sqlalchemy import BigInteger, ForeignKey, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -12,6 +12,29 @@ class Message(Base):
     """A message associated with a build or vote session."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        CheckConstraint(
+            "(projection_resource_kind IS NULL) = (projection_source_key IS NULL)",
+            name="messages_projection_identity_complete",
+        ),
+        CheckConstraint(
+            "projection_resource_kind IS NULL OR projection_resource_kind IN ('build', 'vote_session')",
+            name="messages_projection_resource_kind_check",
+        ),
+        CheckConstraint(
+            "desired_action IN ('refresh', 'delete')",
+            name="messages_desired_action_check",
+        ),
+        CheckConstraint(
+            "desired_revision > 0 AND applied_revision > 0 AND applied_revision <= desired_revision",
+            name="messages_projection_revisions_valid",
+        ),
+        Index(
+            "messages_projection_pending_idx",
+            "desired_revision",
+            postgresql_where=text("projection_resource_kind IS NOT NULL AND desired_revision > applied_revision"),
+        ),
+    )
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
@@ -28,7 +51,7 @@ class Message(Base):
     content: Mapped[str | None] = mapped_column(Text)
     build_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("builds.id", name="public_messages_build_id_fkey", ondelete="CASCADE"),
+        ForeignKey("builds.id", name="public_messages_build_id_fkey", ondelete="SET NULL"),
         default=None,
     )
     vote_session_id: Mapped[int | None] = mapped_column(
@@ -36,5 +59,12 @@ class Message(Base):
         ForeignKey("vote_sessions.id", name="messages_vote_session_id_fkey", ondelete="SET NULL"),
         default=None,
     )
+    projection_resource_kind: Mapped[str | None] = mapped_column(Text, default=None)
+    projection_source_key: Mapped[str | None] = mapped_column(Text, default=None)
+    desired_action: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'refresh'"), default="refresh"
+    )
+    desired_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
+    applied_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     updated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default_factory=Instant.now, onupdate=func.now())
     """When this row was last modified. Bumped automatically on every UPDATE."""

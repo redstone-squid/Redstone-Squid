@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from squid.messages.application.ports import MessageRepository
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind, TrackedMessage
 from squid.messages.errors import InvalidMessageError
 
 
@@ -58,3 +58,16 @@ class MessageService:
         use it to decide whether a message has already been posted at all.
         """
         return await self._repository.list_for_build_purpose(build_id, purpose)
+
+    async def list_projection(self, resource_kind: ProjectionResourceKind, source_key: str) -> Sequence[MessageRecord]:
+        """Return actual Discord messages belonging to one desired projection."""
+        return await self._repository.list_projection(resource_kind, source_key)
+
+    async def mark_projection_applied(
+        self,
+        resource_kind: ProjectionResourceKind,
+        source_key: str,
+        generation: int,
+    ) -> None:
+        """Acknowledge only messages still targeting the generation just rendered."""
+        await self._repository.mark_projection_applied(resource_kind, source_key, generation)

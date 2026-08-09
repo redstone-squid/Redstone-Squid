@@ -5,7 +5,7 @@ from collections.abc import Sequence
 import pytest
 
 from squid.messages.application import MessageService
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord, TrackedMessage
+from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind, TrackedMessage
 from squid.messages.errors import InvalidMessageError
 
 
@@ -39,6 +39,14 @@ class FakeMessageRepository:
 
     async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
         return []
+
+    async def list_projection(self, resource_kind: ProjectionResourceKind, source_key: str) -> Sequence[MessageRecord]:
+        return []
+
+    async def mark_projection_applied(
+        self, resource_kind: ProjectionResourceKind, source_key: str, generation: int
+    ) -> None:
+        return None
 
 
 async def test_message_service_requires_vote_session_id() -> None:

@@ -132,6 +132,35 @@ def test_migrations_create_schema_without_drift(
                     ")"
                 )
             ).scalar_one()
+            connection.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
+            connection.execute(
+                text("INSERT INTO discord_sync_queue (resource_kind, source_key) VALUES ('build', '42')")
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO messages ("
+                    "id, server_id, channel_id, author_id, purpose, projection_resource_kind, projection_source_key"
+                    ") VALUES (100, 999, 200, 300, 'view_confirmed_build', 'build', '42')"
+                )
+            )
+            initial_projection_state = connection.execute(
+                text("SELECT desired_action, desired_revision, applied_revision FROM messages WHERE id = 100")
+            ).one()
+            connection.execute(
+                text(
+                    "UPDATE discord_sync_queue "
+                    "SET action = 'delete', enqueued_at = enqueued_at + interval '1 second' "
+                    "WHERE resource_kind = 'build' AND source_key = '42'"
+                )
+            )
+            updated_projection_state = connection.execute(
+                text(
+                    "SELECT m.desired_action, m.desired_revision, m.applied_revision, q.generation "
+                    "FROM messages m JOIN discord_sync_queue q "
+                    "ON q.resource_kind = m.projection_resource_kind AND q.source_key = m.projection_source_key "
+                    "WHERE m.id = 100"
+                )
+            ).one()
     finally:
         engine.dispose()
 
@@ -146,6 +175,8 @@ def test_migrations_create_schema_without_drift(
     assert legacy_record_table is None
     assert legacy_record_routines == set()
     assert retirement_rebuild_queued is True
+    assert initial_projection_state == ("refresh", 1, 1)
+    assert updated_projection_state == ("delete", 2, 1, 2)
 
 
 def test_alembic_detects_managed_function_and_trigger_drift(

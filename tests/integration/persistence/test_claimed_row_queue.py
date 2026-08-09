@@ -20,6 +20,7 @@ CREATE TABLE discord_sync_queue (
     enqueued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
     dead_at TIMESTAMPTZ,
+    generation BIGINT NOT NULL DEFAULT 1,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     UNIQUE (resource_kind, source_key)
@@ -176,6 +177,7 @@ async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
         resource_kind=job.resource_kind,
         source_key=job.source_key,
         action=job.action,
+        generation=job.generation,
         attempts=7,
         claimed_at=job.claimed_at,
     )

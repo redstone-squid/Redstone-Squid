@@ -9,7 +9,7 @@ from squid.sync import DiscordSyncService, SyncJob
 
 
 def _job() -> SyncJob:
-    return SyncJob(1, "build", "42", "refresh", 0, Instant.from_utc(2026, 8, 5))
+    return SyncJob(1, "build", "42", "refresh", 1, 0, Instant.from_utc(2026, 8, 5))
 
 
 async def test_service_delegates_claim_and_acknowledgement() -> None:
