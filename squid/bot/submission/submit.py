@@ -14,9 +14,7 @@ from discord.ext.commands import (
     flag,
 )
 
-from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -35,7 +33,7 @@ from squid.builds.application import (
     BuildService,
     DoorSubmissionInput,
 )
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Build
 from squid.core.errors import SquidError
 from squid.core.i18n import _
 from squid.messages.application import MessageService
@@ -404,31 +402,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             f"Declared {declared[0]}x{declared[1]}x{declared[2]}, "
             f"schematic measures {measured.width}x{measured.height}x{measured.length}"
         )
-
-    @commands.Cog.listener("on_build_confirmed")
-    async def post_confirmed_build(self, build: Build) -> None:
-        """Post a confirmed build to the appropriate discord channels.
-
-        Args:
-            build (Build): The build to post.
-        """
-        assert build.id is not None
-        if build.submission_status != Status.CONFIRMED:
-            msg = "The build must be confirmed to post it."
-            raise ValueError(msg)
-
-        build_handler = self.bot.for_build(build)
-        layout = await build_handler.render_layout()
-
-        async def _send_msg(channel: GuildMessageable):
-            message = await channel.send(view=layout, allowed_mentions=no_mentions())
-            await self.messages.track(
-                to_tracked_message(message),
-                purpose="view_confirmed_build",
-                build_id=build.id,
-            )
-
-        await asyncio.gather(*(_send_msg(channel) for channel in await build_handler.get_channels_to_post_to()))
 
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):

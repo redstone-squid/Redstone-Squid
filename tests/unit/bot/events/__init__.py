@@ -1,0 +1,1 @@
+"""Domain-event dispatch tests."""

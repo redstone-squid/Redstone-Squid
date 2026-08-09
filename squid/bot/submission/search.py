@@ -272,9 +272,7 @@ class SearchCog[
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            build = await self.builds.confirm(build_id)
-
-            self.bot.dispatch("build_confirmed", build)
+            await self.builds.confirm(build_id)
 
             await edit_layout(
                 sent_message,

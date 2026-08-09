@@ -94,6 +94,7 @@ class RedstoneSquid(Bot):
             "squid.bot.voting.vote",
             "squid.bot.starboard.cog",
             "squid.bot.sync",
+            "squid.bot.events",
             "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",
