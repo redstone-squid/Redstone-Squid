@@ -25,6 +25,8 @@ from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
+from squid.events.application import DomainEventService
+from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.permissions.application import AuthorizationService
@@ -200,6 +202,7 @@ def create_application_services(db: DatabaseEngine, config: RuntimeConfig) -> Ap
         votes=vote_service,
         vote_members=vote_members,
         discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),
+        domain_events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
         redstoner=RedstonerService(
             RedstonerPolicy(
                 starboard_author_id=config.community.redstoner_starboard_author_id,

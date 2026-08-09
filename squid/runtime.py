@@ -9,6 +9,7 @@ from squid.auth.application import ApiKeyService
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.events.application import DomainEventService
 from squid.messages.application import MessageService
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
@@ -49,6 +50,7 @@ class ApplicationServices:
     votes: VoteService
     vote_members: InteractiveVoteActorResolver | None
     discord_sync: DiscordSyncService
+    domain_events: DomainEventService
     redstoner: RedstonerService
     welcome_relay: WelcomeRelayService
 

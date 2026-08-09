@@ -426,6 +426,54 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.emit_domain_event() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_type text;
+    target_kind text;
+    target_id bigint;
+    target_payload jsonb;
+    new_event_id bigint;
+BEGIN
+    -- Unlike discord_sync_queue, this log records transitions, so an UPDATE that
+    -- rewrites a column to the value it already held must not produce an event.
+    IF TG_TABLE_NAME = 'builds' THEN
+        IF OLD.submission_status IS NOT DISTINCT FROM NEW.submission_status THEN RETURN NULL; END IF;
+        target_kind := 'build';
+        target_id := NEW.id;
+        IF NEW.submission_status = 1 THEN
+            target_type := 'build.confirmed';
+        ELSIF NEW.submission_status = 2 THEN
+            target_type := 'build.denied';
+        ELSE
+            RETURN NULL;
+        END IF;
+        target_payload := jsonb_build_object(
+            'previous_status', OLD.submission_status,
+            'status', NEW.submission_status
+        );
+    ELSE
+        IF OLD.status IS NOT DISTINCT FROM NEW.status OR NEW.status <> 'closed' THEN RETURN NULL; END IF;
+        target_kind := 'vote_session';
+        target_id := NEW.id;
+        target_type := 'vote_session.closed';
+        target_payload := jsonb_build_object('kind', NEW.kind, 'result', NEW.result);
+    END IF;
+
+    INSERT INTO public.domain_events (event_type, aggregate_kind, aggregate_id, payload, occurred_at)
+    VALUES (target_type, target_kind, target_id, target_payload, now())
+    RETURNING id INTO new_event_id;
+
+    INSERT INTO public.domain_event_deliveries
+        (event_id, consumer, available_at, claimed_at, attempts, last_error)
+    SELECT new_event_id, c.name, now(), NULL, 0, NULL
+    FROM public.domain_event_consumers c;
+
+    RETURN NULL;
+END;
+$$;
+
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
@@ -497,3 +545,7 @@ CREATE TRIGGER extender_timing_variants_enqueue_discord_sync AFTER INSERT OR DEL
 CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+CREATE TRIGGER builds_emit_domain_event AFTER UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
+
+CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
