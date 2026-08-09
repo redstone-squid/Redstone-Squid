@@ -479,15 +479,18 @@ class ObservabilityConfig(_FrozenModel):
     headers: dict[str, SecretStr] = Field(default_factory=dict)
     sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
     service_name: str = Field(default="redstone-squid", min_length=1)
+    environment: str = Field(default="development", min_length=1)
+    release: str | None = None
 
     _empty_endpoint = field_validator("endpoint", mode="before")(_empty_to_none)
+    _empty_release = field_validator("release", mode="before")(_empty_to_none)
 
-    @field_validator("service_name")
+    @field_validator("service_name", "environment")
     @classmethod
-    def _normalize_service_name(cls, value: str) -> str:
+    def _normalize_resource_name(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
-            msg = "Must contain a non-whitespace service name."
+            msg = "Must contain a non-whitespace resource name."
             raise ValueError(msg)
         return normalized
 

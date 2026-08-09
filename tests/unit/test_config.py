@@ -62,6 +62,8 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
         SQUID_OBSERVABILITY_SAMPLE_RATIO="0.25",
         SQUID_OBSERVABILITY_SERVICE_NAME="custom-squid",
+        SQUID_OBSERVABILITY_ENVIRONMENT="staging",
+        SQUID_OBSERVABILITY_RELEASE="abcdef123456",
     )
 
     config = load_application_config()
@@ -87,6 +89,8 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"
         assert process_config.observability.sample_ratio == 0.25
         assert process_config.observability.service_name == "custom-squid"
+        assert process_config.observability.environment == "staging"
+        assert process_config.observability.release == "abcdef123456"
         assert "secret-token" not in repr(process_config.observability)
     assert EMBEDDING_DIMENSION == 1536
 

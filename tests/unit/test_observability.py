@@ -82,6 +82,21 @@ def test_metrics_endpoint_uses_its_signal_path() -> None:
     )
 
 
+def test_resource_attributes_include_environment_and_release() -> None:
+    config = ObservabilityConfig.model_validate(
+        {
+            "environment": "staging",
+            "release": "abcdef123456",
+        }
+    )
+
+    assert observability._resource_attributes(config, "worker") == {  # pyright: ignore[reportPrivateUsage]
+        "service.name": "redstone-squid-worker",
+        "deployment.environment.name": "staging",
+        "service.version": "abcdef123456",
+    }
+
+
 def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture) -> None:
     observability._configured_pid = 100  # pyright: ignore[reportPrivateUsage]
     observability._configured_handle = ObservabilityHandle()  # pyright: ignore[reportPrivateUsage]

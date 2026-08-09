@@ -290,7 +290,7 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     if not component:
         msg = "The observability process service name must not be empty."
         raise ValueError(msg)
-    resource = Resource.create({"service.name": f"{config.service_name}-{component}"})
+    resource = Resource.create(_resource_attributes(config, component))
     provider = TracerProvider(
         resource=resource,
         sampler=ParentBasedTraceIdRatio(config.sample_ratio),
@@ -327,6 +327,17 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
             metric_provider.shutdown()
 
     return ObservabilityHandle(shutdown)
+
+
+def _resource_attributes(config: ObservabilityConfig, component: str) -> dict[str, str]:
+    """Build low-cardinality deployment identity shared by traces and metrics."""
+    attributes = {
+        "service.name": f"{config.service_name}-{component}",
+        "deployment.environment.name": config.environment,
+    }
+    if config.release is not None:
+        attributes["service.version"] = config.release
+    return attributes
 
 
 def _install_trace_log_filter() -> None:
