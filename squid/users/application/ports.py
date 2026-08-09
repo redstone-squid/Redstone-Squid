@@ -1,11 +1,20 @@
 """User account application ports."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
 from squid.users.domain import AliasClaim, ClaimMethod, ClaimStatus, CreatorAlias, UserAccount, UserConsent
-from squid.users.domain import VerificationCode as DomainVerificationCode
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationLinkResult:
+    """Outcome of atomically consuming a code and linking an account."""
+
+    account: UserAccount | None = None
+    claimed_alias: CreatorAlias | None = None
+    conflicting_minecraft_uuid: UUID | None = None
 
 
 class UserRepository(Protocol):
@@ -42,8 +51,12 @@ class UserRepository(Protocol):
 
     async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_discord_id: int) -> AliasClaim: ...
 
-    async def get_valid_verification_code(self, code: str) -> DomainVerificationCode | None: ...
+    async def consume_code_and_link_account(
+        self,
+        *,
+        discord_id: int,
+        code: str,
+        consent: UserConsent,
+    ) -> VerificationLinkResult: ...
 
-    async def invalidate_codes(self, minecraft_uuid: UUID) -> None: ...
-
-    async def create_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...
+    async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...

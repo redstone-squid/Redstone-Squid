@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID
 
 from squid.users.application.ports import UserRepository
-from squid.users.domain import AliasClaim, ClaimMethod, ClaimStatus, CreatorAlias, UserAccount, UserConsent
+from squid.users.domain import AliasClaim, ClaimStatus, CreatorAlias, UserAccount, UserConsent
 from squid.users.errors import (
     AccountAlreadyLinkedError,
     ClaimNotFoundError,
@@ -55,34 +55,16 @@ class UserService:
         Returns the creator alias claimed automatically because it matched the
         verified username, or ``None`` if no unclaimed alias matched.
         """
-        verification_code = await self._repository.get_valid_verification_code(code)
-        if verification_code is None:
-            raise InvalidVerificationCodeError
-
-        user = await self._repository.get_by_discord_id(discord_id)
-        if user is None:
-            user = await self._repository.add(
-                consent=consent,
-                discord_id=discord_id,
-                minecraft_uuid=verification_code.minecraft_uuid,
-                ign=verification_code.username,
-            )
-        else:
-            if user.minecraft_uuid is not None and user.minecraft_uuid != verification_code.minecraft_uuid:
-                raise AccountAlreadyLinkedError(discord_id, user.minecraft_uuid)
-
-            user.minecraft_uuid = verification_code.minecraft_uuid
-            user.ign = verification_code.username
-            user.consent = consent
-            await self._repository.update(user)
-
-        if user.id is None:
-            return None
-        return await self._repository.claim_unclaimed_alias(
-            user_id=user.id,
-            name=verification_code.username,
-            method=ClaimMethod.VERIFIED_IGN,
+        result = await self._repository.consume_code_and_link_account(
+            discord_id=discord_id,
+            code=code,
+            consent=consent,
         )
+        if result.account is None:
+            raise InvalidVerificationCodeError
+        if result.conflicting_minecraft_uuid is not None:
+            raise AccountAlreadyLinkedError(discord_id, result.conflicting_minecraft_uuid)
+        return result.claimed_alias
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:
         """Unlink a user's Minecraft account."""
@@ -129,9 +111,8 @@ class UserService:
         if minecraft_username is None:
             raise MinecraftAccountNotFoundError(minecraft_uuid)
 
-        await self._repository.invalidate_codes(minecraft_uuid)
         code = self._verification_code_factory()
-        await self._repository.create_verification_code(
+        await self._repository.replace_verification_code(
             minecraft_uuid=minecraft_uuid, code=str(code), username=minecraft_username
         )
         return code

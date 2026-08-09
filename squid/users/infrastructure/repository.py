@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.persistence.repository import BaseAsyncRepository
+from squid.users.application.ports import VerificationLinkResult
 from squid.users.domain import (
     AliasClaim,
     ClaimMethod,
@@ -19,7 +20,6 @@ from squid.users.domain import (
     CreatorAlias,
     UserAccount,
     UserConsent,
-    VerificationCode,
     normalize_ign,
 )
 from squid.users.errors import (
@@ -273,40 +273,86 @@ class UserRepository:
         """
         return hashlib.sha256(f"{self._verification_code_pepper}{code}".encode()).hexdigest()
 
-    async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
-        """Return a valid verification code matching the given code."""
-        async with self._session_factory() as session:
-            repository = _VerificationCodeModelRepository(session=session)
-            verification_code = await repository.get_one_or_none(
-                VerificationCodeModel.expires > Instant.now(),
-                code=self.hash_verification_code(code),
-                valid=True,
+    async def consume_code_and_link_account(
+        self,
+        *,
+        discord_id: int,
+        code: str,
+        consent: UserConsent,
+    ) -> VerificationLinkResult:
+        """Consume one code and apply every resulting identity change atomically."""
+        async with self._session_factory.begin() as session:
+            verification_code = await session.scalar(
+                select(VerificationCodeModel)
+                .where(
+                    VerificationCodeModel.expires > Instant.now(),
+                    VerificationCodeModel.code == self.hash_verification_code(code),
+                    VerificationCodeModel.valid.is_(True),
+                )
+                .with_for_update()
             )
             if verification_code is None:
-                return None
-            return VerificationCode(
-                minecraft_uuid=verification_code.minecraft_uuid,
-                username=verification_code.username,
+                return VerificationLinkResult()
+
+            user = await session.scalar(select(User).where(User.discord_id == discord_id).with_for_update())
+            if user is not None and user.minecraft_uuid not in {None, verification_code.minecraft_uuid}:
+                return VerificationLinkResult(
+                    account=_to_account(user),
+                    conflicting_minecraft_uuid=user.minecraft_uuid,
+                )
+
+            uuid_holder = await session.scalar(
+                select(User).where(User.minecraft_uuid == verification_code.minecraft_uuid).with_for_update()
+            )
+            if uuid_holder is not None and uuid_holder.discord_id != discord_id:
+                return VerificationLinkResult(
+                    account=_to_account(user) if user is not None else UserAccount(discord_id, None, None),
+                    conflicting_minecraft_uuid=verification_code.minecraft_uuid,
+                )
+
+            if user is None:
+                user = User(discord_id=discord_id)
+                session.add(user)
+                await session.flush()
+            user.minecraft_uuid = verification_code.minecraft_uuid
+            user.ign = verification_code.username
+            user.consent_version = consent.version
+            user.consented_at = consent.granted_at
+            verification_code.valid = False
+
+            alias = await session.scalar(
+                update(CreatorAliasModel)
+                .where(
+                    CreatorAliasModel.normalized_name == normalize_ign(verification_code.username),
+                    CreatorAliasModel.user_id.is_(None),
+                )
+                .values(user_id=user.id, claimed_at=Instant.now(), claim_method=ClaimMethod.VERIFIED_IGN)
+                .returning(CreatorAliasModel)
+            )
+            await session.flush()
+            return VerificationLinkResult(
+                account=_to_account(user),
+                claimed_alias=None if alias is None else _to_alias(alias),
             )
 
-    async def invalidate_codes(self, minecraft_uuid: uuid.UUID) -> None:
-        """Invalidate all verification codes for the given Minecraft UUID."""
-        async with self._session_factory() as session:
-            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
-            verification_codes = await repository.get_many(
-                VerificationCodeModel.expires > Instant.now(),
-                minecraft_uuid=minecraft_uuid,
-                valid=True,
+    async def replace_verification_code(
+        self,
+        *,
+        minecraft_uuid: uuid.UUID,
+        code: str,
+        username: str,
+    ) -> None:
+        """Invalidate prior codes and insert their replacement atomically."""
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                update(VerificationCodeModel)
+                .where(VerificationCodeModel.minecraft_uuid == minecraft_uuid, VerificationCodeModel.valid.is_(True))
+                .values(valid=False)
             )
-            for verification_code in verification_codes:
-                verification_code.valid = False
-            if verification_codes:
-                await repository.update_many(verification_codes)
-
-    async def create_verification_code(self, *, minecraft_uuid: uuid.UUID, code: str, username: str) -> None:
-        """Insert a new verification code for the given Minecraft UUID and username."""
-        code = self.hash_verification_code(code)
-        async with self._session_factory() as session:
-            verification_code = VerificationCodeModel(minecraft_uuid=minecraft_uuid, code=code, username=username)
-            repository = _VerificationCodeModelRepository(session=session, auto_commit=True)
-            await repository.add(verification_code)
+            session.add(
+                VerificationCodeModel(
+                    minecraft_uuid=minecraft_uuid,
+                    code=self.hash_verification_code(code),
+                    username=username,
+                )
+            )

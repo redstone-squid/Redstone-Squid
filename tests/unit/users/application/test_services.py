@@ -7,6 +7,7 @@ import pytest
 from whenever import Instant
 
 from squid.users.application import UserService
+from squid.users.application.ports import VerificationLinkResult
 from squid.users.domain import (
     CURRENT_CONSENT_VERSION,
     AliasClaim,
@@ -158,13 +159,42 @@ class FakeUserRepository:
         self.claims[claim_id] = resolved
         return resolved
 
-    async def get_valid_verification_code(self, code: str) -> VerificationCode | None:
-        return self.code
+    async def consume_code_and_link_account(
+        self,
+        *,
+        discord_id: int,
+        code: str,
+        consent: UserConsent,
+    ) -> VerificationLinkResult:
+        verification_code = self.code
+        if verification_code is None:
+            return VerificationLinkResult()
+        user = await self.get_by_discord_id(discord_id)
+        if user is not None and user.minecraft_uuid not in {None, verification_code.minecraft_uuid}:
+            return VerificationLinkResult(user, conflicting_minecraft_uuid=user.minecraft_uuid)
+        if user is None:
+            user = await self.add(
+                consent=consent,
+                discord_id=discord_id,
+                minecraft_uuid=verification_code.minecraft_uuid,
+                ign=verification_code.username,
+            )
+        else:
+            user.minecraft_uuid = verification_code.minecraft_uuid
+            user.ign = verification_code.username
+            user.consent = consent
+            await self.update(user)
+        self.code = None
+        claimed = None
+        if user.id is not None:
+            claimed = await self.claim_unclaimed_alias(
+                user_id=user.id,
+                name=verification_code.username,
+                method=ClaimMethod.VERIFIED_IGN,
+            )
+        return VerificationLinkResult(user, claimed)
 
-    async def invalidate_codes(self, minecraft_uuid: UUID) -> None:
-        return None
-
-    async def create_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None:
+    async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None:
         self.created_code = code
 
 
@@ -208,6 +238,16 @@ async def test_user_link_and_code_generation() -> None:
     assert repository.user == UserAccount(1, minecraft_uuid, "Player", CONSENT, id=1)
     assert generated == 123456
     assert repository.created_code == "123456"
+
+
+async def test_user_link_consumes_the_verification_code() -> None:
+    repository = FakeUserRepository()
+    service = linked_service(repository)
+
+    await service.link_minecraft_account(1, "valid", consent=CONSENT)
+
+    with pytest.raises(InvalidVerificationCodeError):
+        await service.link_minecraft_account(1, "valid", consent=CONSENT)
 
 
 async def test_user_link_rejects_a_different_existing_account() -> None:

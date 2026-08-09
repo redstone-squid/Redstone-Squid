@@ -13,7 +13,7 @@ from whenever import Instant
 from squid.persistence.base import Base
 from squid.users.domain import CONSENT_CUTOFF, CURRENT_CONSENT_VERSION, ClaimMethod, ClaimStatus, UserConsent
 from squid.users.errors import AliasAlreadyClaimedError, CreatorAliasNotFoundError
-from squid.users.infrastructure.models import CreatorAlias, CreatorAliasClaim, User
+from squid.users.infrastructure.models import CreatorAlias, CreatorAliasClaim, User, VerificationCode
 from squid.users.infrastructure.repository import UserRepository
 
 CONSENT = UserConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -25,6 +25,7 @@ _TABLES = [
     Base.metadata.tables["users"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
+    Base.metadata.tables["verification_codes"],
 ]
 
 
@@ -143,6 +144,29 @@ async def test_concurrent_claims_leave_exactly_one_winner(
     winners = [result for result in results if result is not None]
     assert len(winners) == 1
     assert winners[0].user_id in {first.id, second.id}
+
+
+async def test_verification_code_is_consumed_by_exactly_one_link(
+    repository: UserRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await repository.replace_verification_code(
+        minecraft_uuid=MINECRAFT_UUID,
+        code="123456",
+        username="Player",
+    )
+
+    first, second = await asyncio.gather(
+        repository.consume_code_and_link_account(discord_id=1, code="123456", consent=CONSENT),
+        repository.consume_code_and_link_account(discord_id=2, code="123456", consent=CONSENT),
+    )
+
+    assert sum(result.account is not None for result in (first, second)) == 1
+    async with async_session_factory() as session:
+        code = await session.scalar(select(VerificationCode))
+        assert code is not None
+        assert code.valid is False
+        assert len((await session.scalars(select(User).where(User.minecraft_uuid == MINECRAFT_UUID))).all()) == 1
 
 
 async def test_claim_request_and_approval_credits_the_claimant(
