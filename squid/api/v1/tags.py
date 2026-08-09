@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import CursorSigner, Tags
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.v1.schemas.tags import TagDetail
@@ -15,13 +15,13 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 
 @router.get("", response_model=Page[TagDetail], responses=responses(400, 422, 503))
 async def list_tags(
-    services: Services,
+    tags: Tags,
     signer: CursorSigner,
     page_size: Annotated[int, Query(ge=1, le=50)] = 50,
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[TagDetail]:
     """List published tag definitions."""
-    definitions = list(await services.tags.public_definitions())
+    definitions = list(await tags.public_definitions())
     offset = _offset(signer, cursor, "tags:approved")
     selected = definitions[offset : offset + page_size]
     next_offset = offset + len(selected)
@@ -34,9 +34,9 @@ async def list_tags(
 
 
 @router.get("/{tag_id}", response_model=TagDetail, responses=responses(404, 422, 503))
-async def get_tag(tag_id: int, services: Services) -> TagDetail:
+async def get_tag(tag_id: int, tags: Tags) -> TagDetail:
     """Return one published tag definition."""
-    definition = await services.tags.public_definition(tag_id)
+    definition = await tags.public_definition(tag_id)
     if definition is None:
         msg = "Tag not found."
         raise NotFoundError(msg, resource="tag", public_context={"tag_id": tag_id})

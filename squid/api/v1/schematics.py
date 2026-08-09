@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import BuildQueries, CursorSigner, Schematics
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.v1.schemas.schematics import SchematicSummary
@@ -22,21 +22,22 @@ router = APIRouter(tags=["schematics"])
 )
 async def list_build_schematics(
     build_id: int,
-    services: Services,
+    build_queries: BuildQueries,
+    schematics: Schematics,
     signer: CursorSigner,
     page_size: Annotated[int, Query(ge=1, le=50)] = 50,
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a confirmed build."""
-    build = await services.build_queries.get(build_id)
+    build = await build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
-    schematics = await services.schematics.list_for_build(build_id)
+    stored = await schematics.list_for_build(build_id)
     binding = f"build-schematics:{build_id}"
     offset = _offset(signer, cursor, binding)
-    selected = schematics[offset : offset + page_size]
+    selected = stored[offset : offset + page_size]
     next_offset = offset + len(selected)
-    has_more = next_offset < len(schematics)
+    has_more = next_offset < len(stored)
     return Page(
         items=[SchematicSummary.from_domain(schematic) for schematic in selected],
         next_cursor=signer.encode({"offset": next_offset}, binding=binding) if has_more else None,
@@ -53,10 +54,10 @@ async def list_build_schematics(
     },
 )
 async def get_schematic_content(
-    sha256: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], services: Services
+    sha256: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
 ) -> Response:
     """Download stored schematic bytes by their SHA-256 digest."""
-    content = await services.schematics.content(sha256)
+    content = await schematics.content(sha256)
     return Response(
         content=content,
         media_type="application/octet-stream",
@@ -73,10 +74,10 @@ async def get_schematic_content(
     },
 )
 async def get_schematic_render_content(
-    recipe_hash: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], services: Services
+    recipe_hash: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
 ) -> Response:
     """Return a content-addressed PNG preview from private object storage."""
-    content = await services.schematics.render_content(recipe_hash)
+    content = await schematics.render_content(recipe_hash)
     return Response(
         content=content,
         media_type="image/png",

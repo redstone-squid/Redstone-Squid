@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import Services
+from squid.api.dependencies import BuildQueries, Search
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.v1.schemas.builds import BuildSummary
@@ -20,8 +20,8 @@ from squid.api.v1.schemas.search import (
     SearchResult,
     SearchSuggestions,
 )
+from squid.builds.application import BuildQueryService
 from squid.core.errors import ErrorCode, ValidationError
-from squid.runtime import ApiServices
 from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 logger = logging.getLogger(__name__)
@@ -33,25 +33,26 @@ PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 
 
 @router.get("/fields", response_model=list[SearchField], responses=responses(503))
-async def list_search_fields(services: Services) -> list[SearchField]:
+async def list_search_fields(search_service: Search) -> list[SearchField]:
     """Publish the effective allowlisted query-field registry."""
-    registry = await services.search.fields()
+    registry = await search_service.fields()
     return [SearchField.from_domain(field) for field in registry.definitions]
 
 
 @router.get("/suggest", response_model=SearchSuggestions, responses=responses(400, 422, 503))
 async def suggest_terms(
-    services: Services,
+    search_service: Search,
     q: Annotated[str, Query(max_length=1_000)],
     limit: Annotated[int, Query(ge=1, le=25)] = 5,
 ) -> SearchSuggestions:
     """Suggest indexed terms completing a valid query."""
-    return SearchSuggestions(suggestions=list(await services.search.suggest(q, limit=limit)))
+    return SearchSuggestions(suggestions=list(await search_service.suggest(q, limit=limit)))
 
 
 @router.get("", response_model=Page[SearchResult], responses=responses(400, 422, 503))
 async def search(
-    services: Services,
+    search_service: Search,
+    build_queries: BuildQueries,
     q: Annotated[str, Query(max_length=1_000)],
     scope: SearchScope = SearchScope.ALL,
     sort: Annotated[str | None, Query(max_length=80)] = None,
@@ -59,7 +60,7 @@ async def search(
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[SearchResult]:
     """Match builds, computed records, and taxonomy entries in one ranked page."""
-    result = await services.search.search(
+    result = await search_service.search(
         SearchRequest(
             query=q,
             scope=scope,
@@ -70,7 +71,7 @@ async def search(
             visible_statuses=PUBLIC_SEARCH_STATUSES,
         )
     )
-    builds = await hydrate_builds(services, result.hits)
+    builds = await hydrate_builds(build_queries, result.hits)
     items: list[SearchResult] = []
     for hit in result.hits:
         match hit.resource_kind:
@@ -108,7 +109,7 @@ def build_hit_id(source_id: str) -> int:
         raise ValidationError(msg) from error
 
 
-async def hydrate_builds(services: ApiServices, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
+async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
     """Load authoritative builds for build hits, logging any the projection outlived.
 
     Build projections carry a description that falls back to submitter free text and drift from
@@ -117,7 +118,7 @@ async def hydrate_builds(services: ApiServices, hits: Sequence[SearchHit]) -> di
     hit_ids = [build_hit_id(hit.source_id) for hit in hits if hit.resource_kind == "build"]
     if not hit_ids:
         return {}
-    builds = await services.build_queries.get_many(hit_ids)
+    builds = await build_queries.get_many(hit_ids)
     summaries = {build.id: BuildSummary.from_domain(build) for build in builds if build.id is not None}
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:

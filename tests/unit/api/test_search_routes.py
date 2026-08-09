@@ -78,7 +78,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     )
     graph = fakes(page, [indexed_build()])
 
-    result = await search(graph.services, q="piston", scope=SearchScope.ALL)
+    result = await search(graph.services.search, graph.services.build_queries, q="piston", scope=SearchScope.ALL)
 
     assert [item.resource_kind for item in result.items] == ["build", "record", "metadata"]
     build_item, record_item, metadata_item = result.items
@@ -98,7 +98,12 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
 async def test_search_never_widens_build_visibility_past_confirmed() -> None:
     graph = fakes(empty_page())
 
-    await search(graph.services, q="status:pending", scope=SearchScope.ALL)
+    await search(
+        graph.services.search,
+        graph.services.build_queries,
+        q="status:pending",
+        scope=SearchScope.ALL,
+    )
 
     assert graph.search.await_args is not None
     request = graph.search.await_args.args[0]
@@ -114,7 +119,12 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
     )
     graph = fakes(page)
 
-    result = await search(graph.services, q="piston", scope=SearchScope.BUILDS)
+    result = await search(
+        graph.services.search,
+        graph.services.build_queries,
+        q="piston",
+        scope=SearchScope.BUILDS,
+    )
 
     assert result.items == []
 
@@ -123,7 +133,7 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
 async def test_suggest_passes_the_caller_limit_through() -> None:
     graph = fakes(empty_page())
 
-    result = await suggest_terms(graph.services, q="pist", limit=3)
+    result = await suggest_terms(graph.services.search, q="pist", limit=3)
 
     assert result.suggestions == ["piston"]
     graph.suggest.assert_awaited_once_with("pist", limit=3)

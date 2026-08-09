@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
-from squid.api.dependencies import CurrentPrincipal, Services
+from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.rate_limit import SlidingWindowRateLimiter
 from squid.api.security import Principal, Scope, require
@@ -31,11 +31,11 @@ class VoteInput(BaseModel):
 @router.get("/{vote_session_id}", response_model=VoteSessionDetail, responses=responses(404, 422, 503))
 async def get_vote_session(
     vote_session_id: int,
-    services: Services,
+    votes: Votes,
     principal: CurrentPrincipal,
 ) -> VoteSessionDetail:
     """Return aggregate vote state without exposing ballot identities."""
-    session = await services.votes.get_session_by_id(vote_session_id)
+    session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         msg = "Vote session not found."
         raise NotFoundError(
@@ -52,7 +52,8 @@ async def get_vote_session(
 async def cast_vote(
     vote_session_id: int,
     vote: VoteInput,
-    services: Services,
+    votes: Votes,
+    vote_members: VoteMembers,
     principal: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
@@ -64,15 +65,15 @@ async def cast_vote(
             end_user_action="Accept the current privacy notice and retry.",
         )
     await _vote_limiter.check(principal.subject)
-    session = await services.votes.get_session_by_id(vote_session_id)
+    session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         raise _vote_not_found(vote_session_id)
-    if services.vote_members is None:
+    if vote_members is None:
         raise AuthorizationError
-    actor = await services.vote_members.member(principal.discord_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(principal.discord_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
-    result = await services.votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)
+    result = await votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_id=principal.discord_id)

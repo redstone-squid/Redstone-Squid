@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 
-from squid.api.dependencies import CurrentPrincipal, CursorSigner, Services
+from squid.api.dependencies import Authorization, BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Search
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.security import Principal, Scope, require
@@ -20,7 +20,7 @@ from squid.builds.errors import (
     InvalidBuildError,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
-from squid.runtime import ApiServices
+from squid.permissions.application import AuthorizationService
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
 from squid.users.errors import ConsentRequiredError
 
@@ -33,7 +33,7 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
 async def submit_build(
     submission: DoorSubmission,
     response: Response,
-    services: Services,
+    builds: BuildCommands,
     principal: UserWriter,
 ) -> BuildDetail:
     """Submit a door build for Discord moderation."""
@@ -42,7 +42,7 @@ async def submit_build(
         msg = "Only door submissions are supported."
         raise InvalidBuildError(msg, public_context={"category": submission.category})
     assert principal.discord_id is not None
-    build = await services.builds.submit_door(
+    build = await builds.submit_door(
         DoorSubmissionInput(
             submitter_id=principal.discord_id,
             door_size=submission.door_size,
@@ -78,7 +78,8 @@ async def edit_build(
     build_id: int,
     changes: BuildPatch,
     response: Response,
-    services: Services,
+    builds: BuildCommands,
+    authorization: Authorization,
     principal: UserWriter,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
@@ -87,14 +88,14 @@ async def edit_build(
     expected_revision = _expected_revision(build_id, if_match)
     patch = BuildEditPatch.from_attributes(changes.model_dump(exclude_unset=True))
     assert principal.discord_id is not None
-    async with services.builds.edit(
+    async with builds.edit(
         build_id,
         patch,
         blocking=False,
         expected_revision=expected_revision,
     ) as lease:
         is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
-        is_admin = await services.authorization.is_global_administrator(principal.discord_id)
+        is_admin = await authorization.is_global_administrator(principal.discord_id)
         if not is_owner and not is_admin:
             raise AuthorizationError
         build = await lease.commit()
@@ -103,9 +104,9 @@ async def edit_build(
 
 
 @router.get("/{build_id}", response_model=BuildDetail, responses=responses(404, 422, 503))
-async def get_build(build_id: int, response: Response, services: Services) -> BuildDetail:
+async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
     """Return one confirmed public build."""
-    build = await services.build_queries.get(build_id)
+    build = await build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
     _set_build_etag(response, build)
@@ -114,7 +115,9 @@ async def get_build(build_id: int, response: Response, services: Services) -> Bu
 
 @router.get("", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
 async def list_builds(
-    services: Services,
+    build_queries: BuildQueries,
+    search_service: Search,
+    authorization: Authorization,
     signer: CursorSigner,
     principal: CurrentPrincipal,
     q: Annotated[str | None, Query(max_length=1_000)] = None,
@@ -128,7 +131,7 @@ async def list_builds(
         if status is not None:
             msg = "status cannot be combined with q"
             raise ValidationError(msg, public_context={"field": "status"})
-        result = await services.search.search(
+        result = await search_service.search(
             SearchRequest(
                 query=q,
                 scope=SearchScope.BUILDS,
@@ -139,7 +142,7 @@ async def list_builds(
                 visible_statuses=PUBLIC_SEARCH_STATUSES,
             )
         )
-        summaries = await hydrate_builds(services, result.hits)
+        summaries = await hydrate_builds(build_queries, result.hits)
         return Page(
             items=[
                 summary for hit in result.hits if (summary := summaries.get(build_hit_id(hit.source_id))) is not None
@@ -156,10 +159,10 @@ async def list_builds(
         )
     effective = status or BuildStatusFilter.CONFIRMED
     if effective is not BuildStatusFilter.CONFIRMED:
-        await _require_global_administrator(services, principal)
+        await _require_global_administrator(authorization, principal)
     binding = f"builds:status={effective}:id-desc"
     after_id = after_id_from_cursor(signer, cursor, binding)
-    builds = await services.build_queries.list_page(
+    builds = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
         submitter_id=None,
         after_id=after_id,
@@ -168,7 +171,7 @@ async def list_builds(
     return keyset_page(signer, builds, page_size=page_size, binding=binding)
 
 
-async def _require_global_administrator(services: ApiServices, principal: Principal) -> None:
+async def _require_global_administrator(authorization: AuthorizationService, principal: Principal) -> None:
     """Gate non-public moderation views on the human, not just the credential.
 
     A service key carries no `discord_id` and so can never satisfy this, which keeps a leaked
@@ -178,7 +181,7 @@ async def _require_global_administrator(services: ApiServices, principal: Princi
         if principal.kind == "anonymous":
             raise AuthenticationError
         raise AuthorizationError
-    if not await services.authorization.is_global_administrator(principal.discord_id):
+    if not await authorization.is_global_administrator(principal.discord_id):
         raise AuthorizationError
 
 

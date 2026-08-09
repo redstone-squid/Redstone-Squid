@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import CursorSigner, Versions
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.v1.schemas.versions import VersionDetail
@@ -15,13 +15,13 @@ router = APIRouter(prefix="/versions", tags=["versions"])
 
 @router.get("", response_model=Page[VersionDetail], responses=responses(400, 422, 503))
 async def list_versions(
-    services: Services,
+    versions_service: Versions,
     signer: CursorSigner,
     page_size: Annotated[int, Query(ge=1, le=50)] = 50,
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[VersionDetail]:
     """List recognized Java and Bedrock releases."""
-    versions = await services.versions.list_all()
+    versions = await versions_service.list_all()
     offset = _offset(signer, cursor)
     selected = versions[offset : offset + page_size]
     next_offset = offset + len(selected)

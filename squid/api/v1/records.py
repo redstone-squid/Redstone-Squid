@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import CursorSigner, Records
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
@@ -15,9 +15,9 @@ _BINDING = "records:active:id-desc"
 
 
 @router.get("/{record_id}", response_model=RecordDetail, responses=responses(404, 422, 503))
-async def get_record(record_id: int, services: Services) -> RecordDetail:
+async def get_record(record_id: int, records: Records) -> RecordDetail:
     """Return one result only while its computation run is active."""
-    record = await services.records.get(record_id)
+    record = await records.get(record_id)
     if record is None:
         raise NotFoundError(resource="record", public_context={"record_id": record_id})
     return RecordDetail(**RecordSummary.from_domain(record).model_dump())
@@ -25,16 +25,16 @@ async def get_record(record_id: int, services: Services) -> RecordDetail:
 
 @router.get("", response_model=Page[RecordSummary], responses=responses(400, 422, 503))
 async def list_records(
-    services: Services,
+    records: Records,
     signer: CursorSigner,
     page_size: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query(max_length=4_096)] = None,
 ) -> Page[RecordSummary]:
     """List authoritative active record results."""
     after_id = _after_id(signer, cursor)
-    records = list(await services.records.list_page(after_id=after_id, limit=page_size + 1))
-    has_more = len(records) > page_size
-    page_records = records[:page_size]
+    found = list(await records.list_page(after_id=after_id, limit=page_size + 1))
+    has_more = len(found) > page_size
+    page_records = found[:page_size]
     next_cursor = (
         signer.encode({"after_id": page_records[-1].id}, binding=_BINDING) if has_more and page_records else None
     )

@@ -1,7 +1,7 @@
 """HTTP vote mutation tests."""
 
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -57,7 +57,13 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
     members = SimpleNamespace(member=AsyncMock(return_value=actor))
     services = cast(ApiServices, SimpleNamespace(votes=votes, vote_members=members))
 
-    response = await cast_vote(12, VoteInput(guild_id=10, option_id="approve"), services, user())
+    response = await cast_vote(
+        12,
+        VoteInput(guild_id=10, option_id="approve"),
+        services.votes,
+        cast(Any, members),
+        user(),
+    )
 
     members.member.assert_awaited_once_with(7, 10, "build")
     votes.cast_vote_by_session.assert_awaited_once_with(12, actor, "approve")
@@ -72,7 +78,8 @@ async def test_service_credentials_cannot_cast_ballots() -> None:
         await cast_vote(
             12,
             VoteInput(guild_id=10, option_id="approve"),
-            cast(ApiServices, SimpleNamespace()),
+            cast(Any, SimpleNamespace()),
+            None,
             service,
         )
 
@@ -90,6 +97,7 @@ async def test_invalid_option_is_a_typed_client_error() -> None:
         await cast_vote(
             12,
             VoteInput(guild_id=10, option_id="missing"),
-            cast(ApiServices, SimpleNamespace(votes=votes, vote_members=members)),
+            cast(Any, votes),
+            cast(Any, members),
             user("user:invalid-option"),
         )

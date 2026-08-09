@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
-from squid.api.dependencies import CurrentPrincipal, Services
+from squid.api.dependencies import CurrentPrincipal, WebAuth
 from squid.api.errors import responses
 from squid.core.errors import AuthenticationError, ValidationError
 
@@ -17,27 +17,27 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 @router.get("/discord", response_class=RedirectResponse, responses=responses(400, 503))
 async def discord_authorize(
     request: Request,
-    services: Services,
+    web_auth: WebAuth,
     redirect_to: Annotated[str | None, Query(max_length=2_048)] = None,
 ) -> RedirectResponse:
     """Begin Discord authorization with PKCE and durable one-time state."""
-    if services.web_auth is None:
+    if web_auth is None:
         raise AuthenticationError
     _validate_redirect(request, redirect_to)
-    return RedirectResponse(await services.web_auth.authorize_url(redirect_to))
+    return RedirectResponse(await web_auth.authorize_url(redirect_to))
 
 
 @router.get("/discord/callback", response_class=RedirectResponse, responses=responses(400, 401, 503))
 async def discord_callback(
     request: Request,
-    services: Services,
+    web_auth: WebAuth,
     code: Annotated[str, Query(min_length=1, max_length=2_048)],
     state: Annotated[str, Query(min_length=1, max_length=512)],
 ) -> RedirectResponse:
     """Exchange a Discord code and set a revocable opaque session cookie."""
-    if services.web_auth is None:
+    if web_auth is None:
         raise AuthenticationError
-    token, redirect_to = await services.web_auth.callback(
+    token, redirect_to = await web_auth.callback(
         code,
         state,
         user_agent=request.headers.get("User-Agent"),
@@ -59,12 +59,12 @@ async def discord_callback(
 
 
 @router.post("/logout", status_code=204, responses=responses(401, 403, 503))
-async def logout(request: Request, services: Services, principal: CurrentPrincipal) -> Response:
+async def logout(request: Request, web_auth: WebAuth, principal: CurrentPrincipal) -> Response:
     """Revoke the current browser session and clear its cookies."""
     token = request.cookies.get("__Host-squid_session")
-    if principal.kind != "user" or token is None or services.web_auth is None:
+    if principal.kind != "user" or token is None or web_auth is None:
         raise AuthenticationError
-    await services.web_auth.logout(token)
+    await web_auth.logout(token)
     response = Response(status_code=204)
     response.delete_cookie("__Host-squid_session", path="/", secure=True, httponly=True, samesite="lax")
     response.delete_cookie("squid_csrf", path="/", secure=True, samesite="lax")

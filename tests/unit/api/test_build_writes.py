@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -46,7 +46,7 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
     services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
 
     http_response = Response()
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, services, USER)
+    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, services.builds, USER)
 
     assert response.id == 42
     assert submit_door.await_args is not None
@@ -56,7 +56,9 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
     assert http_response.headers["etag"] == '"build-42-r1"'
 
     with pytest.raises(InvalidBuildError):
-        await submit_build(DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), services, USER)
+        await submit_build(
+            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), services.builds, USER
+        )
 
 
 @pytest.mark.asyncio
@@ -65,7 +67,7 @@ async def test_submit_gates_new_accounts_on_current_consent() -> None:
     pending = replace(USER, consent_pending=True)
 
     with pytest.raises(ConsentRequiredError) as error:
-        await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services, pending)
+        await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, pending)
 
     assert error.value.public_context == {"consent_url": "/v1/users/me/consent"}
 
@@ -94,7 +96,15 @@ async def test_edit_checks_ownership_while_lease_is_held() -> None:
     )
 
     with pytest.raises(AuthorizationError):
-        await edit_build(42, BuildPatch(extra_user_info="changed"), Response(), services, USER, '"build-42-r1"')
+        await edit_build(
+            42,
+            BuildPatch(extra_user_info="changed"),
+            Response(),
+            services.builds,
+            services.authorization,
+            USER,
+            '"build-42-r1"',
+        )
 
     lease.commit.assert_not_awaited()
 
@@ -116,7 +126,8 @@ async def test_global_administrator_can_edit_confirmed_build() -> None:
         42,
         BuildPatch(extra_user_info=None),
         http_response,
-        services,
+        services.builds,
+        services.authorization,
         USER,
         '"build-42-r1"',
     )
@@ -128,7 +139,7 @@ async def test_global_administrator_can_edit_confirmed_build() -> None:
 
 @pytest.mark.asyncio
 async def test_edit_requires_an_if_match_revision() -> None:
-    services = cast(ApiServices, SimpleNamespace())
+    builds = cast(Any, SimpleNamespace())
 
     with pytest.raises(BuildRevisionRequiredError):
-        await edit_build(42, BuildPatch(), Response(), services, USER)
+        await edit_build(42, BuildPatch(), Response(), builds, cast(Any, None), USER)

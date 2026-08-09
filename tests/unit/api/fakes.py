@@ -126,6 +126,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
         SimpleNamespace(
             api_keys=None,
             web_auth=None,
+            builds=SimpleNamespace(),
             users=MockUserManager(),
             build_queries=MockBuildQueries(),
             authorization=MockAuthorization(),
@@ -134,6 +135,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
             versions=MockVersions(),
             schematics=MockSchematics(),
             votes=MockVotes(),
+            vote_members=None,
             records=MockRecords(),
         ),
     )

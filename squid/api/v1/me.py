@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from squid.api.dependencies import CursorSigner, Services
+from squid.api.dependencies import BuildQueries, CursorSigner, Users
 from squid.api.errors import responses
 from squid.api.pagination import Page
 from squid.api.security import Principal, Scope, require
@@ -21,28 +21,28 @@ _ALL_STATUSES = frozenset(Status)
 
 
 @router.get("", response_model=UserMe, responses=responses(401, 403, 404, 503))
-async def get_me(services: Services, principal: UserPrincipal) -> UserMe:
+async def get_me(users: Users, principal: UserPrincipal) -> UserMe:
     """Return the authenticated user's own linked account."""
     if principal.kind != "user" or principal.discord_id is None:
         raise AuthenticationError
-    account = await services.users.get_account(principal.discord_id)
+    account = await users.get_account(principal.discord_id)
     if account is None:
         raise UserNotFoundError(principal.discord_id)
     return UserMe.from_domain(account, consent_pending=principal.consent_pending)
 
 
 @router.post("/consent", response_model=UserMe, responses=responses(401, 403, 404, 503))
-async def grant_consent(services: Services, principal: UserPrincipal) -> UserMe:
+async def grant_consent(users: Users, principal: UserPrincipal) -> UserMe:
     """Accept the current privacy notice for future writes."""
     if principal.kind != "user" or principal.discord_id is None:
         raise AuthenticationError
-    account = await services.users.grant_current_consent(principal.discord_id)
+    account = await users.grant_current_consent(principal.discord_id)
     return UserMe.from_domain(account, consent_pending=False)
 
 
 @router.get("/builds", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
 async def list_my_builds(
-    services: Services,
+    build_queries: BuildQueries,
     signer: CursorSigner,
     principal: UserPrincipal,
     status: BuildStatusFilter | None = None,
@@ -58,7 +58,7 @@ async def list_my_builds(
         raise AuthenticationError
     statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
     binding = f"users:{principal.discord_id}:builds:status={status or 'all'}:id-desc"
-    builds = await services.build_queries.list_page(
+    builds = await build_queries.list_page(
         statuses=statuses,
         submitter_id=principal.discord_id,
         after_id=after_id_from_cursor(signer, cursor, binding),
