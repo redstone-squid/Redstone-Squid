@@ -60,9 +60,11 @@ output, guided by a prompt that knows the rules document.
 
 ## Step 1 — Land the rules document
 
-Copy the uploaded file to `docs/Door_Rules.md` verbatim and commit it alone
+Copy the uploaded file to `reference/Door_Rules.md` verbatim and commit it alone
 (`docs: add squid records rules document`). It is the source the prompt digest is distilled
-from, and the plan references it by section.
+from, and the plan references it by section. It lives outside `docs/` on purpose: it is a
+verbatim Google Docs export whose internal `#bookmark=id.…` links have no targets here, so
+`zensical build --strict` rejects it as a site page.
 
 ## Step 2 — Structured output
 
@@ -228,7 +230,7 @@ The two channel IDs are currently duplicated as literals at `submit.py:415-416` 
 System prompt contents, in order:
 
 1. Task: read a bundle of Discord messages from a records channel, return zero or more builds.
-2. **Condensed rules digest** distilled from `docs/Door_Rules.md`: the title grammar
+2. **Condensed rules digest** distilled from `reference/Door_Rules.md`: the title grammar
    (`<wiring placement> <animated> <size> <type> <orientation>`, §2.1), the four restriction
    axes with their real vocabularies (§2.1.4–2.1.7 — SEAMLESS tiers, FLUSH/DELUXE/TRAPDOOR,
    HIPSTER, EXPANDABLE/TILEABLE, SYMMETRICAL/SYNC/CLEAN, the `-less`/`ONLY` component
