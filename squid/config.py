@@ -283,8 +283,13 @@ class CommunityConfig(_FrozenModel):
 
     redstoner_starboard_author_id: int = 700796664276844612
     redstoner_starboard_channel_id: int = 1332630008270684241
+    redstoner_role_id: int = 433670432420397060
+    redstoner_corner_channel_id: int = 534945678850523138
+    redstoner_announcement_channel_id: int = 433643026204852224
     welcome_channel_id: int = 1356094722531393680
     welcome_relay_channel_id: int = 433618741528625155
+    version_tracker_channel_id: int = 1334168723170263122
+    build_log_channel_ids: tuple[int, ...] = (726156829629087814, 667401499554611210)
 
 
 class CatboxConfig(_FrozenModel):

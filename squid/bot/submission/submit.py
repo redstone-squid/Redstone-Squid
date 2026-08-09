@@ -19,7 +19,6 @@ from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
-from squid.bot.submission.message_context import BUILD_LOG_CHANNEL_IDS
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
@@ -407,7 +406,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if message.author.bot:
             return
 
-        if message.channel.id not in BUILD_LOG_CHANNEL_IDS:
+        if message.channel.id not in self.bot.community_config.build_log_channel_ids:
             return
         if not isinstance(message.channel, discord.TextChannel):
             return

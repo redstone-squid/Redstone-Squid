@@ -15,8 +15,6 @@ from squid.core.errors import SquidError
 
 logger = logging.getLogger(__name__)
 
-BUILD_LOG_CHANNEL_IDS = (726156829629087814, 667401499554611210)
-
 
 class GroupableMessage(Protocol):
     """Minimum message shape consumed by the pure grouping function."""

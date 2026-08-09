@@ -54,7 +54,8 @@ class DynamicRemoveOwnRedstonerRoleButton[
             return
 
         member = interaction.user
-        redstoner_role = interaction.guild.get_role(433670432420397060)
+        community = interaction.client.community_config
+        redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
         if redstoner_role is None or redstoner_role not in member.roles:
             return
 
@@ -62,7 +63,7 @@ class DynamicRemoveOwnRedstonerRoleButton[
         await member.remove_roles(redstoner_role)
         owner = interaction.client.get_user(interaction.client.owner_id)
         assert owner is not None
-        redstoner_channel = interaction.client.get_channel(534945678850523138)  # redstoner-corner
+        redstoner_channel = interaction.client.get_channel(community.redstoner_corner_channel_id)
         assert isinstance(redstoner_channel, GuildMessageable)
         await redstoner_channel.send(
             view=text_layout(
@@ -147,7 +148,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert decision.source_message_url is not None
         member = next(mention for mention in message.mentions if mention.id == decision.member_id)
         assert message.guild is not None
-        redstoner_role = message.guild.get_role(433670432420397060)
+        redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
             await message.channel.send(
                 view=text_layout(t(locale, _("Could not find the redstoner role."))),
@@ -173,7 +174,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
         )
         view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
-        await self.bot.get_channel(433643026204852224).send(
+        await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
             view=view,
         )

@@ -51,7 +51,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     @Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message):
         """Parse messages in the version-tracking channel and add them to the database"""
-        minecraft_version_tracker_channel = 1334168723170263122
+        minecraft_version_tracker_channel = self.bot.community_config.version_tracker_channel_id
 
         channel_id = message.channel.id
         if channel_id != minecraft_version_tracker_channel:

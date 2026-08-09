@@ -165,6 +165,8 @@ def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) ->
         SQUID_COMMUNITY_REDSTONER_STARBOARD_CHANNEL_ID="2",
         SQUID_COMMUNITY_WELCOME_CHANNEL_ID="3",
         SQUID_COMMUNITY_WELCOME_RELAY_CHANNEL_ID="4",
+        SQUID_COMMUNITY_VERSION_TRACKER_CHANNEL_ID="5",
+        SQUID_COMMUNITY_BUILD_LOG_CHANNEL_IDS="[6, 7]",
     )
 
     config = load_bot_process_config().runtime.community
@@ -173,6 +175,8 @@ def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) ->
     assert config.redstoner_starboard_channel_id == 2
     assert config.welcome_channel_id == 3
     assert config.welcome_relay_channel_id == 4
+    assert config.version_tracker_channel_id == 5
+    assert config.build_log_channel_ids == (6, 7)
 
 
 def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
