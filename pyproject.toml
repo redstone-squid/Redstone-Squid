@@ -8,7 +8,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 # GitHub Actions keeps requirements/base.txt and requirements/dev.txt in sync.
 # To reproduce the export locally, run:
-# 1. uv export -o requirements/base.txt
+# 1. uv export --no-dev -o requirements/base.txt
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
     "alembic>=1.18.5",

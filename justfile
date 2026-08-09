@@ -48,7 +48,7 @@ upgrade *packages:
     uv sync {{ prepend("--upgrade-package ", packages) }}
 
 compile:
-    uv export --locked --output-file requirements/base.txt
+    uv export --locked --no-dev --output-file requirements/base.txt
     uv export --locked --only-dev --output-file requirements/dev.txt
 
 lint:

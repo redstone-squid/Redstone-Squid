@@ -45,8 +45,15 @@ jobs:
 
     - name: Regenerate exported requirements
       run: |
-        uv export --locked -o requirements/base.txt --quiet
+        uv export --locked --no-dev -o requirements/base.txt --quiet
         uv export --locked --only-dev -o requirements/dev.txt --quiet
+
+    - name: Assert production requirements exclude development packages
+      run: |
+        if grep -Eq '^(nucleation|pyrefly|pytest|ruff|schemathesis|testcontainers)==' requirements/base.txt; then
+          echo "requirements/base.txt contains development-only packages"
+          exit 1
+        fi
 
     - name: Detect regenerated changes
       id: diff
