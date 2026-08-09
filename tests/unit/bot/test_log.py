@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -7,26 +7,34 @@ from squid.bot.log import LoggingCog
 
 
 @pytest.mark.asyncio
-async def test_log_fetches_uncached_owner_and_uses_logging(caplog: pytest.LogCaptureFixture) -> None:
-    owner = Mock(send=AsyncMock())
-    bot = Mock(owner_id=123, get_user=Mock(return_value=None), fetch_user=AsyncMock(return_value=owner))
+async def test_log_uses_logging_without_discord_io(caplog: pytest.LogCaptureFixture) -> None:
+    bot = Mock(owner_id=None)
     cog = LoggingCog(bot)
 
     with caplog.at_level(logging.INFO, logger="squid.bot.log"):
         await cog.log("Bot started")
 
-    bot.fetch_user.assert_awaited_once_with(123)
-    owner.send.assert_awaited_once()
     assert "Bot started" in caplog.messages[0]
 
 
 @pytest.mark.asyncio
-async def test_log_uses_cached_owner() -> None:
-    owner = Mock(send=AsyncMock())
-    bot = Mock(owner_id=123, get_user=Mock(return_value=owner), fetch_user=AsyncMock())
+async def test_command_log_excludes_arguments_and_raw_content(caplog: pytest.LogCaptureFixture) -> None:
+    bot = Mock()
     cog = LoggingCog(bot)
+    ctx = Mock()
+    ctx.command.qualified_name = "build submit"
+    ctx.args = (object(), ctx, "super-secret-argument")
+    ctx.kwargs = {"notes": "private-content"}
+    ctx.guild.id = 456
+    ctx.author.id = 789
+    ctx.interaction = None
 
-    await cog.log("Bot started")
+    with caplog.at_level(logging.INFO, logger="squid.bot.log"):
+        await cog.log_command_usage(ctx)
 
-    bot.fetch_user.assert_not_awaited()
-    owner.send.assert_awaited_once()
+    record = caplog.records[0]
+    assert record.message == "Discord command invoked"
+    assert record.__dict__["squid.command.name"] == "build submit"
+    assert record.__dict__["squid.discord.guild_id"] == 456
+    assert "super-secret-argument" not in caplog.text
+    assert "private-content" not in caplog.text

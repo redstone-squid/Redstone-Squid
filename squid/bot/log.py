@@ -6,8 +6,6 @@ from discord.ext import commands
 from discord.ext.commands import Cog, CommandError, Context
 
 from squid.bot.errors import handle_context_error
-from squid.bot.utils.components import no_mentions, text_layout
-from squid.core.time import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -18,31 +16,9 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
     def __init__(self, bot: BotT):
         self.bot = bot
 
-        if not self.bot.owner_id:
-            msg = "Owner ID not set."
-            raise RuntimeError(msg)
-
-    async def log(self, msg: str, first_log: bool = False, dm_owner: bool = True) -> None:
-        """
-        Logs a timestamped message to stdout and to the owner of the bot via DM.
-
-        Args:
-            msg: the message to log
-            first_log: if True, adds a line of dashes before the message
-            dm_owner: whether to send the message to the owner of the bot via DM
-
-        Returns:
-            None
-        """
-        timestamp_msg = utcnow() + msg
-        if first_log:
-            timestamp_msg = f"{'-' * 90}\n{timestamp_msg}"
-        if dm_owner:
-            owner_id = self.bot.owner_id
-            assert owner_id is not None
-            owner = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
-            await owner.send(view=text_layout(timestamp_msg), allowed_mentions=no_mentions())
-        logger.info("%s", timestamp_msg)
+    async def log(self, message: str) -> None:
+        """Write an operational message without adding Discord I/O to the hot path."""
+        logger.info("%s", message)
 
     # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
     # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
@@ -51,28 +27,27 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
     async def log_on_ready(self):
         """Logs when the bot is ready."""
         assert self.bot.user is not None
-        await self.log(
-            f"Bot logged in with name: {self.bot.user.name} and id: {self.bot.user.id}.",
-            first_log=True,
+        logger.info(
+            "Discord gateway ready",
+            extra={
+                "squid.discord.bot_id": self.bot.user.id,
+                "squid.discord.guild_count": len(self.bot.guilds),
+            },
         )
 
     @Cog.listener("on_command")
     async def log_command_usage(self, ctx: Context[BotT]):
         """Logs command usage to stdout and to the owner of the bot via DM."""
         assert ctx.command is not None
-        command = f"{ctx.command.qualified_name}"
-        if ctx.args:
-            # The first two arguments are the cog/bot and the context respectively
-            command += f" {' '.join(str(arg) for arg in ctx.args[2:])}"
-        if ctx.kwargs:
-            command += f" {' '.join(f'{k}:{v}' for k, v in ctx.kwargs.items())}"
-        if ctx.guild is not None:
-            log_message = f'{ctx.author!s} ran: "{command}" in server: {ctx.guild.name}.'
-        else:
-            log_message = f'{ctx.author!s} ran: "{command}" in a private message.'
-
-        owner_dmed_bot = (ctx.guild is None) and await ctx.bot.is_owner(ctx.message.author)
-        await self.log(log_message, dm_owner=(not owner_dmed_bot))
+        logger.info(
+            "Discord command invoked",
+            extra={
+                "squid.command.name": ctx.command.qualified_name,
+                "squid.discord.guild_id": ctx.guild.id if ctx.guild is not None else None,
+                "squid.discord.user_id": ctx.author.id,
+                "squid.discord.interaction": ctx.interaction is not None,
+            },
+        )
 
     @Cog.listener("on_command_error")
     async def log_command_error(self, ctx: Context[BotT], exception: CommandError):
