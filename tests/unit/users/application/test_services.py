@@ -78,6 +78,15 @@ class FakeUserRepository:
     async def get_by_discord_id(self, discord_id: int) -> UserAccount | None:
         return self.user if self.user is not None and self.user.discord_id == discord_id else None
 
+    async def get_or_create_discord(self, discord_id: int) -> UserAccount:
+        existing = await self.get_by_discord_id(discord_id)
+        if existing is not None:
+            return existing
+        # The real repository upserts a consent-free identity row, so the account it
+        # hands back still needs the privacy notice accepted.
+        self.user = UserAccount(discord_id, None, None, None, id=self._take_id())
+        return self.user
+
     async def update(self, user: UserAccount) -> None:
         self.user = user
 

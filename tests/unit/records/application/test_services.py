@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 
 from squid.records.application.models import (
+    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
@@ -42,6 +43,7 @@ class FakeRuns:
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
+        self.active_records: dict[int, ActiveRecord] = {}
 
     async def active_ruleset_id(self) -> int:
         return 7
@@ -58,6 +60,14 @@ class FakeRuns:
 
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         return self.title_gap_rows
+
+    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
+        return self.active_records.get(result_id)
+
+    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]:
+        ordered = sorted(self.active_records, reverse=True)
+        remaining = [result_id for result_id in ordered if after_id is None or result_id < after_id]
+        return tuple(self.active_records[result_id] for result_id in remaining[:limit])
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
