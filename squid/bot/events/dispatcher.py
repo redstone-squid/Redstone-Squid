@@ -24,7 +24,7 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self.handlers: dict[str, DomainEventHandler] = build_handler_registry(bot)
+        self.handlers: dict[str, tuple[DomainEventHandler, ...]] = build_handler_registry(bot)
         self.process_domain_events.start()
 
     @override
@@ -42,14 +42,17 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             logger.exception("Failed to process domain events")
 
     async def _process(self, delivery: DomainEventDelivery) -> None:
-        handler = self.handlers.get(delivery.event.event_type)
-        if handler is None:
+        handlers = self.handlers.get(delivery.event.event_type)
+        if not handlers:
             # Every registered consumer receives every event, so an unhandled type is
             # normal rather than an error; acknowledge it instead of retrying forever.
             await self.bot.services.domain_events.complete(delivery)
             return
         try:
-            await handler.handle(delivery.event)
+            # One failure retries the whole delivery, re-running the handlers that
+            # already succeeded. That is why every handler must be idempotent.
+            for handler in handlers:
+                await handler.handle(delivery.event)
         except Exception as error:
             dropped = await self.bot.services.domain_events.fail(delivery, error)
             if dropped:

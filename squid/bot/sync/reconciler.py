@@ -1,10 +1,8 @@
 """Drain durable Discord and search-projection reconciliation work."""
 
-import contextlib
 import logging
 from typing import TYPE_CHECKING, override
 
-import discord
 from discord.ext import tasks
 from discord.ext.commands import Cog
 
@@ -69,22 +67,19 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await self.bot.for_build(build).update_messages()
 
     async def _refresh_vote(self, vote_session_id: int) -> None:
+        """Re-render a vote session's messages.
+
+        Acting on a closed session's outcome belongs to the `vote_session.closed`
+        domain event, not here: this queue coalesces, so it can say a session changed
+        but not that it closed, and a re-render must stay safe to repeat.
+        """
         snapshot = await self.bot.services.votes.get_session_by_id(vote_session_id)
         if snapshot is None:
             return
         if snapshot.kind == "build":
-            build_id = snapshot.target.build_id
-            if build_id is not None and snapshot.status == "closed":
-                if snapshot.result == "approved":
-                    await self.bot.services.builds.confirm(build_id)
-                elif snapshot.result == "denied":
-                    await self.bot.services.builds.deny(build_id)
             session = await BuildVoteSession.from_id(self.bot, vote_session_id)
         elif snapshot.kind == "delete_log":
             session = await DeleteLogVoteSession.from_id(self.bot, vote_session_id)
-            if session is not None and snapshot.status == "closed" and snapshot.result == "approved":
-                with contextlib.suppress(discord.NotFound):
-                    await session.target_message.delete()
         else:
             session = await GenericVoteSession.from_id(self.bot, vote_session_id)
         if session is not None:
