@@ -1,9 +1,8 @@
 """Durable refresh infrastructure for indexed search documents."""
 
-from __future__ import annotations
-
 import hashlib
 import json
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -39,6 +38,9 @@ from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
 from squid.tags.infrastructure.models import TagAlias, TagDefinition
 from squid.users.infrastructure.models import CreatorAlias
 from squid.versions.infrastructure.models import Version
+
+logger = logging.getLogger(__name__)
+PROJECTION_MAX_ATTEMPTS = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,10 +79,11 @@ class SearchProjectionStore:
                 await self._session.scalars(
                     select(SearchProjectionQueueItem)
                     .where(
+                        SearchProjectionQueueItem.dead_at.is_(None),
                         or_(
                             SearchProjectionQueueItem.locked_at.is_(None),
                             SearchProjectionQueueItem.locked_at < func.now() - text("interval '5 minutes'"),
-                        )
+                        ),
                     )
                     .order_by(SearchProjectionQueueItem.enqueued_at, SearchProjectionQueueItem.id)
                     .limit(limit)
@@ -98,12 +101,25 @@ class SearchProjectionStore:
         """Remove a successfully processed queue item."""
         await self._session.delete(item)
 
-    async def retry(self, item: SearchProjectionQueueItem, error: Exception) -> None:
-        """Release failed work for retry while retaining diagnostic context."""
+    async def retry(
+        self,
+        item: SearchProjectionQueueItem,
+        error: Exception,
+        *,
+        max_attempts: int = PROJECTION_MAX_ATTEMPTS,
+    ) -> bool:
+        """Release failed work or retain it as a dead letter after exhaustion."""
+        if max_attempts < 1:
+            msg = "Projection max_attempts must be positive."
+            raise ValueError(msg)
         item.attempts += 1
         item.locked_at = None
         item.last_error = str(error)[:4000]
+        dead_lettered = item.attempts >= max_attempts
+        if dead_lettered:
+            item.dead_at = Instant.now()
         await self._session.flush()
+        return dead_lettered
 
     async def delete_document(self, resource_kind: str, source_key: str) -> None:
         """Delete a projected resource and its cascading facets/embedding work."""
@@ -518,7 +534,15 @@ class SearchProjectionWorker:
             except Exception as error:
                 retry_item = await self._session.get(SearchProjectionQueueItem, item_id)
                 if retry_item is not None:
-                    await self._store.retry(retry_item, error)
+                    dead_lettered = await self._store.retry(retry_item, error)
+                    if dead_lettered:
+                        logger.exception(
+                            "Dead-lettered a search projection after repeated failures",
+                            extra={
+                                "squid.search.resource_kind": retry_item.resource_kind,
+                                "squid.search.source_key": retry_item.source_key,
+                            },
+                        )
                 failed += 1
         return succeeded, failed
 

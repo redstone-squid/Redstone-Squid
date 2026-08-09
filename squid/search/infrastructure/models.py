@@ -147,7 +147,11 @@ class SearchProjectionQueueItem(Base, kw_only=True):
             name="search_projection_queue_action_check",
         ),
         UniqueConstraint("resource_kind", "source_key", name="search_projection_queue_resource_key"),
-        Index("search_projection_queue_ready_idx", "enqueued_at", postgresql_where=text("locked_at IS NULL")),
+        Index(
+            "search_projection_queue_ready_idx",
+            "enqueued_at",
+            postgresql_where=text("locked_at IS NULL AND dead_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -159,6 +163,7 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 

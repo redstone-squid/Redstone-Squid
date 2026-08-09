@@ -127,6 +127,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         attempts = 0,
         locked_at = NULL,
+        dead_at = NULL,
         last_error = NULL;
 
     IF target_kind IN ('door', 'extender') THEN
@@ -186,6 +187,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         attempts = 0,
         locked_at = NULL,
+        dead_at = NULL,
         last_error = NULL;
 
     IF TG_TABLE_NAME IN ('tag_definitions', 'tag_aliases') THEN
@@ -198,6 +200,7 @@ BEGIN
             enqueued_at = EXCLUDED.enqueued_at,
             attempts = 0,
             locked_at = NULL,
+            dead_at = NULL,
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
@@ -218,14 +221,16 @@ BEGIN
         FROM public.build_creators bc
         WHERE bc.alias_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         SELECT 'build', bv.build_id::text, 'upsert', now()
         FROM public.build_versions bv
         WHERE bv.version_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -247,20 +252,23 @@ BEGIN
             now()
         )
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         VALUES ('record', 'result:' || target_result_id::text, 'upsert', now())
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
     ELSE
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         SELECT 'record', 'result:' || rr.id::text, 'upsert', now()
         FROM public.record_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;

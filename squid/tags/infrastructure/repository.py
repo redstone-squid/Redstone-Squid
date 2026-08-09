@@ -115,7 +115,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                     VALUES ('metadata', :source_key, :action, now())
                     ON CONFLICT (resource_kind, source_key) DO UPDATE
                     SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-                        attempts = 0, locked_at = NULL, last_error = NULL
+                        attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL
                     """
                 ),
                 {
