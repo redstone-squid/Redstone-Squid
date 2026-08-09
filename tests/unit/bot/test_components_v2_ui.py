@@ -184,3 +184,18 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
 
     view.render_detail(record)
     assert "View build" in str(view.to_components())
+
+
+@pytest.mark.asyncio
+async def test_search_timeout_visibly_disables_bound_controls() -> None:
+    page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), next_cursor=None, has_more=False)
+    view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
+    message = AsyncMock(spec=discord.Message)
+    view.bind_message(cast(discord.Message, message))
+
+    await view.on_timeout()
+
+    controls = [child for child in view.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
+    assert controls
+    assert all(control.disabled for control in controls)
+    message.edit.assert_awaited_once()

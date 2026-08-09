@@ -32,11 +32,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """Link your minecraft account."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         consent_view = UserDataConsentView(ctx.author.id, locale=locale)
-        await ctx.send(
+        message = await ctx.send(
             view=consent_view,
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
+        consent_view.bind_message(message)
         await consent_view.wait()
         if consent_view.consent is None:
             await ctx.send(

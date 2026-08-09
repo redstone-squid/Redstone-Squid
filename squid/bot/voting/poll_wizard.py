@@ -8,7 +8,7 @@ import discord
 from whenever import Instant
 
 from squid.bot._types import GuildMessageable
-from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
+from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.utils.components import edit_interaction_layout, edit_layout, no_mentions, text_layout
 from squid.bot.voting.generic_session import GenericVoteSession
@@ -87,14 +87,16 @@ class PollModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
+        confirmation = PollConfirmation(self.cog, interaction.user.id, draft, options)
         await interaction.response.send_message(
-            view=PollConfirmation(self.cog, interaction.user.id, draft, options),
+            view=confirmation,
             ephemeral=True,
             allowed_mentions=no_mentions(),
         )
+        confirmation.bind_message(await interaction.original_response())
 
 
-class PollConfirmation(ErrorHandledLayoutView):
+class PollConfirmation(ExpiringLayoutView):
     """Preview controls that publish, edit, or cancel a poll draft."""
 
     actions = discord.ui.ActionRow()
@@ -149,6 +151,7 @@ class PollConfirmation(ErrorHandledLayoutView):
         await interaction.edit_original_response(
             view=text_layout(f"Published: {message.jump_url}"), allowed_mentions=no_mentions()
         )
+        self.stop()
 
     @actions.button(label="Edit", style=discord.ButtonStyle.secondary)
     async def edit(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
@@ -156,4 +159,5 @@ class PollConfirmation(ErrorHandledLayoutView):
 
     @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+        self.stop()
         await edit_interaction_layout(interaction, text_layout("Poll cancelled."))

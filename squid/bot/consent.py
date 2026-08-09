@@ -4,14 +4,14 @@ from typing import Any, override
 
 import discord
 
-from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
-from squid.bot.utils.components import no_mentions
+from squid.bot.utils.components import edit_interaction_layout, no_mentions
 from squid.core.i18n import _
 from squid.users.domain import CURRENT_CONSENT_VERSION, UserConsent
 
 
-class UserDataConsentView(ErrorHandledLayoutView):
+class UserDataConsentView(ExpiringLayoutView):
     """Ask one Discord user to accept the current account-link privacy notice."""
 
     actions = discord.ui.ActionRow()
@@ -57,14 +57,20 @@ class UserDataConsentView(ErrorHandledLayoutView):
 
     @actions.button(label="Agree and link", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        await interaction.response.defer()
         self.consent = UserConsent.grant_current()
+        await self._finish(interaction)
+
+    async def _finish(self, interaction: discord.Interaction[Any]) -> None:
+        """Render the prompt inert before releasing the waiting command."""
+        for child in self.walk_children():
+            if isinstance(child, discord.ui.Button | discord.ui.Select):
+                child.disabled = True
+        await edit_interaction_layout(interaction, self)
         self.stop()
 
     @actions.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        await interaction.response.defer()
-        self.stop()
+        await self._finish(interaction)
 
     @property
     def notice_version(self) -> str:

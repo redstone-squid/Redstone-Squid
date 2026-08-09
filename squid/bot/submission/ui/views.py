@@ -9,7 +9,7 @@ import discord
 from discord import Interaction
 from whenever import Instant
 
-from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
+from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
@@ -406,7 +406,7 @@ class ConfirmationView(ErrorHandledLayoutView):
         self.stop()
 
 
-class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView):
+class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
     """A view that allows users to edit a build.
 
     Changes are accumulated locally and applied under a service-managed lock on submit.
@@ -526,7 +526,13 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledLayoutView)
         self.submit.label = t(self.locale, _("Review changes"))
         self._handle_button_states()
         await self._render(interaction)
-        await interaction.followup.send(view=self, ephemeral=ephemeral, allowed_mentions=no_mentions())
+        message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
+            view=self,
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
+        self.bind_message(message)
 
     async def update(self, interaction: discord.Interaction[BotT]):
         self._handle_button_states()

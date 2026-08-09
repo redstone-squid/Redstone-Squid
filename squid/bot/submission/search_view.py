@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 import discord
 from discord.utils import escape_markdown
 
-from squid.bot.errors import ErrorHandledLayoutView
+from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.utils.components import DISCORD_GREEN, edit_interaction_layout, no_mentions
 from squid.core.i18n import _
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from squid.search.application import SearchService
 
 
-class SearchResultsView(ErrorHandledLayoutView):
+class SearchResultsView(ExpiringLayoutView):
     """A message-bound cursor paginator with inline result details."""
 
     def __init__(

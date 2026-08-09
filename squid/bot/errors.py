@@ -351,6 +351,34 @@ class ErrorHandledLayoutView(discord.ui.LayoutView):
         await handle_interaction_error(interaction, error, surface=f"view:{type(item).__name__}")
 
 
+class ExpiringLayoutView(ErrorHandledLayoutView):
+    """A finite session view that visibly disables controls when it expires."""
+
+    def __init__(self, *, timeout: float) -> None:
+        super().__init__(timeout=timeout)
+        self._bound_message: discord.Message | None = None
+
+    def bind_message(self, message: discord.Message) -> None:
+        """Bind the response message so timeout state can be rendered visibly."""
+        self._bound_message = message
+
+    @override
+    async def on_timeout(self) -> None:
+        for child in self.walk_children():
+            component: discord.ui.Item[Any] = child
+            if isinstance(child, discord.ui.DynamicItem):
+                component = child.item
+            if isinstance(component, discord.ui.Button | discord.ui.Select):
+                component.disabled = True
+        self.stop()
+        if self._bound_message is None:
+            return
+        try:
+            await edit_layout(self._bound_message, self, allowed_mentions=no_mentions())
+        except discord.HTTPException:
+            logger.debug("Could not disable expired %s", type(self).__name__, exc_info=True)
+
+
 class ErrorHandledModal(discord.ui.Modal):
     """Discord modal that delegates submission failures to the shared handler."""
 

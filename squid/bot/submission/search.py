@@ -91,10 +91,12 @@ class SearchCog[
             sort=SearchSort(sort, direction) if sort is not None else None,
         )
         page = await self.search.search(request)
-        await ctx.send(
-            view=SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale),
+        view = SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale)
+        message = await ctx.send(
+            view=view,
             allowed_mentions=no_mentions(),
         )
+        view.bind_message(message)
 
     @commands.hybrid_group(name="restrictions")
     async def restrictions_group(self, ctx: Context[BotT]) -> None:
