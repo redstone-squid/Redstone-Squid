@@ -5,7 +5,7 @@ import contextlib
 import logging
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, override
 
 import discord
 from discord.ext import commands
@@ -119,7 +119,7 @@ class ReactionRouter:
 
     def _dispatch(self, method: str, event: ReactionEvent | ReactionClearEvent) -> None:
         for subscriber in tuple(self._subscribers):
-            callback = cast(Any, getattr(subscriber, method))
+            callback = getattr(subscriber, method)
             task = asyncio.create_task(self._run_subscriber(subscriber, method, callback(event)))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
@@ -158,6 +158,7 @@ class ReactionRouterCog(commands.Cog):
     async def on_raw_reaction_clear_emoji(self, payload: discord.RawReactionClearEmojiEvent) -> None:
         await self.bot.reactions.dispatch_clear_emoji(payload)
 
+    @override
     async def cog_unload(self) -> None:
         await self.bot.reactions.close()
 

@@ -1,5 +1,7 @@
 """PostgreSQL opaque-session repository."""
 
+from typing import override
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -17,6 +19,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
+    @override
     async def save_state(self, state: OAuthState) -> None:
         async with self._session_factory() as session:
             session.add(
@@ -29,6 +32,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
             )
             await session.commit()
 
+    @override
     async def consume_state(self, state: str, *, now: Instant) -> OAuthState | None:
         async with self._session_factory() as session:
             model = await session.scalar(
@@ -39,6 +43,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
                 return None
             return OAuthState(model.state, model.code_verifier, model.redirect_to, model.expires_at)
 
+    @override
     async def create_session(
         self, *, token_hash: bytes, user_id: int, expires_at: Instant, user_agent: str | None
     ) -> str:
@@ -48,6 +53,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
             await session.commit()
             return str(model.id)
 
+    @override
     async def authenticate(self, token_hash: bytes, *, now: Instant) -> WebSessionIdentity | None:
         async with self._session_factory() as session:
             row = (
@@ -75,6 +81,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
                 consent_pending(user.created_at, user.consent_version, CURRENT_CONSENT_VERSION),
             )
 
+    @override
     async def revoke(self, token_hash: bytes, *, now: Instant) -> None:
         async with self._session_factory() as session:
             await session.execute(update(WebSession).where(WebSession.token_hash == token_hash).values(revoked_at=now))

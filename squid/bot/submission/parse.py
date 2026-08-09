@@ -170,7 +170,8 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
         else:
             if is_subhint(attr_type, list):
                 formatter, parser = handle_list(attr_type)  # type: ignore
-            elif is_bearable(None, attr_type):
+            # beartype takes a runtime hint here, which `type[T]` satisfies but does not spell.
+            elif is_bearable(None, attr_type):  # pyright: ignore[reportArgumentType]
                 formatter, parser = handle_optional(attr_type)  # type: ignore
     if formatter is None or parser is None:
         msg = f"No dispatch found for {attr_type}"

@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 from google.oauth2.service_account import Credentials
 from pydantic import (
@@ -559,6 +559,7 @@ class ApiProcessConfig(_ProcessSettings):
     oauth: OAuthConfig = OAuthConfig()
 
     @property
+    @override
     def runtime(self) -> RuntimeConfig:
         """Return runtime settings including API-only credential adapters."""
         return super().runtime.model_copy(

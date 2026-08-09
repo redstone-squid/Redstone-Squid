@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Literal, Self, override
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -205,6 +205,7 @@ class BuildDetail(BuildSummary):
     links: BuildLinks
 
     @classmethod
+    @override
     def from_domain(cls, build: Build) -> "BuildDetail":
         """Render public detail without raw extra_info or account identifiers."""
         summary = BuildSummary.from_domain(build)

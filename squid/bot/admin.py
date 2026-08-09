@@ -1,7 +1,7 @@
 """Various admin commands for the bot."""
 
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, override
 
 import discord
 from discord import app_commands
@@ -28,6 +28,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
         self.bot.reactions.subscribe(self)
 
+    @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
 
