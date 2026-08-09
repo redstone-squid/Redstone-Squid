@@ -5,6 +5,7 @@ ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-slim AS builder
 
 ARG WITH_SCHEMATICS=0
+ARG WITH_OBSERVABILITY=1
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -23,8 +24,12 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    if [ "$WITH_SCHEMATICS" = "1" ]; then \
+    if [ "$WITH_SCHEMATICS" = "1" ] && [ "$WITH_OBSERVABILITY" = "1" ]; then \
+      uv sync --locked --no-dev --no-editable --extra schematics --extra observability; \
+    elif [ "$WITH_SCHEMATICS" = "1" ]; then \
       uv sync --locked --no-dev --no-editable --extra schematics; \
+    elif [ "$WITH_OBSERVABILITY" = "1" ]; then \
+      uv sync --locked --no-dev --no-editable --extra observability; \
     else \
       uv sync --locked --no-dev --no-editable; \
     fi
@@ -76,6 +81,6 @@ USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=5).read()" || exit 1
 
-CMD ["python", "app.py"]
+CMD ["python", "-m", "squid.api.app"]

@@ -1,25 +1,21 @@
-"""Discord commands and maintenance workers for computed records."""
+"""Discord commands for querying and managing computed records."""
 
-import logging
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import check_is_global_admin
 from squid.core.i18n import _
-from squid.observability import trace_span
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-logger = logging.getLogger(__name__)
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -29,11 +25,6 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.bot = bot
         self.records = bot.services.records
         self.computation = bot.services.record_computation
-        self.process_maintenance.start()
-
-    @override
-    async def cog_unload(self) -> None:
-        self.process_maintenance.cancel()
 
     @hybrid_group(name="admin")
     @check_is_global_admin()
@@ -231,19 +222,3 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ),
             allowed_mentions=no_mentions(),
         )
-
-    @tasks.loop(seconds=30)
-    async def process_maintenance(self) -> None:
-        """Drain bounded record recomputation work."""
-        try:
-            with trace_span(
-                "squid.background.record_maintenance",
-                {"squid.surface": "background_loop"},
-            ):
-                await self.computation.process_queue()
-        except Exception:
-            logger.exception("Failed to process record maintenance work")
-
-    @process_maintenance.before_loop
-    async def before_process_maintenance(self) -> None:
-        await self.bot.wait_until_ready()

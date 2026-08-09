@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 from discord import app_commands
-from discord.ext import tasks
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
-from whenever import Instant
 
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
@@ -22,7 +20,6 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
 from squid.core.i18n import _
-from squid.observability import record_histogram, trace_span
 from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -41,12 +38,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
-        self.close_due_polls.start()
 
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
-        self.close_due_polls.cancel()
 
     async def get_vote_session(
         self, message_id: int, *, status: Literal["open", "closed"] | None = None
@@ -292,42 +287,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             except (discord.NotFound, discord.Forbidden):
                 return None
         return await self._actor(member, kind)
-
-    @tasks.loop(seconds=30)
-    async def close_due_polls(self) -> None:
-        """Finalize expired polls from persisted deadlines."""
-        try:
-            with trace_span(
-                "squid.background.close_due_polls",
-                {"squid.surface": "background_loop"},
-            ):
-                now = Instant.now()
-                snapshots = await self.vote_service.close_due(now)
-                for snapshot in snapshots:
-                    if snapshot.poll is not None:
-                        record_histogram(
-                            "squid.vote.close.lag",
-                            max((now - snapshot.poll.deadline).total("seconds"), 0.0),
-                            attributes={"squid.vote.kind": snapshot.kind},
-                        )
-                    try:
-                        with trace_span(
-                            "squid.vote.update_closed_messages",
-                            {"squid.vote.session_id": snapshot.id},
-                        ):
-                            await GenericVoteSession(self.bot, snapshot).update_messages()
-                    except Exception:
-                        logger.exception(
-                            "Closed due poll %s but could not update its Discord message",
-                            snapshot.id,
-                            extra={"squid.vote.session_id": snapshot.id},
-                        )
-        except Exception:
-            logger.exception("Failed to scan and close due polls")
-
-    @close_due_polls.before_loop
-    async def before_close_due_polls(self) -> None:
-        await self.bot.wait_until_ready()
 
     @vote_group.command(name="delete")
     @app_commands.rename(target_message="message")

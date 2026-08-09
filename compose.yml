@@ -1,34 +1,71 @@
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Docker Compose reference guide at
-# https://docs.docker.com/go/compose-spec-reference/
+x-app: &app
+  build:
+    context: .
+    args:
+      WITH_OBSERVABILITY: ${WITH_OBSERVABILITY:-1}
+  restart: unless-stopped
+  env_file:
+    - ${SQUID_ENV_FILE:-.env}
+  environment:
+    SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
+    SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
+  volumes:
+    - ./logs:/var/log/app
+  stop_grace_period: 20s
 
-# Here the instructions define your application as a service called "server".
-# This service is built from the Dockerfile in the current directory.
-# You can add other services your application may depend on here, such as a
-# database or a cache. For examples, see the Awesome Compose repository:
-# https://github.com/docker/awesome-compose
 services:
-  server:
-    build:
-      context: .
-    container_name: redstone-squid-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
-      SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
+  api:
+    <<: *app
+    container_name: redstone-squid-api
+    command: ["python", "-m", "squid.api.app"]
     ports:
       - "8000:8000"
-    volumes:
-      - ./logs:/var/log/app
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  bot:
+    <<: *app
+    container_name: redstone-squid-bot
+    command: ["python", "-m", "squid.bot.app"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/readyz', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  worker:
+    <<: *app
+    container_name: redstone-squid-worker
+    build:
+      context: .
+      args:
+        WITH_OBSERVABILITY: ${WITH_OBSERVABILITY:-1}
+        WITH_SCHEMATICS: ${WITH_SCHEMATICS:-1}
+    command: ["python", "-m", "squid.worker.app"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8002/readyz', timeout=5).read()",
         ]
       interval: 30s
       timeout: 10s
@@ -46,36 +83,3 @@ services:
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ./logs:/var/log/app:ro
-
-# The commented out section below is an example of how to define a PostgreSQL
-# database that your application can use. `depends_on` tells Docker Compose to
-# start the database before your application. The `db-data` volume persists the
-# database data between container restarts. The `db-password` secret is used
-# to set the database password. You must create `db/password.txt` and add
-# a password of your choosing to it before running `docker compose up`.
-#     depends_on:
-#       db:
-#         condition: service_healthy
-#   db:
-#     image: postgres
-#     restart: always
-#     user: postgres
-#     secrets:
-#       - db-password
-#     volumes:
-#       - db-data:/var/lib/postgresql/data
-#     environment:
-#       - POSTGRES_DB=example
-#       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
-#     expose:
-#       - 5432
-#     healthcheck:
-#       test: [ "CMD", "pg_isready" ]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-# volumes:
-#   db-data:
-# secrets:
-#   db-password:
-#     file: db/password.txt

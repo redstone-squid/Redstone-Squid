@@ -1,6 +1,11 @@
 """Process-level SQLAlchemy engine and session infrastructure."""
 
-from sqlalchemy import Engine, create_engine, make_url, select
+from functools import cache
+from pathlib import Path
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import Engine, create_engine, make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -42,8 +47,30 @@ class DatabaseEngine:
         async with self.async_session() as session:
             await session.execute(select(1))
 
+    async def check_readiness(self) -> None:
+        """Verify connectivity and that the deployed schema is at this release's head."""
+        async with self.async_session() as session:
+            versions = frozenset((await session.scalars(text("SELECT version_num FROM alembic_version"))).all())
+        expected = expected_migration_heads()
+        if versions != expected:
+            msg = "The database migration revision does not match this application release."
+            raise DataIntegrityError(
+                msg,
+                context={"database_heads": sorted(versions), "application_heads": sorted(expected)},
+                developer_action="Run the release migration job before making the service ready.",
+            )
+
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
         """Validates that the database schema is consistent with the expected schema."""
         if not is_sane_database(base_cls, self.sync_engine):
             msg = "The database schema is not consistent with the expected schema."
             raise DataIntegrityError(msg)
+
+
+@cache
+def expected_migration_heads() -> frozenset[str]:
+    """Read the migration heads shipped in this source/image exactly once."""
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    return frozenset(ScriptDirectory.from_config(config).get_heads())

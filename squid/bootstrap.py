@@ -246,4 +246,4 @@ def create_application_runtime(config: RuntimeConfig, db: DatabaseEngine | None 
     # that may finish an in-flight write has closed.
     resource_stack.push_async_callback(database.close)
     services = create_application_services(database, config, resource_stack=resource_stack)
-    return ApplicationRuntime(services, resource_stack.aclose, database.ping, database.ping)
+    return ApplicationRuntime(services, resource_stack.aclose, database.ping, database.check_readiness)

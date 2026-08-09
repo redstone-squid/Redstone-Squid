@@ -227,6 +227,20 @@ class BotConfig(_FrozenModel):
     """Discord-process-specific settings."""
 
     log_file: str | None = "discord.log"
+    health_port: int = Field(default=8001, ge=1, le=65535)
+
+    _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
+    _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
+
+
+class WorkerConfig(_FrozenModel):
+    """Database-worker process settings."""
+
+    log_file: str | None = "worker.log"
+    health_port: int = Field(default=8002, ge=1, le=65535)
+    event_interval_seconds: float = Field(default=15, gt=0)
+    maintenance_interval_seconds: float = Field(default=30, gt=0)
+    keepalive_interval_seconds: float = Field(default=86_400, gt=0)
 
     _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
     _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
@@ -582,11 +596,28 @@ class ApiProcessConfig(_ProcessSettings):
         )
 
 
+class WorkerProcessConfig(_ProcessSettings):
+    """Validated configuration required by the database worker process."""
+
+    worker: WorkerConfig = WorkerConfig()
+
+    @property
+    def logging(self) -> LoggingConfig:
+        return LoggingConfig(
+            level=self.log.level,
+            root_level=self.log.root_level or "INFO",
+            directory=self.log.directory,
+            log_file=self.worker.log_file,
+            access_log_file=None,
+        )
+
+
 class ApplicationConfig(BotProcessConfig):
     """Complete configuration required by the combined application launcher."""
 
     api: ApiConfig
     oauth: OAuthConfig = OAuthConfig()
+    worker: WorkerConfig = WorkerConfig()
 
     def bot_process(self) -> BotProcessConfig:
         """Project the combined settings into the Discord process."""
@@ -630,6 +661,26 @@ class ApplicationConfig(BotProcessConfig):
                     "observability",
                     "oauth",
                     "api",
+                }
+            )
+        )
+
+    def worker_process(self) -> WorkerProcessConfig:
+        """Project the combined settings into the database worker process."""
+        return WorkerProcessConfig.model_validate(
+            self.model_dump(
+                include={
+                    "database",
+                    "verification",
+                    "cursor",
+                    "openai",
+                    "embedding",
+                    "vector",
+                    "schematic",
+                    "community",
+                    "log",
+                    "observability",
+                    "worker",
                 }
             )
         )
@@ -679,6 +730,11 @@ def load_api_process_config() -> ApiProcessConfig:
     return _load_settings(ApiProcessConfig)
 
 
+def load_worker_process_config() -> WorkerProcessConfig:
+    """Load and validate settings for the standalone database worker process."""
+    return _load_settings(WorkerProcessConfig)
+
+
 def load_database_config() -> DatabaseConfig:
     """Load only the database settings needed by migration tooling."""
 
@@ -724,9 +780,12 @@ __all__ = [
     "OpenAIConfig",
     "RuntimeConfig",
     "SchematicConfig",
+    "WorkerConfig",
+    "WorkerProcessConfig",
     "load_api_process_config",
     "load_application_config",
     "load_bot_process_config",
     "load_database_config",
     "load_worker_observability_config",
+    "load_worker_process_config",
 ]

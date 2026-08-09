@@ -78,32 +78,6 @@ class PostConfirmedBuildHandler:
                 raise result
 
 
-class ApplyBuildVoteOutcomeHandler:
-    """Apply a closed build vote's outcome to the build it decided.
-
-    Confirming writes `builds`, which emits `build.confirmed`, which is what posts
-    the build. That second hop is deliberate: the vote path and `/build approve`
-    then reach the announcement the same way.
-    """
-
-    def __init__(self, bot: "squid.bot.app.RedstoneSquid") -> None:
-        self.bot = bot
-
-    async def handle(self, event: DomainEvent) -> None:
-        snapshot = await self.bot.services.votes.get_session_by_id(event.aggregate_id)
-        if snapshot is None or snapshot.kind != "build" or snapshot.status != "closed":
-            return
-        build_id = snapshot.target.build_id
-        if build_id is None:
-            return
-        # Redelivery is safe because these rewrite the status to the value it already
-        # holds, which the emit trigger's IS DISTINCT FROM guard declines to re-emit.
-        if snapshot.result == "approved":
-            await self.bot.services.builds.confirm(build_id)
-        elif snapshot.result == "denied":
-            await self.bot.services.builds.deny(build_id)
-
-
 class DeleteVotedMessageHandler:
     """Delete the message a closed delete-log vote approved removing."""
 
@@ -132,5 +106,5 @@ def build_handler_registry(bot: "squid.bot.app.RedstoneSquid") -> dict[str, tupl
     """Map each handled event type to the handlers that react to it."""
     return {
         "build.confirmed": (PostConfirmedBuildHandler(bot),),
-        "vote_session.closed": (ApplyBuildVoteOutcomeHandler(bot), DeleteVotedMessageHandler(bot)),
+        "vote_session.closed": (DeleteVotedMessageHandler(bot),),
     }

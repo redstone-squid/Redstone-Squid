@@ -53,7 +53,7 @@ Copy the example environment file and replace its required placeholders:
 cp .env.example .env
 ```
 
-The combined launcher requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_PEPPER`,
+The complete deployment requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_PEPPER`,
 `SQUID_DISCORD_TOKEN`, `SQUID_API_SECRET`, `SQUID_API_KEY_PEPPER`, `SQUID_API_SESSION_PEPPER`, and
 `SQUID_CURSOR_SECRET`. Exported environment variables take precedence over `.env`. Discord OAuth,
 REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
@@ -98,12 +98,23 @@ To get the database URL from Supabase, click **Connect** and copy a PostgreSQL c
 SQUID_DATABASE_URL=postgresql://postgres.example:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
 ```
 
-### Running The Application
+### Running the Application
 
-The application can now be run simply with:
-```
+For local development, the supervisor starts the API, Discord bot, and database worker as separate child processes and
+stops the other two if any process exits:
+
+```console
 python app.py
 ```
+
+Production uses separate service units so each process can be restarted and checked independently:
+
+```console
+docker compose up --build
+```
+
+The API exposes `/livez` and database/schema-aware `/readyz` on port 8000. The bot and worker expose the same endpoints
+on their process-local `SQUID_BOT_HEALTH_PORT` (8001) and `SQUID_WORKER_HEALTH_PORT` (8002) listeners.
 
 ## Discord Set Up
 

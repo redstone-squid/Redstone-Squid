@@ -42,6 +42,12 @@ def test_create_app_delegates_optional_instrumentation(mocker: MockerFixture) ->
     instrument.assert_called_once_with(mocker.ANY, config.observability)
 
 
+def test_liveness_and_readiness_have_distinct_endpoints(client: httpx.Client) -> None:
+    assert client.get("/livez").json() == {"status": "ok"}
+    assert client.get("/readyz").json() == {"status": "ready"}
+    assert client.get("/health").json() == {"status": "ready"}
+
+
 def test_missing_authorization_header_returns_401(client: httpx.Client):
     resp = client.post("/verify", json={"uuid": str(TEST_UUID)})
     assert resp.status_code == 401

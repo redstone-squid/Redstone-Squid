@@ -1,6 +1,7 @@
 """Discord bot application and process entry point."""
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Self, override
@@ -8,9 +9,8 @@ from typing import Self, override
 import discord
 from discord import Webhook
 from discord.abc import Messageable
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ext.commands import Bot
-from whenever import Instant
 
 from squid.bootstrap import create_application_runtime
 
@@ -31,6 +31,7 @@ from squid.config import (
     CommunityConfig,
     load_bot_process_config,
 )
+from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability
 from squid.runtime import ApplicationServices
@@ -47,7 +48,6 @@ class RedstoneSquid(Bot):
     def __init__(
         self,
         services: ApplicationServices,
-        keep_database_active: Callable[[], Awaitable[None]],
         config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
         *,
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
@@ -55,19 +55,26 @@ class RedstoneSquid(Bot):
         community_config: CommunityConfig = DEFAULT_COMMUNITY_CONFIG,
         inference_model: str = "gpt-5.6-luna",
         inference_reasoning_effort: str = "low",
+        development_mode: bool = False,
     ):
         self.services = services
-        self._keep_database_active = keep_database_active
         self.catbox_config = catbox_config
         self.build_config = build_config
         self.community_config = community_config
         self.inference_model = inference_model
         self.inference_reasoning_effort = inference_reasoning_effort
+        self.development_mode = development_mode
         description = f"{config.bot_name} v{config.bot_version}".strip()
+        intents = discord.Intents.none()
+        intents.guilds = True
+        intents.members = True
+        intents.messages = True
+        intents.message_content = True
+        intents.reactions = True
         super().__init__(
             command_prefix=commands.when_mentioned_or(config.prefix),
             owner_id=config.owner_id,
-            intents=discord.Intents.all(),
+            intents=intents,
             description=description or None,
             tree_cls=SquidCommandTree,
         )
@@ -83,7 +90,6 @@ class RedstoneSquid(Bot):
         """Called when the bot is ready to start."""
         await self.tree.set_translator(SquidAppCommandTranslator())
 
-        # Load extensions in parallel to speed up bot startup
         extensions = [
             "squid.bot.reactions",
             "squid.bot.misc_commands",
@@ -95,31 +101,25 @@ class RedstoneSquid(Bot):
             "squid.bot.starboard.cog",
             "squid.bot.sync",
             "squid.bot.events",
-            "jishaku",
             "squid.bot.verify",
             "squid.bot.admin",
             "squid.bot.give_redstoner",
             "squid.bot.version_tracking",
             "squid.bot.welcome_relay",
         ]
+        if self.development_mode:
+            extensions.append("jishaku")
 
-        await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
-        self.keep_database_active.start()
-        self.clean_dangling_build_locks.start()
-
-    @tasks.loop(hours=24)
-    async def keep_database_active(self):
-        """Keep free-tier database hosting active."""
-        await self._keep_database_active()
-
-    @tasks.loop(minutes=5)
-    async def clean_dangling_build_locks(self):
-        """Clean up dangling build locks in case some functions failed to release them."""
-        await self.services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
-
-    @clean_dangling_build_locks.before_loop
-    async def before_clean_dangling_build_locks(self) -> None:
-        await self.wait_until_ready()
+        loaded: list[str] = []
+        try:
+            for extension in extensions:
+                await self.load_extension(extension)
+                loaded.append(extension)
+        except Exception:
+            for extension in reversed(loaded):
+                with contextlib.suppress(commands.ExtensionError):
+                    await self.unload_extension(extension)
+            raise
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""
@@ -203,20 +203,24 @@ async def main(
     observability = configure_observability(resolved_config.observability, service_name="bot")
 
     try:
-        async with (
-            create_application_runtime(resolved_config.runtime) as runtime,
-            RedstoneSquid(
+        async with create_application_runtime(resolved_config.runtime) as runtime:
+            bot = RedstoneSquid(
                 runtime.services,
-                runtime.keep_database_active,
                 config=identity_config,
                 catbox_config=resolved_config.catbox,
                 build_config=resolved_config.build,
                 community_config=resolved_config.community,
                 inference_model=resolved_config.openai.chat_model,
                 inference_reasoning_effort=resolved_config.openai.reasoning_effort,
-            ) as bot,
-        ):
-            await bot.start(resolved_config.discord.token.get_secret_value())
+                development_mode=resolved_config.development_mode,
+            )
+
+            async def bot_ready() -> bool:
+                await runtime.ready()
+                return bot.is_ready()
+
+            async with bot, ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port):
+                await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
         observability.shutdown()
         queue_listener.stop()

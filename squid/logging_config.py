@@ -49,6 +49,7 @@ __all__ = [
     "build_logging_config",
     "configure_api_logging",
     "configure_bot_logging",
+    "configure_service_worker_logging",
     "configure_worker_logging",
     "prepare_log_path",
     "resolve_level",
@@ -258,6 +259,16 @@ def configure_api_logging(config: LoggingConfig) -> None:
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
+        )
+    )
+
+
+def configure_service_worker_logging(config: LoggingConfig) -> None:
+    """Configure logging for the long-lived database worker process."""
+    logging.config.dictConfig(
+        build_logging_config(
+            config=config,
+            named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
         )
     )
 

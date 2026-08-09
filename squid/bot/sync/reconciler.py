@@ -31,12 +31,11 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @tasks.loop(seconds=15)
     async def process_reconciliation(self) -> None:
-        """Drain bounded Discord refresh and search projection work."""
+        """Drain bounded Discord refresh work."""
         try:
             with trace_span("squid.background.reconciliation", {"squid.surface": "background_loop"}):
                 for job in await self.bot.services.discord_sync.claim():
                     await self._process_job(job)
-                await self.bot.services.refresh_search_index()
         except Exception:
             logger.exception("Failed to process reconciliation work")
 

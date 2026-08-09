@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -27,9 +27,22 @@ ConfigFactory = Callable[[], ApiProcessConfig]
 router = APIRouter()
 
 
-@router.get("/health")
-async def health() -> dict[str, str]:
+@router.get("/livez")
+async def live() -> dict[str, str]:
+    """Report only whether the API process can service requests."""
     return {"status": "ok"}
+
+
+@router.get("/health")
+@router.get("/readyz")
+async def ready(request: Request, response: Response) -> dict[str, str]:
+    """Report whether required database state matches this release."""
+    try:
+        await request.app.state.runtime.ready()
+    except Exception:
+        response.status_code = 503
+        return {"status": "not_ready"}
+    return {"status": "ready"}
 
 
 class User(BaseModel):

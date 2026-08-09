@@ -7,7 +7,7 @@ import discord
 import pytest
 from whenever import Instant
 
-from squid.bot.events.handlers import ApplyBuildVoteOutcomeHandler, DeleteVotedMessageHandler
+from squid.bot.events.handlers import DeleteVotedMessageHandler
 from squid.events import DomainEvent
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -15,6 +15,7 @@ from squid.voting.domain import (
     VoteSessionSnapshot,
     VoteTarget,
 )
+from squid.worker.events import ApplyBuildVoteOutcomeHandler
 
 
 def _snapshot(
@@ -63,7 +64,7 @@ def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
 async def test_a_decided_build_vote_applies_its_outcome(result: str, expected: str) -> None:
     bot = _bot(_snapshot(kind="build", result=result, target=VoteTarget(build_id=42)))  # type: ignore[arg-type]
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     getattr(bot.services.builds, expected).assert_awaited_once_with(42)
 
@@ -72,7 +73,7 @@ async def test_a_decided_build_vote_applies_its_outcome(result: str, expected: s
 async def test_an_undecided_build_vote_leaves_the_build_alone(result: str) -> None:
     bot = _bot(_snapshot(kind="build", result=result, target=VoteTarget(build_id=42)))  # type: ignore[arg-type]
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     bot.services.builds.confirm.assert_not_awaited()
     bot.services.builds.deny.assert_not_awaited()
@@ -81,7 +82,7 @@ async def test_an_undecided_build_vote_leaves_the_build_alone(result: str) -> No
 async def test_a_still_open_session_is_not_applied() -> None:
     bot = _bot(_snapshot(kind="build", status="open", target=VoteTarget(build_id=42)))
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     bot.services.builds.confirm.assert_not_awaited()
 
@@ -89,7 +90,7 @@ async def test_a_still_open_session_is_not_applied() -> None:
 async def test_a_build_vote_without_a_target_build_is_skipped() -> None:
     bot = _bot(_snapshot(kind="build", target=VoteTarget()))
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     bot.services.builds.confirm.assert_not_awaited()
 
@@ -97,7 +98,7 @@ async def test_a_build_vote_without_a_target_build_is_skipped() -> None:
 async def test_a_delete_log_session_does_not_touch_builds() -> None:
     bot = _bot(_snapshot(kind="delete_log"))
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     bot.services.builds.confirm.assert_not_awaited()
 
@@ -145,7 +146,7 @@ async def test_a_missing_session_is_skipped_by_both_handlers() -> None:
     bot = _bot(None)
     bot.get_or_fetch_message = AsyncMock()
 
-    await ApplyBuildVoteOutcomeHandler(bot).handle(_event())
+    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
     await DeleteVotedMessageHandler(bot).handle(_event())
 
     bot.services.builds.confirm.assert_not_awaited()
