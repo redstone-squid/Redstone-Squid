@@ -111,6 +111,7 @@ class BuildService:
         *,
         blocking: bool = False,
         timeout: float = 30,
+        expected_revision: int | None = None,
     ) -> BuildEditLease:
         return BuildEditLease(
             self._repository,
@@ -120,17 +121,18 @@ class BuildService:
             patch,
             blocking=blocking,
             timeout=timeout,
+            expected_revision=expected_revision,
         )
 
     async def confirm(self, build_id: int) -> Build:
-        build = await self._get_required(build_id)
         async with self._locks.locked(build_id):
+            build = await self._get_required(build_id)
             await self._repository.confirm(build)
         return build
 
     async def deny(self, build_id: int) -> Build:
-        build = await self._get_required(build_id)
         async with self._locks.locked(build_id):
+            build = await self._get_required(build_id)
             await self._repository.deny(build)
         return build
 

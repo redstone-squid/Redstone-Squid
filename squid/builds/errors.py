@@ -1,6 +1,6 @@
 """Build context errors."""
 
-from squid.core.errors import ConflictError, ErrorCode, NotFoundError, ValidationError
+from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, ValidationError
 from squid.core.i18n import _
 
 
@@ -44,6 +44,40 @@ class BuildBusyError(ConflictError):
             public_context={"build_id": build_id},
         )
         self.build_id = build_id
+
+
+class BuildRevisionRequiredError(DomainError):
+    """A caller attempted an optimistic write without a revision precondition."""
+
+    default_message = _("An If-Match build revision is required for this operation.")
+    default_title = _("Build revision required")
+    default_code = ErrorCode.BUILD_REVISION_REQUIRED
+    default_resource = "build"
+    default_end_user_action = _("Fetch the build again and retry with its ETag.")
+
+    def __init__(self, build_id: int) -> None:
+        super().__init__(
+            context={"build_id": build_id},
+            public_context={"build_id": build_id},
+        )
+
+
+class BuildRevisionMismatchError(DomainError):
+    """A caller's expected build revision is no longer current."""
+
+    default_message = _("The build changed after it was read.")
+    default_title = _("Build revision mismatch")
+    default_code = ErrorCode.BUILD_REVISION_MISMATCH
+    default_resource = "build"
+    default_end_user_action = _("Fetch the latest build, merge the changes, and try again.")
+
+    def __init__(self, build_id: int, *, expected_revision: int | None, current_revision: int | None = None) -> None:
+        context = {"build_id": build_id}
+        if expected_revision is not None:
+            context["expected_revision"] = expected_revision
+        if current_revision is not None:
+            context["current_revision"] = current_revision
+        super().__init__(context=context, public_context=context)
 
 
 class RestrictionNotFoundError(NotFoundError):

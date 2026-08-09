@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from squid.api.i18n import locale_for_request
+from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -86,6 +87,10 @@ def _problem_response(problem: ProblemDetail, locale: str) -> Response:
 
 
 def _status_for_error(error: SquidError) -> int:
+    if isinstance(error, BuildRevisionRequiredError):
+        return HTTPStatus.PRECONDITION_REQUIRED
+    if isinstance(error, BuildRevisionMismatchError):
+        return HTTPStatus.PRECONDITION_FAILED
     if isinstance(error, AuthenticationError):
         return HTTPStatus.UNAUTHORIZED
     if isinstance(error, AuthorizationError):

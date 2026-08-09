@@ -13,7 +13,7 @@ from squid.builds.application.services import (
     BuildService,
 )
 from squid.builds.domain import Build, BuildCategory, Status
-from squid.builds.errors import BuildBusyError, BuildNotFoundError
+from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
 
 
 class FakeBuildRepository:
@@ -180,6 +180,19 @@ async def test_edit_loads_build_only_after_acquiring_lease(existing_build: Build
 
     async with build_service(repository, locks).edit(42, BuildEditPatch()):
         pass
+
+
+async def test_edit_rejects_a_stale_expected_revision(existing_build: Build) -> None:
+    repository = FakeBuildRepository(existing_build)
+    locks = FakeBuildLocks()
+
+    with pytest.raises(BuildRevisionMismatchError) as error:
+        async with build_service(repository, locks).edit(42, BuildEditPatch(dimensions=(1, 2, 3)), expected_revision=2):
+            pass
+
+    assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
+    assert existing_build.dimensions == (None, None, None)
+    locks.release.assert_awaited_once_with(42)
 
 
 async def test_status_changes_and_cleanup_use_lock_manager(existing_build: Build) -> None:

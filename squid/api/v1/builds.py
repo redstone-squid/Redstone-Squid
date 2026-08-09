@@ -1,8 +1,9 @@
 """Build read and write routes."""
 
+import re
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.api.dependencies import CurrentPrincipal, CursorSigner, Services
 from squid.api.errors import responses
@@ -12,7 +13,12 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilt
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput
 from squid.builds.domain import Build, Status
-from squid.builds.errors import BuildNotFoundError, InvalidBuildError
+from squid.builds.errors import (
+    BuildNotFoundError,
+    BuildRevisionMismatchError,
+    BuildRevisionRequiredError,
+    InvalidBuildError,
+)
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
 from squid.runtime import ApplicationServices
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
@@ -20,10 +26,16 @@ from squid.users.errors import ConsentRequiredError
 
 router = APIRouter(prefix="/builds", tags=["builds"])
 UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
+_BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
 
 
 @router.post("", response_model=BuildDetail, status_code=201, responses=responses(400, 401, 403, 422, 503))
-async def submit_build(submission: DoorSubmission, services: Services, principal: UserWriter) -> BuildDetail:
+async def submit_build(
+    submission: DoorSubmission,
+    response: Response,
+    services: Services,
+    principal: UserWriter,
+) -> BuildDetail:
     """Submit a door build for Discord moderation."""
     _require_consented_user(principal)
     if submission.category.casefold() != "door":
@@ -53,35 +65,50 @@ async def submit_build(submission: DoorSubmission, services: Services, principal
             ai_generated=False,
         )
     )
+    _set_build_etag(response, build)
     return BuildDetail.from_domain(build)
 
 
-@router.patch("/{build_id}", response_model=BuildDetail, responses=responses(400, 401, 403, 404, 409, 422, 503))
+@router.patch(
+    "/{build_id}",
+    response_model=BuildDetail,
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
+)
 async def edit_build(
     build_id: int,
     changes: BuildPatch,
+    response: Response,
     services: Services,
     principal: UserWriter,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
     """Edit an owned pending build, or any build as a global administrator."""
     _require_consented_user(principal)
+    expected_revision = _expected_revision(build_id, if_match)
     patch = BuildEditPatch.from_attributes(changes.model_dump(exclude_unset=True))
     assert principal.discord_id is not None
-    async with services.builds.edit(build_id, patch, blocking=False) as lease:
+    async with services.builds.edit(
+        build_id,
+        patch,
+        blocking=False,
+        expected_revision=expected_revision,
+    ) as lease:
         is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
         is_admin = await services.authorization.is_global_administrator(principal.discord_id)
         if not is_owner and not is_admin:
             raise AuthorizationError
         build = await lease.commit()
+    _set_build_etag(response, build)
     return BuildDetail.from_domain(build)
 
 
 @router.get("/{build_id}", response_model=BuildDetail, responses=responses(404, 422, 503))
-async def get_build(build_id: int, services: Services) -> BuildDetail:
+async def get_build(build_id: int, response: Response, services: Services) -> BuildDetail:
     """Return one confirmed public build."""
     build = await services.build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
+    _set_build_etag(response, build)
     return BuildDetail.from_domain(build)
 
 
@@ -194,3 +221,24 @@ def _require_consented_user(principal: Principal) -> None:
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
+
+
+def build_etag(build: Build) -> str:
+    """Return the strong validator for one persisted build revision."""
+    if build.id is None:
+        msg = "Cannot create an ETag for an unpersisted build."
+        raise ValueError(msg)
+    return f'"build-{build.id}-r{build.revision}"'
+
+
+def _set_build_etag(response: Response, build: Build) -> None:
+    response.headers["ETag"] = build_etag(build)
+
+
+def _expected_revision(build_id: int, if_match: str | None) -> int:
+    if if_match is None:
+        raise BuildRevisionRequiredError(build_id)
+    match = _BUILD_ETAG.fullmatch(if_match.strip())
+    if match is None or int(match.group("build_id")) != build_id:
+        raise BuildRevisionMismatchError(build_id, expected_revision=None)
+    return int(match.group("revision"))

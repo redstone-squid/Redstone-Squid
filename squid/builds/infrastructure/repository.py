@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
 from squid.builds.domain import (
@@ -21,7 +22,7 @@ from squid.builds.domain import (
     Status,
     UnknownRestrictions,
 )
-from squid.builds.errors import InvalidBuildError
+from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
@@ -186,6 +187,7 @@ class BuildRepository:
                     await self._create_or_update_message(build, session)
                 sql_build.original_message_id = build.original_message_id
                 await session.commit()
+                build.revision = sql_build.revision
         else:
             await self._update_existing(build)
 
@@ -213,43 +215,54 @@ class BuildRepository:
                 )
             )
             sql_build = (await session.execute(statement)).scalar_one()
-            sql_build.submission_status = build.submission_status
-            sql_build.width = build.width
-            sql_build.height = build.height
-            sql_build.depth = build.depth
-            sql_build.completion_time = build.completion_time
-            sql_build.completion_at = build.completion_at
-            sql_build.completion_evidence = build.completion_evidence
-            sql_build.description = build.description
-            sql_build.submitter_user_id = await self._get_or_create_account(session, build.submitter_id)
-            sql_build.version_spec = build.version_spec
-            sql_build.ai_generated = build.ai_generated or False
-            sql_build.embedding = build.embedding
-            sql_build.edited_time = build.edited_time
+            if sql_build.revision != build.revision:
+                raise BuildRevisionMismatchError(
+                    build.id,
+                    expected_revision=build.revision,
+                    current_revision=sql_build.revision,
+                )
+            try:
+                sql_build.submission_status = build.submission_status
+                sql_build.width = build.width
+                sql_build.height = build.height
+                sql_build.depth = build.depth
+                sql_build.completion_time = build.completion_time
+                sql_build.completion_at = build.completion_at
+                sql_build.completion_evidence = build.completion_evidence
+                sql_build.description = build.description
+                sql_build.submitter_user_id = await self._get_or_create_account(session, build.submitter_id)
+                sql_build.version_spec = build.version_spec
+                sql_build.ai_generated = build.ai_generated or False
+                sql_build.embedding = build.embedding
+                sql_build.edited_time = build.edited_time
 
-            if not isinstance(sql_build, Door):
-                msg = f"Only doors are supported for now, got {sql_build.category}."
-                raise TypeError(msg)
-            sql_build.orientation = build.door_orientation_type or "Door"
-            sql_build.door_width = build.door_width or 1
-            sql_build.door_height = build.door_height or 2
-            sql_build.door_depth = build.door_depth
-            sql_build.normal_opening_time = build.normal_opening_time
-            sql_build.normal_closing_time = build.normal_closing_time
-            sql_build.visible_opening_time = build.visible_opening_time
-            sql_build.visible_closing_time = build.visible_closing_time
+                if not isinstance(sql_build, Door):
+                    msg = f"Only doors are supported for now, got {sql_build.category}."
+                    raise TypeError(msg)
+                sql_build.orientation = build.door_orientation_type or "Door"
+                sql_build.door_width = build.door_width or 1
+                sql_build.door_height = build.door_height or 2
+                sql_build.door_depth = build.door_depth
+                sql_build.normal_opening_time = build.normal_opening_time
+                sql_build.normal_closing_time = build.normal_closing_time
+                sql_build.visible_opening_time = build.visible_opening_time
+                sql_build.visible_closing_time = build.visible_closing_time
 
-            sql_build.build_creators.clear()
-            sql_build.build_restrictions.clear()
-            sql_build.build_versions.clear()
-            sql_build.build_types.clear()
-            sql_build.tag_assignments.clear()
-            sql_build.links.clear()
-            await self._setup_relationships(build, session, sql_build)
-            if build.original_message_id is not None:
-                await self._create_or_update_message(build, session)
-            sql_build.original_message_id = build.original_message_id
-            await session.commit()
+                sql_build.build_creators.clear()
+                sql_build.build_restrictions.clear()
+                sql_build.build_versions.clear()
+                sql_build.build_types.clear()
+                sql_build.tag_assignments.clear()
+                sql_build.links.clear()
+                await self._setup_relationships(build, session, sql_build)
+                if build.original_message_id is not None:
+                    await self._create_or_update_message(build, session)
+                sql_build.original_message_id = build.original_message_id
+                await session.commit()
+            except StaleDataError as error:
+                await session.rollback()
+                raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
+            build.revision = sql_build.revision
 
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
         """Set up all relationships for the build using SQLAlchemy's relationship handling."""
@@ -542,14 +555,7 @@ class BuildRepository:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
 
-        build.submission_status = Status.CONFIRMED
-        async with self._session_factory() as session:
-            stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.CONFIRMED)
-            result = cast(CursorResult[Any], await session.execute(stmt))
-            await session.commit()
-            if result.rowcount != 1:
-                msg = "Failed to confirm submission in the database."
-                raise PersistenceError(msg, context={"build_id": build.id, "operation": "confirm"})
+        await self._set_status(build, Status.CONFIRMED, operation="confirm")
 
     async def deny(self, build: Build) -> None:
         """Marks the build as denied.
@@ -561,14 +567,37 @@ class BuildRepository:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
 
-        build.submission_status = Status.DENIED
+        await self._set_status(build, Status.DENIED, operation="deny")
+
+    async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
+        assert build.id is not None
+        edited_time = Instant.now()
         async with self._session_factory() as session:
-            stmt = update(SQLBuild).where(SQLBuild.id == build.id).values(submission_status=Status.DENIED)
-            result = cast(CursorResult[Any], await session.execute(stmt))
-            await session.commit()
+            statement = (
+                update(SQLBuild)
+                .where(SQLBuild.id == build.id, SQLBuild.revision == build.revision)
+                .values(
+                    submission_status=status,
+                    revision=SQLBuild.revision + 1,
+                    edited_time=edited_time,
+                )
+            )
+            result = cast(CursorResult[Any], await session.execute(statement))
             if result.rowcount != 1:
-                msg = "Failed to deny submission in the database."
-                raise PersistenceError(msg, context={"build_id": build.id, "operation": "deny"})
+                current_revision = await session.scalar(select(SQLBuild.revision).where(SQLBuild.id == build.id))
+                await session.rollback()
+                if current_revision is not None:
+                    raise BuildRevisionMismatchError(
+                        build.id,
+                        expected_revision=build.revision,
+                        current_revision=current_revision,
+                    )
+                msg = f"Failed to {operation} submission in the database."
+                raise PersistenceError(msg, context={"build_id": build.id, "operation": operation})
+            await session.commit()
+        build.submission_status = status
+        build.revision += 1
+        build.edited_time = edited_time
 
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""

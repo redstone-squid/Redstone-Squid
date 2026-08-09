@@ -207,7 +207,8 @@ BEGIN
     ),
     changed AS (
         UPDATE builds b
-        SET    extra_info = a.new_extra
+        SET    extra_info = a.new_extra,
+               revision = b.revision + 1
         FROM   affected a
         WHERE  b.id = a.id
         RETURNING b.id

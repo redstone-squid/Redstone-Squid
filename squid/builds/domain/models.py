@@ -176,6 +176,7 @@ class Build:
     """
 
     id: int | None = None
+    revision: int = 1
     submission_status: Status | None = None
     category: BuildCategory | None = None
     record_category: RecordCategoryLiteral | None = None

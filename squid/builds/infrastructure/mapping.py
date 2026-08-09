@@ -61,6 +61,7 @@ class BuildMapper:
         tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
         return Build(
             id=sql_build.id,
+            revision=sql_build.revision,
             submission_status=sql_build.submission_status,
             category=BuildCategory(sql_build.category),
             record_category=sql_build.record_category,

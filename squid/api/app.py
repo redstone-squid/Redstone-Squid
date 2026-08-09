@@ -98,7 +98,8 @@ def create_api_app(
             allow_origins=list(cors_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST", "PATCH"],
-            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type", "X-CSRF-Token"],
+            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type", "If-Match", "X-CSRF-Token"],
+            expose_headers=["ETag"],
         )
     if config is not None:
         instrument_api_app(api, config.observability)

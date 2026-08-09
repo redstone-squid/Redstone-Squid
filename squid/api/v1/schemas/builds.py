@@ -143,6 +143,7 @@ class BuildSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
+    revision: int
     title: str
     status: str
     category: str
@@ -160,6 +161,7 @@ class BuildSummary(BaseModel):
             raise ValueError(msg)
         return cls(
             id=build.id,
+            revision=build.revision,
             title=build.title,
             status=_status_name(build.submission_status),
             category=build.category.value if build.category is not None else "unknown",

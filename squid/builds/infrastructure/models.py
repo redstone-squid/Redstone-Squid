@@ -113,6 +113,7 @@ class Build(Base, kw_only=True):
             name="check_record_category",
         ),
         CheckConstraint("submission_status = ANY (ARRAY[0, 1, 2])", name="check_status"),
+        CheckConstraint("revision > 0", name="builds_revision_positive"),
         CheckConstraint("depth > 0", name="submissions_build_depth_check"),
         CheckConstraint("height > 0", name="submissions_build_height_check"),
         CheckConstraint("width > 0", name="submissions_build_width_check"),
@@ -126,6 +127,7 @@ class Build(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     submission_status: Mapped[Status] = mapped_column(SmallInteger, nullable=False)
     record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text)
     width: Mapped[int | None] = mapped_column(Integer)
@@ -172,6 +174,8 @@ class Build(Base, kw_only=True):
         InstantUTC(), server_default=func.now(), default_factory=Instant.now
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
+    __mapper_args__ = {"version_id_col": revision}
 
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"

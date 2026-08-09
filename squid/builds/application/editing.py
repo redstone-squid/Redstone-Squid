@@ -7,7 +7,7 @@ from typing import Final, Literal, Self, override
 from squid.builds.application.commands import Dimensions
 from squid.builds.application.ports import BuildLockManager, BuildRepository
 from squid.builds.domain import Build, Info, ServerInfo
-from squid.builds.errors import BuildBusyError, BuildNotFoundError, InvalidBuildError
+from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.core.errors import InvalidStateError
 
 
@@ -184,6 +184,7 @@ class BuildEditLease:
         *,
         blocking: bool,
         timeout: float,
+        expected_revision: int | None,
     ) -> None:
         self._repository = repository
         self._locks = locks
@@ -192,6 +193,7 @@ class BuildEditLease:
         self._patch = patch
         self._blocking = blocking
         self._timeout = timeout
+        self._expected_revision = expected_revision
         self._build: Build | None = None
         self._committed = False
 
@@ -214,6 +216,13 @@ class BuildEditLease:
         if build is None:
             await self._locks.release(self._build_id)
             raise BuildNotFoundError(self._build_id)
+        if self._expected_revision is not None and build.revision != self._expected_revision:
+            await self._locks.release(self._build_id)
+            raise BuildRevisionMismatchError(
+                self._build_id,
+                expected_revision=self._expected_revision,
+                current_revision=build.revision,
+            )
         self._build = build
         try:
             self._patch.apply(build)

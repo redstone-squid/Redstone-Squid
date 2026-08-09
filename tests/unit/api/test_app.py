@@ -7,6 +7,7 @@ from pytest_mock import MockerFixture
 
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
 from squid.users.errors import MinecraftServiceUnavailableError
 from tests.unit.api.fakes import (
@@ -137,3 +138,24 @@ def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, 
     assert "sensitive" not in response.text
     assert "secret" not in response.text
     assert response.json()["error_id"] == response.headers["X-Error-ID"]
+
+
+def test_build_revision_errors_use_http_preconditions(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+
+    @app.get("/revision-required")
+    async def revision_required() -> None:
+        raise BuildRevisionRequiredError(42)
+
+    @app.get("/revision-mismatch")
+    async def revision_mismatch() -> None:
+        raise BuildRevisionMismatchError(42, expected_revision=3, current_revision=4)
+
+    with TestClient(app, raise_server_exceptions=False) as internal_client:
+        required = internal_client.get("/revision-required")
+        mismatch = internal_client.get("/revision-mismatch")
+
+    assert required.status_code == 428
+    assert required.json()["code"] == ErrorCode.BUILD_REVISION_REQUIRED
+    assert mismatch.status_code == 412
+    assert mismatch.json()["context"] == {"build_id": 42, "expected_revision": 3, "current_revision": 4}
