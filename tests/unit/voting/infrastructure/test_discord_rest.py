@@ -1,4 +1,4 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -6,7 +6,7 @@ import pytest
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 
-type Handler = Callable[[httpx.Request], httpx.Response | Awaitable[httpx.Response]]
+type Handler = Callable[[httpx.Request], httpx.Response]
 
 
 def client_for(handler: Handler) -> httpx.AsyncClient:

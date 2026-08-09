@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,6 +13,7 @@ from squid.api.v1.schemas.builds import BuildPatch, DoorSubmission
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import AuthorizationError
+from squid.runtime import ApplicationServices
 from squid.users.errors import ConsentRequiredError
 
 USER = Principal(
@@ -39,12 +41,14 @@ def persisted_build(*, submitter_id: int = 123, status: Status = Status.PENDING)
 
 @pytest.mark.asyncio
 async def test_submit_maps_authenticated_identity_and_rejects_other_categories() -> None:
-    services = SimpleNamespace(builds=SimpleNamespace(submit_door=AsyncMock(return_value=persisted_build())))
+    submit_door = AsyncMock(return_value=persisted_build())
+    services = cast(ApplicationServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
 
     response = await submit_build(DoorSubmission(door_size=(2, 2, None)), services, USER)
 
     assert response.id == 42
-    submission = services.builds.submit_door.await_args.args[0]
+    assert submit_door.await_args is not None
+    submission = submit_door.await_args.args[0]
     assert submission.submitter_id == 123
     assert not submission.ai_generated
 
@@ -54,7 +58,7 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
 
 @pytest.mark.asyncio
 async def test_submit_gates_new_accounts_on_current_consent() -> None:
-    services = SimpleNamespace(builds=SimpleNamespace(submit_door=AsyncMock()))
+    services = cast(ApplicationServices, SimpleNamespace(builds=SimpleNamespace(submit_door=AsyncMock())))
     pending = replace(USER, consent_pending=True)
 
     with pytest.raises(ConsentRequiredError) as error:
@@ -78,9 +82,12 @@ class EditLease:
 @pytest.mark.asyncio
 async def test_edit_checks_ownership_while_lease_is_held() -> None:
     lease = EditLease(persisted_build(submitter_id=999))
-    services = SimpleNamespace(
-        builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-        authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=False)),
+    services = cast(
+        ApplicationServices,
+        SimpleNamespace(
+            builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
+            authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=False)),
+        ),
     )
 
     with pytest.raises(AuthorizationError):
@@ -93,9 +100,12 @@ async def test_edit_checks_ownership_while_lease_is_held() -> None:
 async def test_global_administrator_can_edit_confirmed_build() -> None:
     build = persisted_build(submitter_id=999, status=Status.CONFIRMED)
     lease = EditLease(build)
-    services = SimpleNamespace(
-        builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-        authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=True)),
+    services = cast(
+        ApplicationServices,
+        SimpleNamespace(
+            builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
+            authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=True)),
+        ),
     )
 
     response = await edit_build(42, BuildPatch(extra_user_info=None), services, USER)

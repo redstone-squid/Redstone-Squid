@@ -1,3 +1,6 @@
+from dataclasses import replace
+from typing import Any
+
 from whenever import Instant
 
 from squid.reactions.domain import ReactionActor
@@ -28,16 +31,15 @@ class FakeRepository:
         return ()
 
 
-def make_config(**settings: object) -> StarboardConfig:
-    values = {
-        "id": 1,
-        "guild_id": 10,
-        "channel_id": 20,
-        "name": "main",
-        "emojis": (StarboardEmoji("⭐", "up", 1.5),),
-    }
-    values.update(settings)  # pyrefly: ignore[no-matching-overload]
-    return StarboardConfig(**values)  # type: ignore[arg-type]
+def make_config(**settings: Any) -> StarboardConfig:
+    base = StarboardConfig(
+        id=1,
+        guild_id=10,
+        channel_id=20,
+        name="main",
+        emojis=(StarboardEmoji("⭐", "up", 1.5),),
+    )
+    return replace(base, **settings)
 
 
 def make_origin() -> OriginMessage:

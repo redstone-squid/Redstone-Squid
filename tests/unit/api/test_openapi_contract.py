@@ -42,7 +42,7 @@ def collect_asgi_portals():
 def test_api_never_returns_a_server_error(case: schemathesis.Case, collect_asgi_portals: None) -> None:
     case.call_and_validate(
         headers={"Authorization": TEST_SYNERGY_SECRET},
-        checks=[schemathesis.checks.not_a_server_error],  # pyrefly: ignore
+        checks=[schemathesis.checks.not_a_server_error],  # pyrefly: ignore  # pyright: ignore[reportAttributeAccessIssue]
     )
 
 

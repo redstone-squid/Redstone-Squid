@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from pydantic import AnyHttpUrl, SecretStr
 from whenever import Instant
 
 from squid.auth.application.web import DiscordOAuthService, consent_pending
@@ -54,8 +55,8 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
         users,
         OAuthConfig(
             discord_client_id="client",
-            discord_client_secret="secret",
-            redirect_uri="https://api.example/v1/auth/discord/callback",
+            discord_client_secret=SecretStr("secret"),
+            redirect_uri=AnyHttpUrl("https://api.example/v1/auth/discord/callback"),
         ),
         "session-pepper-for-tests",
         client=httpx.AsyncClient(transport=transport),
@@ -70,6 +71,7 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
 
     users.get_or_create_account.assert_awaited_once_with(123)
     assert redirect_to == "/account"
+    assert repository.token_hash is not None
     assert repository.token_hash == service.hash_token(token)
     assert token.encode() not in repository.token_hash
 
