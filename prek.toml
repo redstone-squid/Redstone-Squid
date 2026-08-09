@@ -7,7 +7,9 @@ hooks = [
     { id = "check-merge-conflict" },
     { id = "check-toml" },
     { id = "check-yaml" },
-    { id = "end-of-file-fixer", exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|supabase/|tests/fuzz/corpus/|tests/supabase/)" },
+    # locales/ is excluded because pybabel always emits a trailing blank line, so fixing it here
+    # only makes the next `just i18n-update` put it back.
+    { id = "end-of-file-fixer", exclude = "^(alembic/sql/|locales/|schema/|schema_dump\\.sql$|supabase/|tests/fuzz/corpus/|tests/supabase/)" },
     { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"], exclude = "^(alembic/sql/|schema/|schema_dump\\.sql$|supabase/|tests/fuzz/corpus/|tests/supabase/)" },
 ]
 
