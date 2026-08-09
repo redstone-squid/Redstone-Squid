@@ -307,18 +307,17 @@ DECLARE
     target_action text := 'upsert';
 BEGIN
     target_kind := CASE TG_TABLE_NAME
-        WHEN 'restrictions' THEN 'restriction'
-        WHEN 'restriction_aliases' THEN 'restriction'
-        WHEN 'types' THEN 'type'
+        WHEN 'tag_definitions' THEN 'tag'
+        WHEN 'tag_aliases' THEN 'tag'
         WHEN 'creator_aliases' THEN 'creator'
         WHEN 'versions' THEN 'version'
     END;
-    IF TG_TABLE_NAME = 'restriction_aliases' THEN
-        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.restriction_id ELSE NEW.restriction_id END;
+    IF TG_TABLE_NAME = 'tag_aliases' THEN
+        target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.tag_id ELSE NEW.tag_id END;
     ELSE
         target_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
     END IF;
-    IF TG_OP = 'DELETE' AND TG_TABLE_NAME <> 'restriction_aliases' THEN
+    IF TG_OP = 'DELETE' AND TG_TABLE_NAME <> 'tag_aliases' THEN
         target_action := 'delete';
     END IF;
 
@@ -331,20 +330,30 @@ BEGIN
         locked_at = NULL,
         last_error = NULL;
 
-    IF TG_TABLE_NAME IN ('restrictions', 'restriction_aliases') THEN
+    IF TG_TABLE_NAME IN ('tag_definitions', 'tag_aliases') THEN
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', br.build_id::text, 'upsert', now()
-        FROM public.build_restrictions br
-        WHERE br.restriction_id = target_id
+        SELECT 'build', assignment.build_id::text, 'upsert', now()
+        FROM public.build_tag_assignments assignment
+        WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
-    ELSIF TG_TABLE_NAME = 'types' THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', bt.build_id::text, 'upsert', now()
-        FROM public.build_types bt
-        WHERE bt.type_id = target_id
+        SET action = 'upsert',
+            enqueued_at = EXCLUDED.enqueued_at,
+            attempts = 0,
+            locked_at = NULL,
+            last_error = NULL;
+
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT 'build', assignment.build_id::text, 'refresh', now(), NULL, NULL, 0, NULL
+        FROM public.build_tag_assignments assignment
+        WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
-        SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
+        SET action = EXCLUDED.action,
+            enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL,
+            dead_at = NULL,
+            attempts = 0,
+            last_error = NULL;
     ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
         INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
         SELECT 'build', bc.build_id::text, 'upsert', now()
@@ -361,31 +370,6 @@ BEGIN
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at, locked_at = NULL;
     END IF;
     RETURN NULL;
-END;
-$$;
-
-
---
--- Name: find_restriction_ids(text[]); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.find_restriction_ids(search_terms text[]) RETURNS TABLE(id smallint, build_category text, name text, type text)
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT DISTINCT *
-    FROM (
-        SELECT r.id, r.build_category, r.name, r.type  -- prevent collision with the TABLE above
-        FROM restrictions r
-        WHERE r.name = ANY(search_terms)
-
-        UNION
-
-        SELECT restriction_id, r.build_category, alias, r.type
-        FROM restriction_aliases JOIN restrictions r ON restriction_id = r.id
-        WHERE alias = ANY(search_terms)
-    ) s;
 END;
 $$;
 
@@ -587,122 +571,6 @@ $$;
 
 
 --
--- Name: sync_new_restriction(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.sync_new_restriction() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    -- string we are searching for
-    b_restriction        text;
-
-    -- id that will go into build_restrictions
-    b_restriction_id     int;
-
-    -- category / type of the *restriction*
-    r_category           text;
-    r_type               text;
-
-    -- json key inside unknown_restrictions matching r_type
-    json_key             text;
-BEGIN
-    -- 1. figure out category & type (alias rows don’t have them)
-    IF TG_TABLE_NAME = 'restrictions' THEN
-        b_restriction    := NEW.name;
-        b_restriction_id := NEW.id;
-        r_category       := NEW.build_category;
-        r_type           := NEW.type;
-    ELSIF TG_TABLE_NAME = 'restriction_aliases' THEN
-        b_restriction    := NEW.alias;
-        b_restriction_id := NEW.restriction_id;
-
-        SELECT r.build_category, r.type
-        INTO   r_category, r_type
-        FROM   restrictions r
-        WHERE  r.id = NEW.restriction_id;
-    ELSE
-        RAISE EXCEPTION 'sync_new_restriction() fired by unexpected table %', TG_TABLE_NAME;
-    END IF;
-
-    -- 2. map type → correct json key
-    json_key := CASE r_type
-                  WHEN 'component'        THEN 'component_restrictions'
-                  WHEN 'wiring-placement' THEN 'wiring_placement_restrictions'
-                  WHEN 'miscellaneous'    THEN 'miscellaneous_restrictions'
-                END;
-
-    IF json_key IS NULL THEN
-        RAISE NOTICE 'Restriction type % is unsupported – skipped', r_type;
-        RETURN NULL;
-    END IF;
-
-    -- 3. touch only builds with same category & containing the string
-    WITH affected AS (
-        SELECT b.id,
-               (
-                   WITH elems AS (
-                       SELECT jsonb_array_elements_text(
-                                  b.extra_info -> 'unknown_restrictions' -> json_key
-                              ) AS val
-                   ),
-                   kept AS (
-                       SELECT jsonb_agg(to_jsonb(val)) AS arr
-                       FROM   elems
-                       WHERE  lower(val) <> lower(b_restriction)
-                   )
-                   SELECT CASE
-                              WHEN (SELECT arr FROM kept) IS NULL THEN
-                                  CASE
-                                      WHEN ((b.extra_info -> 'unknown_restrictions') - json_key) = '{}'::jsonb THEN
-                                          b.extra_info - 'unknown_restrictions'
-                                      ELSE
-                                          jsonb_set(
-                                              b.extra_info,
-                                              '{unknown_restrictions}',
-                                              (b.extra_info -> 'unknown_restrictions') - json_key,
-                                              TRUE
-                                          )
-                                  END
-                              ELSE
-                                  jsonb_set(
-                                      b.extra_info,
-                                      ARRAY['unknown_restrictions', json_key],
-                                      (SELECT arr FROM kept),
-                                      TRUE
-                                  )
-                          END
-               ) AS new_extra
-        FROM   builds b
-        WHERE  b.category = r_category
-          AND  EXISTS (
-              SELECT 1
-              FROM   jsonb_array_elements_text(
-                         b.extra_info -> 'unknown_restrictions' -> json_key
-                     ) AS t(val)
-              WHERE  lower(val) = lower(b_restriction)
-          )
-    ),
-    changed AS (
-        UPDATE builds b
-        SET    extra_info = a.new_extra,
-               revision = b.revision + 1
-        FROM   affected a
-        WHERE  b.id = a.id
-        RETURNING b.id
-    )
-    -- 4. link builds to the new restriction (ignore dupes)
-    INSERT INTO build_restrictions (build_id, restriction_id)
-    SELECT id, b_restriction_id
-    FROM   changed
-    ON CONFLICT DO NOTHING;
-
-    RETURN NULL;  -- AFTER trigger
-END;
-$$;
-
-
---
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -825,23 +693,6 @@ COMMENT ON TABLE public.build_links IS 'A link associated with a build (image, v
 
 
 --
--- Name: build_restrictions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.build_restrictions (
-    build_id bigint NOT NULL,
-    restriction_id smallint NOT NULL
-);
-
-
---
--- Name: TABLE build_restrictions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.build_restrictions IS 'Association table between builds and their restrictions.';
-
-
---
 -- Name: build_schematics; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -940,23 +791,6 @@ CREATE TABLE public.build_tag_assignments (
 --
 
 COMMENT ON TABLE public.build_tag_assignments IS 'A typed tag value attached to one build.';
-
-
---
--- Name: build_types; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.build_types (
-    build_id bigint NOT NULL,
-    type_id smallint NOT NULL
-);
-
-
---
--- Name: TABLE build_types; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.build_types IS 'Association table between builds and their types.';
 
 
 --
@@ -1781,77 +1615,6 @@ ALTER TABLE public.record_rulesets ALTER COLUMN id ADD GENERATED BY DEFAULT AS I
 
 
 --
--- Name: restriction_aliases; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.restriction_aliases (
-    restriction_id smallint NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    alias text NOT NULL
-);
-
-
---
--- Name: TABLE restriction_aliases; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.restriction_aliases IS 'An alias for a restriction, allowing for alternative names.';
-
-
---
--- Name: restriction_aliases_restriction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.restriction_aliases ALTER COLUMN restriction_id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.restriction_aliases_restriction_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: restrictions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.restrictions (
-    id smallint NOT NULL,
-    build_category text,
-    name text,
-    type text
-);
-
-
---
--- Name: TABLE restrictions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.restrictions IS 'A restriction that can be applied to builds.';
-
-
---
--- Name: restrictions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.restrictions_id_seq
-    AS smallint
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: restrictions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.restrictions_id_seq OWNED BY public.restrictions.id;
-
-
---
 -- Name: schematic_files; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2514,44 +2277,6 @@ COMMENT ON TABLE public.tag_units IS 'A unit accepted by numeric tag inputs.';
 
 
 --
--- Name: types; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.types (
-    id smallint NOT NULL,
-    build_category text,
-    name text
-);
-
-
---
--- Name: TABLE types; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.types IS 'A build pattern.';
-
-
---
--- Name: types_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.types_id_seq
-    AS smallint
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: types_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.types_id_seq OWNED BY public.types.id;
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2855,13 +2580,6 @@ ALTER TABLE ONLY public.global_administrators ALTER COLUMN discord_id SET DEFAUL
 
 
 --
--- Name: restrictions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.restrictions ALTER COLUMN id SET DEFAULT nextval('public.restrictions_id_seq'::regclass);
-
-
---
 -- Name: schematic_jobs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2873,13 +2591,6 @@ ALTER TABLE ONLY public.schematic_jobs ALTER COLUMN id SET DEFAULT nextval('publ
 --
 
 ALTER TABLE ONLY public.schematic_renders ALTER COLUMN id SET DEFAULT nextval('public.schematic_renders_id_seq'::regclass);
-
-
---
--- Name: types id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.types ALTER COLUMN id SET DEFAULT nextval('public.types_id_seq'::regclass);
 
 
 --
@@ -2936,14 +2647,6 @@ ALTER TABLE ONLY public.build_links
 
 
 --
--- Name: build_restrictions build_restrictions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_restrictions
-    ADD CONSTRAINT build_restrictions_pkey PRIMARY KEY (build_id, restriction_id);
-
-
---
 -- Name: build_schematics build_schematics_build_file_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2965,14 +2668,6 @@ ALTER TABLE ONLY public.build_schematics
 
 ALTER TABLE ONLY public.build_tag_assignments
     ADD CONSTRAINT build_tag_assignments_pkey PRIMARY KEY (build_id, tag_id);
-
-
---
--- Name: build_types build_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_types
-    ADD CONSTRAINT build_types_pkey PRIMARY KEY (build_id, type_id);
 
 
 --
@@ -3280,30 +2975,6 @@ ALTER TABLE ONLY public.record_rulesets
 
 
 --
--- Name: restriction_aliases restriction_aliases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.restriction_aliases
-    ADD CONSTRAINT restriction_aliases_pkey PRIMARY KEY (alias);
-
-
---
--- Name: restrictions restrictions_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.restrictions
-    ADD CONSTRAINT restrictions_name_key UNIQUE (name);
-
-
---
--- Name: restrictions restrictions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.restrictions
-    ADD CONSTRAINT restrictions_pkey PRIMARY KEY (id);
-
-
---
 -- Name: schematic_files schematic_files_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3557,22 +3228,6 @@ ALTER TABLE ONLY public.tag_relations
 
 ALTER TABLE ONLY public.tag_units
     ADD CONSTRAINT tag_units_pkey PRIMARY KEY (key);
-
-
---
--- Name: types types_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.types
-    ADD CONSTRAINT types_name_key UNIQUE (name);
-
-
---
--- Name: types types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.types
-    ADD CONSTRAINT types_pkey PRIMARY KEY (id);
 
 
 --
@@ -3883,13 +3538,6 @@ CREATE INDEX record_results_definition_idx ON public.record_results USING btree 
 
 
 --
--- Name: restriction_aliases_restriction_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX restriction_aliases_restriction_id_idx ON public.restriction_aliases USING btree (restriction_id);
-
-
---
 -- Name: schematic_files_storage_state_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4086,20 +3734,6 @@ CREATE TRIGGER build_links_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE
 
 
 --
--- Name: build_restrictions build_restrictions_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_restrictions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: build_restrictions build_restrictions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
 -- Name: build_tag_assignments build_tag_assignments_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4111,20 +3745,6 @@ CREATE TRIGGER build_tag_assignments_enqueue_discord_sync AFTER INSERT OR DELETE
 --
 
 CREATE TRIGGER build_tag_assignments_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: build_types build_types_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_types_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-
---
--- Name: build_types build_types_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER build_types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_types FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 
 --
@@ -4275,20 +3895,6 @@ CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON
 
 
 --
--- Name: restriction_aliases restriction_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER restriction_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restriction_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
-
-
---
--- Name: restrictions restrictions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER restrictions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.restrictions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
-
-
---
 -- Name: builds set_locked_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4296,24 +3902,17 @@ CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE
 
 
 --
--- Name: restrictions trg_sync_on_tag; Type: TRIGGER; Schema: public; Owner: -
+-- Name: tag_aliases tag_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trg_sync_on_tag AFTER INSERT ON public.restrictions FOR EACH ROW EXECUTE FUNCTION public.sync_new_restriction();
-
-
---
--- Name: restriction_aliases trg_sync_on_tag_alias; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_sync_on_tag_alias AFTER INSERT ON public.restriction_aliases FOR EACH ROW EXECUTE FUNCTION public.sync_new_restriction();
+CREATE TRIGGER tag_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 
 --
--- Name: types types_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+-- Name: tag_definitions tag_definitions_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER types_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.types FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
 
 --
@@ -4400,22 +3999,6 @@ ALTER TABLE ONLY public.build_links
 
 
 --
--- Name: build_restrictions build_restrictions_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_restrictions
-    ADD CONSTRAINT build_restrictions_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
-
-
---
--- Name: build_restrictions build_restrictions_restriction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_restrictions
-    ADD CONSTRAINT build_restrictions_restriction_id_fkey FOREIGN KEY (restriction_id) REFERENCES public.restrictions(id) ON DELETE RESTRICT;
-
-
---
 -- Name: build_schematics build_schematics_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4453,22 +4036,6 @@ ALTER TABLE ONLY public.build_tag_assignments
 
 ALTER TABLE ONLY public.build_tag_assignments
     ADD CONSTRAINT build_tag_assignments_display_unit_fkey FOREIGN KEY (display_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
-
-
---
--- Name: build_types build_types_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_types
-    ADD CONSTRAINT build_types_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
-
-
---
--- Name: build_types build_types_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.build_types
-    ADD CONSTRAINT build_types_type_id_fkey FOREIGN KEY (type_id) REFERENCES public.types(id) ON DELETE RESTRICT;
 
 
 --
@@ -4781,14 +4348,6 @@ ALTER TABLE ONLY public.record_results
 
 ALTER TABLE ONLY public.record_results
     ADD CONSTRAINT record_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
-
-
---
--- Name: restriction_aliases restriction_aliases_restriction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.restriction_aliases
-    ADD CONSTRAINT restriction_aliases_restriction_id_fkey FOREIGN KEY (restriction_id) REFERENCES public.restrictions(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --

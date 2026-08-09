@@ -5,9 +5,10 @@ from sqlalchemy import inspect
 from whenever import Instant
 
 from squid.auth.infrastructure.models import ApiKey
-from squid.builds.infrastructure.models import Build, BuildEditHistory, RestrictionAlias
+from squid.builds.infrastructure.models import Build, BuildEditHistory
 from squid.messages.infrastructure.models import Message
 from squid.persistence.types import InstantUTC
+from squid.tags.infrastructure.models import TagAlias
 from squid.users.infrastructure.models import CreatorAlias, CreatorAliasClaim, User, VerificationCode
 from squid.voting.infrastructure.models import VoteSession
 
@@ -28,7 +29,7 @@ from squid.voting.infrastructure.models import VoteSession
         (CreatorAlias, "created_at"),
         (CreatorAliasClaim, "created_at"),
         (CreatorAliasClaim, "resolved_at"),
-        (RestrictionAlias, "created_at"),
+        (TagAlias, "created_at"),
         (User, "consented_at"),
         (User, "created_at"),
         (VerificationCode, "created"),

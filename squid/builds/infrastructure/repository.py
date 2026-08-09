@@ -30,17 +30,13 @@ from squid.builds.infrastructure.models import (
 from squid.builds.infrastructure.models import (
     BuildCreator,
     BuildLink,
-    BuildRestriction,
-    BuildType,
     BuildVersion,
     Door,
-    Restriction,
-    Type,
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.tags.domain import TagAssignment as DomainTagAssignment
-from squid.tags.domain import TagSemanticKind, TagValueType
+from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.models import (
     BuildTagAssignment as SQLTagAssignment,
 )
@@ -207,9 +203,7 @@ class BuildRepository:
                 .where(SQLBuild.id == build.id)
                 .options(
                     selectinload(SQLBuild.build_creators),
-                    selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
                     selectinload(SQLBuild.build_versions),
-                    selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                     selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(SQLBuild.links),
                 )
@@ -249,12 +243,11 @@ class BuildRepository:
                 sql_build.visible_closing_time = build.visible_closing_time
 
                 sql_build.build_creators.clear()
-                sql_build.build_restrictions.clear()
                 sql_build.build_versions.clear()
-                sql_build.build_types.clear()
                 sql_build.tag_assignments.clear()
                 sql_build.links.clear()
                 await self._setup_relationships(build, session, sql_build)
+                sql_build.extra_info = build.extra_info
                 if build.original_message_id is not None:
                     await self._create_or_update_message(build, session)
                 sql_build.original_message_id = build.original_message_id
@@ -271,34 +264,8 @@ class BuildRepository:
             alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
             sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
 
-        # Handle restrictions
-        all_restrictions = (
-            build.wiring_placement_restrictions
-            + build.animated_restrictions
-            + build.component_restrictions
-            + build.miscellaneous_restrictions
-        )
-        if all_restrictions:
-            restriction_objects, unknown_restrictions = await self._get_restrictions(build, session, all_restrictions)
-            sql_build.build_restrictions.extend(
-                BuildRestriction(restriction=restriction) for restriction in restriction_objects
-            )
-            # Update extra_info with unknown restrictions
-            if unknown_restrictions:
-                merged_restrictions: UnknownRestrictions = {}
-                merged_restrictions.update(build.extra_info.get("unknown_restrictions", {}))
-                merged_restrictions.update(unknown_restrictions)
-                build.extra_info["unknown_restrictions"] = merged_restrictions
-
-        # Handle types
         if not build.door_type:
             build.door_type = ["Regular"]
-        type_objects, unknown_types = await self._get_types(build, session, build.door_type)
-        sql_build.build_types.extend(BuildType(type=build_type) for build_type in type_objects)
-        # Update extra_info with unknown types
-        if unknown_types:
-            build.extra_info["unknown_patterns"] = build.extra_info.get("unknown_patterns", []) + unknown_types
-
         await self._setup_tag_assignments(build, session, sql_build)
 
         # Handle versions
@@ -328,10 +295,7 @@ class BuildRepository:
         session: AsyncSession,
         sql_build: SQLBuild,
     ) -> None:
-        assignments = build.tags
-        if not assignments:
-            assignments = await self._legacy_tag_assignments(build, session)
-            build.tags = assignments
+        assignments = await self._authoritative_tag_assignments(build, session)
         if not assignments:
             return
 
@@ -371,27 +335,37 @@ class BuildRepository:
                 )
             )
 
-    async def _legacy_tag_assignments(self, build: Build, session: AsyncSession) -> list[DomainTagAssignment]:
-        restrictions = (
-            build.wiring_placement_restrictions
-            + build.animated_restrictions
-            + build.component_restrictions
-            + build.miscellaneous_restrictions
-        )
+    async def _authoritative_tag_assignments(
+        self,
+        build: Build,
+        session: AsyncSession,
+    ) -> list[DomainTagAssignment]:
+        """Translate editable taxonomy fields into the sole persisted tag model."""
+        restrictions = [value for values in build.restrictions.values() for value in values or ()]
         patterns = build.door_type or ["Regular"]
-        rows = await _resolve_official_tag_rows(
+        rows, unknown_restrictions, unknown_patterns = await _resolve_official_tag_rows(
             session,
             build_kind=build.category.value if build.category is not None else None,
             restrictions=restrictions,
             patterns=patterns,
         )
-        return [
+        _merge_unknown_taxonomy(build, unknown_restrictions, unknown_patterns)
+        classification = [
             DomainTagAssignment(
                 definition=self._mapper.tag_definition_to_domain(row),
                 provenance="submitted",
             )
             for row in rows
         ]
+        retained = [
+            assignment
+            for assignment in build.tags
+            if assignment.definition.authority is not TagAuthority.OFFICIAL
+            or assignment.definition.semantic_kind not in {TagSemanticKind.RESTRICTION, TagSemanticKind.PATTERN}
+        ]
+        assignments = [*retained, *classification]
+        build.tags = assignments
+        return assignments
 
     @staticmethod
     async def _get_or_create_account(session: AsyncSession, discord_id: int) -> int:
@@ -450,51 +424,6 @@ class BuildRepository:
             alias_ids.append(alias_id)
 
         return alias_ids
-
-    @staticmethod
-    async def _get_restrictions(
-        build: Build, session: AsyncSession, restrictions: list[str]
-    ) -> tuple[list[Restriction], UnknownRestrictions]:
-        """Get Restriction objects and identify unknown restrictions."""
-        restrictions_titled = [r.title() for r in restrictions]
-
-        stmt = select(Restriction).where(Restriction.name.in_(restrictions_titled))
-        result = await session.execute(stmt)
-        found_restrictions = result.scalars().all()
-
-        # Identify unknown restrictions by type
-        unknown_restrictions: UnknownRestrictions = {}
-        found_names = {r.name for r in found_restrictions}
-
-        unknown_wiring = [r for r in build.wiring_placement_restrictions if r.title() not in found_names]
-        unknown_animated = [r for r in build.animated_restrictions if r.title() not in found_names]
-        unknown_component = [r for r in build.component_restrictions if r.title() not in found_names]
-        unknown_misc = [r for r in build.miscellaneous_restrictions if r.title() not in found_names]
-
-        if unknown_wiring:
-            unknown_restrictions["wiring_placement_restrictions"] = unknown_wiring
-        if unknown_animated:
-            unknown_restrictions["animated_restrictions"] = unknown_animated
-        if unknown_component:
-            unknown_restrictions["component_restrictions"] = unknown_component
-        if unknown_misc:
-            unknown_restrictions["miscellaneous_restrictions"] = unknown_misc
-
-        return list(found_restrictions), unknown_restrictions
-
-    @staticmethod
-    async def _get_types(build: Build, session: AsyncSession, type_names: list[str]) -> tuple[list[Type], list[str]]:
-        """Get Type objects and identify unknown types."""
-        type_names_titled = [t.title() for t in type_names]
-
-        stmt = select(Type).where(Type.build_category == build.category).where(Type.name.in_(type_names_titled))
-        result = await session.execute(stmt)
-        found_types = result.scalars().all()
-
-        found_names = {t.name for t in found_types}
-        unknown_types = [t for t in type_names if t.title() not in found_names]
-
-        return list(found_types), unknown_types
 
     @staticmethod
     async def _get_versions(session: AsyncSession, version_strings: list[str]) -> list[Version]:
@@ -606,8 +535,6 @@ class BuildRepository:
                 select(Door)
                 .where(Door.submission_status == Status.PENDING)
                 .options(
-                    selectinload(Door.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(Door.build_types).selectinload(BuildType.type),
                     selectinload(Door.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(Door.links),
                 )
@@ -624,8 +551,6 @@ class BuildRepository:
             stmt = (
                 select(SQLBuild)
                 .options(
-                    selectinload(SQLBuild.build_restrictions).selectinload(BuildRestriction.restriction),
-                    selectinload(SQLBuild.build_types).selectinload(BuildType.type),
                     selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
                     selectinload(SQLBuild.links),
                 )
@@ -671,11 +596,11 @@ async def _resolve_official_tag_rows(
     build_kind: str | None,
     restrictions: list[str],
     patterns: list[str],
-) -> list[SQLTagDefinition]:
+) -> tuple[list[SQLTagDefinition], set[str], set[str]]:
     restriction_names = {_normalize_tag_name(name) for name in restrictions}
     pattern_names = {_normalize_tag_name(name) for name in patterns}
     if not restriction_names and not pattern_names:
-        return []
+        return [], set(), set()
 
     matched_name = or_(
         SQLTagDefinition.normalized_name.in_(restriction_names | pattern_names),
@@ -710,7 +635,60 @@ async def _resolve_official_tag_rows(
             TagApplicability,
             TagApplicability.tag_id == SQLTagDefinition.id,
         ).where(TagApplicability.build_kind == build_kind)
-    return list((await session.scalars(statement)).unique().all())
+    rows = list((await session.scalars(statement)).unique().all())
+    matched_restrictions = _unambiguously_matched_names(rows, restriction_names, TagSemanticKind.RESTRICTION)
+    matched_patterns = _unambiguously_matched_names(rows, pattern_names, TagSemanticKind.PATTERN)
+    selected = [
+        row
+        for row in rows
+        if (
+            (row.semantic_kind == TagSemanticKind.RESTRICTION and bool(_definition_names(row) & matched_restrictions))
+            or (row.semantic_kind == TagSemanticKind.PATTERN and bool(_definition_names(row) & matched_patterns))
+        )
+    ]
+    return selected, restriction_names - matched_restrictions, pattern_names - matched_patterns
+
+
+def _unambiguously_matched_names(
+    definitions: Sequence[SQLTagDefinition],
+    requested: set[str],
+    semantic_kind: TagSemanticKind,
+) -> set[str]:
+    return {
+        name
+        for name in requested
+        if sum(
+            name in _definition_names(definition)
+            for definition in definitions
+            if definition.semantic_kind == semantic_kind
+        )
+        == 1
+    }
+
+
+def _definition_names(definition: SQLTagDefinition) -> set[str]:
+    return {definition.normalized_name, *(alias.normalized_alias for alias in definition.aliases)}
+
+
+def _merge_unknown_taxonomy(
+    build: Build,
+    unknown_restrictions: set[str],
+    unknown_patterns: set[str],
+) -> None:
+    current_restrictions: UnknownRestrictions = {}
+    current_restrictions.update(build.extra_info.get("unknown_restrictions", {}))
+    for field_name, values in build.restrictions.items():
+        new_values = [value for value in values or () if _normalize_tag_name(value) in unknown_restrictions]
+        existing_values = cast(list[str], current_restrictions.get(field_name, []))
+        if new_values or existing_values:
+            current_restrictions[field_name] = list(dict.fromkeys([*existing_values, *new_values]))
+    if current_restrictions:
+        build.extra_info["unknown_restrictions"] = current_restrictions
+
+    new_patterns = [value for value in build.door_type if _normalize_tag_name(value) in unknown_patterns]
+    existing_patterns = build.extra_info.get("unknown_patterns", [])
+    if new_patterns or existing_patterns:
+        build.extra_info["unknown_patterns"] = list(dict.fromkeys([*existing_patterns, *new_patterns]))
 
 
 def _normalize_tag_name(value: str) -> str:

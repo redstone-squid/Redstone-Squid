@@ -7,6 +7,7 @@ import pytest
 from alembic.config import Config
 from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
@@ -123,6 +124,20 @@ def test_migrations_create_schema_without_drift(
                     )
                 ).scalars()
             )
+            legacy_taxonomy_tables = {
+                table_name: connection.execute(text(f"SELECT to_regclass('public.{table_name}')")).scalar_one()
+                for table_name in (
+                    "build_restrictions",
+                    "build_types",
+                    "restriction_aliases",
+                    "restrictions",
+                    "types",
+                )
+            }
+            legacy_taxonomy_routines = {
+                signature: connection.execute(text(f"SELECT to_regprocedure('public.{signature}')")).scalar_one()
+                for signature in ("find_restriction_ids(text[])", "sync_new_restriction()")
+            }
             retirement_rebuild_queued = connection.execute(
                 text(
                     "SELECT EXISTS ("
@@ -174,6 +189,8 @@ def test_migrations_create_schema_without_drift(
     assert option_table == "vote_session_options"
     assert legacy_record_table is None
     assert legacy_record_routines == set()
+    assert set(legacy_taxonomy_tables.values()) == {None}
+    assert set(legacy_taxonomy_routines.values()) == {None}
     assert retirement_rebuild_queued is True
     assert initial_projection_state == ("refresh", 1, 1)
     assert updated_projection_state == ("delete", 2, 1, 2)
@@ -211,3 +228,28 @@ def test_alembic_detects_managed_function_and_trigger_drift(
 
     with pytest.raises(CommandError, match="New upgrade operations detected"):
         command.check(config)
+
+
+def test_taxonomy_cutover_refuses_unimported_legacy_rows(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The destructive taxonomy migration fails before dropping unmatched legacy data."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b8c9d0e1f2a3")
+
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO restrictions (build_category, name, type) "
+                    "VALUES ('Door', 'Migration parity sentinel', 'miscellaneous')"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    with pytest.raises(DBAPIError, match="restriction definitions are not fully imported"):
+        command.upgrade(config, "head")

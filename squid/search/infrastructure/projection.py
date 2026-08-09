@@ -20,12 +20,7 @@ from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import (
     Build,
     BuildCreator,
-    BuildRestriction,
-    BuildType,
     BuildVersion,
-    Restriction,
-    RestrictionAlias,
-    Type,
 )
 from squid.core.errors import DataIntegrityError
 from squid.records.infrastructure.models import (
@@ -251,34 +246,12 @@ class SearchProjectionLoader:
             select(Build)
             .where(Build.id == build_id)
             .options(
-                selectinload(Build.build_restrictions).selectinload(BuildRestriction.restriction),
-                selectinload(Build.build_types).selectinload(BuildType.type),
                 selectinload(Build.tag_assignments),
                 selectinload(Build.links),
             )
         )
         if build is None:
             return None
-        restrictions = tuple(
-            (
-                await self._session.scalars(
-                    select(Restriction)
-                    .join(BuildRestriction, BuildRestriction.restriction_id == Restriction.id)
-                    .where(BuildRestriction.build_id == build_id)
-                    .order_by(Restriction.name)
-                )
-            ).all()
-        )
-        types = tuple(
-            (
-                await self._session.scalars(
-                    select(Type)
-                    .join(BuildType, BuildType.type_id == Type.id)
-                    .where(BuildType.build_id == build_id)
-                    .order_by(Type.name)
-                )
-            ).all()
-        )
         creators = tuple(
             (
                 await self._session.scalars(
@@ -326,28 +299,20 @@ class SearchProjectionLoader:
         if description is None:
             submitted_description = build.extra_info.get("user")
             description = submitted_description if isinstance(submitted_description, str) else None
-        restriction_names = tuple(
-            name for restriction in restrictions if (name := _mapped_text(restriction, "name")) is not None
-        )
-        type_names = tuple(name for build_type in types if (name := _mapped_text(build_type, "name")) is not None)
         approved_assignments = tuple(
             assignment for assignment in build.tag_assignments if assignment.definition.moderation_status == "approved"
         )
         assigned_tag_names = tuple(_render_tag_assignment(assignment) for assignment in approved_assignments)
-        official_restrictions = tuple(
+        restriction_names = tuple(
             assignment.definition.display_name
             for assignment in approved_assignments
             if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "restriction"
         )
-        official_patterns = tuple(
+        type_names = tuple(
             assignment.definition.display_name
             for assignment in approved_assignments
             if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "pattern"
         )
-        if official_restrictions:
-            restriction_names = official_restrictions
-        if official_patterns:
-            type_names = official_patterns
         creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
         version_names = tuple(_version_name(version) for version in versions)
         dimensions = {
@@ -392,7 +357,7 @@ class SearchProjectionLoader:
             subtitle=canonical_subtitle,
             description=description,
             status=build.submission_status.name.lower(),
-            tags=(*assigned_tag_names, *restriction_names, *type_names, *creator_names, *version_names),
+            tags=(*assigned_tag_names, *creator_names, *version_names),
             document_data={
                 "build_id": build.id,
                 "canonical_title": canonical_title,
@@ -494,47 +459,6 @@ class SearchProjectionLoader:
                     "value_type": definition.value_type,
                     "query_name": definition.query_name,
                 },
-            )
-        if subtype == "restriction":
-            restriction = await self._session.get(Restriction, source_id)
-            if restriction is None:
-                return None
-            aliases = tuple(
-                (
-                    await self._session.scalars(
-                        select(RestrictionAlias.alias)
-                        .where(RestrictionAlias.restriction_id == source_id)
-                        .order_by(RestrictionAlias.alias)
-                    )
-                ).all()
-            )
-            restriction_name = _mapped_text(restriction, "name")
-            if restriction_name is None:
-                return None
-            return _metadata_projection(
-                source_key=f"restriction:{source_id}",
-                title=restriction_name,
-                subtype="restriction",
-                tags=aliases,
-                data={
-                    "restriction_id": source_id,
-                    "aliases": aliases,
-                    "build_category": restriction.build_category,
-                    "restriction_type": restriction.type,
-                },
-            )
-        if subtype == "type":
-            build_type = await self._session.get(Type, source_id)
-            if build_type is None:
-                return None
-            type_name = _mapped_text(build_type, "name")
-            if type_name is None:
-                return None
-            return _metadata_projection(
-                source_key=f"type:{source_id}",
-                title=type_name,
-                subtype="type",
-                data={"type_id": source_id, "build_category": build_type.build_category},
             )
         if subtype == "creator":
             creator = await self._session.get(CreatorAlias, source_id)

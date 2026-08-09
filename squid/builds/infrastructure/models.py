@@ -27,12 +27,10 @@ from whenever import Instant
 
 from squid.builds.domain import (
     BuildCategory,
-    BuildCategoryLiteral,
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
     RecordCategoryLiteral,
-    RestrictionTypeLiteral,
     Status,
 )
 from squid.config import EMBEDDING_DIMENSION
@@ -41,65 +39,6 @@ from squid.persistence.types import InstantUTC
 
 if TYPE_CHECKING:
     from squid.tags.infrastructure.models import BuildTagAssignment
-
-
-class Restriction(Base):
-    """A restriction that can be applied to builds."""
-
-    __tablename__ = "restrictions"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(Text)
-    name: Mapped[str] = mapped_column(
-        Text, nullable=True, unique=True
-    )  # FIXME: Shouldn't be nullable, note that to make type checkers happy I made this Mapped[str] instead of Mapped[str | None], even though it is nullable in the database
-    type: Mapped[RestrictionTypeLiteral | None] = mapped_column(Text)
-
-    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
-        back_populates="restriction", default_factory=list, lazy="raise_on_sql", repr=False
-    )
-    aliases: Mapped[list[RestrictionAlias]] = relationship(
-        back_populates="restriction", default_factory=list, lazy="selectin"
-    )
-
-
-class RestrictionAlias(Base):
-    """An alias for a restriction, allowing for alternative names."""
-
-    __tablename__ = "restriction_aliases"
-    restriction_id: Mapped[int] = mapped_column(
-        SmallInteger,
-        Identity(),
-        ForeignKey(
-            "restrictions.id",
-            name="restriction_aliases_restriction_id_fkey",
-            ondelete="CASCADE",
-            onupdate="CASCADE",
-        ),
-        nullable=False,
-    )
-    alias: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-
-    __table_args__ = (Index("restriction_aliases_restriction_id_idx", "restriction_id"),)
-
-    restriction: Mapped[Restriction] = relationship(back_populates="aliases", init=False, lazy="joined")
-
-
-class Type(Base):
-    """A build pattern."""
-
-    __tablename__ = "types"
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
-    build_category: Mapped[BuildCategoryLiteral | None] = mapped_column(Text)
-    name: Mapped[str] = mapped_column(
-        Text, nullable=True, unique=True
-    )  # FIXME: This should be unique per build category  # FIXME: shouldn't be nullable
-
-    build_types: Mapped[list[BuildType]] = relationship(
-        back_populates="type", default_factory=list, lazy="raise_on_sql", repr=False
-    )
 
 
 class Build(Base, kw_only=True):
@@ -187,15 +126,9 @@ class Build(Base, kw_only=True):
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-    build_restrictions: Mapped[list[BuildRestriction]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin"
-    )
-
     build_versions: Mapped[list[BuildVersion]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin"
     )
-
-    build_types: Mapped[list[BuildType]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
 
     tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
         default_factory=list,
@@ -308,31 +241,6 @@ class BuildCreator(Base):
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
 
 
-class BuildRestriction(Base):
-    """Association table between builds and their restrictions."""
-
-    __tablename__ = "build_restrictions"
-    build_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("builds.id", name="build_restrictions_build_id_fkey", ondelete="CASCADE"),
-        primary_key=True,
-        init=False,
-    )
-    restriction_id: Mapped[int] = mapped_column(
-        SmallInteger,
-        ForeignKey("restrictions.id", name="build_restrictions_restriction_id_fkey", ondelete="RESTRICT"),
-        primary_key=True,
-        init=False,
-    )
-
-    build: Mapped[Build] = relationship(
-        back_populates="build_restrictions", lazy="raise_on_sql", repr=False, default=None
-    )
-    restriction: Mapped[Restriction] = relationship(
-        back_populates="build_restrictions", lazy="joined", repr=False, default=None
-    )
-
-
 class BuildVersion(Base):
     """Association table between builds and their versions."""
 
@@ -350,27 +258,6 @@ class BuildVersion(Base):
     )
 
     build: Mapped[Build] = relationship(back_populates="build_versions", lazy="raise_on_sql", repr=False, default=None)
-
-
-class BuildType(Base):
-    """Association table between builds and their types."""
-
-    __tablename__ = "build_types"
-    build_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("builds.id", name="build_types_build_id_fkey", ondelete="CASCADE"),
-        primary_key=True,
-        init=False,
-    )
-    type_id: Mapped[int] = mapped_column(
-        SmallInteger,
-        ForeignKey("types.id", name="build_types_type_id_fkey", ondelete="RESTRICT"),
-        primary_key=True,
-        init=False,
-    )
-
-    build: Mapped[Build] = relationship(back_populates="build_types", lazy="raise_on_sql", repr=False, default=None)
-    type: Mapped[Type] = relationship(back_populates="build_types", lazy="joined", repr=False, default=None)
 
 
 class BuildLink(Base):

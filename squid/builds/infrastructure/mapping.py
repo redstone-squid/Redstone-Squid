@@ -57,8 +57,19 @@ class BuildMapper:
             else await session.scalar(select(Message).where(Message.id == sql_build.original_message_id))
         )
 
-        restrictions = [association.restriction for association in sql_build.build_restrictions]
         tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
+        official_restrictions = [
+            assignment.definition
+            for assignment in tags
+            if assignment.definition.authority is TagAuthority.OFFICIAL
+            and assignment.definition.semantic_kind is TagSemanticKind.RESTRICTION
+        ]
+        official_patterns = [
+            assignment.definition.display_name
+            for assignment in tags
+            if assignment.definition.authority is TagAuthority.OFFICIAL
+            and assignment.definition.semantic_kind is TagSemanticKind.PATTERN
+        ]
         return Build(
             id=sql_build.id,
             revision=sql_build.revision,
@@ -76,17 +87,27 @@ class BuildMapper:
             door_width=sql_build.door_width if isinstance(sql_build, Door) else None,
             door_height=sql_build.door_height if isinstance(sql_build, Door) else None,
             door_depth=sql_build.door_depth if isinstance(sql_build, Door) else None,
-            door_type=[association.type.name for association in sql_build.build_types],
+            door_type=official_patterns,
             door_orientation_type=sql_build.orientation if isinstance(sql_build, Door) else None,
             wiring_placement_restrictions=[
-                restriction.name for restriction in restrictions if restriction.type == "wiring-placement"
+                restriction.display_name
+                for restriction in official_restrictions
+                if restriction.restriction_type == "wiring-placement"
             ],
-            animated_restrictions=[restriction.name for restriction in restrictions if restriction.type == "animated"],
+            animated_restrictions=[
+                restriction.display_name
+                for restriction in official_restrictions
+                if restriction.restriction_type == "animated"
+            ],
             component_restrictions=[
-                restriction.name for restriction in restrictions if restriction.type == "component"
+                restriction.display_name
+                for restriction in official_restrictions
+                if restriction.restriction_type == "component"
             ],
             miscellaneous_restrictions=[
-                restriction.name for restriction in restrictions if restriction.type == "miscellaneous"
+                restriction.display_name
+                for restriction in official_restrictions
+                if restriction.restriction_type == "miscellaneous"
             ],
             tags=tags,
             extender_orientation=sql_build.orientation if isinstance(sql_build, Extender) else None,

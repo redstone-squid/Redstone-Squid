@@ -2,14 +2,14 @@
 
 from unittest.mock import AsyncMock, Mock
 
-from squid.builds.infrastructure.models import Restriction
 from squid.builds.infrastructure.taxonomy import BuildTagsManager
+from squid.tags.infrastructure.models import TagDefinition
 
 
 class TestBuildTagsManager:
     """Test suite for BuildTagsManager restriction access."""
 
-    async def test_fetch_all_restrictions(self, sample_restriction_data: list[Restriction]) -> None:
+    async def test_fetch_all_restrictions(self, sample_restriction_data: list[TagDefinition]) -> None:
         """Test fetching all restrictions returns expected data."""
         mock_session = AsyncMock()
         mock_session_maker = Mock(return_value=mock_session)

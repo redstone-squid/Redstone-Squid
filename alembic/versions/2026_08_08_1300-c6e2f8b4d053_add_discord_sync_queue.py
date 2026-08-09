@@ -72,6 +72,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove reconciliation triggers, function, and queue."""
+    # Later taxonomy migrations can reconstruct these tables while downgrading.
+    # Keep the historical downgrade independent of the mutable entity registry.
+    op.execute("DROP TRIGGER IF EXISTS build_restrictions_enqueue_discord_sync ON public.build_restrictions")
+    op.execute("DROP TRIGGER IF EXISTS build_types_enqueue_discord_sync ON public.build_types")
     for entity in reversed(_selected_entities(PGTrigger, _TRIGGER_NAMES)):
         op.execute(entity.to_sql_statement_drop())
     for entity in reversed(_selected_entities(PGFunction, _FUNCTION_NAMES)):
