@@ -16,7 +16,10 @@ from squid.persistence.base import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # fileConfig disables every already-configured logger by default. Alembic is not
+    # always the only thing running in the process — the migration tests drive it
+    # in-process — and silently muting the host's loggers is never what is wanted.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in ALEMBIC_UTIL_ENTITIES}
