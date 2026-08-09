@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from whenever import Instant
 
 from squid.api.dependencies import get_services
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 from squid.tags.domain import (
     TagAuthority,
     TagDefinition,
@@ -57,7 +57,7 @@ class VoteFake:
 
 
 def _override(app: FastAPI, **services: object) -> None:
-    fake_services = cast(ApplicationServices, SimpleNamespace(**services))
+    fake_services = cast(ApiServices, SimpleNamespace(**services))
     app.dependency_overrides[get_services] = lambda: fake_services
 
 

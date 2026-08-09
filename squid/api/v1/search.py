@@ -21,7 +21,7 @@ from squid.api.v1.schemas.search import (
     SearchSuggestions,
 )
 from squid.core.errors import ErrorCode, ValidationError
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ def build_hit_id(source_id: str) -> int:
         raise ValidationError(msg) from error
 
 
-async def hydrate_builds(services: ApplicationServices, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
+async def hydrate_builds(services: ApiServices, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
     """Load authoritative builds for build hits, logging any the projection outlived.
 
     Build projections carry a description that falls back to submitter free text and drift from

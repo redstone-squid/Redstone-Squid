@@ -9,7 +9,7 @@ import pytest
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import search, suggest_terms
 from squid.builds.domain import Build, BuildCategory, Status
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 from squid.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
@@ -22,7 +22,7 @@ from squid.search.domain import (
 class Fakes(NamedTuple):
     """A search-only service graph plus the mocks its routes are expected to drive."""
 
-    services: ApplicationServices
+    services: ApiServices
     search: AsyncMock
     suggest: AsyncMock
 
@@ -48,7 +48,7 @@ def fakes(page: SearchPage, builds: list[Build] | None = None) -> Fakes:
         search=SimpleNamespace(search=search_mock, suggest=suggest_mock),
         build_queries=SimpleNamespace(get_many=AsyncMock(return_value=builds or [])),
     )
-    return Fakes(cast(ApplicationServices, services), search_mock, suggest_mock)
+    return Fakes(cast(ApiServices, services), search_mock, suggest_mock)
 
 
 def empty_page() -> SearchPage:

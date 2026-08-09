@@ -53,6 +53,17 @@ class IngestedSchematic:
     analysis: SchematicAnalysis
 
 
+class SchematicStorageMaintenance:
+    """Perform storage repair without constructing analysis or rendering adapters."""
+
+    def __init__(self, store: SchematicStore) -> None:
+        self._store = store
+
+    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
+        """Backfill and recover artifact state in a bounded batch."""
+        return await self._store.maintain_storage(limit=limit)
+
+
 class SchematicService:
     """Accept, analyze, store, and re-encode schematic files.
 

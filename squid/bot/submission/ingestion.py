@@ -11,7 +11,7 @@ from squid.bot.submission.media import MediaMirror
 from squid.bot.submission.message_context import assemble_bundle
 from squid.builds.domain import Build, BuildCategory
 from squid.core.errors import SquidError
-from squid.runtime import ApplicationServices
+from squid.runtime import BotServices
 from squid.schematics.application import IngestedSchematic, IngestRequest
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def ingest_message_bundle(
     primary: Sequence[discord.Message],
     preceding: Sequence[discord.Message],
-    services: ApplicationServices,
+    services: BotServices,
     *,
     model: str,
     mirror: MediaMirror,

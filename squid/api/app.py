@@ -14,13 +14,13 @@ from squid.api.errors import register_exception_handlers, responses
 from squid.api.security import Principal, Scope, require
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
-from squid.bootstrap import create_application_runtime
+from squid.bootstrap import create_api_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
-from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.runtime import ApiServices, ApplicationRuntime
 
-RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime]
+RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
 ConfigFactory = Callable[[], ApiProcessConfig]
 
 
@@ -55,7 +55,7 @@ class User(BaseModel):
 @router.post("/v1/verify", status_code=201, responses=responses(401, 403, 404, 422, 503), tags=["users"])
 async def get_verification_code(
     user: User,
-    services: Annotated[ApplicationServices, Depends(get_services)],
+    services: Annotated[ApiServices, Depends(get_services)],
     _principal: Annotated[Principal, Depends(require(Scope.VERIFY))],
 ) -> int:
     """Generate a verification code for a user."""
@@ -63,7 +63,7 @@ async def get_verification_code(
 
 
 def create_api_app(
-    runtime_factory: RuntimeFactory = create_application_runtime,
+    runtime_factory: RuntimeFactory = create_api_runtime,
     *,
     config: ApiProcessConfig | None = None,
     config_factory: ConfigFactory = load_api_process_config,

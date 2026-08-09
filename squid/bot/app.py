@@ -12,7 +12,7 @@ from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Bot
 
-from squid.bootstrap import create_application_runtime
+from squid.bootstrap import create_bot_runtime
 
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
@@ -36,7 +36,7 @@ from squid.config import (
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability
-from squid.runtime import ApplicationServices, BackgroundTaskSupervisor
+from squid.runtime import BackgroundTaskSupervisor, BotServices
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -50,7 +50,7 @@ CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"
 class RedstoneSquid(Bot):
     def __init__(
         self,
-        services: ApplicationServices,
+        services: BotServices,
         config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
         *,
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
@@ -221,7 +221,7 @@ async def main(
     observability = configure_observability(resolved_config.observability, service_name="bot")
 
     try:
-        async with create_application_runtime(resolved_config.runtime) as runtime:
+        async with create_bot_runtime(resolved_config.runtime) as runtime:
             bot = RedstoneSquid(
                 runtime.services,
                 config=identity_config,

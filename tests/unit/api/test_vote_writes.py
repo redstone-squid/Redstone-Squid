@@ -9,7 +9,7 @@ import pytest
 from squid.api.security import Principal, Scope
 from squid.api.v1.votes import VoteInput, cast_vote
 from squid.core.errors import AuthenticationError, ValidationError
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     CastVoteResult,
@@ -55,7 +55,7 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
         cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session)),
     )
     members = SimpleNamespace(member=AsyncMock(return_value=actor))
-    services = cast(ApplicationServices, SimpleNamespace(votes=votes, vote_members=members))
+    services = cast(ApiServices, SimpleNamespace(votes=votes, vote_members=members))
 
     response = await cast_vote(12, VoteInput(guild_id=10, option_id="approve"), services, user())
 
@@ -72,7 +72,7 @@ async def test_service_credentials_cannot_cast_ballots() -> None:
         await cast_vote(
             12,
             VoteInput(guild_id=10, option_id="approve"),
-            cast(ApplicationServices, SimpleNamespace()),
+            cast(ApiServices, SimpleNamespace()),
             service,
         )
 
@@ -90,6 +90,6 @@ async def test_invalid_option_is_a_typed_client_error() -> None:
         await cast_vote(
             12,
             VoteInput(guild_id=10, option_id="missing"),
-            cast(ApplicationServices, SimpleNamespace(votes=votes, vote_members=members)),
+            cast(ApiServices, SimpleNamespace(votes=votes, vote_members=members)),
             user("user:invalid-option"),
         )

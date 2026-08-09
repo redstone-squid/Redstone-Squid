@@ -17,7 +17,7 @@ async def test_main_owns_observability_and_logging_shutdown(mocker: MockerFixtur
     bot.__aenter__.return_value = bot
     mocker.patch.object(bot_app, "configure_bot_logging", return_value=listener)
     configure = mocker.patch.object(bot_app, "configure_observability", return_value=handle)
-    mocker.patch.object(bot_app, "create_application_runtime", return_value=runtime)
+    mocker.patch.object(bot_app, "create_bot_runtime", return_value=runtime)
     mocker.patch.object(bot_app, "RedstoneSquid", return_value=bot)
     mocker.patch.object(bot_app, "ProcessHealthServer", return_value=mocker.MagicMock())
 

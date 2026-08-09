@@ -5,57 +5,22 @@ import contextlib
 import logging
 import signal
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 from whenever import Instant
 
 from squid.artifacts.infrastructure import create_artifact_store
-from squid.bootstrap import create_application_runtime
-from squid.builds.application import BuildService
+from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_worker_process_config
-from squid.events import DomainEventService
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
-from squid.records.application import RecordComputationService
-from squid.runtime import ApplicationServices, BackgroundTaskSupervisor
-from squid.schematics.application import SchematicJobService, SchematicService
+from squid.runtime import BackgroundTaskSupervisor, WorkerServices
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
-from squid.search.application import SearchEmbeddingService
-from squid.voting.application import VoteService
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class WorkerServices:
-    """Narrow application capabilities used by this process."""
-
-    builds: BuildService
-    votes: VoteService
-    records: RecordComputationService
-    events: DomainEventService
-    schematics: SchematicService
-    schematic_jobs: SchematicJobService
-    search_embeddings: SearchEmbeddingService
-    refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
-
-    @classmethod
-    def from_application(cls, services: ApplicationServices) -> "WorkerServices":
-        """Project the shared composition graph into worker-owned capabilities."""
-        return cls(
-            builds=services.builds,
-            votes=services.votes,
-            records=services.record_computation,
-            events=services.domain_events,
-            schematics=services.schematics,
-            schematic_jobs=services.schematic_jobs,
-            search_embeddings=services.search_embeddings,
-            refresh_search_index=services.refresh_search_index,
-        )
 
 
 class DatabaseWorker:
@@ -232,7 +197,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 loop.add_signal_handler(process_signal, stop.set)
 
     try:
-        async with create_application_runtime(resolved_config.runtime) as runtime:
+        async with create_worker_runtime(resolved_config.runtime) as runtime:
             artifacts = create_artifact_store(resolved_config.runtime.object_storage)
             schematic_config = resolved_config.runtime.schematics
             if schematic_config.enabled and engine_installed():
@@ -246,7 +211,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 schematic_config,
             )
             worker = DatabaseWorker(
-                WorkerServices.from_application(runtime.services),
+                runtime.services,
                 runtime.keep_database_active,
                 resolved_config.worker,
                 schematic_jobs,

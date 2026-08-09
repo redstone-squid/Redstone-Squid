@@ -1,9 +1,29 @@
 """Application runtime lifecycle tests."""
 
 import asyncio
+from dataclasses import fields
 from unittest.mock import AsyncMock
 
-from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
+from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, BotServices, WorkerServices
+
+
+def test_process_service_bundles_expose_only_owned_capabilities() -> None:
+    api = {field.name for field in fields(ApiServices)}
+    bot = {field.name for field in fields(BotServices)}
+    worker = {field.name for field in fields(WorkerServices)}
+
+    assert api.isdisjoint({"build_inference", "discord_sync", "domain_events", "search_embeddings"})
+    assert bot.isdisjoint({"api_keys", "web_auth", "vote_members", "search_embeddings", "schematic_jobs"})
+    assert worker == {
+        "builds",
+        "votes",
+        "records",
+        "events",
+        "schematics",
+        "schematic_jobs",
+        "search_embeddings",
+        "refresh_search_index",
+    }
 
 
 async def test_application_runtime_closes_database() -> None:

@@ -11,7 +11,12 @@ from squid.schematics.application.jobs import (
 )
 from squid.schematics.application.ports import SchematicAnalyzer, SchematicStore, SchematicVersionResolver
 from squid.schematics.application.queries import DuplicateCandidate, StoredSchematic
-from squid.schematics.application.services import IngestedSchematic, SchematicService, summarise_losses
+from squid.schematics.application.services import (
+    IngestedSchematic,
+    SchematicService,
+    SchematicStorageMaintenance,
+    summarise_losses,
+)
 
 __all__ = [
     "ClaimedSchematicJob",
@@ -27,6 +32,7 @@ __all__ = [
     "SchematicJobService",
     "SchematicJobSnapshot",
     "SchematicService",
+    "SchematicStorageMaintenance",
     "SchematicStore",
     "SchematicVersionResolver",
     "SimulationRequest",

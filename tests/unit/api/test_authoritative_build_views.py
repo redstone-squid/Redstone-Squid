@@ -14,7 +14,7 @@ from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import SignedCursor
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 
 SIGNER = SignedCursor(b"authoritative-build-view-test-secret")
 SERVICE = Principal(kind="service", subject="api-key:test", scopes=frozenset(Scope))
@@ -24,7 +24,7 @@ USER = Principal(kind="user", subject="user:1", scopes=frozenset(Scope), discord
 class Fakes(NamedTuple):
     """A build-query service graph plus the mocks its routes are expected to drive."""
 
-    services: ApplicationServices
+    services: ApiServices
     list_page: AsyncMock
     is_global_administrator: AsyncMock
 
@@ -56,7 +56,7 @@ def fakes(*, builds: list[Build] | None = None, is_admin: bool = False) -> Fakes
         build_queries=SimpleNamespace(list_page=list_page),
         authorization=SimpleNamespace(is_global_administrator=is_global_administrator),
     )
-    return Fakes(cast(ApplicationServices, services), list_page, is_global_administrator)
+    return Fakes(cast(ApiServices, services), list_page, is_global_administrator)
 
 
 @pytest.mark.asyncio

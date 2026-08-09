@@ -8,7 +8,7 @@ import pytest
 
 from squid.bot.submission import ingestion
 from squid.builds.domain import Build, BuildCategory
-from squid.runtime import ApplicationServices
+from squid.runtime import BotServices
 from squid.schematics.application import IngestedSchematic
 
 
@@ -49,7 +49,7 @@ async def test_raw_schematic_is_recorded_privately_without_public_mirroring(
     result = await ingestion.ingest_message_bundle(
         [cast(discord.Message, message)],
         [],
-        cast(ApplicationServices, services),
+        cast(BotServices, services),
         model="test-model",
         mirror=mirror,
     )

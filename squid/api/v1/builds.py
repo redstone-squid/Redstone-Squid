@@ -20,7 +20,7 @@ from squid.builds.errors import (
     InvalidBuildError,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
-from squid.runtime import ApplicationServices
+from squid.runtime import ApiServices
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
 from squid.users.errors import ConsentRequiredError
 
@@ -168,7 +168,7 @@ async def list_builds(
     return keyset_page(signer, builds, page_size=page_size, binding=binding)
 
 
-async def _require_global_administrator(services: ApplicationServices, principal: Principal) -> None:
+async def _require_global_administrator(services: ApiServices, principal: Principal) -> None:
     """Gate non-public moderation views on the human, not just the credential.
 
     A service key carries no `discord_id` and so can never satisfy this, which keeps a leaked

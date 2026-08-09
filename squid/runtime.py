@@ -17,7 +17,7 @@ from squid.events.application import DomainEventService
 from squid.messages.application import MessageService
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
-from squid.schematics.application import SchematicJobService, SchematicService
+from squid.schematics.application import SchematicJobService, SchematicService, SchematicStorageMaintenance
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
@@ -32,12 +32,29 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class ApplicationServices:
-    """Long-lived application services created by the process composition root."""
+class ApiServices:
+    """Capabilities exposed by the HTTP API process."""
 
     builds: BuildService
     api_keys: ApiKeyService | None
     web_auth: DiscordOAuthService | None
+    build_queries: BuildQueryService
+    authorization: AuthorizationService
+    records: RecordService
+    schematics: SchematicService
+    search: SearchService
+    tags: TagService
+    users: UserService
+    versions: VersionService
+    votes: VoteService
+    vote_members: InteractiveVoteActorResolver | None
+
+
+@dataclass(frozen=True, slots=True)
+class BotServices:
+    """Capabilities exposed to Discord gateway features."""
+
+    builds: BuildService
     build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService
@@ -46,17 +63,13 @@ class ApplicationServices:
     records: RecordService
     record_computation: RecordComputationService
     schematics: SchematicService
-    schematic_jobs: SchematicJobService
     search: SearchService
-    search_embeddings: SearchEmbeddingService
     tags: TagService
-    refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     settings: SettingsService
     starboards: StarboardService
     users: UserService
     versions: VersionService
     votes: VoteService
-    vote_members: InteractiveVoteActorResolver | None
     discord_sync: DiscordSyncService
     domain_events: DomainEventService
     redstoner: RedstonerService
@@ -64,10 +77,24 @@ class ApplicationServices:
 
 
 @dataclass(frozen=True, slots=True)
-class ApplicationRuntime:
+class WorkerServices:
+    """Capabilities exposed to transport-neutral background jobs."""
+
+    builds: BuildService
+    votes: VoteService
+    records: RecordComputationService
+    events: DomainEventService
+    schematics: SchematicStorageMaintenance
+    schematic_jobs: SchematicJobService
+    search_embeddings: SearchEmbeddingService
+    refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicationRuntime[ServicesT]:
     """Own application services and process-level resource callbacks."""
 
-    services: ApplicationServices
+    services: ServicesT
     close_resources: Callable[[], Awaitable[None]]
     keep_database_active: Callable[[], Awaitable[None]]
     check_readiness: Callable[[], Awaitable[None]] | None = None

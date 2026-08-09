@@ -6,12 +6,12 @@ from fastapi import Depends, Query, Request
 
 from squid.api.security import Principal, current_principal
 from squid.core.pagination import SignedCursor
-from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.runtime import ApiServices, ApplicationRuntime
 
 
-async def get_services(request: Request) -> ApplicationServices:
+async def get_services(request: Request) -> ApiServices:
     """Return application services initialized during API startup."""
-    runtime = cast(ApplicationRuntime, request.app.state.runtime)
+    runtime = cast(ApplicationRuntime[ApiServices], request.app.state.runtime)
     return runtime.services
 
 
@@ -22,6 +22,6 @@ async def cursor_signer(request: Request) -> SignedCursor:
 
 
 PageSize = Annotated[int, Query(ge=1, le=50)]
-Services = Annotated[ApplicationServices, Depends(get_services)]
+Services = Annotated[ApiServices, Depends(get_services)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 CursorSigner = Annotated[SignedCursor, Depends(cursor_signer)]

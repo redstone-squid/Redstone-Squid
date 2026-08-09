@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
-from squid.runtime import ApplicationRuntime, ApplicationServices
+from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
@@ -119,7 +119,7 @@ def build_app() -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
     services = cast(
-        ApplicationServices,
+        ApiServices,
         SimpleNamespace(
             api_keys=None,
             web_auth=None,
