@@ -189,3 +189,46 @@ class SchematicRender(Base, kw_only=True):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+class SchematicJob(Base, kw_only=True):
+    """A durable request for the worker-owned native schematic engine."""
+
+    __tablename__ = "schematic_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "operation IN ('capabilities', 'analyze', 'convert', 'compare', 'render', 'simulate', 'autostack')",
+            name="schematic_jobs_operation_check",
+        ),
+        CheckConstraint(
+            "completed_at IS NULL OR dead_at IS NULL",
+            name="schematic_jobs_single_terminal_state",
+        ),
+        Index(
+            "schematic_jobs_ready_idx",
+            "available_at",
+            postgresql_where=text("completed_at IS NULL AND dead_at IS NULL"),
+        ),
+        Index("schematic_jobs_expiry_idx", "expires_at", postgresql_where=text("expires_at IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    operation: Mapped[str] = mapped_column(Text, nullable=False)
+    params: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    input_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    result_object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    error_kind: Mapped[str | None] = mapped_column(Text, default=None)
+    error_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )

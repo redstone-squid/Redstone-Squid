@@ -38,13 +38,13 @@ from squid.persistence.engine import DatabaseEngine
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApplicationRuntime, ApplicationServices
-from squid.schematics.application import RenderRequest, SchematicAnalyzer, SchematicService
+from squid.schematics.application import RenderRequest, SchematicAnalyzer, SchematicJobService, SchematicService
 from squid.schematics.domain.models import SchematicLimits
-from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
+from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
+from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.repository import SchematicRepository
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.search.application import CursorCodec, SearchQueryParser, SearchService
 from squid.search.infrastructure import PostgresSearchBackend
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
@@ -69,32 +69,23 @@ from squid.voting.infrastructure.repository import VoteRepository
 logger = logging.getLogger(__name__)
 
 
-def create_schematic_analyzer(config: SchematicConfig) -> SchematicAnalyzer:
-    """Choose the schematic analyzer this process can actually run.
-
-    The engine is an optional extra with no musl or linux-aarch64 wheels, so absence is a
-    supported deployment rather than a misconfiguration: the null analyzer raises one typed,
-    translated error from every method and the rest of the bot is unaffected.
-
-    Availability is decided with `find_spec`, never a trial import — loading a native extension
-    is expensive and an ABI-mismatched wheel can abort the interpreter. The real import happens
-    only in the worker child, where a failure is contained.
-    """
-    if not config.enabled:
-        return NullSchematicAnalyzer("Schematic support is switched off by configuration.")
-    if not engine_installed():
-        logger.info("The optional schematic engine is not installed; schematic features are disabled.")
-        return NullSchematicAnalyzer("The optional 'schematics' extra is not installed.")
-    return SchematicWorkerPool(config)
+def create_schematic_analyzer(
+    config: SchematicConfig,
+    jobs: SchematicJobService,
+    artifacts: ArtifactStore,
+) -> SchematicAnalyzer:
+    """Build a queue client; only the dedicated worker process owns native execution."""
+    return QueuedSchematicAnalyzer(jobs, artifacts, config)
 
 
 def create_schematic_service(
     db: DatabaseEngine,
     config: SchematicConfig,
     artifacts: ArtifactStore,
+    jobs: SchematicJobService,
 ) -> SchematicService:
     """Assemble the schematic service over whichever analyzer this process can run."""
-    analyzer = create_schematic_analyzer(config)
+    analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
     if config.render_pack_path is not None or config.render_pack_url is not None:
         resource_pack = ResourcePackLoader(
@@ -112,7 +103,7 @@ def create_schematic_service(
             max_inflated_bytes=config.max_inflated_bytes,
             max_allocated_volume=config.max_allocated_volume,
         ),
-        engine_installed=not isinstance(analyzer, NullSchematicAnalyzer),
+        engine_installed=config.enabled,
         duplicate_metric_tolerance=config.duplicate_metric_tolerance,
         duplicate_near_distance=config.duplicate_near_distance,
         duplicate_max_comparisons=config.duplicate_max_comparisons,
@@ -174,7 +165,12 @@ def create_application_services(
     if resource_stack is not None:
         resource_stack.push_async_callback(text_generator.aclose)
     artifacts = create_artifact_store(config.object_storage)
-    schematic_service = create_schematic_service(db, config.schematics, artifacts)
+    schematic_jobs = SchematicJobService(
+        PostgresSchematicJobRepository(db.async_session),
+        max_attempts=config.schematics.job_max_attempts,
+        retention_hours=config.schematics.job_retention_hours,
+    )
+    schematic_service = create_schematic_service(db, config.schematics, artifacts, schematic_jobs)
     if resource_stack is not None:
         resource_stack.push_async_callback(schematic_service.aclose)
     web_auth = (
@@ -214,6 +210,7 @@ def create_application_services(
         records=RecordService(record_repository, record_repository, record_computation),
         record_computation=record_computation,
         schematics=schematic_service,
+        schematic_jobs=schematic_jobs,
         search=SearchService(
             PostgresSearchBackend(db.async_session, fields=search_fields),
             SearchQueryParser(),

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from whenever import Instant
 
+from squid.artifacts.infrastructure import create_artifact_store
 from squid.bootstrap import create_application_runtime
 from squid.builds.application import BuildService
 from squid.config import WorkerConfig, WorkerProcessConfig, load_worker_process_config
@@ -18,7 +19,10 @@ from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
 from squid.records.application import RecordComputationService
 from squid.runtime import ApplicationServices, BackgroundTaskSupervisor
-from squid.schematics.application import SchematicService
+from squid.schematics.application import SchematicJobService, SchematicService
+from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
+from squid.schematics.infrastructure.durable import SchematicJobRunner
+from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.voting.application import VoteService
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
 
@@ -34,6 +38,7 @@ class WorkerServices:
     records: RecordComputationService
     events: DomainEventService
     schematics: SchematicService
+    schematic_jobs: SchematicJobService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
 
     @classmethod
@@ -45,6 +50,7 @@ class WorkerServices:
             records=services.record_computation,
             events=services.domain_events,
             schematics=services.schematics,
+            schematic_jobs=services.schematic_jobs,
             refresh_search_index=services.refresh_search_index,
         )
 
@@ -57,12 +63,14 @@ class DatabaseWorker:
         services: WorkerServices,
         keep_database_active: Callable[[], Awaitable[None]],
         config: WorkerConfig,
+        schematic_jobs: SchematicJobRunner,
         *,
         supervisor: BackgroundTaskSupervisor | None = None,
     ) -> None:
         self._services = services
         self._keep_database_active = keep_database_active
         self._config = config
+        self._schematic_jobs = schematic_jobs
         self._supervisor = supervisor or BackgroundTaskSupervisor()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
         self._events = CoreDomainEventRunner(services.events, {"vote_session.closed": (outcome_handler,)})
@@ -75,6 +83,11 @@ class DatabaseWorker:
             self._process_events,
             name="core-domain-events",
             interval=event_interval,
+        )
+        self._supervisor.start_periodic(
+            self._process_schematic_jobs,
+            name="schematic-jobs",
+            interval=self._config.schematic_job_interval_seconds,
         )
         self._supervisor.start_periodic(
             self._refresh_search,
@@ -102,6 +115,11 @@ class DatabaseWorker:
             interval=maintenance_interval,
         )
         self._supervisor.start_periodic(
+            self._cleanup_schematic_jobs,
+            name="schematic-job-cleanup",
+            interval=max(maintenance_interval, 300),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -116,17 +134,23 @@ class DatabaseWorker:
         """Return whether every critical job has completed at least once."""
         required = {
             "core-domain-events",
+            "schematic-jobs",
             "search-projections",
             "record-maintenance",
             "due-votes",
             "stale-build-locks",
             "artifact-maintenance",
+            "schematic-job-cleanup",
         }
         return required <= self._supervisor.last_success.keys()
 
     async def _process_events(self) -> None:
         with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):
             await self._events.process_batch()
+
+    async def _process_schematic_jobs(self) -> None:
+        with trace_span("squid.worker.schematic_jobs", {"squid.surface": "background_loop"}):
+            await self._schematic_jobs.process_batch()
 
     async def _refresh_search(self) -> None:
         with trace_span("squid.worker.search_projection", {"squid.surface": "background_loop"}):
@@ -166,6 +190,10 @@ class DatabaseWorker:
                 extra={"squid.artifacts.migrated": migrated, "squid.artifacts.recovered": recovered},
             )
 
+    async def _cleanup_schematic_jobs(self) -> None:
+        with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
+            await self._schematic_jobs.cleanup()
+
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
     """Run the worker until a process signal or caller-owned stop event fires."""
@@ -181,10 +209,23 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
 
     try:
         async with create_application_runtime(resolved_config.runtime) as runtime:
+            artifacts = create_artifact_store(resolved_config.runtime.object_storage)
+            schematic_config = resolved_config.runtime.schematics
+            if schematic_config.enabled and engine_installed():
+                native_analyzer = SchematicWorkerPool(schematic_config)
+            else:
+                native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
+            schematic_jobs = SchematicJobRunner(
+                runtime.services.schematic_jobs,
+                artifacts,
+                native_analyzer,
+                schematic_config,
+            )
             worker = DatabaseWorker(
                 WorkerServices.from_application(runtime.services),
                 runtime.keep_database_active,
                 resolved_config.worker,
+                schematic_jobs,
             )
             worker.start()
 
@@ -197,6 +238,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                     await stop.wait()
             finally:
                 await worker.close()
+                await native_analyzer.aclose()
     finally:
         observability.shutdown()
 

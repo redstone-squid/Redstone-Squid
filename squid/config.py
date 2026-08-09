@@ -278,6 +278,7 @@ class WorkerConfig(_FrozenModel):
     event_interval_seconds: float = Field(default=15, gt=0)
     maintenance_interval_seconds: float = Field(default=30, gt=0)
     keepalive_interval_seconds: float = Field(default=86_400, gt=0)
+    schematic_job_interval_seconds: float = Field(default=0.25, gt=0)
 
     _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
     _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
@@ -352,6 +353,13 @@ class SchematicConfig(_FrozenModel):
     """Whether to use the native engine at all, even when it is installed."""
     workers: int = Field(default=2, ge=1, le=8)
     """How many supervised worker subprocesses to run."""
+    job_poll_interval_seconds: float = Field(default=0.2, gt=0, le=5)
+    """How often API and bot clients poll a submitted durable job."""
+    job_wait_timeout_seconds: float = Field(default=120.0, gt=0)
+    """Maximum client wait; jobs remain durable if the caller stops waiting."""
+    job_max_attempts: int = Field(default=3, ge=1, le=10)
+    job_retention_hours: int = Field(default=24, ge=1, le=168)
+    max_job_artifact_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
 
     max_upload_bytes: int = Field(default=2 * 1024 * 1024, ge=1)
     """Largest attachment accepted, checked before the file is downloaded from Discord."""
