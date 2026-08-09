@@ -265,10 +265,7 @@ def _current_trace_context() -> tuple[str, str] | None:
 
 def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
     """Build the SDK pipeline after the caller has established process ownership."""
-    from opentelemetry import (
-        metrics,  # pyright: ignore[reportMissingImports]
-        trace,  # pyright: ignore[reportMissingImports]
-    )
+    from opentelemetry import metrics, trace  # pyright: ignore[reportMissingImports]
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import (  # pyright: ignore[reportMissingImports]
         OTLPMetricExporter,
     )
