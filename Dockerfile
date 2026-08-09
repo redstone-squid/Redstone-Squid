@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36
 
-FROM python:${PYTHON_VERSION}-slim AS builder
+FROM ${PYTHON_IMAGE} AS builder
 
 ARG WITH_SCHEMATICS=0
 ARG WITH_OBSERVABILITY=1
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
@@ -34,7 +34,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
       uv sync --locked --no-dev --no-editable; \
     fi
 
-FROM python:${PYTHON_VERSION}-slim AS runtime
+FROM ${PYTHON_IMAGE} AS runtime
 
 ARG WITH_SOFTWARE_GPU=0
 RUN if [ "$WITH_SOFTWARE_GPU" = "1" ]; then \

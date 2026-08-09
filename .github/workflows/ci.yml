@@ -83,15 +83,60 @@ jobs:
         if: always()
         run: uv cache prune --ci
 
+  dependency-security:
+    name: Dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Audit locked production dependencies
+        run: |
+          audit_requirements=$(mktemp)
+          uv export --locked --no-dev --no-hashes --no-emit-project --output-file "$audit_requirements" >/dev/null
+          uvx --from pip-audit==2.10.1 pip-audit \
+            --requirement "$audit_requirements" \
+            --no-deps \
+            --disable-pip \
+            --progress-spinner=off
+
+      - name: Export dependency SBOM
+        run: uv export --locked --no-dev --format cyclonedx1.5 --output-file dependency-report.json
+
+      - name: Upload dependency SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-sbom-${{ github.sha }}
+          path: dependency-report.json
+
+      - name: Minimize uv cache
+        if: always()
+        run: uv cache prune --ci
+
   deploy:
     name: Deploy
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [actions-security, quality, unit, integration]
+    needs: [actions-security, dependency-security, quality, unit, integration]
     permissions: {}
     uses: ./.github/workflows/cd.yml
     secrets:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
       SSH_USER: ${{ secrets.SSH_USER }}
 
   unit:

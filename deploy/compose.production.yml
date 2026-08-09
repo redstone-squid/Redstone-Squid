@@ -1,0 +1,26 @@
+services:
+  api:
+    image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}
+    pull_policy: always
+
+  bot:
+    image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}
+    pull_policy: always
+
+  worker:
+    image: ${SQUID_WORKER_IMAGE:?SQUID_WORKER_IMAGE must be an immutable image digest}
+    pull_policy: always
+
+  migrate:
+    image: ${SQUID_APP_IMAGE:?SQUID_APP_IMAGE must be an immutable image digest}
+    pull_policy: always
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    profiles:
+      - migration
+    env_file:
+      - ${SQUID_ENV_FILE:-.env}
+    environment:
+      SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
+    volumes:
+      - squid-objects:/var/lib/app/objects

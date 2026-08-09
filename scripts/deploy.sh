@@ -1,78 +1,126 @@
-#!/bin/bash
-#
-# deploy.sh - Script to be run in the root of the project directory to deploy Redstone Squid.
-# It pulls the latest changes from git, syncs pip requirements, and starts the app.
-#
-set -euo pipefail
+#!/usr/bin/env bash
+# Deploy one tested pair of immutable application images.
 
-# path to a file that stores the PID of the running app
-PIDFILE=".app.pid"
+set -Eeuo pipefail
 
-# Function to show usage
+readonly STATE_DIRECTORY="${SQUID_DEPLOYMENT_STATE_DIRECTORY:-.deploy}"
+readonly CURRENT_RELEASE_FILE="$STATE_DIRECTORY/current-release"
+readonly PREVIOUS_RELEASE_FILE="$STATE_DIRECTORY/previous-release"
+readonly COMPOSE_OVERRIDE="${SQUID_PRODUCTION_COMPOSE_FILE:-deploy/compose.production.yml}"
+readonly LEGACY_PID_FILE=".app.pid"
+readonly -a COMPOSE=(docker compose -f compose.yml -f "$COMPOSE_OVERRIDE")
+
 usage() {
-    echo "Usage: $0 [-d]"
-    echo "  -d    Run in detached mode"
-    exit 1
+    printf 'Usage: %s APP_IMAGE@sha256:DIGEST WORKER_IMAGE@sha256:DIGEST\n' "$0" >&2
+    exit 2
 }
 
-# Initialize detach flag
-detach=false
+validate_image() {
+    local image="$1"
+    if [[ ! "$image" =~ ^[^[:space:]]+@sha256:[[:xdigit:]]{64}$ ]]; then
+        printf 'Image must be pinned by sha256 digest: %s\n' "$image" >&2
+        exit 2
+    fi
+}
 
-# Parse command line arguments
-while getopts "d" opt; do
-    case $opt in
-        d)
-            detach=true
-            ;;
-        *)
-            usage
-            ;;
-    esac
-done
+read_release() {
+    local release_file="$1"
+    local -n app_result="$2"
+    local -n worker_result="$3"
+    [[ -f "$release_file" ]] || return 1
+    IFS= read -r app_result < "$release_file"
+    IFS= read -r worker_result < <(sed -n '2p' "$release_file")
+    validate_image "$app_result"
+    validate_image "$worker_result"
+}
 
-# Pull latest changes from git
-echo "Pulling latest changes..."
-git pull
+wait_for_legacy_process() {
+    local pid="$1"
+    local attempt
+    for attempt in {1..20}; do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 0.5
+    done
+    printf 'Legacy launcher PID %s did not stop in time.\n' "$pid" >&2
+    return 1
+}
 
-# Install newest dependencies
-echo "Syncing dependencies"
-# Alternatively: pip-sync requirements/base.txt requirements/dev.txt
-uv sync
+stop_legacy_launcher() {
+    [[ -f "$LEGACY_PID_FILE" ]] || return 0
+    local pid command
+    IFS= read -r pid < "$LEGACY_PID_FILE"
+    if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
+        printf 'Refusing invalid legacy PID file contents.\n' >&2
+        return 1
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+        mv "$LEGACY_PID_FILE" "$STATE_DIRECTORY/stale-legacy.pid"
+        return 0
+    fi
+    command=$(ps -p "$pid" -o args=)
+    if [[ "$command" != *"app.py"* ]]; then
+        printf 'Refusing to stop PID %s because it is not the legacy app.py launcher.\n' "$pid" >&2
+        return 1
+    fi
+    kill "$pid"
+    wait_for_legacy_process "$pid"
+    mv "$LEGACY_PID_FILE" "$STATE_DIRECTORY/stopped-legacy.pid"
+}
 
-# Kill existing app.py process
-echo "Killing existing app.py process..."
-if [ -f "$PIDFILE" ]; then
-  echo "Found PID file in $PIDFILE"
-  PID=$(<"$PIDFILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    echo "Stopping app (PID $PID)…"
-    kill "$PID"
-    rm "$PIDFILE"
-  else
-    echo "No process $PID; removing stale PID file."
-    rm "$PIDFILE"
-  fi
+write_release() {
+    local destination="$1"
+    local app_image="$2"
+    local worker_image="$3"
+    local temporary
+    temporary=$(mktemp "$STATE_DIRECTORY/release.XXXXXX")
+    printf '%s\n%s\n' "$app_image" "$worker_image" > "$temporary"
+    mv "$temporary" "$destination"
+}
 
-  sleep 2  # Wait for a moment to ensure the process has time to terminate
-  # Double-check if the process is still running
-  if kill -0 "$PID" 2>/dev/null; then
-    echo "Process $PID is still running after kill command. Exiting."
-    exit 1
-  fi
-else
-  echo "No PID file; Assuming no app is running."
-  echo "If you have manually started the app, please stop it before running this script."
+rollback() {
+    local status=$?
+    trap - ERR
+    if [[ "$cutover_started" == true && -n "$previous_app_image" && -n "$previous_worker_image" ]]; then
+        printf 'Cutover failed; restoring the previous service images.\n' >&2
+        export SQUID_APP_IMAGE="$previous_app_image"
+        export SQUID_WORKER_IMAGE="$previous_worker_image"
+        if ! "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
+            printf 'Automatic service rollback also failed; inspect Compose health and database compatibility.\n' >&2
+        fi
+    fi
+    exit "$status"
+}
+
+[[ $# -eq 2 ]] || usage
+app_image="$1"
+worker_image="$2"
+validate_image "$app_image"
+validate_image "$worker_image"
+
+mkdir -p "$STATE_DIRECTORY"
+previous_app_image=""
+previous_worker_image=""
+read_release "$CURRENT_RELEASE_FILE" previous_app_image previous_worker_image || true
+cutover_started=false
+trap rollback ERR
+
+export SQUID_APP_IMAGE="$app_image"
+export SQUID_WORKER_IMAGE="$worker_image"
+
+printf 'Pulling immutable release images.\n'
+"${COMPOSE[@]}" pull api bot worker migrate
+
+printf 'Applying database migrations from the application image.\n'
+"${COMPOSE[@]}" run --rm migrate
+
+stop_legacy_launcher
+cutover_started=true
+printf 'Starting independently supervised services.\n'
+"${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180 api bot worker
+
+if [[ -n "$previous_app_image" && -n "$previous_worker_image" ]]; then
+    write_release "$PREVIOUS_RELEASE_FILE" "$previous_app_image" "$previous_worker_image"
 fi
-
-# Run the application
-if [ "$detach" = true ]; then
-    echo "Starting app in detached mode..."
-    nohup uv run app.py > app.log 2>&1 &
-    echo "$!" > "$PIDFILE"
-    echo "App started in background. Check app.log for output."
-else
-    echo "Starting app in foreground..."
-    uv run app.py &
-    echo "$!" > "$PIDFILE"
-    wait
-fi
+write_release "$CURRENT_RELEASE_FILE" "$app_image" "$worker_image"
+trap - ERR
+printf 'Release is ready: %s / %s\n' "$app_image" "$worker_image"

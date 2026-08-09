@@ -5,7 +5,6 @@ from textwrap import dedent
 from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
-import git
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
@@ -157,17 +156,13 @@ class Help(commands.MinimalHelpCommand):
             )
         )
         footer: str | None = None
-        try:
-            repo = git.Repo(search_parent_directories=True)
-            footer = f"commit: {repo.head.commit.hexsha[:7]}, message: {repo.head.commit.message.strip()}"
-        except git.InvalidGitRepositoryError:
-            build_config = getattr(self.context.bot, "build_config", None)
-            if (
-                isinstance(build_config, BuildConfig)
-                and build_config.commit_hash is not None
-                and build_config.commit_message is not None
-            ):
-                footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
+        build_config = getattr(self.context.bot, "build_config", None)
+        if (
+            isinstance(build_config, BuildConfig)
+            and build_config.commit_hash is not None
+            and build_config.commit_message is not None
+        ):
+            footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
         await self.get_destination().send(
             view=help_layout(t(locale, _("Help")), desc, footer=footer),
             allowed_mentions=no_mentions(),

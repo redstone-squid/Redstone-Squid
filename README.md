@@ -113,6 +113,15 @@ Production uses separate service units so each process can be restarted and chec
 docker compose up --build
 ```
 
+The production workflow builds and smoke-tests two immutable images: a transport image for the API and bot, and a
+worker image containing the optional native schematic engine. It runs Alembic from the exact application image before
+switching the three Compose services, waits for every readiness check, and retains the previous image digests in
+`.deploy/previous-release`. Production hosts need Docker Compose, an existing `.env`, and the deployment files copied
+by CI; they do not need Git, Python, or `uv`. A failed service cutover automatically restores the previous images.
+
+Repository deployment secrets are `SSH_HOST`, `SSH_USER`, `SSH_KEY`, and `SSH_KNOWN_HOSTS`. The last value must contain
+the pinned OpenSSH `known_hosts` entry for the production host; CI intentionally does not trust a live `ssh-keyscan`.
+
 The API exposes `/livez` and database/schema-aware `/readyz` on port 8000. The bot and worker expose the same endpoints
 on their process-local `SQUID_BOT_HEALTH_PORT` (8001) and `SQUID_WORKER_HEALTH_PORT` (8002) listeners.
 

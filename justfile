@@ -18,15 +18,6 @@ run: stop
     {{python}} app.py
 
 [unix]
-deploy: stop _pull sync
-    #!{{shebang}}
-    nohup {{python}} app.py "&"
-
-# Needed to order the tasks correctly
-_pull:
-    git pull
-
-[unix]
 stop:
     #!{{shebang}}
     pkill -f app.py || true
