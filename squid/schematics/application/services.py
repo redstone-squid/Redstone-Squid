@@ -37,6 +37,7 @@ from squid.schematics.domain.models import (
 from squid.schematics.errors import (
     InvalidSchematicError,
     SchematicNotFoundError,
+    SchematicRenderUnavailableError,
     SchematicSupportUnavailableError,
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
@@ -51,17 +52,6 @@ class IngestedSchematic:
 
     sha256: str
     analysis: SchematicAnalysis
-
-
-class SchematicStorageMaintenance:
-    """Perform storage repair without constructing analysis or rendering adapters."""
-
-    def __init__(self, store: SchematicStore) -> None:
-        self._store = store
-
-    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
-        """Backfill and recover artifact state in a bounded batch."""
-        return await self._store.maintain_storage(limit=limit)
 
 
 class SchematicService:
@@ -107,7 +97,6 @@ class SchematicService:
         self._render_request = render_request or RenderRequest()
         self._render_max_block_count = render_max_block_count
         self._render_max_bounding_volume = render_max_bounding_volume
-        self._render_attempted: set[tuple[int, str]] = set()
         self._render_warning_emitted = False
         self._poisoned: set[str] = set()
         """Digests of files that killed a worker. Re-analysing one would kill the next worker
@@ -314,21 +303,23 @@ class SchematicService:
     async def prepare_render(self, build_id: int) -> PreparedRender | None:
         """Render a primary schematic once, or return its recipe-matched cached URL.
 
-        Rendering is enrichment: disabled support, an oversized build, a bad pack, or a native
-        failure all return `None` so submission and voting continue unaffected.
+        Disabled support and deliberately skipped oversized builds return ``None``. Operational
+        failures propagate so the durable render queue can retry or dead-letter the intent.
         """
-        if not self._render_enabled or self._resource_pack is None or not self._available:
-            self._warn_render_once("Schematic rendering is disabled or unavailable.")
+        if not self._render_enabled:
             return None
+        if self._resource_pack is None or not self._available:
+            msg = "Schematic rendering is enabled but its worker resources are unavailable."
+            raise SchematicRenderUnavailableError(msg)
         try:
             capabilities = await self._analyzer.capabilities()
             if not capabilities.can_render:
-                self._warn_render_once("The schematic engine has no rendering adapter.")
-                return None
+                msg = capabilities.unavailable_reason or "The schematic engine has no rendering adapter."
+                raise SchematicRenderUnavailableError(msg)
             pack_data, pack_sha256 = await self._resource_pack.load()
         except SquidError:
             self._warn_render_once("The configured schematic resource pack is unavailable.", exc_info=True)
-            return None
+            raise
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -374,10 +365,6 @@ class SchematicService:
                 cached_url=cached.url,
             )
 
-        attempt = (stored.id, recipe_hash)
-        if attempt in self._render_attempted:
-            return None
-        self._render_attempted.add(attempt)
         data = await self._store.get_file(stored.file_sha256)
         if data is None:
             return None
@@ -394,7 +381,7 @@ class SchematicService:
                     "squid.schematic.operation": "render",
                 },
             )
-            return None
+            raise
         except SquidError:
             logger.warning(
                 "Could not render the schematic for build %s; skipping preview.",
@@ -406,7 +393,7 @@ class SchematicService:
                     "squid.schematic.operation": "render",
                 },
             )
-            return None
+            raise
         if not png.startswith(b"\x89PNG\r\n\x1a\n"):
             logger.warning(
                 "The schematic renderer returned a non-PNG payload for build %s.",
@@ -417,7 +404,7 @@ class SchematicService:
                     "squid.schematic.operation": "render",
                 },
             )
-            return None
+            raise SchematicRenderUnavailableError()
         return PreparedRender(
             schematic_id=stored.id,
             recipe_hash=recipe_hash,
@@ -426,7 +413,7 @@ class SchematicService:
             png=png,
         )
 
-    async def record_render(self, render: PreparedRender, url: str) -> StoredRender:
+    async def record_render(self, render: PreparedRender, url: str, object_key: str) -> StoredRender:
         """Persist the uploaded URL for a freshly prepared render."""
         if render.png is None:
             msg = "Only a fresh render can be recorded."
@@ -435,10 +422,18 @@ class SchematicService:
             render.schematic_id,
             render.recipe_hash,
             url,
+            object_key,
             width=render.width,
             height=render.height,
             byte_size=len(render.png),
         )
+
+    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+        """Return one registered PNG preview from private object storage."""
+        content = await self._store.get_render_content(recipe_hash, max_bytes=max_bytes)
+        if content is None:
+            raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
+        return content
 
     def _warn_render_once(self, message: str, *, exc_info: bool = False) -> None:
         if self._render_warning_emitted:

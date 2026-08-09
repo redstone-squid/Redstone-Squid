@@ -141,11 +141,14 @@ class SchematicStore(Protocol):
         schematic_id: int,
         recipe_hash: str,
         url: str,
+        object_key: str,
         *,
         width: int,
         height: int,
         byte_size: int,
     ) -> StoredRender: ...
+
+    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         """Persist moderator-facing simulation evidence for one attachment."""

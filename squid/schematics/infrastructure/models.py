@@ -183,12 +183,39 @@ class SchematicRender(Base, kw_only=True):
     recipe_hash: Mapped[str] = mapped_column(Text, nullable=False)
     """SHA-256 of the pack, camera recipe, output dimensions, and analyzer version."""
     url: Mapped[str] = mapped_column(Text, nullable=False)
+    object_key: Mapped[str | None] = mapped_column(Text, default=None)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+class SchematicRenderQueueItem(Base, kw_only=True):
+    """A durable request to render and publish one build's primary schematic."""
+
+    __tablename__ = "schematic_render_queue"
+    __table_args__ = (
+        Index(
+            "schematic_render_queue_ready_idx",
+            "enqueued_at",
+            postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
+        ),
+    )
+
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="schematic_render_queue_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    enqueued_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class SchematicJob(Base, kw_only=True):

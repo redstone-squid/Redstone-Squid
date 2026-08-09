@@ -510,16 +510,14 @@ and cached in worker globals.
 GPU: `python:3.12-slim` has no adapter. Add an optional Dockerfile layer
 (`ARG WITH_SOFTWARE_GPU=0`) installing `mesa-vulkan-drivers libvulkan1` (~120 MB) with
 `WGPU_BACKEND=vulkan`. lavapipe is a software Vulkan ICD — correct output, seconds per
-frame. Acceptable for a background task, **never** inside an interaction response: renders
-are always fire-and-forget after the build posts, then the vote message is edited via the
-existing `BuildHandler.update_messages()`.
+frame. Acceptable for a background task, **never** inside an interaction response: render
+intents are persisted alongside the primary schematic and completed by the worker process.
 
 Degradation ladder — nucleation missing → `/build schematic *` never registered
 (check `services.schematics.available` in `squid/bot/submission/__init__.py::setup`);
-render disabled/no pack/no adapter → everything else works, render skipped, warned **once**
-at WARNING not per request; schematic over the caps → skip with a note, don't attempt;
-render crashed/timed out → log and skip, **never retry** (retrying a poison payload is how
-you get a crash loop).
+render disabled → everything else works and durable intents remain unclaimed; a missing pack
+or adapter and transient native failures use bounded retries before dead-lettering; schematic
+over the caps → acknowledge the intent without attempting a render.
 
 Use `RenderConfig.isometric(w, h)` + `set_sphere_fit(True)` + `set_background(0,0,0,0)` for a
 rotation-stable transparent PNG that reads on both Discord themes. Recipe hash =
@@ -529,21 +527,21 @@ change invalidates cached renders and an identical request never re-renders.
 
 **As built**, render settings are flat fields on `SchematicConfig` (`render_enabled`,
 `render_pack_path`, and so on), which keeps every value reachable through the verified
-single-split `SQUID_SCHEMATIC_RENDER_*` environment names. Remote packs require a configured
-SHA-256; local packs may derive it. The loader fetches lazily, verifies before caching, and
-retains verified bytes for the process lifetime.
+single-split `SQUID_SCHEMATIC_RENDER_*` environment names. Enabled rendering also requires
+`render_public_base_url`; remote packs require a configured SHA-256, while local packs may
+derive it. The worker-owned loader fetches lazily, verifies before caching, and retains
+verified bytes for the process lifetime.
 
 - The worker protocol continues sending pack bytes because any pool worker can receive the
   request. Each persistent worker hashes those bytes and caches the parsed engine
   `ResourcePack`, avoiding repeated native parsing without coupling the parent to an engine
   handle or local worker filesystem path.
-- Submission rendering is a cog-owned background task started only after voting messages have
-  posted. Successful PNGs are uploaded to Catbox as replaceable derived artifacts, added to
-  `render_urls` under the build edit lock, and followed by `BuildHandler.update_messages()`.
-  Cog unload cancels and awaits outstanding renders.
-- The service checks cached recipes before its per-process attempt deny-set. Native crashes,
-  timeouts, invalid PNG output, and configured metric caps all degrade to a logged skip; an
-  uncached recipe is attempted at most once per process.
+- Primary-schematic writes atomically upsert `schematic_render_queue`. The worker claims with a
+  fencing token, performs native rendering, stores the PNG under a content-addressed private
+  object key, registers a stable API URL, and updates `render_urls` under the build edit lease.
+  The database trigger then requests Discord reconciliation; bot restarts cannot strand work.
+- Cached recipes converge without re-rendering. Transient failures back off and exhausted work
+  is retained as a dead letter; invalid or poison payloads cannot create an unbounded crash loop.
 
 ### Phase 4 — simulation + autostack (gated)
 
@@ -735,9 +733,10 @@ End-to-end per phase, in a test guild:
    converted file; `/build schematic convert data_version:2586` reports the loss array.
 2. **Phase 2** — submit a door, then resubmit the same door translated and rotated. The
    second submission's vote card must flag the first.
-3. **Phase 3** — submit with `SQUID_SCHEMATIC_RENDER_ENABLED=1` and a pack configured; the
-   vote card gains a rendered thumbnail after the background task completes. Then unset the
-   pack and confirm submission still succeeds with one WARNING and no user-visible error.
+3. **Phase 3** — submit with `SQUID_SCHEMATIC_RENDER_ENABLED=1`, a pack, and
+   `SQUID_SCHEMATIC_RENDER_PUBLIC_BASE_URL` configured; the vote card gains a rendered thumbnail
+   after the worker completes the durable intent. Stop the bot during rendering and confirm the
+   worker still publishes the image and reconciliation updates the message after reconnect.
 4. **Phase 4** — run the three-door timing experiment *before* implementing; then
    `/build detect-lattice` on an expandable extender and check the reported unit cell against
    the known module size.

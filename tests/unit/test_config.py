@@ -210,6 +210,7 @@ def test_schematic_render_settings_load_from_flat_environment_names(
         SQUID_DISCORD_TOKEN="discord-token",
         SQUID_SCHEMATIC_RENDER_ENABLED="true",
         SQUID_SCHEMATIC_RENDER_PACK_PATH=str(pack_path),
+        SQUID_SCHEMATIC_RENDER_PUBLIC_BASE_URL="https://api.example",
         SQUID_SCHEMATIC_RENDER_WIDTH="640",
         SQUID_SCHEMATIC_RENDER_HEIGHT="480",
         SQUID_SCHEMATIC_RENDER_MAX_BLOCK_COUNT="12345",

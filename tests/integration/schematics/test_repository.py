@@ -27,7 +27,11 @@ _SETUP = (
     "CREATE TABLE IF NOT EXISTS builds (id BIGINT PRIMARY KEY)",
     "INSERT INTO builds (id) VALUES (1), (2) ON CONFLICT DO NOTHING",
 )
-_TABLES = [Base.metadata.tables["schematic_files"], Base.metadata.tables["build_schematics"]]
+_TABLES = [
+    Base.metadata.tables["schematic_files"],
+    Base.metadata.tables["build_schematics"],
+    Base.metadata.tables["schematic_render_queue"],
+]
 
 
 @pytest.fixture
@@ -115,6 +119,7 @@ async def test_worker_maintenance_moves_legacy_inline_payloads(
 
 async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
     repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """An engine upgrade re-analyses; accumulating a row per pass would corrupt every count."""
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
@@ -125,6 +130,9 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
     stored = await repository.list_for_build(1)
     assert len(stored) == 1
     assert stored[0].analysis.metrics.block_count == 99
+    async with async_session_factory() as session:
+        queued = await session.scalar(text("SELECT count(*) FROM schematic_render_queue WHERE build_id = 1"))
+    assert queued == 1
 
 
 async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicRepository) -> None:

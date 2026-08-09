@@ -47,6 +47,9 @@ class SchematicFake:
     async def content(self, sha256: str):
         return b"schematic-data" if sha256 == "a" * 64 else None
 
+    async def render_content(self, recipe_hash: str):
+        return b"\x89PNG\r\n\x1a\npreview" if recipe_hash == "b" * 64 else None
+
 
 class VoteFake:
     def __init__(self, session: VoteSessionSnapshot) -> None:
@@ -128,6 +131,19 @@ def test_schematic_content_is_an_attachment(app_factory: tuple[FastAPI, MockData
     assert response.content == b"schematic-data"
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["content-disposition"] == f'attachment; filename="{"a" * 64}.schematic"'
+
+
+def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+    _override(app, schematics=SchematicFake())
+
+    with TestClient(app) as client:
+        response = client.get(f"/v1/schematic-renders/{'b' * 64}/content")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\npreview"
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "public, max-age=31536000, immutable"
 
 
 def test_hidden_vote_session_omits_ballots_and_live_tallies(

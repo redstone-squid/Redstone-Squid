@@ -18,6 +18,7 @@ from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, en
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
+from squid.worker.rendering import SchematicRenderProjector
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class DatabaseWorker:
         keep_database_active: Callable[[], Awaitable[None]],
         config: WorkerConfig,
         schematic_jobs: SchematicJobRunner,
+        schematic_renders: SchematicRenderProjector,
         *,
         supervisor: BackgroundTaskSupervisor | None = None,
     ) -> None:
@@ -38,6 +40,7 @@ class DatabaseWorker:
         self._keep_database_active = keep_database_active
         self._config = config
         self._schematic_jobs = schematic_jobs
+        self._schematic_renders = schematic_renders
         self._supervisor = supervisor or BackgroundTaskSupervisor()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
         self._events = CoreDomainEventRunner(services.events, {"vote_session.closed": (outcome_handler,)})
@@ -54,6 +57,11 @@ class DatabaseWorker:
         self._supervisor.start_periodic(
             self._process_schematic_jobs,
             name="schematic-jobs",
+            interval=self._config.schematic_job_interval_seconds,
+        )
+        self._supervisor.start_periodic(
+            self._process_schematic_renders,
+            name="schematic-renders",
             interval=self._config.schematic_job_interval_seconds,
         )
         self._supervisor.start_periodic(
@@ -107,6 +115,7 @@ class DatabaseWorker:
         required = {
             "core-domain-events",
             "schematic-jobs",
+            "schematic-renders",
             "search-projections",
             "search-embeddings",
             "record-maintenance",
@@ -130,6 +139,10 @@ class DatabaseWorker:
     async def _process_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_jobs", {"squid.surface": "background_loop"}):
             await self._schematic_jobs.process_batch()
+
+    async def _process_schematic_renders(self) -> None:
+        with trace_span("squid.worker.schematic_renders", {"squid.surface": "background_loop"}):
+            await self._schematic_renders.process_batch()
 
     async def _refresh_search(self) -> None:
         with trace_span("squid.worker.search_projection", {"squid.surface": "background_loop"}):
@@ -208,11 +221,22 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 native_analyzer,
                 schematic_config,
             )
+            schematic_renders = SchematicRenderProjector(
+                runtime.services.schematic_renders,
+                runtime.services.schematics,
+                runtime.services.artifacts,
+                runtime.services.builds,
+                str(schematic_config.render_public_base_url)
+                if schematic_config.render_public_base_url is not None
+                else None,
+                enabled=schematic_config.render_enabled,
+            )
             worker = DatabaseWorker(
                 runtime.services,
                 runtime.keep_database_active,
                 resolved_config.worker,
                 schematic_jobs,
+                schematic_renders,
             )
             worker.start()
 

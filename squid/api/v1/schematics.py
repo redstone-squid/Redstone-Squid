@@ -64,6 +64,26 @@ async def get_schematic_content(
     )
 
 
+@router.get(
+    "/schematic-renders/{recipe_hash}/content",
+    response_class=Response,
+    responses={
+        **responses(404, 422, 503),
+        200: {"content": {"image/png": {}}, "description": "Generated schematic preview"},
+    },
+)
+async def get_schematic_render_content(
+    recipe_hash: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], services: Services
+) -> Response:
+    """Return a content-addressed PNG preview from private object storage."""
+    content = await services.schematics.render_content(recipe_hash)
+    return Response(
+        content=content,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 def _offset(signer: CursorSigner, cursor: str | None, binding: str) -> int:
     if cursor is None:
         return 0

@@ -43,12 +43,13 @@ from squid.schematics.application import (
     RenderRequest,
     SchematicAnalyzer,
     SchematicJobService,
+    SchematicRenderJobService,
     SchematicService,
-    SchematicStorageMaintenance,
 )
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
+from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.repository import SchematicRepository
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
@@ -94,11 +95,13 @@ def create_schematic_service(
     config: SchematicConfig,
     artifacts: ArtifactStore,
     jobs: SchematicJobService,
+    *,
+    render_capable: bool = False,
 ) -> SchematicService:
     """Assemble the schematic service over whichever analyzer this process can run."""
     analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
-    if config.render_pack_path is not None or config.render_pack_url is not None:
+    if render_capable and config.render_enabled:
         resource_pack = ResourcePackLoader(
             path=config.render_pack_path,
             url=str(config.render_pack_url) if config.render_pack_url is not None else None,
@@ -120,7 +123,7 @@ def create_schematic_service(
         duplicate_max_comparisons=config.duplicate_max_comparisons,
         duplicate_result_limit=config.duplicate_result_limit,
         duplicate_total_timeout_seconds=config.duplicate_total_timeout_seconds,
-        render_enabled=config.render_enabled,
+        render_enabled=config.render_enabled and render_capable,
         resource_pack=resource_pack,
         render_request=RenderRequest(
             width=config.render_width,
@@ -135,10 +138,18 @@ def create_schematic_service(
 class _ServiceGraph:
     """Lazily assemble one process's services and register owned adapters."""
 
-    def __init__(self, db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> None:
+    def __init__(
+        self,
+        db: DatabaseEngine,
+        config: RuntimeConfig,
+        resources_stack: AsyncExitStack,
+        *,
+        render_capable: bool = False,
+    ) -> None:
         self.db = db
         self.config = config
         self.resources = resources_stack
+        self.render_capable = render_capable
 
     @cached_property
     def restriction_repository(self) -> RestrictionRepository:
@@ -233,6 +244,7 @@ class _ServiceGraph:
             self.config.schematics,
             self.artifacts,
             self.schematic_jobs,
+            render_capable=self.render_capable,
         )
         self.resources.push_async_callback(service.aclose)
         return service
@@ -368,15 +380,16 @@ def create_worker_services(
     db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack
 ) -> WorkerServices:
     """Create only capabilities used by transport-neutral background jobs."""
-    graph = _ServiceGraph(db, config, resources_stack)
+    graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     return WorkerServices(
         builds=graph.builds,
         artifacts=graph.artifacts,
         votes=graph.votes,
         records=graph.record_computation,
         events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
-        schematics=SchematicStorageMaintenance(SchematicRepository(db.async_session, graph.artifacts)),
+        schematics=graph.schematics,
         schematic_jobs=graph.schematic_jobs,
+        schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(run_projection_batch, db.async_session),
     )

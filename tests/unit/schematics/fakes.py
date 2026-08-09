@@ -253,6 +253,7 @@ class FakeSchematicStore:
         schematic_id: int,
         recipe_hash: str,
         url: str,
+        object_key: str,
         *,
         width: int,
         height: int,
@@ -261,6 +262,9 @@ class FakeSchematicStore:
         render = StoredRender(schematic_id, recipe_hash, url, width, height, byte_size)
         self.renders[(schematic_id, recipe_hash)] = render
         return render
+
+    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
+        return None
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         self.simulations[schematic_id] = result

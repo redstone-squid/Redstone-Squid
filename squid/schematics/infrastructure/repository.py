@@ -17,7 +17,12 @@ from squid.schematics.domain.models import (
     SimulationResult,
 )
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile, SchematicRender
+from squid.schematics.infrastructure.models import (
+    BuildSchematic,
+    SchematicFile,
+    SchematicRender,
+    SchematicRenderQueueItem,
+)
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,
@@ -223,6 +228,20 @@ class SchematicRepository:
                     .values(is_primary=False)
                 )
             schematic_id = await session.scalar(statement)
+            if primary:
+                render_job = insert(SchematicRenderQueueItem).values(build_id=build_id)
+                await session.execute(
+                    render_job.on_conflict_do_update(
+                        index_elements=[SchematicRenderQueueItem.build_id],
+                        set_={
+                            "enqueued_at": func.now(),
+                            "claimed_at": None,
+                            "dead_at": None,
+                            "attempts": 0,
+                            "last_error": None,
+                        },
+                    )
+                )
             await session.commit()
         assert schematic_id is not None
         return schematic_id
@@ -318,6 +337,7 @@ class SchematicRepository:
         schematic_id: int,
         recipe_hash: str,
         url: str,
+        object_key: str,
         *,
         width: int,
         height: int,
@@ -330,13 +350,20 @@ class SchematicRepository:
                 build_schematic_id=schematic_id,
                 recipe_hash=recipe_hash,
                 url=url,
+                object_key=object_key,
                 width=width,
                 height=height,
                 byte_size=byte_size,
             )
             .on_conflict_do_update(
                 index_elements=[SchematicRender.build_schematic_id, SchematicRender.recipe_hash],
-                set_={"url": url, "width": width, "height": height, "byte_size": byte_size},
+                set_={
+                    "url": url,
+                    "object_key": object_key,
+                    "width": width,
+                    "height": height,
+                    "byte_size": byte_size,
+                },
             )
             .returning(SchematicRender)
         )
@@ -345,6 +372,20 @@ class SchematicRepository:
             await session.commit()
         assert row is not None
         return _stored_render(row)
+
+    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
+        """Load a registered preview artifact within the API response budget."""
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(SchematicRender.object_key, SchematicRender.byte_size).where(
+                        SchematicRender.recipe_hash == recipe_hash
+                    )
+                )
+            ).first()
+        if row is None or row.object_key is None or row.byte_size > max_bytes:
+            return None
+        return await self._artifacts.get(row.object_key, max_bytes=max_bytes)
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         """Replace the latest moderator-triggered evidence for one schematic."""

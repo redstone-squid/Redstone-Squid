@@ -18,7 +18,7 @@ from squid.events.application import DomainEventService
 from squid.messages.application import MessageService
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
-from squid.schematics.application import SchematicJobService, SchematicService, SchematicStorageMaintenance
+from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
@@ -86,8 +86,9 @@ class WorkerServices:
     votes: VoteService
     records: RecordComputationService
     events: DomainEventService
-    schematics: SchematicStorageMaintenance
+    schematics: SchematicService
     schematic_jobs: SchematicJobService
+    schematic_renders: SchematicRenderJobService
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
 

@@ -26,7 +26,6 @@ from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_c
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_admin
 from squid.builds.application import (
-    BuildEditPatch,
     BuildInferenceService,
     BuildService,
     DoorSubmissionInput,
@@ -45,14 +44,6 @@ logger = logging.getLogger(__name__)
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
-def _validated_artifact_url(value: str) -> str:
-    url = value.strip()
-    if not url.startswith(("https://", "http://")):
-        msg = "The artifact host returned an invalid render URL."
-        raise ValueError(msg)
-    return url
-
-
 class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
     """A cog with commands to submit builds."""
 
@@ -60,7 +51,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     builds: BuildService
     inference: BuildInferenceService
     messages: MessageService
-    _schematic_render_tasks: set[asyncio.Task[None]]
 
     @fix_converter_annotations
     class SubmitDoorFlags(commands.FlagConverter):
@@ -260,56 +250,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),
         )
-        self._schedule_schematic_render(build)
-
-    def _schedule_schematic_render(self, build: Build) -> None:
-        """Start rendering only after voting messages exist, without delaying submission."""
-        if build.id is None:
-            return
-        task = self.bot.background_tasks.start(
-            self._render_schematic_preview(build.id),
-            name=f"schematic-preview-{build.id}",
-        )
-        self._schematic_render_tasks.add(task)
-        task.add_done_callback(self._schematic_render_tasks.discard)
-
-    async def _render_schematic_preview(self, build_id: int) -> None:
-        """Upload and attach one generated preview; every failure degrades to a log entry."""
-        try:
-            prepared = await self.bot.services.schematics.prepare_render(build_id)
-            if prepared is None:
-                return
-            url = prepared.cached_url
-            if url is None:
-                assert prepared.png is not None
-                url = _validated_artifact_url(
-                    await self.bot.catbox.upload(f"build-{build_id}-render.png", prepared.png, "image/png")
-                )
-                try:
-                    await self.bot.services.schematics.record_render(prepared, url)
-                except SquidError:
-                    logger.warning(
-                        "Could not cache the rendered preview for build %s.",
-                        build_id,
-                        exc_info=True,
-                        extra={"squid.build.id": build_id, "squid.schematic.operation": "render"},
-                    )
-
-            current = await self.builds.get(build_id)
-            if current is None:
-                return
-            if url not in current.render_urls:
-                patch = BuildEditPatch(render_urls=[*current.render_urls, url])
-                async with self.builds.edit(build_id, patch, blocking=True) as lease:
-                    current = await lease.commit()
-            await self.bot.for_build(current).update_messages()
-        except Exception:
-            logger.warning(
-                "Could not generate the schematic preview for build %s.",
-                build_id,
-                exc_info=True,
-                extra={"squid.build.id": build_id, "squid.schematic.operation": "render"},
-            )
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_id: int
@@ -422,7 +362,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
         for build in builds:
             await self.bot.for_build(build).post_for_voting(type="add")
-            self._schedule_schematic_render(build)
 
     @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
     @check_is_home_server_trusted_or_global_admin()

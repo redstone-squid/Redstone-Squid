@@ -299,7 +299,7 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert prepared is not None
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == b"resource-pack"
-    await schematics.record_render(prepared, "https://cdn.example/render.png")
+    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
 
     cached = await schematics.prepare_render(7)
     assert cached is not None
@@ -326,13 +326,14 @@ async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCap
     assert vars(caplog.records[-1])["squid.schematic.operation"] == "render"
 
 
-async def test_render_worker_crash_is_not_retried() -> None:
+async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
     analyzer = FakeSchematicAnalyzer()
     schematics, _, store = service(analyzer, render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
     analyzer.failure = SchematicWorkerCrashedError(operation="render", exit_code=-9)
 
-    assert await schematics.prepare_render(7) is None
+    with pytest.raises(SchematicWorkerCrashedError):
+        await schematics.prepare_render(7)
     assert await schematics.prepare_render(7) is None
     await store.record_analysis(8, store.records[0][1], analyzer.analysis, primary=True)
     assert await schematics.prepare_render(8) is None

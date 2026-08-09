@@ -101,6 +101,9 @@ class MockSchematics:
     async def content(self, _sha256: str):
         raise SchematicNotFoundError
 
+    async def render_content(self, _recipe_hash: str):
+        raise SchematicNotFoundError
+
 
 class MockVotes:
     async def get_session_by_id(self, _vote_session_id: int):

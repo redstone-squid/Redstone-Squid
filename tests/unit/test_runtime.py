@@ -22,6 +22,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "events",
         "schematics",
         "schematic_jobs",
+        "schematic_renders",
         "search_embeddings",
         "refresh_search_index",
     }

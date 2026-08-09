@@ -383,6 +383,8 @@ class SchematicConfig(_FrozenModel):
     """Operator-supplied resource-pack URL, fetched lazily and cached after verification."""
     render_pack_sha256: str | None = None
     """Expected lowercase SHA-256. Required for remote packs; local packs may derive it."""
+    render_public_base_url: AnyHttpUrl | None = None
+    """Public API origin used for stable worker-published PNG URLs."""
     render_cache_dir: Path = Field(
         default_factory=lambda: (
             Path(os.environ.get("XDG_CACHE_HOME", Path.cwd() / ".cache")) / "redstone-squid" / "schematics"
@@ -445,8 +447,10 @@ class SchematicConfig(_FrozenModel):
         if self.render_pack_path is not None and self.render_pack_url is not None:
             msg = "Configure only one of render_pack_path and render_pack_url."
             raise ValueError(msg)
-        if self.render_enabled and self.render_pack_path is None and self.render_pack_url is None:
-            msg = "Rendering requires render_pack_path or render_pack_url."
+        if self.render_enabled and (
+            (self.render_pack_path is None and self.render_pack_url is None) or self.render_public_base_url is None
+        ):
+            msg = "Rendering requires a resource pack and render_public_base_url."
             raise ValueError(msg)
         if self.render_pack_url is not None and self.render_pack_sha256 is None:
             msg = "Remote render packs require render_pack_sha256."
