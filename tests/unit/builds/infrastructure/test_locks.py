@@ -34,6 +34,8 @@ async def test_build_lock_is_reentrant_only_for_owning_task() -> None:
     assert session.execute.await_count == 1
     await locks.release(42)
     assert session.execute.await_count == 2
+    release_statement = session.execute.await_args_list[-1].args[0]
+    assert "builds.lock_token" in str(release_statement)
 
 
 async def test_build_lock_rejects_release_from_another_task() -> None:

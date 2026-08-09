@@ -10,8 +10,9 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
+from uuid import UUID, uuid4
 
-from sqlalchemy import update
+from sqlalchemy import func, or_, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -25,7 +26,7 @@ class BuildLockTracker:
     """Track task ownership of in-process build leases."""
 
     def __init__(self) -> None:
-        self._lock_owners: dict[int, tuple[asyncio.Task[object], int]] = {}
+        self._lock_owners: dict[int, tuple[asyncio.Task[object], int, UUID]] = {}
 
     @staticmethod
     def current_task() -> asyncio.Task[object]:
@@ -45,39 +46,38 @@ class BuildLockTracker:
         lease = self._lock_owners.get(build_id)
         if lease is None:
             return False
-        owner, count = lease
+        owner, count, token = lease
         if owner is not task:
             return False
-        self._lock_owners[build_id] = (owner, count + 1)
+        self._lock_owners[build_id] = (owner, count + 1, token)
         return True
 
-    def record_acquired(self, build_id: int, task: asyncio.Task[object]) -> None:
+    def record_acquired(self, build_id: int, task: asyncio.Task[object], token: UUID) -> None:
         """Record that *task* has newly acquired *build_id*'s lease."""
-        self._lock_owners[build_id] = (task, 1)
+        self._lock_owners[build_id] = (task, 1, token)
 
-    def release(self, build_id: int) -> bool:
+    def release(self, build_id: int) -> UUID | None:
         """Release one level of *build_id*'s lease for the current task.
 
         Returns:
-            True if this was the outermost release and the persisted lock
-            should now be released too; False if a nested lease remains, or
-            there was nothing to release.
+            The persisted lease token on the outermost release, or ``None`` if
+            a nested lease remains or there was nothing to release.
 
         Raises:
             RuntimeError: If a task other than the current owner tries to release.
         """
         lease = self._lock_owners.get(build_id)
         if lease is None:
-            return False
-        owner, count = lease
+            return None
+        owner, count, token = lease
         if owner is not self.current_task():
             msg = f"Build {build_id} lock can only be released by its owning task."
             raise InvalidStateError(msg, context={"build_id": build_id})
         if count > 1:
-            self._lock_owners[build_id] = (owner, count - 1)
-            return False
+            self._lock_owners[build_id] = (owner, count - 1, token)
+            return None
         self._lock_owners.pop(build_id, None)
-        return True
+        return token
 
     def clear(self) -> None:
         """Forget all locally-tracked leases."""
@@ -111,20 +111,37 @@ class BuildLockRepository:
     async def _try_acquire(self, build_id: int, task: asyncio.Task[object]) -> bool:
         if self._tracker.is_held_locally(build_id):
             return False
+        token = uuid4()
         async with self._session_factory() as session:
-            statement = update(Build).where(Build.id == build_id, Build.is_locked.is_(False)).values(is_locked=True)
+            statement = (
+                update(Build)
+                .where(
+                    Build.id == build_id,
+                    or_(Build.is_locked.is_(False), Build.lock_expires_at < func.now()),
+                )
+                .values(
+                    is_locked=True,
+                    lock_token=token,
+                    lock_expires_at=func.now() + text("interval '5 minutes'"),
+                )
+            )
             result = cast(CursorResult[Any], await session.execute(statement))
             await session.commit()
         if result.rowcount == 1:
-            self._tracker.record_acquired(build_id, task)
+            self._tracker.record_acquired(build_id, task, token)
             return True
         return False
 
     async def release(self, build_id: int) -> None:
-        if not self._tracker.release(build_id):
+        token = self._tracker.release(build_id)
+        if token is None:
             return
         async with self._session_factory() as session:
-            await session.execute(update(Build).where(Build.id == build_id).values(is_locked=False))
+            await session.execute(
+                update(Build)
+                .where(Build.id == build_id, Build.lock_token == token)
+                .values(is_locked=False, lock_token=None, lock_expires_at=None)
+            )
             await session.commit()
 
     @asynccontextmanager
@@ -138,6 +155,9 @@ class BuildLockRepository:
 
     async def clean_stale(self, *, older_than: Instant) -> None:
         async with self._session_factory() as session:
-            await session.execute(update(Build).where(Build.locked_at < older_than).values(is_locked=False))
+            await session.execute(
+                update(Build)
+                .where(Build.lock_expires_at < func.now())
+                .values(is_locked=False, lock_token=None, lock_expires_at=None)
+            )
             await session.commit()
-        self._tracker.clear()

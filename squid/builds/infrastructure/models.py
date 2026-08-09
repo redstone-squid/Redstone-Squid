@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import VECTOR
@@ -20,7 +21,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
@@ -158,6 +159,8 @@ class Build(Base, kw_only=True):
         default=None,
     )
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    lock_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    lock_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     extra_info: Mapped[Info] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict

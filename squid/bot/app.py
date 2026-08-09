@@ -105,6 +105,7 @@ class RedstoneSquid(Bot):
 
         await asyncio.gather(*(self.load_extension(ext) for ext in extensions))
         self.keep_database_active.start()
+        self.clean_dangling_build_locks.start()
 
     @tasks.loop(hours=24)
     async def keep_database_active(self):
@@ -115,6 +116,10 @@ class RedstoneSquid(Bot):
     async def clean_dangling_build_locks(self):
         """Clean up dangling build locks in case some functions failed to release them."""
         await self.services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
+
+    @clean_dangling_build_locks.before_loop
+    async def before_clean_dangling_build_locks(self) -> None:
+        await self.wait_until_ready()
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""
