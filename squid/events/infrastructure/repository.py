@@ -1,15 +1,11 @@
 """PostgreSQL domain-event delivery adapter."""
 
-from datetime import timedelta
-from typing import Any, cast
-
-from sqlalchemy import delete, func, or_, select, text, update
-from sqlalchemy.engine import CursorResult
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from whenever import Instant
 
 from squid.events.application import DomainEvent, DomainEventDelivery
 from squid.events.infrastructure.models import DomainEventDeliveryRecord, DomainEventRecord
+from squid.persistence.queue import ClaimedRowQueue
 
 
 class PostgresDomainEventRepository:
@@ -17,6 +13,12 @@ class PostgresDomainEventRepository:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
+        self._queue = ClaimedRowQueue(
+            session_factory,
+            DomainEventDeliveryRecord,
+            ready_at=DomainEventDeliveryRecord.available_at,
+            claimed_at=DomainEventDeliveryRecord.claimed_at,
+        )
 
     async def claim(self, *, consumer: str, limit: int) -> tuple[DomainEventDelivery, ...]:
         async with self._session_factory() as session:
@@ -28,10 +30,7 @@ class PostgresDomainEventRepository:
                         .where(
                             DomainEventDeliveryRecord.consumer == consumer,
                             DomainEventDeliveryRecord.available_at <= func.now(),
-                            or_(
-                                DomainEventDeliveryRecord.claimed_at.is_(None),
-                                DomainEventDeliveryRecord.claimed_at < func.now() - text("interval '5 minutes'"),
-                            ),
+                            self._queue.reclaimable(),
                         )
                         # Ordered by event id so a consumer observes transitions on one
                         # aggregate in the order they actually happened.
@@ -41,10 +40,7 @@ class PostgresDomainEventRepository:
                     )
                 ).all()
             )
-            claimed_at = Instant.now()
-            for delivery, _ in rows:
-                delivery.claimed_at = claimed_at
-            await session.commit()
+            claimed_at = await self._queue.stamp(tuple(delivery for delivery, _ in rows), session)
             return tuple(
                 DomainEventDelivery(
                     event=DomainEvent(
@@ -63,42 +59,20 @@ class PostgresDomainEventRepository:
             )
 
     async def complete(self, delivery: DomainEventDelivery) -> bool:
-        async with self._session_factory() as session:
-            result = cast(
-                CursorResult[Any],
-                await session.execute(delete(DomainEventDeliveryRecord).where(*self._claim_filter(delivery))),
-            )
-            await session.commit()
-            return bool(result.rowcount)
+        return await self._queue.complete(self._identity(delivery), delivery.claimed_at)
 
     async def fail(self, delivery: DomainEventDelivery, error: str, *, max_attempts: int) -> bool:
-        attempts = delivery.attempts + 1
-        async with self._session_factory() as session:
-            if attempts >= max_attempts:
-                result = cast(
-                    CursorResult[Any],
-                    await session.execute(delete(DomainEventDeliveryRecord).where(*self._claim_filter(delivery))),
-                )
-                await session.commit()
-                return bool(result.rowcount)
-            delay_seconds = min(15 * 2 ** (attempts - 1), 3600)
-            await session.execute(
-                update(DomainEventDeliveryRecord)
-                .where(*self._claim_filter(delivery))
-                .values(
-                    attempts=attempts,
-                    claimed_at=None,
-                    available_at=func.now() + timedelta(seconds=delay_seconds),
-                    last_error=error[:4000],
-                )
-            )
-            await session.commit()
-            return False
+        return await self._queue.fail(
+            self._identity(delivery),
+            delivery.claimed_at,
+            attempts=delivery.attempts,
+            error=error,
+            max_attempts=max_attempts,
+        )
 
     @staticmethod
-    def _claim_filter(delivery: DomainEventDelivery) -> tuple[Any, ...]:
+    def _identity(delivery: DomainEventDelivery) -> tuple[ColumnElement[bool], ...]:
         return (
             DomainEventDeliveryRecord.event_id == delivery.event.id,
             DomainEventDeliveryRecord.consumer == delivery.consumer,
-            DomainEventDeliveryRecord.claimed_at == delivery.claimed_at,
         )
