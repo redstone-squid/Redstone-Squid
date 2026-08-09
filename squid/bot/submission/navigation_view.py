@@ -30,6 +30,16 @@ HOME: Final[str] = "\N{HOUSE BUILDING}"
 NON_MARKDOWN_INFORMATION_SOURCE: Final[str] = "\N{INFORMATION SOURCE}"
 
 
+def disable_view_controls(view: discord.ui.LayoutView) -> None:
+    """Disable ordinary and dynamic interactive components in a session view."""
+    for child in view.walk_children():
+        component: discord.ui.Item[Any] = child
+        if isinstance(child, discord.ui.DynamicItem):
+            component = child.item
+        if isinstance(component, discord.ui.Button | discord.ui.Select):
+            component.disabled = True
+
+
 async def resolve_parent[ClientT: discord.Client](
     parent: "BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]",
 ) -> "BaseNavigableView[ClientT]":
@@ -143,10 +153,7 @@ class StopButton[BaseViewT: BaseNavigableView[Any], ClientT: discord.Client](dis
     async def callback(self, interaction: discord.Interaction[ClientT]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         """Disables all the items in the view."""
         parent = await resolve_parent(self._navigation_parent)
-        for child in parent.walk_children():
-            if isinstance(child, discord.ui.Button | discord.ui.Select):
-                child.disabled = True
-
+        disable_view_controls(parent)
         parent.stop()
         await edit_interaction_layout(interaction, parent)
 

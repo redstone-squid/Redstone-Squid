@@ -1,6 +1,7 @@
 """Models and views for discord interactions."""
 
 import asyncio
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -10,7 +11,11 @@ from whenever import Instant
 
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.submission.navigation_view import BaseNavigableView, MaybeAwaitableBaseNavigableViewFunc
+from squid.bot.submission.navigation_view import (
+    BaseNavigableView,
+    MaybeAwaitableBaseNavigableViewFunc,
+    disable_view_controls,
+)
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import (
     BuildField,
@@ -41,6 +46,10 @@ from squid.core.i18n import _
 if TYPE_CHECKING:
     import squid.bot.app
     import squid.bot.submission.build_handler
+
+logger = logging.getLogger(__name__)
+
+BUILD_INFO_TIMEOUT_SECONDS = 300
 
 
 def _split_values(value: str) -> list[str]:
@@ -624,8 +633,9 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         *,
         parent: BaseNavigableView[BotT] | MaybeAwaitableBaseNavigableViewFunc[BotT] | None = None,
     ):
-        super().__init__(parent=parent, timeout=None)
+        super().__init__(parent=parent, timeout=BUILD_INFO_TIMEOUT_SECONDS)
         self.build = build
+        self._message: discord.Message | None = None
         if build.id is None:
             edit_button = EphemeralBuildEditButton(build)
         else:
@@ -646,9 +656,27 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         if not interaction.response.is_done():
             await interaction.response.defer()
         await self._render(interaction)
-        await interaction.followup.send(view=self, allowed_mentions=no_mentions())
+        self._message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
+            view=self,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
 
     @override
     async def update(self, interaction: discord.Interaction[BotT]) -> None:
         await self._render(interaction)
         await edit_interaction_layout(interaction, self)
+        if interaction.message is not None:
+            self._message = interaction.message
+
+    @override
+    async def on_timeout(self) -> None:
+        """Expire stateful navigation while leaving persistent public actions separate."""
+        disable_view_controls(self)
+        self.stop()
+        if self._message is None:
+            return
+        try:
+            await self._message.edit(view=self, allowed_mentions=no_mentions())
+        except discord.HTTPException:
+            logger.debug("Could not disable expired build info controls", exc_info=True)
