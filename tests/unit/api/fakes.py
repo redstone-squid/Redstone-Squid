@@ -118,14 +118,14 @@ class MockRecords:
         return ()
 
 
-def build_app() -> tuple[FastAPI, MockDatabaseManager]:
+def build_app(*, web_auth: object | None = None) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
     services = cast(
         ApiServices,
         SimpleNamespace(
             api_keys=None,
-            web_auth=None,
+            web_auth=web_auth,
             builds=SimpleNamespace(),
             users=MockUserManager(),
             build_queries=MockBuildQueries(),

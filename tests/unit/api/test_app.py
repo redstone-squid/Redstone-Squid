@@ -7,6 +7,7 @@ from pytest_mock import MockerFixture
 
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.auth.domain.sessions import WebSessionIdentity
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
 from squid.users.errors import MinecraftServiceUnavailableError
@@ -16,6 +17,7 @@ from tests.unit.api.fakes import (
     TEST_UUID,
     TEST_VERIFICATION_CODE,
     MockDatabaseManager,
+    build_app,
 )
 
 
@@ -90,6 +92,75 @@ def test_success_returns_verification_code(client: httpx.Client):
     )
     assert resp.status_code == 201
     assert resp.json() == TEST_VERIFICATION_CODE
+
+
+def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) -> None:
+    web_auth = mocker.Mock()
+    web_auth.authenticate = mocker.AsyncMock(
+        return_value=WebSessionIdentity(
+            session_id="session",
+            user_id=1,
+            discord_id=123,
+            consent_pending=False,
+        )
+    )
+    web_auth.logout = mocker.AsyncMock()
+    app, database = build_app(web_auth=web_auth)
+
+    with TestClient(app, base_url="https://testserver") as session_client:
+        session_client.cookies.set("__Host-squid_session", "session-token")
+        session_client.cookies.set("squid_csrf", "csrf-token")
+        response = session_client.post("/v1/auth/logout")
+
+    assert database.closed
+    assert response.status_code == 403
+    web_auth.logout.assert_not_awaited()
+
+
+def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: MockerFixture) -> None:
+    web_auth = mocker.Mock()
+    web_auth.authenticate = mocker.AsyncMock(
+        return_value=WebSessionIdentity(
+            session_id="session",
+            user_id=1,
+            discord_id=123,
+            consent_pending=False,
+        )
+    )
+    web_auth.logout = mocker.AsyncMock()
+    app, database = build_app(web_auth=web_auth)
+
+    with TestClient(app, base_url="https://testserver") as session_client:
+        session_client.cookies.set("__Host-squid_session", "session-token")
+        session_client.cookies.set("squid_csrf", "csrf-token")
+        response = session_client.post("/v1/auth/logout", headers={"X-CSRF-Token": "wrong-token"})
+
+    assert database.closed
+    assert response.status_code == 403
+    web_auth.logout.assert_not_awaited()
+
+
+def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerFixture) -> None:
+    web_auth = mocker.Mock()
+    web_auth.authenticate = mocker.AsyncMock(
+        return_value=WebSessionIdentity(
+            session_id="session",
+            user_id=1,
+            discord_id=123,
+            consent_pending=False,
+        )
+    )
+    web_auth.logout = mocker.AsyncMock()
+    app, database = build_app(web_auth=web_auth)
+
+    with TestClient(app, base_url="https://testserver") as session_client:
+        session_client.cookies.set("__Host-squid_session", "session-token")
+        session_client.cookies.set("squid_csrf", "csrf-token")
+        response = session_client.post("/v1/auth/logout", headers={"X-CSRF-Token": "csrf-token"})
+
+    assert database.closed
+    assert response.status_code == 204
+    web_auth.logout.assert_awaited_once_with("session-token")
 
 
 async def test_verify_handler_depends_on_users_capability(mocker: MockerFixture) -> None:
