@@ -1,5 +1,6 @@
 """Application orchestration for account-owned revisioned drafts."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -133,6 +134,7 @@ class SubmissionDraftService:
         capacity: AccountDraftCapacity | None = None,
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
+        now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if retention_days < 1:
             msg = "draft retention must be positive"
@@ -141,6 +143,7 @@ class SubmissionDraftService:
         self._manifests = manifests
         self._capacity = capacity or FixedAccountDraftCapacity()
         self._retention_days = retention_days
+        self._now = now
 
     async def create(
         self,
@@ -162,7 +165,7 @@ class SubmissionDraftService:
         missing = manifest.unsupported_required_capabilities(category, client_capabilities, origin)
         if missing:
             raise DraftSchemaUnsupportedError(missing)
-        created_at = now or Instant.now()
+        created_at = now or self._now()
         stored = StoredDraft(
             snapshot=DraftSnapshot(
                 id=draft_id or uuid4(),
@@ -184,6 +187,11 @@ class SubmissionDraftService:
         if draft is None:
             raise DraftNotFoundError(draft_id)
         self._require_owner(draft, account_id)
+        if draft.snapshot.status is DraftStatus.EXPIRED or (
+            draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
+            and draft.expires_at <= self._now()
+        ):
+            raise DraftStateConflictError(DraftStatus.EXPIRED.value, operation="access")
         return draft
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
@@ -204,10 +212,10 @@ class SubmissionDraftService:
         now: Instant | None = None,
     ) -> AppliedDraftChange:
         """Validate field IDs/types and atomically persist one optimistic edit."""
+        current = await self.get_owned(draft_id, account_id)
         replayed = await self._repository.replayed_change(draft_id, account_id, change.idempotency_key)
         if replayed is not None:
             return replayed
-        current = await self.get_owned(draft_id, account_id)
         manifest = await self._pinned_manifest(current, locale)
         candidate = current.snapshot.apply(change)
         errors = manifest.validate_answers(
@@ -218,7 +226,7 @@ class SubmissionDraftService:
         )
         if errors:
             raise DraftIncompleteError(errors)
-        touched_at = now or Instant.now()
+        touched_at = now or self._now()
         return await self._repository.apply_change(
             draft_id,
             account_id,
