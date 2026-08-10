@@ -41,6 +41,10 @@ Mutating operations can be written to the encrypted recovery queue before networ
 reuse the original idempotency key, serialize concurrent queue updates, retain private JSON only in
 encrypted state, and stop automatically on permanent failures or after a bounded backoff budget.
 
+Update metadata is notification-only. The verifier authenticates the exact manifest bytes with a
+pinned Ed25519 release key before parsing them, requires HTTPS artifact URLs, compares independent
+CLI/protocol versions, and can stream-check the signed size and SHA-256 without replacing a binary.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
