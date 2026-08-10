@@ -28,6 +28,8 @@ public sealed interface PendingPlayerAuthorization {
     public val userCode: String
     public val expiresAt: Instant
     public val pollingIntervalSeconds: Int
+    public val verificationUri: String?
+    public val verificationUriComplete: String?
 }
 
 public class PendingPaperAuthorization internal constructor(
@@ -36,16 +38,21 @@ public class PendingPaperAuthorization internal constructor(
     override val userCode: String,
     override val expiresAt: Instant,
     override val pollingIntervalSeconds: Int,
+    override val verificationUri: String?,
+    override val verificationUriComplete: String?,
     public val installationKey: PaperInstallationKey,
     internal val installationId: UUID,
     private val deviceCode: String,
+    internal val exchangeIdempotencyKey: String,
 ) : PendingPlayerAuthorization {
     internal fun <T> useDeviceCode(action: (String) -> T): T = action(deviceCode)
 
     override fun toString(): String =
         "PendingPaperAuthorization(challengeId=$challengeId, javaUuid=$javaUuid, userCode=$userCode, " +
             "expiresAt=$expiresAt, pollingIntervalSeconds=$pollingIntervalSeconds, " +
-            "installationKey=$installationKey, deviceCode=<redacted>)"
+            "installationKey=$installationKey, verificationUri=$verificationUri, " +
+            "verificationUriComplete=$verificationUriComplete, deviceCode=<redacted>, " +
+            "exchangeIdempotencyKey=<redacted>)"
 }
 
 public class PendingFabricAuthorization internal constructor(
@@ -54,8 +61,11 @@ public class PendingFabricAuthorization internal constructor(
     override val userCode: String,
     override val expiresAt: Instant,
     override val pollingIntervalSeconds: Int,
+    override val verificationUri: String?,
+    override val verificationUriComplete: String?,
     private val deviceCode: String,
     private val pkceVerifier: String,
+    internal val exchangeIdempotencyKey: String,
 ) : PendingPlayerAuthorization {
     internal fun <T> useSecrets(action: (deviceCode: String, pkceVerifier: String) -> T): T =
         action(deviceCode, pkceVerifier)
@@ -63,7 +73,8 @@ public class PendingFabricAuthorization internal constructor(
     override fun toString(): String =
         "PendingFabricAuthorization(challengeId=$challengeId, javaUuid=$javaUuid, userCode=$userCode, " +
             "expiresAt=$expiresAt, pollingIntervalSeconds=$pollingIntervalSeconds, " +
-            "deviceCode=<redacted>, pkceVerifier=<redacted>)"
+            "verificationUri=$verificationUri, verificationUriComplete=$verificationUriComplete, " +
+            "deviceCode=<redacted>, pkceVerifier=<redacted>, exchangeIdempotencyKey=<redacted>)"
 }
 
 public data class AuthorizedPlayer(
@@ -106,7 +117,11 @@ public class MinecraftDeviceAuthorizationClient(
             MinecraftAuthProtocolJson.encodePaperExchange(PaperChallengeExchangeRequest(deviceCode))
         }
         return transport.executeJson(
-            authRequest(MinecraftAuthApiPaths.PAPER_EXCHANGE, body, installation.headers()),
+            authRequest(
+                MinecraftAuthApiPaths.PAPER_EXCHANGE,
+                body,
+                installation.headers() + mapOf("Idempotency-Key" to pending.exchangeIdempotencyKey),
+            ),
             "Paper player grant response",
             MinecraftAuthProtocolJson::decodeGrant,
         ).thenApply { response ->
@@ -137,7 +152,11 @@ public class MinecraftDeviceAuthorizationClient(
             MinecraftAuthProtocolJson.encodeFabricExchange(FabricChallengeExchangeRequest(deviceCode, verifier))
         }
         return transport.executeJson(
-            authRequest(MinecraftAuthApiPaths.FABRIC_EXCHANGE, body),
+            authRequest(
+                MinecraftAuthApiPaths.FABRIC_EXCHANGE,
+                body,
+                mapOf("Idempotency-Key" to pending.exchangeIdempotencyKey),
+            ),
             "Fabric player grant response",
             MinecraftAuthProtocolJson::decodeGrant,
         ).thenApply { response ->
@@ -162,9 +181,12 @@ public class MinecraftDeviceAuthorizationClient(
             userCode = response.userCode,
             expiresAt = Instant.parse(response.expiresAt),
             pollingIntervalSeconds = response.pollingIntervalSeconds,
+            verificationUri = response.verificationUri,
+            verificationUriComplete = response.verificationUriComplete,
             installationKey = installationKey,
             installationId = installationId,
             deviceCode = deviceCode,
+            exchangeIdempotencyKey = "minecraft-exchange:${response.id}",
         ).also(::requirePending)
     }
 
@@ -179,8 +201,11 @@ public class MinecraftDeviceAuthorizationClient(
             userCode = response.userCode,
             expiresAt = Instant.parse(response.expiresAt),
             pollingIntervalSeconds = response.pollingIntervalSeconds,
+            verificationUri = response.verificationUri,
+            verificationUriComplete = response.verificationUriComplete,
             deviceCode = deviceCode,
             pkceVerifier = verifier,
+            exchangeIdempotencyKey = "minecraft-exchange:${response.id}",
         ).also(::requirePending)
     }
 

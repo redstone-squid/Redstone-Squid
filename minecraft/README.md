@@ -26,17 +26,50 @@ prefix, refuses plaintext remote HTTP, never follows redirects, applies bounded
 timeouts/body sizes, and requires `no-store` on successful auth responses.
 
 Secret persistence is deliberately a port instead of a plaintext config file.
-`FailClosedMinecraftSecretStore` is the default; a platform must provide an
-audited OS credential-vault adapter before enabling persistence. The in-memory
-adapter exists only in tests. Pending device codes and Fabric PKCE verifiers
-remain in memory, and secret-bearing values redact their string forms.
+Both entrypoints use a bounded ephemeral store for player grants, pending device
+codes, and Fabric PKCE verifiers; everything is lost on restart. Paper reads its
+installation ID and secret only from an environment variable or JVM system
+property and keeps them in memory. An audited OS-vault adapter remains required
+before either platform may persist credentials.
 
-The platform entrypoints still expose the current boundary: commands are
-registered and report that the workflow is not connected. Wiring backend URL
-configuration, an OS-vault adapter, player-facing device-code UI and polling,
-form screens/dialogs, world capture, selection rendering, protection hooks,
-schematic upload, and final submission are follow-up milestones. No placeholder
-reports a submission as accepted.
+The platform entrypoints now wire `/squid link`, category draft creation/resume,
+status, cancellation, and manifest-aware `set`/`unset` edits. Device polling runs
+off the game thread and every result is dispatched back to the Paper/Fabric game
+thread. No command claims final submission, media, world capture, or schematic
+support. The native Brigadier tree remains a better fit than Stick here because
+the same command shape is registered against Paper and Fabric source types and
+all workflow behavior already lives in the platform-neutral core.
+
+## Runtime configuration
+
+The clients refuse to construct a transport unless both public endpoints are
+explicit, absolute HTTPS URLs. The API base must end in `/v1/`. A backend-provided
+`verification_uri_complete` is shown first, then `verification_uri`, with the
+configured approval URI serving only as the compatibility fallback.
+
+| Purpose | JVM system property | Environment variable |
+| --- | --- | --- |
+| API base | `redstonesquid.apiBaseUri` | `SQUID_MINECRAFT_API_BASE_URI` |
+| Public approval page | `redstonesquid.approvalUri` | `SQUID_MINECRAFT_APPROVAL_URI` |
+| Paper installation ID | `redstonesquid.installationId` | `SQUID_MINECRAFT_INSTALLATION_ID` |
+| Paper installation secret | *(not accepted)* | `SQUID_MINECRAFT_INSTALLATION_SECRET` |
+
+System properties take precedence where offered. The Paper secret is
+environment-only because JVM `-D` arguments are commonly exposed by process
+listings and start scripts. Do not put it in `plugin.yml`, a checked-in server
+configuration, command arguments, or process logs. Fabric does not use the two
+Paper-only settings.
+
+Available synchronized-draft commands are:
+
+- `/squid link`
+- `/squid submit` and `/squid submit <category>`
+- `/squid set <field> <value>` and `/squid unset <field>`
+- `/squid status` and `/squid cancel`
+
+List values use comma-separated stable values. Durations require an explicit
+unit such as `20t`, `10rt`, or `1.5s`. This text editor is intentionally small;
+the backend remains authoritative for validation.
 
 ## Build
 

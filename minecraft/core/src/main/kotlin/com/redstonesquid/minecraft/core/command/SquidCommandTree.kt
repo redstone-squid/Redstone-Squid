@@ -1,7 +1,9 @@
 package com.redstonesquid.minecraft.core.command
 
 import com.mojang.brigadier.Command
+import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
+import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
 
 public enum class CommandAudience {
@@ -15,6 +17,8 @@ public enum class SquidCommandAction(
     public val audience: CommandAudience,
 ) {
     SUBMIT("submit", "redstonesquid.submit", CommandAudience.PLAYER),
+    SET("set", "redstonesquid.submit", CommandAudience.PLAYER),
+    UNSET("unset", "redstonesquid.submit", CommandAudience.PLAYER),
     SELECT("select", "redstonesquid.submit", CommandAudience.PLAYER),
     POSITION_ONE("pos1", "redstonesquid.submit", CommandAudience.PLAYER),
     POSITION_TWO("pos2", "redstonesquid.submit", CommandAudience.PLAYER),
@@ -42,7 +46,7 @@ public object SquidCommandTree {
         val root = LiteralArgumentBuilder.literal<S>("squid")
         SquidCommandAction.entries
             .filter { it.audience == CommandAudience.PLAYER }
-            .forEach { root.then(actionNode(it, access, actions)) }
+            .forEach { action -> root.then(playerActionNode(action, access, actions)) }
 
         val server = LiteralArgumentBuilder.literal<S>("server")
             .requires { source ->
@@ -67,4 +71,39 @@ public object SquidCommandTree {
             val result = actions.execute(action, it)
             if (result == 0) Command.SINGLE_SUCCESS else result
         }
+
+    private fun <S> playerActionNode(
+        action: SquidCommandAction,
+        access: CommandAccess<S>,
+        actions: CommandActions<S>,
+    ): LiteralArgumentBuilder<S> {
+        val node = actionNode(action, access, actions)
+        when (action) {
+            SquidCommandAction.SUBMIT -> node.then(
+                RequiredArgumentBuilder.argument<S, String>(
+                    "category",
+                    StringArgumentType.word(),
+                ).executes { actions.execute(action, it) },
+            )
+            SquidCommandAction.SET -> node.then(
+                RequiredArgumentBuilder.argument<S, String>(
+                    "field",
+                    StringArgumentType.word(),
+                ).then(
+                    RequiredArgumentBuilder.argument<S, String>(
+                        "value",
+                        StringArgumentType.greedyString(),
+                    ).executes { actions.execute(action, it) },
+                ),
+            )
+            SquidCommandAction.UNSET -> node.then(
+                RequiredArgumentBuilder.argument<S, String>(
+                    "field",
+                    StringArgumentType.word(),
+                ).executes { actions.execute(action, it) },
+            )
+            else -> Unit
+        }
+        return node
+    }
 }

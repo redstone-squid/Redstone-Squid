@@ -1,8 +1,10 @@
 package com.redstonesquid.minecraft.core.auth
 
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 private val storeKeyPattern = Regex("[A-Za-z0-9_.:-]{1,128}")
 
@@ -100,6 +102,62 @@ public object FailClosedMinecraftSecretStore : MinecraftSecretStore {
     override fun removePlayerGrant(key: PlayerGrantKey): Unit = unavailable()
 
     private fun unavailable(): Nothing = throw SecretPersistenceUnavailableException()
+}
+
+/**
+ * Volatile credential store for platform sessions that cannot safely persist secrets.
+ * Everything is discarded when the server or client exits.
+ */
+public class EphemeralMinecraftSecretStore(
+    private val clock: Clock = Clock.systemUTC(),
+    private val maxInstallationCredentials: Int = 16,
+    private val maxPlayerGrants: Int = 4_096,
+) : MinecraftSecretStore {
+    private val installations = ConcurrentHashMap<PaperInstallationKey, PaperInstallationCredential>()
+    private val grants = ConcurrentHashMap<PlayerGrantKey, PlayerGrantCredential>()
+
+    init {
+        require(maxInstallationCredentials > 0 && maxPlayerGrants > 0) { "credential bounds must be positive" }
+    }
+
+    override fun loadInstallation(key: PaperInstallationKey): PaperInstallationCredential? = installations[key]
+
+    override fun saveInstallation(key: PaperInstallationKey, credential: PaperInstallationCredential) {
+        synchronized(installations) {
+            require(installations.containsKey(key) || installations.size < maxInstallationCredentials) {
+                "ephemeral installation credential capacity was reached"
+            }
+            installations[key] = credential
+        }
+    }
+
+    override fun removeInstallation(key: PaperInstallationKey) {
+        val installationId = installations.remove(key)?.installationId ?: return
+        grants.entries.removeIf { it.key.installationId == installationId }
+    }
+
+    override fun loadPlayerGrant(key: PlayerGrantKey): PlayerGrantCredential? {
+        val grant = grants[key] ?: return null
+        if (!grant.isUsable(clock.instant())) {
+            grants.remove(key, grant)
+            return null
+        }
+        return grant
+    }
+
+    override fun savePlayerGrant(credential: PlayerGrantCredential) {
+        synchronized(grants) {
+            grants.entries.removeIf { !it.value.isUsable(clock.instant()) }
+            require(grants.containsKey(credential.key) || grants.size < maxPlayerGrants) {
+                "ephemeral player grant capacity was reached"
+            }
+            grants[credential.key] = credential
+        }
+    }
+
+    override fun removePlayerGrant(key: PlayerGrantKey) {
+        grants.remove(key)
+    }
 }
 
 public class MissingMinecraftCredentialException(kind: String) : IllegalStateException(

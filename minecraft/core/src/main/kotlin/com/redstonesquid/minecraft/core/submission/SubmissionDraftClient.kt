@@ -98,7 +98,12 @@ public class SubmissionDraftClient(
             ),
             "submission option set",
             FormProtocolJson::decodeOptions,
-        )
+        ).thenApply { optionSet ->
+            require(optionSet.source == source && optionSet.category == category) {
+                "backend option set did not match the requested source and category"
+            }
+            optionSet
+        }
     }
 
     public fun createDraft(
@@ -182,6 +187,7 @@ public class SubmissionDraftClient(
         authenticatedRequest(
             BackendHttpMethod.DELETE,
             SubmissionApiPaths.DRAFT_TEMPLATE.replace("{id}", draftId.toString()),
+            extraHeaders = mapOf("Idempotency-Key" to "$clientInstanceId:delete:$draftId"),
         ),
         expectedStatus = 204,
     )
@@ -190,6 +196,7 @@ public class SubmissionDraftClient(
         method: BackendHttpMethod,
         path: String,
         body: String? = null,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): BackendRequest = BackendRequest(
         method = method,
         pathAndQuery = path,
@@ -197,7 +204,7 @@ public class SubmissionDraftClient(
         headers = authenticationHeaders() + localeHeaders() + mapOf(
             "Cache-Control" to "no-store",
             "Pragma" to "no-cache",
-        ),
+        ) + extraHeaders,
         maxResponseBytes = MAX_DRAFT_RESPONSE_BYTES,
     )
 

@@ -1,6 +1,7 @@
 package com.redstonesquid.minecraft.core.command
 
 import com.mojang.brigadier.CommandDispatcher
+import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.exceptions.CommandSyntaxException
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -19,6 +20,37 @@ class SquidCommandTreeTest {
 
         assertEquals(7, dispatcher.execute("squid submit", source))
         assertEquals(SquidCommandAction.SUBMIT, executed)
+
+        assertEquals(7, dispatcher.execute("squid submit door", source))
+        assertEquals(SquidCommandAction.SUBMIT, executed)
+        assertEquals(7, dispatcher.execute("squid set description compact and fast", source))
+        assertEquals(SquidCommandAction.SET, executed)
+    }
+
+    @Test
+    fun `draft arguments remain native Brigadier values`() {
+        var category: String? = null
+        var field: String? = null
+        var value: String? = null
+        val dispatcher = dispatcher { action, context ->
+            when (action) {
+                SquidCommandAction.SUBMIT -> category = StringArgumentType.getString(context, "category")
+                SquidCommandAction.SET -> {
+                    field = StringArgumentType.getString(context, "field")
+                    value = StringArgumentType.getString(context, "value")
+                }
+                else -> Unit
+            }
+            1
+        }
+        val source = TestSource(setOf("redstonesquid.submit"))
+
+        dispatcher.execute("squid submit door", source)
+        dispatcher.execute("squid set description compact and fast", source)
+
+        assertEquals("door", category)
+        assertEquals("description", field)
+        assertEquals("compact and fast", value)
     }
 
     @Test

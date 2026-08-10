@@ -1,5 +1,6 @@
 package com.redstonesquid.minecraft.protocol
 
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.SerialName
@@ -80,6 +81,10 @@ public class ChallengeCreateResponse(
     public val expiresAt: String,
     @SerialName("polling_interval_seconds")
     public val pollingIntervalSeconds: Int,
+    @SerialName("verification_uri")
+    public val verificationUri: String? = null,
+    @SerialName("verification_uri_complete")
+    public val verificationUriComplete: String? = null,
 ) {
     init {
         requireUuid(id, "challenge ID")
@@ -87,13 +92,16 @@ public class ChallengeCreateResponse(
         require(userCodePattern.matches(userCode)) { "user_code has an invalid format" }
         requireInstant(expiresAt, "expires_at")
         require(pollingIntervalSeconds in 1..300) { "polling_interval_seconds is outside the supported range" }
+        verificationUri?.let { requirePublicHttpsUri(it, "verification_uri") }
+        verificationUriComplete?.let { requirePublicHttpsUri(it, "verification_uri_complete") }
     }
 
     public fun <T> useDeviceCode(action: (String) -> T): T = action(deviceCode)
 
     override fun toString(): String =
         "ChallengeCreateResponse(id=$id, deviceCode=<redacted>, userCode=$userCode, " +
-            "expiresAt=$expiresAt, pollingIntervalSeconds=$pollingIntervalSeconds)"
+            "expiresAt=$expiresAt, pollingIntervalSeconds=$pollingIntervalSeconds, " +
+            "verificationUri=$verificationUri, verificationUriComplete=$verificationUriComplete)"
 }
 
 /** A one-time player bearer response. The token is deliberately absent from [toString]. */
@@ -174,6 +182,14 @@ private fun requireUuid(value: String, name: String) {
 
 private fun requireInstant(value: String, name: String) {
     require(runCatching { Instant.parse(value) }.isSuccess) { "$name must be an RFC 3339 instant" }
+}
+
+private fun requirePublicHttpsUri(value: String, name: String) {
+    val uri = runCatching { URI(value) }.getOrNull()
+    require(
+        uri != null && uri.scheme.equals("https", ignoreCase = true) && uri.host != null &&
+            uri.rawUserInfo == null && uri.rawFragment == null,
+    ) { "$name must be an absolute public HTTPS URI" }
 }
 
 private fun String.isVisibleAscii(): Boolean = all { it.code in 0x21..0x7e }

@@ -57,6 +57,10 @@ class MinecraftDeviceAuthorizationTest {
             assertFalse(installationSecret in request.toString())
             assertTrue(request.requireNoStoreResponse)
         }
+        assertEquals(
+            "minecraft-exchange:123e4567-e89b-12d3-a456-426614174020",
+            transport.requests.last().headers["Idempotency-Key"],
+        )
     }
 
     @Test
@@ -145,7 +149,9 @@ class MinecraftDeviceAuthorizationTest {
           "device_code":"abcdefghijklmnopqrstuvwxyzABCDE_123456",
           "user_code":"ABCD-EFGH-IJKL-MNOP",
           "expires_at":"2030-01-01T00:05:00Z",
-          "polling_interval_seconds":5
+          "polling_interval_seconds":5,
+          "verification_uri":"https://www.example.test/link",
+          "verification_uri_complete":"https://www.example.test/link?code=ABCD-EFGH-IJKL-MNOP"
         }
         """.trimIndent()
 

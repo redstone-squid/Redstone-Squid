@@ -2,6 +2,7 @@ package com.redstonesquid.minecraft.protocol
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -34,7 +35,9 @@ class MinecraftAuthProtocolTest {
               "device_code":"abcdefghijklmnopqrstuvwxyzABCDE_123456",
               "user_code":"ABCD-EFGH-IJKL-MNOP",
               "expires_at":"2030-01-01T00:00:00Z",
-              "polling_interval_seconds":5
+              "polling_interval_seconds":5,
+              "verification_uri":"https://www.example.test/link",
+              "verification_uri_complete":"https://www.example.test/link?code=ABCD-EFGH-IJKL-MNOP"
             }
             """.trimIndent(),
         )
@@ -53,7 +56,30 @@ class MinecraftAuthProtocolTest {
 
         assertTrue("<redacted>" in challenge.toString())
         assertFalse("abcdefghijklmnopqrstuvwxyzABCDE_123456" in challenge.toString())
+        assertEquals("https://www.example.test/link", challenge.verificationUri)
+        assertEquals(
+            "https://www.example.test/link?code=ABCD-EFGH-IJKL-MNOP",
+            challenge.verificationUriComplete,
+        )
         assertTrue("<redacted>" in grant.toString())
         assertFalse("sqpt_" in grant.toString())
+    }
+
+    @Test
+    fun `challenge rejects a plaintext verification endpoint`() {
+        assertFailsWith<IllegalArgumentException> {
+            MinecraftAuthProtocolJson.decodeChallenge(
+                """
+                {
+                  "id":"123e4567-e89b-12d3-a456-426614174000",
+                  "device_code":"abcdefghijklmnopqrstuvwxyzABCDE_123456",
+                  "user_code":"ABCD-EFGH-IJKL-MNOP",
+                  "expires_at":"2030-01-01T00:00:00Z",
+                  "polling_interval_seconds":5,
+                  "verification_uri":"http://www.example.test/link"
+                }
+                """.trimIndent(),
+            )
+        }
     }
 }
