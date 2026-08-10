@@ -84,16 +84,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             msg = "The build must be pending to post it."
             raise ValueError(msg)
 
-        layout = await self.render_layout()
-        messages = await asyncio.gather(
-            *(
-                vote_channel.send(view=layout, allowed_mentions=no_mentions())
-                for vote_channel in await self.get_channels_to_post_to()
-            )
-        )
-
-        assert build.submitter_id is not None
-        await BuildVoteSession.create(self.bot, messages, build.submitter_id, build, type)
+        await BuildVoteSession.ensure_submission(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
         """Gets the original message of the build."""

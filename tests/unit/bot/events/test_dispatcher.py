@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock
 from whenever import Instant
 
 from squid.bot.events.dispatcher import DomainEventCog
-from squid.events import DomainEvent, DomainEventDelivery
+from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 
 
-def _delivery(event_type: str = "build.confirmed") -> DomainEventDelivery:
+def _delivery(event_type: str = "build.confirmed", *, schema_version: int = 1) -> DomainEventDelivery:
     event = DomainEvent(
         id=1,
         event_type=event_type,
@@ -17,6 +17,7 @@ def _delivery(event_type: str = "build.confirmed") -> DomainEventDelivery:
         aggregate_id=42,
         occurred_at=Instant.from_utc(2026, 8, 9),
         payload={},
+        schema_version=schema_version,
     )
     return DomainEventDelivery(event=event, consumer="discord", attempts=0, claimed_at=Instant.from_utc(2026, 8, 9))
 
@@ -51,6 +52,16 @@ async def test_an_unhandled_event_type_is_acknowledged_rather_than_retried() -> 
     bot.services.domain_events.fail.assert_not_awaited()
 
 
+async def test_missing_submission_delivery_handler_is_not_acknowledged() -> None:
+    cog, bot = _cog()
+    bot.services.domain_events.fail.return_value = False
+
+    await cog._process(_delivery("build.submitted"))
+
+    bot.services.domain_events.fail.assert_awaited_once()
+    bot.services.domain_events.complete.assert_not_awaited()
+
+
 async def test_a_failing_handler_is_retried_and_not_acknowledged() -> None:
     handler = AsyncMock()
     handler.handle.side_effect = RuntimeError("boom")
@@ -60,6 +71,18 @@ async def test_a_failing_handler_is_retried_and_not_acknowledged() -> None:
     await cog._process(_delivery())
 
     bot.services.domain_events.fail.assert_awaited_once()
+    bot.services.domain_events.complete.assert_not_awaited()
+
+
+async def test_an_unsupported_event_version_is_rejected() -> None:
+    handler = AsyncMock()
+    handler.handle.side_effect = UnsupportedEventVersionError("unsupported")
+    cog, bot = _cog(handler)
+
+    await cog._process(_delivery(schema_version=99))
+
+    bot.services.domain_events.reject.assert_awaited_once()
+    bot.services.domain_events.fail.assert_not_awaited()
     bot.services.domain_events.complete.assert_not_awaited()
 
 

@@ -73,6 +73,32 @@ class VoteService:
             options=options,
         )
 
+    async def ensure_build_submission_vote(
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+    ) -> int:
+        """Return the one initial review session for a submitted build.
+
+        Domain events are delivered at least once and the legacy Discord submit path
+        can race the event consumer. The repository serializes both callers by build
+        so they converge on one session.
+        """
+        options = normalize_vote_options(options, kind="build")
+        return await self._repository.get_or_create_build_submission_session(
+            author_account_id=author_account_id,
+            pass_threshold=pass_threshold,
+            fail_threshold=fail_threshold,
+            build_id=build_id,
+            changes=changes,
+            options=options,
+        )
+
     async def start_delete_log_vote(
         self,
         *,

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import cast
 
-from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -54,6 +54,38 @@ class VoteRepository:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
+
+    async def get_or_create_build_submission_session(
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+    ) -> int:
+        """Serialize initial-review creation and return the existing session on retry."""
+        options = normalize_vote_options(options, kind="build")
+        async with self._session_factory.begin() as session:
+            lock_key = f"build-submission-vote:{build_id}"
+            await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))))
+            existing = await session.scalar(
+                select(BuildVoteSession.vote_session_id)
+                .join(VoteSession, VoteSession.id == BuildVoteSession.vote_session_id)
+                .where(BuildVoteSession.build_id == build_id, VoteSession.kind == "build")
+                .order_by(BuildVoteSession.vote_session_id)
+                .limit(1)
+            )
+            if existing is not None:
+                return existing
+            session_id = await self._create_session(
+                session, author_account_id, "build", pass_threshold, fail_threshold, options
+            )
+            await session.execute(
+                insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
+            )
+            return session_id
 
     async def create_build_session(
         self,

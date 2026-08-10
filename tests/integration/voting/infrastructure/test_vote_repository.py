@@ -269,6 +269,34 @@ async def test_vote_aggregates_are_persisted_by_repository(
     ]
 
 
+async def test_initial_build_vote_creation_is_idempotent(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = VoteRepository(async_session_factory)
+    first = await repository.get_or_create_build_submission_session(
+        author_account_id=99,
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=42,
+        changes=[("submission_status", "pending", "confirmed")],
+    )
+    second = await repository.get_or_create_build_submission_session(
+        author_account_id=100,
+        pass_threshold=4,
+        fail_threshold=-2,
+        build_id=42,
+        changes=[("submission_status", "pending", "confirmed")],
+    )
+
+    async with async_session_factory() as session:
+        roots = await session.scalar(text("SELECT count(*) FROM vote_sessions"))
+        targets = await session.scalar(text("SELECT count(*) FROM build_vote_sessions WHERE build_id = 42"))
+
+    assert second == first
+    assert roots == 1
+    assert targets == 1
+
+
 async def test_target_failure_rolls_back_vote_root(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

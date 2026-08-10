@@ -1,0 +1,1 @@
+"""Discord voting presentation tests."""
