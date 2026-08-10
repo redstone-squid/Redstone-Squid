@@ -314,6 +314,46 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.publish_domain_event(
+    event_type_input text,
+    schema_version_input integer,
+    aggregate_kind_input text,
+    aggregate_id_input bigint,
+    payload_input jsonb DEFAULT '{}'::jsonb
+) RETURNS bigint
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    new_event_id bigint;
+BEGIN
+    IF event_type_input = '' OR aggregate_kind_input = '' OR schema_version_input < 1 THEN
+        RAISE EXCEPTION 'invalid domain event envelope';
+    END IF;
+
+    INSERT INTO public.domain_events
+        (event_type, schema_version, aggregate_kind, aggregate_id, payload, occurred_at)
+    VALUES (
+        event_type_input,
+        schema_version_input,
+        aggregate_kind_input,
+        aggregate_id_input,
+        coalesce(payload_input, '{}'::jsonb),
+        now()
+    )
+    RETURNING id INTO new_event_id;
+
+    INSERT INTO public.domain_event_deliveries
+        (event_id, consumer, available_at, claimed_at, attempts, last_error)
+    SELECT new_event_id, consumers.name, now(), NULL, 0, NULL
+    FROM public.domain_event_consumers AS consumers;
+
+    -- PostgreSQL delivers NOTIFY only after this transaction commits. It is a
+    -- latency hint; durable consumers still poll domain_event_deliveries.
+    PERFORM pg_notify('squid_domain_events', new_event_id::text);
+    RETURN new_event_id;
+END;
+$$;
+
 CREATE FUNCTION public.emit_domain_event() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -322,7 +362,6 @@ DECLARE
     target_kind text;
     target_id bigint;
     target_payload jsonb;
-    new_event_id bigint;
 BEGIN
     -- Unlike discord_sync_queue, this log records transitions, so an UPDATE that
     -- rewrites a column to the value it already held must not produce an event.
@@ -349,14 +388,7 @@ BEGIN
         target_payload := jsonb_build_object('kind', NEW.kind, 'result', NEW.result);
     END IF;
 
-    INSERT INTO public.domain_events (event_type, aggregate_kind, aggregate_id, payload, occurred_at)
-    VALUES (target_type, target_kind, target_id, target_payload, now())
-    RETURNING id INTO new_event_id;
-
-    INSERT INTO public.domain_event_deliveries
-        (event_id, consumer, available_at, claimed_at, attempts, last_error)
-    SELECT new_event_id, c.name, now(), NULL, 0, NULL
-    FROM public.domain_event_consumers c;
+    PERFORM public.publish_domain_event(target_type, 1, target_kind, target_id, target_payload);
 
     RETURN NULL;
 END;

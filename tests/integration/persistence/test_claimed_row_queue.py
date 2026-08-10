@@ -28,6 +28,7 @@ CREATE TABLE discord_sync_queue (
 CREATE TABLE domain_events (
     id BIGSERIAL PRIMARY KEY,
     event_type TEXT NOT NULL,
+    schema_version SMALLINT NOT NULL DEFAULT 1,
     aggregate_kind TEXT NOT NULL,
     aggregate_id BIGINT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,

@@ -1,6 +1,6 @@
 """SQLAlchemy models for the append-only domain-event log."""
 
-from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Integer, Text, func, text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Identity, Index, Integer, SmallInteger, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
@@ -13,10 +13,14 @@ class DomainEventRecord(Base, kw_only=True):
     """One state transition, recorded once and never coalesced."""
 
     __tablename__ = "domain_events"
-    __table_args__ = (Index("domain_events_aggregate_idx", "aggregate_kind", "aggregate_id"),)
+    __table_args__ = (
+        CheckConstraint("schema_version > 0", name="domain_events_schema_version_positive"),
+        Index("domain_events_aggregate_idx", "aggregate_kind", "aggregate_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"), default=1)
     aggregate_kind: Mapped[str] = mapped_column(Text, nullable=False)
     aggregate_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(

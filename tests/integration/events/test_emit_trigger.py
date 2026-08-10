@@ -25,6 +25,7 @@ CREATE TABLE vote_sessions (
 CREATE TABLE domain_events (
     id BIGSERIAL PRIMARY KEY,
     event_type TEXT NOT NULL,
+    schema_version SMALLINT NOT NULL DEFAULT 1,
     aggregate_kind TEXT NOT NULL,
     aggregate_id BIGINT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -49,9 +50,15 @@ _DROP_SCHEMA = """
 DROP TABLE IF EXISTS
     domain_event_deliveries, domain_event_consumers, domain_events, vote_sessions, builds CASCADE;
 DROP FUNCTION IF EXISTS public.emit_domain_event() CASCADE;
+DROP FUNCTION IF EXISTS public.publish_domain_event(text, integer, text, bigint, jsonb) CASCADE;
 """
 
-_ENTITY_NAMES = {"emit_domain_event", "builds_emit_domain_event", "vote_sessions_emit_domain_event"}
+_ENTITY_NAMES = {
+    "publish_domain_event",
+    "emit_domain_event",
+    "builds_emit_domain_event",
+    "vote_sessions_emit_domain_event",
+}
 
 
 def _managed_sql() -> list[TextClause]:
@@ -66,7 +73,7 @@ def _managed_sql() -> list[TextClause]:
         for entity in ALEMBIC_UTIL_ENTITIES
         if isinstance(entity, PGTrigger) and entity.signature.partition("(")[0] in _ENTITY_NAMES
     ]
-    assert len(functions) == 1
+    assert len(functions) == 2
     assert len(triggers) == 2
     return [*functions, *triggers]
 
@@ -199,3 +206,26 @@ async def test_no_registered_consumers_records_the_event_without_deliveries(
     assert len(await _events(async_session_factory)) == 1
     async with async_session_factory() as session:
         assert (await session.execute(text("SELECT count(*) FROM domain_event_deliveries"))).scalar_one() == 0
+
+
+async def test_publisher_records_the_schema_version(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        event_id = (
+            await session.execute(
+                text("SELECT public.publish_domain_event('example.changed', 2, 'example', 7, '{\"value\": 1}')")
+            )
+        ).scalar_one()
+
+    async with async_session_factory() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT event_type, schema_version, aggregate_kind, aggregate_id, payload "
+                    "FROM domain_events WHERE id = :event_id"
+                ),
+                {"event_id": event_id},
+            )
+        ).one()
+    assert row == ("example.changed", 2, "example", 7, {"value": 1})

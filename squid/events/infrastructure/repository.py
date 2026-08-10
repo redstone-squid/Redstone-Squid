@@ -47,6 +47,7 @@ class PostgresDomainEventRepository:
                     event=DomainEvent(
                         id=event.id,
                         event_type=event.event_type,
+                        schema_version=event.schema_version,
                         aggregate_kind=event.aggregate_kind,
                         aggregate_id=event.aggregate_id,
                         occurred_at=event.occurred_at,

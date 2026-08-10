@@ -17,6 +17,7 @@ class DomainEvent:
     aggregate_id: int
     occurred_at: Instant
     payload: dict[str, object] = field(default_factory=dict)
+    schema_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)
