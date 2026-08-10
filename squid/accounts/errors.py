@@ -71,9 +71,15 @@ class ConsentRequiredError(ValidationError):
     default_resource = "account"
     default_end_user_action = _("Review and accept the current privacy notice, then try again.")
 
-    def __init__(self, discord_id: int) -> None:
-        super().__init__(context={"discord_id": discord_id})
+    def __init__(self, discord_id: int | None = None, *, account_id: int | None = None) -> None:
+        context: dict[str, int] = {}
+        if discord_id is not None:
+            context["discord_id"] = discord_id
+        if account_id is not None:
+            context["account_id"] = account_id
+        super().__init__(context=context)
         self.discord_id = discord_id
+        self.account_id = account_id
 
 
 class CreatorAliasNotFoundError(NotFoundError):

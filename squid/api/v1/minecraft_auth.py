@@ -31,6 +31,7 @@ from squid.core.errors import (
     ConflictError,
     NotFoundError,
     RateLimitedError,
+    ServiceUnavailableError,
     SquidError,
     ValidationError,
 )
@@ -126,8 +127,8 @@ class PlayerAuthorizationHttpService(Protocol):
 class MinecraftAuthApiServices(Protocol):
     """Narrow runtime bundle required when this router is integrated."""
 
-    minecraft_installations: PaperInstallationHttpService
-    minecraft_player_authorization: PlayerAuthorizationHttpService
+    minecraft_installations: PaperInstallationHttpService | None
+    minecraft_player_authorization: PlayerAuthorizationHttpService | None
 
 
 class _MinecraftAuthRuntime(Protocol):
@@ -141,13 +142,19 @@ class _MinecraftAuthAppState(Protocol):
 def get_installation_service(request: Request) -> PaperInstallationHttpService:
     """Resolve Paper installation operations without importing the global runtime."""
     state = cast(_MinecraftAuthAppState, request.app.state)
-    return state.runtime.services.minecraft_installations
+    service = state.runtime.services.minecraft_installations
+    if service is None:
+        raise ServiceUnavailableError(resource="minecraft_auth")
+    return service
 
 
 def get_player_authorization_service(request: Request) -> PlayerAuthorizationHttpService:
     """Resolve player authorization operations without importing the global runtime."""
     state = cast(_MinecraftAuthAppState, request.app.state)
-    return state.runtime.services.minecraft_player_authorization
+    service = state.runtime.services.minecraft_player_authorization
+    if service is None:
+        raise ServiceUnavailableError(resource="minecraft_auth")
+    return service
 
 
 async def current_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
@@ -189,7 +196,6 @@ AuthenticatedPaper = Annotated[AuthenticatedPaperInstallation, Depends(authentic
 router = APIRouter(
     prefix="/minecraft/auth",
     tags=["minecraft-authentication"],
-    dependencies=[Depends(enforce_request_idempotency)],
 )
 
 
@@ -198,6 +204,7 @@ router = APIRouter(
     response_model=IssuedInstallationResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def create_installation(
     payload: InstallationCreateRequest,
@@ -239,6 +246,7 @@ async def list_installations(
     "/paper/installations/{installation_id}/rotate",
     response_model=IssuedInstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def rotate_installation(
     installation_id: UUID,
@@ -256,6 +264,7 @@ async def rotate_installation(
     "/paper/installations/{installation_id}/profile",
     response_model=InstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def update_installation_profile(
     installation_id: UUID,
@@ -280,6 +289,7 @@ async def update_installation_profile(
     "/paper/installations/{installation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def revoke_installation(
     installation_id: UUID,
@@ -370,6 +380,7 @@ async def exchange_fabric_challenge(
     "/challenges/approval",
     response_model=ChallengeApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def approve_challenge(
     payload: ChallengeApprovalRequest,
@@ -387,6 +398,7 @@ async def approve_challenge(
     "/grants/{grant_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def revoke_grant(
     grant_id: UUID,

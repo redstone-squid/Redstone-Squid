@@ -53,6 +53,13 @@ class FakeMinecraftAuthorizationRepository:
     async def get_installation(self, installation_id: UUID) -> PaperInstallation | None:
         return self.installations.get(installation_id)
 
+    async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+        return tuple(
+            installation
+            for installation in self.installations.values()
+            if installation.owner_account_id == owner_account_id
+        )
+
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:
         return tuple(
             PublishedPaperServer(installation_id=value.id, profile=value.profile, created_at=value.created_at)

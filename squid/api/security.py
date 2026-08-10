@@ -4,11 +4,14 @@ import hmac
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import Depends, Request, Security
 from fastapi.security import APIKeyHeader
 
 from squid.core.errors import AuthenticationError, AuthorizationError
+from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX, PLAYER_TOKEN_PREFIX
+from squid.minecraft_auth.errors import MinecraftAuthorizationError
 
 
 class Scope(StrEnum):
@@ -25,12 +28,16 @@ class Scope(StrEnum):
 class Principal:
     """Transport-neutral authenticated or anonymous caller identity."""
 
-    kind: Literal["anonymous", "service", "account"]
+    kind: Literal["anonymous", "service", "account", "minecraft_player"]
     subject: str
     scopes: frozenset[Scope] = frozenset()
     discord_id: int | None = None
     account_id: int | None = None
     consent_pending: bool = False
+    minecraft_origin: Literal["paper", "fabric"] | None = None
+    java_uuid: UUID | None = None
+    installation_id: UUID | None = None
+    grant_id: UUID | None = None
 
 
 ANONYMOUS = Principal(kind="anonymous", subject="anonymous", scopes=frozenset({Scope.BUILDS_READ}))
@@ -76,6 +83,8 @@ async def current_principal(
             account_id=identity.account_id,
             consent_pending=identity.consent_pending,
         )
+    if len(authorization) > 4096:
+        raise AuthenticationError
     config = request.app.state.config
     if hmac.compare_digest(authorization, config.api.secret.get_secret_value()):
         return Principal(
@@ -84,6 +93,37 @@ async def current_principal(
             scopes=frozenset(Scope),
         )
     token = authorization.removeprefix("Bearer ")
+    if token.startswith(f"{PLAYER_TOKEN_PREFIX}_"):
+        players = request.app.state.runtime.services.minecraft_player_authorization
+        installations = request.app.state.runtime.services.minecraft_installations
+        if players is None:
+            raise AuthenticationError
+        try:
+            installation_id = request.headers.get("X-Squid-Installation-ID")
+            installation_secret = request.headers.get("X-Squid-Installation-Secret")
+            if installation_id is None and installation_secret is None:
+                context = await players.authenticate_fabric_player(token)
+            else:
+                if installations is None or installation_id is None or installation_secret is None:
+                    raise AuthenticationError
+                if len(installation_id) > 36 or not 32 <= len(installation_secret) <= 512:
+                    raise AuthenticationError
+                parsed_id = UUID(installation_id)
+                installation = await installations.authenticate(
+                    f"{INSTALLATION_TOKEN_PREFIX}_{parsed_id.hex}_{installation_secret}"
+                )
+                context = await players.authenticate_paper_player(token, installation)
+        except (MinecraftAuthorizationError, ValueError):
+            raise AuthenticationError from None
+        return Principal(
+            kind="minecraft_player",
+            subject=f"minecraft-grant:{context.grant_id}",
+            account_id=context.account_id,
+            minecraft_origin=context.origin.value,
+            java_uuid=context.java_uuid,
+            installation_id=context.installation_id,
+            grant_id=context.grant_id,
+        )
     api_keys = request.app.state.runtime.services.api_keys
     if api_keys is None:
         raise AuthenticationError

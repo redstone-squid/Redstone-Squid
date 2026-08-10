@@ -12,7 +12,7 @@ from squid.api.security import Principal, current_principal
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-_REPLAYED_HEADERS = frozenset({"content-language", "content-type", "etag", "location"})
+_REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
 _STATE_KEY = "squid_idempotency"
 
 

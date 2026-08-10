@@ -114,6 +114,10 @@ class InstallationCredentialService:
             raise InstallationUnavailableError
         return installation
 
+    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+        """List an account's installations without exposing credential digests."""
+        return await self._repository.list_installations(owner_account_id)
+
     async def update_profile(
         self,
         *,
@@ -400,6 +404,8 @@ class PlayerAuthorizationService:
             or not grant.is_active_at(now)
             or not hmac.compare_digest(grant.token_hash, self._codec.digest(SecretPurpose.PLAYER_TOKEN, secret))
         ):
+            raise InvalidPlayerTokenError
+        if not await self._accounts.can_approve(account_id=grant.account_id, java_uuid=grant.java_uuid):
             raise InvalidPlayerTokenError
         return (
             MinecraftPlayerContext(

@@ -129,6 +129,18 @@ class PostgresMinecraftAuthorizationRepository:
             record = await session.get(PaperInstallationRecord, installation_id)
             return None if record is None else _installation(record)
 
+    async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+        """List one account's installations, including revoked entries for audit."""
+        async with self._session_factory() as session:
+            records = (
+                await session.scalars(
+                    select(PaperInstallationRecord)
+                    .where(PaperInstallationRecord.owner_account_id == owner_account_id)
+                    .order_by(PaperInstallationRecord.created_at, PaperInstallationRecord.id)
+                )
+            ).all()
+        return tuple(_installation(record) for record in records)
+
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:
         """Return explicit, active public profiles without credential or owner internals."""
         async with self._session_factory() as session:

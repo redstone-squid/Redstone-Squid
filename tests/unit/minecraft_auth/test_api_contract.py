@@ -261,21 +261,28 @@ async def test_request_schemas_forbid_client_authority_and_unknown_fields() -> N
         ChallengeApprovalRequest.model_validate({"user_code": USER_CODE, "account_id": ACCOUNT_ID})
 
 
-async def test_openapi_declares_paper_headers_and_retry_safe_mutations() -> None:
+async def test_openapi_declares_paper_headers_and_principal_scoped_idempotency() -> None:
     contract = app_with_fakes(FakeInstallations(), FakePlayers()).openapi()
     paths = contract["paths"]
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
     header_names = {parameter["name"] for parameter in paper_start["parameters"] if parameter["in"] == "header"}
 
-    assert {"X-Squid-Installation-ID", "X-Squid-Installation-Secret", "Idempotency-Key"} <= header_names
-    for path, operations in paths.items():
-        for method, operation in operations.items():
-            if method not in {"post", "put", "patch", "delete"}:
-                continue
-            assert any(
-                parameter["in"] == "header" and parameter["name"] == "Idempotency-Key"
-                for parameter in operation.get("parameters", [])
-            ), f"{method.upper()} {path} lacks Idempotency-Key"
+    assert {"X-Squid-Installation-ID", "X-Squid-Installation-Secret"} <= header_names
+    assert "Idempotency-Key" not in header_names
+    account_mutations = (
+        ("/minecraft/auth/paper/installations", "post"),
+        ("/minecraft/auth/paper/installations/{installation_id}/rotate", "post"),
+        ("/minecraft/auth/paper/installations/{installation_id}/profile", "put"),
+        ("/minecraft/auth/paper/installations/{installation_id}", "delete"),
+        ("/minecraft/auth/challenges/approval", "post"),
+        ("/minecraft/auth/grants/{grant_id}", "delete"),
+    )
+    for path, method in account_mutations:
+        operation = paths[path][method]
+        assert any(
+            parameter["in"] == "header" and parameter["name"] == "Idempotency-Key"
+            for parameter in operation.get("parameters", [])
+        ), f"{method.upper()} {path} lacks Idempotency-Key"
 
 
 async def test_routes_derive_account_origin_and_paper_installation_from_dependencies() -> None:
