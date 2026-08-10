@@ -101,7 +101,7 @@ from squid.submissions.infrastructure.finalization_events import (
     PollableFinalizationStatusPublisher,
 )
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.options import ApprovedTagOptionCatalog
+from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
@@ -348,7 +348,7 @@ class _ServiceGraph:
 
     @cached_property
     def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(ApprovedTagOptionCatalog(self.tags))
+        return SubmissionFormService(ApprovedSubmissionOptionCatalog(self.tags, self.version_service))
 
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:
@@ -378,7 +378,7 @@ class _ServiceGraph:
     def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
         return SubmissionFinalizationWorker(
             self.submission_finalization_jobs,
-            BuildSubmissionTarget(self.builds, self.tags),
+            BuildSubmissionTarget(self.builds, self.tags, self.version_service),
             PollableFinalizationStatusPublisher(),
             ExistingBuildReviewPublisher(),
         )

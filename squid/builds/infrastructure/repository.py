@@ -97,9 +97,7 @@ class BuildRepository:
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
         async with self._session_factory() as session:
-            sql_build = await session.scalar(
-                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id)
-            )
+            sql_build = await session.scalar(select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id))
             if sql_build is None:
                 return None
             return await self._mapper.to_domain(session, sql_build)
@@ -541,9 +539,16 @@ class BuildRepository:
         """Get Version objects for the given version strings."""
         qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
 
-        stmt = select(qvn.c.id).where(qvn.c.quantified_name.in_(version_strings))
+        requested = set(version_strings)
+        stmt = select(qvn.c.id, qvn.c.quantified_name).where(qvn.c.quantified_name.in_(requested))
         result = await session.execute(stmt)
-        version_ids = [tup[0] for tup in result.all()]  # result is a list of 1-tuples
+        matches = result.all()
+        found = {row.quantified_name for row in matches}
+        missing = sorted(requested - found)
+        if missing:
+            msg = f"Unknown canonical Minecraft versions: {missing}"
+            raise InvalidBuildError(msg, context={"versions": missing})
+        version_ids = [row.id for row in matches]
 
         stmt = select(Version).where(Version.id.in_(version_ids))
         result = await session.execute(stmt)

@@ -1,4 +1,4 @@
-"""Approved taxonomy-backed submission form options."""
+"""Approved, authoritative submission form options."""
 
 import hashlib
 from collections.abc import Sequence
@@ -7,6 +7,7 @@ from typing import Protocol, override
 from squid.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.submissions.domain import ChoiceOption
 from squid.tags.domain import TagDefinition, TagSemanticKind
+from squid.versions.domain import MinecraftVersion
 
 _SOURCES = {
     "approved_restrictions": TagSemanticKind.RESTRICTION,
@@ -21,11 +22,18 @@ class ApprovedTagDefinitions(Protocol):
     async def public_definitions(self) -> Sequence[TagDefinition]: ...
 
 
-class ApprovedTagOptionCatalog(FormOptionCatalog):
-    """Project approved tag definitions into stable renderer-neutral choices."""
+class CanonicalMinecraftVersions(Protocol):
+    """Read canonical versions recognized by build persistence."""
 
-    def __init__(self, tags: ApprovedTagDefinitions) -> None:
+    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+
+
+class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
+    """Project approved tags and canonical versions into renderer-neutral choices."""
+
+    def __init__(self, tags: ApprovedTagDefinitions, versions: CanonicalMinecraftVersions) -> None:
         self._tags = tags
+        self._versions = versions
 
     @override
     async def options(
@@ -37,6 +45,15 @@ class ApprovedTagOptionCatalog(FormOptionCatalog):
     ) -> FormOptionSet:
         """Return a deterministic content revision for one supported option source."""
         del locale
+        if source == "approved_source_versions":
+            choices = tuple(
+                ChoiceOption(value, value)
+                for value in sorted(
+                    {str(version) for version in await self._versions.list_all()},
+                    key=_version_sort_key,
+                )
+            )
+            return FormOptionSet(source, category, _content_revision(choices), choices)
         try:
             semantic_kind = _SOURCES[source]
         except KeyError as error:
@@ -57,3 +74,8 @@ class ApprovedTagOptionCatalog(FormOptionCatalog):
 def _content_revision(options: tuple[ChoiceOption, ...]) -> int:
     payload = "\n".join(f"{option.value}\0{option.label}" for option in options).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
+
+
+def _version_sort_key(value: str) -> tuple[bool, tuple[int, ...]]:
+    edition, version = value.split(" ", maxsplit=1)
+    return edition != "Java", tuple(-int(part) for part in version.split("."))

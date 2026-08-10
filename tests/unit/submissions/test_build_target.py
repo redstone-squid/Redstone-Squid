@@ -37,6 +37,7 @@ from squid.tags.domain import (
     TagSemanticKind,
     TagValueType,
 )
+from squid.versions.domain import MinecraftVersion
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 MEDIA_ID = UUID("00000000-0000-4000-8000-000000000502")
@@ -78,6 +79,14 @@ class FakeTags:
         return self.definitions
 
 
+class FakeVersions:
+    def __init__(self, versions: tuple[MinecraftVersion, ...] | None = None) -> None:
+        self.versions = versions or (MinecraftVersion("Java", 26, 1, 2),)
+
+    async def list_all(self) -> tuple[MinecraftVersion, ...]:
+        return self.versions
+
+
 def _definition(
     stable_key: str,
     kind: TagSemanticKind,
@@ -116,7 +125,7 @@ def _submission(category: SubmissionCategory) -> NormalizedSubmission:
         description="A synchronized submission",
         creators=("Builder",),
         capture_dimensions=SubmissionDimensions(8, 9, 10),
-        source_version="26.1.2",
+        source_version="Java 26.1.2",
         version_compatibility=">=26.1",
         taxonomy=SubmissionTaxonomy(),
         schematic_policy=SchematicRightsPolicy(
@@ -150,7 +159,9 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
 ) -> None:
     builds = FakeBuilds()
 
-    result = await BuildSubmissionTarget(builds, FakeTags()).create_or_get(_submission(submission_category))
+    result = await BuildSubmissionTarget(builds, FakeTags(), FakeVersions()).create_or_get(
+        _submission(submission_category)
+    )
 
     build, arguments = builds.calls[0]
     assert result.build_id == 41
@@ -188,7 +199,11 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     )
     builds = FakeBuilds()
 
-    result = await BuildSubmissionTarget(builds, FakeTags((restriction, pattern, showcase))).create_or_get(submission)
+    result = await BuildSubmissionTarget(
+        builds,
+        FakeTags((restriction, pattern, showcase)),
+        FakeVersions(),
+    ).create_or_get(submission)
 
     build = builds.calls[0][0]
     assert build.door_dimensions == (3, 4, 2)
@@ -228,7 +243,7 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
     )
     builds = FakeBuilds()
 
-    await BuildSubmissionTarget(builds, FakeTags()).create_or_get(submission)
+    await BuildSubmissionTarget(builds, FakeTags(), FakeVersions()).create_or_get(submission)
 
     build = builds.calls[0][0]
     assert build.extender_orientation == "Upward"
@@ -240,7 +255,7 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
 
 async def test_retries_delegate_the_source_draft_key_and_return_the_existing_build() -> None:
     builds = FakeBuilds()
-    target = BuildSubmissionTarget(builds, FakeTags())
+    target = BuildSubmissionTarget(builds, FakeTags(), FakeVersions())
     submission = _submission(SubmissionCategory.OTHER)
 
     first = await target.create_or_get(submission)
@@ -263,14 +278,27 @@ async def test_retry_returns_existing_build_after_a_taxonomy_option_is_retired()
     )
     builds = FakeBuilds()
     tags = FakeTags((pattern,))
-    target = BuildSubmissionTarget(builds, tags)
+    versions = FakeVersions()
+    target = BuildSubmissionTarget(builds, tags, versions)
     first = await target.create_or_get(submission)
     tags.definitions = ()
+    versions.versions = ()
 
     second = await target.create_or_get(submission)
 
     assert second == first
     assert len(builds.calls) == 1
+
+
+async def test_unknown_source_version_is_actionable_and_never_delegated_to_persistence() -> None:
+    builds = FakeBuilds()
+    submission = replace(_submission(SubmissionCategory.OTHER), source_version="Java 26.1.20")
+
+    with pytest.raises(ActionableSubmissionError) as error:
+        await BuildSubmissionTarget(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+
+    assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    assert builds.calls == []
 
 
 @pytest.mark.parametrize(
@@ -298,13 +326,17 @@ async def test_user_repairable_validation_failures_become_stable_attention_issue
     expected_issue: SubmissionAttentionIssue,
 ) -> None:
     with pytest.raises(ActionableSubmissionError) as error:
-        await BuildSubmissionTarget(FakeBuilds(), FakeTags()).create_or_get(submission)
+        await BuildSubmissionTarget(FakeBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
 
     assert expected_issue in error.value.issues
 
 
 async def test_structured_build_rejection_becomes_target_attention() -> None:
-    target = BuildSubmissionTarget(FakeBuilds(error=InvalidBuildError("invalid")), FakeTags())
+    target = BuildSubmissionTarget(
+        FakeBuilds(error=InvalidBuildError("invalid")),
+        FakeTags(),
+        FakeVersions(),
+    )
 
     with pytest.raises(ActionableSubmissionError) as error:
         await target.create_or_get(_submission(SubmissionCategory.UTILITY))

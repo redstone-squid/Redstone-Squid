@@ -57,7 +57,9 @@ class ChoiceOption:
     label: str
 
     def __post_init__(self) -> None:
-        _require_stable_id(self.value, "choice value")
+        if not self.value.strip() or self.value != self.value.strip() or len(self.value) > 120:
+            msg = "choice values must be 1-120 characters without surrounding whitespace"
+            raise ValueError(msg)
         if not self.label.strip():
             msg = "choice labels cannot be blank"
             raise ValueError(msg)

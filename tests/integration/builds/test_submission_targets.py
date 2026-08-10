@@ -7,7 +7,7 @@ import psycopg2
 import pytest
 from alembic.config import Config
 from psycopg2 import sql
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
@@ -16,10 +16,32 @@ from alembic import command
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import Account
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.errors import InvalidBuildError
+from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.infrastructure.restrictions import RestrictionRepository
+from squid.submissions.application import ActionableSubmissionError
+from squid.submissions.domain import (
+    GeneralSubmissionDetails,
+    NormalizedSubmission,
+    SchematicRightsPolicy,
+    SubmissionAttentionIssue,
+    SubmissionAttentionReason,
+    SubmissionCategory,
+    SubmissionDimensions,
+    SubmissionOrigin,
+    SubmissionSchematicVisibility,
+    SubmissionTaxonomy,
+    VerifiedSubmissionArtifacts,
+)
+from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
+from squid.tags.domain import TagDefinition
+from squid.versions.application import VersionService
 from squid.versions.infrastructure.models import Version
+from squid.versions.infrastructure.repository import VersionRepository
 
 
 @pytest.fixture
@@ -78,6 +100,49 @@ async def _seed_account_and_version(session_factory: async_sessionmaker[AsyncSes
         )
         await session.flush()
         return account.id
+
+
+class NoopEmbeddings:
+    async def prepare(self, build: Build) -> None:
+        del build
+
+    async def index(self, build: Build) -> None:
+        del build
+
+
+class NoApprovedTags:
+    async def public_definitions(self) -> tuple[TagDefinition, ...]:
+        return ()
+
+
+def _normalized_submission(account_id: int, draft_id: uuid.UUID, source_version: str) -> NormalizedSubmission:
+    return NormalizedSubmission(
+        source_draft_id=draft_id,
+        owner_account_id=account_id,
+        origin=SubmissionOrigin.WEB,
+        schema_id="build_submission.v1",
+        schema_revision=1,
+        category=SubmissionCategory.OTHER,
+        display_name="Version integrity test",
+        description=None,
+        creators=("Builder",),
+        capture_dimensions=SubmissionDimensions(3, 4, 5),
+        source_version=source_version,
+        version_compatibility=None,
+        taxonomy=SubmissionTaxonomy(),
+        schematic_policy=SchematicRightsPolicy(
+            visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
+            license=None,
+            rights_attested=False,
+            include_inventories=False,
+            include_free_text=False,
+        ),
+        completion=None,
+        ai_generated=False,
+        sponsor_attribution=False,
+        artifacts=VerifiedSubmissionArtifacts(),
+        details=GeneralSubmissionDetails(),
+    )
 
 
 def _build(category: BuildCategory, account_id: int, *, draft_id: uuid.UUID | None = None) -> Build:
@@ -152,6 +217,44 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     duplicate = _build(BuildCategory.OTHER, account_id, draft_id=draft_id)
     with pytest.raises(IntegrityError):
         await repository.save(duplicate)
+
+
+async def test_submission_target_persists_only_the_exact_canonical_source_version(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_account_and_version(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    versions = VersionService(VersionRepository(migrated_session_factory))
+    builds = BuildService(
+        repository,
+        BuildLockRepository(migrated_session_factory),
+        RestrictionRepository(migrated_session_factory),
+        versions,
+        NoopEmbeddings(),
+    )
+    target = BuildSubmissionTarget(builds, NoApprovedTags(), versions)
+    canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
+
+    result = await target.create_or_get(_normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
+
+    persisted = await repository.get_by_id(result.build_id)
+    assert persisted is not None
+    assert persisted.versions == ["Java 1.21.0"]
+
+    unknown_draft_id = uuid.UUID("88888888-8888-4888-8888-888888888888")
+    with pytest.raises(ActionableSubmissionError) as error:
+        await target.create_or_get(_normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
+
+    assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    assert await repository.get_by_source_submission_draft_id(unknown_draft_id) is None
+
+    invalid_build = _build(BuildCategory.OTHER, account_id)
+    invalid_build.versions = ["Java 1.21.99"]
+    with pytest.raises(InvalidBuildError, match="Unknown canonical Minecraft versions"):
+        await repository.save(invalid_build)
+    assert invalid_build.id is None
+    async with migrated_session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 1
 
 
 async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(

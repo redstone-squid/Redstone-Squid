@@ -137,9 +137,10 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 FormField(
                     id="source_version",
                     label=localize(_("Exact source Minecraft version")),
-                    control=ControlKind.TEXT,
+                    control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
+                    option_source="approved_source_versions",
                     constraints=FieldConstraints(min_length=1, max_length=80),
                 ),
                 FormField(
