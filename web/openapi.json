@@ -404,6 +404,78 @@
         }
       }
     },
+    "/v1/auth/csrf": {
+      "get": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Csrf Token",
+        "description": "Return the session-bound write token to a credentialed CORS frontend.",
+        "operationId": "csrf_token_v1_auth_csrf_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfTokenResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ]
+      }
+    },
     "/v1/auth/discord": {
       "get": {
         "tags": [
@@ -9316,6 +9388,23 @@
         ],
         "title": "CreatorProfileDetail",
         "description": "A stable public creator identity with all of its claimed aliases."
+      },
+      "CsrfTokenResponse": {
+        "properties": {
+          "csrf_token": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 16,
+            "title": "Csrf Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "csrf_token"
+        ],
+        "title": "CsrfTokenResponse",
+        "description": "A session-bound double-submit token, never a session credential."
       },
       "Dimensions": {
         "properties": {

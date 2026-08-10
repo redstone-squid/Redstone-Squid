@@ -13,6 +13,7 @@ from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequire
 from squid.core.errors import ErrorCode, InternalError
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
+    TEST_CONFIG,
     TEST_SYNERGY_SECRET,
     TEST_UUID,
     TEST_VERIFICATION_CODE,
@@ -167,6 +168,42 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
     assert database.closed
     assert response.status_code == 204
     web_auth.logout.assert_awaited_once_with("session-token")
+
+
+def test_cookie_authenticated_frontend_can_fetch_its_no_store_csrf_token(mocker: MockerFixture) -> None:
+    web_auth = mocker.Mock()
+    web_auth.authenticate = mocker.AsyncMock(
+        return_value=WebSessionIdentity(
+            session_id="session",
+            account_id=1,
+            discord_id=123,
+            consent_pending=False,
+        )
+    )
+    config = TEST_CONFIG.model_copy(
+        update={"api": TEST_CONFIG.api.model_copy(update={"cors_origins": ("https://catalogue.test",)})}
+    )
+    app, database = build_app(web_auth=web_auth, config=config)
+
+    with TestClient(app, base_url="https://api.catalogue.test") as session_client:
+        session_client.cookies.set("__Host-squid_session", "session-token")
+        session_client.cookies.set("squid_csrf", "csrf-token-with-enough-entropy")
+        response = session_client.get("/v1/auth/csrf", headers={"Origin": "https://catalogue.test"})
+
+    assert database.closed
+    assert response.status_code == 200
+    assert response.json() == {"csrf_token": "csrf-token-with-enough-entropy"}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.headers["Access-Control-Allow-Origin"] == "https://catalogue.test"
+    assert response.headers["Access-Control-Allow-Credentials"] == "true"
+
+
+def test_anonymous_frontend_cannot_fetch_a_csrf_token(client: httpx.Client) -> None:
+    response = client.get("/v1/auth/csrf", headers={"Origin": "https://catalogue.test"})
+
+    assert response.status_code == 401
+    assert "csrf_token" not in response.text
 
 
 async def test_verify_handler_depends_on_accounts_capability(mocker: MockerFixture) -> None:
