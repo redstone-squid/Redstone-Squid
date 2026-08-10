@@ -328,6 +328,14 @@ def _validate_value(field: FormField, value: JSONValue) -> str | None:
             return "too_few_items"
         if constraints.max_items is not None and len(value) > constraints.max_items:
             return "too_many_items"
+        if constraints.min_length is not None and any(
+            isinstance(item, str) and len(item) < constraints.min_length for item in value
+        ):
+            return "too_short"
+        if constraints.max_length is not None and any(
+            isinstance(item, str) and len(item) > constraints.max_length for item in value
+        ):
+            return "too_long"
     if field.options:
         allowed = {option.value for option in field.options}
         supplied = value if isinstance(value, Sequence) and not isinstance(value, str | bytes) else (value,)

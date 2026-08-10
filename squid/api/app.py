@@ -12,7 +12,9 @@ from pydantic import BaseModel
 from squid.api.dependencies import Accounts
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
+from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
+from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.security import Principal, Scope, require
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
@@ -109,6 +111,8 @@ def create_api_app(
     api.include_router(v1_router)
     api.add_middleware(RateLimitMiddleware)
     api.add_middleware(IdempotencyResponseMiddleware)
+    api.add_middleware(BoundedRequestBodyMiddleware)
+    api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
     resolved_for_middleware = config
     cors_origins = (
         resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()

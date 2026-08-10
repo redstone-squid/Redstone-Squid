@@ -1,7 +1,9 @@
 """Revisioned submission draft value objects."""
 
+import json
+import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
@@ -12,6 +14,11 @@ from squid.core.errors import ConflictError, JSONValue, ValidationError
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _IDEMPOTENCY_KEY = re.compile(r"^[\x21-\x7e]{8,255}$")
+MAX_DRAFT_OPERATIONS = 100
+MAX_DRAFT_OPERATION_VALUE_BYTES = 16 * 1024
+MAX_DRAFT_ANSWERS_BYTES = 64 * 1024
+MAX_DRAFT_JSON_DEPTH = 4
+MAX_DRAFT_JSON_NODES = 1_024
 
 
 class DraftStatus(StrEnum):
@@ -61,6 +68,12 @@ class FieldOperation:
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
             msg = "unset operations cannot carry a value"
             raise ValueError(msg)
+        if self.kind is FieldOperationKind.SET:
+            _require_json_budget(
+                self.value,
+                max_bytes=MAX_DRAFT_OPERATION_VALUE_BYTES,
+                max_depth=MAX_DRAFT_JSON_DEPTH,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +97,9 @@ class DraftChange:
             raise ValueError(msg)
         if not self.operations:
             msg = "draft changes require at least one operation"
+            raise ValueError(msg)
+        if len(self.operations) > MAX_DRAFT_OPERATIONS:
+            msg = f"draft changes cannot exceed {MAX_DRAFT_OPERATIONS} operations"
             raise ValueError(msg)
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
@@ -115,6 +131,11 @@ class DraftSnapshot:
         if self.schema_revision < 1 or self.revision < 0:
             msg = "schema_revision must be positive and revision cannot be negative"
             raise ValueError(msg)
+        _require_json_budget(
+            self.answers,
+            max_bytes=MAX_DRAFT_ANSWERS_BYTES,
+            max_depth=MAX_DRAFT_JSON_DEPTH + 1,
+        )
         object.__setattr__(self, "answers", deepcopy(dict(self.answers)))
 
     def apply(self, change: DraftChange) -> "DraftSnapshot":
@@ -130,6 +151,19 @@ class DraftSnapshot:
                 answers[operation.field_id] = deepcopy(operation.value)
             else:
                 answers.pop(operation.field_id, None)
+        try:
+            _require_json_budget(
+                answers,
+                max_bytes=MAX_DRAFT_ANSWERS_BYTES,
+                max_depth=MAX_DRAFT_JSON_DEPTH + 1,
+            )
+        except (TypeError, ValueError):
+            msg = "The draft answers exceed the retained data limit."
+            raise ValidationError(
+                msg,
+                resource="submission_draft",
+                public_context={"reason": "answers_too_large"},
+            ) from None
         return replace(self, revision=self.revision + 1, status=DraftStatus.EDITING, answers=answers)
 
     def transition(self, status: DraftStatus) -> "DraftSnapshot":
@@ -147,3 +181,68 @@ class DraftSnapshot:
             msg = f"draft cannot transition from {self.status.value} to {status.value}"
             raise ValidationError(msg, resource="submission_draft")
         return replace(self, status=status)
+
+
+def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> None:
+    stack: list[tuple[object, int]] = [(value, 0)]
+    containers: set[int] = set()
+    nodes = 0
+    estimated_bytes = 0
+    while stack:
+        item, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_DRAFT_JSON_NODES:
+            msg = "draft JSON values contain too many nodes"
+            raise ValueError(msg)
+        if depth > max_depth:
+            msg = "draft JSON values are nested too deeply"
+            raise ValueError(msg)
+        if item is None or isinstance(item, bool):
+            estimated_bytes += 5
+        elif isinstance(item, str):
+            estimated_bytes += len(item.encode("utf-8")) + 2
+        elif isinstance(item, int):
+            if item.bit_length() > 256:
+                msg = "draft JSON integers are too large"
+                raise ValueError(msg)
+            estimated_bytes += 80
+        elif isinstance(item, float):
+            if not math.isfinite(item):
+                msg = "draft JSON numbers must be finite"
+                raise ValueError(msg)
+            estimated_bytes += 32
+        elif isinstance(item, Mapping):
+            _require_new_container(item, containers)
+            estimated_bytes += 2 + len(item)
+            for key, nested in item.items():
+                if not isinstance(key, str):
+                    msg = "draft JSON object keys must be strings"
+                    raise TypeError(msg)
+                estimated_bytes += len(key.encode("utf-8")) + 3
+                stack.append((nested, depth + 1))
+        elif isinstance(item, Sequence) and not isinstance(item, str | bytes | bytearray):
+            _require_new_container(item, containers)
+            estimated_bytes += 2 + len(item)
+            stack.extend((nested, depth + 1) for nested in item)
+        else:
+            msg = "draft values must be JSON-compatible"
+            raise ValueError(msg)
+        if estimated_bytes > max_bytes:
+            msg = "draft JSON values exceed the retained byte limit"
+            raise ValueError(msg)
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+    except (TypeError, ValueError, RecursionError) as error:
+        msg = "draft values must be JSON-compatible"
+        raise ValueError(msg) from error
+    if len(encoded) > max_bytes:
+        msg = "draft JSON values exceed the retained byte limit"
+        raise ValueError(msg)
+
+
+def _require_new_container(value: object, seen: set[int]) -> None:
+    identity = id(value)
+    if identity in seen:
+        msg = "draft JSON values cannot contain cycles or shared containers"
+        raise ValueError(msg)
+    seen.add(identity)
