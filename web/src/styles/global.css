@@ -545,6 +545,284 @@ h3 {
   font-family: var(--mono);
 }
 
+.button:disabled,
+.mode-button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.submission-page {
+  max-width: 980px;
+}
+
+.minecraft-link-page {
+  max-width: 780px;
+}
+
+.submission-heading {
+  max-width: 760px;
+  margin-bottom: clamp(2rem, 5vw, 4rem);
+}
+
+.submission-heading h1 {
+  margin-bottom: 0.8rem;
+}
+
+.submission-flow {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.submission-start,
+.submission-alert,
+.submission-section,
+.minecraft-link-card {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.minecraft-link-card {
+  display: grid;
+  max-width: 620px;
+  gap: 1.2rem;
+}
+
+.minecraft-link-card .button {
+  justify-self: start;
+}
+
+.submission-start {
+  display: grid;
+  max-width: 720px;
+  gap: 1rem;
+}
+
+.submission-start .field {
+  max-width: 28rem;
+}
+
+.submission-start .button {
+  justify-self: start;
+}
+
+.submission-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 4rem;
+  gap: 1rem;
+}
+
+.submission-toolbar p {
+  margin-bottom: 0;
+}
+
+.submission-save-state,
+.submission-limit,
+.submission-status {
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.submission-section h2 {
+  margin-bottom: 1.5rem;
+}
+
+.submission-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.submission-field {
+  align-content: start;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.submission-field--wide {
+  grid-column: 1 / -1;
+}
+
+.submission-field label,
+.submission-field legend {
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.submission-field label small,
+.submission-field legend small {
+  color: var(--ink-faint);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.submission-field > small {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+
+.submission-field--boolean {
+  align-self: center;
+  padding-block: 0.5rem;
+}
+
+.submission-field--boolean label,
+.submission-checkbox,
+.submission-check-grid label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+}
+
+.submission-field--boolean input,
+.submission-checkbox input,
+.submission-check-grid input {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-height: auto;
+  margin-top: 0.15rem;
+  accent-color: var(--redstone);
+}
+
+.submission-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--deepslate-900);
+  gap: 0.55rem 1rem;
+}
+
+.submission-check-grid label {
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.field-error,
+.submission-inline-error {
+  color: var(--danger) !important;
+}
+
+.submission-inline-error {
+  padding: 0.85rem 1rem;
+  border: 1px solid rgb(255 117 107 / 42%);
+  border-radius: var(--radius-sm);
+  background: rgb(169 35 31 / 14%);
+}
+
+.submission-inline-error p:last-child {
+  margin-bottom: 0;
+}
+
+.submission-inline-error .button {
+  margin-top: 0.4rem;
+}
+
+.submission-note {
+  padding-left: 1rem;
+  border-left: 3px solid var(--signal);
+  color: var(--ink-muted);
+}
+
+.submission-upload-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block: 1rem 1.5rem;
+  gap: 1rem;
+}
+
+.submission-checkbox {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.submission-media-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 0.65rem;
+  list-style: none;
+}
+
+.submission-media-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--deepslate-900);
+  gap: 1rem;
+}
+
+.submission-media-list li > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.8rem;
+}
+
+.submission-media-list strong {
+  text-transform: capitalize;
+}
+
+.submission-media-list small {
+  flex-basis: 100%;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+}
+
+.submission-status {
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  text-transform: uppercase;
+}
+
+.submission-status--completed {
+  color: var(--success);
+}
+
+.submission-status--dead {
+  color: var(--danger);
+}
+
+.submission-result {
+  padding: 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  margin-block: 1rem;
+  background: var(--deepslate-900);
+}
+
+.submission-result--completed {
+  border-color: rgb(123 201 148 / 48%);
+}
+
+.submission-result--needs_attention,
+.submission-result--dead {
+  border-color: rgb(255 117 107 / 48%);
+}
+
+.submission-result ul {
+  padding-left: 1.25rem;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -865,7 +1143,16 @@ h3 {
 
   .card-grid,
   .form-grid,
+  .submission-fields,
   .spec-list {
+    grid-template-columns: 1fr;
+  }
+
+  .submission-field--wide {
+    grid-column: auto;
+  }
+
+  .submission-check-grid {
     grid-template-columns: 1fr;
   }
 
