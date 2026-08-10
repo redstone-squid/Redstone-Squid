@@ -19,7 +19,9 @@ from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
+from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService
 from squid.messages.application import MessageService
+from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
 from squid.permissions.application import AuthorizationService
@@ -28,6 +30,12 @@ from squid.schematics.application import SchematicJobService, SchematicRenderJob
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
+from squid.submissions.application import (
+    SubmissionDraftService,
+    SubmissionFinalizationService,
+    SubmissionFinalizationWorker,
+    SubmissionFormService,
+)
 from squid.sync import DiscordSyncService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
@@ -52,6 +60,12 @@ class ApiServices:
     schematics: SchematicService
     search: SearchService
     tags: TagService
+    submission_forms: SubmissionFormService
+    submission_drafts: SubmissionDraftService
+    submission_finalization: SubmissionFinalizationService
+    media_jobs: MediaNormalizationJobService | None
+    minecraft_installations: InstallationCredentialService | None
+    minecraft_player_authorization: PlayerAuthorizationService | None
     accounts: AccountService
     versions: VersionService
     votes: VoteService
@@ -99,6 +113,8 @@ class WorkerServices:
     schematics: SchematicService
     schematic_jobs: SchematicJobService
     schematic_renders: SchematicRenderJobService
+    media_runner: MediaNormalizationJobRunner | None
+    submission_finalization: SubmissionFinalizationWorker
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     record_queue_health: Callable[[], Awaitable[None]]

@@ -40,6 +40,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
     SubmissionTargetResult,
 )
+from squid.submissions.errors import DraftAccessDeniedError
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
@@ -474,6 +475,20 @@ async def test_manifest_failures_are_retained_as_stable_attention_codes() -> Non
 
     assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
     assert SubmissionAttentionIssue("source_version", SubmissionAttentionReason.REQUIRED) in jobs.attention
+
+
+@pytest.mark.asyncio
+async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
+    repository = FakeDraftRepository(_stored(SubmissionOrigin.WEB))
+    drafts = SubmissionDraftService(repository, FakeManifestRegistry())
+    jobs = FakeFinalizationJobs()
+    jobs.snapshot = _snapshot(FinalizationJobStatus.PENDING)
+    service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
+
+    assert await service.status(DRAFT_ID, 7) == jobs.snapshot
+
+    with pytest.raises(DraftAccessDeniedError):
+        await service.status(DRAFT_ID, 8)
 
 
 async def _payload() -> NormalizedSubmission:

@@ -153,6 +153,42 @@ class ObjectStorageConfig(_FrozenModel):
         return self
 
 
+class MediaConfig(_FrozenModel):
+    """Private media normalization queue and subprocess configuration."""
+
+    enabled: bool = False
+    ffmpeg: str = Field(default="ffmpeg", min_length=1)
+    ffprobe: str = Field(default="ffprobe", min_length=1)
+    working_directory: Path | None = None
+    job_max_attempts: int = Field(default=3, ge=1, le=10)
+    probe_timeout_seconds: float = Field(default=15.0, gt=0)
+    image_timeout_seconds: float = Field(default=120.0, gt=0)
+    video_timeout_seconds: float = Field(default=600.0, gt=0)
+    poster_timeout_seconds: float = Field(default=120.0, gt=0)
+    memory_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)
+    cpu_seconds: int = Field(default=540, gt=0)
+    max_open_files: int = Field(default=128, gt=0)
+    threads: int = Field(default=2, ge=1, le=16)
+
+    _empty_working_directory = field_validator("working_directory", mode="before")(_empty_to_none)
+
+
+class MinecraftAuthConfig(_FrozenModel):
+    """Independent keyed-hash material for Minecraft device credentials."""
+
+    pepper: SecretStr | None = None
+
+    _empty_pepper = field_validator("pepper", mode="before")(_empty_to_none)
+
+    @field_validator("pepper")
+    @classmethod
+    def _require_pepper_strength(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode()) < 32:
+            msg = "Must contain at least 32 bytes."
+            raise ValueError(msg)
+        return value
+
+
 class EmbeddingConfig(_FrozenModel):
     """Resolved embedding provider configuration."""
 
@@ -315,6 +351,9 @@ class WorkerConfig(_FrozenModel):
     maintenance_interval_seconds: float = Field(default=30, gt=0)
     keepalive_interval_seconds: float = Field(default=86_400, gt=0)
     schematic_job_interval_seconds: float = Field(default=0.25, gt=0)
+    media_job_interval_seconds: float = Field(default=0.25, gt=0)
+    media_job_concurrency: int = Field(default=1, ge=1, le=8)
+    submission_finalization_interval_seconds: float = Field(default=0.25, gt=0)
 
     _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
     _validate_log_file = field_validator("log_file")(_validate_relative_log_file)
@@ -600,6 +639,8 @@ class RuntimeConfig(_FrozenModel):
     embeddings: EmbeddingConfig
     schematics: SchematicConfig
     object_storage: ObjectStorageConfig
+    media: MediaConfig = MediaConfig()
+    minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     community: CommunityConfig
     notifications: NotificationConfig
     verification_code_pepper: SecretStr
@@ -654,6 +695,8 @@ class _ProcessSettings(BaseSettings):
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
+    media: MediaConfig = MediaConfig()
+    minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
     notification: NotificationConfig = NotificationConfig()
@@ -693,6 +736,8 @@ class _ProcessSettings(BaseSettings):
             ),
             schematics=self.schematic,
             object_storage=self.storage,
+            media=self.media,
+            minecraft_auth=self.minecraft_auth,
             community=self.community,
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
@@ -786,7 +831,10 @@ class ApplicationConfig(BotProcessConfig):
                     "cursor",
                     "openai",
                     "embedding",
+                    "storage",
                     "schematic",
+                    "media",
+                    "minecraft_auth",
                     "community",
                     "notification",
                     "log",
@@ -812,7 +860,10 @@ class ApplicationConfig(BotProcessConfig):
                     "cursor",
                     "openai",
                     "embedding",
+                    "storage",
                     "schematic",
+                    "media",
+                    "minecraft_auth",
                     "community",
                     "notification",
                     "log",
@@ -835,7 +886,10 @@ class ApplicationConfig(BotProcessConfig):
                     "cursor",
                     "openai",
                     "embedding",
+                    "storage",
                     "schematic",
+                    "media",
+                    "minecraft_auth",
                     "community",
                     "notification",
                     "log",

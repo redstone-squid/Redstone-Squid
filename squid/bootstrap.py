@@ -37,8 +37,19 @@ from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency import IdempotencyService
 from squid.idempotency.infrastructure import PostgresIdempotencyRepository
+from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService
+from squid.media.application.services import MediaNormalizationService
+from squid.media.domain import MediaLimits
+from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits
+from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
+from squid.minecraft_auth.infrastructure import (
+    PostgresAccountIdentityAuthorizer,
+    PostgresMinecraftAuthorizationRepository,
+)
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import AuthorizationService
@@ -73,6 +84,25 @@ from squid.settings.application import SettingsService
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.application import StarboardService
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.submissions.application import (
+    CheckedInFormManifestRegistry,
+    SubmissionDraftService,
+    SubmissionFinalizationService,
+    SubmissionFinalizationWorker,
+    SubmissionFormService,
+)
+from squid.submissions.infrastructure.artifact_readiness import (
+    AuthoritativeDraftArtifactReadiness,
+    FailClosedDraftSchematicReader,
+)
+from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
+from squid.submissions.infrastructure.finalization_events import (
+    ExistingBuildReviewPublisher,
+    PollableFinalizationStatusPublisher,
+)
+from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.options import ApprovedTagOptionCatalog
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
@@ -122,6 +152,7 @@ def create_schematic_service(
             max_upload_bytes=config.max_upload_bytes,
             max_inflated_bytes=config.max_inflated_bytes,
             max_allocated_volume=config.max_allocated_volume,
+            max_axis_length=config.max_axis_length,
         ),
         engine_installed=config.enabled,
         duplicate_metric_tolerance=config.duplicate_metric_tolerance,
@@ -246,6 +277,52 @@ class _ServiceGraph:
         return store
 
     @cached_property
+    def media_jobs(self) -> MediaNormalizationJobService | None:
+        if not self.config.media.enabled:
+            return None
+        return MediaNormalizationJobService(
+            self.media_repository,
+            self.artifacts,
+            limits=MediaLimits(),
+            max_attempts=self.config.media.job_max_attempts,
+        )
+
+    @cached_property
+    def media_repository(self) -> PostgresMediaJobRepository:
+        return PostgresMediaJobRepository(self.db.async_session)
+
+    @cached_property
+    def media_runner(self) -> MediaNormalizationJobRunner | None:
+        jobs = self.media_jobs
+        if jobs is None:
+            return None
+        media = self.config.media
+        normalization = MediaNormalizationService(
+            FfmpegMediaNormalizer(
+                ffmpeg=media.ffmpeg,
+                ffprobe=media.ffprobe,
+                process_limits=MediaProcessLimits(
+                    probe_timeout_seconds=media.probe_timeout_seconds,
+                    image_timeout_seconds=media.image_timeout_seconds,
+                    video_timeout_seconds=media.video_timeout_seconds,
+                    poster_timeout_seconds=media.poster_timeout_seconds,
+                    memory_bytes=media.memory_bytes,
+                    cpu_seconds=media.cpu_seconds,
+                    max_open_files=media.max_open_files,
+                    threads=media.threads,
+                ),
+            ),
+            limits=jobs.limits,
+        )
+        self.resources.push_async_callback(normalization.aclose)
+        return MediaNormalizationJobRunner(
+            jobs,
+            self.artifacts,
+            normalization,
+            working_directory=media.working_directory,
+        )
+
+    @cached_property
     def schematic_jobs(self) -> SchematicJobService:
         return SchematicJobService(
             PostgresSchematicJobRepository(self.db.async_session),
@@ -264,6 +341,47 @@ class _ServiceGraph:
         )
         self.resources.push_async_callback(service.aclose)
         return service
+
+    @cached_property
+    def tags(self) -> TagService:
+        return TagService(PostgresTagDefinitionRepository(self.db.async_session))
+
+    @cached_property
+    def submission_forms(self) -> SubmissionFormService:
+        return SubmissionFormService(ApprovedTagOptionCatalog(self.tags))
+
+    @cached_property
+    def submission_drafts(self) -> SubmissionDraftService:
+        return SubmissionDraftService(
+            PostgresDraftRepository(self.db.async_session),
+            CheckedInFormManifestRegistry(),
+        )
+
+    @cached_property
+    def submission_finalization_jobs(self) -> PostgresFinalizationJobRepository:
+        return PostgresFinalizationJobRepository(self.db.async_session)
+
+    @cached_property
+    def submission_finalization(self) -> SubmissionFinalizationService:
+        readiness = AuthoritativeDraftArtifactReadiness(
+            self.media_repository,
+            FailClosedDraftSchematicReader(),
+            media_limits=MediaLimits(),
+        )
+        return SubmissionFinalizationService(
+            self.submission_drafts,
+            readiness,
+            self.submission_finalization_jobs,
+        )
+
+    @cached_property
+    def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
+        return SubmissionFinalizationWorker(
+            self.submission_finalization_jobs,
+            BuildSubmissionTarget(self.builds, self.tags),
+            PollableFinalizationStatusPublisher(),
+            ExistingBuildReviewPublisher(),
+        )
 
     @cached_property
     def search_fields(self) -> PostgresFieldRegistryProvider:
@@ -313,6 +431,34 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def minecraft_repository(self) -> PostgresMinecraftAuthorizationRepository:
+        return PostgresMinecraftAuthorizationRepository(self.db.async_session)
+
+    @cached_property
+    def minecraft_installations(self) -> InstallationCredentialService | None:
+        pepper = self.config.minecraft_auth.pepper
+        if pepper is None:
+            return None
+        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
+        return InstallationCredentialService(
+            self.minecraft_repository,
+            accounts,
+            MinecraftSecretCodec(pepper.get_secret_value().encode()),
+        )
+
+    @cached_property
+    def minecraft_player_authorization(self) -> PlayerAuthorizationService | None:
+        pepper = self.config.minecraft_auth.pepper
+        if pepper is None:
+            return None
+        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
+        return PlayerAuthorizationService(
+            self.minecraft_repository,
+            accounts,
+            MinecraftSecretCodec(pepper.get_secret_value().encode()),
+        )
+
+    @cached_property
     def web_auth(self) -> DiscordOAuthService | None:
         if self.config.oauth is None or self.config.session_pepper is None:
             return None
@@ -349,7 +495,13 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         records=graph.records,
         schematics=graph.schematics,
         search=graph.search,
-        tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
+        tags=graph.tags,
+        submission_forms=graph.submission_forms,
+        submission_drafts=graph.submission_drafts,
+        submission_finalization=graph.submission_finalization,
+        media_jobs=graph.media_jobs,
+        minecraft_installations=graph.minecraft_installations,
+        minecraft_player_authorization=graph.minecraft_player_authorization,
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
@@ -371,7 +523,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         record_computation=graph.record_computation,
         schematics=graph.schematics,
         search=graph.search,
-        tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
+        tags=graph.tags,
         settings=SettingsService(SettingsRepository(db.async_session)),
         starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
         accounts=graph.accounts,
@@ -413,6 +565,8 @@ def create_worker_services(
         schematics=graph.schematics,
         schematic_jobs=graph.schematic_jobs,
         schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),
+        media_runner=graph.media_runner,
+        submission_finalization=graph.submission_finalization_worker,
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(run_projection_batch, db.async_session),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,

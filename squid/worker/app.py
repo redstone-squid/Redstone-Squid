@@ -80,6 +80,17 @@ class DatabaseWorker:
             name="schematic-renders",
             interval=self._config.schematic_job_interval_seconds,
         )
+        if self._services.media_runner is not None:
+            self._supervisor.start_periodic(
+                self._process_media_jobs,
+                name="media-normalization",
+                interval=self._config.media_job_interval_seconds,
+            )
+        self._supervisor.start_periodic(
+            self._process_submission_finalization,
+            name="submission-finalization",
+            interval=self._config.submission_finalization_interval_seconds,
+        )
         self._supervisor.start_periodic(
             self._refresh_search,
             name="search-projections",
@@ -151,11 +162,16 @@ class DatabaseWorker:
             "schematic-job-cleanup",
             "queue-health",
             "notification-retention",
+            "submission-finalization",
         }
+        if self._services.media_runner is not None:
+            required.add("media-normalization")
         longest_interval = max(
             self._config.event_interval_seconds,
             self._config.maintenance_interval_seconds,
             self._config.schematic_job_interval_seconds,
+            self._config.media_job_interval_seconds if self._services.media_runner is not None else 0,
+            self._config.submission_finalization_interval_seconds,
             300,
         )
         return self._supervisor.is_healthy(required, max_age_seconds=longest_interval * 3)
@@ -172,6 +188,17 @@ class DatabaseWorker:
     async def _process_schematic_renders(self) -> None:
         with trace_span("squid.worker.schematic_renders", {"squid.surface": "background_loop"}):
             await self._schematic_renders.process_batch()
+
+    async def _process_media_jobs(self) -> None:
+        runner = self._services.media_runner
+        if runner is None:
+            return
+        with trace_span("squid.worker.media_normalization", {"squid.surface": "background_loop"}):
+            await runner.process_batch(limit=self._config.media_job_concurrency)
+
+    async def _process_submission_finalization(self) -> None:
+        with trace_span("squid.worker.submission_finalization", {"squid.surface": "background_loop"}):
+            await self._services.submission_finalization.process_batch()
 
     async def _refresh_search(self) -> None:
         with trace_span("squid.worker.search_projection", {"squid.surface": "background_loop"}):

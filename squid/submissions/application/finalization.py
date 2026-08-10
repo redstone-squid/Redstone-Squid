@@ -294,6 +294,11 @@ class SubmissionFinalizationService:
             expires_at=expires_at,
         )
 
+    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
+        """Return retained finalization state after rechecking draft ownership."""
+        await self._drafts.get_owned(draft_id, account_id)
+        return await self._jobs.get(draft_id)
+
 
 class SubmissionFinalizationWorker:
     """Run bounded finalization batches with retry and dead-letter handling."""

@@ -13,6 +13,7 @@ from squid.config import (
     load_application_config,
     load_bot_process_config,
     load_worker_observability_config,
+    load_worker_process_config,
 )
 from squid.core.errors import ConfigurationError
 
@@ -123,6 +124,49 @@ def test_worker_loads_only_inherited_observability_settings(monkeypatch: pytest.
 
     assert config.enabled is True
     assert str(config.endpoint) == "http://collector:4318/v1/traces"
+
+
+def test_media_worker_concurrency_is_explicit_and_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_WORKER_MEDIA_JOB_CONCURRENCY="2")
+
+    assert load_worker_process_config().worker.media_job_concurrency == 2
+
+    monkeypatch.setenv("SQUID_WORKER_MEDIA_JOB_CONCURRENCY", "9")
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_worker_process_config()
+
+    assert any(issue["field"] == "worker.media_job_concurrency" for issue in _issues(exc_info.value))
+
+
+def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatch: pytest.MonkeyPatch) -> None:
+    pepper = "minecraft-auth-pepper-with-32-bytes"
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret",
+        SQUID_MEDIA_ENABLED="true",
+        SQUID_MEDIA_THREADS="3",
+        SQUID_MINECRAFT_AUTH_PEPPER=pepper,
+    )
+
+    config = load_api_process_config().runtime
+
+    assert config.media.enabled is True
+    assert config.media.threads == 3
+    assert config.minecraft_auth.pepper is not None
+    assert config.minecraft_auth.pepper.get_secret_value() == pepper
+
+
+def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret",
+        SQUID_MINECRAFT_AUTH_PEPPER="too-short",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == "minecraft_auth.pepper" for issue in _issues(exc_info.value))
 
 
 @pytest.mark.parametrize("ratio", ["-0.1", "1.1"])

@@ -25,6 +25,8 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "schematics",
         "schematic_jobs",
         "schematic_renders",
+        "media_runner",
+        "submission_finalization",
         "search_embeddings",
         "refresh_search_index",
         "record_queue_health",
