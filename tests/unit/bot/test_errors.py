@@ -182,3 +182,40 @@ async def test_presented_error_is_not_rendered_or_logged_twice() -> None:
     interaction.send_initial.assert_not_awaited()
     log_error.assert_called_once()
     assert is_error_presented(error)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_error_log_excludes_discord_account_identifiers() -> None:
+    discord_id = 8_675_309
+    error = InternalError(
+        "private diagnostic",
+        context={
+            "discord_id": discord_id,
+            "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
+            "attempts": [
+                {
+                    "resolved_by_discord_id": discord_id,
+                    "job_id": 17,
+                }
+            ],
+        },
+    )
+    interaction = make_interaction(user_id=discord_id, guild_id=3, channel_id=4)
+
+    with (
+        patch("squid.bot.errors.correlation_id", return_value="b" * 32),
+        patch("squid.bot.errors.logger.error") as log_error,
+    ):
+        await handle_interaction_error(interaction.interaction, error, surface="command")
+
+    log_error.assert_called_once()
+    log_call = log_error.call_args
+    assert log_call is not None
+    assert log_call.args[3] == {"command": None, "guild_id": 3, "channel_id": 4}
+    assert log_call.args[4] == {
+        "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
+        "attempts": [{"job_id": 17}],
+    }
+    rendered_log = log_call.args[0] % log_call.args[1:]
+    assert str(discord_id) not in rendered_log
+    assert error.context["discord_id"] == discord_id

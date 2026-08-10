@@ -39,6 +39,32 @@ class ErrorPresentation:
         return error_layout(self.title, self.detail)
 
 
+def _safe_log_context(context: Mapping[str, object] | None) -> dict[str, object]:
+    """Return diagnostic context without stable Discord account identifiers."""
+
+    def sanitize(value: object) -> object:
+        if isinstance(value, Mapping):
+            return {
+                key: sanitize(item)
+                for key, item in value.items()
+                if isinstance(key, str) and not _is_discord_user_id_key(key)
+            }
+        if isinstance(value, list):
+            return [sanitize(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(sanitize(item) for item in value)
+        return value
+
+    sanitized = sanitize(context or {})
+    assert isinstance(sanitized, dict)
+    return sanitized
+
+
+def _is_discord_user_id_key(key: str) -> bool:
+    normalized = key.casefold()
+    return normalized in {"discord_id", "discord_user_id", "user_id"} or normalized.endswith("_discord_id")
+
+
 def unwrap_error(error: BaseException) -> BaseException:
     """Unwrap discord.py command invocation wrappers."""
     wrapper_types = (
@@ -181,12 +207,12 @@ async def _handle_discord_error(
     original = unwrap_error(error)
     presentation = build_error_presentation(original, locale)
     if presentation.error_id is not None:
-        application_context = original.context if isinstance(original, SquidError) else None
+        application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         logger.error(
             "Discord failure [error_id=%s surface=%s context=%r application_context=%r]",
             presentation.error_id,
             surface,
-            dict(context or {}),
+            _safe_log_context(context),
             application_context,
             exc_info=original,
         )
@@ -223,7 +249,6 @@ async def handle_context_error[BotT: commands.Bot](
         surface="command",
         context={
             "command": command_name,
-            "user_id": context.author.id,
             "guild_id": context.guild.id if context.guild is not None else None,
             "channel_id": context.channel.id,
         },
@@ -252,7 +277,6 @@ async def handle_interaction_error(
         surface=surface,
         context={
             "command": command.name if command is not None else None,
-            "user_id": interaction.user.id,
             "guild_id": interaction.guild_id,
             "channel_id": interaction.channel_id,
         },

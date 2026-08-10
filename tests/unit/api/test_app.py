@@ -92,6 +92,20 @@ def test_success_returns_verification_code(client: httpx.Client):
     assert resp.json() == TEST_VERIFICATION_CODE
 
 
+async def test_verify_handler_depends_on_users_capability(mocker: MockerFixture) -> None:
+    users = mocker.Mock()
+    users.generate_verification_code = mocker.AsyncMock(return_value=TEST_VERIFICATION_CODE)
+
+    result = await api_app.get_verification_code(
+        api_app.User(uuid=TEST_UUID),
+        users,
+        mocker.Mock(),
+    )
+
+    assert result == TEST_VERIFICATION_CODE
+    users.generate_verification_code.assert_awaited_once_with(TEST_UUID)
+
+
 def test_internal_error_is_redacted_and_correlated(
     app_factory: tuple[FastAPI, MockDatabaseManager], mocker: MockerFixture
 ) -> None:

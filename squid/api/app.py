@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from squid.api.dependencies import get_services
+from squid.api.dependencies import Users
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.security import Principal, Scope, require
 from squid.api.v1 import TAGS_METADATA
@@ -55,11 +55,11 @@ class User(BaseModel):
 @router.post("/v1/verify", status_code=201, responses=responses(401, 403, 404, 422, 503), tags=["users"])
 async def get_verification_code(
     user: User,
-    services: Annotated[ApiServices, Depends(get_services)],
+    users: Users,
     _principal: Annotated[Principal, Depends(require(Scope.VERIFY))],
 ) -> int:
     """Generate a verification code for a user."""
-    return await services.users.generate_verification_code(user.uuid)
+    return await users.generate_verification_code(user.uuid)
 
 
 def create_api_app(
