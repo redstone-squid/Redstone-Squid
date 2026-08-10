@@ -28,6 +28,10 @@ Linux Secret Service. If native storage is unavailable, callers must explicitly 
 owner-readable file fallback. That choice is pinned per exact origin and remains detectable so
 every subsequent command can display a warning until the credentials are purged or migrated.
 
+Draft caches, resumable operation records, and short-lived sessions are stored in versioned
+XChaCha20-Poly1305 envelopes. Authentication binds every file to its exact origin and state kind,
+so copied, swapped, or modified ciphertext fails closed.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
