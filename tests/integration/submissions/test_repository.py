@@ -11,15 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
     DraftRevisionConflictError,
     DraftSnapshot,
+    DraftStatus,
     FieldOperation,
     FieldOperationKind,
     SubmissionOrigin,
 )
+from squid.submissions.errors import DraftStateConflictError
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -34,6 +37,8 @@ _TABLES = (
     cast(Table, SubmissionDraft.__table__),
     cast(Table, SubmissionDraftAccess.__table__),
     cast(Table, SubmissionDraftChange.__table__),
+    cast(Table, MediaUploadRecord.__table__),
+    cast(Table, MediaNormalizationJobRecord.__table__),
 )
 
 
@@ -178,3 +183,40 @@ async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
     assert await repository.expire_due(now=NOW) == 0
     assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
     assert await repository.count_active_for_account(account_id) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [DraftStatus.PROCESSING, DraftStatus.SUBMITTED, DraftStatus.EXPIRED])
+async def test_delete_owned_rechecks_noneditable_status_under_repository_lock(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    status: DraftStatus,
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    await repository.create(_stored(account_id))
+    async with async_session_factory.begin() as session:
+        draft = await session.get(SubmissionDraft, DRAFT_ID)
+        assert draft is not None
+        draft.status = status.value
+
+    with pytest.raises(DraftStateConflictError) as exc_info:
+        await repository.delete_owned(DRAFT_ID, account_id)
+
+    assert exc_info.value.public_context == {"status": status.value, "operation": "delete"}
+    assert await repository.get(DRAFT_ID) is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_owned_accepts_needs_attention(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    await repository.create(_stored(account_id))
+    async with async_session_factory.begin() as session:
+        draft = await session.get(SubmissionDraft, DRAFT_ID)
+        assert draft is not None
+        draft.status = DraftStatus.NEEDS_ATTENTION.value
+
+    assert await repository.delete_owned(DRAFT_ID, account_id) is True
+    assert await repository.get(DRAFT_ID) is None

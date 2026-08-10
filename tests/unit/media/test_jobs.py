@@ -5,6 +5,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -39,7 +40,13 @@ from squid.media.domain import (
     MediaNormalizationReport,
     MediaProbe,
 )
-from squid.media.errors import InvalidMediaError, MediaFailureReason, MediaLimitExceededError
+from squid.media.errors import (
+    InvalidMediaError,
+    MediaDraftNotFoundError,
+    MediaDraftStateConflictError,
+    MediaFailureReason,
+    MediaLimitExceededError,
+)
 
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
@@ -248,6 +255,17 @@ class MemoryMediaJobs:
         return True
 
 
+class RejectingMediaJobs(MemoryMediaJobs):
+    def __init__(self, error: MediaDraftNotFoundError | MediaDraftStateConflictError) -> None:
+        super().__init__()
+        self.error = error
+
+    @override
+    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
+        del upload, limits
+        raise self.error
+
+
 class WritingNormalizer:
     def __init__(self, kind: MediaKind, *, failure: Exception | None = None) -> None:
         self.kind = kind
@@ -391,6 +409,30 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
         pass
     else:
         raise AssertionError
+
+
+@pytest.mark.parametrize(
+    "error",
+    [MediaDraftStateConflictError("processing"), MediaDraftNotFoundError(DRAFT_ID)],
+)
+async def test_submit_removes_staged_source_when_draft_rejects_registration(
+    error: MediaDraftNotFoundError | MediaDraftStateConflictError,
+) -> None:
+    artifacts = MemoryArtifacts()
+    jobs = MediaNormalizationJobService(RejectingMediaJobs(error), artifacts)
+
+    with pytest.raises(type(error)):
+        await jobs.submit(
+            MediaUploadSubmission(
+                draft_id=DRAFT_ID,
+                kind=MediaKind.IMAGE,
+                source=b"image",
+                source_content_type="image/jpeg",
+                upload_id=UPLOAD_ID,
+            )
+        )
+
+    assert artifacts.objects == {}
 
 
 async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -> None:

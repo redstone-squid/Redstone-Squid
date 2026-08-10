@@ -26,6 +26,7 @@ from squid.submissions.errors import (
     DraftCapacityExceededError,
     DraftIncompleteError,
     DraftSchemaUnsupportedError,
+    DraftStateConflictError,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
@@ -218,6 +219,29 @@ async def test_capacity_and_single_owner_are_enforced() -> None:
         await service.delete(DRAFT_ID, 8)
     await service.delete(DRAFT_ID, 7)
     assert DRAFT_ID not in repository.drafts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [DraftStatus.PROCESSING, DraftStatus.SUBMITTED, DraftStatus.EXPIRED])
+async def test_delete_rejects_every_noneditable_lifecycle_state(status: DraftStatus) -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    repository.drafts[DRAFT_ID] = replace(created, snapshot=replace(created.snapshot, status=status))
+
+    with pytest.raises(DraftStateConflictError) as exc_info:
+        await service.delete(DRAFT_ID, 7)
+
+    assert exc_info.value.public_context == {"status": status.value, "operation": "delete"}
+    assert DRAFT_ID in repository.drafts
 
 
 @pytest.mark.asyncio

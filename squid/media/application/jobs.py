@@ -28,7 +28,13 @@ from squid.media.domain import (
     MediaNormalizationReport,
     MediaProbe,
 )
-from squid.media.errors import InvalidMediaError, MediaLimitExceededError, MediaProcessingError
+from squid.media.errors import (
+    InvalidMediaError,
+    MediaDraftNotFoundError,
+    MediaDraftStateConflictError,
+    MediaLimitExceededError,
+    MediaProcessingError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +375,7 @@ class MediaNormalizationJobService:
         upload_id = upload.id
         try:
             outcome = await self._repository.enqueue(upload, self._limits)
-        except MediaLimitExceededError:
+        except (MediaLimitExceededError, MediaDraftNotFoundError, MediaDraftStateConflictError):
             await self._artifacts.delete(object_key)
             raise
         except MediaUploadConflictError as error:

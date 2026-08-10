@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
+from squid.media.application.jobs import MediaJobStatus
+from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     MAX_FINALIZATION_JOB_CLAIM,
@@ -41,7 +44,7 @@ from squid.submissions.domain.finalization import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
+from squid.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
 from squid.submissions.infrastructure.finalization_models import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
@@ -93,6 +96,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         async with self._session_factory.begin() as session:
             draft_model = await _locked_draft(session, draft.snapshot.id)
             _require_expected_draft(draft_model, draft)
+            await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
             job = await _locked_job(session, draft.snapshot.id)
             status = DraftStatus(draft_model.status)
             if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
@@ -359,10 +363,36 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
 
 async def _locked_draft(session: AsyncSession, draft_id: UUID) -> SubmissionDraft:
+    await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
     model = await session.scalar(select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update())
     if model is None:
         raise DraftNotFoundError(draft_id)
     return model
+
+
+async def _require_current_media(
+    session: AsyncSession,
+    draft_id: UUID,
+    expected_upload_ids: Sequence[UUID],
+) -> None:
+    rows = tuple(
+        (
+            await session.execute(
+                select(MediaUploadRecord.id, MediaNormalizationJobRecord.status)
+                .outerjoin(
+                    MediaNormalizationJobRecord,
+                    MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                )
+                .where(MediaUploadRecord.draft_id == draft_id)
+                .with_for_update(of=MediaUploadRecord)
+            )
+        ).all()
+    )
+    retained = tuple((upload_id, status) for upload_id, status in rows if status != MediaJobStatus.DISCARDED.value)
+    if any(status != MediaJobStatus.COMPLETED.value for _, status in retained) or {
+        upload_id for upload_id, _ in retained
+    } != set(expected_upload_ids):
+        raise DraftArtifactsChangedError
 
 
 async def _locked_job(session: AsyncSession, draft_id: UUID) -> SubmissionFinalizationJob | None:

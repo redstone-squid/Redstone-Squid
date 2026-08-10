@@ -20,6 +20,7 @@ from squid.submissions.errors import (
     DraftIncompleteError,
     DraftNotFoundError,
     DraftSchemaUnsupportedError,
+    DraftStateConflictError,
 )
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
@@ -186,8 +187,10 @@ class SubmissionDraftService:
         return draft
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
-        """Delete an owned draft immediately, regardless of lifecycle state."""
-        await self.get_owned(draft_id, account_id)
+        """Delete an owned draft only while it remains user-editable."""
+        current = await self.get_owned(draft_id, account_id)
+        if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
         if not await self._repository.delete_owned(draft_id, account_id):
             raise DraftNotFoundError(draft_id)
 

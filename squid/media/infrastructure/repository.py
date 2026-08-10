@@ -23,13 +23,18 @@ from squid.media.application.jobs import (
     TerminalMediaSource,
 )
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
-from squid.media.errors import MediaLimitExceededError
+from squid.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
 from squid.media.infrastructure.models import (
     MediaArtifactRecord,
     MediaNormalizationJobRecord,
     MediaUploadRecord,
 )
+from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
+from squid.submissions.domain import DraftStatus
+from squid.submissions.infrastructure.models import SubmissionDraft
+
+_MEDIA_UPLOAD_LOCK_NAMESPACE = "media-upload-registration-v1"
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
@@ -42,7 +47,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
     async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
         """Reserve aggregate draft capacity, or accept an identical retry."""
         async with self._session_factory.begin() as session:
-            await _lock_uuid(session, upload.id, namespace=0x4D4544494155504C)
+            await lock_uuid(session, upload.id, namespace=_MEDIA_UPLOAD_LOCK_NAMESPACE)
             existing = await session.get(MediaUploadRecord, upload.id)
             if existing is not None:
                 existing_job = await session.get(MediaNormalizationJobRecord, upload.id)
@@ -58,7 +63,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                     )
                 return MediaEnqueueOutcome(created=False, status=existing_status)
 
-            await _lock_uuid(session, upload.draft_id, namespace=0x4D45444941445246)
+            await _lock_mutable_submission_draft(session, upload.draft_id)
             totals = await _active_totals(session, upload.draft_id)
             candidate = MediaBatchTotals(
                 image_count=totals.image_count + int(upload.kind is MediaKind.IMAGE),
@@ -143,6 +148,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         """Fence in-flight work and retain a terminal cleanup record."""
         async with self._session_factory.begin() as session:
+            await _lock_mutable_submission_draft(session, draft_id)
             row = (
                 await session.execute(
                     select(MediaNormalizationJobRecord, MediaUploadRecord)
@@ -219,7 +225,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Atomically persist outputs and complete the job if the claim is current."""
         _validate_completed_artifacts(job.upload.kind, artifacts)
         async with self._session_factory.begin() as session:
-            await _lock_uuid(session, job.upload.draft_id, namespace=0x4D45444941445246)
+            await lock_uuid(
+                session,
+                job.upload.draft_id,
+                namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
+            )
             existing_output_bytes = await session.scalar(
                 select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0))
                 .join(MediaUploadRecord, MediaUploadRecord.id == MediaArtifactRecord.upload_id)
@@ -369,9 +379,16 @@ class PostgresMediaJobRepository(MediaJobRepository):
         return bool(outcome.rowcount)
 
 
-async def _lock_uuid(session: AsyncSession, identifier: UUID, *, namespace: int) -> None:
-    key = (identifier.int ^ namespace) & 0x7FFF_FFFF_FFFF_FFFF
-    await session.execute(select(func.pg_advisory_xact_lock(key)))
+async def _lock_mutable_submission_draft(session: AsyncSession, draft_id: UUID) -> None:
+    await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+    status = await session.scalar(
+        select(SubmissionDraft.status).where(SubmissionDraft.id == draft_id).with_for_update()
+    )
+    if status is None:
+        # Once the draft row is gone there is no owner against which a public mutation can be authorized.
+        raise MediaDraftNotFoundError(draft_id)
+    if DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+        raise MediaDraftStateConflictError(status)
 
 
 async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTotals:

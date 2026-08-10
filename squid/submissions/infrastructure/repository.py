@@ -4,12 +4,15 @@ from collections.abc import Mapping, Sequence
 from typing import Any, cast, override
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import JSONValue
+from squid.media.application.jobs import MediaJobStatus
+from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
 from squid.submissions.application import AppliedDraftChange, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -20,7 +23,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
+from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -160,18 +163,40 @@ class PostgresDraftRepository(DraftRepository):
 
     @override
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
-        """Delete an owned draft and its audit log immediately."""
+        """Delete an editable owned draft behind the shared lifecycle fence."""
         async with self._session_factory.begin() as session:
-            result = cast(
-                CursorResult[Any],
-                await session.execute(
-                    delete(SubmissionDraft).where(
-                        SubmissionDraft.id == draft_id,
-                        SubmissionDraft.owner_account_id == account_id,
-                    )
-                ),
+            await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+            model = await session.scalar(
+                select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
             )
-        return bool(result.rowcount)
+            if model is None:
+                return False
+            self._require_owner(model, account_id)
+            status = DraftStatus(model.status)
+            if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise DraftStateConflictError(status.value, operation="delete")
+            # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
+            # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
+            await session.execute(
+                update(MediaNormalizationJobRecord)
+                .where(
+                    MediaNormalizationJobRecord.upload_id.in_(
+                        select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                    ),
+                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                )
+                .values(
+                    status=MediaJobStatus.DISCARDED.value,
+                    claimed_at=None,
+                    claim_token=None,
+                    completed_at=None,
+                    dead_at=None,
+                    discarded_at=func.now(),
+                    last_error=None,
+                )
+            )
+            await session.delete(model)
+        return True
 
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
         """Mark a bounded batch of inactive drafts expired for later retention cleanup."""

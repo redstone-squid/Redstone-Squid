@@ -1,8 +1,16 @@
 """Structured media validation and infrastructure errors."""
 
 from enum import StrEnum
+from uuid import UUID
 
-from squid.core.errors import ErrorCode, InfrastructureError, ServiceUnavailableError, ValidationError
+from squid.core.errors import (
+    ConflictError,
+    ErrorCode,
+    InfrastructureError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from squid.core.i18n import _
 from squid.media.domain.models import MediaViolation
 
@@ -49,6 +57,29 @@ class MediaLimitExceededError(ValidationError):
             public_context={"reason": "limit_exceeded", "measure": violation.measure.value, "limit": violation.limit},
         )
         self.violation = violation
+
+
+class MediaDraftStateConflictError(ConflictError):
+    """A media mutation lost a race with submission finalization."""
+
+    default_message = _("Media cannot be changed while this submission draft is locked.")
+    default_title = _("Draft media locked")
+    default_resource = "media"
+    default_end_user_action = _("Reload the draft before trying again.")
+
+    def __init__(self, status: str) -> None:
+        super().__init__(public_context={"reason": "draft_state", "status": status})
+
+
+class MediaDraftNotFoundError(NotFoundError):
+    """A media mutation cannot re-establish ownership after draft deletion."""
+
+    default_message = _("Submission draft not found.")
+    default_title = _("Draft not found")
+    default_resource = "submission_draft"
+
+    def __init__(self, draft_id: UUID) -> None:
+        super().__init__(public_context={"draft_id": str(draft_id)})
 
 
 class InvalidMediaError(ValidationError):

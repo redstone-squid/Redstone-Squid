@@ -36,6 +36,30 @@ class DraftCapacityExceededError(ConflictError):
         super().__init__(public_context={"limit": limit})
 
 
+class DraftStateConflictError(ConflictError):
+    """A draft mutation lost a race with a lifecycle transition."""
+
+    default_message = "This submission draft cannot be modified in its current state."
+    default_title = "Draft state changed"
+    default_resource = "submission_draft"
+    default_end_user_action = "Reload the draft before trying again."
+
+    def __init__(self, status: str, *, operation: str) -> None:
+        super().__init__(public_context={"status": status, "operation": operation})
+
+
+class DraftArtifactsChangedError(ConflictError):
+    """Artifact readiness changed before finalization acquired its durable fence."""
+
+    default_message = "The submission draft's media changed while finalization was starting."
+    default_title = "Draft media changed"
+    default_resource = "submission_draft"
+    default_end_user_action = "Review the latest media status and submit the draft again."
+
+    def __init__(self) -> None:
+        super().__init__(public_context={"reason": "media_changed"})
+
+
 class DraftSchemaUnsupportedError(ValidationError):
     """A renderer cannot safely present required fields in the pinned schema."""
 

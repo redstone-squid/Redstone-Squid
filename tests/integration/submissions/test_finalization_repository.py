@@ -1,5 +1,6 @@
 """PostgreSQL coverage for atomic finalization and UUID claim fencing."""
 
+import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from typing import cast
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.media.application.jobs import MediaJobStatus
+from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
@@ -30,6 +33,7 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
+from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
@@ -51,6 +55,8 @@ _TABLES: tuple[Table, ...] = (
     cast(Table, SubmissionDraft.__table__),
     cast(Table, SubmissionDraftAccess.__table__),
     cast(Table, SubmissionDraftChange.__table__),
+    cast(Table, MediaUploadRecord.__table__),
+    cast(Table, MediaNormalizationJobRecord.__table__),
     cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, SubmissionFinalizationResult.__table__),
 )
@@ -92,7 +98,7 @@ async def stored_draft(async_session_factory: async_sessionmaker[AsyncSession]) 
     return draft
 
 
-def _payload(draft: StoredDraft) -> NormalizedSubmission:
+def _payload(draft: StoredDraft, *media_upload_ids: UUID) -> NormalizedSubmission:
     return NormalizedSubmission(
         source_draft_id=draft.snapshot.id,
         owner_account_id=draft.snapshot.owner_account_id,
@@ -117,7 +123,7 @@ def _payload(draft: StoredDraft) -> NormalizedSubmission:
         completion=None,
         ai_generated=False,
         sponsor_attribution=False,
-        artifacts=VerifiedSubmissionArtifacts(),
+        artifacts=VerifiedSubmissionArtifacts(normalized_media_upload_ids=media_upload_ids),
         details=GeneralSubmissionDetails(),
     )
 
@@ -153,6 +159,125 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     async with async_session_factory() as session:
         draft_status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
     assert draft_status == DraftStatus.SUBMITTED.value
+
+
+async def _store_media(
+    session_factory: async_sessionmaker[AsyncSession],
+    upload_id: UUID,
+    status: MediaJobStatus | None,
+) -> None:
+    source = b"raw-image"
+    async with session_factory.begin() as session:
+        session.add(
+            MediaUploadRecord(
+                id=upload_id,
+                draft_id=DRAFT_ID,
+                kind="image",
+                source_content_type="image/jpeg",
+                source_byte_size=len(source),
+                source_sha256="a" * 64,
+                source_object_key=f"media/raw/{upload_id}/{'a' * 64}",
+                strip_audio=False,
+            )
+        )
+        await session.flush()
+        if status is not None:
+            session.add(
+                MediaNormalizationJobRecord(
+                    upload_id=upload_id,
+                    status=status.value,
+                    completed_at=NOW if status is MediaJobStatus.COMPLETED else None,
+                    dead_at=NOW if status is MediaJobStatus.DEAD else None,
+                    discarded_at=NOW if status is MediaJobStatus.DISCARDED else None,
+                )
+            )
+
+
+async def test_enqueue_rechecks_exact_completed_media_set_after_assessment(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    media_id = UUID("00000000-0000-4000-8000-000000000511")
+    payload_before_concurrent_upload = _payload(stored_draft)
+    await _store_media(async_session_factory, media_id, MediaJobStatus.COMPLETED)
+
+    with pytest.raises(DraftArtifactsChangedError):
+        await repository.enqueue(
+            stored_draft,
+            payload_before_concurrent_upload,
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        )
+
+    assert await repository.get(DRAFT_ID) is None
+    async with async_session_factory() as session:
+        status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
+    assert status == DraftStatus.EDITING.value
+
+
+@pytest.mark.parametrize("status", [MediaJobStatus.PENDING, MediaJobStatus.DEAD, MediaJobStatus.DISCARDED, None])
+async def test_enqueue_requires_every_payload_media_id_to_remain_completed(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    status: MediaJobStatus | None,
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    media_id = UUID("00000000-0000-4000-8000-000000000512")
+    await _store_media(async_session_factory, media_id, status)
+
+    with pytest.raises(DraftArtifactsChangedError):
+        await repository.enqueue(
+            stored_draft,
+            _payload(stored_draft, media_id),
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        )
+
+
+async def test_enqueue_accepts_an_exact_completed_media_snapshot(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    media_id = UUID("00000000-0000-4000-8000-000000000513")
+    await _store_media(async_session_factory, media_id, MediaJobStatus.COMPLETED)
+
+    result = await repository.enqueue(
+        stored_draft,
+        _payload(stored_draft, media_id),
+        now=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+
+    assert result.status is FinalizationJobStatus.PENDING
+
+
+async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    finalizations = PostgresFinalizationJobRepository(async_session_factory)
+    drafts = PostgresDraftRepository(async_session_factory)
+    enqueue_result, delete_result = await asyncio.gather(
+        finalizations.enqueue(
+            stored_draft,
+            _payload(stored_draft),
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        ),
+        drafts.delete_owned(DRAFT_ID, stored_draft.snapshot.owner_account_id),
+        return_exceptions=True,
+    )
+
+    if isinstance(enqueue_result, BaseException):
+        assert isinstance(enqueue_result, DraftNotFoundError)
+        assert delete_result is True
+        assert await finalizations.get(DRAFT_ID) is None
+    else:
+        assert enqueue_result.status is FinalizationJobStatus.PENDING
+        assert isinstance(delete_result, DraftStateConflictError)
+        assert await drafts.get(DRAFT_ID) is not None
 
 
 async def test_preparation_attention_can_be_repaired_without_changing_revision(
