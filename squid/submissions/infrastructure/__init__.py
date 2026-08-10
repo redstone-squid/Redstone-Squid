@@ -5,9 +5,11 @@ from squid.submissions.infrastructure.models import (
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
+from squid.submissions.infrastructure.options import ApprovedTagOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 
 __all__ = [
+    "ApprovedTagOptionCatalog",
     "PostgresDraftRepository",
     "SubmissionDraft",
     "SubmissionDraftAccess",

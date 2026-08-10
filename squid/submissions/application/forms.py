@@ -72,6 +72,26 @@ class SubmissionFormService:
         return await self._option_catalog.options(source, category, locale=locale)
 
 
+class CheckedInFormManifestRegistry:
+    """Resolve the current checked-in schema and reject revisions this binary cannot serve."""
+
+    async def current(self, *, locale: str | None) -> FormManifest:
+        """Return the only schema revision authored by this binary."""
+        return build_submission_manifest(locale)
+
+    async def get(
+        self,
+        schema_id: str,
+        revision: int,
+        *,
+        locale: str | None,
+    ) -> FormManifest | None:
+        """Return a pinned schema when its exact immutable revision is still available."""
+        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision != CURRENT_SUBMISSION_SCHEMA_REVISION:
+            return None
+        return build_submission_manifest(locale)
+
+
 def build_submission_manifest(locale: str | None = None) -> FormManifest:
     """Build the checked-in schema revision localized for one client."""
     localize = lambda message: translate(locale, message)
