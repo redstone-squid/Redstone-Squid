@@ -142,6 +142,10 @@ impl Locale {
                 "local profile configuration could not be read or written"
             }
             (Self::ZhCn, MessageKey::ProfileStorageFailed) => "无法读取或写入本地配置文件",
+            (Self::En, MessageKey::LocalSecurityStateFailed) => {
+                "local credentials or encrypted state could not be purged"
+            }
+            (Self::ZhCn, MessageKey::LocalSecurityStateFailed) => "无法清除本地凭据或加密状态",
             (Self::En, MessageKey::ProfileSymlinkRejected) => {
                 "refused a symbolic link in the CLI state path"
             }
@@ -234,6 +238,7 @@ pub enum MessageKey {
     ProfileCaInvalid,
     ProfileConfigInvalid,
     ProfileStorageFailed,
+    LocalSecurityStateFailed,
     ProfileSymlinkRejected,
     OriginInvalidUrl,
     OriginSchemeInvalid,

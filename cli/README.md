@@ -21,7 +21,8 @@ squid profile use production
 ```
 
 Plain HTTP is accepted only for literal IPv4 or IPv6 loopback addresses. Profile configuration is
-non-secret; device credentials and encrypted recovery state use separate stores.
+non-secret; device credentials and encrypted recovery state use separate stores. Removing a
+profile purges those local stores before deleting its configuration.
 
 Device signing keys and draft-cache keys use Windows Credential Manager, macOS Keychain, or the
 Linux Secret Service. If native storage is unavailable, callers must explicitly permit the

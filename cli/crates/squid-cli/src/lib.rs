@@ -10,6 +10,8 @@ use std::str::FromStr;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use serde::Serialize;
+use squid_cli_core::credential::{CredentialBackend, CredentialError, CredentialVault};
+use squid_cli_core::encrypted_state::{EncryptedStateError, EncryptedStateStore};
 use squid_cli_core::exit::ExitStatus;
 use squid_cli_core::locale::{Locale, LocalizedMessage, MessageKey, format_message};
 use squid_cli_core::origin::{ApiOrigin, OriginError};
@@ -330,6 +332,7 @@ fn run_profile(
                     name: String::from(name.as_str()),
                     active_profile: Some(String::from(name.as_str())),
                     removed: false,
+                    purged_credential_backend: None,
                 },
                 output,
             )?;
@@ -337,6 +340,13 @@ fn run_profile(
         }
         ProfileCommand::Remove { name, yes } => {
             let name = parse_profile_name(&name)?;
+            let current = store
+                .load()
+                .map_err(|error| profile_failure(error, Some(name.as_str())))?;
+            let (_stored_name, profile) = current
+                .resolve(Some(&name))
+                .map_err(|error| profile_failure(error, Some(name.as_str())))?;
+            let origin = profile.origin.clone();
             let should_remove = if yes {
                 true
             } else {
@@ -351,16 +361,18 @@ fn run_profile(
                         .with("name", name.as_str()),
                     ProfileMutation {
                         name: String::from(name.as_str()),
-                        active_profile: store
-                            .load()
-                            .map_err(|error| profile_failure(error, Some(name.as_str())))?
-                            .active_profile,
+                        active_profile: current.active_profile,
                         removed: false,
+                        purged_credential_backend: None,
                     },
                     output,
                 )?;
                 return Ok(());
             }
+            let encrypted_state = EncryptedStateStore::new(store.paths(), &origin);
+            encrypted_state.purge().map_err(encrypted_state_failure)?;
+            let credentials = CredentialVault::system(store.paths(), &origin);
+            let purged_backend = credentials.purge().map_err(credential_failure)?;
             let config = store
                 .remove(&name)
                 .map_err(|error| profile_failure(error, Some(name.as_str())))?;
@@ -373,6 +385,7 @@ fn run_profile(
                     name: String::from(name.as_str()),
                     active_profile: config.active_profile,
                     removed: true,
+                    purged_credential_backend: Some(credential_backend_name(purged_backend)),
                 },
                 output,
             )?;
@@ -425,6 +438,7 @@ struct ProfileMutation {
     name: String,
     active_profile: Option<String>,
     removed: bool,
+    purged_credential_backend: Option<&'static str>,
 }
 
 fn write_profile_result(
@@ -639,6 +653,58 @@ fn profile_failure(error: ProfileError, name: Option<&str>) -> CommandFailure {
         )
         .with_field_error("profile_store", sanitize_terminal_text(&other.to_string())),
     }
+}
+
+const fn credential_backend_name(backend: CredentialBackend) -> &'static str {
+    match backend {
+        CredentialBackend::System => "system",
+        CredentialBackend::OwnerFile => "owner_file",
+    }
+}
+
+fn credential_failure(error: CredentialError) -> CommandFailure {
+    let status = if matches!(
+        error,
+        CredentialError::SymlinkNotAllowed
+            | CredentialError::InvalidBackendMarker
+            | CredentialError::InvalidDeviceKey
+            | CredentialError::InvalidDraftCacheKey
+    ) {
+        ExitStatus::Security
+    } else {
+        ExitStatus::LocalState
+    };
+    CommandFailure::new(
+        status,
+        "local_security_state_failed",
+        MessageKey::LocalSecurityStateFailed,
+    )
+    .with_suggested_action(MessageKey::SuggestedCheckFilesystem)
+    .with_field_error("credentials", sanitize_terminal_text(&error.to_string()))
+}
+
+fn encrypted_state_failure(error: EncryptedStateError) -> CommandFailure {
+    let status = if matches!(
+        error,
+        EncryptedStateError::AuthenticationFailed
+            | EncryptedStateError::InvalidEnvelope
+            | EncryptedStateError::UnsupportedEnvelope(_)
+            | EncryptedStateError::SymlinkNotAllowed
+    ) {
+        ExitStatus::Security
+    } else {
+        ExitStatus::LocalState
+    };
+    CommandFailure::new(
+        status,
+        "local_security_state_failed",
+        MessageKey::LocalSecurityStateFailed,
+    )
+    .with_suggested_action(MessageKey::SuggestedCheckFilesystem)
+    .with_field_error(
+        "encrypted_state",
+        sanitize_terminal_text(&error.to_string()),
+    )
 }
 
 fn write_version(format: OutputFormat, locale: Locale, output: &mut impl Write) -> io::Result<()> {
@@ -907,6 +973,30 @@ mod tests {
                     if let Ok(rendered) = rendered {
                         assert!(rendered.contains("* local"));
                         assert!(rendered.contains("来源：http://127.0.0.1:8000"));
+                    }
+                }
+            }
+
+            let remove = Cli::try_parse_from([
+                "squid", "--output", "json", "profile", "remove", "local", "--yes",
+            ]);
+            assert!(remove.is_ok(), "profile remove did not parse: {remove:?}");
+            if let Ok(remove) = remove {
+                if let Command::Profile { command } = remove.command {
+                    let mut output = Vec::new();
+                    let result =
+                        run_profile(command, OutputFormat::Json, Locale::En, &store, &mut output);
+                    assert!(result.is_ok(), "profile remove failed: {result:?}");
+                    let value = serde_json::from_slice::<serde_json::Value>(&output);
+                    assert!(value.is_ok(), "profile remove was not JSON: {value:?}");
+                    if let Ok(value) = value {
+                        assert_eq!(value["data"]["removed"], true);
+                        assert_eq!(value["data"]["purged_credential_backend"], "system");
+                    }
+                    let loaded = store.load();
+                    assert!(loaded.is_ok(), "profile store failed: {loaded:?}");
+                    if let Ok(loaded) = loaded {
+                        assert!(loaded.profiles.is_empty());
                     }
                 }
             }
