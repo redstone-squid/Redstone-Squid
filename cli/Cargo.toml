@@ -15,11 +15,21 @@ license = "MIT"
 repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [workspace.dependencies]
+base64 = "0.22.1"
 clap = { version = "4.5.32", features = ["derive"] }
 clap_complete = "4.5.46"
 directories = "5.0.1"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core", "zeroize"] }
 fs2 = "0.4.3"
 hex = "0.4.3"
+keyring = { version = "=3.6.3", default-features = false, features = [
+    "apple-native",
+    "crypto-rust",
+    "sync-secret-service",
+    "vendored",
+    "windows-native",
+] }
+rand_core = { version = "0.6.4", features = ["getrandom"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 sha2 = "0.10.8"
@@ -29,6 +39,7 @@ thiserror = "2.0.12"
 toml = "0.8.20"
 # Keep this exact: newer URL/IDNA releases currently exceed the workspace's Rust 1.85 MSRV.
 url = { version = "=2.5.4", features = ["serde"] }
+zeroize = "1.8.1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

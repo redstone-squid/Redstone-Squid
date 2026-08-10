@@ -8,9 +8,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+base64.workspace = true
 directories.workspace = true
+ed25519-dalek.workspace = true
 fs2.workspace = true
 hex.workspace = true
+keyring.workspace = true
+rand_core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -18,6 +22,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 url.workspace = true
+zeroize.workspace = true
 
 [lints]
 workspace = true

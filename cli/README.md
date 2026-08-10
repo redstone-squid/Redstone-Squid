@@ -23,6 +23,11 @@ squid profile use production
 Plain HTTP is accepted only for literal IPv4 or IPv6 loopback addresses. Profile configuration is
 non-secret; device credentials and encrypted recovery state use separate stores.
 
+Device signing keys and draft-cache keys use Windows Credential Manager, macOS Keychain, or the
+Linux Secret Service. If native storage is unavailable, callers must explicitly permit the
+owner-readable file fallback. That choice is pinned per exact origin and remains detectable so
+every subsequent command can display a warning until the credentials are purged or migrated.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
