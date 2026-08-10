@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "crates/squid-cli",
+    "crates/squid-cli-core",
+    "crates/squid-cli-test-support",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Redstone Squid contributors"]
+license = "MIT"
+repository = "https://github.com/redstone-squid/Redstone-Squid"
+
+[workspace.dependencies]
+clap = { version = "4.5.32", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+squid-cli-core = { path = "crates/squid-cli-core" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
