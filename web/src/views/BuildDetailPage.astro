@@ -182,7 +182,7 @@ const linkGroups = build
                   {schematics!.items.map((schematic) => (
                     <article>
                       <h3>
-                        {schematic.filename ?? schematic.format}{" "}
+                        {schematic.format}{" "}
                         {schematic.primary && (
                           <span class="chip">{translate(locale, "build.primary")}</span>
                         )}

@@ -15,6 +15,7 @@ const summary: BuildSummary = {
   id: 1,
   revision: 1,
   title: "Compact Door",
+  display_name: null,
   status: "confirmed",
   category: "door",
   dimensions: { width: 5, height: 6, depth: null },
