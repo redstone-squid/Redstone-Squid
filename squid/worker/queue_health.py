@@ -6,27 +6,41 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.observability import record_gauge
+from squid.persistence.queue import VISIBILITY_TIMEOUT
 
-QUEUE_HEALTH_SQL = """
+VISIBILITY_TIMEOUT_SECONDS = int(VISIBILITY_TIMEOUT.total_seconds())
+QUEUE_HEALTH_SQL = f"""
 SELECT 'discord_sync' AS queue,
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NULL AND enqueued_at <= now()) AS ready,
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL) AS in_flight,
+       count(*) FILTER (WHERE dead_at IS NULL
+           AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+           AND enqueued_at <= now()) AS ready,
+       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL
+           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second') AS in_flight,
        count(*) FILTER (WHERE dead_at IS NOT NULL) AS dead_letters,
        extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL AND claimed_at IS NULL AND enqueued_at <= now()
+           WHERE dead_at IS NULL
+               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND enqueued_at <= now()
        )) AS oldest_ready_age
 FROM discord_sync_queue
 UNION ALL
 SELECT 'domain_events.' || consumers.name,
        count(deliveries.event_id) FILTER (
-           WHERE deliveries.dead_at IS NULL AND deliveries.claimed_at IS NULL AND deliveries.available_at <= now()
+           WHERE deliveries.dead_at IS NULL
+               AND (deliveries.claimed_at IS NULL
+                   OR deliveries.claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND deliveries.available_at <= now()
        ),
        count(deliveries.event_id) FILTER (
            WHERE deliveries.dead_at IS NULL AND deliveries.claimed_at IS NOT NULL
+               AND deliveries.claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'
        ),
        count(deliveries.event_id) FILTER (WHERE deliveries.dead_at IS NOT NULL),
        extract(epoch FROM now() - min(deliveries.available_at) FILTER (
-           WHERE deliveries.dead_at IS NULL AND deliveries.claimed_at IS NULL AND deliveries.available_at <= now()
+           WHERE deliveries.dead_at IS NULL
+               AND (deliveries.claimed_at IS NULL
+                   OR deliveries.claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND deliveries.available_at <= now()
        ))
 FROM domain_event_consumers AS consumers
 LEFT JOIN domain_event_deliveries AS deliveries ON deliveries.consumer = consumers.name
@@ -34,39 +48,59 @@ GROUP BY consumers.name
 UNION ALL
 SELECT 'schematic_jobs',
        count(*) FILTER (
-           WHERE completed_at IS NULL AND dead_at IS NULL AND claimed_at IS NULL AND available_at <= now()
+           WHERE completed_at IS NULL AND dead_at IS NULL
+               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND available_at <= now()
        ),
-       count(*) FILTER (WHERE completed_at IS NULL AND dead_at IS NULL AND claimed_at IS NOT NULL),
+       count(*) FILTER (WHERE completed_at IS NULL AND dead_at IS NULL AND claimed_at IS NOT NULL
+           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
        count(*) FILTER (WHERE dead_at IS NOT NULL),
        extract(epoch FROM now() - min(available_at) FILTER (
-           WHERE completed_at IS NULL AND dead_at IS NULL AND claimed_at IS NULL AND available_at <= now()
+           WHERE completed_at IS NULL AND dead_at IS NULL
+               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND available_at <= now()
        ))
 FROM schematic_jobs
 UNION ALL
 SELECT 'schematic_renders',
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NULL AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL),
+       count(*) FILTER (WHERE dead_at IS NULL
+           AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+           AND enqueued_at <= now()),
+       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL
+           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
        count(*) FILTER (WHERE dead_at IS NOT NULL),
        extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL AND claimed_at IS NULL AND enqueued_at <= now()
+           WHERE dead_at IS NULL
+               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND enqueued_at <= now()
        ))
 FROM schematic_render_queue
 UNION ALL
 SELECT 'search_projections',
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NULL AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL),
+       count(*) FILTER (WHERE dead_at IS NULL
+           AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+           AND enqueued_at <= now()),
+       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL
+           AND locked_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
        count(*) FILTER (WHERE dead_at IS NOT NULL),
        extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL AND locked_at IS NULL AND enqueued_at <= now()
+           WHERE dead_at IS NULL
+               AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND enqueued_at <= now()
        ))
 FROM search_projection_queue
 UNION ALL
 SELECT 'search_embeddings',
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NULL AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL),
+       count(*) FILTER (WHERE dead_at IS NULL
+           AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+           AND enqueued_at <= now()),
+       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL
+           AND locked_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
        count(*) FILTER (WHERE dead_at IS NOT NULL),
        extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL AND locked_at IS NULL AND enqueued_at <= now()
+           WHERE dead_at IS NULL
+               AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
+               AND enqueued_at <= now()
        ))
 FROM search_embedding_queue
 UNION ALL

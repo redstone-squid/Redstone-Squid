@@ -148,7 +148,14 @@ def test_migrations_create_schema_without_drift(
                     ")"
                 )
             ).scalar_one()
-            queue_health_names = {row.queue for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
+            queue_health_before = {row.queue: row for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
+            connection.execute(
+                text(
+                    "INSERT INTO discord_sync_queue (resource_kind, source_key, claimed_at) "
+                    "VALUES ('vote_session', 'expired-health-claim', now() - interval '6 minutes')"
+                )
+            )
+            queue_health_after = {row.queue: row for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
             connection.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
             connection.execute(
                 text("INSERT INTO discord_sync_queue (resource_kind, source_key) VALUES ('build', '42')")
@@ -194,7 +201,7 @@ def test_migrations_create_schema_without_drift(
     assert set(legacy_taxonomy_tables.values()) == {None}
     assert set(legacy_taxonomy_routines.values()) == {None}
     assert retirement_rebuild_queued is True
-    assert queue_health_names == {
+    assert set(queue_health_before) == {
         "discord_sync",
         "domain_events.core",
         "domain_events.discord",
@@ -204,6 +211,8 @@ def test_migrations_create_schema_without_drift(
         "search_embeddings",
         "search_projections",
     }
+    assert queue_health_after["discord_sync"].ready == queue_health_before["discord_sync"].ready + 1
+    assert queue_health_after["discord_sync"].in_flight == queue_health_before["discord_sync"].in_flight
     assert initial_projection_state == ("refresh", 1, 1)
     assert updated_projection_state == ("delete", 2, 1, 2)
 
