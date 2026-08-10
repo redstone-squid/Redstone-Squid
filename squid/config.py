@@ -9,6 +9,7 @@ from difflib import get_close_matches
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Any, Literal, Self, cast, override
+from urllib.parse import urlsplit
 
 from google.oauth2.service_account import Credentials
 from pydantic import (
@@ -177,8 +178,10 @@ class MinecraftAuthConfig(_FrozenModel):
     """Independent keyed-hash material for Minecraft device credentials."""
 
     pepper: SecretStr | None = None
+    verification_uri: AnyHttpUrl | None = None
 
     _empty_pepper = field_validator("pepper", mode="before")(_empty_to_none)
+    _empty_verification_uri = field_validator("verification_uri", mode="before")(_empty_to_none)
 
     @field_validator("pepper")
     @classmethod
@@ -187,6 +190,18 @@ class MinecraftAuthConfig(_FrozenModel):
             msg = "Must contain at least 32 bytes."
             raise ValueError(msg)
         return value
+
+    @model_validator(mode="after")
+    def _require_complete_device_flow(self) -> Self:
+        if (self.pepper is None) != (self.verification_uri is None):
+            msg = "Minecraft authorization requires both pepper and verification_uri."
+            raise ValueError(msg)
+        if self.verification_uri is not None:
+            parsed = urlsplit(str(self.verification_uri))
+            if parsed.scheme != "https" or parsed.query or parsed.fragment:
+                msg = "Minecraft verification_uri must be HTTPS without a query or fragment."
+                raise ValueError(msg)
+        return self
 
 
 class EmbeddingConfig(_FrozenModel):

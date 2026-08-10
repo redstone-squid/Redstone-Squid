@@ -146,6 +146,7 @@ def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatc
         SQUID_MEDIA_ENABLED="true",
         SQUID_MEDIA_THREADS="3",
         SQUID_MINECRAFT_AUTH_PEPPER=pepper,
+        SQUID_MINECRAFT_AUTH_VERIFICATION_URI="https://catalogue.example/minecraft/link",
     )
 
     config = load_api_process_config().runtime
@@ -154,6 +155,7 @@ def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatc
     assert config.media.threads == 3
     assert config.minecraft_auth.pepper is not None
     assert config.minecraft_auth.pepper.get_secret_value() == pepper
+    assert str(config.minecraft_auth.verification_uri) == "https://catalogue.example/minecraft/link"
 
 
 def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,6 +169,29 @@ def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch
         load_api_process_config()
 
     assert any(issue["field"] == "minecraft_auth.pepper" for issue in _issues(exc_info.value))
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"SQUID_MINECRAFT_AUTH_PEPPER": "minecraft-auth-pepper-with-32-bytes"},
+        {"SQUID_MINECRAFT_AUTH_VERIFICATION_URI": "https://catalogue.example/minecraft/link"},
+        {
+            "SQUID_MINECRAFT_AUTH_PEPPER": "minecraft-auth-pepper-with-32-bytes",
+            "SQUID_MINECRAFT_AUTH_VERIFICATION_URI": "http://catalogue.example/minecraft/link",
+        },
+    ],
+)
+def test_minecraft_auth_requires_a_complete_https_device_flow(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: dict[str, str],
+) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **settings)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == "minecraft_auth" for issue in _issues(exc_info.value))
 
 
 @pytest.mark.parametrize("ratio", ["-0.1", "1.1"])

@@ -426,6 +426,14 @@ export type ChallengeCreateResponse = {
      */
     user_code: string;
     /**
+     * Verification Uri
+     */
+    verification_uri: string;
+    /**
+     * Verification Uri Complete
+     */
+    verification_uri_complete: string;
+    /**
      * Expires At
      */
     expires_at: string;

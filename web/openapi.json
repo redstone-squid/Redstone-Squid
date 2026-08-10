@@ -9190,6 +9190,18 @@
             "type": "string",
             "title": "User Code"
           },
+          "verification_uri": {
+            "type": "string",
+            "minLength": 1,
+            "format": "uri",
+            "title": "Verification Uri"
+          },
+          "verification_uri_complete": {
+            "type": "string",
+            "minLength": 1,
+            "format": "uri",
+            "title": "Verification Uri Complete"
+          },
           "expires_at": {
             "type": "string",
             "format": "date-time",
@@ -9206,6 +9218,8 @@
           "id",
           "device_code",
           "user_code",
+          "verification_uri",
+          "verification_uri_complete",
           "expires_at",
           "polling_interval_seconds"
         ],

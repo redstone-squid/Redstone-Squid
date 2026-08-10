@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import AnyHttpUrl
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
@@ -54,6 +55,7 @@ DEVICE_CODE = "d" * 43
 USER_CODE = "ABCD-EFGH-IJKL-MNOP"
 PKCE_CHALLENGE = "A" * 43
 PKCE_VERIFIER = "v" * 43
+VERIFICATION_URI = AnyHttpUrl("https://catalogue.test/minecraft/link")
 
 
 def installation(*, profile: PublicServerProfile | None = None, credential_version: int = 1) -> PaperInstallation:
@@ -233,6 +235,9 @@ def app_with_fakes(
 ) -> FastAPI:
     app = FastAPI()
     app.state.runtime = SimpleNamespace(services=SimpleNamespace(idempotency=idempotency))
+    app.state.config = SimpleNamespace(
+        minecraft_auth=SimpleNamespace(verification_uri=VERIFICATION_URI),
+    )
     register_exception_handlers(app)
     app.include_router(router)
 
@@ -357,8 +362,11 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
     assert profiled.json()["profile"]["display_name"] == "Updated"
     assert rotated.json()["secret"] == ROTATED_SECRET
     assert paper_started.status_code == 201
+    assert paper_started.json()["verification_uri"] == str(VERIFICATION_URI)
+    assert paper_started.json()["verification_uri_complete"] == f"{VERIFICATION_URI}?code={USER_CODE}"
     assert paper_exchanged.json()["origin"] == "paper"
     assert fabric_started.status_code == 201
+    assert fabric_started.json()["verification_uri_complete"] == f"{VERIFICATION_URI}?code={USER_CODE}"
     assert fabric_exchanged.json()["origin"] == "fabric"
     assert approved.json()["java_uuid"] == str(JAVA_UUID)
     assert grant_revoked.status_code == 204

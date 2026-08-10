@@ -6,6 +6,7 @@ from typing import Annotated, Never, Protocol, TypeVar, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
+from pydantic import AnyHttpUrl
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
@@ -138,6 +139,7 @@ class _MinecraftAuthRuntime(Protocol):
 
 class _MinecraftAuthAppState(Protocol):
     runtime: _MinecraftAuthRuntime
+    config: object
 
 
 def get_installation_service(request: Request) -> PaperInstallationHttpService:
@@ -158,6 +160,16 @@ def get_player_authorization_service(request: Request) -> PlayerAuthorizationHtt
     return service
 
 
+def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
+    """Return the explicitly configured public page that accepts a user code."""
+    config = getattr(request.app.state, "config", None)
+    minecraft_auth = getattr(config, "minecraft_auth", None)
+    verification_uri = getattr(minecraft_auth, "verification_uri", None)
+    if not isinstance(verification_uri, AnyHttpUrl):
+        raise ServiceUnavailableError(resource="minecraft_auth")
+    return verification_uri
+
+
 async def current_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
     """Require a signed-in human account with current privacy consent."""
     if principal.kind != "account" or principal.account_id is None:
@@ -172,6 +184,7 @@ PlayerAuthorization = Annotated[PlayerAuthorizationHttpService, Depends(get_play
 AccountId = Annotated[int, Depends(current_account_id)]
 InstallationIdHeader = Annotated[str | None, Header(alias="X-Squid-Installation-ID")]
 InstallationSecretHeader = Annotated[str | None, Header(alias="X-Squid-Installation-Secret")]
+VerificationUri = Annotated[AnyHttpUrl, Depends(get_minecraft_verification_uri)]
 
 
 async def authenticated_paper_installation(
@@ -213,6 +226,7 @@ async def enforce_fabric_request_idempotency(
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
     await enforce_request_idempotency_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
+
 
 router = APIRouter(
     prefix="/minecraft/auth",
@@ -334,11 +348,12 @@ async def start_paper_challenge(
     response: Response,
     players: PlayerAuthorization,
     installation: AuthenticatedPaper,
+    verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
     """Start player authorization bound to the authenticated Paper credential generation."""
     challenge = await _execute(players.start_paper_challenge(installation=installation, java_uuid=payload.java_uuid))
     _prevent_storage(response)
-    return ChallengeCreateResponse.from_domain(challenge)
+    return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
 
 
 @router.post(
@@ -370,6 +385,7 @@ async def start_fabric_challenge(
     payload: FabricChallengeCreateRequest,
     response: Response,
     players: PlayerAuthorization,
+    verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
     """Start an anonymous Fabric challenge committed to a client-held S256 verifier."""
     challenge = await _execute(
@@ -379,7 +395,7 @@ async def start_fabric_challenge(
         )
     )
     _prevent_storage(response)
-    return ChallengeCreateResponse.from_domain(challenge)
+    return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
 
 
 @router.post(

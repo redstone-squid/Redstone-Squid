@@ -2,9 +2,10 @@
 
 from datetime import datetime
 from typing import Annotated, Self
+from urllib.parse import urlencode
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.domain import (
@@ -154,15 +155,27 @@ class ChallengeCreateResponse(StrictSchema):
     id: UUID
     device_code: str
     user_code: str
+    verification_uri: AnyHttpUrl
+    verification_uri_complete: AnyHttpUrl
     expires_at: datetime
     polling_interval_seconds: int
 
     @classmethod
-    def from_domain(cls, challenge: IssuedPlayerChallenge) -> "ChallengeCreateResponse":
+    def from_domain(
+        cls,
+        challenge: IssuedPlayerChallenge,
+        *,
+        verification_uri: AnyHttpUrl,
+    ) -> "ChallengeCreateResponse":
+        separator = "&" if verification_uri.query else "?"
         return cls(
             id=challenge.id,
             device_code=challenge.device_code,
             user_code=challenge.user_code,
+            verification_uri=verification_uri,
+            verification_uri_complete=AnyHttpUrl(
+                f"{verification_uri}{separator}{urlencode({'code': challenge.user_code})}"
+            ),
             expires_at=challenge.expires_at.to_stdlib(),
             polling_interval_seconds=challenge.polling_interval_seconds,
         )
