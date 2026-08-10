@@ -163,6 +163,12 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
+    manual_url = "https://media.example/user-managed-render.png"
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            text("INSERT INTO build_links (build_id, url, media_type) VALUES (1, :url, 'render')"),
+            {"url": manual_url},
+        )
     first_url = "https://api.example/v1/schematic-renders/first/content"
     first_render = await repository.record_render(
         first_id,
@@ -174,8 +180,18 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
         byte_size=42,
     )
     assert first_render is not None
+    async with async_session_factory() as session:
+        initial_links = set(
+            await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
+        )
+    assert initial_links == {manual_url, first_url}
 
     second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=True)
+    async with async_session_factory() as session:
+        links_after_replacement = set(
+            await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
+        )
+    assert links_after_replacement == {manual_url}
     stale_render = await repository.record_render(
         first_id,
         "stale-recipe",
@@ -212,14 +228,14 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
     assert replacement is not None
 
     async with async_session_factory() as session:
-        links = tuple(
+        links = set(
             await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
         )
         stale_rows = await session.scalar(
             text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'stale-recipe'")
         )
 
-    assert links == (replacement_url,)
+    assert links == {manual_url, replacement_url}
     assert stale_rows == 0
 
 

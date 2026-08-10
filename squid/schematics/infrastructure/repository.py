@@ -427,14 +427,25 @@ class SchematicRepository:
 
     @staticmethod
     async def _replace_projected_render(session: AsyncSession, build_id: int, url: str) -> None:
+        registered_urls = SchematicRepository._registered_render_urls(build_id)
         existing = tuple(
             await session.scalars(
-                select(BuildLink.url).where(BuildLink.build_id == build_id, BuildLink.media_type == "render")
+                select(BuildLink.url).where(
+                    BuildLink.build_id == build_id,
+                    BuildLink.media_type == "render",
+                    BuildLink.url.in_(registered_urls),
+                )
             )
         )
         if existing == (url,):
             return
-        await session.execute(delete(BuildLink).where(BuildLink.build_id == build_id, BuildLink.media_type == "render"))
+        await session.execute(
+            delete(BuildLink).where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                BuildLink.url.in_(registered_urls),
+            )
+        )
         await session.execute(insert(BuildLink).values(build_id=build_id, url=url, media_type="render"))
         await session.execute(
             update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
@@ -442,14 +453,36 @@ class SchematicRepository:
 
     @staticmethod
     async def _clear_projected_render(session: AsyncSession, build_id: int) -> None:
+        registered_urls = SchematicRepository._registered_render_urls(build_id)
         existing = await session.scalar(
-            select(BuildLink.url).where(BuildLink.build_id == build_id, BuildLink.media_type == "render").limit(1)
+            select(BuildLink.url)
+            .where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                BuildLink.url.in_(registered_urls),
+            )
+            .limit(1)
         )
         if existing is None:
             return
-        await session.execute(delete(BuildLink).where(BuildLink.build_id == build_id, BuildLink.media_type == "render"))
+        await session.execute(
+            delete(BuildLink).where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                BuildLink.url.in_(registered_urls),
+            )
+        )
         await session.execute(
             update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
+        )
+
+    @staticmethod
+    def _registered_render_urls(build_id: int) -> Select[tuple[str]]:
+        """Return URLs whose lifecycle is owned by this schematic projection."""
+        return (
+            select(SchematicRender.url)
+            .join(BuildSchematic, SchematicRender.build_schematic_id == BuildSchematic.id)
+            .where(BuildSchematic.build_id == build_id)
         )
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
