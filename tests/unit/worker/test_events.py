@@ -6,7 +6,7 @@ from whenever import Instant
 
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import VoteSessionResultLiteral, VoteSessionSnapshot, VoteTarget
-from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
+from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 
 
 def _event() -> DomainEvent:
@@ -87,3 +87,29 @@ async def test_core_runner_rejects_unsupported_event_versions_without_retry() ->
     events.reject.assert_awaited_once_with(delivery, error)
     events.fail.assert_not_awaited()
     events.complete.assert_not_awaited()
+
+
+async def test_notification_handler_accepts_current_provider_neutral_build_event_versions() -> None:
+    notifications = AsyncMock()
+    handler = MaterializeNotificationHandler(notifications)
+
+    events = tuple(
+        DomainEvent(
+            id=index,
+            event_type=event_type,
+            aggregate_kind="build",
+            aggregate_id=42,
+            occurred_at=Instant.now(),
+            schema_version=schema_version,
+        )
+        for index, (event_type, schema_version) in enumerate(
+            (("build.submitted", 2), ("build.confirmed", 3), ("build.denied", 3)),
+            start=1,
+        )
+    )
+
+    for event in events:
+        await handler.handle(event)
+
+    assert notifications.materialize.await_count == len(events)
+    assert [call.args for call in notifications.materialize.await_args_list] == [(event,) for event in events]

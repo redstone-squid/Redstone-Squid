@@ -9,6 +9,12 @@ from squid.voting.domain import VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
 CORE_CONSUMER = "core"
+_NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
+    "build.submitted": frozenset({1, 2}),
+    "build.confirmed": frozenset({1, 2, 3}),
+    "build.denied": frozenset({1, 2, 3}),
+    "record_run.activated": frozenset({1}),
+}
 
 
 class VoteOutcomeReader(Protocol):
@@ -58,13 +64,7 @@ class MaterializeNotificationHandler:
         self._notifications = notifications
 
     async def handle(self, event: DomainEvent) -> None:
-        supported_versions = {
-            "build.submitted": {1},
-            "build.confirmed": {1, 2},
-            "build.denied": {1, 2},
-            "record_run.activated": {1},
-        }
-        if event.schema_version not in supported_versions.get(event.event_type, set()):
+        if event.schema_version not in _NOTIFICATION_EVENT_SCHEMA_VERSIONS.get(event.event_type, frozenset()):
             msg = f"Unsupported {event.event_type} schema version {event.schema_version}"
             raise UnsupportedEventVersionError(msg)
         await self._notifications.materialize(event)
