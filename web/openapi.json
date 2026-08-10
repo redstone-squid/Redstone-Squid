@@ -208,6 +208,21 @@
             },
             "description": "Unprocessable Entity"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -356,6 +371,21 @@
             },
             "description": "Unprocessable Entity"
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -382,6 +412,11 @@
         "summary": "Discord Authorize",
         "description": "Begin Discord authorization with PKCE and durable one-time state.",
         "operationId": "discord_authorize_v1_auth_discord_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "redirect_to",
@@ -404,6 +439,21 @@
         "responses": {
           "307": {
             "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -456,6 +506,11 @@
         "summary": "Discord Callback",
         "description": "Exchange a Discord code and set a revocable opaque session cookie.",
         "operationId": "discord_callback_v1_auth_discord_callback_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "code",
@@ -483,6 +538,21 @@
         "responses": {
           "307": {
             "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -581,6 +651,21 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "401": {
             "content": {
@@ -711,6 +796,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -908,6 +1008,21 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "400": {
             "content": {
               "application/problem+json": {
@@ -1068,6 +1183,21 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "400": {
             "content": {
               "application/problem+json": {
@@ -1212,6 +1342,11 @@
         "summary": "Get Build",
         "description": "Return one confirmed public build.",
         "operationId": "get_build_v1_builds__build_id__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "build_id",
@@ -1233,6 +1368,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -1297,6 +1447,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserMe"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
             }
@@ -1415,6 +1580,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "401": {
             "content": {
@@ -1575,6 +1755,21 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "400": {
             "content": {
               "application/problem+json": {
@@ -1661,6 +1856,11 @@
         "summary": "Get Record",
         "description": "Return one result only while its computation run is active.",
         "operationId": "get_record_v1_records__record_id__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "record_id",
@@ -1682,6 +1882,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -1754,6 +1969,11 @@
         "summary": "List Records",
         "description": "List authoritative active record results.",
         "operationId": "list_records_v1_records_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "page_size",
@@ -1795,6 +2015,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -1852,6 +2087,11 @@
         "summary": "List Build Schematics",
         "description": "List analyzed schematics attached to a confirmed build.",
         "operationId": "list_build_schematics_v1_builds__build_id__schematics_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "build_id",
@@ -1902,6 +2142,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -1974,6 +2229,11 @@
         "summary": "Get Schematic Content",
         "description": "Download stored schematic bytes by their SHA-256 digest.",
         "operationId": "get_schematic_content_v1_schematics__sha256__content_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "sha256",
@@ -1992,6 +2252,21 @@
             "content": {
               "application/octet-stream": {}
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -2049,6 +2324,11 @@
         "summary": "Get Schematic Render Content",
         "description": "Return a content-addressed PNG preview from private object storage.",
         "operationId": "get_schematic_render_content_v1_schematic_renders__recipe_hash__content_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "recipe_hash",
@@ -2067,6 +2347,21 @@
             "content": {
               "image/png": {}
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -2139,6 +2434,21 @@
               }
             }
           },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service Unavailable",
             "content": {
@@ -2154,7 +2464,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ]
       }
     },
     "/v1/search/suggest": {
@@ -2165,6 +2480,11 @@
         "summary": "Suggest Terms",
         "description": "Suggest indexed terms completing a valid query.",
         "operationId": "suggest_terms_v1_search_suggest_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "q",
@@ -2199,6 +2519,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -2256,6 +2591,11 @@
         "summary": "Search",
         "description": "Match builds, computed records, and taxonomy entries in one ranked page.",
         "operationId": "search_v1_search_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "q",
@@ -2334,6 +2674,21 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "400": {
             "content": {
               "application/problem+json": {
@@ -2390,6 +2745,11 @@
         "summary": "List Tags",
         "description": "List published tag definitions.",
         "operationId": "list_tags_v1_tags_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "page_size",
@@ -2431,6 +2791,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -2488,6 +2863,11 @@
         "summary": "Get Tag",
         "description": "Return one published tag definition.",
         "operationId": "get_tag_v1_tags__tag_id__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "tag_id",
@@ -2509,6 +2889,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -2566,6 +2961,11 @@
         "summary": "Get Creator Alias",
         "description": "Return a creator credit without exposing its linked account.",
         "operationId": "get_creator_alias_v1_creator_aliases__name__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "name",
@@ -2589,6 +2989,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -2646,6 +3061,11 @@
         "summary": "List Versions",
         "description": "List recognized Java and Bedrock releases.",
         "operationId": "list_versions_v1_versions_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
         "parameters": [
           {
             "name": "page_size",
@@ -2687,6 +3107,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "400": {
             "content": {
@@ -2770,6 +3205,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "404": {
             "content": {
@@ -2885,6 +3335,21 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
           "400": {
             "content": {
               "application/problem+json": {
@@ -2959,21 +3424,6 @@
               }
             },
             "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Too Many Requests"
           },
           "503": {
             "content": {

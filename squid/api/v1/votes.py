@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.rate_limit import SlidingWindowRateLimiter
 from squid.api.security import Principal, Scope, require
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
@@ -16,7 +15,6 @@ from squid.users.errors import ConsentRequiredError
 from squid.voting.domain import CastVoteResult
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
-_vote_limiter = SlidingWindowRateLimiter(30, 300)
 UserVoter = Annotated[Principal, Depends(require(Scope.VOTES_CAST))]
 
 
@@ -68,7 +66,6 @@ async def cast_vote(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
-    await _vote_limiter.check(principal.subject)
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         raise _vote_not_found(vote_session_id)

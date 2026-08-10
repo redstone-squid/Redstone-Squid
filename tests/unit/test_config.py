@@ -371,6 +371,59 @@ def test_api_port_is_bounded(monkeypatch: pytest.MonkeyPatch, port: str) -> None
     assert any(issue["field"] == "api.port" for issue in _issues(exc_info.value))
 
 
+def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret",
+        SQUID_API_TRUSTED_PROXY_IPS='["127.0.0.1", "10.0.0.0/8"]',
+        SQUID_RATE_LIMIT_REDIS_URL="rediss://user:secret@redis.example/0",
+        SQUID_RATE_LIMIT_WINDOW_SECONDS="60",
+        SQUID_RATE_LIMIT_IP_REQUESTS="120",
+        SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS="90",
+        SQUID_RATE_LIMIT_WRITE_REQUESTS="30",
+        SQUID_RATE_LIMIT_VOTE_REQUESTS="10",
+        SQUID_RATE_LIMIT_REDIS_TIMEOUT_SECONDS="0.5",
+        SQUID_RATE_LIMIT_REDIS_RETRY_SECONDS="7",
+        SQUID_RATE_LIMIT_LOCAL_MAX_KEYS="4096",
+    )
+
+    config = load_api_process_config()
+
+    assert config.api.trusted_proxy_ips == ("127.0.0.1", "10.0.0.0/8")
+    assert config.rate_limit.redis_url is not None
+    assert config.rate_limit.redis_url.get_secret_value() == "rediss://user:secret@redis.example/0"
+    assert config.rate_limit.window_seconds == 60
+    assert config.rate_limit.ip_requests == 120
+    assert config.rate_limit.principal_requests == 90
+    assert config.rate_limit.write_requests == 30
+    assert config.rate_limit.vote_requests == 10
+    assert config.rate_limit.redis_timeout_seconds == 0.5
+    assert config.rate_limit.redis_retry_seconds == 7
+    assert config.rate_limit.local_max_keys == 4_096
+    assert "secret@redis" not in repr(config)
+
+
+@pytest.mark.parametrize(
+    ("setting", "field"),
+    [
+        ({"SQUID_API_TRUSTED_PROXY_IPS": '["not-an-address"]'}, "api.trusted_proxy_ips"),
+        ({"SQUID_RATE_LIMIT_REDIS_URL": "https://redis.example"}, "rate_limit.redis_url"),
+        ({"SQUID_RATE_LIMIT_IP_REQUESTS": "0"}, "rate_limit.ip_requests"),
+    ],
+)
+def test_invalid_api_rate_limit_settings_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    setting: dict[str, str],
+    field: str,
+) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **setting)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == field for issue in _issues(exc_info.value))
+
+
 def test_google_credentials_are_mutually_exclusive(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     credentials_file = tmp_path / "credentials.json"
     credentials_file.write_text("{}", encoding="utf-8")

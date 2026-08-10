@@ -1,7 +1,9 @@
 """Version 1 REST router assembly."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from squid.api.errors import responses
+from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.me import router as me_router
@@ -13,7 +15,11 @@ from squid.api.v1.users import router as users_router
 from squid.api.v1.versions import router as versions_router
 from squid.api.v1.votes import router as votes_router
 
-router = APIRouter(prefix="/v1")
+router = APIRouter(
+    prefix="/v1",
+    dependencies=[Depends(enforce_route_rate_limits)],
+    responses=responses(429),
+)
 router.include_router(auth_router)
 router.include_router(builds_router)
 router.include_router(me_router)

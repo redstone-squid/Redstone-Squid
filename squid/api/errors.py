@@ -1,6 +1,7 @@
 """RFC 9457 problem details and FastAPI exception handlers."""
 
 import logging
+from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any, Protocol, cast
 
@@ -74,8 +75,14 @@ def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
     }
 
 
-def _problem_response(problem: ProblemDetail, locale: str) -> Response:
+def _problem_response(
+    problem: ProblemDetail,
+    locale: str,
+    *,
+    extra_headers: Mapping[str, str] | None = None,
+) -> Response:
     headers = {"Content-Language": locale}
+    headers.update(extra_headers or {})
     if problem.error_id is not None:
         headers["X-Error-ID"] = problem.error_id
     return Response(
@@ -127,6 +134,7 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
                 context=exc.public_context or None,
             ),
             locale,
+            extra_headers={"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None,
         )
 
     error_id = correlation_id()

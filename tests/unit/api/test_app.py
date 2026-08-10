@@ -24,6 +24,7 @@ from tests.unit.api.fakes import (
 def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
     config = mocker.Mock()
     config.api.port = 8123
+    config.api.trusted_proxy_ips = ("127.0.0.1", "10.0.0.0/8")
     handle = mocker.Mock()
     mocker.patch.object(api_app, "configure_api_logging")
     configure = mocker.patch.object(api_app, "configure_observability", return_value=handle)
@@ -33,6 +34,8 @@ def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
 
     configure.assert_called_once_with(config.observability, service_name="api")
     run.assert_called_once()
+    assert run.call_args.kwargs["proxy_headers"] is True
+    assert run.call_args.kwargs["forwarded_allow_ips"] == ["127.0.0.1", "10.0.0.0/8"]
     handle.shutdown.assert_called_once_with()
 
 

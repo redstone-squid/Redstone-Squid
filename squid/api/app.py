@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from squid.api.dependencies import Users
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
+from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.security import Principal, Scope, require
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
@@ -55,15 +56,15 @@ class User(BaseModel):
 @router.post(
     "/verify",
     status_code=201,
-    responses=responses(401, 403, 404, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    responses=responses(401, 403, 404, 409, 422, 429, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
 )
 @router.post(
     "/v1/verify",
     status_code=201,
-    responses=responses(401, 403, 404, 409, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 429, 503),
     tags=["users"],
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
 )
 async def get_verification_code(
     user: User,
@@ -86,9 +87,15 @@ def create_api_app(
     async def lifespan(app: FastAPI):
         resolved_config = config or config_factory()
         app.state.config = resolved_config
-        async with runtime_factory(resolved_config.runtime) as runtime:
-            app.state.runtime = runtime
-            yield
+        limiter, policies = create_rate_limiter(resolved_config.rate_limit)
+        app.state.rate_limiter = limiter
+        app.state.rate_limit_policies = policies
+        try:
+            async with runtime_factory(resolved_config.runtime) as runtime:
+                app.state.runtime = runtime
+                yield
+        finally:
+            await limiter.aclose()
 
     api = FastAPI(
         title="Redstone Squid API",
@@ -100,6 +107,7 @@ def create_api_app(
     register_exception_handlers(api)
     api.include_router(router)
     api.include_router(v1_router)
+    api.add_middleware(RateLimitMiddleware)
     api.add_middleware(IdempotencyResponseMiddleware)
     resolved_for_middleware = config
     cors_origins = (
@@ -120,7 +128,7 @@ def create_api_app(
                 "If-Match",
                 "X-CSRF-Token",
             ],
-            expose_headers=["ETag"],
+            expose_headers=["ETag", "RateLimit", "RateLimit-Policy", "Retry-After"],
         )
     if config is not None:
         instrument_api_app(api, config.observability)
@@ -143,6 +151,8 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
             host="0.0.0.0",
             port=resolved_config.api.port,
             log_config=None,
+            proxy_headers=bool(resolved_config.api.trusted_proxy_ips),
+            forwarded_allow_ips=list(resolved_config.api.trusted_proxy_ips),
         )
     finally:
         observability.shutdown()

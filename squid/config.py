@@ -6,6 +6,7 @@ import os
 import re
 from collections.abc import Mapping
 from difflib import get_close_matches
+from ipaddress import ip_network
 from pathlib import Path
 from typing import Any, Literal, Self, cast, override
 
@@ -211,6 +212,7 @@ class ApiConfig(_FrozenModel):
     log_file: str | None = None
     access_log_file: str | None = None
     cors_origins: tuple[str, ...] = ()
+    trusted_proxy_ips: tuple[str, ...] = ()
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
     _empty_bot_token = field_validator("bot_token", mode="before")(_empty_to_none)
@@ -229,6 +231,44 @@ class ApiConfig(_FrozenModel):
     def _require_peppers(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value().encode()) < 16:
             msg = "Must contain at least 16 bytes."
+            raise ValueError(msg)
+        return value
+
+    @field_validator("trusted_proxy_ips")
+    @classmethod
+    def _validate_trusted_proxy_ips(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for network in value:
+            try:
+                ip_network(network, strict=False)
+            except ValueError as exc:
+                msg = "Must contain only IP addresses or CIDR networks."
+                raise ValueError(msg) from exc
+        return value
+
+
+class RateLimitConfig(_FrozenModel):
+    """Distributed HTTP abuse-control configuration."""
+
+    redis_url: SecretStr | None = None
+    window_seconds: int = Field(default=300, ge=1, le=86_400)
+    ip_requests: int = Field(default=600, ge=1)
+    principal_requests: int = Field(default=300, ge=1)
+    write_requests: int = Field(default=60, ge=1)
+    vote_requests: int = Field(default=30, ge=1)
+    redis_timeout_seconds: float = Field(default=0.2, gt=0, le=10)
+    redis_retry_seconds: float = Field(default=5.0, gt=0, le=300)
+    local_max_keys: int = Field(default=2_048, ge=16, le=100_000)
+
+    _empty_redis_url = field_validator("redis_url", mode="before")(_empty_to_none)
+
+    @field_validator("redis_url")
+    @classmethod
+    def _validate_redis_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        raw_url = value.get_secret_value()
+        if not raw_url.startswith(("redis://", "rediss://", "unix://")):
+            msg = "Must use a redis://, rediss://, or unix:// URL."
             raise ValueError(msg)
         return value
 
@@ -669,6 +709,7 @@ class ApiProcessConfig(_ProcessSettings):
 
     api: ApiConfig
     oauth: OAuthConfig = OAuthConfig()
+    rate_limit: RateLimitConfig = RateLimitConfig()
 
     @property
     @override
@@ -715,6 +756,7 @@ class ApplicationConfig(BotProcessConfig):
 
     api: ApiConfig
     oauth: OAuthConfig = OAuthConfig()
+    rate_limit: RateLimitConfig = RateLimitConfig()
     worker: WorkerConfig = WorkerConfig()
 
     def bot_process(self) -> BotProcessConfig:
@@ -759,6 +801,7 @@ class ApplicationConfig(BotProcessConfig):
                     "strict_unknown_keys",
                     "oauth",
                     "api",
+                    "rate_limit",
                 }
             )
         )
@@ -959,6 +1002,7 @@ __all__ = [
     "OAuthConfig",
     "ObservabilityConfig",
     "OpenAIConfig",
+    "RateLimitConfig",
     "RuntimeConfig",
     "SchematicConfig",
     "WorkerConfig",

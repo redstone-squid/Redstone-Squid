@@ -132,6 +132,7 @@ def build_app(
     web_auth: object | None = None,
     idempotency: object | None = None,
     users: object | None = None,
+    config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
@@ -155,4 +156,4 @@ def build_app(
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
-    return create_api_app(lambda _config: runtime, config=TEST_CONFIG), database
+    return create_api_app(lambda _config: runtime, config=config), database
