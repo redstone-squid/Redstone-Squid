@@ -240,7 +240,8 @@ async def test_delete_rejects_every_noneditable_lifecycle_state(status: DraftSta
     with pytest.raises(DraftStateConflictError) as exc_info:
         await service.delete(DRAFT_ID, 7)
 
-    assert exc_info.value.public_context == {"status": status.value, "operation": "delete"}
+    operation = "access" if status is DraftStatus.EXPIRED else "delete"
+    assert exc_info.value.public_context == {"status": status.value, "operation": operation}
     assert DRAFT_ID in repository.drafts
 
 
@@ -264,6 +265,42 @@ async def test_change_is_idempotent_even_after_revision_advances() -> None:
     assert first.replayed is False
     assert replay.replayed is True
     assert replay.draft.snapshot.revision == 1
+
+
+@pytest.mark.asyncio
+async def test_expired_draft_is_inaccessible_even_to_replayed_mutations() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(
+        repository,
+        FakeManifestRegistry(),
+        now=lambda: NOW.add(days=8, days_assumed_24h_ok=True),
+    )
+    expired = StoredDraft(
+        snapshot=DraftSnapshot(
+            id=DRAFT_ID,
+            owner_account_id=7,
+            schema_id="build_submission.v1",
+            schema_revision=1,
+            category="other",
+        ),
+        origin=SubmissionOrigin.WEB,
+        created_at=NOW,
+        updated_at=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+    repository.drafts[DRAFT_ID] = expired
+    repository.replays[(DRAFT_ID, "operation-0001")] = AppliedDraftChange(expired, replayed=True)
+
+    with pytest.raises(DraftStateConflictError) as access_error:
+        await service.get_owned(DRAFT_ID, 7)
+    with pytest.raises(DraftStateConflictError):
+        await service.apply_change(DRAFT_ID, 7, _change(), locale="en")
+    with pytest.raises(DraftStateConflictError):
+        await service.validate_for_finalization(DRAFT_ID, 7, locale="en")
+    with pytest.raises(DraftStateConflictError):
+        await service.delete(DRAFT_ID, 7)
+
+    assert access_error.value.public_context == {"status": "expired", "operation": "access"}
 
 
 @pytest.mark.asyncio
