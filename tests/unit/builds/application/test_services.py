@@ -281,6 +281,15 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     repository.save.assert_awaited_once_with(build)
 
 
+async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> None:
+    draft_id = UUID("11111111-1111-4111-8111-111111111111")
+    existing = Build(id=41, source_submission_draft_id=draft_id)
+
+    result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(draft_id)
+
+    assert result is existing
+
+
 async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry() -> None:
     draft_id = UUID("22222222-2222-2222-2222-222222222222")
     existing = Build(

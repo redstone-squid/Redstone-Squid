@@ -39,6 +39,10 @@ class BuildService:
     async def get(self, build_id: int) -> Build | None:
         return await self._repository.get_by_id(build_id)
 
+    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+        """Return the build previously finalized from a synchronized draft, if any."""
+        return await self._repository.get_by_source_submission_draft_id(draft_id)
+
     async def submit_door(self, submission: DoorSubmissionInput) -> Build:
         build = Build(
             submitter_id=submission.submitter_id,
