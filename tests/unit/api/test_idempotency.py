@@ -1,5 +1,6 @@
 """HTTP idempotency contract tests."""
 
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,6 +21,7 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         self.records: dict[tuple[str, str], ExistingRequest] = {}
         self.pending: dict[object, tuple[str, str]] = {}
 
+    @override
     async def reserve(
         self,
         *,
@@ -40,11 +42,17 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         self.pending[request.request_id] = identity
         return request
 
+    @override
     async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
         del now
         identity = self.pending.pop(request.request_id)
         existing = self.records[identity]
         self.records[identity] = ExistingRequest(existing.fingerprint, response)
+
+    @override
+    async def purge_expired(self, *, now: Instant) -> int:
+        del now
+        return 0
 
 
 class CountingAccounts:
@@ -114,17 +122,20 @@ def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
 @pytest.mark.asyncio
 async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_principal() -> None:
     service = IdempotencyService(MemoryIdempotencyRepository())
-    arguments = {
-        "key": "concurrent-request",
-        "fingerprint": b"same-request",
-        "method": "POST",
-        "route": "/v1/builds",
-    }
 
-    first = await service.reserve(principal="account:1", **arguments)
+    async def reserve_for(principal: str) -> PendingRequest | StoredResponse:
+        return await service.reserve(
+            principal=principal,
+            key="concurrent-request",
+            fingerprint=b"same-request",
+            method="POST",
+            route="/v1/builds",
+        )
+
+    first = await reserve_for("account:1")
     with pytest.raises(IdempotencyInProgressError):
-        await service.reserve(principal="account:1", **arguments)
-    other_principal = await service.reserve(principal="account:2", **arguments)
+        await reserve_for("account:1")
+    other_principal = await reserve_for("account:2")
 
     assert isinstance(first, PendingRequest)
     assert isinstance(other_principal, PendingRequest)

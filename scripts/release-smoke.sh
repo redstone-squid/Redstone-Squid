@@ -69,6 +69,8 @@ docker run --detach --name "$API_CONTAINER" --network host "${COMMON_ENV[@]}" \
     --env SQUID_API_SECRET=release-smoke-api-secret \
     --env SQUID_API_KEY_PEPPER=release-smoke-key-pepper \
     --env SQUID_API_SESSION_PEPPER=release-smoke-session-pepper \
+    --env SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID=release-smoke-v1 \
+    --env 'SQUID_API_IDEMPOTENCY_KEYS={"release-smoke-v1":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}' \
     --env "SQUID_RATE_LIMIT_REDIS_URL=redis://127.0.0.1:${REDIS_PORT}/0" \
     "$APP_IMAGE" python -m squid.api.app >/dev/null
 wait_for_command "API readiness" curl --fail --silent --show-error "http://127.0.0.1:${API_PORT}/readyz"

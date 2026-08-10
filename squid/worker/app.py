@@ -137,6 +137,11 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 3600),
         )
         self._supervisor.start_periodic(
+            self._cleanup_idempotency,
+            name="idempotency-retention",
+            interval=max(maintenance_interval, 300),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -162,6 +167,7 @@ class DatabaseWorker:
             "schematic-job-cleanup",
             "queue-health",
             "notification-retention",
+            "idempotency-retention",
             "submission-finalization",
         }
         if self._services.media_runner is not None:
@@ -254,6 +260,15 @@ class DatabaseWorker:
     async def _cleanup_notifications(self) -> None:
         with trace_span("squid.worker.notification_retention", {"squid.surface": "background_loop"}):
             await self._services.notifications.cleanup()
+
+    async def _cleanup_idempotency(self) -> None:
+        with trace_span("squid.worker.idempotency_retention", {"squid.surface": "background_loop"}):
+            deleted = await self._services.purge_idempotency()
+        if deleted:
+            logger.info(
+                "Expired idempotency requests removed",
+                extra={"squid.idempotency.deleted": deleted},
+            )
 
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:

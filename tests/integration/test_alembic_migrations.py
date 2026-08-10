@@ -251,6 +251,49 @@ def test_alembic_detects_managed_function_and_trigger_drift(
         command.check(config)
 
 
+def test_idempotency_encryption_migration_purges_plaintext_replay_rows(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy response bodies cannot survive into the ciphertext-only schema."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "d2f3a4b5c6d7")
+
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests ("
+                    "id, principal, idempotency_key, request_fingerprint, method, route, state, "
+                    "response_status, response_headers, response_body, completed_at, expires_at"
+                    ") VALUES ("
+                    "'11111111-1111-1111-1111-111111111111', 'account:1', 'legacy-secret', "
+                    "decode('00', 'hex'), 'POST', '/v1/minecraft/installations', 'completed', 201, "
+                    "'{\"content-type\":\"application/json\"}'::jsonb, 'plaintext-secret', now(), "
+                    "now() + interval '24 hours'"
+                    ")"
+                )
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM idempotency_requests")).scalar_one() == 0
+            columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'idempotency_requests'"
+                    )
+                ).scalars()
+            )
+    finally:
+        engine.dispose()
+
+    assert "response_body" not in columns
+    assert {"response_body_ciphertext", "response_body_key_id", "response_body_nonce"} <= columns
+
+
 def test_taxonomy_cutover_refuses_unimported_legacy_rows(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,

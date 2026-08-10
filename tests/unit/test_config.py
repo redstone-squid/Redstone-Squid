@@ -23,6 +23,8 @@ BASE_ENVIRONMENT = {
     "SQUID_CURSOR_SECRET": "cursor-secret-for-tests",
     "SQUID_API_KEY_PEPPER": "api-key-pepper-for-tests",
     "SQUID_API_SESSION_PEPPER": "session-pepper-for-tests",
+    "SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID": "test-v1",
+    "SQUID_API_IDEMPOTENCY_KEYS": '{"test-v1":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}',
 }
 
 
@@ -88,6 +90,11 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.bot_process().logging.log_file == "bot/discord.log"
     assert config.api_process().api.port == 9000
     assert config.api_process().api.key_pepper.get_secret_value() == "api-key-pepper-for-tests"
+    assert config.api_process().api.idempotency_encryption.decoded_keys() == {"test-v1": b"0" * 32}
+    runtime_encryption = config.api_process().runtime.idempotency_encryption
+    assert runtime_encryption is not None
+    assert runtime_encryption.active_key_id == "test-v1"
+    assert "MDAwMDAw" not in repr(config.api_process().api)
     assert config.api_process().logging.access_log_file == "access.log"
     assert config.build.commit_hash == "abcdef123456"
     for process_config in (config.bot_process(), config.api_process(), config.worker_process()):
@@ -417,6 +424,32 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
         load_api_process_config()
 
     assert any(issue["field"] == "api.key_pepper" for issue in _issues(exc_info.value))
+
+
+@pytest.mark.parametrize(
+    ("active_key_id", "keys"),
+    [
+        ("missing", '{"current":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}'),
+        ("current", '{"current":"dG9vLXNob3J0"}'),
+        ("bad key id", '{"bad key id":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}'),
+    ],
+)
+def test_idempotency_encryption_keyring_is_complete_and_strong(
+    monkeypatch: pytest.MonkeyPatch,
+    active_key_id: str,
+    keys: str,
+) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID=active_key_id,
+        SQUID_API_IDEMPOTENCY_KEYS=keys,
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"].startswith("api") for issue in _issues(exc_info.value))
 
 
 def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch) -> None:

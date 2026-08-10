@@ -118,6 +118,7 @@ class WorkerServices:
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     record_queue_health: Callable[[], Awaitable[None]]
+    purge_idempotency: Callable[[], Awaitable[int]]
 
 
 @dataclass(frozen=True, slots=True)

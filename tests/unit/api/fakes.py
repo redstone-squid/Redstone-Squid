@@ -32,6 +32,8 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
             "secret": TEST_SYNERGY_SECRET,
             "key_pepper": "api-key-pepper-for-tests",
             "session_pepper": "session-pepper-for-tests",
+            "idempotency_active_key_id": "test-v1",
+            "idempotency_keys": {"test-v1": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="},
         },
     }
 )
