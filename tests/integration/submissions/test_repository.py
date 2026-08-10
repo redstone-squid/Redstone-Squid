@@ -1,0 +1,180 @@
+"""PostgreSQL synchronized-draft repository integration tests."""
+
+import asyncio
+from collections.abc import AsyncGenerator
+from typing import cast
+from uuid import UUID
+
+import pytest
+from sqlalchemy import Table, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from whenever import Instant
+
+from squid.accounts.infrastructure.models import Account
+from squid.submissions.application import StoredDraft
+from squid.submissions.domain import (
+    DraftChange,
+    DraftRevisionConflictError,
+    DraftSnapshot,
+    FieldOperation,
+    FieldOperationKind,
+    SubmissionOrigin,
+)
+from squid.submissions.infrastructure.models import (
+    SubmissionDraft,
+    SubmissionDraftAccess,
+    SubmissionDraftChange,
+)
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
+
+DRAFT_ID = UUID("00000000-0000-4000-8000-000000000201")
+NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
+_TABLES = (
+    cast(Table, Account.__table__),
+    cast(Table, SubmissionDraft.__table__),
+    cast(Table, SubmissionDraftAccess.__table__),
+    cast(Table, SubmissionDraftChange.__table__),
+)
+
+
+@pytest.fixture
+async def draft_tables(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+    async with async_engine.begin() as connection:
+        for table in _TABLES:
+            await connection.run_sync(table.create)
+    try:
+        yield
+    finally:
+        async with async_engine.begin() as connection:
+            for table in reversed(_TABLES):
+                await connection.run_sync(table.drop)
+
+
+@pytest.fixture
+async def account_id(
+    draft_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> int:
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        return account.id
+
+
+def _stored(account_id: int) -> StoredDraft:
+    return StoredDraft(
+        snapshot=DraftSnapshot(
+            id=DRAFT_ID,
+            owner_account_id=account_id,
+            schema_id="build_submission.v1",
+            schema_revision=1,
+            category="other",
+        ),
+        origin=SubmissionOrigin.WEB,
+        created_at=NOW,
+        updated_at=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+
+
+def _change(*, key: str, operation_id: str) -> DraftChange:
+    return DraftChange(
+        base_revision=0,
+        client_instance_id="web:integration-test",
+        idempotency_key=key,
+        operations=(
+            FieldOperation(
+                UUID(operation_id),
+                "display_name",
+                FieldOperationKind.SET,
+                key,
+            ),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_adds_owner_grant_and_replays_change(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    created = await repository.create(_stored(account_id))
+    change = _change(key="operation-a", operation_id="00000000-0000-4000-8000-000000000202")
+
+    applied = await repository.apply_change(
+        DRAFT_ID,
+        account_id,
+        change,
+        updated_at=NOW.add(seconds=1),
+        expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+    )
+    replayed = await repository.apply_change(
+        DRAFT_ID,
+        account_id,
+        change,
+        updated_at=NOW.add(seconds=2),
+        expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+    )
+
+    assert created.snapshot.revision == 0
+    assert applied.draft.snapshot.revision == 1
+    assert replayed.replayed is True
+    assert replayed.draft.snapshot.revision == 1
+    async with async_session_factory() as session:
+        grants = await session.scalar(select(func.count()).select_from(SubmissionDraftAccess))
+        changes = await session.scalar(select(func.count()).select_from(SubmissionDraftChange))
+    assert grants == 1
+    assert changes == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_revision_changes_have_one_winner(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    await repository.create(_stored(account_id))
+    changes = (
+        _change(key="operation-a", operation_id="00000000-0000-4000-8000-000000000203"),
+        _change(key="operation-b", operation_id="00000000-0000-4000-8000-000000000204"),
+    )
+
+    results = await asyncio.gather(
+        *(
+            repository.apply_change(
+                DRAFT_ID,
+                account_id,
+                change,
+                updated_at=NOW.add(seconds=index),
+                expires_at=NOW.add(days=7, seconds=index, days_assumed_24h_ok=True),
+            )
+            for index, change in enumerate(changes, start=1)
+        ),
+        return_exceptions=True,
+    )
+
+    assert sum(not isinstance(result, BaseException) for result in results) == 1
+    assert sum(isinstance(result, DraftRevisionConflictError) for result in results) == 1
+
+
+@pytest.mark.asyncio
+async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    stored = _stored(account_id)
+    stored = StoredDraft(
+        snapshot=stored.snapshot,
+        origin=stored.origin,
+        created_at=stored.created_at,
+        updated_at=stored.updated_at,
+        expires_at=NOW.add(seconds=1),
+    )
+    await repository.create(stored)
+
+    assert await repository.expire_due(now=NOW) == 0
+    assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
+    assert await repository.count_active_for_account(account_id) == 0

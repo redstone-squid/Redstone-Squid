@@ -76,6 +76,7 @@ class DraftRepository(Protocol):
         account_id: int,
         change: DraftChange,
         *,
+        updated_at: Instant,
         expires_at: Instant,
     ) -> AppliedDraftChange: ...
 
@@ -86,8 +87,11 @@ class DraftRepository(Protocol):
         *,
         expected_revision: int,
         status: DraftStatus,
+        updated_at: Instant,
         expires_at: Instant,
     ) -> StoredDraft: ...
+
+    async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
 
 
 class FormManifestRegistry(Protocol):
@@ -182,6 +186,12 @@ class SubmissionDraftService:
         self._require_owner(draft, account_id)
         return draft
 
+    async def delete(self, draft_id: UUID, account_id: int) -> None:
+        """Delete an owned draft immediately, regardless of lifecycle state."""
+        await self.get_owned(draft_id, account_id)
+        if not await self._repository.delete_owned(draft_id, account_id):
+            raise DraftNotFoundError(draft_id)
+
     async def apply_change(
         self,
         draft_id: UUID,
@@ -211,6 +221,7 @@ class SubmissionDraftService:
             draft_id,
             account_id,
             change,
+            updated_at=touched_at,
             expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
         )
 
@@ -246,6 +257,7 @@ class SubmissionDraftService:
             account_id,
             expected_revision=current.snapshot.revision,
             status=DraftStatus.PROCESSING,
+            updated_at=touched_at,
             expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
         )
         return ProcessingDraft(transitioned, normalized)

@@ -91,6 +91,7 @@ class FakeDraftRepository:
         account_id: int,
         change: DraftChange,
         *,
+        updated_at: Instant,
         expires_at: Instant,
     ) -> AppliedDraftChange:
         current = self.drafts[draft_id]
@@ -99,7 +100,7 @@ class FakeDraftRepository:
         updated = replace(
             current,
             snapshot=current.snapshot.apply(change),
-            updated_at=NOW,
+            updated_at=updated_at,
             expires_at=expires_at,
         )
         self.drafts[draft_id] = updated
@@ -114,6 +115,7 @@ class FakeDraftRepository:
         *,
         expected_revision: int,
         status: DraftStatus,
+        updated_at: Instant,
         expires_at: Instant,
     ) -> StoredDraft:
         current = self.drafts[draft_id]
@@ -122,11 +124,18 @@ class FakeDraftRepository:
         updated = replace(
             current,
             snapshot=current.snapshot.transition(status),
-            updated_at=NOW,
+            updated_at=updated_at,
             expires_at=expires_at,
         )
         self.drafts[draft_id] = updated
         return updated
+
+    async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
+        current = self.drafts.get(draft_id)
+        if current is None or current.snapshot.owner_account_id != account_id:
+            return False
+        del self.drafts[draft_id]
+        return True
 
 
 def _change(base_revision: int = 0) -> DraftChange:
@@ -205,6 +214,11 @@ async def test_capacity_and_single_owner_are_enforced() -> None:
         )
     with pytest.raises(DraftAccessDeniedError):
         await service.get_owned(DRAFT_ID, 8)
+
+    with pytest.raises(DraftAccessDeniedError):
+        await service.delete(DRAFT_ID, 8)
+    await service.delete(DRAFT_ID, 7)
+    assert DRAFT_ID not in repository.drafts
 
 
 @pytest.mark.asyncio
