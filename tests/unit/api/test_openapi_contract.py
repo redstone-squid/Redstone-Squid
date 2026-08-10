@@ -82,6 +82,7 @@ def test_catalogue_extensions_are_registered_in_openapi() -> None:
 
 def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
     document = _app.openapi()
+    streaming_retries = {("/v1/submissions/drafts/{draft_id}/media/{kind}", "post")}
 
     for path, path_item in document["paths"].items():
         for method in ("post", "put", "patch", "delete"):
@@ -89,6 +90,12 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
             if operation is None:
                 continue
             parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
+            if (path, method) in streaming_retries:
+                assert any(
+                    parameter.get("in") == "query" and parameter.get("name") == "upload_id"
+                    for parameter in parameters
+                ), f"{method.upper()} {path} lacks its streaming-safe retry UUID"
+                continue
             assert any(
                 parameter.get("in") == "header" and parameter.get("name") == "Idempotency-Key"
                 for parameter in parameters

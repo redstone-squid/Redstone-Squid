@@ -105,10 +105,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -268,10 +268,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -642,10 +642,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -770,10 +770,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -1156,10 +1156,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -1564,10 +1564,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -1848,6 +1848,1711 @@
         }
       }
     },
+    "/v1/minecraft/auth/paper/installations": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Create Installation",
+        "description": "Register a Paper server and return its plaintext secret exactly once.",
+        "operationId": "create_installation_v1_minecraft_auth_paper_installations_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallationCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedInstallationResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "List Installations",
+        "description": "List only the signed-in account's Paper installations, without secrets or digests.",
+        "operationId": "list_installations_v1_minecraft_auth_paper_installations_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationListResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/paper/installations/{installation_id}/rotate": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Rotate Installation",
+        "description": "Fence an owned installation's old credentials and return one replacement secret.",
+        "operationId": "rotate_installation_v1_minecraft_auth_paper_installations__installation_id__rotate_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Installation Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedInstallationResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/paper/installations/{installation_id}/profile": {
+      "put": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Update Installation Profile",
+        "description": "Replace an owned server's explicit public-listing and sponsorship preferences.",
+        "operationId": "update_installation_profile_v1_minecraft_auth_paper_installations__installation_id__profile_put",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Installation Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerProfileSchema"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallationResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/paper/installations/{installation_id}": {
+      "delete": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Revoke Installation",
+        "description": "Revoke an owned server and all pending or active authorization derived from it.",
+        "operationId": "revoke_installation_v1_minecraft_auth_paper_installations__installation_id__delete",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Installation Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/paper/challenges": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Start Paper Challenge",
+        "description": "Start player authorization bound to the authenticated Paper credential generation.",
+        "operationId": "start_paper_challenge_v1_minecraft_auth_paper_challenges_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "X-Squid-Installation-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Squid-Installation-Id"
+            }
+          },
+          {
+            "name": "X-Squid-Installation-Secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Squid-Installation-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperChallengeCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeCreateResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/paper/challenges/exchange": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Exchange Paper Challenge",
+        "description": "Exchange one approved Paper challenge on the same authenticated installation.",
+        "operationId": "exchange_paper_challenge_v1_minecraft_auth_paper_challenges_exchange_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "X-Squid-Installation-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Squid-Installation-Id"
+            }
+          },
+          {
+            "name": "X-Squid-Installation-Secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Squid-Installation-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaperChallengeExchangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedPlayerGrantResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/fabric/challenges": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Start Fabric Challenge",
+        "description": "Start an anonymous Fabric challenge committed to a client-held S256 verifier.",
+        "operationId": "start_fabric_challenge_v1_minecraft_auth_fabric_challenges_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FabricChallengeCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeCreateResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/fabric/challenges/exchange": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Exchange Fabric Challenge",
+        "description": "Exchange one approved Fabric challenge by proving its client-held PKCE verifier.",
+        "operationId": "exchange_fabric_challenge_v1_minecraft_auth_fabric_challenges_exchange_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FabricChallengeExchangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedPlayerGrantResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/challenges/approval": {
+      "post": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Approve Challenge",
+        "description": "Approve only the Java UUID authoritatively attached to the signed-in account.",
+        "operationId": "approve_challenge_v1_minecraft_auth_challenges_approval_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChallengeApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeApprovalResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/minecraft/auth/grants/{grant_id}": {
+      "delete": {
+        "tags": [
+          "minecraft-authentication"
+        ],
+        "summary": "Revoke Grant",
+        "description": "Revoke one grant only when it belongs to the signed-in account.",
+        "operationId": "revoke_grant_v1_minecraft_auth_grants__grant_id__delete",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Grant Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
     "/v1/users/me/notifications/preferences": {
       "get": {
         "tags": [
@@ -1963,10 +3668,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -2108,10 +3813,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -2342,10 +4047,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -2516,10 +4221,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -2811,10 +4516,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -3297,14 +5002,14 @@
         }
       }
     },
-    "/v1/schematics/{sha256}/content": {
+    "/v1/builds/{build_id}/schematics/{schematic_id}/content": {
       "get": {
         "tags": [
           "schematics"
         ],
         "summary": "Get Schematic Content",
-        "description": "Download stored schematic bytes by their SHA-256 digest.",
-        "operationId": "get_schematic_content_v1_schematics__sha256__content_get",
+        "description": "Download explicitly published sanitized bytes from a confirmed build.",
+        "operationId": "get_schematic_content_v1_builds__build_id__schematics__schematic_id__content_get",
         "security": [
           {
             "ApiCredential": []
@@ -3312,13 +5017,22 @@
         ],
         "parameters": [
           {
-            "name": "sha256",
+            "name": "build_id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$",
-              "title": "Sha256"
+              "type": "integer",
+              "title": "Build Id"
+            }
+          },
+          {
+            "name": "schematic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Schematic Id"
             }
           }
         ],
@@ -3779,6 +5493,1877 @@
               }
             },
             "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/form/current": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Current Form",
+        "description": "Return the localized form and protocol bounds authored by this server.",
+        "operationId": "current_form_v1_submissions_form_current_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormManifestResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/submissions/form/options/{source}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Form Options",
+        "description": "Return one revisioned dynamic option source for a build category.",
+        "operationId": "form_options_v1_submissions_form_options__source__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Source"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Category"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormOptionSetResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Create Draft",
+        "description": "Create an empty synchronized draft owned by the signed-in account.",
+        "operationId": "create_draft_v1_submissions_drafts_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredDraftResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Get Draft",
+        "description": "Return one synchronized draft after enforcing caller ownership.",
+        "operationId": "get_draft_v1_submissions_drafts__draft_id__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredDraftResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Delete Draft",
+        "description": "Immediately delete one caller-owned synchronized draft.",
+        "operationId": "delete_draft_v1_submissions_drafts__draft_id__delete",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/changes": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Change Draft",
+        "description": "Atomically apply a retry-safe optimistic edit to an owned draft.",
+        "operationId": "change_draft_v1_submissions_drafts__draft_id__changes_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftChangeResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/submission": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Submit Draft",
+        "description": "Validate an owned draft and start retry-safe durable finalization.",
+        "operationId": "submit_draft_v1_submissions_drafts__draft_id__submission_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionFinalizationResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Get Draft Submission",
+        "description": "Return retained finalization state after rechecking draft ownership.",
+        "operationId": "get_draft_submission_v1_submissions_drafts__draft_id__submission_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionFinalizationResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/media/{kind}": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Upload Draft Media",
+        "description": "Stream one owned-draft upload through a private bounded staging file.",
+        "operationId": "upload_draft_media_v1_submissions_drafts__draft_id__media__kind__post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MediaKind"
+            }
+          },
+          {
+            "name": "strip_audio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Remove audio while normalizing a video.",
+              "default": false,
+              "title": "Strip Audio"
+            },
+            "description": "Remove audio while normalizing a video."
+          },
+          {
+            "name": "upload_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable client-generated UUID for safe upload retries.",
+              "title": "Upload Id"
+            },
+            "description": "Stable client-generated UUID for safe upload retries."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftMediaResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/media": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "List Draft Media",
+        "description": "List all retained states and safe normalized facts for an owned draft.",
+        "operationId": "list_draft_media_v1_submissions_drafts__draft_id__media_get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftMediaListResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/media/{upload_id}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Get Draft Media",
+        "description": "Return one upload after enforcing both draft ownership and association.",
+        "operationId": "get_draft_media_v1_submissions_drafts__draft_id__media__upload_id__get",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftMediaResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Discard Draft Media",
+        "description": "Withdraw one upload while retaining a stable discarded state.",
+        "operationId": "discard_draft_media_v1_submissions_drafts__draft_id__media__upload_id__delete",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "content": {
@@ -4483,10 +8068,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
               "title": "Idempotency-Key"
             },
-            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "requestBody": {
@@ -4645,6 +8230,17 @@
             "type": "string",
             "title": "Title"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -4765,6 +8361,28 @@
             ],
             "title": "Orientation"
           },
+          "extension_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Length"
+          },
+          "extender_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extender Type"
+          },
           "restrictions": {
             "additionalProperties": {
               "items": {
@@ -4796,6 +8414,7 @@
           "id",
           "revision",
           "title",
+          "display_name",
           "status",
           "category",
           "dimensions",
@@ -4811,6 +8430,8 @@
           "door_dimensions",
           "patterns",
           "orientation",
+          "extension_length",
+          "extender_type",
           "restrictions",
           "description",
           "links"
@@ -5273,6 +8894,17 @@
             "type": "string",
             "title": "Title"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -5379,6 +9011,7 @@
           "id",
           "revision",
           "title",
+          "display_name",
           "status",
           "category",
           "dimensions",
@@ -5445,6 +9078,156 @@
         ],
         "title": "BuildTag",
         "description": "A public tag assignment without moderation provenance."
+      },
+      "CategoryFormResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/FormSectionResponse"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "sections"
+        ],
+        "title": "CategoryFormResponse",
+        "description": "A stable build category and its category-specific form sections."
+      },
+      "ChallengeApprovalRequest": {
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 8,
+            "pattern": "^[A-Za-z2-7a-z-]+$",
+            "title": "User Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_code"
+        ],
+        "title": "ChallengeApprovalRequest",
+        "description": "Approve a displayed user code as the signed-in account."
+      },
+      "ChallengeApprovalResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "java_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Java Uuid"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/MinecraftClientOrigin"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "java_uuid",
+          "origin",
+          "approved_at"
+        ],
+        "title": "ChallengeApprovalResponse",
+        "description": "Non-secret confirmation of an exact-identity approval."
+      },
+      "ChallengeCreateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "device_code": {
+            "type": "string",
+            "title": "Device Code"
+          },
+          "user_code": {
+            "type": "string",
+            "title": "User Code"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "polling_interval_seconds": {
+            "type": "integer",
+            "title": "Polling Interval Seconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "device_code",
+          "user_code",
+          "expires_at",
+          "polling_interval_seconds"
+        ],
+        "title": "ChallengeCreateResponse",
+        "description": "One-time device-flow codes and their polling policy."
+      },
+      "ChoiceOptionResponse": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ChoiceOptionResponse",
+        "description": "One stable selectable value and its localized display label."
+      },
+      "ControlKind": {
+        "type": "string",
+        "enum": [
+          "text",
+          "number",
+          "choice",
+          "multi_choice",
+          "duration",
+          "boolean"
+        ],
+        "title": "ControlKind",
+        "description": "Small renderer-neutral set of supported form controls."
       },
       "CreatorAliasDetail": {
         "properties": {
@@ -5734,10 +9517,273 @@
         "title": "DoorSubmission",
         "description": "A user-authored door build submission."
       },
+      "DraftChangeRequest": {
+        "properties": {
+          "base_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Base Revision"
+          },
+          "client_instance_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Client Instance Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 8,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "title": "Idempotency Key"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/FieldOperationRequest"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Operations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "base_revision",
+          "client_instance_id",
+          "idempotency_key",
+          "operations"
+        ],
+        "title": "DraftChangeRequest",
+        "description": "An atomic optimistic draft edit with retry-safe identity."
+      },
+      "DraftChangeResponse": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/StoredDraftResponse"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft",
+          "replayed"
+        ],
+        "title": "DraftChangeResponse",
+        "description": "The state produced by a draft change and whether it was a replay."
+      },
+      "DraftCreateRequest": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Category"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SubmissionOrigin"
+          },
+          "client_capabilities": {
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "title": "Client Capabilities"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "origin"
+        ],
+        "title": "DraftCreateRequest",
+        "description": "Request an empty account-owned draft pinned to the current form revision."
+      },
+      "DraftMediaArtifactResponse": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/DraftMediaArtifactRole"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content_type",
+          "width",
+          "height"
+        ],
+        "title": "DraftMediaArtifactResponse",
+        "description": "Safe facts about one normalized visual artifact."
+      },
+      "DraftMediaArtifactRole": {
+        "type": "string",
+        "enum": [
+          "output",
+          "poster"
+        ],
+        "title": "DraftMediaArtifactRole",
+        "description": "Normalized visual outputs visible to a draft owner."
+      },
+      "DraftMediaLimitsResponse": {
+        "properties": {
+          "max_upload_bytes": {
+            "type": "integer",
+            "title": "Max Upload Bytes"
+          },
+          "max_images": {
+            "type": "integer",
+            "title": "Max Images"
+          },
+          "max_videos": {
+            "type": "integer",
+            "title": "Max Videos"
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "title": "Max Output Bytes"
+          },
+          "max_duration_milliseconds": {
+            "type": "integer",
+            "title": "Max Duration Milliseconds"
+          },
+          "max_pixels_per_frame": {
+            "type": "integer",
+            "title": "Max Pixels Per Frame"
+          },
+          "max_decoded_pixels_per_second": {
+            "type": "integer",
+            "title": "Max Decoded Pixels Per Second"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "max_upload_bytes",
+          "max_images",
+          "max_videos",
+          "max_output_bytes",
+          "max_duration_milliseconds",
+          "max_pixels_per_frame",
+          "max_decoded_pixels_per_second"
+        ],
+        "title": "DraftMediaLimitsResponse",
+        "description": "Server-enforced upload, batch, and decoder-work budgets."
+      },
+      "DraftMediaListResponse": {
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/DraftMediaLimitsResponse"
+          },
+          "media": {
+            "items": {
+              "$ref": "#/components/schemas/DraftMediaResponse"
+            },
+            "type": "array",
+            "title": "Media"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "limits",
+          "media"
+        ],
+        "title": "DraftMediaListResponse",
+        "description": "The complete bounded media collection for one owned draft."
+      },
+      "DraftMediaResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DraftMediaStatus"
+          },
+          "source_content_type": {
+            "type": "string",
+            "title": "Source Content Type"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/DraftMediaArtifactResponse"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "draft_id",
+          "kind",
+          "status",
+          "source_content_type",
+          "artifacts"
+        ],
+        "title": "DraftMediaResponse",
+        "description": "Safe state for one upload without storage or normalization internals."
+      },
+      "DraftMediaStatus": {
+        "type": "string",
+        "enum": [
+          "processing",
+          "completed",
+          "dead",
+          "discarded"
+        ],
+        "title": "DraftMediaStatus",
+        "description": "Stable client states that do not expose worker claim details."
+      },
+      "DraftStatus": {
+        "type": "string",
+        "enum": [
+          "editing",
+          "processing",
+          "needs_attention",
+          "submitted",
+          "expired"
+        ],
+        "title": "DraftStatus",
+        "description": "Lifecycle state of a server-side submission draft."
+      },
       "ErrorCode": {
         "type": "string",
         "enum": [
           "ACCOUNT_ALREADY_LINKED",
+          "ACCOUNT_NOT_FOUND",
           "ALIAS_ALREADY_ADDED",
           "ALIAS_ALREADY_CLAIMED",
           "ALIAS_IN_USE",
@@ -5761,7 +9807,7 @@
           "INVALID_QUERY",
           "INVALID_REQUEST",
           "INVALID_STATE",
-          "INVALID_USER",
+          "INVALID_ACCOUNT",
           "INVALID_VERIFICATION_CODE",
           "INVALID_VERSION",
           "INVALID_VOTE_CONFIGURATION",
@@ -5780,12 +9826,421 @@
           "SCHEMATIC_TOO_LARGE",
           "SCHEMATIC_WORKER_CRASHED",
           "UNAUTHORIZED",
-          "USER_NOT_FOUND",
           "VALIDATION_ERROR",
           "VERSION_CATALOG_UNAVAILABLE"
         ],
         "title": "ErrorCode",
         "description": "Stable machine-readable application error codes."
+      },
+      "FabricChallengeCreateRequest": {
+        "properties": {
+          "java_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Java Uuid"
+          },
+          "pkce_s256_challenge": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "title": "Pkce S256 Challenge"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "java_uuid",
+          "pkce_s256_challenge"
+        ],
+        "title": "FabricChallengeCreateRequest",
+        "description": "Request player authorization from Fabric with an S256 PKCE commitment."
+      },
+      "FabricChallengeExchangeRequest": {
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Device Code"
+          },
+          "pkce_verifier": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9._~-]+$",
+            "title": "Pkce Verifier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "device_code",
+          "pkce_verifier"
+        ],
+        "title": "FabricChallengeExchangeRequest",
+        "description": "Exchange an approved Fabric challenge with its PKCE verifier."
+      },
+      "FieldConstraintsResponse": {
+        "properties": {
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "maximum": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximum"
+          },
+          "min_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Length"
+          },
+          "max_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Length"
+          },
+          "min_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Items"
+          },
+          "max_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items"
+          },
+          "must_equal": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "minimum",
+          "maximum",
+          "min_length",
+          "max_length",
+          "min_items",
+          "max_items",
+          "must_equal"
+        ],
+        "title": "FieldConstraintsResponse",
+        "description": "Validation bounds interpreted the same way by clients and the server."
+      },
+      "FieldOperationKind": {
+        "type": "string",
+        "enum": [
+          "set",
+          "unset"
+        ],
+        "title": "FieldOperationKind",
+        "description": "Mutations supported by the v1 field-operation protocol."
+      },
+      "FieldOperationRequest": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Id"
+          },
+          "field_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Field Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FieldOperationKind"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "field_id",
+          "kind"
+        ],
+        "title": "FieldOperationRequest",
+        "description": "Set or unset exactly one stable form field."
+      },
+      "FinalizationJobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "claimed",
+          "needs_attention",
+          "completed",
+          "dead"
+        ],
+        "title": "FinalizationJobStatus",
+        "description": "Durable state of one source-draft finalization job."
+      },
+      "FormFieldResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "control": {
+            "$ref": "#/components/schemas/ControlKind"
+          },
+          "value_kind": {
+            "$ref": "#/components/schemas/ValueKind"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required"
+          },
+          "help_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Text"
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/FieldConstraintsResponse"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOptionResponse"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "option_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Option Source"
+          },
+          "visible_when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisibilityRuleResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "repeatable": {
+            "type": "boolean",
+            "title": "Repeatable"
+          },
+          "required_capability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Capability"
+          },
+          "origins": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionOrigin"
+            },
+            "type": "array",
+            "title": "Origins"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "control",
+          "value_kind",
+          "required",
+          "help_text",
+          "constraints",
+          "options",
+          "option_source",
+          "visible_when",
+          "default",
+          "repeatable",
+          "required_capability",
+          "origins"
+        ],
+        "title": "FormFieldResponse",
+        "description": "One field that any supported submission renderer can present."
+      },
+      "FormManifestResponse": {
+        "properties": {
+          "schema_id": {
+            "type": "string",
+            "title": "Schema Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "minimum_protocol": {
+            "type": "integer",
+            "title": "Minimum Protocol"
+          },
+          "maximum_protocol": {
+            "type": "integer",
+            "title": "Maximum Protocol"
+          },
+          "common_sections": {
+            "items": {
+              "$ref": "#/components/schemas/FormSectionResponse"
+            },
+            "type": "array",
+            "title": "Common Sections"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryFormResponse"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schema_id",
+          "revision",
+          "minimum_protocol",
+          "maximum_protocol",
+          "common_sections",
+          "categories"
+        ],
+        "title": "FormManifestResponse",
+        "description": "One immutable renderer-neutral submission form revision."
+      },
+      "FormOptionSetResponse": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Source"
+          },
+          "category": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Category"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOptionResponse"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "category",
+          "revision",
+          "options"
+        ],
+        "title": "FormOptionSetResponse",
+        "description": "One revision of a category-aware dynamic option source."
+      },
+      "FormSectionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FormFieldResponse"
+            },
+            "type": "array",
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "fields"
+        ],
+        "title": "FormSectionResponse",
+        "description": "An ordered group of related form fields."
       },
       "HTTPValidationError": {
         "properties": {
@@ -5882,6 +10337,175 @@
         "maxItems": 3,
         "minItems": 3
       },
+      "InstallationCreateRequest": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ServerProfileSchema"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "InstallationCreateRequest",
+        "description": "Register one account-owned Paper installation."
+      },
+      "InstallationListResponse": {
+        "properties": {
+          "installations": {
+            "items": {
+              "$ref": "#/components/schemas/InstallationResponse"
+            },
+            "type": "array",
+            "title": "Installations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installations"
+        ],
+        "title": "InstallationListResponse",
+        "description": "All Paper installations owned by the signed-in account."
+      },
+      "InstallationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "credential_version": {
+            "type": "integer",
+            "title": "Credential Version"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ServerProfileSchema"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "rotated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotated At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "credential_version",
+          "profile",
+          "created_at",
+          "rotated_at",
+          "revoked_at"
+        ],
+        "title": "InstallationResponse",
+        "description": "Account-visible installation metadata without its credential digest."
+      },
+      "IssuedInstallationResponse": {
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/InstallationResponse"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installation",
+          "secret"
+        ],
+        "title": "IssuedInstallationResponse",
+        "description": "Installation metadata and its one-time plaintext secret."
+      },
+      "IssuedPlayerGrantResponse": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "java_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Java Uuid"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/MinecraftClientOrigin"
+          },
+          "installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installation Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "grant_id",
+          "token",
+          "java_uuid",
+          "origin",
+          "installation_id",
+          "expires_at"
+        ],
+        "title": "IssuedPlayerGrantResponse",
+        "description": "One-time player bearer token response from a consumed challenge."
+      },
       "JSONValue": {
         "anyOf": [
           {
@@ -5912,6 +10536,16 @@
             "type": "null"
           }
         ]
+      },
+      "JsonValue": {},
+      "MediaKind": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video"
+        ],
+        "title": "MediaKind",
+        "description": "A hosted media type accepted by a submission."
       },
       "MetadataSearchEntry": {
         "properties": {
@@ -5989,6 +10623,15 @@
         ],
         "title": "MetadataSearchResult",
         "description": "A taxonomy or version match."
+      },
+      "MinecraftClientOrigin": {
+        "type": "string",
+        "enum": [
+          "paper",
+          "fabric"
+        ],
+        "title": "MinecraftClientOrigin",
+        "description": "A server-established Minecraft client transport."
       },
       "NotificationPreferenceUpdate": {
         "properties": {
@@ -6401,6 +11044,40 @@
           "has_more"
         ],
         "title": "Page[VersionDetail]"
+      },
+      "PaperChallengeCreateRequest": {
+        "properties": {
+          "java_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Java Uuid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "java_uuid"
+        ],
+        "title": "PaperChallengeCreateRequest",
+        "description": "Request player authorization from an authenticated Paper server."
+      },
+      "PaperChallengeExchangeRequest": {
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 32,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Device Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "device_code"
+        ],
+        "title": "PaperChallengeExchangeRequest",
+        "description": "Exchange an approved Paper challenge on its authenticated installation."
       },
       "ProblemDetail": {
         "properties": {
@@ -6858,24 +11535,9 @@
             "type": "integer",
             "title": "Id"
           },
-          "sha256": {
-            "type": "string",
-            "title": "Sha256"
-          },
           "primary": {
             "type": "boolean",
             "title": "Primary"
-          },
-          "filename": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Filename"
           },
           "format": {
             "type": "string",
@@ -6925,15 +11587,25 @@
           "analysis_schema_version": {
             "type": "integer",
             "title": "Analysis Schema Version"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "license_url": {
+            "type": "string",
+            "title": "License Url"
+          },
+          "download_url": {
+            "type": "string",
+            "title": "Download Url"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "sha256",
           "primary",
-          "filename",
           "format",
           "byte_size",
           "dimensions",
@@ -6944,7 +11616,10 @@
           "palette_size",
           "source_data_version",
           "analyzer_version",
-          "analysis_schema_version"
+          "analysis_schema_version",
+          "license",
+          "license_url",
+          "download_url"
         ],
         "title": "SchematicSummary",
         "description": "Allowlisted analysis metadata for one stored build schematic."
@@ -7016,6 +11691,250 @@
         "title": "SearchSuggestions",
         "description": "Indexed terms completing a partial query."
       },
+      "ServerProfileSchema": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048,
+                "minLength": 1,
+                "pattern": "^https?://[^\\s]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          },
+          "sponsor_opt_in": {
+            "type": "boolean",
+            "title": "Sponsor Opt In",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ServerProfileSchema",
+        "description": "Explicit public listing and sponsor preferences for a Paper server."
+      },
+      "StoredDraftResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "schema_id": {
+            "type": "string",
+            "title": "Schema Id"
+          },
+          "schema_revision": {
+            "type": "integer",
+            "title": "Schema Revision"
+          },
+          "category": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Category"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DraftStatus"
+          },
+          "answers": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Answers"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SubmissionOrigin"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "schema_id",
+          "schema_revision",
+          "category",
+          "revision",
+          "status",
+          "answers",
+          "origin",
+          "created_at",
+          "updated_at",
+          "expires_at"
+        ],
+        "title": "StoredDraftResponse",
+        "description": "The compacted current state of one caller-owned synchronized draft."
+      },
+      "SubmissionAttentionIssueResponse": {
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Field Id"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/SubmissionAttentionReason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field_id",
+          "reason"
+        ],
+        "title": "SubmissionAttentionIssueResponse",
+        "description": "One stable field-level reason that a submitter can act on."
+      },
+      "SubmissionAttentionReason": {
+        "type": "string",
+        "enum": [
+          "unknown_field",
+          "required",
+          "wrong_type",
+          "required_value",
+          "below_minimum",
+          "above_maximum",
+          "too_short",
+          "too_long",
+          "too_few_items",
+          "too_many_items",
+          "unknown_option",
+          "schema_unsupported",
+          "schematic_required",
+          "schematic_processing",
+          "schematic_rejected",
+          "media_processing",
+          "media_rejected",
+          "target_rejected",
+          "retry_exhausted"
+        ],
+        "title": "SubmissionAttentionReason",
+        "description": "Stable repair reasons shared by every submission transport."
+      },
+      "SubmissionFinalizationResponse": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "draft_revision": {
+            "type": "integer",
+            "title": "Draft Revision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FinalizationJobStatus"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "build_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_id",
+          "draft_revision",
+          "status",
+          "issues",
+          "build_id"
+        ],
+        "title": "SubmissionFinalizationResponse",
+        "description": "Owner-visible state of durable draft finalization."
+      },
+      "SubmissionOrigin": {
+        "type": "string",
+        "enum": [
+          "discord",
+          "web",
+          "paper",
+          "fabric"
+        ],
+        "title": "SubmissionOrigin",
+        "description": "A transport that can own or finalize a submission draft."
+      },
       "SubscriptionKind": {
         "type": "string",
         "enum": [
@@ -7024,7 +11943,7 @@
           "record_filter"
         ],
         "title": "SubscriptionKind",
-        "description": "Durable subject types a user may follow."
+        "description": "Durable subject types an account may follow."
       },
       "TagDetail": {
         "properties": {
@@ -7301,6 +12220,19 @@
         ],
         "title": "ValidationError"
       },
+      "ValueKind": {
+        "type": "string",
+        "enum": [
+          "string",
+          "integer",
+          "number",
+          "boolean",
+          "string_list",
+          "game_ticks"
+        ],
+        "title": "ValueKind",
+        "description": "Canonical JSON value expected from a field."
+      },
       "VersionDetail": {
         "properties": {
           "edition": {
@@ -7335,6 +12267,40 @@
         ],
         "title": "VersionDetail",
         "description": "One recognized Minecraft release."
+      },
+      "VisibilityOperator": {
+        "type": "string",
+        "enum": [
+          "equals",
+          "not_equals",
+          "in"
+        ],
+        "title": "VisibilityOperator",
+        "description": "Operators supported by the deliberately narrow visibility language."
+      },
+      "VisibilityRuleResponse": {
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Field Id"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/VisibilityOperator"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field_id",
+          "operator",
+          "value"
+        ],
+        "title": "VisibilityRuleResponse",
+        "description": "A renderer-neutral condition controlling whether a field is shown."
       },
       "VoteInput": {
         "properties": {
@@ -7579,12 +12545,20 @@
       "description": "Notification preferences, subscriptions, and inbox."
     },
     {
+      "name": "minecraft-authentication",
+      "description": "Paper installation credentials and player-bound device authorization."
+    },
+    {
       "name": "builds",
       "description": "Public redstone build catalog."
     },
     {
       "name": "search",
       "description": "Search grammar and field discovery."
+    },
+    {
+      "name": "submissions",
+      "description": "Revisioned submission forms and synchronized drafts."
     },
     {
       "name": "records",

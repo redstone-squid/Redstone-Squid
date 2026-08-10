@@ -1,7 +1,8 @@
 """Isolated tests for the strict Minecraft authorization HTTP contract."""
 
 from dataclasses import replace
-from uuid import UUID
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeCreateRequest,
 )
 from squid.core.errors import AuthenticationError
+from squid.idempotency import PendingRequest
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
@@ -213,13 +215,24 @@ class FakePlayers:
         return True
 
 
+class RecordingIdempotency:
+    def __init__(self) -> None:
+        self.reservations: list[dict[str, object]] = []
+
+    async def reserve(self, **values: object) -> PendingRequest:
+        self.reservations.append(values)
+        return PendingRequest(uuid4())
+
+
 def app_with_fakes(
     installations: FakeInstallations,
     players: FakePlayers,
     *,
     signed_in: bool = True,
+    idempotency: RecordingIdempotency | None = None,
 ) -> FastAPI:
     app = FastAPI()
+    app.state.runtime = SimpleNamespace(services=SimpleNamespace(idempotency=idempotency))
     register_exception_handlers(app)
     app.include_router(router)
 
@@ -261,23 +274,27 @@ async def test_request_schemas_forbid_client_authority_and_unknown_fields() -> N
         ChallengeApprovalRequest.model_validate({"user_code": USER_CODE, "account_id": ACCOUNT_ID})
 
 
-async def test_openapi_declares_paper_headers_and_principal_scoped_idempotency() -> None:
+async def test_openapi_declares_paper_headers_and_server_scoped_idempotency() -> None:
     contract = app_with_fakes(FakeInstallations(), FakePlayers()).openapi()
     paths = contract["paths"]
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
     header_names = {parameter["name"] for parameter in paper_start["parameters"] if parameter["in"] == "header"}
 
     assert {"X-Squid-Installation-ID", "X-Squid-Installation-Secret"} <= header_names
-    assert "Idempotency-Key" not in header_names
-    account_mutations = (
+    assert "Idempotency-Key" in header_names
+    mutations = (
         ("/minecraft/auth/paper/installations", "post"),
         ("/minecraft/auth/paper/installations/{installation_id}/rotate", "post"),
         ("/minecraft/auth/paper/installations/{installation_id}/profile", "put"),
         ("/minecraft/auth/paper/installations/{installation_id}", "delete"),
+        ("/minecraft/auth/paper/challenges", "post"),
+        ("/minecraft/auth/paper/challenges/exchange", "post"),
+        ("/minecraft/auth/fabric/challenges", "post"),
+        ("/minecraft/auth/fabric/challenges/exchange", "post"),
         ("/minecraft/auth/challenges/approval", "post"),
         ("/minecraft/auth/grants/{grant_id}", "delete"),
     )
-    for path, method in account_mutations:
+    for path, method in mutations:
         operation = paths[path][method]
         assert any(
             parameter["in"] == "header" and parameter["name"] == "Idempotency-Key"
@@ -366,6 +383,36 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
         installation_revoked,
     ):
         assert response.headers["Cache-Control"] == "no-store"
+
+
+async def test_one_time_device_responses_use_server_derived_idempotency_namespaces() -> None:
+    idempotency = RecordingIdempotency()
+    app = app_with_fakes(FakeInstallations(), FakePlayers(), idempotency=idempotency)
+    paper_headers = {
+        "X-Squid-Installation-ID": str(INSTALLATION_ID),
+        "X-Squid-Installation-Secret": INSTALLATION_SECRET,
+        "Idempotency-Key": "paper-retry-key",
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        paper = await client.post(
+            "/minecraft/auth/paper/challenges",
+            headers=paper_headers,
+            json={"java_uuid": str(JAVA_UUID)},
+        )
+        fabric = await client.post(
+            "/minecraft/auth/fabric/challenges",
+            headers={"Idempotency-Key": "fabric-retry-key"},
+            json={"java_uuid": str(JAVA_UUID), "pkce_s256_challenge": PKCE_CHALLENGE},
+        )
+
+    assert paper.status_code == 201
+    assert fabric.status_code == 201
+    assert idempotency.reservations[0]["principal"] == f"minecraft-installation:{INSTALLATION_ID}:1"
+    fabric_principal = idempotency.reservations[1]["principal"]
+    assert isinstance(fabric_principal, str)
+    assert fabric_principal.startswith("minecraft-fabric:")
+    assert "127.0.0.1" not in fabric_principal
 
 
 async def test_paper_endpoints_require_both_installation_headers() -> None:

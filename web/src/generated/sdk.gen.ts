@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptNoticeV1UsersMeNotificationsConsentPostData, AcceptNoticeV1UsersMeNotificationsConsentPostErrors, AcceptNoticeV1UsersMeNotificationsConsentPostResponses, CastVoteV1VoteSessionsVoteSessionIdVotesPostData, CastVoteV1VoteSessionsVoteSessionIdVotesPostErrors, CastVoteV1VoteSessionsVoteSessionIdVotesPostResponses, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostData, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostErrors, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostResponses, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteData, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteErrors, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteResponses, DiscordAuthorizeV1AuthDiscordGetData, DiscordAuthorizeV1AuthDiscordGetErrors, DiscordCallbackV1AuthDiscordCallbackGetData, DiscordCallbackV1AuthDiscordCallbackGetErrors, EditBuildV1BuildsBuildIdPatchData, EditBuildV1BuildsBuildIdPatchErrors, EditBuildV1BuildsBuildIdPatchResponses, GetBuildV1BuildsBuildIdGetData, GetBuildV1BuildsBuildIdGetErrors, GetBuildV1BuildsBuildIdGetResponses, GetCreatorAliasV1CreatorAliasesNameGetData, GetCreatorAliasV1CreatorAliasesNameGetErrors, GetCreatorAliasV1CreatorAliasesNameGetResponses, GetCreatorProfileV1CreatorsCreatorIdGetData, GetCreatorProfileV1CreatorsCreatorIdGetErrors, GetCreatorProfileV1CreatorsCreatorIdGetResponses, GetMeV1UsersMeGetData, GetMeV1UsersMeGetErrors, GetMeV1UsersMeGetResponses, GetPreferencesV1UsersMeNotificationsPreferencesGetData, GetPreferencesV1UsersMeNotificationsPreferencesGetErrors, GetPreferencesV1UsersMeNotificationsPreferencesGetResponses, GetRecordV1RecordsRecordIdGetData, GetRecordV1RecordsRecordIdGetErrors, GetRecordV1RecordsRecordIdGetResponses, GetSchematicContentV1SchematicsSha256ContentGetData, GetSchematicContentV1SchematicsSha256ContentGetErrors, GetSchematicContentV1SchematicsSha256ContentGetResponses, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetData, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetErrors, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetResponses, GetTagV1TagsTagIdGetData, GetTagV1TagsTagIdGetErrors, GetTagV1TagsTagIdGetResponses, GetVerificationCodeV1VerifyPostData, GetVerificationCodeV1VerifyPostErrors, GetVerificationCodeV1VerifyPostResponses, GetVerificationCodeVerifyPostData, GetVerificationCodeVerifyPostErrors, GetVerificationCodeVerifyPostResponses, GetVoteSessionV1VoteSessionsVoteSessionIdGetData, GetVoteSessionV1VoteSessionsVoteSessionIdGetErrors, GetVoteSessionV1VoteSessionsVoteSessionIdGetResponses, GrantConsentV1UsersMeConsentPostData, GrantConsentV1UsersMeConsentPostErrors, GrantConsentV1UsersMeConsentPostResponses, ListBuildSchematicsV1BuildsBuildIdSchematicsGetData, ListBuildSchematicsV1BuildsBuildIdSchematicsGetErrors, ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses, ListBuildsV1BuildsGetData, ListBuildsV1BuildsGetErrors, ListBuildsV1BuildsGetResponses, ListInboxV1UsersMeNotificationsInboxGetData, ListInboxV1UsersMeNotificationsInboxGetErrors, ListInboxV1UsersMeNotificationsInboxGetResponses, ListMyBuildsV1UsersMeBuildsGetData, ListMyBuildsV1UsersMeBuildsGetErrors, ListMyBuildsV1UsersMeBuildsGetResponses, ListRecordsV1RecordsGetData, ListRecordsV1RecordsGetErrors, ListRecordsV1RecordsGetResponses, ListSearchFieldsV1SearchFieldsGetData, ListSearchFieldsV1SearchFieldsGetErrors, ListSearchFieldsV1SearchFieldsGetResponses, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetData, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetErrors, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetResponses, ListTagsV1TagsGetData, ListTagsV1TagsGetErrors, ListTagsV1TagsGetResponses, ListVersionsV1VersionsGetData, ListVersionsV1VersionsGetErrors, ListVersionsV1VersionsGetResponses, LiveLivezGetData, LiveLivezGetResponses, LogoutV1AuthLogoutPostData, LogoutV1AuthLogoutPostErrors, LogoutV1AuthLogoutPostResponses, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostData, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostErrors, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostResponses, ReadyHealthGetData, ReadyHealthGetResponses, ReadyReadyzGetData, ReadyReadyzGetResponses, SearchV1SearchGetData, SearchV1SearchGetErrors, SearchV1SearchGetResponses, SubmitBuildV1BuildsPostData, SubmitBuildV1BuildsPostErrors, SubmitBuildV1BuildsPostResponses, SuggestTermsV1SearchSuggestGetData, SuggestTermsV1SearchSuggestGetErrors, SuggestTermsV1SearchSuggestGetResponses, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchData, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchErrors, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchResponses } from './types.gen';
+import type { AcceptNoticeV1UsersMeNotificationsConsentPostData, AcceptNoticeV1UsersMeNotificationsConsentPostErrors, AcceptNoticeV1UsersMeNotificationsConsentPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostData, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, CastVoteV1VoteSessionsVoteSessionIdVotesPostData, CastVoteV1VoteSessionsVoteSessionIdVotesPostErrors, CastVoteV1VoteSessionsVoteSessionIdVotesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostData, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, CreateDraftV1SubmissionsDraftsPostData, CreateDraftV1SubmissionsDraftsPostErrors, CreateDraftV1SubmissionsDraftsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostData, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostData, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostErrors, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostResponses, CurrentFormV1SubmissionsFormCurrentGetData, CurrentFormV1SubmissionsFormCurrentGetErrors, CurrentFormV1SubmissionsFormCurrentGetResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteData, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteData, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteErrors, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteData, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscordAuthorizeV1AuthDiscordGetData, DiscordAuthorizeV1AuthDiscordGetErrors, DiscordCallbackV1AuthDiscordCallbackGetData, DiscordCallbackV1AuthDiscordCallbackGetErrors, EditBuildV1BuildsBuildIdPatchData, EditBuildV1BuildsBuildIdPatchErrors, EditBuildV1BuildsBuildIdPatchResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostData, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostData, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, FormOptionsV1SubmissionsFormOptionsSourceGetData, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, FormOptionsV1SubmissionsFormOptionsSourceGetResponses, GetBuildV1BuildsBuildIdGetData, GetBuildV1BuildsBuildIdGetErrors, GetBuildV1BuildsBuildIdGetResponses, GetCreatorAliasV1CreatorAliasesNameGetData, GetCreatorAliasV1CreatorAliasesNameGetErrors, GetCreatorAliasV1CreatorAliasesNameGetResponses, GetCreatorProfileV1CreatorsCreatorIdGetData, GetCreatorProfileV1CreatorsCreatorIdGetErrors, GetCreatorProfileV1CreatorsCreatorIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetData, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetData, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetData, GetDraftV1SubmissionsDraftsDraftIdGetErrors, GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetMeV1UsersMeGetData, GetMeV1UsersMeGetErrors, GetMeV1UsersMeGetResponses, GetPreferencesV1UsersMeNotificationsPreferencesGetData, GetPreferencesV1UsersMeNotificationsPreferencesGetErrors, GetPreferencesV1UsersMeNotificationsPreferencesGetResponses, GetRecordV1RecordsRecordIdGetData, GetRecordV1RecordsRecordIdGetErrors, GetRecordV1RecordsRecordIdGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetData, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetErrors, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetResponses, GetTagV1TagsTagIdGetData, GetTagV1TagsTagIdGetErrors, GetTagV1TagsTagIdGetResponses, GetVerificationCodeV1VerifyPostData, GetVerificationCodeV1VerifyPostErrors, GetVerificationCodeV1VerifyPostResponses, GetVerificationCodeVerifyPostData, GetVerificationCodeVerifyPostErrors, GetVerificationCodeVerifyPostResponses, GetVoteSessionV1VoteSessionsVoteSessionIdGetData, GetVoteSessionV1VoteSessionsVoteSessionIdGetErrors, GetVoteSessionV1VoteSessionsVoteSessionIdGetResponses, GrantConsentV1UsersMeConsentPostData, GrantConsentV1UsersMeConsentPostErrors, GrantConsentV1UsersMeConsentPostResponses, ListBuildSchematicsV1BuildsBuildIdSchematicsGetData, ListBuildSchematicsV1BuildsBuildIdSchematicsGetErrors, ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses, ListBuildsV1BuildsGetData, ListBuildsV1BuildsGetErrors, ListBuildsV1BuildsGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetData, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListInboxV1UsersMeNotificationsInboxGetData, ListInboxV1UsersMeNotificationsInboxGetErrors, ListInboxV1UsersMeNotificationsInboxGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetData, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListMyBuildsV1UsersMeBuildsGetData, ListMyBuildsV1UsersMeBuildsGetErrors, ListMyBuildsV1UsersMeBuildsGetResponses, ListRecordsV1RecordsGetData, ListRecordsV1RecordsGetErrors, ListRecordsV1RecordsGetResponses, ListSearchFieldsV1SearchFieldsGetData, ListSearchFieldsV1SearchFieldsGetErrors, ListSearchFieldsV1SearchFieldsGetResponses, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetData, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetErrors, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetResponses, ListTagsV1TagsGetData, ListTagsV1TagsGetErrors, ListTagsV1TagsGetResponses, ListVersionsV1VersionsGetData, ListVersionsV1VersionsGetErrors, ListVersionsV1VersionsGetResponses, LiveLivezGetData, LiveLivezGetResponses, LogoutV1AuthLogoutPostData, LogoutV1AuthLogoutPostErrors, LogoutV1AuthLogoutPostResponses, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostData, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostErrors, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostResponses, ReadyHealthGetData, ReadyHealthGetResponses, ReadyReadyzGetData, ReadyReadyzGetResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteData, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteData, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostData, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, SearchV1SearchGetData, SearchV1SearchGetErrors, SearchV1SearchGetResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostData, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostData, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, SubmitBuildV1BuildsPostData, SubmitBuildV1BuildsPostErrors, SubmitBuildV1BuildsPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostData, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SuggestTermsV1SearchSuggestGetData, SuggestTermsV1SearchSuggestGetErrors, SuggestTermsV1SearchSuggestGetResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutData, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchData, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchErrors, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -191,6 +191,155 @@ export const listMyBuildsV1UsersMeBuildsGet = <ThrowOnError extends boolean = fa
 });
 
 /**
+ * List Installations
+ *
+ * List only the signed-in account's Paper installations, without secrets or digests.
+ */
+export const listInstallationsV1MinecraftAuthPaperInstallationsGet = <ThrowOnError extends boolean = false>(options?: Options<ListInstallationsV1MinecraftAuthPaperInstallationsGetData, ThrowOnError>): RequestResult<ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/installations',
+    ...options
+});
+
+/**
+ * Create Installation
+ *
+ * Register a Paper server and return its plaintext secret exactly once.
+ */
+export const createInstallationV1MinecraftAuthPaperInstallationsPost = <ThrowOnError extends boolean = false>(options: Options<CreateInstallationV1MinecraftAuthPaperInstallationsPostData, ThrowOnError>): RequestResult<CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, ThrowOnError> => (options.client ?? client).post<CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/installations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Rotate Installation
+ *
+ * Fence an owned installation's old credentials and return one replacement secret.
+ */
+export const rotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePost = <ThrowOnError extends boolean = false>(options: Options<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostData, ThrowOnError>): RequestResult<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, ThrowOnError> => (options.client ?? client).post<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}/rotate',
+    ...options
+});
+
+/**
+ * Update Installation Profile
+ *
+ * Replace an owned server's explicit public-listing and sponsorship preferences.
+ */
+export const updateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePut = <ThrowOnError extends boolean = false>(options: Options<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutData, ThrowOnError>): RequestResult<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, ThrowOnError> => (options.client ?? client).put<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}/profile',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke Installation
+ *
+ * Revoke an owned server and all pending or active authorization derived from it.
+ */
+export const revokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteData, ThrowOnError>): RequestResult<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}',
+    ...options
+});
+
+/**
+ * Start Paper Challenge
+ *
+ * Start player authorization bound to the authenticated Paper credential generation.
+ */
+export const startPaperChallengeV1MinecraftAuthPaperChallengesPost = <ThrowOnError extends boolean = false>(options: Options<StartPaperChallengeV1MinecraftAuthPaperChallengesPostData, ThrowOnError>): RequestResult<StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, ThrowOnError> => (options.client ?? client).post<StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/challenges',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Exchange Paper Challenge
+ *
+ * Exchange one approved Paper challenge on the same authenticated installation.
+ */
+export const exchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePost = <ThrowOnError extends boolean = false>(options: Options<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostData, ThrowOnError>): RequestResult<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ThrowOnError> => (options.client ?? client).post<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/paper/challenges/exchange',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Start Fabric Challenge
+ *
+ * Start an anonymous Fabric challenge committed to a client-held S256 verifier.
+ */
+export const startFabricChallengeV1MinecraftAuthFabricChallengesPost = <ThrowOnError extends boolean = false>(options: Options<StartFabricChallengeV1MinecraftAuthFabricChallengesPostData, ThrowOnError>): RequestResult<StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, ThrowOnError> => (options.client ?? client).post<StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/fabric/challenges',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Exchange Fabric Challenge
+ *
+ * Exchange one approved Fabric challenge by proving its client-held PKCE verifier.
+ */
+export const exchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePost = <ThrowOnError extends boolean = false>(options: Options<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostData, ThrowOnError>): RequestResult<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ThrowOnError> => (options.client ?? client).post<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/fabric/challenges/exchange',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Approve Challenge
+ *
+ * Approve only the Java UUID authoritatively attached to the signed-in account.
+ */
+export const approveChallengeV1MinecraftAuthChallengesApprovalPost = <ThrowOnError extends boolean = false>(options: Options<ApproveChallengeV1MinecraftAuthChallengesApprovalPostData, ThrowOnError>): RequestResult<ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ThrowOnError> => (options.client ?? client).post<ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/challenges/approval',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Revoke Grant
+ *
+ * Revoke one grant only when it belongs to the signed-in account.
+ */
+export const revokeGrantV1MinecraftAuthGrantsGrantIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteData, ThrowOnError>): RequestResult<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/minecraft/auth/grants/{grant_id}',
+    ...options
+});
+
+/**
  * Get Preferences
  *
  * Return disabled defaults before the notification notice has been accepted.
@@ -326,11 +475,11 @@ export const listBuildSchematicsV1BuildsBuildIdSchematicsGet = <ThrowOnError ext
 /**
  * Get Schematic Content
  *
- * Download stored schematic bytes by their SHA-256 digest.
+ * Download explicitly published sanitized bytes from a confirmed build.
  */
-export const getSchematicContentV1SchematicsSha256ContentGet = <ThrowOnError extends boolean = false>(options: Options<GetSchematicContentV1SchematicsSha256ContentGetData, ThrowOnError>): RequestResult<GetSchematicContentV1SchematicsSha256ContentGetResponses, GetSchematicContentV1SchematicsSha256ContentGetErrors, ThrowOnError> => (options.client ?? client).get<GetSchematicContentV1SchematicsSha256ContentGetResponses, GetSchematicContentV1SchematicsSha256ContentGetErrors, ThrowOnError>({
+export const getSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGet = <ThrowOnError extends boolean = false>(options: Options<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData, ThrowOnError>): RequestResult<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError> => (options.client ?? client).get<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError>({
     security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/schematics/{sha256}/content',
+    url: '/v1/builds/{build_id}/schematics/{schematic_id}/content',
     ...options
 });
 
@@ -375,6 +524,146 @@ export const suggestTermsV1SearchSuggestGet = <ThrowOnError extends boolean = fa
 export const searchV1SearchGet = <ThrowOnError extends boolean = false>(options: Options<SearchV1SearchGetData, ThrowOnError>): RequestResult<SearchV1SearchGetResponses, SearchV1SearchGetErrors, ThrowOnError> => (options.client ?? client).get<SearchV1SearchGetResponses, SearchV1SearchGetErrors, ThrowOnError>({
     security: [{ name: 'Authorization', type: 'apiKey' }],
     url: '/v1/search',
+    ...options
+});
+
+/**
+ * Current Form
+ *
+ * Return the localized form and protocol bounds authored by this server.
+ */
+export const currentFormV1SubmissionsFormCurrentGet = <ThrowOnError extends boolean = false>(options?: Options<CurrentFormV1SubmissionsFormCurrentGetData, ThrowOnError>): RequestResult<CurrentFormV1SubmissionsFormCurrentGetResponses, CurrentFormV1SubmissionsFormCurrentGetErrors, ThrowOnError> => (options?.client ?? client).get<CurrentFormV1SubmissionsFormCurrentGetResponses, CurrentFormV1SubmissionsFormCurrentGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/form/current',
+    ...options
+});
+
+/**
+ * Form Options
+ *
+ * Return one revisioned dynamic option source for a build category.
+ */
+export const formOptionsV1SubmissionsFormOptionsSourceGet = <ThrowOnError extends boolean = false>(options: Options<FormOptionsV1SubmissionsFormOptionsSourceGetData, ThrowOnError>): RequestResult<FormOptionsV1SubmissionsFormOptionsSourceGetResponses, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, ThrowOnError> => (options.client ?? client).get<FormOptionsV1SubmissionsFormOptionsSourceGetResponses, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/form/options/{source}',
+    ...options
+});
+
+/**
+ * Create Draft
+ *
+ * Create an empty synchronized draft owned by the signed-in account.
+ */
+export const createDraftV1SubmissionsDraftsPost = <ThrowOnError extends boolean = false>(options: Options<CreateDraftV1SubmissionsDraftsPostData, ThrowOnError>): RequestResult<CreateDraftV1SubmissionsDraftsPostResponses, CreateDraftV1SubmissionsDraftsPostErrors, ThrowOnError> => (options.client ?? client).post<CreateDraftV1SubmissionsDraftsPostResponses, CreateDraftV1SubmissionsDraftsPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete Draft
+ *
+ * Immediately delete one caller-owned synchronized draft.
+ */
+export const deleteDraftV1SubmissionsDraftsDraftIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteDraftV1SubmissionsDraftsDraftIdDeleteData, ThrowOnError>): RequestResult<DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}',
+    ...options
+});
+
+/**
+ * Get Draft
+ *
+ * Return one synchronized draft after enforcing caller ownership.
+ */
+export const getDraftV1SubmissionsDraftsDraftIdGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftV1SubmissionsDraftsDraftIdGetData, ThrowOnError>): RequestResult<GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}',
+    ...options
+});
+
+/**
+ * Change Draft
+ *
+ * Atomically apply a retry-safe optimistic edit to an owned draft.
+ */
+export const changeDraftV1SubmissionsDraftsDraftIdChangesPost = <ThrowOnError extends boolean = false>(options: Options<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostData, ThrowOnError>): RequestResult<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ThrowOnError> => (options.client ?? client).post<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/changes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Draft Submission
+ *
+ * Return retained finalization state after rechecking draft ownership.
+ */
+export const getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetData, ThrowOnError>): RequestResult<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/submission',
+    ...options
+});
+
+/**
+ * Submit Draft
+ *
+ * Validate an owned draft and start retry-safe durable finalization.
+ */
+export const submitDraftV1SubmissionsDraftsDraftIdSubmissionPost = <ThrowOnError extends boolean = false>(options: Options<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostData, ThrowOnError>): RequestResult<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, ThrowOnError> => (options.client ?? client).post<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/submission',
+    ...options
+});
+
+/**
+ * Upload Draft Media
+ *
+ * Stream one owned-draft upload through a private bounded staging file.
+ */
+export const uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost = <ThrowOnError extends boolean = false>(options: Options<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData, ThrowOnError>): RequestResult<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError> => (options.client ?? client).post<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/media/{kind}',
+    ...options
+});
+
+/**
+ * List Draft Media
+ *
+ * List all retained states and safe normalized facts for an owned draft.
+ */
+export const listDraftMediaV1SubmissionsDraftsDraftIdMediaGet = <ThrowOnError extends boolean = false>(options: Options<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetData, ThrowOnError>): RequestResult<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ThrowOnError> => (options.client ?? client).get<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/media',
+    ...options
+});
+
+/**
+ * Discard Draft Media
+ *
+ * Withdraw one upload while retaining a stable discarded state.
+ */
+export const discardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDelete = <ThrowOnError extends boolean = false>(options: Options<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteData, ThrowOnError>): RequestResult<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
+    ...options
+});
+
+/**
+ * Get Draft Media
+ *
+ * Return one upload after enforcing both draft ownership and association.
+ */
+export const getDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetData, ThrowOnError>): RequestResult<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
     ...options
 });
 

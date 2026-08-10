@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
     DraftMediaListResponse,
@@ -253,6 +254,7 @@ async def get_draft_media(
     "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def discard_draft_media(
     draft_id: UUID,

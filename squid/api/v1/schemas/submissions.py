@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
 from squid.core.errors import JSONValue
-from squid.submissions.application import FormOptionSet, StoredDraft
+from squid.submissions.application import FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import (
     CategoryForm,
     ChoiceOption,
@@ -17,9 +17,11 @@ from squid.submissions.domain import (
     FieldConstraints,
     FieldOperation,
     FieldOperationKind,
+    FinalizationJobStatus,
     FormField,
     FormManifest,
     FormSection,
+    SubmissionAttentionReason,
     SubmissionOrigin,
     ValueKind,
     VisibilityOperator,
@@ -293,6 +295,36 @@ class DraftChangeResponse(StrictSchema):
 
     draft: StoredDraftResponse
     replayed: bool
+
+
+class SubmissionAttentionIssueResponse(StrictSchema):
+    """One stable field-level reason that a submitter can act on."""
+
+    field_id: StableIdentifier
+    reason: SubmissionAttentionReason
+
+
+class SubmissionFinalizationResponse(StrictSchema):
+    """Owner-visible state of durable draft finalization."""
+
+    draft_id: UUID
+    draft_revision: int
+    status: FinalizationJobStatus
+    issues: list[SubmissionAttentionIssueResponse]
+    build_id: int | None
+
+    @classmethod
+    def from_domain(cls, snapshot: FinalizationJobSnapshot) -> "SubmissionFinalizationResponse":
+        return cls(
+            draft_id=snapshot.draft_id,
+            draft_revision=snapshot.draft_revision,
+            status=snapshot.status,
+            issues=[
+                SubmissionAttentionIssueResponse(field_id=issue.field_id, reason=issue.reason)
+                for issue in snapshot.issues
+            ],
+            build_id=snapshot.result.build_id if snapshot.result is not None else None,
+        )
 
 
 def _json_value(value: JSONValue) -> JsonValue:

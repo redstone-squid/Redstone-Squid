@@ -15,6 +15,17 @@ _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
 _STATE_KEY = "squid_idempotency"
 
+IdempotencyKey = Annotated[
+    str | None,
+    Header(
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=255,
+        pattern=r"^[\x21-\x7e]+$",
+        description="Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+    ),
+]
+
 
 class IdempotencyReplay(Exception):
     """Short-circuit an equivalent request with its stored response."""
@@ -33,25 +44,25 @@ class _PendingResponse:
 async def enforce_request_idempotency(
     request: Request,
     principal: Annotated[Principal, Depends(current_principal)],
-    idempotency_key: Annotated[
-        str | None,
-        Header(
-            alias="Idempotency-Key",
-            min_length=1,
-            max_length=255,
-            pattern=r"^[\x21-\x7e]+$",
-            description="Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
-        ),
-    ] = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
+    await enforce_request_idempotency_for(request, principal.subject, idempotency_key)
+
+
+async def enforce_request_idempotency_for(
+    request: Request,
+    principal: str,
+    idempotency_key: str | None,
+) -> None:
+    """Reserve a key in a server-derived principal namespace."""
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
     route = request.scope.get("route")
     route_path = cast(str, getattr(route, "path", request.url.path))
     reservation = await service.reserve(
-        principal=principal.subject,
+        principal=principal,
         key=idempotency_key,
         fingerprint=await _request_fingerprint(request, route_path),
         method=request.method,

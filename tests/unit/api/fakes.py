@@ -17,6 +17,7 @@ from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
+from squid.submissions.application import FormOptionSet, build_submission_manifest
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -123,6 +124,15 @@ class MockRecords:
         return ()
 
 
+class MockSubmissionForms:
+    def manifest(self, *, locale: str | None):
+        return build_submission_manifest(locale)
+
+    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+        del locale
+        return FormOptionSet(source, category, 1, ())
+
+
 class MockIdempotency:
     async def reserve(self, **_kwargs: object) -> PendingRequest:
         return PendingRequest(uuid.uuid4())
@@ -199,6 +209,12 @@ def build_app(
             votes=MockVotes(),
             vote_members=None,
             records=MockRecords(),
+            submission_forms=MockSubmissionForms(),
+            submission_drafts=SimpleNamespace(),
+            submission_finalization=SimpleNamespace(),
+            media_jobs=None,
+            minecraft_installations=None,
+            minecraft_player_authorization=None,
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())

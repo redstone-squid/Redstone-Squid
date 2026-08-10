@@ -23,6 +23,10 @@ export type BuildDetail = {
      */
     title: string;
     /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
      * Status
      */
     status: string;
@@ -73,6 +77,14 @@ export type BuildDetail = {
      * Orientation
      */
     orientation: string | null;
+    /**
+     * Extension Length
+     */
+    extension_length: number | null;
+    /**
+     * Extender Type
+     */
+    extender_type: string | null;
     /**
      * Restrictions
      */
@@ -271,6 +283,10 @@ export type BuildSummary = {
      */
     title: string;
     /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
      * Status
      */
     status: string;
@@ -337,6 +353,110 @@ export type BuildTag = {
      */
     unit: string | null;
 };
+
+/**
+ * CategoryFormResponse
+ *
+ * A stable build category and its category-specific form sections.
+ */
+export type CategoryFormResponse = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Sections
+     */
+    sections: Array<FormSectionResponse>;
+};
+
+/**
+ * ChallengeApprovalRequest
+ *
+ * Approve a displayed user code as the signed-in account.
+ */
+export type ChallengeApprovalRequest = {
+    /**
+     * User Code
+     */
+    user_code: string;
+};
+
+/**
+ * ChallengeApprovalResponse
+ *
+ * Non-secret confirmation of an exact-identity approval.
+ */
+export type ChallengeApprovalResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Java Uuid
+     */
+    java_uuid: string;
+    origin: MinecraftClientOrigin;
+    /**
+     * Approved At
+     */
+    approved_at: string;
+};
+
+/**
+ * ChallengeCreateResponse
+ *
+ * One-time device-flow codes and their polling policy.
+ */
+export type ChallengeCreateResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Device Code
+     */
+    device_code: string;
+    /**
+     * User Code
+     */
+    user_code: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Polling Interval Seconds
+     */
+    polling_interval_seconds: number;
+};
+
+/**
+ * ChoiceOptionResponse
+ *
+ * One stable selectable value and its localized display label.
+ */
+export type ChoiceOptionResponse = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * ControlKind
+ *
+ * Small renderer-neutral set of supported form controls.
+ */
+export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
 
 /**
  * CreatorAliasDetail
@@ -469,11 +589,404 @@ export type DoorSubmission = {
 };
 
 /**
+ * DraftChangeRequest
+ *
+ * An atomic optimistic draft edit with retry-safe identity.
+ */
+export type DraftChangeRequest = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Client Instance Id
+     */
+    client_instance_id: string;
+    /**
+     * Idempotency Key
+     */
+    idempotency_key: string;
+    /**
+     * Operations
+     */
+    operations: Array<FieldOperationRequest>;
+};
+
+/**
+ * DraftChangeResponse
+ *
+ * The state produced by a draft change and whether it was a replay.
+ */
+export type DraftChangeResponse = {
+    draft: StoredDraftResponse;
+    /**
+     * Replayed
+     */
+    replayed: boolean;
+};
+
+/**
+ * DraftCreateRequest
+ *
+ * Request an empty account-owned draft pinned to the current form revision.
+ */
+export type DraftCreateRequest = {
+    /**
+     * Category
+     */
+    category: string;
+    origin: SubmissionOrigin;
+    /**
+     * Client Capabilities
+     */
+    client_capabilities?: Array<string>;
+};
+
+/**
+ * DraftMediaArtifactResponse
+ *
+ * Safe facts about one normalized visual artifact.
+ */
+export type DraftMediaArtifactResponse = {
+    role: DraftMediaArtifactRole;
+    /**
+     * Content Type
+     */
+    content_type: string;
+    /**
+     * Width
+     */
+    width: number;
+    /**
+     * Height
+     */
+    height: number;
+};
+
+/**
+ * DraftMediaArtifactRole
+ *
+ * Normalized visual outputs visible to a draft owner.
+ */
+export type DraftMediaArtifactRole = 'output' | 'poster';
+
+/**
+ * DraftMediaLimitsResponse
+ *
+ * Server-enforced upload, batch, and decoder-work budgets.
+ */
+export type DraftMediaLimitsResponse = {
+    /**
+     * Max Upload Bytes
+     */
+    max_upload_bytes: number;
+    /**
+     * Max Images
+     */
+    max_images: number;
+    /**
+     * Max Videos
+     */
+    max_videos: number;
+    /**
+     * Max Output Bytes
+     */
+    max_output_bytes: number;
+    /**
+     * Max Duration Milliseconds
+     */
+    max_duration_milliseconds: number;
+    /**
+     * Max Pixels Per Frame
+     */
+    max_pixels_per_frame: number;
+    /**
+     * Max Decoded Pixels Per Second
+     */
+    max_decoded_pixels_per_second: number;
+};
+
+/**
+ * DraftMediaListResponse
+ *
+ * The complete bounded media collection for one owned draft.
+ */
+export type DraftMediaListResponse = {
+    limits: DraftMediaLimitsResponse;
+    /**
+     * Media
+     */
+    media: Array<DraftMediaResponse>;
+};
+
+/**
+ * DraftMediaResponse
+ *
+ * Safe state for one upload without storage or normalization internals.
+ */
+export type DraftMediaResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Draft Id
+     */
+    draft_id: string;
+    kind: MediaKind;
+    status: DraftMediaStatus;
+    /**
+     * Source Content Type
+     */
+    source_content_type: string;
+    /**
+     * Artifacts
+     */
+    artifacts: Array<DraftMediaArtifactResponse>;
+};
+
+/**
+ * DraftMediaStatus
+ *
+ * Stable client states that do not expose worker claim details.
+ */
+export type DraftMediaStatus = 'processing' | 'completed' | 'dead' | 'discarded';
+
+/**
+ * DraftStatus
+ *
+ * Lifecycle state of a server-side submission draft.
+ */
+export type DraftStatus = 'editing' | 'processing' | 'needs_attention' | 'submitted' | 'expired';
+
+/**
  * ErrorCode
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_CURSOR' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_USER' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'USER_NOT_FOUND' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_CURSOR' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
+
+/**
+ * FabricChallengeCreateRequest
+ *
+ * Request player authorization from Fabric with an S256 PKCE commitment.
+ */
+export type FabricChallengeCreateRequest = {
+    /**
+     * Java Uuid
+     */
+    java_uuid: string;
+    /**
+     * Pkce S256 Challenge
+     */
+    pkce_s256_challenge: string;
+};
+
+/**
+ * FabricChallengeExchangeRequest
+ *
+ * Exchange an approved Fabric challenge with its PKCE verifier.
+ */
+export type FabricChallengeExchangeRequest = {
+    /**
+     * Device Code
+     */
+    device_code: string;
+    /**
+     * Pkce Verifier
+     */
+    pkce_verifier: string;
+};
+
+/**
+ * FieldConstraintsResponse
+ *
+ * Validation bounds interpreted the same way by clients and the server.
+ */
+export type FieldConstraintsResponse = {
+    /**
+     * Minimum
+     */
+    minimum: number | number | null;
+    /**
+     * Maximum
+     */
+    maximum: number | number | null;
+    /**
+     * Min Length
+     */
+    min_length: number | null;
+    /**
+     * Max Length
+     */
+    max_length: number | null;
+    /**
+     * Min Items
+     */
+    min_items: number | null;
+    /**
+     * Max Items
+     */
+    max_items: number | null;
+    must_equal: JsonValue2;
+};
+
+/**
+ * FieldOperationKind
+ *
+ * Mutations supported by the v1 field-operation protocol.
+ */
+export type FieldOperationKind = 'set' | 'unset';
+
+/**
+ * FieldOperationRequest
+ *
+ * Set or unset exactly one stable form field.
+ */
+export type FieldOperationRequest = {
+    /**
+     * Operation Id
+     */
+    operation_id: string;
+    /**
+     * Field Id
+     */
+    field_id: string;
+    kind: FieldOperationKind;
+    value?: JsonValue2;
+};
+
+/**
+ * FinalizationJobStatus
+ *
+ * Durable state of one source-draft finalization job.
+ */
+export type FinalizationJobStatus = 'pending' | 'claimed' | 'needs_attention' | 'completed' | 'dead';
+
+/**
+ * FormFieldResponse
+ *
+ * One field that any supported submission renderer can present.
+ */
+export type FormFieldResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    control: ControlKind;
+    value_kind: ValueKind;
+    /**
+     * Required
+     */
+    required: boolean;
+    /**
+     * Help Text
+     */
+    help_text: string | null;
+    constraints: FieldConstraintsResponse;
+    /**
+     * Options
+     */
+    options: Array<ChoiceOptionResponse>;
+    /**
+     * Option Source
+     */
+    option_source: string | null;
+    visible_when: VisibilityRuleResponse | null;
+    default: JsonValue2;
+    /**
+     * Repeatable
+     */
+    repeatable: boolean;
+    /**
+     * Required Capability
+     */
+    required_capability: string | null;
+    /**
+     * Origins
+     */
+    origins: Array<SubmissionOrigin>;
+};
+
+/**
+ * FormManifestResponse
+ *
+ * One immutable renderer-neutral submission form revision.
+ */
+export type FormManifestResponse = {
+    /**
+     * Schema Id
+     */
+    schema_id: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Minimum Protocol
+     */
+    minimum_protocol: number;
+    /**
+     * Maximum Protocol
+     */
+    maximum_protocol: number;
+    /**
+     * Common Sections
+     */
+    common_sections: Array<FormSectionResponse>;
+    /**
+     * Categories
+     */
+    categories: Array<CategoryFormResponse>;
+};
+
+/**
+ * FormOptionSetResponse
+ *
+ * One revision of a category-aware dynamic option source.
+ */
+export type FormOptionSetResponse = {
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Category
+     */
+    category: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Options
+     */
+    options: Array<ChoiceOptionResponse>;
+};
+
+/**
+ * FormSectionResponse
+ *
+ * An ordered group of related form fields.
+ */
+export type FormSectionResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Fields
+     */
+    fields: Array<FormFieldResponse>;
+};
 
 /**
  * HTTPValidationError
@@ -521,9 +1034,118 @@ export type InputDimensions = [
     number | null
 ];
 
+/**
+ * InstallationCreateRequest
+ *
+ * Register one account-owned Paper installation.
+ */
+export type InstallationCreateRequest = {
+    /**
+     * Label
+     */
+    label: string;
+    profile?: ServerProfileSchema;
+};
+
+/**
+ * InstallationListResponse
+ *
+ * All Paper installations owned by the signed-in account.
+ */
+export type InstallationListResponse = {
+    /**
+     * Installations
+     */
+    installations: Array<InstallationResponse>;
+};
+
+/**
+ * InstallationResponse
+ *
+ * Account-visible installation metadata without its credential digest.
+ */
+export type InstallationResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Credential Version
+     */
+    credential_version: number;
+    profile: ServerProfileSchema;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Rotated At
+     */
+    rotated_at: string | null;
+    /**
+     * Revoked At
+     */
+    revoked_at: string | null;
+};
+
+/**
+ * IssuedInstallationResponse
+ *
+ * Installation metadata and its one-time plaintext secret.
+ */
+export type IssuedInstallationResponse = {
+    installation: InstallationResponse;
+    /**
+     * Secret
+     */
+    secret: string;
+};
+
+/**
+ * IssuedPlayerGrantResponse
+ *
+ * One-time player bearer token response from a consumed challenge.
+ */
+export type IssuedPlayerGrantResponse = {
+    /**
+     * Grant Id
+     */
+    grant_id: string;
+    /**
+     * Token
+     */
+    token: string;
+    /**
+     * Java Uuid
+     */
+    java_uuid: string;
+    origin: MinecraftClientOrigin;
+    /**
+     * Installation Id
+     */
+    installation_id: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
 export type JsonValue = boolean | number | number | string | Array<JsonValue> | {
     [key: string]: JsonValue;
 } | null;
+
+export type JsonValue2 = unknown;
+
+/**
+ * MediaKind
+ *
+ * A hosted media type accepted by a submission.
+ */
+export type MediaKind = 'image' | 'video';
 
 /**
  * MetadataSearchEntry
@@ -569,6 +1191,13 @@ export type MetadataSearchResult = {
     score: number | null;
     metadata: MetadataSearchEntry;
 };
+
+/**
+ * MinecraftClientOrigin
+ *
+ * A server-established Minecraft client transport.
+ */
+export type MinecraftClientOrigin = 'paper' | 'fabric';
 
 /**
  * NotificationPreferenceUpdate
@@ -787,6 +1416,30 @@ export type PageVersionDetail = {
      * Has More
      */
     has_more: boolean;
+};
+
+/**
+ * PaperChallengeCreateRequest
+ *
+ * Request player authorization from an authenticated Paper server.
+ */
+export type PaperChallengeCreateRequest = {
+    /**
+     * Java Uuid
+     */
+    java_uuid: string;
+};
+
+/**
+ * PaperChallengeExchangeRequest
+ *
+ * Exchange an approved Paper challenge on its authenticated installation.
+ */
+export type PaperChallengeExchangeRequest = {
+    /**
+     * Device Code
+     */
+    device_code: string;
 };
 
 /**
@@ -1061,17 +1714,9 @@ export type SchematicSummary = {
      */
     id: number;
     /**
-     * Sha256
-     */
-    sha256: string;
-    /**
      * Primary
      */
     primary: boolean;
-    /**
-     * Filename
-     */
-    filename: string | null;
     /**
      * Format
      */
@@ -1110,6 +1755,18 @@ export type SchematicSummary = {
      * Analysis Schema Version
      */
     analysis_schema_version: number;
+    /**
+     * License
+     */
+    license: string;
+    /**
+     * License Url
+     */
+    license_url: string;
+    /**
+     * Download Url
+     */
+    download_url: string;
 };
 
 /**
@@ -1160,9 +1817,141 @@ export type SearchSuggestions = {
 };
 
 /**
+ * ServerProfileSchema
+ *
+ * Explicit public listing and sponsor preferences for a Paper server.
+ */
+export type ServerProfileSchema = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Address
+     */
+    address?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Website Url
+     */
+    website_url?: string | null;
+    /**
+     * Sponsor Opt In
+     */
+    sponsor_opt_in?: boolean;
+};
+
+/**
+ * StoredDraftResponse
+ *
+ * The compacted current state of one caller-owned synchronized draft.
+ */
+export type StoredDraftResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Schema Id
+     */
+    schema_id: string;
+    /**
+     * Schema Revision
+     */
+    schema_revision: number;
+    /**
+     * Category
+     */
+    category: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    status: DraftStatus;
+    /**
+     * Answers
+     */
+    answers: {
+        [key: string]: JsonValue2;
+    };
+    origin: SubmissionOrigin;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
+/**
+ * SubmissionAttentionIssueResponse
+ *
+ * One stable field-level reason that a submitter can act on.
+ */
+export type SubmissionAttentionIssueResponse = {
+    /**
+     * Field Id
+     */
+    field_id: string;
+    reason: SubmissionAttentionReason;
+};
+
+/**
+ * SubmissionAttentionReason
+ *
+ * Stable repair reasons shared by every submission transport.
+ */
+export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'media_processing' | 'media_rejected' | 'target_rejected' | 'retry_exhausted';
+
+/**
+ * SubmissionFinalizationResponse
+ *
+ * Owner-visible state of durable draft finalization.
+ */
+export type SubmissionFinalizationResponse = {
+    /**
+     * Draft Id
+     */
+    draft_id: string;
+    /**
+     * Draft Revision
+     */
+    draft_revision: number;
+    status: FinalizationJobStatus;
+    /**
+     * Issues
+     */
+    issues: Array<SubmissionAttentionIssueResponse>;
+    /**
+     * Build Id
+     */
+    build_id: number | null;
+};
+
+/**
+ * SubmissionOrigin
+ *
+ * A transport that can own or finalize a submission draft.
+ */
+export type SubmissionOrigin = 'discord' | 'web' | 'paper' | 'fabric';
+
+/**
  * SubscriptionKind
  *
- * Durable subject types a user may follow.
+ * Durable subject types an account may follow.
  */
 export type SubscriptionKind = 'creator' | 'record' | 'record_filter';
 
@@ -1315,6 +2104,13 @@ export type ValidationError = {
 };
 
 /**
+ * ValueKind
+ *
+ * Canonical JSON value expected from a field.
+ */
+export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks';
+
+/**
  * VersionDetail
  *
  * One recognized Minecraft release.
@@ -1340,6 +2136,27 @@ export type VersionDetail = {
      * Display Name
      */
     display_name: string;
+};
+
+/**
+ * VisibilityOperator
+ *
+ * Operators supported by the deliberately narrow visibility language.
+ */
+export type VisibilityOperator = 'equals' | 'not_equals' | 'in';
+
+/**
+ * VisibilityRuleResponse
+ *
+ * A renderer-neutral condition controlling whether a field is shown.
+ */
+export type VisibilityRuleResponse = {
+    /**
+     * Field Id
+     */
+    field_id: string;
+    operator: VisibilityOperator;
+    value: JsonValue2;
 };
 
 /**
@@ -1543,7 +2360,7 @@ export type GetVerificationCodeV1VerifyPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -1602,7 +2419,7 @@ export type GetVerificationCodeVerifyPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -1735,7 +2552,7 @@ export type LogoutV1AuthLogoutPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -1854,7 +2671,7 @@ export type SubmitBuildV1BuildsPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -1957,7 +2774,7 @@ export type EditBuildV1BuildsBuildIdPatchData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2072,7 +2889,7 @@ export type GrantConsentV1UsersMeConsentPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2181,6 +2998,625 @@ export type ListMyBuildsV1UsersMeBuildsGetResponses = {
 
 export type ListMyBuildsV1UsersMeBuildsGetResponse = ListMyBuildsV1UsersMeBuildsGetResponses[keyof ListMyBuildsV1UsersMeBuildsGetResponses];
 
+export type ListInstallationsV1MinecraftAuthPaperInstallationsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/paper/installations';
+};
+
+export type ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ListInstallationsV1MinecraftAuthPaperInstallationsGetError = ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors[keyof ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors];
+
+export type ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: InstallationListResponse;
+};
+
+export type ListInstallationsV1MinecraftAuthPaperInstallationsGetResponse = ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses[keyof ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses];
+
+export type CreateInstallationV1MinecraftAuthPaperInstallationsPostData = {
+    body: InstallationCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/paper/installations';
+};
+
+export type CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreateInstallationV1MinecraftAuthPaperInstallationsPostError = CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors[keyof CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors];
+
+export type CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: IssuedInstallationResponse;
+};
+
+export type CreateInstallationV1MinecraftAuthPaperInstallationsPostResponse = CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses[keyof CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses];
+
+export type RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: string;
+    };
+    query?: never;
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}/rotate';
+};
+
+export type RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostError = RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors[keyof RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors];
+
+export type RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssuedInstallationResponse;
+};
+
+export type RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponse = RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses[keyof RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses];
+
+export type UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutData = {
+    body: ServerProfileSchema;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: string;
+    };
+    query?: never;
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}/profile';
+};
+
+export type UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutError = UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors[keyof UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors];
+
+export type UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses = {
+    /**
+     * Successful Response
+     */
+    200: InstallationResponse;
+};
+
+export type UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponse = UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses[keyof UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses];
+
+export type RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Installation Id
+         */
+        installation_id: string;
+    };
+    query?: never;
+    url: '/v1/minecraft/auth/paper/installations/{installation_id}';
+};
+
+export type RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteError = RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors[keyof RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors];
+
+export type RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponse = RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses[keyof RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses];
+
+export type StartPaperChallengeV1MinecraftAuthPaperChallengesPostData = {
+    body: PaperChallengeCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        /**
+         * X-Squid-Installation-Id
+         */
+        'X-Squid-Installation-ID'?: string | null;
+        /**
+         * X-Squid-Installation-Secret
+         */
+        'X-Squid-Installation-Secret'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/paper/challenges';
+};
+
+export type StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type StartPaperChallengeV1MinecraftAuthPaperChallengesPostError = StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors[keyof StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors];
+
+export type StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ChallengeCreateResponse;
+};
+
+export type StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponse = StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses[keyof StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses];
+
+export type ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostData = {
+    body: PaperChallengeExchangeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        /**
+         * X-Squid-Installation-Id
+         */
+        'X-Squid-Installation-ID'?: string | null;
+        /**
+         * X-Squid-Installation-Secret
+         */
+        'X-Squid-Installation-Secret'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/paper/challenges/exchange';
+};
+
+export type ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostError = ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors[keyof ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors];
+
+export type ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssuedPlayerGrantResponse;
+};
+
+export type ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponse = ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses[keyof ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses];
+
+export type StartFabricChallengeV1MinecraftAuthFabricChallengesPostData = {
+    body: FabricChallengeCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/fabric/challenges';
+};
+
+export type StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type StartFabricChallengeV1MinecraftAuthFabricChallengesPostError = StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors[keyof StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors];
+
+export type StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ChallengeCreateResponse;
+};
+
+export type StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponse = StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses[keyof StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses];
+
+export type ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostData = {
+    body: FabricChallengeExchangeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/fabric/challenges/exchange';
+};
+
+export type ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostError = ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors[keyof ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors];
+
+export type ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssuedPlayerGrantResponse;
+};
+
+export type ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponse = ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses[keyof ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses];
+
+export type ApproveChallengeV1MinecraftAuthChallengesApprovalPostData = {
+    body: ChallengeApprovalRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/minecraft/auth/challenges/approval';
+};
+
+export type ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ApproveChallengeV1MinecraftAuthChallengesApprovalPostError = ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors[keyof ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors];
+
+export type ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChallengeApprovalResponse;
+};
+
+export type ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponse = ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses[keyof ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses];
+
+export type RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Grant Id
+         */
+        grant_id: string;
+    };
+    query?: never;
+    url: '/v1/minecraft/auth/grants/{grant_id}';
+};
+
+export type RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteError = RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors[keyof RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors];
+
+export type RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponse = RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses[keyof RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses];
+
 export type GetPreferencesV1UsersMeNotificationsPreferencesGetData = {
     body?: never;
     path?: never;
@@ -2224,7 +3660,7 @@ export type UpdatePreferencesV1UsersMeNotificationsPreferencesPatchData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2277,7 +3713,7 @@ export type AcceptNoticeV1UsersMeNotificationsConsentPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2369,7 +3805,7 @@ export type CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2426,7 +3862,7 @@ export type DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdD
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2542,7 +3978,7 @@ export type MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };
@@ -2745,19 +4181,23 @@ export type ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses = {
 
 export type ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponse = ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses[keyof ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses];
 
-export type GetSchematicContentV1SchematicsSha256ContentGetData = {
+export type GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData = {
     body?: never;
     path: {
         /**
-         * Sha256
+         * Build Id
          */
-        sha256: string;
+        build_id: number;
+        /**
+         * Schematic Id
+         */
+        schematic_id: number;
     };
     query?: never;
-    url: '/v1/schematics/{sha256}/content';
+    url: '/v1/builds/{build_id}/schematics/{schematic_id}/content';
 };
 
-export type GetSchematicContentV1SchematicsSha256ContentGetErrors = {
+export type GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors = {
     /**
      * Not Found
      */
@@ -2776,16 +4216,16 @@ export type GetSchematicContentV1SchematicsSha256ContentGetErrors = {
     503: ProblemDetail;
 };
 
-export type GetSchematicContentV1SchematicsSha256ContentGetError = GetSchematicContentV1SchematicsSha256ContentGetErrors[keyof GetSchematicContentV1SchematicsSha256ContentGetErrors];
+export type GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetError = GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors[keyof GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors];
 
-export type GetSchematicContentV1SchematicsSha256ContentGetResponses = {
+export type GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses = {
     /**
      * Stored schematic content
      */
     200: Blob | File;
 };
 
-export type GetSchematicContentV1SchematicsSha256ContentGetResponse = GetSchematicContentV1SchematicsSha256ContentGetResponses[keyof GetSchematicContentV1SchematicsSha256ContentGetResponses];
+export type GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponse = GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses[keyof GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses];
 
 export type GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetData = {
     body?: never;
@@ -2958,6 +4398,719 @@ export type SearchV1SearchGetResponses = {
 };
 
 export type SearchV1SearchGetResponse = SearchV1SearchGetResponses[keyof SearchV1SearchGetResponses];
+
+export type CurrentFormV1SubmissionsFormCurrentGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/submissions/form/current';
+};
+
+export type CurrentFormV1SubmissionsFormCurrentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CurrentFormV1SubmissionsFormCurrentGetError = CurrentFormV1SubmissionsFormCurrentGetErrors[keyof CurrentFormV1SubmissionsFormCurrentGetErrors];
+
+export type CurrentFormV1SubmissionsFormCurrentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FormManifestResponse;
+};
+
+export type CurrentFormV1SubmissionsFormCurrentGetResponse = CurrentFormV1SubmissionsFormCurrentGetResponses[keyof CurrentFormV1SubmissionsFormCurrentGetResponses];
+
+export type FormOptionsV1SubmissionsFormOptionsSourceGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Source
+         */
+        source: string;
+    };
+    query: {
+        /**
+         * Category
+         */
+        category: string;
+    };
+    url: '/v1/submissions/form/options/{source}';
+};
+
+export type FormOptionsV1SubmissionsFormOptionsSourceGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type FormOptionsV1SubmissionsFormOptionsSourceGetError = FormOptionsV1SubmissionsFormOptionsSourceGetErrors[keyof FormOptionsV1SubmissionsFormOptionsSourceGetErrors];
+
+export type FormOptionsV1SubmissionsFormOptionsSourceGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FormOptionSetResponse;
+};
+
+export type FormOptionsV1SubmissionsFormOptionsSourceGetResponse = FormOptionsV1SubmissionsFormOptionsSourceGetResponses[keyof FormOptionsV1SubmissionsFormOptionsSourceGetResponses];
+
+export type CreateDraftV1SubmissionsDraftsPostData = {
+    body: DraftCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/submissions/drafts';
+};
+
+export type CreateDraftV1SubmissionsDraftsPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreateDraftV1SubmissionsDraftsPostError = CreateDraftV1SubmissionsDraftsPostErrors[keyof CreateDraftV1SubmissionsDraftsPostErrors];
+
+export type CreateDraftV1SubmissionsDraftsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: StoredDraftResponse;
+};
+
+export type CreateDraftV1SubmissionsDraftsPostResponse = CreateDraftV1SubmissionsDraftsPostResponses[keyof CreateDraftV1SubmissionsDraftsPostResponses];
+
+export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}';
+};
+
+export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteError = DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors[keyof DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors];
+
+export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponse = DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses[keyof DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses];
+
+export type GetDraftV1SubmissionsDraftsDraftIdGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}';
+};
+
+export type GetDraftV1SubmissionsDraftsDraftIdGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type GetDraftV1SubmissionsDraftsDraftIdGetError = GetDraftV1SubmissionsDraftsDraftIdGetErrors[keyof GetDraftV1SubmissionsDraftsDraftIdGetErrors];
+
+export type GetDraftV1SubmissionsDraftsDraftIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StoredDraftResponse;
+};
+
+export type GetDraftV1SubmissionsDraftsDraftIdGetResponse = GetDraftV1SubmissionsDraftsDraftIdGetResponses[keyof GetDraftV1SubmissionsDraftsDraftIdGetResponses];
+
+export type ChangeDraftV1SubmissionsDraftsDraftIdChangesPostData = {
+    body: DraftChangeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/changes';
+};
+
+export type ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ChangeDraftV1SubmissionsDraftsDraftIdChangesPostError = ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors[keyof ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors];
+
+export type ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftChangeResponse;
+};
+
+export type ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponse = ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses[keyof ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses];
+
+export type GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/submission';
+};
+
+export type GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetError = GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors[keyof GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors];
+
+export type GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubmissionFinalizationResponse;
+};
+
+export type GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponse = GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses[keyof GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses];
+
+export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/submission';
+};
+
+export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostError = SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors[keyof SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors];
+
+export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: SubmissionFinalizationResponse;
+};
+
+export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponse = SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses[keyof SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses];
+
+export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        kind: MediaKind;
+    };
+    query?: {
+        /**
+         * Strip Audio
+         *
+         * Remove audio while normalizing a video.
+         */
+        strip_audio?: boolean;
+        /**
+         * Upload Id
+         *
+         * Stable client-generated UUID for safe upload retries.
+         */
+        upload_id?: string | null;
+    };
+    url: '/v1/submissions/drafts/{draft_id}/media/{kind}';
+};
+
+export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostError = UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors[keyof UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors];
+
+export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: DraftMediaResponse;
+};
+
+export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponse = UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses[keyof UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses];
+
+export type ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/media';
+};
+
+export type ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetError = ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors[keyof ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors];
+
+export type ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftMediaListResponse;
+};
+
+export type ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponse = ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses[keyof ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses];
+
+export type DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}';
+};
+
+export type DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteError = DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors[keyof DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors];
+
+export type DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponse = DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses[keyof DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses];
+
+export type GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}';
+};
+
+export type GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetError = GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors[keyof GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors];
+
+export type GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftMediaResponse;
+};
+
+export type GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponse = GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses[keyof GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses];
 
 export type ListTagsV1TagsGetData = {
     body?: never;
@@ -3225,7 +5378,7 @@ export type CastVoteV1VoteSessionsVoteSessionIdVotesPostData = {
         /**
          * Idempotency-Key
          *
-         * Deduplicate an equivalent mutation by this authenticated caller for 24 hours.
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
     };

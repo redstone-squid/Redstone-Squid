@@ -1,12 +1,15 @@
 """Renderer-neutral submission form and synchronized-draft routes."""
 
+from dataclasses import dataclass
 from typing import Annotated, Protocol, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.security import Principal, current_principal
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
@@ -15,9 +18,10 @@ from squid.api.v1.schemas.submissions import (
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
+    SubmissionFinalizationResponse,
 )
-from squid.core.errors import AuthenticationError
-from squid.submissions.application import AppliedDraftChange, FormOptionSet, StoredDraft
+from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
+from squid.submissions.application import AppliedDraftChange, FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 
 
@@ -56,11 +60,26 @@ class SubmissionDraftCommands(Protocol):
     async def delete(self, draft_id: UUID, account_id: int) -> None: ...
 
 
+class SubmissionFinalizationCommands(Protocol):
+    """Owner-scoped finalization operations needed by the HTTP transport."""
+
+    async def submit(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        locale: str | None,
+    ) -> FinalizationJobSnapshot: ...
+
+    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None: ...
+
+
 class SubmissionApiServices(Protocol):
     """Narrow runtime service bundle consumed by this router."""
 
     submission_forms: SubmissionFormReader
     submission_drafts: SubmissionDraftCommands
+    submission_finalization: SubmissionFinalizationCommands
 
 
 class _SubmissionRuntime(Protocol):
@@ -83,22 +102,69 @@ def get_submission_drafts(request: Request) -> SubmissionDraftCommands:
     return state.runtime.services.submission_drafts
 
 
+def get_submission_finalization(request: Request) -> SubmissionFinalizationCommands:
+    """Resolve finalization without coupling this module to the global runtime type."""
+    state = cast(_SubmissionAppState, request.app.state)
+    return state.runtime.services.submission_finalization
+
+
+class SubmissionFinalizationNotFoundError(NotFoundError):
+    """The owned draft has not been submitted for finalization yet."""
+
+    default_message = "This draft has not been submitted yet."
+    default_title = "Submission not started"
+    default_resource = "submission_finalization"
+
+
 async def authenticated_account(
     principal: Annotated[Principal, Depends(current_principal)],
 ) -> int:
-    """Require a signed-in human account for synchronized draft access."""
-    if principal.kind != "account" or principal.account_id is None:
+    """Require a current human or player-bound account for draft access."""
+    return _submission_actor(principal).account_id
+
+
+@dataclass(frozen=True, slots=True)
+class AuthenticatedSubmissionActor:
+    """Server-derived account and renderer origin for one submission request."""
+
+    account_id: int
+    origin: SubmissionOrigin
+
+
+async def authenticated_submission_actor(
+    principal: Annotated[Principal, Depends(current_principal)],
+) -> AuthenticatedSubmissionActor:
+    """Resolve submission provenance without trusting a request-body origin."""
+    return _submission_actor(principal)
+
+
+def _submission_actor(principal: Principal) -> AuthenticatedSubmissionActor:
+    if principal.account_id is None or principal.kind not in {"account", "minecraft_player"}:
         raise AuthenticationError
-    return principal.account_id
+    if principal.consent_pending:
+        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
+    if principal.kind == "account":
+        origin = SubmissionOrigin.WEB
+    elif principal.minecraft_origin is not None:
+        origin = SubmissionOrigin(principal.minecraft_origin)
+    else:
+        raise AuthenticationError
+    return AuthenticatedSubmissionActor(principal.account_id, origin)
 
 
 Forms = Annotated[SubmissionFormReader, Depends(get_submission_forms)]
 Drafts = Annotated[SubmissionDraftCommands, Depends(get_submission_drafts)]
+Finalization = Annotated[SubmissionFinalizationCommands, Depends(get_submission_finalization)]
 AccountId = Annotated[int, Depends(authenticated_account)]
+SubmissionActor = Annotated[AuthenticatedSubmissionActor, Depends(authenticated_submission_actor)]
 OptionSource = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 Category = Annotated[str, Query(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 
-router = APIRouter(prefix="/submissions", tags=["submissions"])
+router = APIRouter(
+    prefix="/submissions",
+    tags=["submissions"],
+    dependencies=[Depends(enforce_request_idempotency)],
+)
 
 
 @router.get(
@@ -138,13 +204,15 @@ async def create_draft(
     payload: DraftCreateRequest,
     request: Request,
     drafts: Drafts,
-    account_id: AccountId,
+    actor: SubmissionActor,
 ) -> StoredDraftResponse:
     """Create an empty synchronized draft owned by the signed-in account."""
+    if payload.origin is not actor.origin:
+        raise AuthorizationError
     draft = await drafts.create(
-        owner_account_id=account_id,
+        owner_account_id=actor.account_id,
         category=payload.category,
-        origin=payload.origin,
+        origin=actor.origin,
         client_capabilities=frozenset(payload.client_capabilities),
         locale=locale_for_request(request),
     )
@@ -181,6 +249,44 @@ async def change_draft(
         locale=locale_for_request(request),
     )
     return DraftChangeResponse(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
+
+
+@router.post(
+    "/drafts/{draft_id}/submission",
+    response_model=SubmissionFinalizationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
+)
+async def submit_draft(
+    draft_id: UUID,
+    request: Request,
+    finalization: Finalization,
+    account_id: AccountId,
+) -> SubmissionFinalizationResponse:
+    """Validate an owned draft and start retry-safe durable finalization."""
+    snapshot = await finalization.submit(
+        draft_id,
+        account_id,
+        locale=locale_for_request(request),
+    )
+    return SubmissionFinalizationResponse.from_domain(snapshot)
+
+
+@router.get(
+    "/drafts/{draft_id}/submission",
+    response_model=SubmissionFinalizationResponse,
+    responses=responses(401, 403, 404, 422, 503),
+)
+async def get_draft_submission(
+    draft_id: UUID,
+    finalization: Finalization,
+    account_id: AccountId,
+) -> SubmissionFinalizationResponse:
+    """Return retained finalization state after rechecking draft ownership."""
+    snapshot = await finalization.status(draft_id, account_id)
+    if snapshot is None:
+        raise SubmissionFinalizationNotFoundError
+    return SubmissionFinalizationResponse.from_domain(snapshot)
 
 
 @router.delete(

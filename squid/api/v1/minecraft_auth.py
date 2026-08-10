@@ -1,5 +1,6 @@
 """Strict HTTP routes for Minecraft installation and player authorization."""
 
+import hashlib
 from collections.abc import Awaitable
 from typing import Annotated, Never, Protocol, TypeVar, cast
 from uuid import UUID
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
 from squid.api.security import Principal, current_principal
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
@@ -193,6 +194,26 @@ async def authenticated_paper_installation(
 
 AuthenticatedPaper = Annotated[AuthenticatedPaperInstallation, Depends(authenticated_paper_installation)]
 
+
+async def enforce_paper_request_idempotency(
+    request: Request,
+    installation: AuthenticatedPaper,
+    idempotency_key: IdempotencyKey = None,
+) -> None:
+    """Partition one-time Paper responses by an authenticated credential generation."""
+    principal = f"minecraft-installation:{installation.id}:{installation.credential_version}"
+    await enforce_request_idempotency_for(request, principal, idempotency_key)
+
+
+async def enforce_fabric_request_idempotency(
+    request: Request,
+    idempotency_key: IdempotencyKey = None,
+) -> None:
+    """Partition anonymous Fabric retries by the transport's observed network peer."""
+    peer = request.client.host if request.client is not None else "unknown"
+    peer_digest = hashlib.sha256(peer.encode()).hexdigest()
+    await enforce_request_idempotency_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
+
 router = APIRouter(
     prefix="/minecraft/auth",
     tags=["minecraft-authentication"],
@@ -306,6 +327,7 @@ async def revoke_installation(
     response_model=ChallengeCreateResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 409, 422, 429, 503),
+    dependencies=[Depends(enforce_paper_request_idempotency)],
 )
 async def start_paper_challenge(
     payload: PaperChallengeCreateRequest,
@@ -323,6 +345,7 @@ async def start_paper_challenge(
     "/paper/challenges/exchange",
     response_model=IssuedPlayerGrantResponse,
     responses=responses(400, 401, 409, 422, 503),
+    dependencies=[Depends(enforce_paper_request_idempotency)],
 )
 async def exchange_paper_challenge(
     payload: PaperChallengeExchangeRequest,
@@ -341,6 +364,7 @@ async def exchange_paper_challenge(
     response_model=ChallengeCreateResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
+    dependencies=[Depends(enforce_fabric_request_idempotency)],
 )
 async def start_fabric_challenge(
     payload: FabricChallengeCreateRequest,
@@ -362,6 +386,7 @@ async def start_fabric_challenge(
     "/fabric/challenges/exchange",
     response_model=IssuedPlayerGrantResponse,
     responses=responses(400, 409, 422, 503),
+    dependencies=[Depends(enforce_fabric_request_idempotency)],
 )
 async def exchange_fabric_challenge(
     payload: FabricChallengeExchangeRequest,

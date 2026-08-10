@@ -9,17 +9,41 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.api.security import ANONYMOUS
-from squid.api.v1.schemas.submissions import DraftChangeRequest, DraftCreateRequest, FormManifestResponse
+from squid.accounts.errors import ConsentRequiredError
+from squid.api.security import ANONYMOUS, Principal, current_principal
+from squid.api.v1.schemas.submissions import (
+    DraftChangeRequest,
+    DraftCreateRequest,
+    FormManifestResponse,
+    SubmissionFinalizationResponse,
+)
 from squid.api.v1.submissions import (
+    AuthenticatedSubmissionActor,
     authenticated_account,
+    authenticated_submission_actor,
     get_submission_drafts,
+    get_submission_finalization,
     get_submission_forms,
     router,
 )
 from squid.core.errors import AuthenticationError
-from squid.submissions.application import AppliedDraftChange, FormOptionSet, StoredDraft, build_submission_manifest
-from squid.submissions.domain import ChoiceOption, DraftChange, DraftSnapshot, SubmissionOrigin
+from squid.submissions.application import (
+    AppliedDraftChange,
+    FinalizationJobSnapshot,
+    FormOptionSet,
+    StoredDraft,
+    build_submission_manifest,
+)
+from squid.submissions.domain import (
+    ChoiceOption,
+    DraftChange,
+    DraftSnapshot,
+    FinalizationJobStatus,
+    SubmissionAttentionIssue,
+    SubmissionAttentionReason,
+    SubmissionOrigin,
+    SubmissionTargetResult,
+)
 
 ACCOUNT_ID = 42
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
@@ -108,6 +132,36 @@ class FakeDrafts:
         self.deleted = (draft_id, account_id)
 
 
+class FakeFinalization:
+    def __init__(self, draft_id: UUID) -> None:
+        self.snapshot = FinalizationJobSnapshot(
+            job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),
+            draft_id=draft_id,
+            draft_revision=1,
+            status=FinalizationJobStatus.NEEDS_ATTENTION,
+            attempts=0,
+            available_at=NOW,
+            attention_at=NOW,
+            issues=(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+        )
+        self.submit_calls: list[tuple[UUID, int, str | None]] = []
+        self.status_calls: list[tuple[UUID, int]] = []
+
+    async def submit(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        locale: str | None,
+    ) -> FinalizationJobSnapshot:
+        self.submit_calls.append((draft_id, account_id, locale))
+        return self.snapshot
+
+    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
+        self.status_calls.append((draft_id, account_id))
+        return self.snapshot
+
+
 def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
     response = FormManifestResponse.from_domain(build_submission_manifest())
     payload = response.model_dump(mode="json")
@@ -164,6 +218,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     app.include_router(router)
     forms = FakeForms()
     drafts = FakeDrafts()
+    finalization = FakeFinalization(drafts.current.snapshot.id)
 
     async def form_dependency() -> FakeForms:
         return forms
@@ -171,12 +226,24 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def draft_dependency() -> FakeDrafts:
         return drafts
 
+    async def finalization_dependency() -> FakeFinalization:
+        return finalization
+
     async def account_dependency() -> int:
         return ACCOUNT_ID
 
+    async def actor_dependency() -> AuthenticatedSubmissionActor:
+        return AuthenticatedSubmissionActor(ACCOUNT_ID, SubmissionOrigin.WEB)
+
+    async def principal_dependency() -> Principal:
+        return Principal(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
+
     app.dependency_overrides[get_submission_forms] = form_dependency
     app.dependency_overrides[get_submission_drafts] = draft_dependency
+    app.dependency_overrides[get_submission_finalization] = finalization_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
+    app.dependency_overrides[authenticated_submission_actor] = actor_dependency
+    app.dependency_overrides[current_principal] = principal_dependency
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         manifest_response = await client.get("/submissions/form/current", headers={"Accept-Language": "zh-TW"})
@@ -188,7 +255,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
             "/submissions/drafts",
             json={
                 "category": "door",
-                "origin": "paper",
+                "origin": "web",
                 "client_capabilities": ["repeatable_text"],
             },
         )
@@ -210,6 +277,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
             },
         )
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
+        submit_response = await client.post(f"/submissions/drafts/{draft_id}/submission")
+        submission_response = await client.get(f"/submissions/drafts/{draft_id}/submission")
         delete_response = await client.delete(f"/submissions/drafts/{draft_id}")
 
     assert manifest_response.status_code == 200
@@ -219,14 +288,25 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert options_response.json()["options"] == [{"value": "slim", "label": "Slim"}]
     assert forms.option_calls == [("approved_restrictions", "door", "en")]
     assert create_response.status_code == 201
-    assert create_response.json()["origin"] == "paper"
-    assert drafts.created_with == (ACCOUNT_ID, "door", SubmissionOrigin.PAPER, frozenset({"repeatable_text"}), "en")
+    assert create_response.json()["origin"] == "web"
+    assert drafts.created_with == (ACCOUNT_ID, "door", SubmissionOrigin.WEB, frozenset({"repeatable_text"}), "en")
     assert change_response.status_code == 200
     assert change_response.json()["draft"]["revision"] == 1
     assert change_response.json()["replayed"] is False
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
     assert get_response.json()["answers"] == {"display_name": "Compact door"}
+    assert submit_response.status_code == 202
+    assert submit_response.json() == {
+        "draft_id": draft_id,
+        "draft_revision": 1,
+        "status": "needs_attention",
+        "issues": [{"field_id": "schematic", "reason": "schematic_processing"}],
+        "build_id": None,
+    }
+    assert submission_response.json() == submit_response.json()
+    assert finalization.submit_calls == [(UUID(draft_id), ACCOUNT_ID, "en")]
+    assert finalization.status_calls == [(UUID(draft_id), ACCOUNT_ID)]
     assert delete_response.status_code == 204
     assert drafts.deleted == (UUID(draft_id), ACCOUNT_ID)
 
@@ -234,3 +314,56 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
 async def test_draft_authentication_requires_a_human_account() -> None:
     with pytest.raises(AuthenticationError):
         await authenticated_account(ANONYMOUS)
+
+
+async def test_draft_authentication_requires_current_privacy_consent() -> None:
+    principal = Principal(
+        kind="account",
+        subject="account:42",
+        account_id=42,
+        discord_id=123,
+        consent_pending=True,
+    )
+
+    with pytest.raises(ConsentRequiredError) as error:
+        await authenticated_account(principal)
+
+    assert error.value.context == {"discord_id": 123, "account_id": 42}
+
+
+async def test_player_grant_derives_minecraft_origin() -> None:
+    principal = Principal(
+        kind="minecraft_player",
+        subject="minecraft-grant:test",
+        account_id=42,
+        minecraft_origin="paper",
+    )
+
+    actor = await authenticated_submission_actor(principal)
+
+    assert actor == AuthenticatedSubmissionActor(42, SubmissionOrigin.PAPER)
+
+
+def test_finalization_response_does_not_expose_worker_or_target_internals() -> None:
+    snapshot = FinalizationJobSnapshot(
+        job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),
+        draft_id=stored_draft().snapshot.id,
+        draft_revision=2,
+        status=FinalizationJobStatus.COMPLETED,
+        attempts=2,
+        available_at=NOW,
+        claimed_at=None,
+        claim_token=None,
+        completed_at=NOW,
+        last_error="private worker detail",
+        result=SubmissionTargetResult(91, "postgres_builds", {"private": "value"}),
+    )
+
+    payload = SubmissionFinalizationResponse.from_domain(snapshot).model_dump(mode="json")
+
+    assert payload["build_id"] == 91
+    assert "job_id" not in payload
+    assert "attempts" not in payload
+    assert "last_error" not in payload
+    assert "target_key" not in payload
+    assert "provenance" not in payload
