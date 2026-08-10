@@ -503,6 +503,18 @@ export type CreatorProfileDetail = {
 };
 
 /**
+ * CsrfTokenResponse
+ *
+ * A session-bound double-submit token, never a session credential.
+ */
+export type CsrfTokenResponse = {
+    /**
+     * Csrf Token
+     */
+    csrf_token: string;
+};
+
+/**
  * Dimensions
  *
  * A three-dimensional build measurement.
@@ -2479,6 +2491,39 @@ export type GetVerificationCodeVerifyPostResponses = {
 };
 
 export type GetVerificationCodeVerifyPostResponse = GetVerificationCodeVerifyPostResponses[keyof GetVerificationCodeVerifyPostResponses];
+
+export type CsrfTokenV1AuthCsrfGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/auth/csrf';
+};
+
+export type CsrfTokenV1AuthCsrfGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CsrfTokenV1AuthCsrfGetError = CsrfTokenV1AuthCsrfGetErrors[keyof CsrfTokenV1AuthCsrfGetErrors];
+
+export type CsrfTokenV1AuthCsrfGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CsrfTokenResponse;
+};
+
+export type CsrfTokenV1AuthCsrfGetResponse = CsrfTokenV1AuthCsrfGetResponses[keyof CsrfTokenV1AuthCsrfGetResponses];
 
 export type DiscordAuthorizeV1AuthDiscordGetData = {
     body?: never;

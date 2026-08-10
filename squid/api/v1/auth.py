@@ -10,9 +10,21 @@ from fastapi.responses import RedirectResponse, Response
 from squid.api.dependencies import CurrentPrincipal, WebAuth
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
+from squid.api.v1.schemas.auth import CsrfTokenResponse
 from squid.core.errors import AuthenticationError, ValidationError
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+@router.get("/csrf", response_model=CsrfTokenResponse, responses=responses(401, 503))
+async def csrf_token(request: Request, response: Response, principal: CurrentPrincipal) -> CsrfTokenResponse:
+    """Return the session-bound write token to a credentialed CORS frontend."""
+    token = request.cookies.get("squid_csrf")
+    if principal.kind != "account" or token is None or not 16 <= len(token) <= 128:
+        raise AuthenticationError
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return CsrfTokenResponse(csrf_token=token)
 
 
 @router.get("/discord", response_class=RedirectResponse, responses=responses(400, 503))
