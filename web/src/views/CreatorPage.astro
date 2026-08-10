@@ -1,0 +1,54 @@
+---
+import BuildCard from "../components/BuildCard.astro";
+import ErrorState from "../components/ErrorState.astro";
+import Pagination from "../components/Pagination.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { asCatalogueError, fetchBuilds } from "../lib/api";
+import { localizePath, translate, type Locale } from "../lib/i18n";
+import { creatorQuery } from "../lib/search";
+
+type Props = { locale: Locale; name: string };
+const { locale, name } = Astro.props;
+const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const canonicalPath = localizePath(`/creators/${encodeURIComponent(name)}`, locale);
+let error;
+let page;
+try {
+  page = await fetchBuilds(locale, { q: creatorQuery(name), cursor });
+} catch (caught) {
+  error = asCatalogueError(caught);
+  Astro.response.status = error.status === 404 ? 404 : 503;
+}
+---
+
+<BaseLayout
+  title={translate(locale, "builds.byCreator", { name })}
+  description={translate(locale, "builds.byCreatorIntro")}
+  locale={locale}
+  canonicalPath={canonicalPath}
+  noindex={Boolean(cursor)}
+>
+  <div class="page-shell section-stack">
+    <header class="page-heading">
+      <div class="eyebrow">{translate(locale, "build.creators")}</div>
+      <h1>{translate(locale, "builds.byCreator", { name })}</h1>
+      <p class="lede">{translate(locale, "builds.byCreatorIntro")}</p>
+    </header>
+    {
+      error ? (
+        <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+      ) : page!.items.length > 0 ? (
+        <>
+          <div class="card-grid">
+            {page!.items.map((build) => (
+              <BuildCard build={build} locale={locale} />
+            ))}
+          </div>
+          <Pagination locale={locale} cursor={page!.next_cursor} url={Astro.url} />
+        </>
+      ) : (
+        <div class="empty-state">{translate(locale, "builds.empty")}</div>
+      )
+    }
+  </div>
+</BaseLayout>

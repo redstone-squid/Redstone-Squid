@@ -1,0 +1,25 @@
+---
+import type { RecordSummary } from "../generated/types.gen";
+import { formatDate, localizePath, translate, translateTaxonomy, type Locale } from "../lib/i18n";
+
+type Props = { record: RecordSummary; locale: Locale };
+const { record, locale } = Astro.props;
+---
+
+<article class="record-card">
+  <div class="record-card__body">
+    <span class="kicker">#{record.id} / {translateTaxonomy(locale, record.record_class)}</span>
+    <h3>
+      <a class="card-link" href={localizePath(`/records/${record.id}`, locale)}>{record.title}</a>
+    </h3>
+    {record.subtitle && <p>{record.subtitle}</p>}
+    <ul class="card-meta">
+      <li>{translateTaxonomy(locale, record.build_kind)}</li>
+      <li>{translateTaxonomy(locale, record.version_scope)}</li>
+    </ul>
+    <div class="holder-count">
+      {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })}
+      · {formatDate(locale, record.computed_at)}
+    </div>
+  </div>
+</article>

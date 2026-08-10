@@ -1,0 +1,35 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getRuntimeConfig } from "../lib/config";
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const config = getRuntimeConfig();
+---
+
+<BaseLayout
+  title={translate(locale, "about.title")}
+  description={translate(locale, "meta.aboutDescription")}
+  locale={locale}
+>
+  <div class="page-shell">
+    <article class="prose">
+      <div class="eyebrow">{translate(locale, "site.tagline")}</div>
+      <h1>{translate(locale, "about.title")}</h1>
+      <p class="lede">{translate(locale, "about.intro")}</p>
+      <h2>{translate(locale, "about.readOnlyTitle")}</h2>
+      <p>{translate(locale, "about.readOnlyBody")}</p>
+      <h2>{translate(locale, "about.recordsTitle")}</h2>
+      <p>{translate(locale, "about.recordsBody")}</p>
+      <div class="footer-links">
+        <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer"
+          >{translate(locale, "footer.discord")}</a
+        >
+        <a class="button" href={config.botInviteUrl} rel="noreferrer"
+          >{translate(locale, "footer.invite")}</a
+        >
+      </div>
+    </article>
+  </div>
+</BaseLayout>

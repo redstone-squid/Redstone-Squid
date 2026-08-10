@@ -1,0 +1,116 @@
+---
+import BuildCard from "../components/BuildCard.astro";
+import ErrorState from "../components/ErrorState.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { asCatalogueError, CatalogueApiError, fetchRecord } from "../lib/api";
+import type { RecordDetail } from "../generated/types.gen";
+import { formatDate, localizePath, translate, translateTaxonomy, type Locale } from "../lib/i18n";
+import { readPositiveInteger } from "../lib/search";
+
+type Props = { locale: Locale; id: string };
+const { locale } = Astro.props;
+const recordId = readPositiveInteger(Astro.props.id);
+let error;
+let record: RecordDetail | undefined;
+if (!recordId) {
+  error = new CatalogueApiError(404);
+  Astro.response.status = 404;
+} else {
+  try {
+    record = await fetchRecord(locale, recordId);
+  } catch (caught) {
+    error = asCatalogueError(caught);
+    Astro.response.status = error.status === 404 ? 404 : 503;
+  }
+}
+const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : Astro.url.pathname;
+---
+
+<BaseLayout
+  title={record?.title ?? translate(locale, "error.notFoundTitle")}
+  description={record?.subtitle ?? translate(locale, "meta.recordsDescription")}
+  locale={locale}
+  canonicalPath={canonicalPath}
+  noindex={Boolean(error)}
+  structuredData={record
+    ? {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        name: record.title,
+        description: record.subtitle,
+        dateModified: record.computed_at,
+        itemListElement: record.holder_builds.map((build, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: build.title,
+          url: localizePath(`/builds/${build.id}`, locale),
+        })),
+      }
+    : undefined}
+>
+  {
+    error ? (
+      <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+    ) : (
+      <div class="page-shell section-stack">
+        <header class="detail-header">
+          <div>
+            <div class="eyebrow">{translate(locale, "record.detail", { id: record!.id })}</div>
+            <h1>{record!.title}</h1>
+            {record!.subtitle && <p class="lede">{record!.subtitle}</p>}
+            <p class="kicker">
+              {translate(locale, "record.computed", {
+                date: formatDate(locale, record!.computed_at),
+              })}
+            </p>
+          </div>
+          <span class="chip">{translateTaxonomy(locale, record!.status)}</span>
+        </header>
+        <section class="surface">
+          <h2>{translate(locale, "build.specification")}</h2>
+          <dl class="spec-list">
+            <div>
+              <>
+                <dt>{translate(locale, "record.class")}</dt>
+                <dd>{translateTaxonomy(locale, record!.record_class)}</dd>
+              </>
+            </div>
+            <div>
+              <>
+                <dt>{translate(locale, "record.kind")}</dt>
+                <dd>{translateTaxonomy(locale, record!.build_kind)}</dd>
+              </>
+            </div>
+            <div>
+              <>
+                <dt>{translate(locale, "record.versionScope")}</dt>
+                <dd>{translateTaxonomy(locale, record!.version_scope)}</dd>
+              </>
+            </div>
+            <div>
+              <>
+                <dt>{translate(locale, "record.status")}</dt>
+                <dd>{translateTaxonomy(locale, record!.status)}</dd>
+              </>
+            </div>
+          </dl>
+        </section>
+        <section aria-labelledby="holders-heading">
+          <div class="section-heading">
+            <div>
+              <h2 id="holders-heading">{translate(locale, "record.holders")}</h2>
+              <p>
+                {translate(locale, "record.holderCount", { count: record!.holder_builds.length })}
+              </p>
+            </div>
+          </div>
+          <div class="card-grid">
+            {record!.holder_builds.map((build) => (
+              <BuildCard build={build} locale={locale} />
+            ))}
+          </div>
+        </section>
+      </div>
+    )
+  }
+</BaseLayout>

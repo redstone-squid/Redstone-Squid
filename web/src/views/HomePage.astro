@@ -1,0 +1,105 @@
+---
+import BuildCard from "../components/BuildCard.astro";
+import ErrorState from "../components/ErrorState.astro";
+import RecordCard from "../components/RecordCard.astro";
+import SearchComposer from "../components/SearchComposer";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { asCatalogueError, fetchBuilds, fetchRecords } from "../lib/api";
+import { getRuntimeConfig } from "../lib/config";
+import { localizePath, translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const config = getRuntimeConfig();
+let error;
+let builds;
+let records;
+try {
+  [builds, records] = await Promise.all([
+    fetchBuilds(locale, { pageSize: 6 }),
+    fetchRecords(locale, undefined, 3),
+  ]);
+} catch (caught) {
+  error = asCatalogueError(caught);
+  Astro.response.status = error.status === 404 ? 404 : 503;
+}
+const searchAction = localizePath("/builds", locale);
+---
+
+<BaseLayout
+  title={translate(locale, "nav.home")}
+  locale={locale}
+  canonicalPath={localizePath("/", locale)}
+  structuredData={{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: translate(locale, "site.name"),
+    url: new URL(localizePath("/", locale), config.siteUrl).toString(),
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${new URL(searchAction, config.siteUrl)}?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
+    },
+  }}
+>
+  {
+    error ? (
+      <ErrorState locale={locale} error={error} retryHref={localizePath("/", locale)} />
+    ) : (
+      <>
+        <section class="hero">
+          <div class="page-shell hero-content">
+            <div class="eyebrow">{translate(locale, "home.eyebrow")}</div>
+            <h1>{translate(locale, "home.title")}</h1>
+            <p class="lede">{translate(locale, "home.intro")}</p>
+            <SearchComposer client:load locale={locale} action={searchAction} />
+          </div>
+        </section>
+        <div class="page-shell section-stack">
+          <section aria-labelledby="latest-heading">
+            <div class="section-heading">
+              <div>
+                <h2 id="latest-heading">{translate(locale, "home.latest")}</h2>
+                <p>{translate(locale, "home.latestIntro")}</p>
+              </div>
+              <a href={localizePath("/builds", locale)}>{translate(locale, "nav.builds")} →</a>
+            </div>
+            <div class="card-grid">
+              {builds!.items.map((build) => (
+                <BuildCard build={build} locale={locale} />
+              ))}
+            </div>
+          </section>
+          <section aria-labelledby="records-heading">
+            <div class="section-heading">
+              <div>
+                <h2 id="records-heading">{translate(locale, "home.records")}</h2>
+                <p>{translate(locale, "home.recordsIntro")}</p>
+              </div>
+              <a href={localizePath("/records", locale)}>{translate(locale, "nav.records")} →</a>
+            </div>
+            <div class="card-grid">
+              {records!.items.map((record) => (
+                <RecordCard record={record} locale={locale} />
+              ))}
+            </div>
+          </section>
+          <section class="cta">
+            <div>
+              <h2>{translate(locale, "home.communityTitle")}</h2>
+              <p>{translate(locale, "home.communityBody")}</p>
+            </div>
+            <div class="cta-actions">
+              <a class="button button--primary" href={config.discordCommunityUrl} rel="noreferrer">
+                {translate(locale, "footer.discord")}
+              </a>
+              <a class="button" href={config.botInviteUrl} rel="noreferrer">
+                {translate(locale, "footer.invite")}
+              </a>
+            </div>
+          </section>
+        </div>
+      </>
+    )
+  }
+</BaseLayout>

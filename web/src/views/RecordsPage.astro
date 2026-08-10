@@ -1,0 +1,52 @@
+---
+import ErrorState from "../components/ErrorState.astro";
+import Pagination from "../components/Pagination.astro";
+import RecordCard from "../components/RecordCard.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { asCatalogueError, fetchRecords } from "../lib/api";
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const canonicalUrl = new URL(Astro.url);
+canonicalUrl.searchParams.delete("cursor");
+let error;
+let page;
+try {
+  page = await fetchRecords(locale, cursor);
+} catch (caught) {
+  error = asCatalogueError(caught);
+  Astro.response.status = error.status === 404 ? 404 : 503;
+}
+---
+
+<BaseLayout
+  title={translate(locale, "records.title")}
+  description={translate(locale, "meta.recordsDescription")}
+  locale={locale}
+  canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
+  noindex={Boolean(cursor)}
+>
+  <div class="page-shell section-stack">
+    <header class="page-heading">
+      <div class="eyebrow">{translate(locale, "site.tagline")}</div>
+      <h1>{translate(locale, "records.title")}</h1>
+      <p class="lede">{translate(locale, "records.intro")}</p>
+    </header>
+    {
+      error ? (
+        <ErrorState locale={locale} error={error} retryHref={Astro.url.pathname} />
+      ) : page!.items.length > 0 ? (
+        <section class="card-grid" aria-label={translate(locale, "records.title")}>
+          {page!.items.map((record) => (
+            <RecordCard record={record} locale={locale} />
+          ))}
+        </section>
+      ) : (
+        <div class="empty-state">{translate(locale, "records.empty")}</div>
+      )
+    }
+    {page && <Pagination locale={locale} cursor={page.next_cursor} url={Astro.url} />}
+  </div>
+</BaseLayout>

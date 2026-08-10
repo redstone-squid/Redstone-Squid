@@ -1,0 +1,41 @@
+---
+import type { BuildSummary } from "../generated/types.gen";
+import { localizePath, translate, translateTaxonomy, type Locale } from "../lib/i18n";
+import { cardPreview, formatDimensions, formatTiming } from "../lib/view-models";
+import RemoteImage from "./RemoteImage.astro";
+
+type Props = { build: BuildSummary; locale: Locale };
+const { build, locale } = Astro.props;
+const preview = cardPreview(build);
+const href = localizePath(`/builds/${build.id}`, locale);
+---
+
+<article class="build-card">
+  <div class="build-card__media">
+    {
+      preview ? (
+        <RemoteImage src={preview} alt="" locale={locale} />
+      ) : (
+        <div class="remote-image__fallback">{translate(locale, "common.noImage")}</div>
+      )
+    }
+  </div>
+  <div class="build-card__body">
+    <span class="kicker">#{build.id} / {translateTaxonomy(locale, build.category)}</span>
+    <h3><a class="card-link" href={href}>{build.title}</a></h3>
+    <ul class="card-meta" aria-label={translate(locale, "build.specification")}>
+      <li>{formatDimensions(locale, build.dimensions)}</li>
+      <li>{formatTiming(locale, build.opening_time)}</li>
+      {build.versions[0] && <li>{build.versions[0]}</li>}
+    </ul>
+    {
+      build.creators.length > 0 && (
+        <div class="card-creators">
+          {build.creators.map((creator) => (
+            <a href={localizePath(`/creators/${encodeURIComponent(creator)}`, locale)}>{creator}</a>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</article>

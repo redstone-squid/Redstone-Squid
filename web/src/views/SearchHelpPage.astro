@@ -1,0 +1,54 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const fields = [
+  "title",
+  "description",
+  "creator",
+  "version",
+  "kind",
+  "type",
+  "pattern",
+  "tag",
+  "restriction",
+  "width",
+  "height",
+  "depth",
+  "opening_time",
+  "closing_time",
+];
+---
+
+<BaseLayout
+  title={translate(locale, "search.helpTitle")}
+  description={translate(locale, "search.helpIntro")}
+  locale={locale}
+>
+  <div class="page-shell">
+    <article class="prose">
+      <div class="eyebrow">{translate(locale, "search.help")}</div>
+      <h1>{translate(locale, "search.helpTitle")}</h1>
+      <p class="lede">{translate(locale, "search.helpIntro")}</p>
+      <h2>{translate(locale, "search.helpFields")}</h2>
+      <ul class="chip-list">
+        {
+          fields.map((field) => (
+            <li>
+              <code>{field}</code>
+            </li>
+          ))
+        }
+      </ul>
+      <h2>{translate(locale, "search.helpExamples")}</h2>
+      <div class="stack">
+        <p><code>{translate(locale, "search.helpExampleOne")}</code></p>
+        <p><code>{translate(locale, "search.helpExampleTwo")}</code></p>
+        <p><code>{translate(locale, "search.helpExampleThree")}</code></p>
+      </div>
+      <p>{translate(locale, "search.helpNote")}</p>
+    </article>
+  </div>
+</BaseLayout>

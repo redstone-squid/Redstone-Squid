@@ -43,6 +43,10 @@
 *.ico      binary
 # SVG treated as text by default.
 *.svg      text
+*.astro    text
+*.css      text
+*.ts       text
+*.tsx      text
 # If you want to treat it as binary,
 # use the following line instead.
 # *.svg    binary

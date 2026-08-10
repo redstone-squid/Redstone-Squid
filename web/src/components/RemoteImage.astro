@@ -1,0 +1,24 @@
+---
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = {
+  src: string;
+  alt: string;
+  locale: Locale;
+  eager?: boolean;
+};
+
+const { src, alt, locale, eager = false } = Astro.props;
+---
+
+<div class="remote-image">
+  <span class="remote-image__fallback">{translate(locale, "common.imageUnavailable")}</span>
+  <img
+    src={src}
+    alt={alt}
+    loading={eager ? "eager" : "lazy"}
+    decoding="async"
+    referrerpolicy="no-referrer"
+    onerror="this.hidden=true"
+  />
+</div>

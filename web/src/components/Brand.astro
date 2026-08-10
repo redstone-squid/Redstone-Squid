@@ -1,0 +1,12 @@
+---
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+---
+
+<span class="brand-mark" aria-hidden="true">RS</span>
+<span class="brand-copy">
+  <strong>{translate(locale, "site.name")}</strong>
+  <small>{translate(locale, "site.tagline")}</small>
+</span>

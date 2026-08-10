@@ -1,0 +1,9 @@
+node_modules/
+.bun-cache/
+.bun-tmp/
+.astro/
+dist/
+coverage/
+playwright-report/
+test-results/
+.lighthouseci/

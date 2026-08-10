@@ -1,0 +1,103 @@
+---
+import BuildCard from "../components/BuildCard.astro";
+import ErrorState from "../components/ErrorState.astro";
+import Pagination from "../components/Pagination.astro";
+import SearchComposer from "../components/SearchComposer";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { asCatalogueError, fetchSearch } from "../lib/api";
+import { localizePath, translate, type Locale } from "../lib/i18n";
+import { composeGuidedQuery, queryFromUrl } from "../lib/search";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const guided = queryFromUrl(Astro.url.searchParams);
+const q = Astro.url.searchParams.get("q")?.trim() || composeGuidedQuery(guided);
+const sort = Astro.url.searchParams.get("sort")?.trim() || undefined;
+const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const canonicalUrl = new URL(Astro.url);
+canonicalUrl.searchParams.delete("cursor");
+let error;
+let page;
+if (q) {
+  try {
+    page = await fetchSearch(locale, { q, sort, cursor });
+  } catch (caught) {
+    error = asCatalogueError(caught);
+    Astro.response.status = error.status === 404 ? 404 : 503;
+  }
+}
+---
+
+<BaseLayout
+  title={translate(locale, "search.title")}
+  description={translate(locale, "meta.searchDescription")}
+  locale={locale}
+  canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
+  noindex={Boolean(cursor || error)}
+>
+  <div class="page-shell section-stack">
+    <header class="page-heading">
+      <div class="eyebrow">{translate(locale, "site.tagline")}</div>
+      <h1>{translate(locale, "search.title")}</h1>
+      <p class="lede">{translate(locale, "search.intro")}</p>
+    </header>
+    <SearchComposer
+      client:load
+      locale={locale}
+      action={localizePath("/search", locale)}
+      initialGuided={guided}
+      initialQuery={q}
+      initialSort={sort ?? ""}
+      initialMode={q && !Object.values(guided).some(Boolean) ? "advanced" : "guided"}
+    />
+    {
+      error ? (
+        <ErrorState
+          locale={locale}
+          error={error}
+          retryHref={`${Astro.url.pathname}${Astro.url.search}`}
+        />
+      ) : !q ? (
+        <div class="empty-state">{translate(locale, "search.prompt")}</div>
+      ) : page!.items.length === 0 ? (
+        <div class="empty-state">{translate(locale, "search.empty")}</div>
+      ) : (
+        <section aria-labelledby="search-results-heading">
+          <h2 id="search-results-heading">{translate(locale, "search.results")}</h2>
+          <div class="search-results">
+            {page!.items.map((result) => {
+              if ("build" in result) return <BuildCard build={result.build} locale={locale} />;
+              if ("record" in result)
+                return (
+                  <article class="search-result">
+                    <span class="result-kind">{translate(locale, "search.resultRecord")}</span>
+                    <div>
+                      <h2>{result.record.title}</h2>
+                      <p>{result.record.subtitle ?? result.record.build_title}</p>
+                    </div>
+                    <a
+                      class="button"
+                      href={localizePath(`/records/${result.record.record_id}`, locale)}
+                    >
+                      {translate(locale, "common.viewRecord")}
+                    </a>
+                  </article>
+                );
+              return (
+                <article class="search-result">
+                  <span class="result-kind">{translate(locale, "search.resultMetadata")}</span>
+                  <div>
+                    <h2>{result.metadata.title}</h2>
+                    <p>{result.metadata.description ?? result.metadata.aliases.join(" · ")}</p>
+                  </div>
+                  <span class="chip">{result.metadata.metadata_kind}</span>
+                </article>
+              );
+            })}
+          </div>
+          <Pagination locale={locale} cursor={page!.next_cursor} url={Astro.url} />
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>

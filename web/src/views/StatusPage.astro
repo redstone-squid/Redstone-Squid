@@ -1,0 +1,29 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { localizePath, translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale; status: 404 | 503 };
+const { locale, status } = Astro.props;
+Astro.response.status = status;
+const notFound = status === 404;
+---
+
+<BaseLayout
+  title={translate(locale, notFound ? "error.notFoundTitle" : "error.serviceTitle")}
+  description={translate(locale, notFound ? "error.notFoundBody" : "error.serviceBody")}
+  locale={locale}
+  noindex
+>
+  <div class="page-shell">
+    <section class="error-panel">
+      <div class="error-code">{translate(locale, "error.status", { status })}</div>
+      <h1>{translate(locale, notFound ? "error.notFoundTitle" : "error.serviceTitle")}</h1>
+      <p class="error-detail">
+        {translate(locale, notFound ? "error.notFoundBody" : "error.serviceBody")}
+      </p>
+      <a class="button button--primary" href={localizePath("/", locale)}
+        >{translate(locale, "common.home")}</a
+      >
+    </section>
+  </div>
+</BaseLayout>

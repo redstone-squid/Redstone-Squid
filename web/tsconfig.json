@@ -1,0 +1,12 @@
+{
+  "extends": "astro/tsconfigs/strictest",
+  "compilerOptions": {
+    "allowJs": false,
+    "exactOptionalPropertyTypes": false,
+    "jsx": "react-jsx",
+    "noUncheckedIndexedAccess": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", "coverage", "playwright-report", "test-results"]
+}

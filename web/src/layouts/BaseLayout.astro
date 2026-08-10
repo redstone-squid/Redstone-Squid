@@ -1,0 +1,117 @@
+---
+import Brand from "../components/Brand.astro";
+import { getRuntimeConfig } from "../lib/config";
+import { localeFromPath, localizePath, translate, type Locale } from "../lib/i18n";
+import "../styles/global.css";
+
+type Props = {
+  title: string;
+  description?: string;
+  locale?: Locale;
+  canonicalPath?: string;
+  noindex?: boolean;
+  image?: string;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+};
+
+const config = getRuntimeConfig();
+const locale = Astro.props.locale ?? localeFromPath(Astro.url.pathname);
+const title = `${Astro.props.title} · ${translate(locale, "site.name")}`;
+const description = Astro.props.description ?? translate(locale, "meta.defaultDescription");
+const requestedPath = `${Astro.url.pathname}${Astro.url.search}`;
+const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
+const canonical = new URL(canonicalPath, config.siteUrl).toString();
+const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
+const chineseUrl = new URL(localizePath(canonicalPath, "zh-CN"), config.siteUrl).toString();
+const otherLocale = locale === "en" ? "zh-CN" : "en";
+const languageHref = localizePath(requestedPath, otherLocale);
+const activePath = Astro.url.pathname.replace(/^\/zh-cn(?=\/|$)/, "") || "/";
+const navItems = [
+  ["nav.home", "/"],
+  ["nav.builds", "/builds"],
+  ["nav.records", "/records"],
+  ["nav.search", "/search"],
+  ["nav.about", "/about"],
+] as const;
+const jsonLd = Astro.props.structuredData
+  ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
+  : undefined;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#090b0c" />
+    <meta name="robots" content={Astro.props.noindex ? "noindex,follow" : "index,follow"} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="en" href={englishUrl} />
+    <link rel="alternate" hreflang="zh-CN" href={chineseUrl} />
+    <link rel="alternate" hreflang="x-default" href={englishUrl} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={translate(locale, "site.name")} />
+    <meta property="og:locale" content={locale === "en" ? "en_US" : "zh_CN"} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    {Astro.props.image && <meta property="og:image" content={Astro.props.image} />}
+    <meta name="twitter:card" content={Astro.props.image ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <title>{title}</title>
+    {jsonLd && <script is:inline type="application/ld+json" set:html={jsonLd} />}
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">{translate(locale, "nav.skip")}</a>
+    <header class="site-header">
+      <div class="nav-shell">
+        <a
+          class="brand"
+          href={localizePath("/", locale)}
+          aria-label={translate(locale, "nav.home")}
+        >
+          <Brand locale={locale} />
+        </a>
+        <nav class="main-nav" aria-label="Primary">
+          {
+            navItems.map(([key, href]) => (
+              <a
+                href={localizePath(href, locale)}
+                aria-current={
+                  activePath === href || (href !== "/" && activePath.startsWith(`${href}/`))
+                    ? "page"
+                    : undefined
+                }
+              >
+                {translate(locale, key)}
+              </a>
+            ))
+          }
+          <a class="language-link" href={languageHref} hreflang={otherLocale}>
+            {translate(locale, "nav.language")}
+          </a>
+        </nav>
+      </div>
+    </header>
+    <main id="main-content">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="footer-shell">
+        <div>
+          <a class="brand" href={localizePath("/", locale)}><Brand locale={locale} /></a>
+          <p>{translate(locale, "footer.note")}</p>
+        </div>
+        <div class="footer-links">
+          <a href={config.discordCommunityUrl} rel="noreferrer"
+            >{translate(locale, "footer.discord")}</a
+          >
+          <a href={config.botInviteUrl} rel="noreferrer">{translate(locale, "footer.invite")}</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

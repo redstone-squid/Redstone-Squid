@@ -1,0 +1,46 @@
+---
+import type { CatalogueApiError } from "../lib/api";
+import { localizePath, translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale; error: CatalogueApiError; retryHref?: string };
+const { locale, error, retryHref } = Astro.props;
+const notFound = error.status === 404;
+---
+
+<div class="page-shell">
+  <section class="error-panel" aria-labelledby="error-title">
+    <div class="error-code">{translate(locale, "error.status", { status: error.status })}</div>
+    <h1 id="error-title">
+      {
+        notFound
+          ? translate(locale, "error.notFoundTitle")
+          : translate(locale, "error.serviceTitle")
+      }
+    </h1>
+    <p class="error-detail">
+      {
+        error.problem?.detail ??
+          (notFound
+            ? translate(locale, "error.notFoundBody")
+            : translate(locale, "error.serviceBody"))
+      }
+    </p>
+    {
+      error.problem?.error_id && (
+        <p class="error-code">
+          {translate(locale, "error.reference", { id: error.problem.error_id })}
+        </p>
+      )
+    }
+    <div class="footer-links">
+      {
+        retryHref && (
+          <a class="button button--primary" href={retryHref}>
+            {translate(locale, "common.retry")}
+          </a>
+        )
+      }
+      <a class="button" href={localizePath("/", locale)}>{translate(locale, "common.home")}</a>
+    </div>
+  </section>
+</div>

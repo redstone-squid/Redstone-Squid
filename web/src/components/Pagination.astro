@@ -1,0 +1,18 @@
+---
+import { translate, type Locale } from "../lib/i18n";
+
+type Props = { locale: Locale; cursor: string | null; url: URL };
+const { locale, cursor, url } = Astro.props;
+const next = new URL(url);
+if (cursor) next.searchParams.set("cursor", cursor);
+---
+
+{
+  cursor && (
+    <nav class="pagination" aria-label="Pagination">
+      <a class="pagination-link" href={`${next.pathname}${next.search}`} rel="next">
+        {translate(locale, "common.loadMore")}
+      </a>
+    </nav>
+  )
+}
