@@ -1,6 +1,7 @@
 """Application-facing binary artifact storage contracts."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 
@@ -17,7 +18,24 @@ class ArtifactStore(Protocol):
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> ArtifactMetadata: ...
 
+    async def put_path(
+        self,
+        key: str,
+        source: Path,
+        *,
+        content_type: str,
+        max_bytes: int,
+    ) -> ArtifactMetadata: ...
+
     async def get(self, key: str, *, max_bytes: int) -> bytes | None: ...
+
+    async def get_path(
+        self,
+        key: str,
+        destination: Path,
+        *,
+        max_bytes: int,
+    ) -> ArtifactMetadata | None: ...
 
     async def stat(self, key: str) -> ArtifactMetadata | None: ...
 

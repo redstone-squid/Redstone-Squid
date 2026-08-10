@@ -108,19 +108,21 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
     __tablename__ = "media_normalization_jobs"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'claimed', 'completed', 'dead')",
+            "status IN ('pending', 'claimed', 'completed', 'dead', 'discarded')",
             name="media_normalization_jobs_status_check",
         ),
         CheckConstraint("attempts >= 0", name="media_normalization_jobs_attempts_nonnegative"),
         CheckConstraint(
             "(status = 'pending' AND claimed_at IS NULL AND claim_token IS NULL "
-            "AND completed_at IS NULL AND dead_at IS NULL) OR "
+            "AND completed_at IS NULL AND dead_at IS NULL AND discarded_at IS NULL) OR "
             "(status = 'claimed' AND claimed_at IS NOT NULL AND claim_token IS NOT NULL "
-            "AND completed_at IS NULL AND dead_at IS NULL) OR "
+            "AND completed_at IS NULL AND dead_at IS NULL AND discarded_at IS NULL) OR "
             "(status = 'completed' AND claimed_at IS NULL AND claim_token IS NULL "
-            "AND completed_at IS NOT NULL AND dead_at IS NULL) OR "
+            "AND completed_at IS NOT NULL AND dead_at IS NULL AND discarded_at IS NULL) OR "
             "(status = 'dead' AND claimed_at IS NULL AND claim_token IS NULL "
-            "AND completed_at IS NULL AND dead_at IS NOT NULL)",
+            "AND completed_at IS NULL AND dead_at IS NOT NULL AND discarded_at IS NULL) OR "
+            "(status = 'discarded' AND claimed_at IS NULL AND claim_token IS NULL "
+            "AND completed_at IS NULL AND dead_at IS NULL AND discarded_at IS NOT NULL)",
             name="media_normalization_jobs_state_shape",
         ),
         Index(
@@ -130,8 +132,8 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
         ),
         Index(
             "media_normalization_jobs_terminal_idx",
-            "completed_at",
-            postgresql_where=text("status IN ('completed', 'dead')"),
+            "upload_id",
+            postgresql_where=text("status IN ('completed', 'dead', 'discarded')"),
         ),
     )
 
@@ -149,4 +151,5 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    discarded_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

@@ -6,6 +6,7 @@ from squid.auth.infrastructure import session_models as auth_session_models
 from squid.builds.infrastructure import models as build_models
 from squid.events.infrastructure import models as event_models
 from squid.idempotency.infrastructure import models as idempotency_models
+from squid.media.infrastructure import models as media_models
 from squid.messages.infrastructure import models as message_models
 from squid.notifications.infrastructure import models as notification_models
 from squid.permissions.infrastructure import models as permission_models
@@ -27,6 +28,7 @@ __all__ = [
     "build_models",
     "event_models",
     "idempotency_models",
+    "media_models",
     "message_models",
     "notification_models",
     "permission_models",

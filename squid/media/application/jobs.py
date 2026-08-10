@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import stat
 import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ class MediaJobStatus(StrEnum):
     CLAIMED = "claimed"
     COMPLETED = "completed"
     DEAD = "dead"
+    DISCARDED = "discarded"
 
 
 class MediaArtifactRole(StrEnum):
@@ -70,6 +72,27 @@ class MediaUploadSubmission:
             raise ValueError(msg)
         if not self.source:
             msg = "Media uploads cannot be empty."
+            raise ValueError(msg)
+        _require_content_type(self.source_content_type)
+        if self.kind is MediaKind.IMAGE and self.strip_audio:
+            msg = "Image uploads cannot request audio removal."
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class StagedMediaUploadSubmission:
+    """A private regular file staged by a streaming transport."""
+
+    draft_id: UUID
+    kind: MediaKind
+    source_path: Path
+    source_content_type: str
+    strip_audio: bool = False
+    upload_id: UUID | None = None
+
+    def __post_init__(self) -> None:
+        if self.draft_id.int == 0 or (self.upload_id is not None and self.upload_id.int == 0):
+            msg = "Media upload and draft identifiers cannot be nil UUIDs."
             raise ValueError(msg)
         _require_content_type(self.source_content_type)
         if self.kind is MediaKind.IMAGE and self.strip_audio:
@@ -167,6 +190,7 @@ class MediaJobSnapshot:
     claim_token: UUID | None
     completed_at: Instant | None
     dead_at: Instant | None
+    discarded_at: Instant | None
     last_error: str | None
     artifacts: tuple[StoredMediaArtifact, ...] = ()
 
@@ -222,13 +246,22 @@ class MediaJobArtifactError(RuntimeError):
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
 
-    async def enqueue(self, upload: MediaUploadMetadata) -> MediaEnqueueOutcome: ...
+    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome: ...
 
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
 
+    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+
+    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
+
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]: ...
 
-    async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool: ...
+    async def complete(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+        limits: MediaLimits,
+    ) -> bool: ...
 
     async def fail(
         self,
@@ -273,8 +306,8 @@ class MediaNormalizationJobService:
         if len(submission.source) > self._limits.max_source_bytes:
             msg = f"Media upload exceeds the {self._limits.max_source_bytes}-byte source limit."
             raise ValueError(msg)
-        upload_id = submission.upload_id or uuid4()
         digest = hashlib.sha256(submission.source).hexdigest()
+        upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
         stored = await self._artifacts.put(
             object_key,
@@ -285,18 +318,60 @@ class MediaNormalizationJobService:
             await self._artifacts.delete(object_key)
             msg = "Object storage did not confirm the staged media upload."
             raise MediaJobArtifactError(msg)
-        upload = MediaUploadMetadata(
-            id=upload_id,
-            draft_id=submission.draft_id,
-            kind=submission.kind,
-            source_content_type=submission.source_content_type.strip(),
-            source_byte_size=len(submission.source),
-            source_sha256=digest,
-            source_object_key=object_key,
-            strip_audio=submission.strip_audio,
+        return await self._register(
+            MediaUploadMetadata(
+                id=upload_id,
+                draft_id=submission.draft_id,
+                kind=submission.kind,
+                source_content_type=submission.source_content_type.strip(),
+                source_byte_size=len(submission.source),
+                source_sha256=digest,
+                source_object_key=object_key,
+                strip_audio=submission.strip_audio,
+            )
         )
+
+    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+        """Stage a bounded regular file without buffering it in application memory."""
+        byte_size, digest = await asyncio.to_thread(
+            _staged_source_metadata,
+            submission.source_path,
+            self._limits.max_source_bytes,
+        )
+        upload_id = submission.upload_id or uuid4()
+        object_key = f"media/raw/{upload_id}/{digest}"
+        stored = await self._artifacts.put_path(
+            object_key,
+            submission.source_path,
+            content_type=submission.source_content_type.strip(),
+            max_bytes=self._limits.max_source_bytes,
+        )
+        if stored.byte_size != byte_size or stored.sha256 not in {None, digest}:
+            await self._artifacts.delete(object_key)
+            msg = "Object storage did not confirm the staged media upload."
+            raise MediaJobArtifactError(msg)
+        return await self._register(
+            MediaUploadMetadata(
+                id=upload_id,
+                draft_id=submission.draft_id,
+                kind=submission.kind,
+                source_content_type=submission.source_content_type.strip(),
+                source_byte_size=byte_size,
+                source_sha256=digest,
+                source_object_key=object_key,
+                strip_audio=submission.strip_audio,
+            )
+        )
+
+    async def _register(self, upload: MediaUploadMetadata) -> UUID:
+        """Register immutable staged metadata and reconcile terminal replays."""
+        object_key = upload.source_object_key
+        upload_id = upload.id
         try:
-            outcome = await self._repository.enqueue(upload)
+            outcome = await self._repository.enqueue(upload, self._limits)
+        except MediaLimitExceededError:
+            await self._artifacts.delete(object_key)
+            raise
         except MediaUploadConflictError as error:
             same_key = hmac.compare_digest(error.existing_source_object_key, object_key)
             if not same_key or error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
@@ -304,7 +379,7 @@ class MediaNormalizationJobService:
             if same_key and error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
                 await self._repository.mark_source_deleted(TerminalMediaSource(upload_id, object_key))
             raise
-        if outcome.status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
+        if outcome.status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD, MediaJobStatus.DISCARDED}:
             source = TerminalMediaSource(upload_id, object_key)
             await self._artifacts.delete(object_key)
             await self._repository.mark_source_deleted(source)
@@ -313,6 +388,14 @@ class MediaNormalizationJobService:
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
         return await self._repository.get(upload_id)
 
+    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+        """List retained upload state for one draft in creation order."""
+        return await self._repository.list_for_draft(draft_id)
+
+    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+        """Withdraw one upload and schedule any remaining raw source for cleanup."""
+        return await self._repository.discard(draft_id, upload_id)
+
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
             msg = f"Media job claim limit must be between 1 and {MAX_MEDIA_JOB_CLAIM}."
@@ -320,7 +403,7 @@ class MediaNormalizationJobService:
         return await self._repository.claim(limit=limit)
 
     async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
-        return await self._repository.complete(job, artifacts)
+        return await self._repository.complete(job, artifacts, self._limits)
 
     async def fail(
         self,
@@ -388,17 +471,22 @@ class MediaNormalizationJobRunner:
                 )
 
     async def _process(self, job: ClaimedMediaJob) -> None:
-        try:
-            source = await self._load_source(job)
-            artifacts = await self._normalize_and_store(job, source)
-            await self._jobs.complete(job, artifacts)
-        except Exception as error:
-            await self._jobs.fail(job, error, terminal=_is_terminal(error))
+        with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:
+            temporary = Path(temporary_name)
+            temporary.chmod(0o700)
+            source_path = temporary / "source"
+            try:
+                await self._load_source(job, source_path)
+                artifacts = await self._normalize_and_store(job, source_path, temporary)
+                await self._jobs.complete(job, artifacts)
+            except Exception as error:
+                await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
-    async def _load_source(self, job: ClaimedMediaJob) -> bytes:
+    async def _load_source(self, job: ClaimedMediaJob, destination: Path) -> None:
         try:
-            source = await self._artifacts.get(
+            source = await self._artifacts.get_path(
                 job.upload.source_object_key,
+                destination,
                 max_bytes=self._jobs.limits.max_source_bytes,
             )
         except ValueError as error:
@@ -407,82 +495,83 @@ class MediaNormalizationJobRunner:
         if source is None:
             msg = "The queued raw media object is missing."
             raise MediaJobSourceError(msg)
-        digest = hashlib.sha256(source).hexdigest()
-        if len(source) != job.upload.source_byte_size or not hmac.compare_digest(digest, job.upload.source_sha256):
+        if (
+            source.byte_size != job.upload.source_byte_size
+            or source.sha256 is None
+            or not hmac.compare_digest(
+                source.sha256,
+                job.upload.source_sha256,
+            )
+        ):
             msg = "The queued raw media object no longer matches its immutable metadata."
             raise MediaJobSourceError(msg)
-        return source
 
     async def _normalize_and_store(
         self,
         job: ClaimedMediaJob,
-        source: bytes,
+        source_path: Path,
+        temporary: Path,
     ) -> tuple[StoredMediaArtifact, ...]:
-        with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:
-            temporary = Path(temporary_name)
-            temporary.chmod(0o700)
-            source_path = temporary / "source"
-            await asyncio.to_thread(_write_private, source_path, source)
-            output_path = temporary / ("normalized.png" if job.upload.kind is MediaKind.IMAGE else "normalized.mp4")
-            poster_path = temporary / "poster.jpg" if job.upload.kind is MediaKind.VIDEO else None
-            result = await self._normalization.normalize(
-                MediaNormalizationRequest(
-                    kind=job.upload.kind,
-                    source_path=source_path,
-                    output_path=output_path,
-                    poster_path=poster_path,
-                    strip_audio=job.upload.strip_audio,
-                )
+        output_path = temporary / ("normalized.png" if job.upload.kind is MediaKind.IMAGE else "normalized.mp4")
+        poster_path = temporary / "poster.jpg" if job.upload.kind is MediaKind.VIDEO else None
+        result = await self._normalization.normalize(
+            MediaNormalizationRequest(
+                kind=job.upload.kind,
+                source_path=source_path,
+                output_path=output_path,
+                poster_path=poster_path,
+                strip_audio=job.upload.strip_audio,
             )
-            output = await asyncio.to_thread(
+        )
+        output = await asyncio.to_thread(
+            _read_verified,
+            result.output_path,
+            result.report.output,
+            self._jobs.limits.max_output_bytes,
+        )
+        stored = [
+            await self._store_artifact(
+                MediaArtifactRole.OUTPUT,
+                output,
+                result.report.output.content_type,
+                result.report.output.sha256,
+                width=result.report.output.width,
+                height=result.report.output.height,
+            )
+        ]
+        if result.report.poster is not None:
+            if result.poster_path is None:
+                msg = "A video normalization result omitted its poster path."
+                raise MediaJobArtifactError(msg)
+            poster = await asyncio.to_thread(
                 _read_verified,
-                result.output_path,
-                result.report.output,
+                result.poster_path,
+                result.report.poster,
                 self._jobs.limits.max_output_bytes,
             )
-            stored = [
-                await self._store_artifact(
-                    MediaArtifactRole.OUTPUT,
-                    output,
-                    result.report.output.content_type,
-                    result.report.output.sha256,
-                    width=result.report.output.width,
-                    height=result.report.output.height,
-                )
-            ]
-            if result.report.poster is not None:
-                if result.poster_path is None:
-                    msg = "A video normalization result omitted its poster path."
-                    raise MediaJobArtifactError(msg)
-                poster = await asyncio.to_thread(
-                    _read_verified,
-                    result.poster_path,
-                    result.report.poster,
-                    self._jobs.limits.max_output_bytes,
-                )
-                stored.append(
-                    await self._store_artifact(
-                        MediaArtifactRole.POSTER,
-                        poster,
-                        result.report.poster.content_type,
-                        result.report.poster.sha256,
-                        width=result.report.poster.width,
-                        height=result.report.poster.height,
-                    )
-                )
-            report = _encode_report(result.report)
-            report_digest = hashlib.sha256(report).hexdigest()
             stored.append(
                 await self._store_artifact(
-                    MediaArtifactRole.REPORT,
-                    report,
-                    "application/json",
-                    report_digest,
-                    width=None,
-                    height=None,
+                    MediaArtifactRole.POSTER,
+                    poster,
+                    result.report.poster.content_type,
+                    result.report.poster.sha256,
+                    width=result.report.poster.width,
+                    height=result.report.poster.height,
                 )
             )
-            return tuple(stored)
+        report = _encode_report(result.report)
+        report_digest = hashlib.sha256(report).hexdigest()
+        stored.append(
+            await self._store_artifact(
+                MediaArtifactRole.REPORT,
+                report,
+                "application/json",
+                report_digest,
+                width=None,
+                height=None,
+            )
+        )
+        return tuple(stored)
 
     async def _store_artifact(
         self,
@@ -519,12 +608,40 @@ def _is_terminal(error: Exception) -> bool:
     return isinstance(error, InvalidMediaError | MediaLimitExceededError | MediaProcessingError | MediaJobSourceError)
 
 
-def _write_private(path: Path, data: bytes) -> None:
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+def _staged_source_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
     try:
-        with os.fdopen(descriptor, "wb") as stream:
+        initial = os.fstat(descriptor)
+        if not stat.S_ISREG(initial.st_mode):
+            msg = "Media uploads must be staged as regular files."
+            raise ValueError(msg)
+        if initial.st_size <= 0:
+            msg = "Media uploads cannot be empty."
+            raise ValueError(msg)
+        if initial.st_size > max_bytes:
+            msg = f"Media upload exceeds the {max_bytes}-byte source limit."
+            raise ValueError(msg)
+        digest = hashlib.sha256()
+        with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
-            stream.write(data)
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+            current = os.fstat(stream.fileno())
+        if (
+            current.st_dev,
+            current.st_ino,
+            current.st_size,
+            current.st_mtime_ns,
+        ) != (
+            initial.st_dev,
+            initial.st_ino,
+            initial.st_size,
+            initial.st_mtime_ns,
+        ):
+            msg = "Media upload changed while it was being staged."
+            raise ValueError(msg)
+        return initial.st_size, digest.hexdigest()
     finally:
         if descriptor >= 0:
             os.close(descriptor)
