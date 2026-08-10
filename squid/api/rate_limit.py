@@ -30,6 +30,19 @@ logger = logging.getLogger(__name__)
 _KEY_PREFIX = "{squid-rate-limit}:v1"
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _VOTE_WRITE_PATH = "/v1/vote-sessions/{vote_session_id}/votes"
+_MINECRAFT_CHALLENGE_START_PATHS = frozenset(
+    {
+        "/v1/minecraft/auth/paper/challenges",
+        "/v1/minecraft/auth/fabric/challenges",
+    }
+)
+_MINECRAFT_CHALLENGE_EXCHANGE_PATHS = frozenset(
+    {
+        "/v1/minecraft/auth/paper/challenges/exchange",
+        "/v1/minecraft/auth/fabric/challenges/exchange",
+    }
+)
+_MINECRAFT_CHALLENGE_APPROVAL_PATH = "/v1/minecraft/auth/challenges/approval"
 _BYPASS_PATHS = frozenset({"/livez", "/health", "/readyz"})
 
 _SLIDING_WINDOW_SCRIPT = """
@@ -133,6 +146,9 @@ class ApiRateLimitPolicies:
     principal: RateLimitPolicy
     write: RateLimitPolicy
     vote: RateLimitPolicy
+    minecraft_challenge_start: RateLimitPolicy
+    minecraft_challenge_exchange: RateLimitPolicy
+    minecraft_challenge_approval: RateLimitPolicy
 
     @classmethod
     def from_config(cls, config: RateLimitConfig) -> "ApiRateLimitPolicies":
@@ -142,6 +158,21 @@ class ApiRateLimitPolicies:
             principal=RateLimitPolicy("principal", config.principal_requests, window),
             write=RateLimitPolicy("write", config.write_requests, window),
             vote=RateLimitPolicy("vote", config.vote_requests, window),
+            minecraft_challenge_start=RateLimitPolicy(
+                "minecraft-challenge-start",
+                config.minecraft_challenge_start_requests,
+                window,
+            ),
+            minecraft_challenge_exchange=RateLimitPolicy(
+                "minecraft-challenge-exchange",
+                config.minecraft_challenge_exchange_requests,
+                window,
+            ),
+            minecraft_challenge_approval=RateLimitPolicy(
+                "minecraft-challenge-approval",
+                config.minecraft_challenge_approval_requests,
+                window,
+            ),
         )
 
 
@@ -382,10 +413,18 @@ async def enforce_route_rate_limits(
     identity = principal.subject if principal.kind != "anonymous" else _client_identity(request)
     if principal.kind != "anonymous":
         checks.append(RateLimitRequest(policies.principal, identity))
-    if request.method in _WRITE_METHODS:
-        checks.append(RateLimitRequest(policies.write, identity))
     route = request.scope.get("route")
-    if principal.kind != "anonymous" and getattr(route, "path", None) == _VOTE_WRITE_PATH:
+    route_path = getattr(route, "path", None)
+    request_path = request.url.path
+    if request_path in _MINECRAFT_CHALLENGE_START_PATHS:
+        checks.append(RateLimitRequest(policies.minecraft_challenge_start, identity))
+    elif request_path in _MINECRAFT_CHALLENGE_EXCHANGE_PATHS:
+        checks.append(RateLimitRequest(policies.minecraft_challenge_exchange, identity))
+    elif request_path == _MINECRAFT_CHALLENGE_APPROVAL_PATH:
+        checks.append(RateLimitRequest(policies.minecraft_challenge_approval, identity))
+    elif request.method in _WRITE_METHODS:
+        checks.append(RateLimitRequest(policies.write, identity))
+    if principal.kind != "anonymous" and route_path == _VOTE_WRITE_PATH:
         checks.append(RateLimitRequest(policies.vote, identity))
     if not checks:
         return

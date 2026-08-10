@@ -435,6 +435,9 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS="90",
         SQUID_RATE_LIMIT_WRITE_REQUESTS="30",
         SQUID_RATE_LIMIT_VOTE_REQUESTS="10",
+        SQUID_RATE_LIMIT_MINECRAFT_CHALLENGE_START_REQUESTS="6",
+        SQUID_RATE_LIMIT_MINECRAFT_CHALLENGE_EXCHANGE_REQUESTS="110",
+        SQUID_RATE_LIMIT_MINECRAFT_CHALLENGE_APPROVAL_REQUESTS="8",
         SQUID_RATE_LIMIT_REDIS_TIMEOUT_SECONDS="0.5",
         SQUID_RATE_LIMIT_REDIS_RETRY_SECONDS="7",
         SQUID_RATE_LIMIT_LOCAL_MAX_KEYS="4096",
@@ -450,6 +453,9 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
     assert config.rate_limit.principal_requests == 90
     assert config.rate_limit.write_requests == 30
     assert config.rate_limit.vote_requests == 10
+    assert config.rate_limit.minecraft_challenge_start_requests == 6
+    assert config.rate_limit.minecraft_challenge_exchange_requests == 110
+    assert config.rate_limit.minecraft_challenge_approval_requests == 8
     assert config.rate_limit.redis_timeout_seconds == 0.5
     assert config.rate_limit.redis_retry_seconds == 7
     assert config.rate_limit.local_max_keys == 4_096

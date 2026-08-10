@@ -162,6 +162,57 @@ def test_authenticated_write_reports_every_active_quota() -> None:
     assert response.headers["RateLimit"].startswith('"ip";r=599;t=')
 
 
+def test_minecraft_device_flows_use_polling_aware_dedicated_quotas() -> None:
+    config = TEST_CONFIG.model_copy(
+        update={
+            "rate_limit": RateLimitConfig(
+                ip_requests=100,
+                principal_requests=100,
+                write_requests=1,
+                minecraft_challenge_start_requests=1,
+                minecraft_challenge_exchange_requests=2,
+                minecraft_challenge_approval_requests=1,
+            )
+        }
+    )
+    app, _database = build_app(config=config)
+    fabric_start = {
+        "java_uuid": str(TEST_UUID),
+        "pkce_s256_challenge": "A" * 43,
+    }
+    fabric_exchange = {
+        "device_code": "d" * 43,
+        "pkce_verifier": "v" * 43,
+    }
+
+    with TestClient(app) as client:
+        started = client.post("/v1/minecraft/auth/fabric/challenges", json=fabric_start)
+        start_limited = client.post("/v1/minecraft/auth/fabric/challenges", json=fabric_start)
+        exchanged_once = client.post("/v1/minecraft/auth/fabric/challenges/exchange", json=fabric_exchange)
+        exchanged_twice = client.post("/v1/minecraft/auth/fabric/challenges/exchange", json=fabric_exchange)
+        exchange_limited = client.post("/v1/minecraft/auth/fabric/challenges/exchange", json=fabric_exchange)
+        approved = client.post(
+            "/v1/minecraft/auth/challenges/approval",
+            json={"user_code": "ABCD-EFGH-IJKL-MNOP"},
+            headers={"Authorization": TEST_SYNERGY_SECRET},
+        )
+        approval_limited = client.post(
+            "/v1/minecraft/auth/challenges/approval",
+            json={"user_code": "ABCD-EFGH-IJKL-MNOP"},
+            headers={"Authorization": TEST_SYNERGY_SECRET},
+        )
+
+    assert started.status_code == exchanged_once.status_code == exchanged_twice.status_code == 503
+    assert approved.status_code == 503
+    assert start_limited.status_code == exchange_limited.status_code == approval_limited.status_code == 429
+    assert '"minecraft-challenge-start";q=1' in started.headers["RateLimit-Policy"]
+    assert '"minecraft-challenge-exchange";q=2' in exchanged_once.headers["RateLimit-Policy"]
+    assert '"minecraft-challenge-approval";q=1' in approved.headers["RateLimit-Policy"]
+    assert '"write"' not in started.headers["RateLimit-Policy"]
+    assert '"write"' not in exchanged_once.headers["RateLimit-Policy"]
+    assert '"write"' not in approved.headers["RateLimit-Policy"]
+
+
 def test_health_and_preflight_requests_bypass_rate_limiting() -> None:
     config = TEST_CONFIG.model_copy(update={"rate_limit": RateLimitConfig(ip_requests=1)})
     app, _database = build_app(config=config)
