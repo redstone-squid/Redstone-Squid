@@ -461,6 +461,11 @@ new routes must extend the existing trace and contract coverage as they land.
   `GET /v1/search`, `GET /v1/search/suggest`, the admin-gated `GET /v1/builds?status=`, and
   `GET /v1/users/me/builds`. This is what finally exercises `list_page`'s `submitter_id`
   parameter and the "identity *and status*" half of the two-path split.
+- **Phase 9 — implemented.** API-wide distributed rate limiting uses a Redis-backed exact sliding window, with layered
+  IP, authenticated-principal, write, and vote-write policies. One atomic Lua script evaluates each applicable
+  post-authentication policy set, and a bounded local shadow plus circuit breaker preserves abuse control during Redis
+  outages. Health checks and CORS preflights bypass quotas; normal responses expose `RateLimit-Policy` and `RateLimit`,
+  while 429 responses also expose `Retry-After`.
 
 ## Phases (original sequencing)
 
@@ -496,6 +501,9 @@ before any write route, user auth before votes.
 - **Phase 8 — resource-model completion.** Added after the fact: the routes listed under
   "Resource model" that the original sequencing never assigned to a phase. Recorded here so the
   gap between the two lists is visible rather than inferred.
+- **Phase 9 — distributed rate limiting.** Replace the original per-process limiter with a private Redis service and an
+  atomic, layered sliding-window limiter shared by every API replica. Retain a bounded per-process fallback so Redis is
+  not a readiness dependency.
 
 ## Critical files
 

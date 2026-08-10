@@ -1,3 +1,10 @@
+x-app-environment: &app-environment
+  SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
+  SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
+  SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
+  SQUID_OBSERVABILITY_ENVIRONMENT: ${SQUID_OBSERVABILITY_ENVIRONMENT:-production}
+  SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
+
 x-app: &app
   build:
     context: .
@@ -6,12 +13,7 @@ x-app: &app
   restart: unless-stopped
   env_file:
     - ${SQUID_ENV_FILE:-.env}
-  environment:
-    SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
-    SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
-    SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
-    SQUID_OBSERVABILITY_ENVIRONMENT: ${SQUID_OBSERVABILITY_ENVIRONMENT:-production}
-    SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
+  environment: *app-environment
   volumes:
     - ./logs:/var/log/app
     - squid-objects:/var/lib/app/objects
@@ -22,6 +24,9 @@ services:
     <<: *app
     container_name: redstone-squid-api
     command: ["python", "-m", "squid.api.app"]
+    environment:
+      <<: *app-environment
+      SQUID_RATE_LIMIT_REDIS_URL: ${SQUID_RATE_LIMIT_REDIS_URL:-redis://redis:6379/0}
     ports:
       - "8000:8000"
     healthcheck:
@@ -75,6 +80,27 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  redis:
+    image: redis:8.8.0-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    stop_grace_period: 10s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6

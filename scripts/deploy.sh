@@ -84,7 +84,8 @@ rollback() {
         printf 'Cutover failed; restoring the previous service images.\n' >&2
         export SQUID_APP_IMAGE="$previous_app_image"
         export SQUID_WORKER_IMAGE="$previous_worker_image"
-        if ! "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
+        # Older strict-config images do not know settings first introduced by the failed release.
+        if ! SQUID_STRICT_UNKNOWN_KEYS=false "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
             printf 'Automatic service rollback also failed; inspect Compose health and database compatibility.\n' >&2
         fi
     fi
@@ -108,7 +109,7 @@ export SQUID_APP_IMAGE="$app_image"
 export SQUID_WORKER_IMAGE="$worker_image"
 
 printf 'Pulling immutable release images.\n'
-"${COMPOSE[@]}" pull api bot worker migrate
+"${COMPOSE[@]}" pull api bot worker migrate redis
 
 printf 'Applying database migrations from the application image.\n'
 "${COMPOSE[@]}" run --rm migrate
@@ -116,7 +117,7 @@ printf 'Applying database migrations from the application image.\n'
 stop_legacy_launcher
 cutover_started=true
 printf 'Starting independently supervised services.\n'
-"${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180 api bot worker
+"${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 180 redis api bot worker
 
 if [[ -n "$previous_app_image" && -n "$previous_worker_image" ]]; then
     write_release "$PREVIOUS_RELEASE_FILE" "$previous_app_image" "$previous_worker_image"

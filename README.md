@@ -58,6 +58,13 @@ The complete deployment requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_
 `SQUID_CURSOR_SECRET`. Exported environment variables take precedence over `.env`. Discord OAuth,
 REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
 
+The API applies layered five-minute limits by client IP, authenticated principal, write request, and vote write.
+Production Compose runs a private, non-persistent Redis service so limits are shared across API replicas; when Redis is
+temporarily unavailable, each API process falls back to a bounded in-memory limiter. Responses advertise the active
+quota through `RateLimit-Policy` and `RateLimit`, and rejected requests also include `Retry-After`. Configure
+`SQUID_API_TRUSTED_PROXY_IPS` only with addresses or CIDR ranges owned by the reverse proxy so forwarded client IPs
+cannot be spoofed. The thresholds and Redis connection settings are listed in `.env.example`.
+
 Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments must rename their settings:
 
 Unknown names are warning-only for local processes. Production Compose sets
@@ -125,8 +132,9 @@ by CI; they do not need Git, Python, or `uv`. A failed service cutover automatic
 Repository deployment secrets are `SSH_HOST`, `SSH_USER`, `SSH_KEY`, and `SSH_KNOWN_HOSTS`. The last value must contain
 the pinned OpenSSH `known_hosts` entry for the production host; CI intentionally does not trust a live `ssh-keyscan`.
 
-The API exposes `/livez` and database/schema-aware `/readyz` on port 8000. The bot and worker expose the same endpoints
-on their process-local `SQUID_BOT_HEALTH_PORT` (8001) and `SQUID_WORKER_HEALTH_PORT` (8002) listeners.
+The API exposes `/livez` and database/schema-aware `/readyz` on port 8000. Redis availability deliberately does not
+affect readiness because the API has a local abuse-control fallback. The bot and worker expose the same endpoints on
+their process-local `SQUID_BOT_HEALTH_PORT` (8001) and `SQUID_WORKER_HEALTH_PORT` (8002) listeners.
 
 ## Discord Set Up
 
