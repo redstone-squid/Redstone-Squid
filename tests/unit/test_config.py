@@ -43,6 +43,7 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_DATABASE_LISTENER_URL="postgresql://listener:password@database.example/squid",
         SQUID_API_SECRET="api-secret",
         SQUID_API_PORT="9000",
         SQUID_DEVELOPMENT_MODE="true",
@@ -57,6 +58,9 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_API_ACCESS_LOG_FILE="access.log",
         SQUID_BUILD_COMMIT_HASH="abcdef123456",
         SQUID_BUILD_COMMIT_MESSAGE="configuration rewrite",
+        SQUID_NOTIFICATION_PUBLIC_SITE_URL="https://catalogue.example/",
+        SQUID_NOTIFICATION_RETENTION_DAYS="120",
+        SQUID_NOTIFICATION_STAFF_DISCORD_IDS="[123,456]",
         SQUID_OBSERVABILITY_ENABLED="true",
         SQUID_OBSERVABILITY_ENDPOINT="http://collector.example:4318",
         SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
@@ -70,6 +74,8 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
 
     assert isinstance(config, ApplicationConfig)
     assert config.database.url.get_secret_value() == BASE_ENVIRONMENT["SQUID_DATABASE_URL"]
+    assert config.database.listener_url is not None
+    assert config.database.listener_url.get_secret_value() == "postgresql://listener:password@database.example/squid"
     assert config.runtime.openai.api_key is not None
     assert config.runtime.openai.api_key.get_secret_value() == "text-key"
     assert config.runtime.embeddings.api_key is not None
@@ -83,7 +89,10 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.api_process().api.key_pepper.get_secret_value() == "api-key-pepper-for-tests"
     assert config.api_process().logging.access_log_file == "access.log"
     assert config.build.commit_hash == "abcdef123456"
-    for process_config in (config.bot_process(), config.api_process()):
+    for process_config in (config.bot_process(), config.api_process(), config.worker_process()):
+        assert str(process_config.notification.public_site_url) == "https://catalogue.example/"
+        assert process_config.notification.retention_days == 120
+        assert process_config.notification.staff_discord_ids == (123, 456)
         assert process_config.observability.enabled is True
         assert str(process_config.observability.endpoint) == "http://collector.example:4318/"
         assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"

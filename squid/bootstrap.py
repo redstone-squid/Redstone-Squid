@@ -30,11 +30,14 @@ from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
 from squid.events.application import DomainEventService
+from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency import IdempotencyService
 from squid.idempotency.infrastructure import PostgresIdempotencyRepository
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.notifications import NotificationService
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import AuthorizationService
 from squid.permissions.infrastructure.repository import GlobalAdministratorRepository
 from squid.persistence.engine import DatabaseEngine
@@ -219,6 +222,16 @@ class _ServiceGraph:
         return PostgresRecordRepository(self.db.async_session)
 
     @cached_property
+    def notifications(self) -> NotificationService:
+        return NotificationService(
+            PostgresNotificationRepository(
+                self.db.async_session,
+                staff_discord_ids=self.config.notifications.staff_discord_ids,
+            ),
+            retention_days=self.config.notifications.retention_days,
+        )
+
+    @cached_property
     def record_computation(self) -> RecordComputationService:
         return RecordComputationService(self.record_repository, self.record_repository)
 
@@ -330,6 +343,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
         idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session)),
+        notifications=graph.notifications,
         build_queries=graph.build_queries,
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         records=graph.records,
@@ -365,6 +379,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         votes=graph.votes,
         discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),
         domain_events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
+        notifications=graph.notifications,
         redstoner=RedstonerService(
             RedstonerPolicy(
                 starboard_author_id=config.community.redstoner_starboard_author_id,
@@ -391,6 +406,10 @@ def create_worker_services(
         votes=graph.votes,
         records=graph.record_computation,
         events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
+        event_wake_listener=(
+            None if config.database.listener_url is None else DomainEventWakeListener(config.database.listener_url)
+        ),
+        notifications=graph.notifications,
         schematics=graph.schematics,
         schematic_jobs=graph.schematic_jobs,
         schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),

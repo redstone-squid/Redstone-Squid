@@ -20,6 +20,8 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "votes",
         "records",
         "events",
+        "event_wake_listener",
+        "notifications",
         "schematics",
         "schematic_jobs",
         "schematic_renders",

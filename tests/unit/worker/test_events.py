@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 from whenever import Instant
 
-from squid.events import DomainEvent, DomainEventDelivery
+from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import VoteSessionResultLiteral, VoteSessionSnapshot, VoteTarget
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
 
@@ -70,4 +70,20 @@ async def test_core_runner_retries_handler_failure() -> None:
     await runner.process_batch()
 
     events.fail.assert_awaited_once()
+    events.complete.assert_not_awaited()
+
+
+async def test_core_runner_rejects_unsupported_event_versions_without_retry() -> None:
+    delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
+    events = AsyncMock()
+    events.claim.return_value = (delivery,)
+    handler = AsyncMock()
+    error = UnsupportedEventVersionError("future")
+    handler.handle.side_effect = error
+    runner = CoreDomainEventRunner(events, {"vote_session.closed": (handler,)})
+
+    await runner.process_batch()
+
+    events.reject.assert_awaited_once_with(delivery, error)
+    events.fail.assert_not_awaited()
     events.complete.assert_not_awaited()

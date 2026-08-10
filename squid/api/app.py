@@ -118,7 +118,7 @@ def create_api_app(
             CORSMiddleware,
             allow_origins=list(cors_origins),
             allow_credentials=True,
-            allow_methods=["GET", "POST", "PATCH"],
+            allow_methods=["GET", "POST", "PATCH", "DELETE"],
             allow_headers=[
                 "Accept",
                 "Accept-Language",

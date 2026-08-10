@@ -362,13 +362,29 @@ DECLARE
     target_kind text;
     target_id bigint;
     target_payload jsonb;
+    target_schema_version integer := 1;
 BEGIN
     -- Unlike discord_sync_queue, this log records transitions, so an UPDATE that
     -- rewrites a column to the value it already held must not produce an event.
     IF TG_TABLE_NAME = 'builds' THEN
+        IF TG_OP = 'INSERT' THEN
+            target_kind := 'build';
+            target_id := NEW.id;
+            target_type := 'build.submitted';
+            target_payload := jsonb_build_object(
+                'status', NEW.submission_status,
+                'submitter_user_id', NEW.submitter_user_id,
+                'category', NEW.category
+            );
+            PERFORM public.publish_domain_event(
+                target_type, target_schema_version, target_kind, target_id, target_payload
+            );
+            RETURN NULL;
+        END IF;
         IF OLD.submission_status IS NOT DISTINCT FROM NEW.submission_status THEN RETURN NULL; END IF;
         target_kind := 'build';
         target_id := NEW.id;
+        target_schema_version := 2;
         IF NEW.submission_status = 1 THEN
             target_type := 'build.confirmed';
         ELSIF NEW.submission_status = 2 THEN
@@ -378,7 +394,16 @@ BEGIN
         END IF;
         target_payload := jsonb_build_object(
             'previous_status', OLD.submission_status,
-            'status', NEW.submission_status
+            'status', NEW.submission_status,
+            'submitter_user_id', NEW.submitter_user_id,
+            'category', NEW.category,
+            'first_confirmation', NEW.submission_status = 1 AND NOT EXISTS (
+                SELECT 1
+                FROM public.domain_events
+                WHERE aggregate_kind = 'build'
+                  AND aggregate_id = NEW.id
+                  AND event_type = 'build.confirmed'
+            )
         );
     ELSE
         IF OLD.status IS NOT DISTINCT FROM NEW.status OR NEW.status <> 'closed' THEN RETURN NULL; END IF;
@@ -388,7 +413,9 @@ BEGIN
         target_payload := jsonb_build_object('kind', NEW.kind, 'result', NEW.result);
     END IF;
 
-    PERFORM public.publish_domain_event(target_type, 1, target_kind, target_id, target_payload);
+    PERFORM public.publish_domain_event(
+        target_type, target_schema_version, target_kind, target_id, target_payload
+    );
 
     RETURN NULL;
 END;
@@ -500,6 +527,6 @@ CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE O
 
 CREATE TRIGGER messages_initialize_discord_projection BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.initialize_discord_message_projection();
 
-CREATE TRIGGER builds_emit_domain_event AFTER UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
+CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 
 CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();

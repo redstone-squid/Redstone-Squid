@@ -157,6 +157,18 @@ class PostgresRecordRepository:
                 session,
                 f"record-run:{batch.kind.value}:{batch.version_id}",
             )
+            version_predicate = (
+                RecordComputationRun.version_id.is_(None)
+                if batch.version_id is None
+                else RecordComputationRun.version_id == batch.version_id
+            )
+            previous_run_id = await session.scalar(
+                select(RecordComputationRun.id).where(
+                    RecordComputationRun.build_kind == batch.kind.value,
+                    version_predicate,
+                    RecordComputationRun.is_active.is_(True),
+                )
+            )
             run = RecordComputationRun(
                 ruleset_id=batch.ruleset_id,
                 build_kind=batch.kind.value,
@@ -222,11 +234,6 @@ class PostgresRecordRepository:
                     for predecessor, history in pairwise(history_chain):
                         history.predecessor_id = predecessor.id
 
-            version_predicate = (
-                RecordComputationRun.version_id.is_(None)
-                if batch.version_id is None
-                else RecordComputationRun.version_id == batch.version_id
-            )
             await session.execute(
                 update(RecordComputationRun)
                 .where(
@@ -241,6 +248,26 @@ class PostgresRecordRepository:
             run.completed_at = Instant.now()
             run.is_active = True
             await session.flush()
+            await session.execute(
+                select(
+                    func.public.publish_domain_event(
+                        "record_run.activated",
+                        1,
+                        "record_run",
+                        run.id,
+                        func.jsonb_build_object(
+                            "previous_run_id",
+                            previous_run_id,
+                            "baseline",
+                            previous_run_id is None,
+                            "build_kind",
+                            batch.kind.value,
+                            "version_id",
+                            batch.version_id,
+                        ),
+                    )
+                )
+            )
             return run.id
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:

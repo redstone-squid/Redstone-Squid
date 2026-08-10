@@ -40,9 +40,13 @@ CREATE TABLE domain_event_deliveries (
     consumer TEXT REFERENCES domain_event_consumers(name) ON DELETE CASCADE,
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
+    claim_token UUID,
+    claim_count INTEGER NOT NULL DEFAULT 0,
     dead_at TIMESTAMPTZ,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
+    CHECK (claim_count >= 0),
+    CHECK ((claimed_at IS NULL) = (claim_token IS NULL)),
     PRIMARY KEY (event_id, consumer)
 );
 INSERT INTO domain_event_consumers (name) VALUES ('discord');
@@ -205,6 +209,8 @@ async def test_a_delivery_is_claimed_with_its_event_and_acknowledged(
 
     (delivery,) = await repository.claim(consumer="discord", limit=10)
     assert (delivery.event.id, delivery.event.event_type, delivery.consumer) == (event_id, "build.confirmed", "discord")
+    assert delivery.claim_token is not None
+    assert delivery.claim_count == 1
     assert await repository.complete(delivery) is True
     assert await _count(async_session_factory, "domain_event_deliveries") == 0
     # The event itself is a log and outlives its deliveries.
@@ -229,7 +235,7 @@ async def test_a_stale_delivery_token_cannot_acknowledge(
     (delivery,) = await repository.claim(consumer="discord", limit=10)
 
     async with async_session_factory.begin() as session:
-        await session.execute(text("UPDATE domain_event_deliveries SET claimed_at = NULL"))
+        await session.execute(text("UPDATE domain_event_deliveries SET claimed_at = NULL, claim_token = NULL"))
 
     assert await repository.complete(delivery) is False
     assert await _count(async_session_factory, "domain_event_deliveries") == 1
@@ -250,10 +256,17 @@ async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_dead_letters_it
     assert (attempts, future) == (1, True)
 
     async with async_session_factory.begin() as session:
-        await session.execute(text("UPDATE domain_event_deliveries SET available_at = now(), claimed_at = NULL"))
+        await session.execute(
+            text("UPDATE domain_event_deliveries SET available_at = now(), claimed_at = NULL, claim_token = NULL")
+        )
     (retried,) = await repository.claim(consumer="discord", limit=10)
     ceiling = DomainEventDelivery(
-        event=retried.event, consumer=retried.consumer, attempts=7, claimed_at=retried.claimed_at
+        event=retried.event,
+        consumer=retried.consumer,
+        attempts=7,
+        claimed_at=retried.claimed_at,
+        claim_token=retried.claim_token,
+        claim_count=retried.claim_count,
     )
     assert await repository.fail(ceiling, "boom", max_attempts=8) is True
     async with async_session_factory() as session:

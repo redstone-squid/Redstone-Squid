@@ -3,7 +3,8 @@
 import logging
 from typing import Protocol
 
-from squid.events import DomainEvent, DomainEventDelivery, DomainEventService
+from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.notifications import NotificationService
 from squid.voting.domain import VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,25 @@ class ApplyBuildVoteOutcomeHandler:
             await self._builds.deny(build_id)
 
 
+class MaterializeNotificationHandler:
+    """Project supported events into durable inbox and DM work."""
+
+    def __init__(self, notifications: NotificationService) -> None:
+        self._notifications = notifications
+
+    async def handle(self, event: DomainEvent) -> None:
+        supported_versions = {
+            "build.submitted": {1},
+            "build.confirmed": {1, 2},
+            "build.denied": {1, 2},
+            "record_run.activated": {1},
+        }
+        if event.schema_version not in supported_versions.get(event.event_type, set()):
+            msg = f"Unsupported {event.event_type} schema version {event.schema_version}"
+            raise UnsupportedEventVersionError(msg)
+        await self._notifications.materialize(event)
+
+
 class CoreDomainEventRunner:
     """Drain and acknowledge the core consumer's durable deliveries."""
 
@@ -66,6 +86,17 @@ class CoreDomainEventRunner:
         try:
             for handler in self._handlers.get(delivery.event.event_type, ()):
                 await handler.handle(delivery.event)
+        except UnsupportedEventVersionError as error:
+            await self._events.reject(delivery, error)
+            logger.exception(
+                "Rejected a domain event with an unsupported schema version",
+                extra={
+                    "squid.event.id": delivery.event.id,
+                    "squid.event.type": delivery.event.event_type,
+                    "squid.event.schema_version": delivery.event.schema_version,
+                },
+            )
+            return
         except Exception as error:
             dead_lettered = await self._events.fail(delivery, error)
             if dead_lettered:

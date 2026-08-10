@@ -88,8 +88,10 @@ class DatabaseConfig(_FrozenModel):
     """Relational database connection configuration."""
 
     url: SecretStr
+    listener_url: SecretStr | None = None
 
-    _validate_url = field_validator("url")(_validate_postgres_url)
+    _empty_listener_url = field_validator("listener_url", mode="before")(_empty_to_none)
+    _validate_url = field_validator("url", "listener_url")(_validate_postgres_url)
 
 
 class OpenAIConfig(_FrozenModel):
@@ -567,6 +569,16 @@ class BuildConfig(_FrozenModel):
         return self
 
 
+class NotificationConfig(_FrozenModel):
+    """User notification links and retention policy."""
+
+    public_site_url: AnyHttpUrl | None = None
+    retention_days: int = Field(default=90, ge=1, le=3650)
+    staff_discord_ids: tuple[int, ...] = (353089661175988224,)
+
+    _empty_public_site_url = field_validator("public_site_url", mode="before")(_empty_to_none)
+
+
 class BotIdentityConfig(_FrozenModel):
     """Code-owned identity and policy values for the Discord bot."""
 
@@ -587,6 +599,7 @@ class RuntimeConfig(_FrozenModel):
     schematics: SchematicConfig
     object_storage: ObjectStorageConfig
     community: CommunityConfig
+    notifications: NotificationConfig
     verification_code_pepper: SecretStr
     cursor_secret: SecretStr
     api_key_pepper: SecretStr | None = None
@@ -641,6 +654,7 @@ class _ProcessSettings(BaseSettings):
     storage: ObjectStorageConfig = ObjectStorageConfig()
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
+    notification: NotificationConfig = NotificationConfig()
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
     strict_unknown_keys: bool = False
@@ -678,6 +692,7 @@ class _ProcessSettings(BaseSettings):
             schematics=self.schematic,
             object_storage=self.storage,
             community=self.community,
+            notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
             cursor_secret=self.cursor.secret,
         )
@@ -771,6 +786,7 @@ class ApplicationConfig(BotProcessConfig):
                     "embedding",
                     "schematic",
                     "community",
+                    "notification",
                     "log",
                     "observability",
                     "strict_unknown_keys",
@@ -796,6 +812,7 @@ class ApplicationConfig(BotProcessConfig):
                     "embedding",
                     "schematic",
                     "community",
+                    "notification",
                     "log",
                     "observability",
                     "strict_unknown_keys",
@@ -818,6 +835,7 @@ class ApplicationConfig(BotProcessConfig):
                     "embedding",
                     "schematic",
                     "community",
+                    "notification",
                     "log",
                     "observability",
                     "strict_unknown_keys",
@@ -999,6 +1017,7 @@ __all__ = [
     "EmbeddingConfig",
     "GoogleConfig",
     "LoggingConfig",
+    "NotificationConfig",
     "OAuthConfig",
     "ObservabilityConfig",
     "OpenAIConfig",

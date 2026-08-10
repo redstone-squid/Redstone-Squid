@@ -1,7 +1,9 @@
 """SQLAlchemy models for the append-only domain-event log."""
 
+import uuid
+
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Identity, Index, Integer, SmallInteger, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -46,6 +48,11 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
 
     __tablename__ = "domain_event_deliveries"
     __table_args__ = (
+        CheckConstraint("claim_count >= 0", name="domain_event_deliveries_claim_count_nonnegative"),
+        CheckConstraint(
+            "(claimed_at IS NULL) = (claim_token IS NULL)",
+            name="domain_event_deliveries_claim_complete",
+        ),
         Index(
             "domain_event_deliveries_ready_idx",
             "available_at",
@@ -63,6 +70,8 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    claim_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

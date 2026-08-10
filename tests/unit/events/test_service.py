@@ -43,6 +43,15 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
     assert args.kwargs == {"max_attempts": 3}
 
 
+async def test_service_permanently_rejects_invalid_contracts() -> None:
+    repository = AsyncMock()
+    repository.reject.return_value = True
+    service = DomainEventService(repository)
+
+    assert await service.reject(_delivery(), ValueError("unsupported")) is True
+    repository.reject.assert_awaited_once_with(_delivery(), "unsupported")
+
+
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(ValueError, match="between 1 and 100"):

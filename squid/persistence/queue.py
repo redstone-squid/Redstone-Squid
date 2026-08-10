@@ -1,11 +1,10 @@
-"""Claim bookkeeping shared by the trigger-filled outbox tables.
+"""Timestamp-fenced claim bookkeeping shared by several durable work tables.
 
-Two outbox tables — `discord_sync_queue` and `domain_event_deliveries` — are drained
-the same way: claim a bounded batch with `FOR UPDATE SKIP LOCKED`, stamp a claim
-timestamp that doubles as a fencing token, then either delete the row, release it
-with exponential backoff, or retain it as a dead letter. The subtle parts are the
-reclaim predicate, fencing comparison, and backoff ceiling, so they are defined once
-here.
+The Discord synchronization, schematic, render, and search-embedding queues claim a
+bounded batch with `FOR UPDATE SKIP LOCKED`, stamp a claim timestamp that doubles as a
+fencing token, then either delete the row, release it with exponential backoff, or
+retain it as a dead letter. The subtle parts are defined once here. Domain events and
+notification DMs use stronger database-generated UUID tokens in their own adapters.
 
 Two other queues deliberately do not use this. `SearchProjectionStore` runs inside a
 caller-owned session and hands back live ORM rows that the projector mutates in the

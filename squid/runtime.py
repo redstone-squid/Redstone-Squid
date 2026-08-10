@@ -16,8 +16,10 @@ from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.events.application import DomainEventService
+from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
 from squid.messages.application import MessageService
+from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
@@ -43,6 +45,7 @@ class ApiServices:
     api_keys: ApiKeyService | None
     web_auth: DiscordOAuthService | None
     idempotency: IdempotencyService
+    notifications: NotificationService
     build_queries: BuildQueryService
     authorization: AuthorizationService
     records: RecordService
@@ -77,6 +80,7 @@ class BotServices:
     votes: VoteService
     discord_sync: DiscordSyncService
     domain_events: DomainEventService
+    notifications: NotificationService
     redstoner: RedstonerService
     welcome_relay: WelcomeRelayService
 
@@ -90,6 +94,8 @@ class WorkerServices:
     votes: VoteService
     records: RecordComputationService
     events: DomainEventService
+    event_wake_listener: DomainEventWakeListener | None
+    notifications: NotificationService
     schematics: SchematicService
     schematic_jobs: SchematicJobService
     schematic_renders: SchematicRenderJobService

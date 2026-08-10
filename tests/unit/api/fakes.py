@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
 from squid.idempotency import PendingRequest
+from squid.notifications import NotificationPreferences
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -130,6 +131,47 @@ class MockIdempotency:
         return None
 
 
+class MockNotifications:
+    async def preferences(self, user_id: int):
+        return NotificationPreferences(user_id=user_id, notice_version=None, consented_at=None)
+
+    async def accept_notice(self, user_id: int, *, web_enabled: bool, dm_enabled: bool):
+        return NotificationPreferences(
+            user_id=user_id,
+            notice_version="2026-08-10",
+            consented_at=None,
+            web_enabled=web_enabled,
+            dm_enabled=dm_enabled,
+        )
+
+    async def set_preferences(self, user_id: int, *, web_enabled: bool, dm_enabled: bool):
+        return NotificationPreferences(
+            user_id=user_id,
+            notice_version="2026-08-10",
+            consented_at=None,
+            web_enabled=web_enabled,
+            dm_enabled=dm_enabled,
+        )
+
+    async def subscriptions(self, _user_id: int):
+        return ()
+
+    async def subscribe(self, _user_id: int, **_kwargs: object):
+        raise AssertionError("service principals cannot create notification subscriptions")
+
+    async def unsubscribe(self, _user_id: int, _subscription_id: int) -> None:
+        return None
+
+    async def can_view_staff(self, _discord_id: int) -> bool:
+        return False
+
+    async def inbox(self, _user_id: int, **_kwargs: object):
+        return ()
+
+    async def mark_read(self, _user_id: int, _notification_id: int, **_kwargs: object) -> None:
+        return None
+
+
 def build_app(
     *,
     web_auth: object | None = None,
@@ -145,6 +187,7 @@ def build_app(
             api_keys=None,
             web_auth=web_auth,
             idempotency=idempotency or MockIdempotency(),
+            notifications=MockNotifications(),
             builds=SimpleNamespace(),
             users=users or MockUserManager(),
             build_queries=MockBuildQueries(),

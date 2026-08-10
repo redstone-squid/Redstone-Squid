@@ -14,7 +14,9 @@ from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 _CREATE_SCHEMA = """
 CREATE TABLE builds (
     id BIGSERIAL PRIMARY KEY,
-    submission_status SMALLINT NOT NULL
+    submission_status SMALLINT NOT NULL,
+    submitter_user_id BIGINT NOT NULL DEFAULT 1,
+    category TEXT
 );
 CREATE TABLE vote_sessions (
     id BIGSERIAL PRIMARY KEY,
@@ -39,6 +41,8 @@ CREATE TABLE domain_event_deliveries (
     consumer TEXT REFERENCES domain_event_consumers(name) ON DELETE CASCADE,
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
+    claim_token UUID,
+    claim_count INTEGER NOT NULL DEFAULT 0,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     PRIMARY KEY (event_id, consumer)
@@ -122,10 +126,25 @@ async def test_confirming_a_build_emits_one_event_with_a_delivery_per_consumer(
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET submission_status = 1 WHERE id = :id"), {"id": build_id})
 
-    assert await _events(async_session_factory) == [("build.confirmed", "build", build_id)]
+    assert await _events(async_session_factory) == [
+        ("build.submitted", "build", build_id),
+        ("build.confirmed", "build", build_id),
+    ]
     async with async_session_factory() as session:
         deliveries = (await session.execute(text("SELECT consumer, attempts FROM domain_event_deliveries"))).all()
-    assert deliveries == [("discord", 0)]
+        confirmed = (
+            await session.execute(
+                text(
+                    "SELECT schema_version, payload FROM domain_events "
+                    "WHERE event_type = 'build.confirmed' AND aggregate_id = :build_id"
+                ),
+                {"build_id": build_id},
+            )
+        ).one()
+    assert deliveries == [("discord", 0), ("discord", 0)]
+    assert confirmed.schema_version == 2
+    assert confirmed.payload["first_confirmation"] is True
+    assert confirmed.payload["submitter_user_id"] == 1
 
 
 async def test_denying_a_build_emits_a_denied_event(
@@ -136,7 +155,10 @@ async def test_denying_a_build_emits_a_denied_event(
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET submission_status = 2 WHERE id = :id"), {"id": build_id})
 
-    assert await _events(async_session_factory) == [("build.denied", "build", build_id)]
+    assert await _events(async_session_factory) == [
+        ("build.submitted", "build", build_id),
+        ("build.denied", "build", build_id),
+    ]
 
 
 async def test_rewriting_the_same_status_emits_nothing(
@@ -148,7 +170,7 @@ async def test_rewriting_the_same_status_emits_nothing(
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET submission_status = 1 WHERE id = :id"), {"id": build_id})
 
-    assert await _events(async_session_factory) == []
+    assert await _events(async_session_factory) == [("build.submitted", "build", build_id)]
 
 
 async def test_returning_a_build_to_pending_emits_nothing(
@@ -159,15 +181,14 @@ async def test_returning_a_build_to_pending_emits_nothing(
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET submission_status = 0 WHERE id = :id"), {"id": build_id})
 
-    assert await _events(async_session_factory) == []
+    assert await _events(async_session_factory) == [("build.submitted", "build", build_id)]
 
 
-async def test_inserting_a_build_emits_nothing(
+async def test_inserting_a_build_emits_a_submitted_event(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The trigger is scoped to UPDATE, so a build created confirmed is not an event."""
-    await _seed_build(async_session_factory, status=1)
-    assert await _events(async_session_factory) == []
+    build_id = await _seed_build(async_session_factory, status=1)
+    assert await _events(async_session_factory) == [("build.submitted", "build", build_id)]
 
 
 async def test_closing_a_vote_session_emits_one_event(
@@ -203,7 +224,7 @@ async def test_no_registered_consumers_records_the_event_without_deliveries(
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET submission_status = 1 WHERE id = :id"), {"id": build_id})
 
-    assert len(await _events(async_session_factory)) == 1
+    assert len(await _events(async_session_factory)) == 2
     async with async_session_factory() as session:
         assert (await session.execute(text("SELECT count(*) FROM domain_event_deliveries"))).scalar_one() == 0
 

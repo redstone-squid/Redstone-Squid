@@ -8,6 +8,7 @@ from squid.api.security import Principal, current_principal
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.core.pagination import SignedCursor
+from squid.notifications import NotificationService
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
@@ -43,6 +44,10 @@ def get_authorization(services: Services) -> AuthorizationService:
 
 def get_records(services: Services) -> RecordService:
     return services.records
+
+
+def get_notifications(services: Services) -> NotificationService:
+    return services.notifications
 
 
 def get_schematics(services: Services) -> SchematicService:
@@ -90,6 +95,7 @@ BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
 CursorSigner = Annotated[SignedCursor, Depends(cursor_signer)]
 Records = Annotated[RecordService, Depends(get_records)]
+Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]
 Search = Annotated[SearchService, Depends(get_search)]
 Tags = Annotated[TagService, Depends(get_tags)]

@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
+from uuid import UUID
 
 from whenever import Instant
 
@@ -28,6 +29,8 @@ class DomainEventDelivery:
     consumer: str
     attempts: int
     claimed_at: Instant
+    claim_token: UUID | None = None
+    claim_count: int = 0
 
 
 class DomainEventRepository(Protocol):
@@ -38,6 +41,12 @@ class DomainEventRepository(Protocol):
     async def complete(self, delivery: DomainEventDelivery) -> bool: ...
 
     async def fail(self, delivery: DomainEventDelivery, error: str, *, max_attempts: int) -> bool: ...
+
+    async def reject(self, delivery: DomainEventDelivery, error: str) -> bool: ...
+
+
+class UnsupportedEventVersionError(ValueError):
+    """A consumer cannot safely interpret an event envelope version."""
 
 
 class DomainEventService:
@@ -75,3 +84,7 @@ class DomainEventService:
         Returns whether the delivery was dead-lettered.
         """
         return await self._repository.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)
+
+    async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+        """Permanently reject an event whose contract cannot be interpreted."""
+        return await self._repository.reject(delivery, str(error)[:4000])

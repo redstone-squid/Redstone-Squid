@@ -17,7 +17,7 @@ from squid.runtime import BackgroundTaskSupervisor, WorkerServices
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
-from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner
+from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from squid.worker.rendering import SchematicRenderProjector
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,19 @@ class DatabaseWorker:
         self._schematic_jobs = schematic_jobs
         self._schematic_renders = schematic_renders
         self._supervisor = supervisor or BackgroundTaskSupervisor()
+        self._event_lock = asyncio.Lock()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
-        self._events = CoreDomainEventRunner(services.events, {"vote_session.closed": (outcome_handler,)})
+        notification_handler = MaterializeNotificationHandler(services.notifications)
+        self._events = CoreDomainEventRunner(
+            services.events,
+            {
+                "build.submitted": (notification_handler,),
+                "build.confirmed": (notification_handler,),
+                "build.denied": (notification_handler,),
+                "record_run.activated": (notification_handler,),
+                "vote_session.closed": (outcome_handler,),
+            },
+        )
 
     def start(self) -> None:
         """Start all jobs after the runtime has been constructed successfully."""
@@ -54,6 +65,11 @@ class DatabaseWorker:
             name="core-domain-events",
             interval=event_interval,
         )
+        if self._services.event_wake_listener is not None:
+            self._supervisor.start(
+                self._services.event_wake_listener.run(self._process_events),
+                name="domain-event-listener",
+            )
         self._supervisor.start_periodic(
             self._process_schematic_jobs,
             name="schematic-jobs",
@@ -105,6 +121,11 @@ class DatabaseWorker:
             interval=maintenance_interval,
         )
         self._supervisor.start_periodic(
+            self._cleanup_notifications,
+            name="notification-retention",
+            interval=max(maintenance_interval, 3600),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -129,6 +150,7 @@ class DatabaseWorker:
             "artifact-maintenance",
             "schematic-job-cleanup",
             "queue-health",
+            "notification-retention",
         }
         longest_interval = max(
             self._config.event_interval_seconds,
@@ -139,8 +161,9 @@ class DatabaseWorker:
         return self._supervisor.is_healthy(required, max_age_seconds=longest_interval * 3)
 
     async def _process_events(self) -> None:
-        with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):
-            await self._events.process_batch()
+        async with self._event_lock:
+            with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):
+                await self._events.process_batch()
 
     async def _process_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_jobs", {"squid.surface": "background_loop"}):
@@ -200,6 +223,10 @@ class DatabaseWorker:
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
             await self._schematic_jobs.cleanup()
+
+    async def _cleanup_notifications(self) -> None:
+        with trace_span("squid.worker.notification_retention", {"squid.surface": "background_loop"}):
+            await self._services.notifications.cleanup()
 
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:

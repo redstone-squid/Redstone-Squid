@@ -31,6 +31,7 @@ from squid.config import (
     BuildConfig,
     CatboxConfig,
     CommunityConfig,
+    NotificationConfig,
     load_bot_process_config,
 )
 from squid.health import ProcessHealthServer
@@ -44,7 +45,8 @@ DEFAULT_BOT_IDENTITY = BotIdentityConfig()
 DEFAULT_CATBOX_CONFIG = CatboxConfig()
 DEFAULT_BUILD_CONFIG = BuildConfig()
 DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
-CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"})
+DEFAULT_NOTIFICATION_CONFIG = NotificationConfig()
+CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation", "notification-deliveries"})
 
 
 class RedstoneSquid(Bot):
@@ -56,6 +58,7 @@ class RedstoneSquid(Bot):
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
         community_config: CommunityConfig = DEFAULT_COMMUNITY_CONFIG,
+        notification_config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG,
         inference_model: str = "gpt-5.6-luna",
         inference_reasoning_effort: str = "low",
         development_mode: bool = False,
@@ -63,6 +66,11 @@ class RedstoneSquid(Bot):
         self.services = services
         self.build_config = build_config
         self.community_config = community_config
+        self.notification_site_url = (
+            None
+            if notification_config.public_site_url is None
+            else str(notification_config.public_site_url).rstrip("/")
+        )
         self.inference_model = inference_model
         self.inference_reasoning_effort = inference_reasoning_effort
         self.development_mode = development_mode
@@ -119,6 +127,7 @@ class RedstoneSquid(Bot):
             "squid.bot.starboard.cog",
             "squid.bot.sync",
             "squid.bot.events",
+            "squid.bot.notifications",
             "squid.bot.verify",
             "squid.bot.admin",
             "squid.bot.give_redstoner",
@@ -228,6 +237,7 @@ async def main(
                 catbox_config=resolved_config.catbox,
                 build_config=resolved_config.build,
                 community_config=resolved_config.community,
+                notification_config=resolved_config.notification,
                 inference_model=resolved_config.openai.chat_model,
                 inference_reasoning_effort=resolved_config.openai.reasoning_effort,
                 development_mode=resolved_config.development_mode,

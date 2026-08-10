@@ -42,6 +42,7 @@ class FakeSession:
         self.assigned: set[int] = set()
         self.flushes = 0
         self.execute = AsyncMock()
+        self.scalar = AsyncMock(return_value=None)
 
     async def __aenter__(self) -> "FakeSession":
         return self
