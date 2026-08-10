@@ -4,7 +4,7 @@ site_url = "https://redstone-squid.github.io/Redstone-Squid/"
 site_description = "A Discord bot for managing Minecraft redstone build submissions."
 repo_url = "https://github.com/redstone-squid/Redstone-Squid"
 repo_name = "redstone-squid/Redstone-Squid"
-edit_uri = "edit/main/docs/"
+edit_uri = "edit/master/docs/"
 docs_dir = "docs"
 site_dir = "site"
 

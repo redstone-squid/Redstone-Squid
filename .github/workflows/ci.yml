@@ -9,6 +9,8 @@ on:
       - dev
   pull_request:
     branches: ["*"]
+  schedule:
+    - cron: "23 3 * * *"
   workflow_dispatch:
 
 env:
@@ -56,6 +58,11 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --dev
+
+      - name: Check committed OpenAPI document
+        run: |
+          uv run --locked python scripts/export_openapi.py
+          git diff --exit-code -- web/openapi.json
 
       - name: Check all files have corresponding gitattributes
         shell: bash
@@ -127,10 +134,159 @@ jobs:
         if: always()
         run: uv cache prune --ci
 
+  web-quality:
+    name: Catalogue quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Install catalogue dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check generated SDK
+        run: bun run sdk:check
+
+      - name: Check catalogue formatting
+        run: bun run format:check
+
+      - name: Lint catalogue
+        run: bun run lint
+
+      - name: Check Astro and TypeScript
+        run: bun run check
+
+      - name: Run catalogue unit tests
+        run: bun run test
+
+      - name: Build catalogue
+        run: bun run build
+
+      - name: Check client JavaScript budget
+        run: bun run check:bundle
+
+      - name: Audit catalogue dependencies
+        run: bun audit
+
+      - name: Install Lighthouse browser
+        run: |
+          bunx playwright install --with-deps chromium
+          echo "CHROME_PATH=$(bun -e 'import { chromium } from "@playwright/test"; process.stdout.write(chromium.executablePath())')" >> "$GITHUB_ENV"
+
+      - name: Run Lighthouse budgets
+        run: bun run test:lighthouse
+
+      - name: Upload catalogue reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalogue-quality-${{ github.sha }}
+          path: |
+            web/coverage/
+            web/.lighthouseci/reports/
+          if-no-files-found: ignore
+
+  web-e2e-pr:
+    name: Catalogue PR browser (${{ matrix.project }})
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium-desktop
+            browser: chromium
+          - project: mobile-safari
+            browser: webkit
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.3.13"
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps ${{ matrix.browser }}
+      - run: bun run build
+      - run: bunx playwright test --project=${{ matrix.project }} --workers=1 --shard=1/1
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalogue-pr-${{ matrix.project }}-${{ github.sha }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+
+  web-e2e-full:
+    name: Catalogue full browser (${{ matrix.project }})
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium-desktop
+            browser: chromium
+          - project: firefox-desktop
+            browser: firefox
+          - project: webkit-desktop
+            browser: webkit
+          - project: mobile-chrome
+            browser: chromium
+          - project: mobile-safari
+            browser: webkit
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.3.13"
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps ${{ matrix.browser }}
+      - run: bun run build
+      - run: bunx playwright test --project=${{ matrix.project }} --workers=1 --shard=1/1
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: catalogue-full-${{ matrix.project }}-${{ github.sha }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+
   deploy:
     name: Deploy
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [actions-security, dependency-security, quality, unit, integration]
+    needs: [actions-security, dependency-security, quality, unit, integration, web-quality, web-e2e-full]
     permissions: {}
     uses: ./.github/workflows/cd.yml
     secrets:

@@ -1,11 +1,10 @@
 # A Public Catalogue for Redstone-Squid
 
-> **Status.** Phase 1 completed on 2026-08-10; phases 2–4 have not started. The contract landed as
-> designed: finding 1 was fixed with the summary extension, and holder hydration needed an explicit
-> confirmed-status check to keep stale record results from exposing moderated builds. Findings 2
-> and 3 remain live defects regardless of whether the remaining phases ship. Amend this document in
-> place as phases land, calling out where building it proved part of it wrong rather than silently
-> rewriting.
+> **Status.** All four phases completed on 2026-08-11. The contract landed as designed: finding 1
+> was fixed with the summary extension, and holder hydration needed an explicit confirmed-status
+> check to keep stale record results from exposing moderated builds. Phase 4 fixed finding 2's four
+> branch references. Finding 3 remains an API constraint, and the shipped composer deliberately has
+> no status control. Implementation discoveries and deviations are recorded below.
 
 ## Context
 
@@ -83,13 +82,11 @@ Verified in-tree during design.
    the inherited declarations and constructor arguments while adding the summary fields.
    `RecordDetail(RecordSummary)` had the same shape; `holder_builds` was genuinely new there.
 
-2. **Live defect — the documentation workflow targets a branch that does not exist.** The
-   repository's default branch is `master`, but `.github/workflows/docs.yml` gates on `main` in
-   three places: the push trigger (line 6), the `upload-pages-artifact` step (line 45), and the
-   deploy job (line 52). Documentation has therefore never deployed from a push. `zensical.toml:7`
-   carries the same error in `edit_uri = "edit/main/docs/"`, breaking every "edit this page" link.
-   All four are fixed in Phase 4. Changing only the trigger would build on every push and deploy on
-   none of them.
+2. **Resolved in Phase 4 — the documentation workflow targeted a branch that does not exist.** The
+   repository's default branch is `master`, but `.github/workflows/docs.yml` gated on `main` in the
+   push trigger, the `upload-pages-artifact` step, and the deploy job. `zensical.toml` carried the
+   same error in `edit_uri`. Phase 4 changed all four references together, restoring push deployment
+   and "edit this page" links.
 
 3. **Live constraint — `q` and `status` are mutually exclusive on `GET /builds`.** Passing both
    raises `ValidationError` (`squid/api/v1/builds.py:130-133`). Since `PUBLIC_SEARCH_STATUSES` is
@@ -257,14 +254,31 @@ The security shape of the workflow is unchanged and non-negotiable:
 1. **API contract — complete.** Added the `BuildTag` key; `BuildSummary` preview, versions, and timings;
    `BuildDetail` de-duplication per finding 1; and `RecordDetail.holder_builds`. The extensions are in
    the schemathesis contract harness, and the regenerated document is committed at `web/openapi.json`.
-2. **Web foundation.** Scaffold `/web` — Astro, React, strict TypeScript, Bun, custom CSS tokens,
+2. **Web foundation — complete.** Scaffolded `/web` with Astro, React, strict TypeScript, Bun,
+   custom CSS tokens,
    standalone [`@astrojs/node` adapter](https://docs.astro.build/en/guides/integrations-guide/node/).
    Generated SDK, per-request client, locale mapping helper, typed dictionaries, brand component.
-3. **Catalogue pages.** Routes, both islands, cursor pagination, media handling, metadata, sitemap
-   endpoint, problem-response mapping.
-4. **Testing and docs automation.** Vitest, Playwright, axe, fixtures, visual goldens, bundle and
-   Lighthouse budgets, the screenshot workflows — and the four `main` → `master` fixes from
-   finding 2.
+3. **Catalogue pages — complete.** Shipped every English and Chinese route, both islands, cursor
+   pagination, media handling, metadata, the cached dynamic sitemap, and localized problem-response
+   mapping.
+4. **Testing and docs automation — complete.** Added thresholded Vitest coverage, the five-project
+   Playwright matrix, axe, deterministic HTTP fixtures, Chromium desktop/mobile visual goldens,
+   bundle and Lighthouse budgets, an audit-clean dependency graph, the two-workflow secure screenshot
+   handoff, and finding 2's four `main` → `master` fixes.
+
+## Implementation discoveries
+
+- Astro renders nested components after middleware receives the initial streaming response, so a
+  status assigned inside a shared page component did not reach the HTTP status line. The request
+  middleware now consumes the small catalogue response before applying the component's request-local
+  status. Focused browser tests assert real 400, 404, timeout-derived 503, and explicit 503 statuses;
+  the buffering did not compromise the performance budget (representative pages score 99–100).
+- Hey API 0.99's generated client does not typecheck with `exactOptionalPropertyTypes`; generated
+  code is not hand-edited, so that one TypeScript option is disabled while `strict` and the remaining
+  checks stay enabled. SDK regeneration and drift checks run in CI.
+- The initially selected Lighthouse CI wrapper carried unresolved transitive advisories. Phase 4
+  replaced it with the current Lighthouse CLI, a small checked runner, and a `js-yaml` 4.3.1 override
+  for Hey API's exact vulnerable transitive pin. `bun audit` now reports no vulnerabilities.
 
 ## Acceptance
 
@@ -282,8 +296,7 @@ The security shape of the workflow is unchanged and non-negotiable:
 - Hosting credentials and deployment automation stay out of v1.
 - Existing unrelated work on `schematics-phase-0` must be preserved; implementation starts from a
   clean dedicated branch or worktree.
-- Implementation requires roughly 5 GB of free disk for Bun dependencies and Playwright browsers.
-  The environment had 423 MB free at planning time; the operator is provisioning 10 GB before
-  Phase 2. Phase 1 is pure Python and can proceed under the current constraint.
+- Implementation required the anticipated additional disk for Bun dependencies and Playwright
+  browsers; the environment was expanded before Phase 2 and the complete test assets now fit.
 - The FYP findings are based on source and report inspection. Its suite could not be reinstalled and
   rerun under the planning-time disk constraint, so its test counts are as-reported, not as-verified.
