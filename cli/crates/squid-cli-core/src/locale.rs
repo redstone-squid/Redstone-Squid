@@ -58,6 +58,120 @@ impl Locale {
                 "check the destination path and filesystem permissions"
             }
             (Self::ZhCn, MessageKey::SuggestedCheckFilesystem) => "请检查目标路径和文件系统权限",
+            (Self::En, MessageKey::ProfileAdded) => "added profile {name} for {origin}",
+            (Self::ZhCn, MessageKey::ProfileAdded) => "已为 {origin} 添加配置 {name}",
+            (Self::En, MessageKey::ProfileSelected) => "selected profile {name}",
+            (Self::ZhCn, MessageKey::ProfileSelected) => "已选择配置 {name}",
+            (Self::En, MessageKey::ProfileRemoved) => "removed local profile {name}",
+            (Self::ZhCn, MessageKey::ProfileRemoved) => "已移除本地配置 {name}",
+            (Self::En, MessageKey::ProfileRemovalCancelled) => "kept profile {name}",
+            (Self::ZhCn, MessageKey::ProfileRemovalCancelled) => "已保留配置 {name}",
+            (Self::En, MessageKey::ProfileListEmpty) => "no profiles configured",
+            (Self::ZhCn, MessageKey::ProfileListEmpty) => "尚未配置任何配置文件",
+            (Self::En, MessageKey::ProfileDetails) => {
+                "{active}{name}\n  origin: {origin}\n  locale: {locale}\n  editor: {editor}\n  update checks: {update_checks}\n  custom CA: {ca_certificate}"
+            }
+            (Self::ZhCn, MessageKey::ProfileDetails) => {
+                "{active}{name}\n  来源：{origin}\n  语言：{locale}\n  编辑器：{editor}\n  更新检查：{update_checks}\n  自定义 CA：{ca_certificate}"
+            }
+            (Self::En, MessageKey::ProfileActiveMarker) => "* ",
+            (Self::ZhCn, MessageKey::ProfileActiveMarker) => "* ",
+            (Self::En, MessageKey::ProfileInactiveMarker) => "  ",
+            (Self::ZhCn, MessageKey::ProfileInactiveMarker) => "  ",
+            (Self::En, MessageKey::ProfileDefaultLocale) => "automatic",
+            (Self::ZhCn, MessageKey::ProfileDefaultLocale) => "自动",
+            (Self::En, MessageKey::ProfileNoCustomCa) => "system trust store",
+            (Self::ZhCn, MessageKey::ProfileNoCustomCa) => "系统信任库",
+            (Self::En, MessageKey::Enabled) => "enabled",
+            (Self::ZhCn, MessageKey::Enabled) => "已启用",
+            (Self::En, MessageKey::Disabled) => "disabled",
+            (Self::ZhCn, MessageKey::Disabled) => "已禁用",
+            (Self::En, MessageKey::EditorTui) => "terminal UI",
+            (Self::ZhCn, MessageKey::EditorTui) => "终端界面",
+            (Self::En, MessageKey::EditorPrompt) => "prompts",
+            (Self::ZhCn, MessageKey::EditorPrompt) => "逐项提示",
+            (Self::En, MessageKey::ConfirmProfileRemoval) => {
+                "remove local profile {name}? Type yes to continue: "
+            }
+            (Self::ZhCn, MessageKey::ConfirmProfileRemoval) => {
+                "要移除本地配置 {name} 吗？请输入 yes 继续："
+            }
+            (Self::En, MessageKey::ProfileConfirmationRequired) => {
+                "profile removal requires interactive confirmation"
+            }
+            (Self::ZhCn, MessageKey::ProfileConfirmationRequired) => "移除配置需要交互式确认",
+            (Self::En, MessageKey::SuggestedUseYes) => {
+                "review the profile name, then pass --yes in non-interactive use"
+            }
+            (Self::ZhCn, MessageKey::SuggestedUseYes) => {
+                "请核对配置名称，然后在非交互环境中传入 --yes"
+            }
+            (Self::En, MessageKey::InvalidProfileName) => {
+                "invalid profile name; start with a lowercase letter and use at most 32 lowercase letters, digits, '-' or '_'"
+            }
+            (Self::ZhCn, MessageKey::InvalidProfileName) => {
+                "配置名称无效；请以小写字母开头，并仅使用最多 32 个小写字母、数字、- 或 _"
+            }
+            (Self::En, MessageKey::ProfileAlreadyExists) => "profile {name} already exists",
+            (Self::ZhCn, MessageKey::ProfileAlreadyExists) => "配置 {name} 已存在",
+            (Self::En, MessageKey::ProfileNotFound) => "profile {name} was not found",
+            (Self::ZhCn, MessageKey::ProfileNotFound) => "找不到配置 {name}",
+            (Self::En, MessageKey::NoActiveProfile) => "no active profile is configured",
+            (Self::ZhCn, MessageKey::NoActiveProfile) => "尚未选择活动配置",
+            (Self::En, MessageKey::ProfileTrustRequired) => {
+                "adding an API origin requires an explicit --trust decision"
+            }
+            (Self::ZhCn, MessageKey::ProfileTrustRequired) => {
+                "添加 API 来源必须通过 --trust 明确信任"
+            }
+            (Self::En, MessageKey::ProfileLocaleInvalid) => {
+                "profile default locale must be en or zh-CN"
+            }
+            (Self::ZhCn, MessageKey::ProfileLocaleInvalid) => "配置的默认语言必须为 en 或 zh-CN",
+            (Self::En, MessageKey::ProfileCaInvalid) => {
+                "custom CA certificate must be a regular non-symlink file"
+            }
+            (Self::ZhCn, MessageKey::ProfileCaInvalid) => {
+                "自定义 CA 证书必须是常规文件，不能是符号链接"
+            }
+            (Self::En, MessageKey::ProfileConfigInvalid) => {
+                "local profile configuration is invalid or unsupported"
+            }
+            (Self::ZhCn, MessageKey::ProfileConfigInvalid) => "本地配置文件无效或不受支持",
+            (Self::En, MessageKey::ProfileStorageFailed) => {
+                "local profile configuration could not be read or written"
+            }
+            (Self::ZhCn, MessageKey::ProfileStorageFailed) => "无法读取或写入本地配置文件",
+            (Self::En, MessageKey::ProfileSymlinkRejected) => {
+                "refused a symbolic link in the CLI state path"
+            }
+            (Self::ZhCn, MessageKey::ProfileSymlinkRejected) => "已拒绝 CLI 状态路径中的符号链接",
+            (Self::En, MessageKey::OriginInvalidUrl) => "API origin is not a valid absolute URL",
+            (Self::ZhCn, MessageKey::OriginInvalidUrl) => "API 来源不是有效的绝对 URL",
+            (Self::En, MessageKey::OriginSchemeInvalid) => {
+                "API origin scheme must be http or https"
+            }
+            (Self::ZhCn, MessageKey::OriginSchemeInvalid) => "API 来源协议必须为 http 或 https",
+            (Self::En, MessageKey::OriginCredentialsRejected) => {
+                "API origin must not contain a username or password"
+            }
+            (Self::ZhCn, MessageKey::OriginCredentialsRejected) => "API 来源不能包含用户名或密码",
+            (Self::En, MessageKey::OriginComponentsRejected) => {
+                "API origin must not contain a path, query, or fragment"
+            }
+            (Self::ZhCn, MessageKey::OriginComponentsRejected) => {
+                "API 来源不能包含路径、查询参数或片段"
+            }
+            (Self::En, MessageKey::OriginHostMissing) => "API origin must contain a host",
+            (Self::ZhCn, MessageKey::OriginHostMissing) => "API 来源必须包含主机名",
+            (Self::En, MessageKey::OriginPortMissing) => "API origin port could not be resolved",
+            (Self::ZhCn, MessageKey::OriginPortMissing) => "无法确定 API 来源端口",
+            (Self::En, MessageKey::OriginHttpsRequired) => {
+                "HTTPS is required outside literal loopback development origins"
+            }
+            (Self::ZhCn, MessageKey::OriginHttpsRequired) => {
+                "除字面量回环开发地址外，API 来源必须使用 HTTPS"
+            }
         }
     }
 }
@@ -94,6 +208,40 @@ pub enum MessageKey {
     UnsupportedLocale,
     LocalIoFailed,
     SuggestedCheckFilesystem,
+    ProfileAdded,
+    ProfileSelected,
+    ProfileRemoved,
+    ProfileRemovalCancelled,
+    ProfileListEmpty,
+    ProfileDetails,
+    ProfileActiveMarker,
+    ProfileInactiveMarker,
+    ProfileDefaultLocale,
+    ProfileNoCustomCa,
+    Enabled,
+    Disabled,
+    EditorTui,
+    EditorPrompt,
+    ConfirmProfileRemoval,
+    ProfileConfirmationRequired,
+    SuggestedUseYes,
+    InvalidProfileName,
+    ProfileAlreadyExists,
+    ProfileNotFound,
+    NoActiveProfile,
+    ProfileTrustRequired,
+    ProfileLocaleInvalid,
+    ProfileCaInvalid,
+    ProfileConfigInvalid,
+    ProfileStorageFailed,
+    ProfileSymlinkRejected,
+    OriginInvalidUrl,
+    OriginSchemeInvalid,
+    OriginCredentialsRejected,
+    OriginComponentsRejected,
+    OriginHostMissing,
+    OriginPortMissing,
+    OriginHttpsRequired,
 }
 
 /// A catalog key plus untrusted values substituted only after selecting a locale.
