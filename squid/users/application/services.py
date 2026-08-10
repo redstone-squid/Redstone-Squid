@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID
 
 from squid.users.application.ports import UserRepository
-from squid.users.domain import AliasClaim, ClaimStatus, CreatorAlias, UserAccount, UserConsent
+from squid.users.domain import AliasClaim, ClaimStatus, CreatorAlias, CreatorProfile, UserAccount, UserConsent
 from squid.users.errors import (
     AccountAlreadyLinkedError,
     ClaimNotFoundError,
@@ -48,6 +48,10 @@ class UserService:
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
         return await self._repository.get_alias_by_name(name)
+
+    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+        """Return a public creator profile and all aliases claimed by it."""
+        return await self._repository.get_creator_profile(public_id)
 
     async def link_minecraft_account(self, discord_id: int, code: str, *, consent: UserConsent) -> CreatorAlias | None:
         """Link a Discord user with consent using a valid, unexpired verification code.

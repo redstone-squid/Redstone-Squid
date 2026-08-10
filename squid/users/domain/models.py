@@ -64,6 +64,7 @@ class UserAccount:
     consent: UserConsent | None = None
     id: int | None = None
     created_at: Instant | None = None
+    public_creator_id: UUID | None = None
 
     @property
     def needs_consent_refresh(self) -> bool:
@@ -85,11 +86,20 @@ class CreatorAlias:
     user_id: int | None = None
     claimed_at: Instant | None = None
     claim_method: ClaimMethod | None = None
+    public_creator_id: UUID | None = None
 
     @property
     def is_claimed(self) -> bool:
         """Whether an account has been credited with this name."""
         return self.user_id is not None
+
+
+@dataclass(frozen=True, slots=True)
+class CreatorProfile:
+    """A stable public identity grouping every alias claimed by one account."""
+
+    public_id: UUID
+    aliases: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import (
+    UUID,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -48,7 +51,7 @@ class RecordRuleset(Base, kw_only=True):
 
 
 class RecordDefinition(Base, kw_only=True):
-    """A stable identity for one record competition."""
+    """A ruleset-specific definition of one stable record competition."""
 
     __tablename__ = "record_definitions"
     __table_args__ = (
@@ -78,6 +81,12 @@ class RecordDefinition(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    competition_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("record_competitions.public_id", name="record_definitions_competition_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+        default_factory=uuid.uuid4,
+    )
     ruleset_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("record_rulesets.id", name="record_definitions_ruleset_id_fkey", ondelete="RESTRICT"),
@@ -98,6 +107,47 @@ class RecordDefinition(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
     materialization_source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eager'"))
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class RecordCompetition(Base, kw_only=True):
+    """A stable public identity for a logical record competition across rulesets."""
+
+    __tablename__ = "record_competitions"
+    __table_args__ = (
+        CheckConstraint(
+            "record_class IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
+            name="record_competitions_record_class_check",
+        ),
+        CheckConstraint(
+            "version_scope IN ('all_time', 'current')",
+            name="record_competitions_version_scope_check",
+        ),
+        UniqueConstraint(
+            "record_class",
+            "build_kind",
+            "version_scope",
+            "version_id",
+            "category_key",
+            name="record_competitions_identity_key",
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
+
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
+    )
+    record_class: Mapped[str] = mapped_column(Text, nullable=False)
+    build_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    version_scope: Mapped[str] = mapped_column(Text, nullable=False)
+    version_id: Mapped[int | None] = mapped_column(
+        SmallInteger,
+        ForeignKey("versions.id", name="record_competitions_version_id_fkey", ondelete="RESTRICT"),
+        default=None,
+    )
+    category_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

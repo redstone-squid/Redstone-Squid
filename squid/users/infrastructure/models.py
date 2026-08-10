@@ -32,6 +32,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("discord_id", name="users_discord_id_key"),
         UniqueConstraint("minecraft_uuid", name="users_minecraft_uuid_key"),
+        UniqueConstraint("public_creator_id", name="users_public_creator_id_key"),
         CheckConstraint(
             "(consent_version IS NULL) = (consented_at IS NULL)",
             name="users_consent_receipt_complete",
@@ -48,6 +49,10 @@ class User(Base):
     )
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     """Internal primary key. Unrelated to the user's Discord or Minecraft identifiers."""
+    public_creator_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
+    )
+    """Stable opaque identifier for the public creator profile backed by this account."""
     ign: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     """The user's Minecraft in-game name, as of the last verification."""
     discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)

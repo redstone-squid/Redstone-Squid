@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 from typing import cast
+from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -16,7 +17,7 @@ from squid.tags.domain import (
     TagSemanticKind,
     TagValueType,
 )
-from squid.users.domain import CreatorAlias
+from squid.users.domain import CreatorAlias, CreatorProfile
 from squid.versions.domain import MinecraftVersion
 from squid.voting.domain import GenericPoll, VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteTarget
 from tests.unit.api.fakes import MockDatabaseManager
@@ -40,7 +41,16 @@ class VersionFake:
 
 class UserFake:
     async def get_creator_alias(self, name: str):
-        return CreatorAlias(7, "Builder", user_id=42) if name.casefold() == "builder" else None
+        creator_id = UUID("22222222-2222-2222-2222-222222222222")
+        return (
+            CreatorAlias(7, "Builder", user_id=42, public_creator_id=creator_id)
+            if name.casefold() == "builder"
+            else None
+        )
+
+    async def get_creator_profile(self, public_id: UUID):
+        expected = UUID("22222222-2222-2222-2222-222222222222")
+        return CreatorProfile(expected, ("Builder", "OldBuilder")) if public_id == expected else None
 
 
 class SchematicFake:
@@ -116,8 +126,26 @@ def test_creator_alias_never_exposes_linked_account(
         response = client.get("/v1/creator-aliases/builder")
 
     assert response.status_code == 200
-    assert response.json() == {"name": "Builder", "claimed": True}
+    assert response.json() == {
+        "name": "Builder",
+        "claimed": True,
+        "creator_id": "22222222-2222-2222-2222-222222222222",
+    }
     assert "user_id" not in response.text
+
+
+def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    app, _database = app_factory
+    _override(app, users=UserFake())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/creators/22222222-2222-2222-2222-222222222222")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "aliases": ["Builder", "OldBuilder"],
+    }
 
 
 def test_schematic_content_is_an_attachment(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:

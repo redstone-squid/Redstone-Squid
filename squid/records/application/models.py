@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from squid.records.domain import (
     BuildKind,
@@ -150,6 +151,7 @@ class ActiveRecord:
 
     id: int
     definition_id: int
+    competition_id: UUID
     title: str
     subtitle: str | None
     record_class: str

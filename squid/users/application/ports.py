@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from squid.users.domain import AliasClaim, ClaimMethod, ClaimStatus, CreatorAlias, UserAccount, UserConsent
+from squid.users.domain import (
+    AliasClaim,
+    ClaimMethod,
+    ClaimStatus,
+    CreatorAlias,
+    CreatorProfile,
+    UserAccount,
+    UserConsent,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +46,8 @@ class UserRepository(Protocol):
     async def unlink_minecraft_account(self, discord_id: int) -> bool: ...
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None: ...
+
+    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None: ...
 
     async def claim_unclaimed_alias(self, *, user_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         """Claim the alias matching *name* only if nobody else holds it."""

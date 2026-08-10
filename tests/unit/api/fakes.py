@@ -39,6 +39,9 @@ class MockUserManager:
     async def get_creator_alias(self, _name: str):
         return None
 
+    async def get_creator_profile(self, _public_id: UUID):
+        return None
+
     async def generate_verification_code(self, user_uuid: str | UUID) -> int:
         if isinstance(user_uuid, str):
             user_uuid = uuid.UUID(user_uuid)

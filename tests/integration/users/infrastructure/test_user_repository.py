@@ -124,6 +124,12 @@ async def test_claim_unclaimed_alias_matches_ignoring_case(
     assert claimed.id == alias_id
     assert claimed.user_id == account.id
     assert claimed.claim_method == ClaimMethod.VERIFIED_IGN
+    assert claimed.public_creator_id == account.public_creator_id
+
+    assert account.public_creator_id is not None
+    profile = await repository.get_creator_profile(account.public_creator_id)
+    assert profile is not None
+    assert profile.aliases == ("player",)
 
 
 async def test_concurrent_claims_leave_exactly_one_winner(

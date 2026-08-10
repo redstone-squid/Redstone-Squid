@@ -18,6 +18,7 @@ from squid.users.domain import (
     ClaimMethod,
     ClaimStatus,
     CreatorAlias,
+    CreatorProfile,
     UserAccount,
     UserConsent,
     normalize_ign,
@@ -53,16 +54,18 @@ def _to_account(user: User) -> UserAccount:
         consent=consent,
         id=user.id,
         created_at=user.created_at,
+        public_creator_id=user.public_creator_id,
     )
 
 
-def _to_alias(alias: CreatorAliasModel) -> CreatorAlias:
+def _to_alias(alias: CreatorAliasModel, public_creator_id: uuid.UUID | None = None) -> CreatorAlias:
     return CreatorAlias(
         id=alias.id,
         name=alias.name,
         user_id=alias.user_id,
         claimed_at=alias.claimed_at,
         claim_method=alias.claim_method,
+        public_creator_id=public_creator_id,
     )
 
 
@@ -168,10 +171,29 @@ class UserRepository:
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         """Return the alias credited under *name*, ignoring case and surrounding space."""
         async with self._session_factory() as session:
-            alias = await session.scalar(
-                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == normalize_ign(name))
-            )
-            return None if alias is None else _to_alias(alias)
+            row = (
+                await session.execute(
+                    select(CreatorAliasModel, User.public_creator_id)
+                    .outerjoin(User, User.id == CreatorAliasModel.user_id)
+                    .where(CreatorAliasModel.normalized_name == normalize_ign(name))
+                )
+            ).one_or_none()
+            return None if row is None else _to_alias(row[0], row[1])
+
+    async def get_creator_profile(self, public_id: uuid.UUID) -> CreatorProfile | None:
+        """Return the aliases grouped by an opaque public creator identifier."""
+        async with self._session_factory() as session:
+            user_id = await session.scalar(select(User.id).where(User.public_creator_id == public_id))
+            if user_id is None:
+                return None
+            aliases = (
+                await session.execute(
+                    select(CreatorAliasModel.name)
+                    .where(CreatorAliasModel.user_id == user_id)
+                    .order_by(CreatorAliasModel.normalized_name)
+                )
+            ).scalars()
+            return CreatorProfile(public_id=public_id, aliases=tuple(aliases))
 
     async def claim_unclaimed_alias(self, *, user_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         """Claim the alias matching *name* only if nobody else holds it.
@@ -190,7 +212,8 @@ class UserRepository:
                 .returning(CreatorAliasModel)
             )
             await session.commit()
-            return None if alias is None else _to_alias(alias)
+            public_id = await session.scalar(select(User.public_creator_id).where(User.id == user_id))
+            return None if alias is None else _to_alias(alias, public_id)
 
     async def request_claim(self, *, name: str, user_id: int) -> AliasClaim:
         """Open a pending claim for *name*, or return the caller's existing pending one."""
@@ -330,9 +353,10 @@ class UserRepository:
                 .returning(CreatorAliasModel)
             )
             await session.flush()
+            public_id = user.public_creator_id
             return VerificationLinkResult(
                 account=_to_account(user),
-                claimed_alias=None if alias is None else _to_alias(alias),
+                claimed_alias=None if alias is None else _to_alias(alias, public_id),
             )
 
     async def replace_verification_code(

@@ -1,6 +1,7 @@
 """Public computed-record representations."""
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,6 +16,7 @@ class RecordSummary(BaseModel):
 
     id: int
     definition_id: int
+    competition_id: UUID
     title: str
     subtitle: str | None
     record_class: str
@@ -29,6 +31,7 @@ class RecordSummary(BaseModel):
         return cls(
             id=record.id,
             definition_id=record.definition_id,
+            competition_id=record.competition_id,
             title=record.title,
             subtitle=record.subtitle,
             record_class=record.record_class,

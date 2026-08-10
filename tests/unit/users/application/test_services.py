@@ -14,6 +14,7 @@ from squid.users.domain import (
     ClaimMethod,
     ClaimStatus,
     CreatorAlias,
+    CreatorProfile,
     UserAccount,
     UserConsent,
     VerificationCode,
@@ -99,6 +100,10 @@ class FakeUserRepository:
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         return self._find_alias(name)
+
+    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+        aliases = tuple(alias.name for alias in self.aliases.values() if alias.public_creator_id == public_id)
+        return CreatorProfile(public_id, aliases) if aliases else None
 
     async def claim_unclaimed_alias(self, *, user_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         alias = self._find_alias(name)

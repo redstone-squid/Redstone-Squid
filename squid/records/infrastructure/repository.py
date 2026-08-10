@@ -8,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import pairwise
 from typing import cast
+from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -41,6 +42,7 @@ from squid.records.domain import (
 from squid.records.infrastructure.models import (
     DoorTimingVariant,
     ExtenderTimingVariant,
+    RecordCompetition,
     RecordComputationRun,
     RecordDefinition,
     RecordDefinitionFacet,
@@ -329,6 +331,7 @@ class PostgresRecordRepository:
                 ActiveRecord(
                     id=result.id,
                     definition_id=definition.id,
+                    competition_id=definition.competition_id,
                     title=definition.title,
                     subtitle=definition.subtitle,
                     record_class=definition.record_class,
@@ -375,7 +378,16 @@ class PostgresRecordRepository:
                 )
                 definition = (await session.execute(statement)).scalar_one_or_none()
                 if definition is None:
+                    competition_id = await self._ensure_competition(
+                        session,
+                        record_class=record_class.value,
+                        build_kind=category.kind.value,
+                        version_scope=VersionScope.ALL_TIME.value,
+                        version_id=None,
+                        category_key=category.key,
+                    )
                     definition = RecordDefinition(
+                        competition_id=competition_id,
                         ruleset_id=ruleset_id,
                         record_class=record_class.value,
                         build_kind=category.kind.value,
@@ -531,7 +543,16 @@ class PostgresRecordRepository:
             identity = (computed.record_class.value, computed.competition.identity.key)
             definition = by_identity.get(identity)
             if definition is None:
+                competition_id = await self._ensure_competition(
+                    session,
+                    record_class=computed.record_class.value,
+                    build_kind=computed.competition.identity.kind.value,
+                    version_scope=computed.scope.value,
+                    version_id=computed.version_id,
+                    category_key=computed.competition.identity.key,
+                )
                 definition = RecordDefinition(
+                    competition_id=competition_id,
                     ruleset_id=batch.ruleset_id,
                     record_class=computed.record_class.value,
                     build_kind=computed.competition.identity.kind.value,
@@ -579,6 +600,46 @@ class PostgresRecordRepository:
                 )
                 existing_facets.add(identity)
         return tuple(definitions)
+
+    async def _ensure_competition(
+        self,
+        session: AsyncSession,
+        *,
+        record_class: str,
+        build_kind: str,
+        version_scope: str,
+        version_id: int | None,
+        category_key: str,
+    ) -> UUID:
+        values = {
+            "record_class": record_class,
+            "build_kind": build_kind,
+            "version_scope": version_scope,
+            "version_id": version_id,
+            "category_key": category_key,
+        }
+        public_id = await session.scalar(
+            insert(RecordCompetition)
+            .values(**values)
+            .on_conflict_do_nothing(constraint="record_competitions_identity_key")
+            .returning(RecordCompetition.public_id)
+        )
+        if public_id is not None:
+            return public_id
+        version_predicate = (
+            RecordCompetition.version_id.is_(None) if version_id is None else RecordCompetition.version_id == version_id
+        )
+        return (
+            await session.execute(
+                select(RecordCompetition.public_id).where(
+                    RecordCompetition.record_class == record_class,
+                    RecordCompetition.build_kind == build_kind,
+                    RecordCompetition.version_scope == version_scope,
+                    version_predicate,
+                    RecordCompetition.category_key == category_key,
+                )
+            )
+        ).scalar_one()
 
 
 async def _door_timings(

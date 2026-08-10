@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 
@@ -48,6 +49,7 @@ def active_record(*holder_build_ids: int) -> ActiveRecord:
     return ActiveRecord(
         id=7,
         definition_id=3,
+        competition_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
         record_class="fastest",
