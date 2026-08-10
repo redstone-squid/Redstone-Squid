@@ -58,6 +58,24 @@ def test_delivery_renderer_uses_configured_public_site_link() -> None:
     )
 
 
+def test_staff_submission_delivery_uses_pending_review_command_not_public_link() -> None:
+    delivery = PendingNotificationDelivery(
+        id=1,
+        generation=1,
+        discord_id=2,
+        nonce=UUID("11111111-1111-1111-1111-111111111111"),
+        claim_token=UUID("22222222-2222-2222-2222-222222222222"),
+        attempts=1,
+        kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+        payload={"build_id": 42},
+    )
+
+    rendered = render_delivery(delivery, "https://example.test")
+
+    assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build view id:42`."
+    assert "https://example.test/builds/42" not in rendered
+
+
 def test_notification_management_is_slash_only() -> None:
     assert NotificationCog.__cog_commands__ == []
     assert {command.name for command in NotificationCog.__cog_app_commands__} == {

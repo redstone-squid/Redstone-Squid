@@ -45,6 +45,17 @@ class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
 class VoteRepository(Protocol):
     """Persistence operations required by :class:`VoteService`."""
 
+    async def get_or_create_build_submission_session(
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+        options: Sequence[VoteOption],
+    ) -> int: ...
+
     async def create_build_session(
         self,
         *,

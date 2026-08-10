@@ -58,6 +58,21 @@ class FakeVoteRepository:
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
 
+    async def get_or_create_build_submission_session(
+        self,
+        *,
+        author_account_id: int,
+        pass_threshold: int,
+        fail_threshold: int,
+        build_id: int,
+        changes: Sequence[VoteChange],
+        options: Sequence[VoteOption],
+    ) -> int:
+        self.build_create_calls.append(
+            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), tuple(options))
+        )
+        return 23
+
     async def create_generic_session(
         self,
         *,
@@ -188,6 +203,23 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
     assert delete_session_id == 25
     assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
     assert repository.delete_create_calls == [(8, 4, -2, 100, 200, 300, DEFAULT_VOTE_OPTIONS)]
+
+
+async def test_initial_build_vote_creation_uses_idempotent_repository_operation() -> None:
+    repository = FakeVoteRepository(None)
+    service = VoteService(repository)
+    changes: list[VoteChange] = [("submission_status", 0, 1)]
+
+    session_id = await service.ensure_build_submission_vote(
+        author_account_id=7,
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=42,
+        changes=changes,
+    )
+
+    assert session_id == 23
+    assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
 
 
 async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:

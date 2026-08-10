@@ -164,6 +164,11 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:
     """Render transport-safe DM text from a materialized notification payload."""
     build_id = delivery.payload.get("build_id")
+    if delivery.kind.value == "staff_build_submitted":
+        message = "A new build is awaiting staff review."
+        if isinstance(build_id, int):
+            return f"{message}\nOpen it in Discord with `/build view id:{build_id}`."
+        return message
     build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
     if delivery.kind.value == "record_gained":
         raw_records = delivery.payload.get("records", [])
@@ -176,7 +181,7 @@ def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None)
     elif delivery.kind.value == "creator_build_confirmed":
         message = "A creator you follow has a newly confirmed build."
     else:
-        message = "A new build is awaiting staff review."
+        message = "A build notification is available."
     return f"{message}\n{build_link}" if build_link is not None else message
 
 
