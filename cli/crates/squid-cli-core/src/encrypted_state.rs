@@ -103,6 +103,38 @@ impl EncryptedStateStore {
         result
     }
 
+    /// Atomically read, mutate, and replace one encrypted JSON value under one exclusive lock.
+    pub fn update<T, R, E>(
+        &self,
+        kind: StateKind,
+        key: &SecretBytes,
+        initial: impl FnOnce() -> T,
+        mutation: impl FnOnce(&mut T) -> Result<R, E>,
+    ) -> Result<R, EncryptedUpdateError<E>>
+    where
+        T: DeserializeOwned + Serialize,
+    {
+        secure_directory(&self.directory).map_err(EncryptedUpdateError::State)?;
+        let lock = open_lock(&self.directory).map_err(EncryptedUpdateError::State)?;
+        FileExt::lock_exclusive(&lock)
+            .map_err(EncryptedStateError::Io)
+            .map_err(EncryptedUpdateError::State)?;
+        let result = (|| {
+            let mut value = self
+                .read_unlocked(kind, key)
+                .map_err(EncryptedUpdateError::State)?
+                .unwrap_or_else(initial);
+            let mutation_result = mutation(&mut value).map_err(EncryptedUpdateError::Mutation)?;
+            self.write_unlocked(kind, key, &value)
+                .map_err(EncryptedUpdateError::State)?;
+            Ok(mutation_result)
+        })();
+        FileExt::unlock(&lock)
+            .map_err(EncryptedStateError::Io)
+            .map_err(EncryptedUpdateError::State)?;
+        result
+    }
+
     /// Delete one encrypted state value without affecting credentials.
     pub fn delete(&self, kind: StateKind) -> Result<(), EncryptedStateError> {
         secure_directory(&self.directory)?;
@@ -328,6 +360,13 @@ pub enum EncryptedStateError {
     SymlinkNotAllowed,
     #[error("encrypted state could not be read or written: {0}")]
     Io(#[source] io::Error),
+}
+
+/// Distinguishes encrypted storage failures from caller-owned mutation failures.
+#[derive(Debug)]
+pub enum EncryptedUpdateError<E> {
+    State(EncryptedStateError),
+    Mutation(E),
 }
 
 #[cfg(test)]

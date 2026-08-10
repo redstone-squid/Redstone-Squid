@@ -37,6 +37,10 @@ inherit ambient proxy settings, require TLS 1.2 or newer outside the literal-loo
 exception, cap JSON requests and responses, and send protocol, renderer-capability, locale, and
 instance headers on every request.
 
+Mutating operations can be written to the encrypted recovery queue before network I/O. Retries
+reuse the original idempotency key, serialize concurrent queue updates, retain private JSON only in
+encrypted state, and stop automatically on permanent failures or after a bounded backoff budget.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
