@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
+from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import Account
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.builds.domain import Build, BuildCategory, Status
@@ -153,15 +154,20 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
         await repository.save(duplicate)
 
 
-async def test_account_merge_transfers_drafts_schematic_rights_and_build_ownership(
+async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    java_uuid = uuid.UUID("33333333-3333-3333-3333-333333333333")
     survivor = await accounts.create()
-    absorbed = await accounts.create()
+    absorbed = await accounts.create(identities=(AccountIdentityValue.java(java_uuid),))
     assert survivor.id is not None
     assert absorbed.id is not None
     draft_id = uuid.UUID("22222222-2222-2222-2222-222222222222")
+    installation_id = uuid.UUID("44444444-4444-4444-4444-444444444444")
+    challenge_id = uuid.UUID("55555555-5555-5555-5555-555555555555")
+    grant_id = uuid.UUID("66666666-6666-6666-6666-666666666666")
+    installation_secret_hash = bytes.fromhex("11" * 32)
 
     async with migrated_session_factory.begin() as session:
         build_id = (
@@ -217,6 +223,51 @@ async def test_account_merge_transfers_drafts_schematic_rights_and_build_ownersh
             ),
             {"build_id": build_id, "absorbed": absorbed.id},
         )
+        await session.execute(
+            text(
+                "INSERT INTO minecraft_paper_installations (id, owner_account_id, label, secret_hash) "
+                "VALUES (:installation_id, :absorbed, 'Merge test', :secret_hash)"
+            ),
+            {
+                "installation_id": installation_id,
+                "absorbed": absorbed.id,
+                "secret_hash": installation_secret_hash,
+            },
+        )
+        await session.execute(
+            text(
+                "INSERT INTO minecraft_player_challenges "
+                "(id, device_code_hash, user_code_hash, origin, java_uuid, installation_id, "
+                "installation_credential_version, created_at, expires_at, approved_by_account_id, approved_at, "
+                "exchanged_at) VALUES (:challenge_id, :device_hash, :user_hash, 'paper', :java_uuid, "
+                ":installation_id, 1, now(), now() + interval '10 minutes', :absorbed, now(), now())"
+            ),
+            {
+                "challenge_id": challenge_id,
+                "device_hash": bytes.fromhex("22" * 32),
+                "user_hash": bytes.fromhex("33" * 32),
+                "java_uuid": java_uuid,
+                "installation_id": installation_id,
+                "absorbed": absorbed.id,
+            },
+        )
+        await session.execute(
+            text(
+                "INSERT INTO minecraft_player_grants "
+                "(id, challenge_id, token_hash, account_id, java_uuid, origin, installation_id, "
+                "installation_credential_version, issued_at, expires_at) VALUES "
+                "(:grant_id, :challenge_id, :token_hash, :absorbed, :java_uuid, 'paper', :installation_id, 1, "
+                "now(), now() + interval '5 minutes')"
+            ),
+            {
+                "grant_id": grant_id,
+                "challenge_id": challenge_id,
+                "token_hash": bytes.fromhex("44" * 32),
+                "absorbed": absorbed.id,
+                "java_uuid": java_uuid,
+                "installation_id": installation_id,
+            },
+        )
 
     await accounts.merge(survivor.id, absorbed.id)
 
@@ -240,10 +291,42 @@ async def test_account_merge_transfers_drafts_schematic_rights_and_build_ownersh
             text("SELECT rights_attested_by_account_id FROM build_schematics WHERE build_id = :build_id"),
             {"build_id": build_id},
         )
+        installation = (
+            await session.execute(
+                text(
+                    "SELECT owner_account_id, id, secret_hash FROM minecraft_paper_installations "
+                    "WHERE id = :installation_id"
+                ),
+                {"installation_id": installation_id},
+            )
+        ).one()
+        challenge = (
+            await session.execute(
+                text(
+                    "SELECT approved_by_account_id, java_uuid, installation_id FROM minecraft_player_challenges "
+                    "WHERE id = :challenge_id"
+                ),
+                {"challenge_id": challenge_id},
+            )
+        ).one()
+        grant = (
+            await session.execute(
+                text("SELECT account_id, java_uuid, installation_id FROM minecraft_player_grants WHERE id = :grant_id"),
+                {"grant_id": grant_id},
+            )
+        ).one()
+        java_identity_owner = await session.scalar(
+            text("SELECT account_id FROM account_identities WHERE provider = 'java' AND subject = :subject"),
+            {"subject": str(java_uuid)},
+        )
 
     assert build_owner == survivor.id
     assert draft_owner == survivor.id
     assert access == [(survivor.id, "owner")]
     assert change_actor == survivor.id
     assert rights_actor == survivor.id
+    assert installation == (survivor.id, installation_id, installation_secret_hash)
+    assert challenge == (survivor.id, java_uuid, installation_id)
+    assert grant == (survivor.id, java_uuid, installation_id)
+    assert java_identity_owner == survivor.id
     assert await accounts.get_by_id(absorbed.id) is None

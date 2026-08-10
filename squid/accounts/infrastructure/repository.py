@@ -526,6 +526,11 @@ class AccountRepository:
             "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
             "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
             "WHERE rights_attested_by_account_id = :absorbed",
+            # Keep installation IDs and credential hashes stable; only their provider-neutral owner changes.
+            "UPDATE minecraft_paper_installations SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
+            "UPDATE minecraft_player_challenges SET approved_by_account_id = :survivor "
+            "WHERE approved_by_account_id = :absorbed",
+            "UPDATE minecraft_player_grants SET account_id = :survivor WHERE account_id = :absorbed",
             "UPDATE api_keys SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
             "UPDATE api_keys SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
             "UPDATE web_sessions SET account_id = :survivor WHERE account_id = :absorbed",
