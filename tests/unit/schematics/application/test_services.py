@@ -299,12 +299,25 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert prepared is not None
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == b"resource-pack"
-    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    assert await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png") is not None
 
     cached = await schematics.prepare_render(7)
     assert cached is not None
     assert cached.cached_url == "https://cdn.example/render.png"
     assert len(analyzer.render_calls) == 1
+
+
+async def test_render_recipe_includes_the_schematic_content_identity() -> None:
+    schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="first.litematic"))
+    await schematics.attach(8, IngestRequest(data=litematic_bytes(b"\x00"), filename="second.litematic"))
+
+    first = await schematics.prepare_render(7)
+    second = await schematics.prepare_render(8)
+
+    assert first is not None
+    assert second is not None
+    assert first.recipe_hash != second.recipe_hash
 
 
 async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCaptureFixture) -> None:

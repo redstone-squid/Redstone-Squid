@@ -179,6 +179,21 @@ class FakeSchematicStore:
         uploaded_by_discord_id: int | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
+        if primary:
+            self.stored = [
+                StoredSchematic(
+                    id=stored.id,
+                    build_id=stored.build_id,
+                    file_sha256=stored.file_sha256,
+                    is_primary=False,
+                    original_filename=stored.original_filename,
+                    analysis=stored.analysis,
+                    simulation_evidence=stored.simulation_evidence,
+                )
+                if stored.build_id == build_id
+                else stored
+                for stored in self.stored
+            ]
         stored = StoredSchematic(
             id=len(self.records),
             build_id=build_id,
@@ -258,10 +273,18 @@ class FakeSchematicStore:
         width: int,
         height: int,
         byte_size: int,
-    ) -> StoredRender:
+    ) -> StoredRender | None:
+        stored = next((item for item in self.stored if item.id == schematic_id), None)
+        if stored is None or not stored.is_primary:
+            return None
         render = StoredRender(schematic_id, recipe_hash, url, width, height, byte_size)
         self.renders[(schematic_id, recipe_hash)] = render
         return render
+
+    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+        stored = next((item for item in self.stored if item.id == schematic_id), None)
+        render = self.renders.get((schematic_id, recipe_hash))
+        return stored is not None and stored.is_primary and render is not None and render.url == url
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
         return None

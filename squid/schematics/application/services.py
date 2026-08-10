@@ -413,8 +413,8 @@ class SchematicService:
             png=png,
         )
 
-    async def record_render(self, render: PreparedRender, url: str, object_key: str) -> StoredRender:
-        """Persist the uploaded URL for a freshly prepared render."""
+    async def record_render(self, render: PreparedRender, url: str, object_key: str) -> StoredRender | None:
+        """Persist and project a fresh render if its source is still the primary schematic."""
         if render.png is None:
             msg = "Only a fresh render can be recorded."
             raise ValueError(msg)
@@ -427,6 +427,13 @@ class SchematicService:
             height=render.height,
             byte_size=len(render.png),
         )
+
+    async def project_render(self, render: PreparedRender) -> bool:
+        """Project a cached render if its source is still the primary schematic."""
+        if render.cached_url is None:
+            msg = "Only a cached render can be projected without recording it."
+            raise ValueError(msg)
+        return await self._store.project_render(render.schematic_id, render.recipe_hash, render.cached_url)
 
     async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
         """Return one registered PNG preview from private object storage."""
@@ -560,6 +567,7 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
 def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sha256: str) -> str:
     dimensions = stored.analysis.metrics.dimensions
     recipe = {
+        "file_sha256": stored.file_sha256,
         "pack_sha256": pack_sha256,
         "request": request.recipe_fields(),
         "schematic_dimensions": [dimensions.width, dimensions.height, dimensions.length],

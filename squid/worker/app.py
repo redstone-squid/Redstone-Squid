@@ -231,7 +231,6 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 runtime.services.schematic_renders,
                 runtime.services.schematics,
                 runtime.services.artifacts,
-                runtime.services.builds,
                 str(schematic_config.render_public_base_url)
                 if schematic_config.render_public_base_url is not None
                 else None,

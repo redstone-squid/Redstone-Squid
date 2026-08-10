@@ -3,7 +3,6 @@
 import logging
 
 from squid.artifacts import ArtifactStore
-from squid.builds.application import BuildEditPatch, BuildService
 from squid.schematics.application import SchematicRenderJobService, SchematicService
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,6 @@ class SchematicRenderProjector:
         jobs: SchematicRenderJobService,
         schematics: SchematicService,
         artifacts: ArtifactStore,
-        builds: BuildService,
         public_base_url: str | None,
         *,
         enabled: bool,
@@ -25,7 +23,6 @@ class SchematicRenderProjector:
         self._jobs = jobs
         self._schematics = schematics
         self._artifacts = artifacts
-        self._builds = builds
         self._public_base_url = public_base_url.rstrip("/") if public_base_url is not None else None
         self._enabled = enabled
 
@@ -51,22 +48,17 @@ class SchematicRenderProjector:
         if prepared is None:
             return
         url = prepared.cached_url
-        if url is None:
-            if self._public_base_url is None:
-                msg = "Schematic rendering requires a public API base URL."
-                raise RuntimeError(msg)
-            assert prepared.png is not None
-            object_key = f"schematic-renders/{prepared.recipe_hash[:2]}/{prepared.recipe_hash}.png"
-            metadata = await self._artifacts.put(object_key, prepared.png, content_type="image/png")
-            if metadata.byte_size != len(prepared.png):
-                msg = "Object storage did not confirm the rendered preview size."
-                raise RuntimeError(msg)
-            url = f"{self._public_base_url}/v1/schematic-renders/{prepared.recipe_hash}/content"
-            await self._schematics.record_render(prepared, url, object_key)
-
-        build = await self._builds.get(build_id)
-        if build is None or url in build.render_urls:
+        if url is not None:
+            await self._schematics.project_render(prepared)
             return
-        patch = BuildEditPatch(render_urls=[*build.render_urls, url])
-        async with self._builds.edit(build_id, patch, blocking=True) as lease:
-            await lease.commit()
+        if self._public_base_url is None:
+            msg = "Schematic rendering requires a public API base URL."
+            raise RuntimeError(msg)
+        assert prepared.png is not None
+        object_key = f"schematic-renders/{prepared.recipe_hash[:2]}/{prepared.recipe_hash}.png"
+        metadata = await self._artifacts.put(object_key, prepared.png, content_type="image/png")
+        if metadata.byte_size != len(prepared.png):
+            msg = "Object storage did not confirm the rendered preview size."
+            raise RuntimeError(msg)
+        url = f"{self._public_base_url}/v1/schematic-renders/{prepared.recipe_hash}/content"
+        await self._schematics.record_render(prepared, url, object_key)

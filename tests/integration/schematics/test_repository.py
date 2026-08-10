@@ -5,6 +5,7 @@ upsert, the partial unique index enforcing one primary per build, and the versio
 fingerprint indexes — are all database semantics rather than Python ones.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -24,13 +25,17 @@ pytestmark = pytest.mark.asyncio
 # `build_schematics` has a foreign key onto `builds`, so a stand-in table is created rather
 # than dragging the entire build schema into a storage test.
 _SETUP = (
-    "CREATE TABLE IF NOT EXISTS builds (id BIGINT PRIMARY KEY)",
+    "CREATE TABLE IF NOT EXISTS builds (id BIGINT PRIMARY KEY, revision BIGINT NOT NULL DEFAULT 1)",
+    "CREATE TABLE IF NOT EXISTS build_links ("
+    "build_id BIGINT REFERENCES builds(id) ON DELETE CASCADE, url TEXT NOT NULL, media_type TEXT, "
+    "PRIMARY KEY (build_id, url))",
     "INSERT INTO builds (id) VALUES (1), (2) ON CONFLICT DO NOTHING",
 )
 _TABLES = [
     Base.metadata.tables["schematic_files"],
     Base.metadata.tables["build_schematics"],
     Base.metadata.tables["schematic_render_queue"],
+    Base.metadata.tables["schematic_renders"],
 ]
 
 
@@ -45,6 +50,7 @@ async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEng
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
+            await connection.execute(text("DROP TABLE IF EXISTS build_links"))
             await connection.execute(text("DROP TABLE IF EXISTS builds"))
 
 
@@ -148,6 +154,114 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Sche
     assert primary is not None
     assert primary.original_filename == "second.litematic"
     assert sum(stored.is_primary for stored in await repository.list_for_build(1)) == 1
+
+
+async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_url(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
+    second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
+    first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
+    first_url = "https://api.example/v1/schematic-renders/first/content"
+    first_render = await repository.record_render(
+        first_id,
+        "first-recipe",
+        first_url,
+        "renders/first.png",
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert first_render is not None
+
+    second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=True)
+    stale_render = await repository.record_render(
+        first_id,
+        "stale-recipe",
+        "https://api.example/v1/schematic-renders/stale/content",
+        "renders/stale.png",
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert stale_render is None
+    assert await repository.project_render(first_id, "first-recipe", first_url) is False
+
+    second_url = "https://api.example/v1/schematic-renders/second/content"
+    second_render = await repository.record_render(
+        second_id,
+        "second-recipe",
+        second_url,
+        "renders/second.png",
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert second_render is not None
+    replacement_url = "https://api.example/v1/schematic-renders/replacement/content"
+    replacement = await repository.record_render(
+        second_id,
+        "replacement-recipe",
+        replacement_url,
+        "renders/replacement.png",
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert replacement is not None
+
+    async with async_session_factory() as session:
+        links = tuple(
+            await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
+        )
+        stale_rows = await session.scalar(
+            text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'stale-recipe'")
+        )
+
+    assert links == (replacement_url,)
+    assert stale_rows == 0
+
+
+async def test_primary_replacement_wins_a_concurrent_render_publication(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
+    second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
+    first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
+    second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
+
+    async with async_session_factory() as replacement, replacement.begin():
+        await replacement.execute(text("SELECT id FROM builds WHERE id = 1 FOR UPDATE"))
+        late_render = asyncio.create_task(
+            repository.record_render(
+                first_id,
+                "late-recipe",
+                "https://api.example/v1/schematic-renders/late/content",
+                "renders/late.png",
+                width=768,
+                height=768,
+                byte_size=42,
+            )
+        )
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(late_render), timeout=0.1)
+        await replacement.execute(
+            text("UPDATE build_schematics SET is_primary = false WHERE id = :schematic_id"),
+            {"schematic_id": first_id},
+        )
+        await replacement.execute(
+            text("UPDATE build_schematics SET is_primary = true WHERE id = :schematic_id"),
+            {"schematic_id": second_id},
+        )
+
+    assert await late_render is None
+    async with async_session_factory() as session:
+        stale_rows = await session.scalar(
+            text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'late-recipe'")
+        )
+    assert stale_rows == 0
 
 
 async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_another_id(

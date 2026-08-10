@@ -146,7 +146,13 @@ class SchematicStore(Protocol):
         width: int,
         height: int,
         byte_size: int,
-    ) -> StoredRender: ...
+    ) -> StoredRender | None:
+        """Record and project a render only while its schematic remains primary."""
+        ...
+
+    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+        """Project a cached render only while its schematic remains primary."""
+        ...
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
 
