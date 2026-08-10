@@ -1,0 +1,46 @@
+---
+import MinecraftLink from "../components/MinecraftLink";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getRuntimeConfig } from "../lib/config";
+import type { Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+
+const { locale } = Astro.props;
+const config = getRuntimeConfig();
+const rawCode = Astro.url.searchParams.get("code") ?? "";
+const initialCode = /^[A-Za-z2-7-]{8,32}$/.test(rawCode) ? rawCode : "";
+const content =
+  locale === "zh-CN"
+    ? {
+        title: "关联 Minecraft 玩家",
+        description: "批准游戏内显示的短用户代码，将 Minecraft 玩家关联到你的账号。",
+        eyebrow: "Minecraft / 设备批准",
+        intro: "确认代码与你在游戏内看到的完全一致。批准仅适用于已验证关联到你账号的 Java 身份。",
+      }
+    : {
+        title: "Link a Minecraft player",
+        description:
+          "Approve the short user code shown in game to link a Minecraft player to your account.",
+        eyebrow: "MINECRAFT / DEVICE APPROVAL",
+        intro:
+          "Confirm that the code exactly matches the one shown in game. Approval applies only to the verified Java identity already linked to your account.",
+      };
+---
+
+<BaseLayout
+  title={content.title}
+  description={content.description}
+  locale={locale}
+  canonicalPath={locale === "zh-CN" ? "/zh-cn/minecraft/link" : "/minecraft/link"}
+  noindex
+>
+  <section class="page-shell minecraft-link-page">
+    <header class="page-heading submission-heading">
+      <p class="eyebrow">{content.eyebrow}</p>
+      <h1>{content.title}</h1>
+      <p>{content.intro}</p>
+    </header>
+    <MinecraftLink client:load locale={locale} config={config} initialCode={initialCode} />
+  </section>
+</BaseLayout>

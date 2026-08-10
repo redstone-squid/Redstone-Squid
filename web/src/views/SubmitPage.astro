@@ -1,0 +1,44 @@
+---
+import SubmissionFlow from "../components/SubmissionFlow";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getRuntimeConfig } from "../lib/config";
+import type { Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+
+const { locale } = Astro.props;
+const config = getRuntimeConfig();
+const content =
+  locale === "zh-CN"
+    ? {
+        title: "投稿作品",
+        description: "创建私人草稿、添加媒体，并完成一条待处理的红石作品记录。",
+        eyebrow: "私人草稿 / 同步保存",
+        intro: "选择作品类别，然后填写服务器提供的当前表单。草稿仅供你的账号查看。",
+      }
+    : {
+        title: "Submit a build",
+        description:
+          "Create a private draft, add media, and finalize a pending redstone build record.",
+        eyebrow: "PRIVATE DRAFT / SYNCHRONIZED",
+        intro:
+          "Choose a build category, then complete the current server-authored form. Your draft is visible only to your account.",
+      };
+---
+
+<BaseLayout
+  title={content.title}
+  description={content.description}
+  locale={locale}
+  canonicalPath={locale === "zh-CN" ? "/zh-cn/submit" : "/submit"}
+  noindex
+>
+  <section class="page-shell submission-page">
+    <header class="page-heading submission-heading">
+      <p class="eyebrow">{content.eyebrow}</p>
+      <h1>{content.title}</h1>
+      <p>{content.intro}</p>
+    </header>
+    <SubmissionFlow client:load locale={locale} config={config} />
+  </section>
+</BaseLayout>
