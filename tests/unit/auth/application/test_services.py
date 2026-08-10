@@ -25,8 +25,8 @@ class FakeApiKeyRepository:
         secret_hash: bytes,
         label: str,
         scopes: frozenset[str],
-        owner_user_id: int | None,
-        created_by: int | None,
+        owner_account_id: int | None,
+        created_by_account_id: int | None,
         expires_at: Instant | None,
     ) -> ApiKey:
         key = ApiKey(
@@ -35,8 +35,8 @@ class FakeApiKeyRepository:
             secret_hash=secret_hash,
             label=label,
             scopes=scopes,
-            owner_user_id=owner_user_id,
-            created_by=created_by,
+            owner_account_id=owner_account_id,
+            created_by_account_id=created_by_account_id,
             created_at=NOW,
             expires_at=expires_at,
         )
@@ -69,8 +69,8 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
     issued = await service(repository).issue(
         label="Minecraft server",
         scopes={"verify", "builds:write"},
-        owner_user_id=4,
-        created_by=7,
+        owner_account_id=4,
+        created_by_account_id=7,
     )
 
     assert issued.token.startswith(f"sq_{issued.key.key_id}_")
@@ -78,8 +78,8 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
     assert issued.key.secret_hash == service(repository).hash_secret(secret)
     assert secret.encode() not in issued.key.secret_hash
     assert issued.key.scopes == frozenset({"verify", "builds:write"})
-    assert issued.key.owner_user_id == 4
-    assert issued.key.created_by == 7
+    assert issued.key.owner_account_id == 4
+    assert issued.key.created_by_account_id == 7
 
 
 @pytest.mark.asyncio

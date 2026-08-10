@@ -22,14 +22,14 @@ from squid.notifications import (
 )
 from squid.notifications.domain import NotificationKind
 
-USER = Principal(kind="user", subject="user:7", scopes=frozenset(Scope), discord_id=123, user_id=7)
+ACCOUNT = Principal(kind="account", subject="account:7", scopes=frozenset(Scope), discord_id=123, account_id=7)
 SIGNER = SignedCursor(b"notification-api-test-secret")
 
 
 async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:
     notifications = AsyncMock()
     notifications.accept_notice.return_value = NotificationPreferences(
-        user_id=7,
+        account_id=7,
         notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
         consented_at=Instant.now(),
     )
@@ -37,7 +37,7 @@ async def test_notification_consent_is_independent_and_defaults_channels_off() -
     response = await accept_notice(
         NotificationPreferenceUpdate(),
         cast(Any, notifications),
-        USER,
+        ACCOUNT,
     )
 
     assert response.consented is True
@@ -51,7 +51,7 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
     record_filter = RecordSubscriptionFilter(tags=(TagPredicate(4), TagPredicate(7, "exact", "slim")))
     notifications.subscribe.return_value = NotificationSubscription(
         id=9,
-        user_id=7,
+        account_id=7,
         kind=SubscriptionKind.RECORD_FILTER,
         subject_id=None,
         record_filter=record_filter,
@@ -69,7 +69,7 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
         }
     )
 
-    response = await create_subscription(request, cast(Any, notifications), USER)
+    response = await create_subscription(request, cast(Any, notifications), ACCOUNT)
 
     assert response.filter == record_filter.as_dict()
     notifications.subscribe.assert_awaited_once_with(
@@ -97,7 +97,7 @@ async def test_staff_inbox_access_is_rechecked_on_each_read() -> None:
         ),
     )
 
-    page = await list_inbox(cast(Any, notifications), SIGNER, USER)
+    page = await list_inbox(cast(Any, notifications), SIGNER, ACCOUNT)
 
     assert page.items[0].kind == "staff_build_submitted"
     notifications.can_view_staff.assert_awaited_once_with(123)

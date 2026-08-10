@@ -14,8 +14,8 @@ class ApiKey:
     secret_hash: bytes
     label: str
     scopes: frozenset[str]
-    owner_user_id: int | None
-    created_by: int | None
+    owner_account_id: int | None
+    created_by_account_id: int | None
     created_at: Instant
     expires_at: Instant | None = None
     revoked_at: Instant | None = None

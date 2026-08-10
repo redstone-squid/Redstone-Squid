@@ -35,9 +35,9 @@ class NotificationProfile(Base, kw_only=True):
         ),
     )
 
-    user_id: Mapped[int] = mapped_column(
+    account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="notification_profiles_user_id_fkey", ondelete="CASCADE"),
+        ForeignKey("accounts.id", name="notification_profiles_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
     notice_version: Mapped[str | None] = mapped_column(Text, default=None)
@@ -71,10 +71,10 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
             name="notification_subscriptions_subject_complete",
         ),
         Index("notification_subscriptions_subject_idx", "kind", "subject_id"),
-        Index("notification_subscriptions_user_idx", "user_id", "created_at"),
+        Index("notification_subscriptions_account_idx", "account_id", "created_at"),
         Index(
             "notification_subscriptions_exact_key",
-            "user_id",
+            "account_id",
             "kind",
             "subject_id",
             unique=True,
@@ -82,7 +82,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
         ),
         Index(
             "notification_subscriptions_filter_key",
-            "user_id",
+            "account_id",
             "kind",
             "filter",
             unique=True,
@@ -91,9 +91,9 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    user_id: Mapped[int] = mapped_column(
+    account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="notification_subscriptions_user_id_fkey", ondelete="CASCADE"),
+        ForeignKey("accounts.id", name="notification_subscriptions_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     kind: Mapped[str] = mapped_column(Text, nullable=False)
@@ -116,14 +116,14 @@ class NotificationRecord(Base, kw_only=True):
             name="notifications_kind_check",
         ),
         UniqueConstraint("source_key", name="notifications_source_key_key"),
-        Index("notifications_user_inbox_idx", "user_id", "id"),
+        Index("notifications_account_inbox_idx", "account_id", "id"),
         Index("notifications_created_idx", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    user_id: Mapped[int] = mapped_column(
+    account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="notifications_user_id_fkey", ondelete="CASCADE"),
+        ForeignKey("accounts.id", name="notifications_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     event_id: Mapped[int] = mapped_column(
@@ -168,9 +168,9 @@ class NotificationDeliveryRecord(Base, kw_only=True):
         ForeignKey("notifications.id", name="notification_deliveries_notification_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id: Mapped[int] = mapped_column(
+    account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="notification_deliveries_user_id_fkey", ondelete="CASCADE"),
+        ForeignKey("accounts.id", name="notification_deliveries_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

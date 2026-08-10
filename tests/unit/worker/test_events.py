@@ -22,7 +22,7 @@ def _event() -> DomainEvent:
 def _snapshot(result: VoteSessionResultLiteral) -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=7,
-        author_id=1,
+        author_account_id=1,
         kind="build",
         status="closed",
         result=result,

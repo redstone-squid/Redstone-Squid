@@ -7,6 +7,9 @@ from contextlib import AsyncExitStack
 from functools import cached_property, partial
 from importlib import resources
 
+from squid.accounts.application import AccountService
+from squid.accounts.infrastructure.mojang import MojangClient
+from squid.accounts.infrastructure.repository import AccountRepository
 from squid.artifacts import ArtifactStore
 from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
@@ -74,9 +77,6 @@ from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
-from squid.users.application import UserService
-from squid.users.infrastructure.mojang import MojangClient
-from squid.users.infrastructure.repository import UserRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
@@ -303,11 +303,11 @@ class _ServiceGraph:
         return resolver
 
     @cached_property
-    def users(self) -> UserService:
+    def accounts(self) -> AccountService:
         mojang = MojangClient()
         self.resources.push_async_callback(mojang.aclose)
-        return UserService(
-            UserRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
+        return AccountService(
+            AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
             mojang.get_username,
             lambda: secrets.randbelow(900_000) + 100_000,
         )
@@ -318,7 +318,7 @@ class _ServiceGraph:
             return None
         service = DiscordOAuthService(
             PostgresWebSessionRepository(self.db.async_session),
-            self.users,
+            self.accounts,
             self.config.oauth,
             self.config.session_pepper.get_secret_value(),
         )
@@ -350,7 +350,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         schematics=graph.schematics,
         search=graph.search,
         tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
-        users=graph.users,
+        accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
         vote_members=graph.vote_members,
@@ -374,7 +374,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         tags=TagService(PostgresTagDefinitionRepository(db.async_session)),
         settings=SettingsService(SettingsRepository(db.async_session)),
         starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
-        users=graph.users,
+        accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
         discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),

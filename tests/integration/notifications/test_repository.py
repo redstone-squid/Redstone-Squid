@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.infrastructure.models import Account
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.notifications.domain import CURRENT_NOTIFICATION_NOTICE_VERSION, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.infrastructure.models import (
@@ -18,10 +19,9 @@ from squid.notifications.infrastructure.models import (
 )
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.persistence.base import Base
-from squid.users.infrastructure.models import User
 
 _TABLES = [
-    Base.metadata.tables["users"],
+    Base.metadata.tables["accounts"],
     Base.metadata.tables["global_administrators"],
     Base.metadata.tables["domain_event_consumers"],
     Base.metadata.tables["domain_events"],
@@ -54,12 +54,12 @@ def repository(
 
 async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> int:
     async with session_factory.begin() as session:
-        user = User(discord_id=123)
-        session.add(user)
+        account = Account()
+        session.add(account)
         await session.flush()
         session.add(
             NotificationProfile(
-                user_id=user.id,
+                account_id=account.id,
                 notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
                 consented_at=Instant.now(),
                 web_enabled=True,
@@ -74,9 +74,9 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> i
         session.add(event)
         await session.flush()
         notification = NotificationRecord(
-            user_id=user.id,
+            account_id=account.id,
             event_id=event.id,
-            source_key="event:1:user:1",
+            source_key="event:1:account:1",
             kind="build_confirmed",
             payload={"build_id": 42},
             web_visible=True,
@@ -85,7 +85,7 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> i
         await session.flush()
         delivery = NotificationDeliveryRecord(
             notification_id=notification.id,
-            user_id=user.id,
+            account_id=account.id,
             discord_id=123,
         )
         session.add(delivery)
@@ -132,9 +132,9 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
 ) -> None:
     await _seed_delivery(async_session_factory)
     async with async_session_factory() as session:
-        user_id = (await session.scalars(select(NotificationProfile.user_id))).one()
+        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
 
-    preferences = await repository.update_preferences(user_id, web_enabled=True, dm_enabled=False)
+    preferences = await repository.update_preferences(account_id, web_enabled=True, dm_enabled=False)
 
     assert preferences is not None
     assert preferences.web_enabled is True
@@ -171,31 +171,31 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
-        user = User(discord_id=456)
-        session.add(user)
+        account = Account()
+        session.add(account)
         await session.flush()
-        user_id = user.id
+        account_id = account.id
 
     first = await repository.add_subscription(
-        user_id,
+        account_id,
         kind=SubscriptionKind.CREATOR,
         subject_id=UUID("11111111-1111-1111-1111-111111111111"),
         record_filter=None,
     )
     second = await repository.add_subscription(
-        user_id,
+        account_id,
         kind=SubscriptionKind.CREATOR,
         subject_id=UUID("11111111-1111-1111-1111-111111111111"),
         record_filter=None,
     )
     filtered = await repository.add_subscription(
-        user_id,
+        account_id,
         kind=SubscriptionKind.RECORD_FILTER,
         subject_id=None,
         record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
     )
     filtered_again = await repository.add_subscription(
-        user_id,
+        account_id,
         kind=SubscriptionKind.RECORD_FILTER,
         subject_id=None,
         record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),

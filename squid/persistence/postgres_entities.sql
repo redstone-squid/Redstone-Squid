@@ -371,9 +371,10 @@ BEGIN
             target_kind := 'build';
             target_id := NEW.id;
             target_type := 'build.submitted';
+            target_schema_version := 2;
             target_payload := jsonb_build_object(
                 'status', NEW.submission_status,
-                'submitter_user_id', NEW.submitter_user_id,
+                'submitter_account_id', NEW.submitter_account_id,
                 'category', NEW.category
             );
             PERFORM public.publish_domain_event(
@@ -384,7 +385,7 @@ BEGIN
         IF OLD.submission_status IS NOT DISTINCT FROM NEW.submission_status THEN RETURN NULL; END IF;
         target_kind := 'build';
         target_id := NEW.id;
-        target_schema_version := 2;
+        target_schema_version := 3;
         IF NEW.submission_status = 1 THEN
             target_type := 'build.confirmed';
         ELSIF NEW.submission_status = 2 THEN
@@ -395,7 +396,7 @@ BEGIN
         target_payload := jsonb_build_object(
             'previous_status', OLD.submission_status,
             'status', NEW.submission_status,
-            'submitter_user_id', NEW.submitter_user_id,
+            'submitter_account_id', NEW.submitter_account_id,
             'category', NEW.category,
             'first_confirmation', NEW.submission_status = 1 AND NOT EXISTS (
                 SELECT 1

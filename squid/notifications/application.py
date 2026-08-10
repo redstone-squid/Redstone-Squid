@@ -20,34 +20,36 @@ from squid.notifications.errors import NotificationConsentRequiredError, Notific
 class NotificationRepository(Protocol):
     """Persistence needed by the notification application service."""
 
-    async def get_preferences(self, user_id: int) -> NotificationPreferences: ...
+    async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
 
-    async def accept_notice(self, user_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences: ...
+    async def accept_notice(
+        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
+    ) -> NotificationPreferences: ...
 
     async def update_preferences(
-        self, user_id: int, *, web_enabled: bool, dm_enabled: bool
+        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences | None: ...
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool: ...
 
     async def add_subscription(
         self,
-        user_id: int,
+        account_id: int,
         *,
         kind: SubscriptionKind,
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
     ) -> NotificationSubscription: ...
 
-    async def list_subscriptions(self, user_id: int) -> Sequence[NotificationSubscription]: ...
+    async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
 
-    async def delete_subscription(self, user_id: int, subscription_id: int) -> bool: ...
+    async def delete_subscription(self, account_id: int, subscription_id: int) -> bool: ...
 
     async def list_inbox(
-        self, user_id: int, *, after_id: int | None, limit: int, include_staff: bool
+        self, account_id: int, *, after_id: int | None, limit: int, include_staff: bool
     ) -> Sequence[InboxNotification]: ...
 
-    async def mark_read(self, user_id: int, notification_id: int, *, include_staff: bool) -> bool: ...
+    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool: ...
 
     async def materialize(self, event: DomainEvent) -> None: ...
 
@@ -74,20 +76,20 @@ class NotificationService:
         self._repository = repository
         self._retention_days = retention_days
 
-    async def preferences(self, user_id: int) -> NotificationPreferences:
+    async def preferences(self, account_id: int) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""
-        return await self._repository.get_preferences(user_id)
+        return await self._repository.get_preferences(account_id)
 
     async def accept_notice(
-        self, user_id: int, *, web_enabled: bool = False, dm_enabled: bool = False
+        self, account_id: int, *, web_enabled: bool = False, dm_enabled: bool = False
     ) -> NotificationPreferences:
         """Record the current notification notice and initial channel choices."""
-        return await self._repository.accept_notice(user_id, web_enabled=web_enabled, dm_enabled=dm_enabled)
+        return await self._repository.accept_notice(account_id, web_enabled=web_enabled, dm_enabled=dm_enabled)
 
-    async def set_preferences(self, user_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
+    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         """Change channels only after the notification-specific notice is current."""
         preferences = await self._repository.update_preferences(
-            user_id,
+            account_id,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )
@@ -97,14 +99,14 @@ class NotificationService:
 
     async def subscribe(
         self,
-        user_id: int,
+        account_id: int,
         *,
         kind: SubscriptionKind,
         subject_id: UUID | None = None,
         record_filter: RecordSubscriptionFilter | None = None,
     ) -> NotificationSubscription:
         """Create or return one equivalent enabled subscription."""
-        preferences = await self._repository.get_preferences(user_id)
+        preferences = await self._repository.get_preferences(account_id)
         if not preferences.has_current_consent:
             raise NotificationConsentRequiredError
         if kind is SubscriptionKind.RECORD_FILTER:
@@ -117,24 +119,24 @@ class NotificationService:
         elif not await self._repository.subscription_target_exists(kind, subject_id):
             raise NotificationSubscriptionNotFoundError(public_context={"subject_id": str(subject_id)})
         return await self._repository.add_subscription(
-            user_id,
+            account_id,
             kind=kind,
             subject_id=subject_id,
             record_filter=record_filter,
         )
 
-    async def subscriptions(self, user_id: int) -> Sequence[NotificationSubscription]:
+    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         """List the caller's enabled subscriptions."""
-        return await self._repository.list_subscriptions(user_id)
+        return await self._repository.list_subscriptions(account_id)
 
-    async def unsubscribe(self, user_id: int, subscription_id: int) -> None:
+    async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
         """Delete one caller-owned subscription."""
-        if not await self._repository.delete_subscription(user_id, subscription_id):
+        if not await self._repository.delete_subscription(account_id, subscription_id):
             raise NotificationSubscriptionNotFoundError(public_context={"subscription_id": subscription_id})
 
     async def inbox(
         self,
-        user_id: int,
+        account_id: int,
         *,
         after_id: int | None = None,
         limit: int = 20,
@@ -145,15 +147,15 @@ class NotificationService:
             msg = "limit must be between 1 and 100"
             raise ValueError(msg)
         return await self._repository.list_inbox(
-            user_id,
+            account_id,
             after_id=after_id,
             limit=limit,
             include_staff=include_staff,
         )
 
-    async def mark_read(self, user_id: int, notification_id: int, *, include_staff: bool = False) -> None:
+    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool = False) -> None:
         """Mark a visible caller-owned inbox item as read."""
-        if not await self._repository.mark_read(user_id, notification_id, include_staff=include_staff):
+        if not await self._repository.mark_read(account_id, notification_id, include_staff=include_staff):
             raise NotificationSubscriptionNotFoundError(
                 resource="notification", public_context={"notification_id": notification_id}
             )

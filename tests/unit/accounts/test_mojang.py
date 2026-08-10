@@ -1,4 +1,4 @@
-"""Mojang HTTP adapter validation tests."""
+"""Mojang account adapter validation tests."""
 
 from typing import Any, cast
 from unittest.mock import Mock
@@ -7,8 +7,8 @@ from uuid import UUID
 import aiohttp
 import pytest
 
-from squid.users.errors import MinecraftServiceUnavailableError
-from squid.users.infrastructure.mojang import MojangClient
+from squid.accounts.errors import MinecraftServiceUnavailableError
+from squid.accounts.infrastructure.mojang import MojangClient
 
 
 class FakeContent:

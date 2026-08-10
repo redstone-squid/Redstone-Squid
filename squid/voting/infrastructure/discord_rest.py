@@ -35,29 +35,29 @@ class DiscordRestActorResolver:
         self._clock = clock
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None]] = {}
 
-    async def member(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
         """Return current member facts, raising when Discord cannot answer reliably."""
         del kind  # Staff/trusted capabilities deliberately remain Discord-transport-only.
-        cache_key = (guild_id, user_id)
+        cache_key = (guild_id, discord_id)
         cached = self._cache.get(cache_key)
         now = self._clock()
         if cached is not None and cached[0] > now:
             return cached[1]
 
-        response = await self._request_member(user_id, guild_id)
+        response = await self._request_member(discord_id, guild_id)
         if response.status_code in {403, 404}:
             actor = None
         elif response.status_code == 200:
-            actor = self._actor_from_response(response, user_id, guild_id)
+            actor = self._actor_from_response(response, account_id, discord_id, guild_id)
         else:
             raise self._unavailable(response.status_code)
         self._cache[cache_key] = (now + self._cache_ttl_seconds, actor)
         return actor
 
-    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
         """Resolve refresh facts, retaining cached vote weight on any failure."""
         try:
-            return await self.member(user_id, guild_id, kind)
+            return await self.member(account_id, discord_id, guild_id, kind)
         except Exception:
             logger.warning(
                 "Could not refresh Discord membership facts for vote session",
@@ -71,8 +71,8 @@ class DiscordRestActorResolver:
         if self._owns_client:
             await self._client.aclose()
 
-    async def _request_member(self, user_id: int, guild_id: int) -> httpx.Response:
-        url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}"
+    async def _request_member(self, discord_id: int, guild_id: int) -> httpx.Response:
+        url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{discord_id}"
         try:
             response = await self._client.get(url, headers={"Authorization": f"Bot {self._token}"})
             if response.status_code == 429:
@@ -110,7 +110,7 @@ class DiscordRestActorResolver:
         return value
 
     @staticmethod
-    def _actor_from_response(response: httpx.Response, user_id: int, guild_id: int) -> VoteActor:
+    def _actor_from_response(response: httpx.Response, account_id: int, discord_id: int, guild_id: int) -> VoteActor:
         try:
             payload = response.json()
         except ValueError as exc:
@@ -121,7 +121,7 @@ class DiscordRestActorResolver:
             role_ids = frozenset(int(role_id) for role_id in payload["roles"])
         except (TypeError, ValueError) as exc:
             raise DiscordRestActorResolver._malformed_member(response, guild_id) from exc
-        return VoteActor(user_id, guild_id, role_ids, is_staff=False, is_trusted=False)
+        return VoteActor(account_id, discord_id, guild_id, role_ids, is_staff=False, is_trusted=False)
 
     @staticmethod
     def _malformed_member(response: httpx.Response, guild_id: int) -> DiscordMemberServiceUnavailableError:

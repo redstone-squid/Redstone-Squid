@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import Response
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Principal, Scope
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorSubmission
@@ -15,14 +16,13 @@ from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
-from squid.users.errors import ConsentRequiredError
 
-USER = Principal(
-    kind="user",
-    subject="user:1",
+ACCOUNT = Principal(
+    kind="account",
+    subject="account:1",
     scopes=frozenset({Scope.BUILDS_WRITE}),
     discord_id=123,
-    user_id=1,
+    account_id=1,
 )
 
 
@@ -46,7 +46,7 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
     services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
 
     http_response = Response()
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, services.builds, USER)
+    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, services.builds, ACCOUNT)
 
     assert response.id == 42
     assert submit_door.await_args is not None
@@ -57,14 +57,14 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
 
     with pytest.raises(InvalidBuildError):
         await submit_build(
-            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), services.builds, USER
+            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), services.builds, ACCOUNT
         )
 
 
 @pytest.mark.asyncio
 async def test_submit_gates_new_accounts_on_current_consent() -> None:
     services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=AsyncMock())))
-    pending = replace(USER, consent_pending=True)
+    pending = replace(ACCOUNT, consent_pending=True)
 
     with pytest.raises(ConsentRequiredError) as error:
         await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, pending)
@@ -102,7 +102,7 @@ async def test_edit_checks_ownership_while_lease_is_held() -> None:
             Response(),
             services.builds,
             services.authorization,
-            USER,
+            ACCOUNT,
             '"build-42-r1"',
         )
 
@@ -128,7 +128,7 @@ async def test_global_administrator_can_edit_confirmed_build() -> None:
         http_response,
         services.builds,
         services.authorization,
-        USER,
+        ACCOUNT,
         '"build-42-r1"',
     )
 
@@ -142,4 +142,4 @@ async def test_edit_requires_an_if_match_revision() -> None:
     builds = cast(Any, SimpleNamespace())
 
     with pytest.raises(BuildRevisionRequiredError):
-        await edit_build(42, BuildPatch(), Response(), builds, cast(Any, None), USER)
+        await edit_build(42, BuildPatch(), Response(), builds, cast(Any, None), ACCOUNT)

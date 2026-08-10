@@ -25,7 +25,7 @@ UserPrincipal = Annotated[Principal, Depends(require(Scope.USERS_READ))]
 @router.get("/preferences", response_model=NotificationPreferencesDetail, responses=responses(401, 403, 503))
 async def get_preferences(notifications: Notifications, principal: UserPrincipal) -> NotificationPreferencesDetail:
     """Return disabled defaults before the notification notice has been accepted."""
-    return NotificationPreferencesDetail.from_domain(await notifications.preferences(_user_id(principal)))
+    return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(principal)))
 
 
 @router.post(
@@ -41,7 +41,7 @@ async def accept_notice(
 ) -> NotificationPreferencesDetail:
     """Accept the notification-specific notice and choose initial channels."""
     preferences = await notifications.accept_notice(
-        _user_id(principal),
+        _account_id(principal),
         web_enabled=request.web_enabled,
         dm_enabled=request.dm_enabled,
     )
@@ -61,7 +61,7 @@ async def update_preferences(
 ) -> NotificationPreferencesDetail:
     """Update web and DM channels independently after consent."""
     preferences = await notifications.set_preferences(
-        _user_id(principal),
+        _account_id(principal),
         web_enabled=request.web_enabled,
         dm_enabled=request.dm_enabled,
     )
@@ -78,7 +78,7 @@ async def list_subscriptions(
     principal: UserPrincipal,
 ) -> list[NotificationSubscriptionDetail]:
     """List enabled subscriptions owned by the caller."""
-    found = await notifications.subscriptions(_user_id(principal))
+    found = await notifications.subscriptions(_account_id(principal))
     return [NotificationSubscriptionDetail.from_domain(item) for item in found]
 
 
@@ -96,7 +96,7 @@ async def create_subscription(
 ) -> NotificationSubscriptionDetail:
     """Subscribe to a public creator, record competition, or structured filter."""
     subscription = await notifications.subscribe(
-        _user_id(principal),
+        _account_id(principal),
         kind=request.kind,
         subject_id=request.subject_id,
         record_filter=None if request.filter is None else request.filter.to_domain(),
@@ -116,7 +116,7 @@ async def delete_subscription(
     principal: UserPrincipal,
 ) -> Response:
     """Remove one caller-owned subscription."""
-    await notifications.unsubscribe(_user_id(principal), subscription_id)
+    await notifications.unsubscribe(_account_id(principal), subscription_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -129,13 +129,13 @@ async def list_inbox(
     cursor: Annotated[str | None, Query(max_length=4096)] = None,
 ) -> Page[InboxNotificationDetail]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
-    user_id = _user_id(principal)
+    account_id = _account_id(principal)
     include_staff = bool(principal.discord_id is not None and await notifications.can_view_staff(principal.discord_id))
-    binding = f"notifications:user:{user_id}:id-desc"
+    binding = f"notifications:account:{account_id}:id-desc"
     after_id = _after_id(signer, cursor, binding)
     found = list(
         await notifications.inbox(
-            user_id,
+            account_id,
             after_id=after_id,
             limit=page_size + 1,
             include_staff=include_staff,
@@ -164,14 +164,14 @@ async def mark_read(
 ) -> Response:
     """Mark one visible inbox item as read."""
     include_staff = bool(principal.discord_id is not None and await notifications.can_view_staff(principal.discord_id))
-    await notifications.mark_read(_user_id(principal), notification_id, include_staff=include_staff)
+    await notifications.mark_read(_account_id(principal), notification_id, include_staff=include_staff)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _user_id(principal: Principal) -> int:
-    if principal.kind != "user" or principal.user_id is None:
+def _account_id(principal: Principal) -> int:
+    if principal.kind != "account" or principal.account_id is None:
         raise AuthenticationError
-    return principal.user_id
+    return principal.account_id
 
 
 def _after_id(signer: CursorSigner, cursor: str | None, binding: str) -> int | None:

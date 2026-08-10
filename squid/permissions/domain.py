@@ -7,8 +7,8 @@ from whenever import Instant
 
 @dataclass(frozen=True, slots=True)
 class GlobalAdministrator:
-    """A Discord user granted bot-wide administrative access by the owner."""
+    """An account granted application-wide administrative access."""
 
-    discord_id: int
-    granted_by_discord_id: int
+    account_id: int
+    granted_by_account_id: int
     granted_at: Instant

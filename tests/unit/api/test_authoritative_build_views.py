@@ -18,7 +18,7 @@ from squid.runtime import ApiServices
 
 SIGNER = SignedCursor(b"authoritative-build-view-test-secret")
 SERVICE = Principal(kind="service", subject="api-key:test", scopes=frozenset(Scope))
-USER = Principal(kind="user", subject="user:1", scopes=frozenset(Scope), discord_id=123, user_id=1)
+ACCOUNT = Principal(kind="account", subject="account:1", scopes=frozenset(Scope), discord_id=123, account_id=1)
 
 
 class Fakes(NamedTuple):
@@ -120,7 +120,7 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
             cast(Any, None),
             graph.services.authorization,
             SIGNER,
-            USER,
+            ACCOUNT,
             status=BuildStatusFilter.PENDING,
         )
 
@@ -134,7 +134,7 @@ async def test_administrator_reads_the_pending_queue() -> None:
         cast(Any, None),
         graph.services.authorization,
         SIGNER,
-        USER,
+        ACCOUNT,
         status=BuildStatusFilter.PENDING,
     )
 
@@ -152,7 +152,7 @@ async def test_status_and_query_are_mutually_exclusive() -> None:
             cast(Any, None),
             graph.services.authorization,
             SIGNER,
-            USER,
+            ACCOUNT,
             q="piston",
             status=BuildStatusFilter.CONFIRMED,
         )
@@ -168,7 +168,7 @@ async def test_status_cursors_do_not_carry_across_views() -> None:
         cast(Any, None),
         graph.services.authorization,
         SIGNER,
-        USER,
+        ACCOUNT,
         page_size=1,
     )
 
@@ -180,7 +180,7 @@ async def test_status_cursors_do_not_carry_across_views() -> None:
             cast(Any, None),
             graph.services.authorization,
             SIGNER,
-            USER,
+            ACCOUNT,
             status=BuildStatusFilter.PENDING,
             cursor=page.next_cursor,
         )
@@ -190,7 +190,7 @@ async def test_status_cursors_do_not_carry_across_views() -> None:
 async def test_submitters_see_their_own_builds_in_every_status() -> None:
     graph = fakes(builds=[persisted_build(5), persisted_build(4, Status.DENIED)])
 
-    page = await list_my_builds(graph.services.build_queries, SIGNER, USER)
+    page = await list_my_builds(graph.services.build_queries, SIGNER, ACCOUNT)
 
     kwargs = awaited_kwargs(graph.list_page)
     assert kwargs["statuses"] == frozenset(Status)
@@ -201,9 +201,9 @@ async def test_submitters_see_their_own_builds_in_every_status() -> None:
 @pytest.mark.asyncio
 async def test_own_build_cursors_are_bound_to_the_submitter() -> None:
     graph = fakes(builds=[persisted_build(5), persisted_build(4)])
-    other = Principal(kind="user", subject="user:2", scopes=frozenset(Scope), discord_id=456, user_id=2)
+    other = Principal(kind="account", subject="account:2", scopes=frozenset(Scope), discord_id=456, account_id=2)
 
-    page = await list_my_builds(graph.services.build_queries, SIGNER, USER, page_size=1)
+    page = await list_my_builds(graph.services.build_queries, SIGNER, ACCOUNT, page_size=1)
 
     assert page.next_cursor is not None
     with pytest.raises(ValidationError):

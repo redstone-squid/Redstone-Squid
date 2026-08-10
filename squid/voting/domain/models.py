@@ -9,7 +9,6 @@ from typing import Literal, TypeAlias
 
 from whenever import Instant
 
-from squid.reactions.domain import ReactionActor
 from squid.voting.errors import InvalidVoteConfigurationError
 
 VoteKindLiteral = Literal["build", "delete_log", "generic"]
@@ -62,7 +61,8 @@ class VoteOption:
 class VoteSelection:
     """A voter's raw selection and its last successfully calculated weight."""
 
-    user_id: int
+    account_id: int
+    discord_id: int
     guild_id: int
     option_id: str
     emoji: str
@@ -74,7 +74,16 @@ class VoteSelection:
             raise InvalidVoteConfigurationError(msg)
 
 
-VoteActor = ReactionActor
+@dataclass(frozen=True, slots=True)
+class VoteActor:
+    """An account plus current Discord membership facts used to weight a ballot."""
+
+    account_id: int
+    discord_id: int
+    guild_id: int = 0
+    role_ids: frozenset[int] = frozenset()
+    is_staff: bool = False
+    is_trusted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +120,7 @@ class VoteSessionSnapshot:
     """Persisted state needed by application and presentation adapters."""
 
     id: int
-    author_id: int
+    author_account_id: int
     kind: VoteKindLiteral
     status: VoteStatus
     result: VoteSessionResultLiteral
@@ -190,12 +199,12 @@ class VoteRefreshResult:
     """Outcome of recomputing cached weights."""
 
     session: VoteSessionSnapshot | None
-    unresolved_user_ids: tuple[int, ...] = ()
+    unresolved_account_ids: tuple[int, ...] = ()
     just_closed: bool = False
 
     @property
     def complete(self) -> bool:
-        return not self.unresolved_user_ids
+        return not self.unresolved_account_ids
 
 
 @dataclass(frozen=True, slots=True)

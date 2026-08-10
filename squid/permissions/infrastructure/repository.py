@@ -12,8 +12,8 @@ from squid.permissions.infrastructure.models import GlobalAdministrator as Globa
 
 def _to_domain(model: GlobalAdministratorModel) -> GlobalAdministrator:
     return GlobalAdministrator(
-        discord_id=model.discord_id,
-        granted_by_discord_id=model.granted_by_discord_id,
+        account_id=model.account_id,
+        granted_by_account_id=model.granted_by_account_id,
         granted_at=model.granted_at,
     )
 
@@ -24,11 +24,11 @@ class GlobalAdministratorRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
 
-    async def contains(self, discord_id: int) -> bool:
+    async def contains(self, account_id: int) -> bool:
         async with self._session_factory() as session:
             return (
                 await session.scalar(
-                    select(GlobalAdministratorModel.discord_id).where(GlobalAdministratorModel.discord_id == discord_id)
+                    select(GlobalAdministratorModel.account_id).where(GlobalAdministratorModel.account_id == account_id)
                 )
                 is not None
             )
@@ -38,35 +38,35 @@ class GlobalAdministratorRepository:
             rows = (
                 await session.scalars(
                     select(GlobalAdministratorModel).order_by(
-                        GlobalAdministratorModel.granted_at, GlobalAdministratorModel.discord_id
+                        GlobalAdministratorModel.granted_at, GlobalAdministratorModel.account_id
                     )
                 )
             ).all()
             return tuple(_to_domain(row) for row in rows)
 
-    async def grant(self, discord_id: int, granted_by_discord_id: int) -> GlobalAdministrator:
+    async def grant(self, account_id: int, granted_by_account_id: int) -> GlobalAdministrator:
         async with self._session_factory() as session:
             statement = (
                 insert(GlobalAdministratorModel)
-                .values(discord_id=discord_id, granted_by_discord_id=granted_by_discord_id)
-                .on_conflict_do_nothing(index_elements=[GlobalAdministratorModel.discord_id])
+                .values(account_id=account_id, granted_by_account_id=granted_by_account_id)
+                .on_conflict_do_nothing(index_elements=[GlobalAdministratorModel.account_id])
                 .returning(GlobalAdministratorModel)
             )
             row = await session.scalar(statement)
             if row is None:
                 row = await session.scalar(
-                    select(GlobalAdministratorModel).where(GlobalAdministratorModel.discord_id == discord_id)
+                    select(GlobalAdministratorModel).where(GlobalAdministratorModel.account_id == account_id)
                 )
             assert row is not None
             await session.commit()
             return _to_domain(row)
 
-    async def revoke(self, discord_id: int) -> bool:
+    async def revoke(self, account_id: int) -> bool:
         async with self._session_factory() as session:
             result = await session.execute(
                 delete(GlobalAdministratorModel)
-                .where(GlobalAdministratorModel.discord_id == discord_id)
-                .returning(GlobalAdministratorModel.discord_id)
+                .where(GlobalAdministratorModel.account_id == account_id)
+                .returning(GlobalAdministratorModel.account_id)
             )
             removed = result.scalar_one_or_none() is not None
             await session.commit()

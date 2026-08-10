@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     def __init__(self, bot: BotT):
         self.bot = bot
-        self.user_service = bot.services.users
+        self.account_service = bot.services.accounts
 
     @hybrid_group(name="account")
     async def account_group(self, ctx: Context[BotT]) -> None:
@@ -47,7 +47,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             )
             return
 
-        claimed = await self.user_service.link_minecraft_account(ctx.author.id, code, consent=consent_view.consent)
+        claimed = await self.account_service.link_minecraft_account(ctx.author.id, code, consent=consent_view.consent)
         message = t(locale, _("Your Discord account has been linked with your Minecraft account."))
         if claimed is not None:
             message += "\n" + t(
@@ -66,7 +66,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
         await view.wait()
         if view.value:
-            if await self.user_service.unlink_minecraft_account(ctx.author.id):
+            if await self.account_service.unlink_minecraft_account(ctx.author.id):
                 await ctx.send(
                     view=text_layout(
                         t(locale, _("Your Discord account has been unlinked from your Minecraft account."))
@@ -91,7 +91,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
     async def claim(self, ctx: Context[BotT], *, name: str) -> None:
         """Ask staff to credit you with an older creator name."""
-        claim = await self.user_service.request_alias_claim(ctx.author.id, name)
+        claim = await self.account_service.request_alias_claim(ctx.author.id, name)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(
@@ -110,9 +110,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @check_is_global_admin()
     async def pending_claims(self, ctx: Context[BotT]) -> None:
         """List creator credit claims awaiting review."""
-        claims = await self.user_service.pending_alias_claims()
+        claims = await self.account_service.pending_alias_claims()
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        body = "\n".join(f"**#{claim.id}** {claim.alias_name} (user {claim.user_id})" for claim in claims)
+        body = "\n".join(f"**#{claim.id}** {claim.alias_name} (account {claim.account_id})" for claim in claims)
         await ctx.send(
             view=text_layout(body or t(locale, _("No creator credit claims are awaiting review."))),
             ephemeral=ctx.interaction is not None,
@@ -123,7 +123,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @check_is_global_admin()
     async def approve_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Credit a claimant with the creator name they requested."""
-        claim = await self.user_service.approve_alias_claim(claim_id, staff_discord_id=ctx.author.id)
+        staff = await self.account_service.get_or_create_account(ctx.author.id)
+        assert staff.id is not None
+        claim = await self.account_service.approve_alias_claim(claim_id, staff_account_id=staff.id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(t(locale, _("Credited **{name}** to the claimant."), name=claim.alias_name)),
@@ -134,7 +136,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @check_is_global_admin()
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Close a creator credit claim without crediting the claimant."""
-        claim = await self.user_service.reject_alias_claim(claim_id, staff_discord_id=ctx.author.id)
+        staff = await self.account_service.get_or_create_account(ctx.author.id)
+        assert staff.id is not None
+        claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff.id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(t(locale, _("Rejected the claim for **{name}**."), name=claim.alias_name)),

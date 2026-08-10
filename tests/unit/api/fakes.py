@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import FastAPI
 
+from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
 from squid.idempotency import PendingRequest
@@ -16,7 +17,6 @@ from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
-from squid.users.errors import MinecraftAccountNotFoundError
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -36,7 +36,7 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
 )
 
 
-class MockUserManager:
+class MockAccountManager:
     async def get_creator_alias(self, _name: str):
         return None
 
@@ -132,43 +132,43 @@ class MockIdempotency:
 
 
 class MockNotifications:
-    async def preferences(self, user_id: int):
-        return NotificationPreferences(user_id=user_id, notice_version=None, consented_at=None)
+    async def preferences(self, account_id: int):
+        return NotificationPreferences(account_id=account_id, notice_version=None, consented_at=None)
 
-    async def accept_notice(self, user_id: int, *, web_enabled: bool, dm_enabled: bool):
+    async def accept_notice(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
         return NotificationPreferences(
-            user_id=user_id,
+            account_id=account_id,
             notice_version="2026-08-10",
             consented_at=None,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )
 
-    async def set_preferences(self, user_id: int, *, web_enabled: bool, dm_enabled: bool):
+    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
         return NotificationPreferences(
-            user_id=user_id,
+            account_id=account_id,
             notice_version="2026-08-10",
             consented_at=None,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )
 
-    async def subscriptions(self, _user_id: int):
+    async def subscriptions(self, _account_id: int):
         return ()
 
-    async def subscribe(self, _user_id: int, **_kwargs: object):
+    async def subscribe(self, _account_id: int, **_kwargs: object):
         raise AssertionError("service principals cannot create notification subscriptions")
 
-    async def unsubscribe(self, _user_id: int, _subscription_id: int) -> None:
+    async def unsubscribe(self, _account_id: int, _subscription_id: int) -> None:
         return None
 
     async def can_view_staff(self, _discord_id: int) -> bool:
         return False
 
-    async def inbox(self, _user_id: int, **_kwargs: object):
+    async def inbox(self, _account_id: int, **_kwargs: object):
         return ()
 
-    async def mark_read(self, _user_id: int, _notification_id: int, **_kwargs: object) -> None:
+    async def mark_read(self, _account_id: int, _notification_id: int, **_kwargs: object) -> None:
         return None
 
 
@@ -176,7 +176,7 @@ def build_app(
     *,
     web_auth: object | None = None,
     idempotency: object | None = None,
-    users: object | None = None,
+    accounts: object | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -189,7 +189,7 @@ def build_app(
             idempotency=idempotency or MockIdempotency(),
             notifications=MockNotifications(),
             builds=SimpleNamespace(),
-            users=users or MockUserManager(),
+            accounts=accounts or MockAccountManager(),
             build_queries=MockBuildQueries(),
             authorization=MockAuthorization(),
             search=MockSearch(),

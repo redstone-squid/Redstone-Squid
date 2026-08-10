@@ -4,6 +4,7 @@ from typing import Annotated, cast
 
 from fastapi import Depends, Query, Request
 
+from squid.accounts.application import AccountService
 from squid.api.security import Principal, current_principal
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
@@ -15,7 +16,6 @@ from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.tags.application import TagService
-from squid.users.application import UserService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.ports import InteractiveVoteActorResolver
@@ -62,8 +62,8 @@ def get_tags(services: Services) -> TagService:
     return services.tags
 
 
-def get_users(services: Services) -> UserService:
-    return services.users
+def get_accounts(services: Services) -> AccountService:
+    return services.accounts
 
 
 def get_versions(services: Services) -> VersionService:
@@ -99,7 +99,7 @@ Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]
 Search = Annotated[SearchService, Depends(get_search)]
 Tags = Annotated[TagService, Depends(get_tags)]
-Users = Annotated[UserService, Depends(get_users)]
+Accounts = Annotated[AccountService, Depends(get_accounts)]
 Versions = Annotated[VersionService, Depends(get_versions)]
 VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
 Votes = Annotated[VoteService, Depends(get_votes)]

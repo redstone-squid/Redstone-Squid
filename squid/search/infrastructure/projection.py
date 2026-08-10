@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
+from squid.accounts.infrastructure.models import CreatorAlias
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.mapping import BuildMapper
@@ -36,7 +37,6 @@ from squid.search.infrastructure.models import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
 from squid.tags.infrastructure.models import TagAlias, TagDefinition
-from squid.users.infrastructure.models import CreatorAlias
 from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
@@ -489,7 +489,7 @@ class SearchProjectionLoader:
                 source_key=f"creator:{source_id}",
                 title=creator_name,
                 subtype="creator",
-                data={"alias_id": source_id, "claimed": creator.user_id is not None},
+                data={"alias_id": source_id, "claimed": creator.account_id is not None},
             )
         if subtype == "version":
             version = await self._session.get(Version, source_id)

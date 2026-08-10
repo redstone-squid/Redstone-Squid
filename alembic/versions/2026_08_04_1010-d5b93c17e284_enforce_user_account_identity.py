@@ -8,7 +8,8 @@ Create Date: 2026-08-04 10:10:00+00:00
 from collections.abc import Sequence
 
 from alembic import op
-from squid.users.domain import CONSENT_CUTOFF
+
+CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
 
 revision: str = "d5b93c17e284"
 down_revision: str | Sequence[str] | None = "c1f7a2d84b30"

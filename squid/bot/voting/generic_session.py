@@ -57,7 +57,7 @@ class GenericVoteSession:
                 line += f" — {raw.get(option.identifier or '', 0)} votes, {weighted.get(option.identifier or '', 0):g} weighted"
             if poll.visibility == "visible_live" and show_totals:
                 voters = [
-                    f"<@{vote.user_id}>" for vote in self.snapshot.selections if vote.option_id == option.identifier
+                    f"<@{vote.discord_id}>" for vote in self.snapshot.selections if vote.option_id == option.identifier
                 ]
                 if voters:
                     line += f" ({', '.join(voters)})"

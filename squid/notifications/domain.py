@@ -14,7 +14,7 @@ _VERSION_SCOPES = frozenset({"all_time", "current"})
 
 
 class SubscriptionKind(StrEnum):
-    """Durable subject types a user may follow."""
+    """Durable subject types an account may follow."""
 
     CREATOR = "creator"
     RECORD = "record"
@@ -33,9 +33,9 @@ class NotificationKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NotificationPreferences:
-    """A user's separate notice receipt and channel switches."""
+    """An account's separate notice receipt and channel switches."""
 
-    user_id: int
+    account_id: int
     notice_version: str | None
     consented_at: Instant | None
     web_enabled: bool = False
@@ -144,7 +144,7 @@ class NotificationSubscription:
     """One enabled subscription owned by an account."""
 
     id: int
-    user_id: int
+    account_id: int
     kind: SubscriptionKind
     subject_id: UUID | None
     record_filter: RecordSubscriptionFilter | None

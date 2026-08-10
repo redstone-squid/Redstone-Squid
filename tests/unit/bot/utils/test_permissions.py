@@ -23,8 +23,13 @@ class FakeAuthorizationService:
     def __init__(self, administrator_ids: set[int] | None = None) -> None:
         self.administrator_ids = administrator_ids or set()
 
-    async def is_global_administrator(self, discord_id: int) -> bool:
-        return discord_id in self.administrator_ids
+    async def is_global_administrator(self, account_id: int) -> bool:
+        return account_id in self.administrator_ids
+
+
+class FakeAccountService:
+    async def get_account(self, discord_id: int) -> SimpleNamespace:
+        return SimpleNamespace(id=discord_id)
 
 
 class FakeSettingsService:
@@ -54,6 +59,7 @@ def _bot(
     member = _member(member_id, guild) if member_id is not None else None
     guild.get_member = lambda user_id: member if member is not None and member.id == user_id else None
     services = SimpleNamespace(
+        accounts=FakeAccountService(),
         authorization=FakeAuthorizationService(global_admin_ids),
         settings=FakeSettingsService([30]),
     )

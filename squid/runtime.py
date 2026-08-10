@@ -10,6 +10,7 @@ from typing import Any, Self
 
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
 from squid.auth.application.web import DiscordOAuthService
@@ -29,7 +30,6 @@ from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
 from squid.sync import DiscordSyncService
 from squid.tags.application import TagService
-from squid.users.application import UserService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.ports import InteractiveVoteActorResolver
@@ -52,7 +52,7 @@ class ApiServices:
     schematics: SchematicService
     search: SearchService
     tags: TagService
-    users: UserService
+    accounts: AccountService
     versions: VersionService
     votes: VoteService
     vote_members: InteractiveVoteActorResolver | None
@@ -75,7 +75,7 @@ class BotServices:
     tags: TagService
     settings: SettingsService
     starboards: StarboardService
-    users: UserService
+    accounts: AccountService
     versions: VersionService
     votes: VoteService
     discord_sync: DiscordSyncService

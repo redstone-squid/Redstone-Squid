@@ -27,13 +27,17 @@ class VoteWeightPolicy(Protocol):
 class VoteActorResolver(Protocol):
     """Resolve current member facts for refresh operations."""
 
-    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None: ...
+    async def resolve(
+        self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral
+    ) -> VoteActor | None: ...
 
 
 class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
     """Resolve membership for an interactive transport and surface dependency failure."""
 
-    async def member(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None: ...
+    async def member(
+        self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral
+    ) -> VoteActor | None: ...
 
     async def aclose(self) -> None: ...
 
@@ -44,7 +48,7 @@ class VoteRepository(Protocol):
     async def create_build_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         build_id: int,
@@ -55,7 +59,7 @@ class VoteRepository(Protocol):
     async def create_delete_log_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         message_id: int,
@@ -67,7 +71,7 @@ class VoteRepository(Protocol):
     async def create_generic_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         guild_id: int,
         question: str,
         visibility: VoteVisibility,
@@ -84,7 +88,8 @@ class VoteRepository(Protocol):
     async def cast_vote(
         self,
         message_id: int,
-        user_id: int,
+        account_id: int,
+        discord_id: int,
         guild_id: int,
         option_id: str,
         emoji: str,

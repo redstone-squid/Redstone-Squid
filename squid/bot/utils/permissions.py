@@ -30,7 +30,12 @@ async def is_global_admin(bot: "squid.bot.app.RedstoneSquid", user_id: int) -> b
     """Return whether a user is the Discord application owner or a persisted global administrator."""
     if await bot.is_owner(discord.Object(id=user_id)):  # type: ignore[arg-type]
         return True
-    return await bot.services.authorization.is_global_administrator(user_id)
+    account = await bot.services.accounts.get_account(user_id)
+    return bool(
+        account is not None
+        and account.id is not None
+        and await bot.services.authorization.is_global_administrator(account.id)
+    )
 
 
 @cache
@@ -38,9 +43,7 @@ def check_is_global_admin():
     """Require the bot owner or a persisted global administrator."""
 
     async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
-        if await ctx.bot.is_owner(ctx.author) or await ctx.bot.services.authorization.is_global_administrator(
-            ctx.author.id
-        ):
+        if await ctx.bot.is_owner(ctx.author) or await is_global_admin(ctx.bot, ctx.author.id):
             return True
         raise GlobalAdministratorRequired()
 

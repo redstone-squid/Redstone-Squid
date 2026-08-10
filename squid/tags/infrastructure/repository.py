@@ -9,6 +9,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.models import AccountIdentity
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import Build
 from squid.tags.application import TagDefinitionRepository
@@ -22,7 +24,6 @@ from squid.tags.domain import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
-from squid.users.infrastructure.models import User
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
@@ -137,8 +138,12 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         async with self._session_factory.begin() as session:
             owned_build_id = await session.scalar(
                 select(Build.id)
-                .join(User, User.id == Build.submitter_user_id)
-                .where(Build.id == build_id, User.discord_id == actor_discord_id)
+                .join(AccountIdentity, AccountIdentity.account_id == Build.submitter_account_id)
+                .where(
+                    Build.id == build_id,
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                    AccountIdentity.subject == str(actor_discord_id),
+                )
             )
             if owned_build_id is None:
                 return False

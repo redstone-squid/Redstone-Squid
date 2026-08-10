@@ -27,7 +27,7 @@ def _snapshot(
 ) -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=5,
-        author_id=1,
+        author_account_id=1,
         kind=kind,  # type: ignore[arg-type]
         status=status,  # type: ignore[arg-type]
         result=result,

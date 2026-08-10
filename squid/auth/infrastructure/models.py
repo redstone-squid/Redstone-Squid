@@ -30,12 +30,12 @@ class ApiKey(Base):
         ARRAY(Text), nullable=False, server_default=text("'{}'::text[]"), default_factory=list
     )
     """Capabilities granted to this credential."""
-    owner_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", name="api_keys_owner_user_id_fkey", ondelete="SET NULL"), default=None
+    owner_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="api_keys_owner_account_id_fkey", ondelete="SET NULL"), default=None
     )
     """Optional account responsible for the credential."""
-    created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", name="api_keys_created_by_fkey"), default=None
+    created_by_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="api_keys_created_by_account_id_fkey"), default=None
     )
     """Account that created the credential, when known."""
     created_at: Mapped[Instant] = mapped_column(

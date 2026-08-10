@@ -45,7 +45,10 @@ class VoteSession(Base, kw_only=True):
         server_default=text("'pending'::text"),
         comment="The result of the vote session.",
     )
-    author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    author_account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", name="vote_sessions_author_account_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+    )
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     pass_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     fail_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -194,7 +197,11 @@ class Vote(Base):
         ),
         primary_key=True,
     )
-    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     option_id: Mapped[str] = mapped_column(Text, nullable=False)
     emoji: Mapped[str] = mapped_column(Text, nullable=False)

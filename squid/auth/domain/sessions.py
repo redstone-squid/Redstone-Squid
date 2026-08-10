@@ -20,6 +20,6 @@ class WebSessionIdentity:
     """Identity restored from an active opaque session."""
 
     session_id: str
-    user_id: int
+    account_id: int
     discord_id: int
     consent_pending: bool

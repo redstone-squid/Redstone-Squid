@@ -37,7 +37,7 @@ def snapshot(
 ) -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=12,
-        author_id=7,
+        author_account_id=7,
         kind=kind,
         status=status,
         result=result,
@@ -53,7 +53,7 @@ def snapshot(
 class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
-        self.cast_calls: list[tuple[int, int, int, str, str, float, dict[int, float] | None]] = []
+        self.cast_calls: list[tuple[int, int, int, int, str, str, float, dict[int, float] | None]] = []
         self.mutation: StoredVoteMutation | None = None
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
@@ -61,7 +61,7 @@ class FakeVoteRepository:
     async def create_generic_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         guild_id: int,
         question: str,
         visibility: VoteVisibility,
@@ -73,7 +73,7 @@ class FakeVoteRepository:
     async def create_build_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         build_id: int,
@@ -81,14 +81,14 @@ class FakeVoteRepository:
         options: Sequence[VoteOption],
     ) -> int:
         self.build_create_calls.append(
-            (author_id, pass_threshold, fail_threshold, build_id, list(changes), tuple(options))
+            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), tuple(options))
         )
         return 24
 
     async def create_delete_log_session(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         message_id: int,
@@ -97,7 +97,7 @@ class FakeVoteRepository:
         options: Sequence[VoteOption],
     ) -> int:
         self.delete_create_calls.append(
-            (author_id, pass_threshold, fail_threshold, message_id, channel_id, server_id, tuple(options))
+            (author_account_id, pass_threshold, fail_threshold, message_id, channel_id, server_id, tuple(options))
         )
         return 25
 
@@ -113,14 +113,17 @@ class FakeVoteRepository:
     async def cast_vote(
         self,
         message_id: int,
-        user_id: int,
+        account_id: int,
+        discord_id: int,
         guild_id: int,
         option_id: str,
         emoji: str,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
-        self.cast_calls.append((message_id, user_id, guild_id, option_id, emoji, desired_weight, refreshed_weights))
+        self.cast_calls.append(
+            (message_id, account_id, discord_id, guild_id, option_id, emoji, desired_weight, refreshed_weights)
+        )
         return self.mutation
 
     async def close(self, message_id: int) -> StoredVoteMutation | None:
@@ -155,8 +158,9 @@ class FakeVoteRepository:
 
 
 class MissingActorResolver:
-    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> None:
-        return None
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> None:
+        del account_id, discord_id, guild_id, kind
+        return
 
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
@@ -165,14 +169,14 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
     changes: list[VoteChange] = [("status", "pending", "confirmed")]
 
     build_session_id = await service.start_build_vote(
-        author_id=7,
+        author_account_id=7,
         pass_threshold=3,
         fail_threshold=-3,
         build_id=42,
         changes=changes,
     )
     delete_session_id = await service.start_delete_log_vote(
-        author_id=8,
+        author_account_id=8,
         pass_threshold=4,
         fail_threshold=-2,
         message_id=100,
@@ -189,7 +193,9 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
 async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:
     initial = replace(
         snapshot(),
-        selections=(VoteSelection(user_id=9, guild_id=10, option_id="approve", emoji="👍", weight=1.0),),
+        selections=(
+            VoteSelection(account_id=9, discord_id=90, guild_id=10, option_id="approve", emoji="👍", weight=1.0),
+        ),
     )
     service = VoteService(FakeVoteRepository(initial), actor_resolver=MissingActorResolver())
 
@@ -227,13 +233,13 @@ async def test_cast_vote_applies_choice_and_staff_weight(
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=is_staff, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=is_staff, is_trusted=False),
         emoji,
     )
 
     assert result.accepted
     option_id = "approve" if emoji == "👍" else "deny"
-    assert repository.cast_calls == [(100, 7, 10, option_id, emoji, abs(expected_weight), {})]
+    assert repository.cast_calls == [(100, 7, 70, 10, option_id, emoji, abs(expected_weight), {})]
 
 
 async def test_cast_vote_by_session_resolves_guild_option_alias() -> None:
@@ -251,16 +257,16 @@ async def test_cast_vote_by_session_resolves_guild_option_alias() -> None:
     )
     service = VoteService(repository)
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=10), "approve")
+    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "approve")
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "<:yes:1>", 1.0, {})]
+    assert repository.cast_calls == [(100, 7, 70, 10, "approve", "<:yes:1>", 1.0, {})]
 
 
 async def test_cast_vote_by_session_rejects_missing_session() -> None:
     service = VoteService(FakeVoteRepository(None))
 
-    result = await service.cast_vote_by_session(404, VoteActor(7, guild_id=10), "approve")
+    result = await service.cast_vote_by_session(404, VoteActor(7, 70, guild_id=10), "approve")
 
     assert result.rejection == "not_found"
     assert result.session is None
@@ -270,7 +276,7 @@ async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
     repository = FakeVoteRepository(snapshot())
     service = VoteService(repository)
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=999), "approve")
+    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=999), "approve")
 
     assert result.rejection == "wrong_guild"
     assert repository.cast_calls == []
@@ -280,7 +286,7 @@ async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
     repository = FakeVoteRepository(snapshot())
     service = VoteService(repository)
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, guild_id=10), "missing")
+    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "missing")
 
     assert result.rejection == "invalid_option"
     assert repository.cast_calls == []
@@ -292,7 +298,7 @@ async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
         "👍",
     )
 
@@ -313,12 +319,12 @@ async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=True, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=True, is_trusted=False),
         "👍",
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "👍", 3.0, {})]
+    assert repository.cast_calls == [(100, 7, 70, 10, "approve", "👍", 3.0, {})]
 
 
 async def test_closed_vote_is_rejected_before_mutation() -> None:
@@ -327,7 +333,7 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=False, is_trusted=True),
+        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=True),
         "👍",
     )
 
@@ -349,7 +355,7 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
         "👍",
     )
 
@@ -374,7 +380,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     repository.get_by_message = get_after_mutation  # type: ignore[method-assign]
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
         "👎",
     )
 
@@ -399,12 +405,12 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=True, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=True, is_trusted=False),
         "<:strong_yes:123>",
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "<:strong_yes:123>", 6.0, {})]
+    assert repository.cast_calls == [(100, 7, 70, 10, "approve", "<:strong_yes:123>", 6.0, {})]
 
 
 async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
@@ -413,7 +419,7 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(user_id=7, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
         "🤷",
     )
 
@@ -427,7 +433,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
 
     with pytest.raises(InvalidVoteConfigurationError, match="unique"):
         await service.start_build_vote(
-            author_id=7,
+            author_account_id=7,
             pass_threshold=3,
             fail_threshold=-3,
             build_id=42,
@@ -440,7 +446,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
 
     with pytest.raises(InvalidVoteConfigurationError, match="approve and one deny"):
         await service.start_build_vote(
-            author_id=7,
+            author_account_id=7,
             pass_threshold=3,
             fail_threshold=-3,
             build_id=42,

@@ -1,4 +1,4 @@
-"""User notification preferences, subscriptions, inbox, and delivery."""
+"""Account notification preferences, subscriptions, inbox, and delivery."""
 
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import (

@@ -77,8 +77,10 @@ class DeleteLogVoteSession(AbstractVoteSession):
         """Track the vote session in the database."""
         assert self.target_message.guild is not None
         self.options = (await self.bot.services.votes.emoji_preset(self.target_message.guild.id, self.kind)).options
+        author = await self.bot.services.accounts.get_or_create_account(self.author_id)
+        assert author.id is not None
         self.id = await self.bot.services.votes.start_delete_log_vote(
-            author_id=self.author_id,
+            author_account_id=author.id,
             pass_threshold=self.pass_threshold,
             fail_threshold=self.fail_threshold,
             message_id=self.target_message.id,
@@ -121,7 +123,7 @@ class DeleteLogVoteSession(AbstractVoteSession):
         self.__init__(
             bot,
             snapshot.message_ids,
-            snapshot.author_id,
+            0,
             target_message,
             snapshot.pass_threshold,
             snapshot.fail_threshold,

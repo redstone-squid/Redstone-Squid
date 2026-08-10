@@ -1,4 +1,4 @@
-"""User context errors."""
+"""Account context errors."""
 
 from uuid import UUID
 
@@ -6,24 +6,35 @@ from squid.core.errors import ConflictError, ErrorCode, NotFoundError, ServiceUn
 from squid.core.i18n import _
 
 
-class InvalidUserError(ValidationError):
-    """User data is invalid."""
+class InvalidAccountError(ValidationError):
+    """Account data is invalid."""
 
-    default_message = _("The user data is invalid.")
-    default_code = ErrorCode.INVALID_USER
-    default_resource = "user"
+    default_message = _("The account data is invalid.")
+    default_code = ErrorCode.INVALID_ACCOUNT
+    default_resource = "account"
 
 
-class UserNotFoundError(NotFoundError):
-    """An application user could not be found."""
+class AccountNotFoundError(NotFoundError):
+    """An application account could not be found."""
 
-    default_message = _("User not found.")
-    default_code = ErrorCode.USER_NOT_FOUND
-    default_resource = "user"
+    default_message = _("Account not found.")
+    default_code = ErrorCode.ACCOUNT_NOT_FOUND
+    default_resource = "account"
 
-    def __init__(self, discord_id: int) -> None:
-        super().__init__(context={"discord_id": discord_id})
+    def __init__(self, account_id: int | None = None, *, discord_id: int | None = None) -> None:
+        context = {"account_id": account_id} if account_id is not None else {"discord_id": discord_id}
+        super().__init__(context=context)
+        self.account_id = account_id
         self.discord_id = discord_id
+
+
+class InvalidMergeProofError(ValidationError):
+    """Both accounts were not authenticated recently enough for a merge."""
+
+    default_message = _("Both accounts must be authenticated again before they can be merged.")
+    default_title = _("Recent account proof required")
+    default_resource = "account_merge"
+    default_end_user_action = _("Authenticate both accounts again, then retry the merge.")
 
 
 class InvalidVerificationCodeError(ValidationError):
@@ -42,7 +53,7 @@ class AccountAlreadyLinkedError(ConflictError):
     default_message = _("This Discord account is already linked to a different Minecraft account.")
     default_title = _("Account already linked")
     default_code = ErrorCode.ACCOUNT_ALREADY_LINKED
-    default_resource = "user"
+    default_resource = "account"
     default_end_user_action = _("Unlink the current account before linking a new one.")
 
     def __init__(self, discord_id: int, minecraft_uuid: UUID) -> None:
@@ -57,7 +68,7 @@ class ConsentRequiredError(ValidationError):
     default_message = _("You need to accept the current privacy notice before completing this action.")
     default_title = _("Consent required")
     default_code = ErrorCode.CONSENT_REQUIRED
-    default_resource = "user"
+    default_resource = "account"
     default_end_user_action = _("Review and accept the current privacy notice, then try again.")
 
     def __init__(self, discord_id: int) -> None:

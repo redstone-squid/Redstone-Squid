@@ -102,24 +102,18 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             self._background_tasks.add(remove_reaction_task)
             remove_reaction_task.add_done_callback(self._background_tasks.discard)
 
-        staff = await is_server_admin(self.bot, payload.guild_id, user_id)
-        trusted = False
-        if isinstance(vote_session, DeleteLogVoteSession):
-            if payload.guild_id is None:
-                # Voting in DMs is not implemented
-                return
-            trusted = await is_trusted_or_global_admin(self.bot, payload.guild_id, user_id)
+        if isinstance(vote_session, DeleteLogVoteSession) and payload.guild_id is None:
+            # Voting in DMs is not implemented
+            return
 
         guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
         member = guild.get_member(user_id) if guild is not None else None
-        actor = VoteActor(
-            user_id=user_id,
-            guild_id=payload.guild_id or 0,
-            role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
-            is_staff=staff,
-            is_trusted=trusted,
+        if member is None:
+            return
+        actor = await self._actor(member, snapshot.kind)
+        previous = next(
+            (selection for selection in snapshot.selections if selection.account_id == actor.account_id), None
         )
-        previous = next((selection for selection in snapshot.selections if selection.user_id == user_id), None)
         result = await self.vote_service.cast_vote(
             payload.message_id,
             actor,
@@ -159,7 +153,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             or snapshot.poll.visibility != "visible_live"
         ):
             return
-        selection = next((item for item in snapshot.selections if item.user_id == payload.user_id), None)
+        selection = next((item for item in snapshot.selections if item.discord_id == payload.user_id), None)
         if selection is None or selection.emoji != str(payload.emoji):
             return
         member = await event.resolve_member()
@@ -213,13 +207,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await ctx.send("That message is not a poll.", ephemeral=True)
             return
         actor = await self._actor(ctx.author, "generic")
-        if snapshot.poll.guild_id != ctx.guild.id or (snapshot.author_id != actor.user_id and not actor.is_staff):
+        if snapshot.poll.guild_id != ctx.guild.id or (
+            snapshot.author_account_id != actor.account_id and not actor.is_staff
+        ):
             await ctx.send("Only the poll creator or staff can refresh it.", ephemeral=True)
             return
         result = await self.vote_service.refresh(message.id)
         if result.session is not None:
             await GenericVoteSession(self.bot, result.session).update_messages()
-        suffix = "" if result.complete else f" Some members could not be resolved: {result.unresolved_user_ids}."
+        suffix = "" if result.complete else f" Some accounts could not be resolved: {result.unresolved_account_ids}."
         await ctx.send(f"Poll weights refreshed.{suffix}", ephemeral=True)
 
     async def parse_poll_options(self, interaction: discord.Interaction, value: str) -> tuple[VoteOption, ...]:
@@ -265,12 +261,19 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             raise InvalidVoteConfigurationError(msg)
         return tuple(options)
 
-    async def _actor(self, member: discord.Member, kind: VoteKindLiteral) -> VoteActor:
+    async def _actor(
+        self, member: discord.Member, kind: VoteKindLiteral, *, account_id: int | None = None
+    ) -> VoteActor:
         staff = await is_server_admin(self.bot, member.guild.id, member.id)
         trusted = (
             await is_trusted_or_global_admin(self.bot, member.guild.id, member.id) if kind == "delete_log" else False
         )
+        if account_id is None:
+            account = await self.bot.services.accounts.get_or_create_account(member.id)
+            assert account.id is not None
+            account_id = account.id
         return VoteActor(
+            account_id,
             member.id,
             member.guild.id,
             frozenset(role.id for role in member.roles),
@@ -278,18 +281,18 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             is_trusted=trusted,
         )
 
-    async def resolve(self, user_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
         """Resolve current member facts for a service-level weight refresh."""
         guild = self.bot.get_guild(guild_id)
         if guild is None:
             return None
-        member = guild.get_member(user_id)
+        member = guild.get_member(discord_id)
         if member is None:
             try:
-                member = await guild.fetch_member(user_id)
+                member = await guild.fetch_member(discord_id)
             except (discord.NotFound, discord.Forbidden):
                 return None
-        return await self._actor(member, kind)
+        return await self._actor(member, kind, account_id=account_id)
 
     @vote_group.command(name="delete")
     @app_commands.rename(target_message="message")

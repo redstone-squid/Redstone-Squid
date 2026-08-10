@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
+from sqlalchemy import BigInteger, ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
@@ -22,9 +22,10 @@ class WebSession(Base, kw_only=True):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", name="web_sessions_user_id_fkey", ondelete="CASCADE"), nullable=False
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", name="web_sessions_account_id_fkey", ondelete="CASCADE"), nullable=False
     )
+    discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     last_seen_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)

@@ -40,8 +40,8 @@ class ApiKeyService:
         *,
         label: str,
         scopes: Iterable[str],
-        owner_user_id: int | None = None,
-        created_by: int | None = None,
+        owner_account_id: int | None = None,
+        created_by_account_id: int | None = None,
         expires_at: Instant | None = None,
     ) -> IssuedApiKey:
         """Create a credential, returning its plaintext token exactly once."""
@@ -52,8 +52,8 @@ class ApiKeyService:
             secret_hash=self.hash_secret(secret),
             label=label,
             scopes=frozenset(scopes),
-            owner_user_id=owner_user_id,
-            created_by=created_by,
+            owner_account_id=owner_account_id,
+            created_by_account_id=created_by_account_id,
             expires_at=expires_at,
         )
         return IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")

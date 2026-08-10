@@ -68,7 +68,7 @@ async def discord_callback(
 async def logout(request: Request, web_auth: WebAuth, principal: CurrentPrincipal) -> Response:
     """Revoke the current browser session and clear its cookies."""
     token = request.cookies.get("__Host-squid_session")
-    if principal.kind != "user" or token is None or web_auth is None:
+    if principal.kind != "account" or token is None or web_auth is None:
         raise AuthenticationError
     await web_auth.logout(token)
     response = Response(status_code=204)

@@ -15,6 +15,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
+from squid.accounts.domain import IdentityProvider, normalize_ign
+from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import (
     Build,
     BuildCategory,
@@ -47,8 +49,6 @@ from squid.tags.infrastructure.models import (
 from squid.tags.infrastructure.models import (
     TagDefinition as SQLTagDefinition,
 )
-from squid.users.domain import normalize_ign
-from squid.users.infrastructure.models import CreatorAlias, User
 from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
@@ -103,8 +103,11 @@ class BuildRepository:
         async with self._session_factory() as session:
             statement = select(SQLBuild).where(SQLBuild.submission_status.in_(statuses))
             if submitter_id is not None:
-                statement = statement.join(User, User.id == SQLBuild.submitter_user_id).where(
-                    User.discord_id == submitter_id
+                statement = statement.join(
+                    AccountIdentity, AccountIdentity.account_id == SQLBuild.submitter_account_id
+                ).where(
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                    AccountIdentity.subject == str(submitter_id),
                 )
             if after_id is not None:
                 statement = statement.where(SQLBuild.id < after_id)
@@ -159,7 +162,7 @@ class BuildRepository:
                     completion_evidence=build.completion_evidence,
                     description=build.description,
                     category=build.category,
-                    submitter_user_id=await self._get_or_create_account(session, build.submitter_id),
+                    submitter_account_id=await self._get_or_create_account(session, build.submitter_id),
                     version_spec=build.version_spec,
                     ai_generated=build.ai_generated or False,
                     embedding=build.embedding,
@@ -224,7 +227,7 @@ class BuildRepository:
                 sql_build.completion_at = build.completion_at
                 sql_build.completion_evidence = build.completion_evidence
                 sql_build.description = build.description
-                sql_build.submitter_user_id = await self._get_or_create_account(session, build.submitter_id)
+                sql_build.submitter_account_id = await self._get_or_create_account(session, build.submitter_id)
                 sql_build.version_spec = build.version_spec
                 sql_build.ai_generated = build.ai_generated or False
                 sql_build.embedding = build.embedding
@@ -369,26 +372,47 @@ class BuildRepository:
 
     @staticmethod
     async def _get_or_create_account(session: AsyncSession, discord_id: int) -> int:
-        """Return the ``users.id`` for *discord_id*, creating a bare row if needed.
+        """Return the account ID for *discord_id*, creating an account if needed.
 
         A submitter-only row holds nothing beyond the Discord snowflake the bot
         already needs for ownership checks, so it carries no consent receipt;
         the receipt covers the Minecraft link, which such a row does not have.
         """
-        user_id = await session.scalar(select(User.id).where(User.discord_id == discord_id))
-        if user_id is not None:
-            return user_id
-        result = await session.execute(
-            pg_insert(User)
-            .values(discord_id=discord_id)
-            .on_conflict_do_nothing(index_elements=[User.discord_id])
-            .returning(User.id)
+        subject = str(discord_id)
+        account_id = await session.scalar(
+            select(AccountIdentity.account_id).where(
+                AccountIdentity.provider == IdentityProvider.DISCORD,
+                AccountIdentity.subject == subject,
+            )
         )
-        user_id = result.scalar_one_or_none()
-        if user_id is not None:
-            return user_id
-        # A concurrent submission inserted the same submitter first.
-        return (await session.execute(select(User.id).where(User.discord_id == discord_id))).scalar_one()
+        if account_id is not None:
+            return account_id
+        candidate = Account()
+        session.add(candidate)
+        await session.flush()
+        account_id = await session.scalar(
+            pg_insert(AccountIdentity)
+            .values(
+                account_id=candidate.id,
+                provider=IdentityProvider.DISCORD,
+                subject=subject,
+                verified_at=Instant.now(),
+            )
+            .on_conflict_do_nothing(index_elements=[AccountIdentity.provider, AccountIdentity.subject])
+            .returning(AccountIdentity.account_id)
+        )
+        if account_id is not None:
+            return account_id
+        await session.delete(candidate)
+        await session.flush()
+        return (
+            await session.execute(
+                select(AccountIdentity.account_id).where(
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                    AccountIdentity.subject == subject,
+                )
+            )
+        ).scalar_one()
 
     @staticmethod
     async def _get_or_create_aliases(session: AsyncSession, igns: list[str]) -> list[int]:

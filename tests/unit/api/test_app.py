@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
+from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
-from squid.users.errors import MinecraftServiceUnavailableError
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
     TEST_SYNERGY_SECRET,
@@ -102,7 +102,7 @@ def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) 
     web_auth.authenticate = mocker.AsyncMock(
         return_value=WebSessionIdentity(
             session_id="session",
-            user_id=1,
+            account_id=1,
             discord_id=123,
             consent_pending=False,
         )
@@ -128,7 +128,7 @@ def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: Mocke
     web_auth.authenticate = mocker.AsyncMock(
         return_value=WebSessionIdentity(
             session_id="session",
-            user_id=1,
+            account_id=1,
             discord_id=123,
             consent_pending=False,
         )
@@ -151,7 +151,7 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
     web_auth.authenticate = mocker.AsyncMock(
         return_value=WebSessionIdentity(
             session_id="session",
-            user_id=1,
+            account_id=1,
             discord_id=123,
             consent_pending=False,
         )
@@ -169,18 +169,18 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
     web_auth.logout.assert_awaited_once_with("session-token")
 
 
-async def test_verify_handler_depends_on_users_capability(mocker: MockerFixture) -> None:
-    users = mocker.Mock()
-    users.generate_verification_code = mocker.AsyncMock(return_value=TEST_VERIFICATION_CODE)
+async def test_verify_handler_depends_on_accounts_capability(mocker: MockerFixture) -> None:
+    accounts = mocker.Mock()
+    accounts.generate_verification_code = mocker.AsyncMock(return_value=TEST_VERIFICATION_CODE)
 
     result = await api_app.get_verification_code(
         api_app.User(uuid=TEST_UUID),
-        users,
+        accounts,
         mocker.Mock(),
     )
 
     assert result == TEST_VERIFICATION_CODE
-    users.generate_verification_code.assert_awaited_once_with(TEST_UUID)
+    accounts.generate_verification_code.assert_awaited_once_with(TEST_UUID)
 
 
 def test_internal_error_is_redacted_and_correlated(

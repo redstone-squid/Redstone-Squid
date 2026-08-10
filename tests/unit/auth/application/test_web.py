@@ -29,9 +29,15 @@ class SessionRepository:
         return saved
 
     async def create_session(
-        self, *, token_hash: bytes, user_id: int, expires_at: Instant, user_agent: str | None
+        self,
+        *,
+        token_hash: bytes,
+        account_id: int,
+        discord_id: int,
+        expires_at: Instant,
+        user_agent: str | None,
     ) -> str:
-        del user_id, expires_at, user_agent
+        del account_id, discord_id, expires_at, user_agent
         self.token_hash = token_hash
         return "session-id"
 
@@ -42,8 +48,8 @@ class SessionRepository:
 @pytest.mark.asyncio
 async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> None:
     repository = SessionRepository()
-    users = AsyncMock()
-    users.get_or_create_account.return_value.id = 42
+    accounts = AsyncMock()
+    accounts.get_or_create_account.return_value.id = 42
     transport = httpx.MockTransport(
         lambda request: httpx.Response(
             200,
@@ -52,7 +58,7 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
     )
     service = DiscordOAuthService(
         repository,
-        users,
+        accounts,
         OAuthConfig(
             discord_client_id="client",
             discord_client_secret=SecretStr("secret"),
@@ -69,7 +75,7 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
 
     token, redirect_to = await service.callback("code", repository.state.state, user_agent="test")
 
-    users.get_or_create_account.assert_awaited_once_with(123)
+    accounts.get_or_create_account.assert_awaited_once_with(123)
     assert redirect_to == "/account"
     assert repository.token_hash is not None
     assert repository.token_hash == service.hash_token(token)

@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
+from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import check_is_global_admin
@@ -42,10 +43,20 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def list_global_admins(self, ctx: Context[BotT]) -> None:
         """List users with bot-wide administrator access."""
         administrators = await self.bot.services.authorization.list_global_administrators()
-        description = "\n".join(
-            f"<@{administrator.discord_id}> — granted by <@{administrator.granted_by_discord_id}>"
-            for administrator in administrators
-        )
+        lines: list[str] = []
+        for administrator in administrators:
+            account = await self.bot.services.accounts.get_account_by_id(administrator.account_id)
+            grantor = await self.bot.services.accounts.get_account_by_id(administrator.granted_by_account_id)
+            identity = None if account is None else account.identity(IdentityProvider.DISCORD)
+            grantor_identity = None if grantor is None else grantor.identity(IdentityProvider.DISCORD)
+            recipient = f"account {administrator.account_id}" if identity is None else f"<@{identity.subject}>"
+            issuer = (
+                f"account {administrator.granted_by_account_id}"
+                if grantor_identity is None
+                else f"<@{grantor_identity.subject}>"
+            )
+            lines.append(f"{recipient} — granted by {issuer}")
+        description = "\n".join(lines)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=info_layout(
@@ -62,9 +73,10 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if await self.bot.is_owner(user):
             msg = "The bot owner already has every permission and is not stored as a global administrator."
             raise commands.BadArgument(msg)
-        administrator = await self.bot.services.authorization.grant_global_administrator(
-            user.id, granted_by_discord_id=ctx.author.id
-        )
+        account = await self.bot.services.accounts.get_or_create_account(user.id)
+        grantor = await self.bot.services.accounts.get_or_create_account(ctx.author.id)
+        assert account.id is not None and grantor.id is not None
+        await self.bot.services.authorization.grant_global_administrator(account.id, granted_by_account_id=grantor.id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=info_layout(
@@ -72,7 +84,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 t(
                     locale,
                     _("{user} now has bot-wide administrator access."),
-                    user=f"<@{administrator.discord_id}>",
+                    user=f"<@{user.id}>",
                 ),
             ),
             allowed_mentions=no_mentions(),
@@ -84,7 +96,12 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if await self.bot.is_owner(user):
             msg = "The bot owner's implicit access cannot be removed."
             raise commands.BadArgument(msg)
-        removed = await self.bot.services.authorization.revoke_global_administrator(user.id)
+        account = await self.bot.services.accounts.get_account(user.id)
+        removed = bool(
+            account is not None
+            and account.id is not None
+            and await self.bot.services.authorization.revoke_global_administrator(account.id)
+        )
         locale = await resolve_locale(ctx, self.bot.services.settings)
         description = (
             t(locale, _("Removed bot-wide administrator access from {user}."), user=f"<@{user.id}>")

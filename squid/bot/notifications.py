@@ -45,7 +45,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     @app_commands.command(name="status", description="Show your notification consent and channels")
     async def status(self, interaction: discord.Interaction) -> None:
-        account = await self.bot.services.users.get_or_create_account(interaction.user.id)
+        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
         assert account.id is not None
         preferences = await self.bot.services.notifications.preferences(account.id)
         await interaction.response.send_message(
@@ -59,14 +59,14 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     @app_commands.command(name="consent", description="Accept the notification notice and choose channels")
     async def consent(self, interaction: discord.Interaction, web: bool = False, dm: bool = False) -> None:
-        account = await self.bot.services.users.get_or_create_account(interaction.user.id)
+        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
         assert account.id is not None
         await self.bot.services.notifications.accept_notice(account.id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message("Notification preferences saved.", ephemeral=True)
 
     @app_commands.command(name="channels", description="Change web and Discord DM channels")
     async def channels(self, interaction: discord.Interaction, web: bool, dm: bool) -> None:
-        account = await self.bot.services.users.get_or_create_account(interaction.user.id)
+        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
         assert account.id is not None
         await self.bot.services.notifications.set_preferences(account.id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message("Notification channels updated.", ephemeral=True)
@@ -156,7 +156,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
                 await self.bot.services.notifications.complete_delivery(delivery)
 
     async def _account_id(self, interaction: discord.Interaction) -> int:
-        account = await self.bot.services.users.get_or_create_account(interaction.user.id)
+        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
         assert account.id is not None
         return account.id
 

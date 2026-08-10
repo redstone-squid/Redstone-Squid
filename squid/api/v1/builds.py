@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.api.dependencies import Authorization, BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Search
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -23,7 +24,6 @@ from squid.builds.errors import (
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
 from squid.permissions.application import AuthorizationService
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
-from squid.users.errors import ConsentRequiredError
 
 router = APIRouter(prefix="/builds", tags=["builds"])
 UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
@@ -103,7 +103,8 @@ async def edit_build(
         expected_revision=expected_revision,
     ) as lease:
         is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
-        is_admin = await authorization.is_global_administrator(principal.discord_id)
+        assert principal.account_id is not None
+        is_admin = await authorization.is_global_administrator(principal.account_id)
         if not is_owner and not is_admin:
             raise AuthorizationError
         build = await lease.commit()
@@ -185,11 +186,11 @@ async def _require_global_administrator(authorization: AuthorizationService, pri
     A service key carries no `discord_id` and so can never satisfy this, which keeps a leaked
     key from reading unreviewed submissions (see finding 1 in docs/plans/rest-api.md).
     """
-    if principal.kind != "user" or principal.discord_id is None:
+    if principal.kind != "account" or principal.discord_id is None or principal.account_id is None:
         if principal.kind == "anonymous":
             raise AuthenticationError
         raise AuthorizationError
-    if not await authorization.is_global_administrator(principal.discord_id):
+    if not await authorization.is_global_administrator(principal.account_id):
         raise AuthorizationError
 
 
@@ -225,7 +226,7 @@ def after_id_from_cursor(signer: CursorSigner, cursor: str | None, binding: str)
 
 
 def _require_consented_user(principal: Principal) -> None:
-    if principal.kind != "user" or principal.discord_id is None:
+    if principal.kind != "account" or principal.discord_id is None or principal.account_id is None:
         raise AuthenticationError
     if principal.consent_pending:
         raise ConsentRequiredError(principal.discord_id).with_context(

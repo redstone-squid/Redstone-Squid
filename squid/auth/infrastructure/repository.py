@@ -15,8 +15,8 @@ def _to_domain(model: ApiKeyModel) -> ApiKey:
         secret_hash=model.secret_hash,
         label=model.label,
         scopes=frozenset(model.scopes),
-        owner_user_id=model.owner_user_id,
-        created_by=model.created_by,
+        owner_account_id=model.owner_account_id,
+        created_by_account_id=model.created_by_account_id,
         created_at=model.created_at,
         expires_at=model.expires_at,
         revoked_at=model.revoked_at,
@@ -38,8 +38,8 @@ class PostgresApiKeyRepository:
         secret_hash: bytes,
         label: str,
         scopes: frozenset[str],
-        owner_user_id: int | None,
-        created_by: int | None,
+        owner_account_id: int | None,
+        created_by_account_id: int | None,
         expires_at: Instant | None,
     ) -> ApiKey:
         """Insert and return an API credential."""
@@ -49,8 +49,8 @@ class PostgresApiKeyRepository:
                 secret_hash=secret_hash,
                 label=label,
                 scopes=sorted(scopes),
-                owner_user_id=owner_user_id,
-                created_by=created_by,
+                owner_account_id=owner_account_id,
+                created_by_account_id=created_by_account_id,
                 expires_at=expires_at,
             )
             session.add(model)

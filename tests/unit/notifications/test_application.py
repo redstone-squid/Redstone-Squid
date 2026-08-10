@@ -25,7 +25,11 @@ async def test_channels_cannot_be_enabled_before_notification_consent() -> None:
 
 async def test_subscriptions_require_notification_specific_consent() -> None:
     repository = AsyncMock()
-    repository.get_preferences.return_value = NotificationPreferences(user_id=7, notice_version=None, consented_at=None)
+    repository.get_preferences.return_value = NotificationPreferences(
+        account_id=7,
+        notice_version=None,
+        consented_at=None,
+    )
     service = NotificationService(cast(Any, repository))
 
     with pytest.raises(NotificationConsentRequiredError):
@@ -37,7 +41,7 @@ async def test_subscriptions_require_notification_specific_consent() -> None:
 async def test_public_subscription_targets_are_validated_before_persistence() -> None:
     repository = AsyncMock()
     repository.get_preferences.return_value = NotificationPreferences(
-        user_id=7,
+        account_id=7,
         notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
         consented_at=Instant.now(),
     )

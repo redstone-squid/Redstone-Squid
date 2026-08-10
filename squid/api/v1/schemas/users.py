@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.users.domain import CreatorAlias, CreatorProfile
+from squid.accounts.domain import CreatorAlias, CreatorProfile
 
 
 class CreatorAliasDetail(BaseModel):

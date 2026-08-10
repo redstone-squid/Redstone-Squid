@@ -84,9 +84,9 @@ class Build(Base, kw_only=True):
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     category: Mapped[BuildCategory | None] = mapped_column(Text)
-    submitter_user_id: Mapped[int] = mapped_column(
+    submitter_account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("users.id", name="builds_submitter_user_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("accounts.id", name="builds_submitter_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
     original_message_id: Mapped[int | None] = mapped_column(

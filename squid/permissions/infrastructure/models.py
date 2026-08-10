@@ -1,6 +1,6 @@
 """SQLAlchemy bot authorization models."""
 
-from sqlalchemy import BigInteger, func
+from sqlalchemy import ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -13,10 +13,18 @@ class GlobalAdministrator(Base):
 
     __tablename__ = "global_administrators"
 
-    discord_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    """Discord snowflake ID receiving bot-wide access."""
-    granted_by_discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    """Discord snowflake ID of the owner who issued the grant."""
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="global_administrators_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    """Internal account receiving application-wide access."""
+    granted_by_account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="global_administrators_granted_by_account_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    """Internal account that issued the grant."""
     granted_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

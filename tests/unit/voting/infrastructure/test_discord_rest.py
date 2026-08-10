@@ -22,10 +22,11 @@ async def test_member_returns_role_facts_with_transport_privileges_disabled() ->
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("secret-token", client=client)
-        actor = await resolver.member(7, 10, "build")
+        actor = await resolver.member(1, 7, 10, "build")
 
     assert actor is not None
-    assert actor.user_id == 7
+    assert actor.account_id == 1
+    assert actor.discord_id == 7
     assert actor.guild_id == 10
     assert actor.role_ids == frozenset({11, 22})
     assert not actor.is_staff
@@ -39,7 +40,7 @@ async def test_member_returns_none_when_member_is_not_accessible(status: int) ->
     async with client_for(lambda _request: httpx.Response(status)) as client:
         resolver = DiscordRestActorResolver("token", client=client)
 
-        assert await resolver.member(7, 10, "generic") is None
+        assert await resolver.member(1, 7, 10, "generic") is None
 
 
 async def test_member_caches_successful_lookup_for_five_minutes() -> None:
@@ -53,11 +54,11 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("token", client=client, clock=lambda: now[0])
-        first = await resolver.member(7, 10, "build")
+        first = await resolver.member(1, 7, 10, "build")
         now[0] = 399.9
-        cached = await resolver.member(7, 10, "generic")
+        cached = await resolver.member(1, 7, 10, "generic")
         now[0] = 400.0
-        refreshed = await resolver.member(7, 10, "build")
+        refreshed = await resolver.member(1, 7, 10, "build")
 
     assert first is not None
     assert first.role_ids == frozenset({1})
@@ -83,7 +84,7 @@ async def test_member_honors_one_rate_limit_retry() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("token", client=client, sleep=sleep)
-        actor = await resolver.member(7, 10, "build")
+        actor = await resolver.member(1, 7, 10, "build")
 
     assert actor is not None
     assert delays == [0.25]
@@ -101,7 +102,7 @@ async def test_member_raises_typed_unavailable_error(status: int) -> None:
         resolver = DiscordRestActorResolver("token", client=client, sleep=sleep)
 
         with pytest.raises(DiscordMemberServiceUnavailableError):
-            await resolver.member(7, 10, "build")
+            await resolver.member(1, 7, 10, "build")
 
 
 async def test_member_maps_transport_failure_to_typed_unavailable_error() -> None:
@@ -112,14 +113,14 @@ async def test_member_maps_transport_failure_to_typed_unavailable_error() -> Non
         resolver = DiscordRestActorResolver("token", client=client)
 
         with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
-            await resolver.member(7, 10, "build")
+            await resolver.member(1, 7, 10, "build")
 
 
 async def test_resolve_swallows_discord_failure_for_background_refresh() -> None:
     async with client_for(lambda _request: httpx.Response(500)) as client:
         resolver = DiscordRestActorResolver("token", client=client)
 
-        assert await resolver.resolve(7, 10, "build") is None
+        assert await resolver.resolve(1, 7, 10, "build") is None
 
 
 async def test_member_rejects_malformed_role_payload() -> None:
@@ -127,4 +128,4 @@ async def test_member_rejects_malformed_role_payload() -> None:
         resolver = DiscordRestActorResolver("token", client=client)
 
         with pytest.raises(DiscordMemberServiceUnavailableError, match="malformed"):
-            await resolver.member(7, 10, "build")
+            await resolver.member(1, 7, 10, "build")

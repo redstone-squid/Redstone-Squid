@@ -11,6 +11,8 @@ from sqlalchemy import ColumnElement, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Build, BuildCreator
 from squid.events import DomainEvent
@@ -39,7 +41,6 @@ from squid.records.infrastructure.models import (
     RecordResultHolder,
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
-from squid.users.infrastructure.models import CreatorAlias, User
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,17 +65,17 @@ class PostgresNotificationRepository:
         self._session_factory = session_factory
         self._staff_discord_ids = tuple(staff_discord_ids)
 
-    async def get_preferences(self, user_id: int) -> NotificationPreferences:
+    async def get_preferences(self, account_id: int) -> NotificationPreferences:
         async with self._session_factory() as session:
-            profile = await session.get(NotificationProfile, user_id)
-            return _preferences(user_id, profile)
+            profile = await session.get(NotificationProfile, account_id)
+            return _preferences(account_id, profile)
 
-    async def accept_notice(self, user_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
+    async def accept_notice(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         async with self._session_factory() as session, session.begin():
             statement = (
                 insert(NotificationProfile)
                 .values(
-                    user_id=user_id,
+                    account_id=account_id,
                     notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
                     consented_at=func.now(),
                     web_enabled=web_enabled,
@@ -83,7 +84,7 @@ class PostgresNotificationRepository:
                     updated_at=func.now(),
                 )
                 .on_conflict_do_update(
-                    index_elements=[NotificationProfile.user_id],
+                    index_elements=[NotificationProfile.account_id],
                     set_={
                         "notice_version": CURRENT_NOTIFICATION_NOTICE_VERSION,
                         "consented_at": func.now(),
@@ -97,17 +98,17 @@ class PostgresNotificationRepository:
             )
             profile = (await session.scalars(statement)).one()
             if not dm_enabled:
-                await self._cancel_pending_deliveries(session, user_id)
-            return _preferences(user_id, profile)
+                await self._cancel_pending_deliveries(session, account_id)
+            return _preferences(account_id, profile)
 
     async def update_preferences(
-        self, user_id: int, *, web_enabled: bool, dm_enabled: bool
+        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences | None:
         async with self._session_factory() as session, session.begin():
             profile = await session.scalar(
                 update(NotificationProfile)
                 .where(
-                    NotificationProfile.user_id == user_id,
+                    NotificationProfile.account_id == account_id,
                     NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
                     NotificationProfile.consented_at.is_not(None),
                 )
@@ -120,16 +121,16 @@ class PostgresNotificationRepository:
                 .returning(NotificationProfile)
             )
             if profile is not None and not dm_enabled:
-                await self._cancel_pending_deliveries(session, user_id)
-            return None if profile is None else _preferences(user_id, profile)
+                await self._cancel_pending_deliveries(session, account_id)
+            return None if profile is None else _preferences(account_id, profile)
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
         async with self._session_factory() as session:
             if kind is SubscriptionKind.CREATOR:
                 statement = select(
                     exists().where(
-                        User.public_creator_id == subject_id,
-                        CreatorAlias.user_id == User.id,
+                        Account.public_creator_id == subject_id,
+                        CreatorAlias.account_id == Account.id,
                     )
                 )
             else:
@@ -138,7 +139,7 @@ class PostgresNotificationRepository:
 
     async def add_subscription(
         self,
-        user_id: int,
+        account_id: int,
         *,
         kind: SubscriptionKind,
         subject_id: UUID | None,
@@ -147,7 +148,7 @@ class PostgresNotificationRepository:
         filter_value = None if record_filter is None else record_filter.as_dict()
         async with self._session_factory() as session, session.begin():
             predicates = [
-                NotificationSubscriptionRecord.user_id == user_id,
+                NotificationSubscriptionRecord.account_id == account_id,
                 NotificationSubscriptionRecord.kind == kind.value,
                 NotificationSubscriptionRecord.enabled.is_(True),
             ]
@@ -166,7 +167,7 @@ class PostgresNotificationRepository:
             row = await session.scalar(
                 insert(NotificationSubscriptionRecord)
                 .values(
-                    user_id=user_id,
+                    account_id=account_id,
                     kind=kind.value,
                     subject_id=subject_id,
                     filter=filter_value,
@@ -181,13 +182,13 @@ class PostgresNotificationRepository:
                 raise RuntimeError(msg)
             return _subscription(row)
 
-    async def list_subscriptions(self, user_id: int) -> Sequence[NotificationSubscription]:
+    async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
                     select(NotificationSubscriptionRecord)
                     .where(
-                        NotificationSubscriptionRecord.user_id == user_id,
+                        NotificationSubscriptionRecord.account_id == account_id,
                         NotificationSubscriptionRecord.enabled.is_(True),
                     )
                     .order_by(NotificationSubscriptionRecord.created_at, NotificationSubscriptionRecord.id)
@@ -195,32 +196,32 @@ class PostgresNotificationRepository:
             ).all()
             return tuple(_subscription(row) for row in rows)
 
-    async def delete_subscription(self, user_id: int, subscription_id: int) -> bool:
+    async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
         async with self._session_factory() as session, session.begin():
             removed = await session.scalar(
                 delete(NotificationSubscriptionRecord)
                 .where(
                     NotificationSubscriptionRecord.id == subscription_id,
-                    NotificationSubscriptionRecord.user_id == user_id,
+                    NotificationSubscriptionRecord.account_id == account_id,
                 )
                 .returning(NotificationSubscriptionRecord.id)
             )
             return removed is not None
 
     async def list_inbox(
-        self, user_id: int, *, after_id: int | None, limit: int, include_staff: bool
+        self, account_id: int, *, after_id: int | None, limit: int, include_staff: bool
     ) -> Sequence[InboxNotification]:
         async with self._session_factory() as session:
             enabled = await session.scalar(
                 select(NotificationProfile.web_enabled).where(
-                    NotificationProfile.user_id == user_id,
+                    NotificationProfile.account_id == account_id,
                     NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
                 )
             )
             if not enabled:
                 return ()
             statement = select(NotificationRecord).where(
-                NotificationRecord.user_id == user_id,
+                NotificationRecord.account_id == account_id,
                 NotificationRecord.web_visible.is_(True),
             )
             if after_id is not None:
@@ -230,11 +231,11 @@ class PostgresNotificationRepository:
             rows = (await session.scalars(statement.order_by(NotificationRecord.id.desc()).limit(limit))).all()
             return tuple(_inbox(row) for row in rows)
 
-    async def mark_read(self, user_id: int, notification_id: int, *, include_staff: bool) -> bool:
+    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool:
         async with self._session_factory() as session, session.begin():
             predicates = [
                 NotificationRecord.id == notification_id,
-                NotificationRecord.user_id == user_id,
+                NotificationRecord.account_id == account_id,
                 NotificationRecord.web_visible.is_(True),
             ]
             if not include_staff:
@@ -279,12 +280,23 @@ class PostgresNotificationRepository:
         if discord_id in self._staff_discord_ids:
             return True
         async with self._session_factory() as session:
-            return bool(await session.scalar(select(exists().where(GlobalAdministrator.discord_id == discord_id))))
+            return bool(
+                await session.scalar(
+                    select(
+                        exists()
+                        .where(GlobalAdministrator.account_id == AccountIdentity.account_id)
+                        .where(
+                            AccountIdentity.provider == IdentityProvider.DISCORD,
+                            AccountIdentity.subject == str(discord_id),
+                        )
+                    )
+                )
+            )
 
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         async with self._session_factory() as session, session.begin():
             claimable_staff = exists().where(
-                GlobalAdministrator.discord_id == NotificationDeliveryRecord.discord_id
+                GlobalAdministrator.account_id == NotificationDeliveryRecord.account_id
             ) | NotificationDeliveryRecord.discord_id.in_(self._staff_discord_ids)
             ids = tuple(
                 (
@@ -292,7 +304,7 @@ class PostgresNotificationRepository:
                         select(NotificationDeliveryRecord.id)
                         .join(
                             NotificationProfile,
-                            NotificationProfile.user_id == NotificationDeliveryRecord.user_id,
+                            NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
                         )
                         .join(NotificationRecord, NotificationRecord.id == NotificationDeliveryRecord.notification_id)
                         .where(
@@ -396,7 +408,7 @@ class PostgresNotificationRepository:
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
         async with self._session_factory() as session, session.begin():
-            user_id = await session.scalar(
+            account_id = await session.scalar(
                 update(NotificationDeliveryRecord)
                 .where(*_delivery_claim(delivery))
                 .values(
@@ -405,23 +417,23 @@ class PostgresNotificationRepository:
                     claim_token=None,
                     last_error=error[:4000],
                 )
-                .returning(NotificationDeliveryRecord.user_id)
+                .returning(NotificationDeliveryRecord.account_id)
             )
-            if user_id is None:
+            if account_id is None:
                 return False
             await session.execute(
                 update(NotificationProfile)
-                .where(NotificationProfile.user_id == user_id)
+                .where(NotificationProfile.account_id == account_id)
                 .values(dm_enabled=False, dm_suspended_at=func.now(), updated_at=func.now())
             )
             return True
 
     @staticmethod
-    async def _cancel_pending_deliveries(session: AsyncSession, user_id: int) -> None:
+    async def _cancel_pending_deliveries(session: AsyncSession, account_id: int) -> None:
         await session.execute(
             update(NotificationDeliveryRecord)
             .where(
-                NotificationDeliveryRecord.user_id == user_id,
+                NotificationDeliveryRecord.account_id == account_id,
                 NotificationDeliveryRecord.sent_at.is_(None),
                 NotificationDeliveryRecord.dead_at.is_(None),
             )
@@ -437,26 +449,30 @@ class PostgresNotificationRepository:
         build = await session.get(Build, event.aggregate_id)
         if build is None or build.submission_status != Status.PENDING:
             return
-        staff_user_ids = (
+        staff_account_ids = (
             await session.execute(
-                select(User.id)
-                .outerjoin(GlobalAdministrator, GlobalAdministrator.discord_id == User.discord_id)
+                select(Account.id)
+                .outerjoin(GlobalAdministrator, GlobalAdministrator.account_id == Account.id)
+                .outerjoin(
+                    AccountIdentity,
+                    (AccountIdentity.account_id == Account.id) & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                )
                 .where(
                     or_(
-                        GlobalAdministrator.discord_id.is_not(None),
-                        User.discord_id.in_(self._staff_discord_ids),
+                        GlobalAdministrator.account_id.is_not(None),
+                        AccountIdentity.subject.in_(str(value) for value in self._staff_discord_ids),
                     )
                 )
-                .order_by(User.id)
+                .order_by(Account.id)
             )
         ).scalars()
-        for user_id in staff_user_ids:
+        for account_id in staff_account_ids:
             await self._insert(
                 session,
                 event=event,
-                user_id=user_id,
+                account_id=account_id,
                 kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-                source_key=f"event:{event.id}:staff:{user_id}",
+                source_key=f"event:{event.id}:staff:{account_id}",
                 payload={"build_id": build.id, "category": None if build.category is None else str(build.category)},
             )
 
@@ -475,9 +491,9 @@ class PostgresNotificationRepository:
         await self._insert(
             session,
             event=event,
-            user_id=build.submitter_user_id,
+            account_id=build.submitter_account_id,
             kind=kind,
-            source_key=f"event:{event.id}:owner:{build.submitter_user_id}",
+            source_key=f"event:{event.id}:owner:{build.submitter_account_id}",
             payload={"build_id": build.id},
         )
         if event.event_type != "build.confirmed" or not await self._is_first_confirmation(session, event):
@@ -487,7 +503,7 @@ class PostgresNotificationRepository:
             return
         subscriber_ids = (
             await session.execute(
-                select(NotificationSubscriptionRecord.user_id)
+                select(NotificationSubscriptionRecord.account_id)
                 .where(
                     NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR.value,
                     NotificationSubscriptionRecord.subject_id.in_(creator_ids),
@@ -496,13 +512,13 @@ class PostgresNotificationRepository:
                 .distinct()
             )
         ).scalars()
-        for user_id in subscriber_ids:
+        for account_id in subscriber_ids:
             await self._insert(
                 session,
                 event=event,
-                user_id=user_id,
+                account_id=account_id,
                 kind=NotificationKind.CREATOR_BUILD_CONFIRMED,
-                source_key=f"event:{event.id}:creator:{user_id}",
+                source_key=f"event:{event.id}:creator:{account_id}",
                 payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
             )
 
@@ -514,12 +530,12 @@ class PostgresNotificationRepository:
             return
         gains = await self._record_gains(session, event.aggregate_id, previous_run_id)
         for build_id, build_gains in gains.items():
-            recipients = set(await self._creator_user_ids(session, build_id))
+            recipients = set(await self._creator_account_ids(session, build_id))
             creator_ids = tuple(await self._creator_public_ids(session, build_id))
             competition_ids = {gain.competition_id for gain in build_gains}
             subscribed = (
                 await session.execute(
-                    select(NotificationSubscriptionRecord.user_id).where(
+                    select(NotificationSubscriptionRecord.account_id).where(
                         NotificationSubscriptionRecord.enabled.is_(True),
                         or_(
                             (
@@ -549,13 +565,13 @@ class PostgresNotificationRepository:
                     for gain in build_gains
                 ],
             }
-            for user_id in recipients:
+            for account_id in recipients:
                 await self._insert(
                     session,
                     event=event,
-                    user_id=user_id,
+                    account_id=account_id,
                     kind=NotificationKind.RECORD_GAINED,
-                    source_key=f"event:{event.id}:record-build:{build_id}:user:{user_id}",
+                    source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
                     payload=payload,
                 )
 
@@ -564,17 +580,21 @@ class PostgresNotificationRepository:
         session: AsyncSession,
         *,
         event: DomainEvent,
-        user_id: int,
+        account_id: int,
         kind: NotificationKind,
         source_key: str,
         payload: dict[str, object],
     ) -> None:
         row = (
             await session.execute(
-                select(NotificationProfile, User.discord_id)
-                .join(User, User.id == NotificationProfile.user_id)
+                select(NotificationProfile, AccountIdentity.subject)
+                .join(
+                    AccountIdentity,
+                    (AccountIdentity.account_id == NotificationProfile.account_id)
+                    & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                )
                 .where(
-                    NotificationProfile.user_id == user_id,
+                    NotificationProfile.account_id == account_id,
                     NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
                     NotificationProfile.consented_at.is_not(None),
                     or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
@@ -587,7 +607,7 @@ class PostgresNotificationRepository:
         notification_id = await session.scalar(
             insert(NotificationRecord)
             .values(
-                user_id=user_id,
+                account_id=account_id,
                 event_id=event.id,
                 source_key=source_key,
                 kind=kind.value,
@@ -606,7 +626,7 @@ class PostgresNotificationRepository:
             return
         await session.execute(
             insert(NotificationDeliveryRecord)
-            .values(notification_id=notification_id, user_id=user_id, discord_id=discord_id)
+            .values(notification_id=notification_id, account_id=account_id, discord_id=int(discord_id))
             .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
         )
 
@@ -640,8 +660,8 @@ class PostgresNotificationRepository:
         return tuple(
             (
                 await session.execute(
-                    select(User.public_creator_id)
-                    .join(CreatorAlias, CreatorAlias.user_id == User.id)
+                    select(Account.public_creator_id)
+                    .join(CreatorAlias, CreatorAlias.account_id == Account.id)
                     .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
                     .where(BuildCreator.build_id == build_id)
                     .distinct()
@@ -650,16 +670,16 @@ class PostgresNotificationRepository:
         )
 
     @staticmethod
-    async def _creator_user_ids(session: AsyncSession, build_id: int) -> Sequence[int]:
-        user_ids = (
+    async def _creator_account_ids(session: AsyncSession, build_id: int) -> Sequence[int]:
+        account_ids = (
             await session.execute(
-                select(CreatorAlias.user_id)
+                select(CreatorAlias.account_id)
                 .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
-                .where(BuildCreator.build_id == build_id, CreatorAlias.user_id.is_not(None))
+                .where(BuildCreator.build_id == build_id, CreatorAlias.account_id.is_not(None))
                 .distinct()
             )
         ).scalars()
-        return tuple(user_id for user_id in user_ids if user_id is not None)
+        return tuple(account_id for account_id in account_ids if account_id is not None)
 
     @staticmethod
     async def _record_gains(
@@ -705,7 +725,7 @@ class PostgresNotificationRepository:
     ) -> set[int]:
         rows = (
             await session.execute(
-                select(NotificationSubscriptionRecord.user_id, NotificationSubscriptionRecord.filter).where(
+                select(NotificationSubscriptionRecord.account_id, NotificationSubscriptionRecord.filter).where(
                     NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD_FILTER.value,
                     NotificationSubscriptionRecord.enabled.is_(True),
                 )
@@ -728,20 +748,20 @@ class PostgresNotificationRepository:
             for tag_id, numeric, text_value, boolean in assignments
         }
         matched: set[int] = set()
-        for user_id, raw_filter in rows:
+        for account_id, raw_filter in rows:
             if raw_filter is None:
                 continue
             record_filter = RecordSubscriptionFilter.from_dict(dict(raw_filter))
             if any(_filter_matches(record_filter, gain, tags) for gain in gains):
-                matched.add(user_id)
+                matched.add(account_id)
         return matched
 
 
-def _preferences(user_id: int, profile: NotificationProfile | None) -> NotificationPreferences:
+def _preferences(account_id: int, profile: NotificationProfile | None) -> NotificationPreferences:
     if profile is None:
-        return NotificationPreferences(user_id=user_id, notice_version=None, consented_at=None)
+        return NotificationPreferences(account_id=account_id, notice_version=None, consented_at=None)
     return NotificationPreferences(
-        user_id=user_id,
+        account_id=account_id,
         notice_version=profile.notice_version,
         consented_at=profile.consented_at,
         web_enabled=profile.web_enabled,
@@ -753,7 +773,7 @@ def _preferences(user_id: int, profile: NotificationProfile | None) -> Notificat
 def _subscription(row: NotificationSubscriptionRecord) -> NotificationSubscription:
     return NotificationSubscription(
         id=row.id,
-        user_id=row.user_id,
+        account_id=row.account_id,
         kind=SubscriptionKind(row.kind),
         subject_id=row.subject_id,
         record_filter=None if row.filter is None else RecordSubscriptionFilter.from_dict(dict(row.filter)),

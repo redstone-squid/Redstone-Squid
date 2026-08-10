@@ -47,7 +47,7 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         self.records[identity] = ExistingRequest(existing.fingerprint, response)
 
 
-class CountingUsers:
+class CountingAccounts:
     def __init__(self) -> None:
         self.calls = 0
 
@@ -56,15 +56,15 @@ class CountingUsers:
         return 100_000 + self.calls
 
 
-def idempotent_client() -> tuple[TestClient, CountingUsers, MockDatabaseManager]:
-    users = CountingUsers()
+def idempotent_client() -> tuple[TestClient, CountingAccounts, MockDatabaseManager]:
+    accounts = CountingAccounts()
     service = IdempotencyService(MemoryIdempotencyRepository())
-    app, database = build_app(idempotency=service, users=users)
-    return TestClient(app), users, database
+    app, database = build_app(idempotency=service, accounts=accounts)
+    return TestClient(app), accounts, database
 
 
 def test_replays_completed_response_without_repeating_mutation() -> None:
-    client, users, database = idempotent_client()
+    client, accounts, database = idempotent_client()
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "verification-request-1"}
 
     with client:
@@ -75,11 +75,11 @@ def test_replays_completed_response_without_repeating_mutation() -> None:
     assert first.status_code == replay.status_code == 201
     assert first.content == replay.content == b"100001"
     assert first.headers["content-type"] == replay.headers["content-type"]
-    assert users.calls == 1
+    assert accounts.calls == 1
 
 
 def test_reusing_key_for_different_payload_returns_conflict() -> None:
-    client, users, database = idempotent_client()
+    client, accounts, database = idempotent_client()
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "verification-request-2"}
 
     with client:
@@ -94,11 +94,11 @@ def test_reusing_key_for_different_payload_returns_conflict() -> None:
     assert first.status_code == 201
     assert conflict.status_code == 409
     assert conflict.json()["code"] == ErrorCode.IDEMPOTENCY_CONFLICT
-    assert users.calls == 1
+    assert accounts.calls == 1
 
 
 def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
-    client, users, database = idempotent_client()
+    client, accounts, database = idempotent_client()
     headers = {"Authorization": TEST_SYNERGY_SECRET}
 
     with client:
@@ -108,7 +108,7 @@ def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
     assert database.closed
     assert first.json() == 100_001
     assert second.json() == 100_002
-    assert users.calls == 2
+    assert accounts.calls == 2
 
 
 @pytest.mark.asyncio
@@ -121,10 +121,10 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_princip
         "route": "/v1/builds",
     }
 
-    first = await service.reserve(principal="user:1", **arguments)
+    first = await service.reserve(principal="account:1", **arguments)
     with pytest.raises(IdempotencyInProgressError):
-        await service.reserve(principal="user:1", **arguments)
-    other_principal = await service.reserve(principal="user:2", **arguments)
+        await service.reserve(principal="account:1", **arguments)
+    other_principal = await service.reserve(principal="account:2", **arguments)
 
     assert isinstance(first, PendingRequest)
     assert isinstance(other_principal, PendingRequest)

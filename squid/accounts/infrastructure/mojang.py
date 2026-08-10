@@ -6,7 +6,7 @@ from uuid import UUID
 
 import aiohttp
 
-from squid.users.errors import MinecraftServiceUnavailableError
+from squid.accounts.errors import MinecraftServiceUnavailableError
 
 MAX_PROFILE_RESPONSE_BYTES = 64 * 1024
 

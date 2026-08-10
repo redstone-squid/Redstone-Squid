@@ -75,7 +75,7 @@ class VoteSessionDetail(BaseModel):
     own_selection: OwnVoteSelection | None
 
     @classmethod
-    def from_domain(cls, session: VoteSessionSnapshot, *, caller_id: int | None = None) -> "VoteSessionDetail":
+    def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> "VoteSessionDetail":
         options_by_id: dict[str, VoteOption] = {}
         for option in session.options:
             assert option.identifier is not None
@@ -93,7 +93,9 @@ class VoteSessionDetail(BaseModel):
                 net=session.net_votes,
             )
         poll = session.poll
-        own_selection = next((selection for selection in session.selections if selection.user_id == caller_id), None)
+        own_selection = next(
+            (selection for selection in session.selections if selection.account_id == caller_account_id), None
+        )
         return cls(
             id=session.id,
             kind=session.kind,

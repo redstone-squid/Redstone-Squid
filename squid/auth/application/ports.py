@@ -17,8 +17,8 @@ class ApiKeyRepository(Protocol):
         secret_hash: bytes,
         label: str,
         scopes: frozenset[str],
-        owner_user_id: int | None,
-        created_by: int | None,
+        owner_account_id: int | None,
+        created_by_account_id: int | None,
         expires_at: Instant | None,
     ) -> ApiKey: ...
 

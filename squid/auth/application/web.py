@@ -11,11 +11,11 @@ from urllib.parse import urlencode
 import httpx
 from whenever import Instant
 
+from squid.accounts.application import AccountService
+from squid.accounts.domain import CONSENT_CUTOFF
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 from squid.config import OAuthConfig
 from squid.core.errors import AuthenticationError, ServiceUnavailableError, ValidationError
-from squid.users.application import UserService
-from squid.users.domain import CONSENT_CUTOFF
 
 
 class WebSessionRepository(Protocol):
@@ -26,7 +26,13 @@ class WebSessionRepository(Protocol):
     async def consume_state(self, state: str, *, now: Instant) -> OAuthState | None: ...
 
     async def create_session(
-        self, *, token_hash: bytes, user_id: int, expires_at: Instant, user_agent: str | None
+        self,
+        *,
+        token_hash: bytes,
+        account_id: int,
+        discord_id: int,
+        expires_at: Instant,
+        user_agent: str | None,
     ) -> str: ...
 
     async def authenticate(self, token_hash: bytes, *, now: Instant) -> WebSessionIdentity | None: ...
@@ -40,7 +46,7 @@ class DiscordOAuthService:
     def __init__(
         self,
         repository: WebSessionRepository,
-        users: UserService,
+        accounts: AccountService,
         config: OAuthConfig,
         pepper: str,
         *,
@@ -48,7 +54,7 @@ class DiscordOAuthService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         self._repository = repository
-        self._users = users
+        self._accounts = accounts
         self._config = config
         self._pepper = pepper.encode()
         self._client = client or httpx.AsyncClient(timeout=10)
@@ -113,12 +119,13 @@ class DiscordOAuthService:
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             msg = "Discord OAuth exchange failed."
             raise ServiceUnavailableError(msg, resource="discord") from error
-        account = await self._users.get_or_create_account(discord_id)
+        account = await self._accounts.get_or_create_account(discord_id)
         assert account.id is not None
         token = secrets.token_urlsafe(32)
         await self._repository.create_session(
             token_hash=self.hash_token(token),
-            user_id=account.id,
+            account_id=account.id,
+            discord_id=discord_id,
             expires_at=self._now().add(hours=self._config.session_ttl_hours),
             user_agent=user_agent,
         )

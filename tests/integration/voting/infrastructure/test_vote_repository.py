@@ -7,6 +7,8 @@ from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
+# Register the account FK target in Base metadata for this intentionally minimal schema.
+from squid.accounts.infrastructure.models import Account as _Account  # noqa: F401
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 from squid.voting.infrastructure.repository import VoteRepository
 
@@ -15,7 +17,7 @@ CREATE TABLE vote_sessions (
     id BIGSERIAL PRIMARY KEY,
     status VARCHAR NOT NULL,
     result VARCHAR NOT NULL,
-    author_id BIGINT NOT NULL,
+    author_account_id BIGINT NOT NULL,
     kind VARCHAR NOT NULL,
     pass_threshold INTEGER NOT NULL,
     fail_threshold INTEGER NOT NULL,
@@ -66,16 +68,22 @@ CREATE TABLE messages (
     content VARCHAR,
     build_id BIGINT,
     vote_session_id BIGINT REFERENCES vote_sessions(id),
+    projection_resource_kind VARCHAR,
+    projection_source_key VARCHAR,
+    desired_action VARCHAR NOT NULL DEFAULT 'refresh',
+    desired_revision BIGINT NOT NULL DEFAULT 1,
+    applied_revision BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE TABLE votes (
     vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    user_id BIGINT,
+    account_id BIGINT NOT NULL,
+    discord_id BIGINT NOT NULL,
     guild_id BIGINT NOT NULL,
     option_id VARCHAR NOT NULL,
     emoji VARCHAR NOT NULL,
     weight DOUBLE PRECISION NOT NULL CHECK (weight > 0),
-    PRIMARY KEY (vote_session_id, user_id)
+    PRIMARY KEY (vote_session_id, account_id)
 );
 """
 
@@ -114,7 +122,7 @@ async def seed_delete_log_vote(
                 text(
                     """
                     INSERT INTO vote_sessions
-                        (status, result, author_id, kind, pass_threshold, fail_threshold)
+                        (status, result, author_account_id, kind, pass_threshold, fail_threshold)
                     VALUES
                         ('open', 'pending', 99, 'delete_log', :pass_threshold, :fail_threshold)
                     RETURNING id
@@ -164,10 +172,12 @@ async def seed_delete_log_vote(
             await session.execute(
                 text(
                     """
-                    INSERT INTO votes (vote_session_id, user_id, guild_id, option_id, emoji, weight)
+                    INSERT INTO votes
+                        (vote_session_id, account_id, discord_id, guild_id, option_id, emoji, weight)
                     VALUES (
                         :vote_session_id,
-                        :user_id,
+                        :account_id,
+                        :discord_id,
                         503,
                         CASE WHEN :weight < 0 THEN 'deny' ELSE 'approve' END,
                         CASE WHEN :weight < 0 THEN '👎' ELSE '👍' END,
@@ -176,8 +186,13 @@ async def seed_delete_log_vote(
                     """
                 ),
                 [
-                    {"vote_session_id": vote_session_id, "user_id": user_id, "weight": weight}
-                    for user_id, weight in votes.items()
+                    {
+                        "vote_session_id": vote_session_id,
+                        "account_id": account_id,
+                        "discord_id": account_id * 10,
+                        "weight": weight,
+                    }
+                    for account_id, weight in votes.items()
                 ],
             )
     return vote_session_id, message_id
@@ -188,14 +203,14 @@ async def test_vote_aggregates_are_persisted_by_repository(
 ) -> None:
     repository = VoteRepository(async_session_factory)
     build_session_id = await repository.create_build_session(
-        author_id=99,
+        author_account_id=99,
         pass_threshold=3,
         fail_threshold=-3,
         build_id=42,
         changes=[("submission_status", "pending", "confirmed")],
     )
     delete_session_id = await repository.create_delete_log_session(
-        author_id=100,
+        author_account_id=100,
         pass_threshold=4,
         fail_threshold=-2,
         message_id=501,
@@ -235,7 +250,7 @@ async def test_vote_aggregates_are_persisted_by_repository(
                 await session.execute(
                     text(
                         """
-                        SELECT author_id, kind, pass_threshold, fail_threshold, status, result
+                        SELECT author_account_id, kind, pass_threshold, fail_threshold, status, result
                         FROM vote_sessions
                         ORDER BY id
                         """
@@ -261,7 +276,7 @@ async def test_target_failure_rolls_back_vote_root(
 
     with pytest.raises(StatementError):
         await repository.create_build_session(
-            author_id=99,
+            author_account_id=99,
             pass_threshold=3,
             fail_threshold=-3,
             build_id=42,
@@ -302,7 +317,7 @@ async def test_custom_vote_options_are_persisted_in_order(
     )
 
     vote_session_id = await repository.create_delete_log_session(
-        author_id=100,
+        author_account_id=100,
         pass_threshold=4,
         fail_threshold=-2,
         message_id=501,
@@ -343,9 +358,9 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
     )
     repository = VoteRepository(async_session_factory)
 
-    inserted = await repository.cast_vote(message_id, 7, 503, "approve", "👍", 1.0)
-    replaced = await repository.cast_vote(message_id, 7, 503, "deny", "👎", 1.0)
-    removed = await repository.cast_vote(message_id, 7, 503, "deny", "👎", 1.0)
+    inserted = await repository.cast_vote(message_id, 7, 70, 503, "approve", "👍", 1.0)
+    replaced = await repository.cast_vote(message_id, 7, 70, 503, "deny", "👎", 1.0)
+    removed = await repository.cast_vote(message_id, 7, 70, 503, "deny", "👎", 1.0)
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
@@ -373,7 +388,7 @@ async def test_cast_vote_closes_at_either_threshold(
     repository = VoteRepository(async_session_factory)
 
     option_id, emoji = ("approve", "👍") if desired_weight > 0 else ("deny", "👎")
-    mutation = await repository.cast_vote(message_id, 7, 503, option_id, emoji, abs(desired_weight))
+    mutation = await repository.cast_vote(message_id, 7, 70, 503, option_id, emoji, abs(desired_weight))
 
     assert mutation is not None
     assert mutation.just_closed
@@ -392,8 +407,8 @@ async def test_concurrent_votes_report_exactly_one_closure(
     repository = VoteRepository(async_session_factory)
 
     results = await asyncio.gather(
-        repository.cast_vote(message_id, 7, 503, "approve", "👍", 1.0),
-        repository.cast_vote(message_id, 8, 503, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 7, 70, 503, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 8, 80, 503, "approve", "👍", 1.0),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -417,7 +432,7 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     )
     deadline = Instant.now().subtract(seconds=1)
     session_id = await repository.create_generic_session(
-        author_id=99,
+        author_account_id=99,
         guild_id=503,
         question="Choose one",
         visibility="anonymous_hidden",
@@ -436,8 +451,8 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
             {"message_id": message_id, "session_id": session_id},
         )
 
-    await repository.cast_vote(message_id, 7, 503, "one", "1️⃣", 3)
-    await repository.cast_vote(message_id, 8, 503, "two", "2️⃣", 1)
+    await repository.cast_vote(message_id, 7, 70, 503, "one", "1️⃣", 3)
+    await repository.cast_vote(message_id, 8, 80, 503, "two", "2️⃣", 1)
     snapshot = await repository.get_by_message(message_id)
 
     assert snapshot is not None

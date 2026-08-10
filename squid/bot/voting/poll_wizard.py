@@ -130,8 +130,10 @@ class PollConfirmation(ExpiringLayoutView):
             await interaction.response.send_message("Polls can only be published in a server.", ephemeral=True)
             return
         self.published = True
+        author = await self.cog.bot.services.accounts.get_or_create_account(interaction.user.id)
+        assert author.id is not None
         session_id = await self.cog.vote_service.start_generic_vote(
-            author_id=interaction.user.id,
+            author_account_id=author.id,
             guild_id=interaction.guild.id,
             question=self.draft.question,
             visibility=self.draft.visibility,

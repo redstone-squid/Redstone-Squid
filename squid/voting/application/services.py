@@ -55,7 +55,7 @@ class VoteService:
     async def start_build_vote(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         build_id: int,
@@ -65,7 +65,7 @@ class VoteService:
         """Create a build vote and its target atomically."""
         options = normalize_vote_options(options, kind="build")
         return await self._repository.create_build_session(
-            author_id=author_id,
+            author_account_id=author_account_id,
             pass_threshold=pass_threshold,
             fail_threshold=fail_threshold,
             build_id=build_id,
@@ -76,7 +76,7 @@ class VoteService:
     async def start_delete_log_vote(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         message_id: int,
@@ -87,7 +87,7 @@ class VoteService:
         """Create a message-deletion vote and its target atomically."""
         options = normalize_vote_options(options, kind="delete_log")
         return await self._repository.create_delete_log_session(
-            author_id=author_id,
+            author_account_id=author_account_id,
             pass_threshold=pass_threshold,
             fail_threshold=fail_threshold,
             message_id=message_id,
@@ -99,7 +99,7 @@ class VoteService:
     async def start_generic_vote(
         self,
         *,
-        author_id: int,
+        author_account_id: int,
         guild_id: int,
         question: str,
         visibility: VoteVisibility,
@@ -119,7 +119,7 @@ class VoteService:
             msg = "Poll options must belong to the poll guild."
             raise InvalidVoteConfigurationError(msg)
         return await self._repository.create_generic_session(
-            author_id=author_id,
+            author_account_id=author_account_id,
             guild_id=guild_id,
             question=question.strip(),
             visibility=visibility,
@@ -182,25 +182,21 @@ class VoteService:
         refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=actor)
         if unresolved:
             logger.warning(
-                "Vote session %s refresh retained cached weights for users %s",
+                "Vote session %s refresh retained cached weights for accounts %s",
                 snapshot.id,
                 unresolved,
                 extra={"squid.vote.session_id": snapshot.id},
             )
-        try:
-            mutation = await self._repository.cast_vote(
-                message_id,
-                actor.user_id,
-                actor.guild_id or message_guild_id,
-                option.identifier or option.emoji,
-                emoji,
-                weight,
-                refreshed,
-            )
-        except TypeError:
-            # Compatibility for repository adapters implementing the pre-selection contract.
-            signed_weight = weight if option.choice is VoteChoice.APPROVE else -weight
-            mutation = await self._repository.cast_vote(message_id, actor.user_id, signed_weight)  # type: ignore[call-arg]
+        mutation = await self._repository.cast_vote(
+            message_id,
+            actor.account_id,
+            actor.discord_id,
+            actor.guild_id or message_guild_id,
+            option.identifier or option.emoji,
+            emoji,
+            weight,
+            refreshed,
+        )
         if mutation is None:
             latest = await self._repository.get_by_message(message_id)
             rejection: VoteRejection = "closed" if latest is not None else "not_found"
@@ -239,7 +235,7 @@ class VoteService:
             return CastVoteResult(None, "not_found")
         if snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.guild_id != actor.guild_id:
             return CastVoteResult(snapshot, "wrong_guild")
-        if actor.user_id != snapshot.author_id and not actor.is_staff:
+        if actor.account_id != snapshot.author_account_id and not actor.is_staff:
             return CastVoteResult(snapshot, "not_authorized")
         await self.refresh(message_id)
         mutation = await self._repository.close(message_id)
@@ -322,14 +318,19 @@ class VoteService:
         weights: dict[int, float] = {}
         unresolved: list[int] = []
         for selection in snapshot.selections:
-            actor = replacing if replacing is not None and replacing.user_id == selection.user_id else None
-            actor = actor or await self._actor_resolver.resolve(selection.user_id, selection.guild_id, snapshot.kind)
+            actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
+            actor = actor or await self._actor_resolver.resolve(
+                selection.account_id,
+                selection.discord_id,
+                selection.guild_id,
+                snapshot.kind,
+            )
             if actor is None:
-                unresolved.append(selection.user_id)
+                unresolved.append(selection.account_id)
                 continue
             weight = await self._policy.calculate(actor, snapshot, selection.emoji)
             if weight is None:
-                weights[selection.user_id] = 0
+                weights[selection.account_id] = 0
             elif isfinite(weight) and weight > 0:
                 option = next(
                     (
@@ -341,5 +342,5 @@ class VoteService:
                     ),
                     None,
                 )
-                weights[selection.user_id] = weight * (option.multiplier if option is not None else 1)
+                weights[selection.account_id] = weight * (option.multiplier if option is not None else 1)
         return weights, unresolved

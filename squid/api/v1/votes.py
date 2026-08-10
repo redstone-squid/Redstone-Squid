@@ -5,13 +5,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.security import Principal, Scope, require
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
-from squid.users.errors import ConsentRequiredError
 from squid.voting.domain import CastVoteResult
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
@@ -42,7 +42,7 @@ async def get_vote_session(
             resource="vote_session",
             public_context={"vote_session_id": vote_session_id},
         )
-    return VoteSessionDetail.from_domain(session, caller_id=principal.discord_id)
+    return VoteSessionDetail.from_domain(session, caller_account_id=principal.account_id)
 
 
 @router.post(
@@ -59,7 +59,7 @@ async def cast_vote(
     principal: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
-    if principal.kind != "user" or principal.discord_id is None:
+    if principal.kind != "account" or principal.account_id is None or principal.discord_id is None:
         raise AuthenticationError
     if principal.consent_pending:
         raise ConsentRequiredError(principal.discord_id).with_context(
@@ -71,13 +71,13 @@ async def cast_vote(
         raise _vote_not_found(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
-    actor = await vote_members.member(principal.discord_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(principal.account_id, principal.discord_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
     result = await votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
-    return VoteSessionDetail.from_domain(result.session, caller_id=principal.discord_id)
+    return VoteSessionDetail.from_domain(result.session, caller_account_id=principal.account_id)
 
 
 def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:

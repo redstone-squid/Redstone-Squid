@@ -25,11 +25,11 @@ class Scope(StrEnum):
 class Principal:
     """Transport-neutral authenticated or anonymous caller identity."""
 
-    kind: Literal["anonymous", "service", "user"]
+    kind: Literal["anonymous", "service", "account"]
     subject: str
     scopes: frozenset[Scope] = frozenset()
     discord_id: int | None = None
-    user_id: int | None = None
+    account_id: int | None = None
     consent_pending: bool = False
 
 
@@ -69,11 +69,11 @@ async def current_principal(
             if csrf_cookie is None or csrf_header is None or not hmac.compare_digest(csrf_cookie, csrf_header):
                 raise AuthorizationError
         return Principal(
-            kind="user",
-            subject=f"user:{identity.user_id}",
+            kind="account",
+            subject=f"account:{identity.account_id}",
             scopes=frozenset(Scope),
             discord_id=identity.discord_id,
-            user_id=identity.user_id,
+            account_id=identity.account_id,
             consent_pending=identity.consent_pending,
         )
     config = request.app.state.config
@@ -96,5 +96,5 @@ async def current_principal(
         kind="service",
         subject=f"api-key:{key.key_id}",
         scopes=valid_scopes,
-        user_id=key.owner_user_id,
+        account_id=key.owner_account_id,
     )

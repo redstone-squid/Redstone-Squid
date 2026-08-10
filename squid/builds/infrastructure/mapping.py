@@ -3,6 +3,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.models import AccountIdentity, CreatorAlias
 from squid.builds.domain import Build, BuildCategory
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
@@ -20,7 +22,6 @@ from squid.tags.domain import (
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
-from squid.users.infrastructure.models import CreatorAlias, User
 from squid.versions.infrastructure.models import Version
 
 
@@ -41,9 +42,13 @@ class BuildMapper:
                 )
             ).all()
         )
-        submitter_discord_id = await session.scalar(
-            select(User.discord_id).where(User.id == sql_build.submitter_user_id)
+        submitter_subject = await session.scalar(
+            select(AccountIdentity.subject).where(
+                AccountIdentity.account_id == sql_build.submitter_account_id,
+                AccountIdentity.provider == IdentityProvider.DISCORD,
+            )
         )
+        submitter_discord_id = None if submitter_subject is None else int(submitter_subject)
         version_rows = (
             await session.scalars(
                 select(Version)

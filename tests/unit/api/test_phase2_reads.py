@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from whenever import Instant
 
+from squid.accounts.domain import CreatorAlias, CreatorProfile
 from squid.api.dependencies import get_services
 from squid.runtime import ApiServices
 from squid.tags.domain import (
@@ -17,7 +18,6 @@ from squid.tags.domain import (
     TagSemanticKind,
     TagValueType,
 )
-from squid.users.domain import CreatorAlias, CreatorProfile
 from squid.versions.domain import MinecraftVersion
 from squid.voting.domain import GenericPoll, VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteTarget
 from tests.unit.api.fakes import MockDatabaseManager
@@ -39,11 +39,11 @@ class VersionFake:
         return [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
 
 
-class UserFake:
+class AccountFake:
     async def get_creator_alias(self, name: str):
         creator_id = UUID("22222222-2222-2222-2222-222222222222")
         return (
-            CreatorAlias(7, "Builder", user_id=42, public_creator_id=creator_id)
+            CreatorAlias(7, "Builder", account_id=42, public_creator_id=creator_id)
             if name.casefold() == "builder"
             else None
         )
@@ -120,7 +120,7 @@ def test_creator_alias_never_exposes_linked_account(
     app_factory: tuple[FastAPI, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
-    _override(app, users=UserFake())
+    _override(app, accounts=AccountFake())
 
     with TestClient(app) as client:
         response = client.get("/v1/creator-aliases/builder")
@@ -136,7 +136,7 @@ def test_creator_alias_never_exposes_linked_account(
 
 def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
     app, _database = app_factory
-    _override(app, users=UserFake())
+    _override(app, accounts=AccountFake())
 
     with TestClient(app) as client:
         response = client.get("/v1/creators/22222222-2222-2222-2222-222222222222")
@@ -180,7 +180,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     app, _database = app_factory
     session = VoteSessionSnapshot(
         id=9,
-        author_id=123,
+        author_account_id=123,
         kind="generic",
         status="open",
         result="pending",
@@ -190,7 +190,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
         messages=(),
         options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
         target=VoteTarget(),
-        selections=(VoteSelection(111, 99, "red", "1", 2.5),),
+        selections=(VoteSelection(111, 222, 99, "red", "1", 2.5),),
         poll=GenericPoll("Pick a color", "anonymous_hidden", 99, Instant.now().add(hours=1)),
     )
     _override(app, votes=VoteFake(session))

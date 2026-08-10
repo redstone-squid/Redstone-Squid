@@ -15,7 +15,7 @@ _CREATE_SCHEMA = """
 CREATE TABLE builds (
     id BIGSERIAL PRIMARY KEY,
     submission_status SMALLINT NOT NULL,
-    submitter_user_id BIGINT NOT NULL DEFAULT 1,
+    submitter_account_id BIGINT NOT NULL DEFAULT 1,
     category TEXT
 );
 CREATE TABLE vote_sessions (
@@ -142,9 +142,9 @@ async def test_confirming_a_build_emits_one_event_with_a_delivery_per_consumer(
             )
         ).one()
     assert deliveries == [("discord", 0), ("discord", 0)]
-    assert confirmed.schema_version == 2
+    assert confirmed.schema_version == 3
     assert confirmed.payload["first_confirmation"] is True
-    assert confirmed.payload["submitter_user_id"] == 1
+    assert confirmed.payload["submitter_account_id"] == 1
 
 
 async def test_denying_a_build_emits_a_denied_event(

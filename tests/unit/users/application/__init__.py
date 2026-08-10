@@ -1,1 +1,0 @@
-"""User application unit tests."""

@@ -85,8 +85,10 @@ class BuildVoteSession(AbstractVoteSession):
             assert original is not None
             changes = original.diff(self.build)
 
+        author = await self.bot.services.accounts.get_or_create_account(self.author_id)
+        assert author.id is not None
         self.id = await self.bot.services.votes.start_build_vote(
-            author_id=self.author_id,
+            author_account_id=author.id,
             pass_threshold=self.pass_threshold,
             fail_threshold=self.fail_threshold,
             build_id=self.build.id,
@@ -137,7 +139,7 @@ class BuildVoteSession(AbstractVoteSession):
         self.__init__(
             bot=bot,
             messages=snapshot.message_ids,
-            author_id=snapshot.author_id,
+            author_id=0,
             build=build,
             type="add",  # TODO: Handle update type properly
             pass_threshold=snapshot.pass_threshold,

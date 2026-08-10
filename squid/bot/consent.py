@@ -4,11 +4,11 @@ from typing import Any, override
 
 import discord
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.utils.components import edit_interaction_layout, no_mentions
 from squid.core.i18n import _
-from squid.users.domain import CURRENT_CONSENT_VERSION, UserConsent
 
 
 class UserDataConsentView(ExpiringLayoutView):
@@ -19,7 +19,7 @@ class UserDataConsentView(ExpiringLayoutView):
     def __init__(self, user_id: int, *, locale: str | None = None, timeout: float = 120.0) -> None:
         super().__init__(timeout=timeout)
         self.user_id = user_id
-        self.consent: UserConsent | None = None
+        self.consent: AccountConsent | None = None
         controls = self.actions
         self.clear_items()
         self.add_item(
@@ -57,7 +57,7 @@ class UserDataConsentView(ExpiringLayoutView):
 
     @actions.button(label="Agree and link", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        self.consent = UserConsent.grant_current()
+        self.consent = AccountConsent.grant_current()
         await self._finish(interaction)
 
     async def _finish(self, interaction: discord.Interaction[Any]) -> None:

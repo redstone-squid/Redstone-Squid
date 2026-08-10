@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.users.domain import UserAccount
+from squid.accounts.domain import Account, IdentityProvider
 
 
 class UserMe(BaseModel):
@@ -18,13 +18,15 @@ class UserMe(BaseModel):
     consent_pending: bool
 
     @classmethod
-    def from_domain(cls, account: UserAccount, *, consent_pending: bool) -> "UserMe":
-        assert account.id is not None and account.discord_id is not None
+    def from_domain(cls, account: Account, *, consent_pending: bool) -> "UserMe":
+        discord = account.identity(IdentityProvider.DISCORD)
+        java = account.identity(IdentityProvider.JAVA)
+        assert account.id is not None and discord is not None and discord.discord_id is not None
         return cls(
             id=account.id,
-            discord_id=account.discord_id,
-            minecraft_uuid=str(account.minecraft_uuid) if account.minecraft_uuid is not None else None,
-            ign=account.ign,
+            discord_id=discord.discord_id,
+            minecraft_uuid=java.subject if java is not None else None,
+            ign=java.display_name if java is not None else None,
             consent_version=account.consent.version if account.consent is not None else None,
             consent_pending=consent_pending,
         )

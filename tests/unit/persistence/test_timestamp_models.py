@@ -4,12 +4,18 @@ import pytest
 from sqlalchemy import inspect
 from whenever import Instant
 
+from squid.accounts.infrastructure.models import (
+    Account,
+    AccountIdentity,
+    CreatorAlias,
+    CreatorAliasClaim,
+    VerificationCode,
+)
 from squid.auth.infrastructure.models import ApiKey
 from squid.builds.infrastructure.models import Build, BuildEditHistory
 from squid.messages.infrastructure.models import Message
 from squid.persistence.types import InstantUTC
 from squid.tags.infrastructure.models import TagAlias
-from squid.users.infrastructure.models import CreatorAlias, CreatorAliasClaim, User, VerificationCode
 from squid.voting.infrastructure.models import VoteSession
 
 
@@ -30,8 +36,10 @@ from squid.voting.infrastructure.models import VoteSession
         (CreatorAliasClaim, "created_at"),
         (CreatorAliasClaim, "resolved_at"),
         (TagAlias, "created_at"),
-        (User, "consented_at"),
-        (User, "created_at"),
+        (Account, "consented_at"),
+        (Account, "created_at"),
+        (AccountIdentity, "verified_at"),
+        (AccountIdentity, "created_at"),
         (VerificationCode, "created"),
         (VerificationCode, "expires"),
         (VoteSession, "created_at"),

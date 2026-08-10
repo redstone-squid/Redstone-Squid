@@ -23,7 +23,7 @@ from squid.voting.domain import (
 def snapshot() -> VoteSessionSnapshot:
     return VoteSessionSnapshot(
         id=12,
-        author_id=7,
+        author_account_id=7,
         kind="build",
         status="open",
         result="pending",
@@ -36,20 +36,20 @@ def snapshot() -> VoteSessionSnapshot:
     )
 
 
-def user(subject: str = "user:7") -> Principal:
+def account(subject: str = "account:1") -> Principal:
     return Principal(
-        kind="user",
+        kind="account",
         subject=subject,
         scopes=frozenset({Scope.VOTES_CAST}),
         discord_id=7,
-        user_id=1,
+        account_id=1,
     )
 
 
 @pytest.mark.asyncio
 async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -> None:
     session = snapshot()
-    actor = VoteActor(7, guild_id=10, role_ids=frozenset({99}))
+    actor = VoteActor(1, 7, guild_id=10, role_ids=frozenset({99}))
     votes = SimpleNamespace(
         get_session_by_id=AsyncMock(return_value=session),
         cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session)),
@@ -62,10 +62,10 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
         VoteInput(guild_id=10, option_id="approve"),
         services.votes,
         cast(Any, members),
-        user(),
+        account(),
     )
 
-    members.member.assert_awaited_once_with(7, 10, "build")
+    members.member.assert_awaited_once_with(1, 7, 10, "build")
     votes.cast_vote_by_session.assert_awaited_once_with(12, actor, "approve")
     assert response.id == 12
 
@@ -91,7 +91,7 @@ async def test_invalid_option_is_a_typed_client_error() -> None:
         get_session_by_id=AsyncMock(return_value=session),
         cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session, rejection="invalid_option")),
     )
-    members = SimpleNamespace(member=AsyncMock(return_value=VoteActor(7, guild_id=10)))
+    members = SimpleNamespace(member=AsyncMock(return_value=VoteActor(1, 7, guild_id=10)))
 
     with pytest.raises(ValidationError):
         await cast_vote(
@@ -99,5 +99,5 @@ async def test_invalid_option_is_a_typed_client_error() -> None:
             VoteInput(guild_id=10, option_id="missing"),
             cast(Any, votes),
             cast(Any, members),
-            user("user:invalid-option"),
+            account("account:invalid-option"),
         )

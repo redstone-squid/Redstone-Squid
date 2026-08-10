@@ -6,11 +6,11 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.accounts.infrastructure.models import Account
 from squid.auth.application.web import WebSessionRepository, consent_pending
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 from squid.auth.infrastructure.session_models import OAuthStateModel, WebSession
-from squid.users.domain import CURRENT_CONSENT_VERSION
-from squid.users.infrastructure.models import User
 
 
 class PostgresWebSessionRepository(WebSessionRepository):
@@ -45,10 +45,22 @@ class PostgresWebSessionRepository(WebSessionRepository):
 
     @override
     async def create_session(
-        self, *, token_hash: bytes, user_id: int, expires_at: Instant, user_agent: str | None
+        self,
+        *,
+        token_hash: bytes,
+        account_id: int,
+        discord_id: int,
+        expires_at: Instant,
+        user_agent: str | None,
     ) -> str:
         async with self._session_factory() as session:
-            model = WebSession(token_hash=token_hash, user_id=user_id, expires_at=expires_at, user_agent=user_agent)
+            model = WebSession(
+                token_hash=token_hash,
+                account_id=account_id,
+                discord_id=discord_id,
+                expires_at=expires_at,
+                user_agent=user_agent,
+            )
             session.add(model)
             await session.commit()
             return str(model.id)
@@ -58,8 +70,8 @@ class PostgresWebSessionRepository(WebSessionRepository):
         async with self._session_factory() as session:
             row = (
                 await session.execute(
-                    select(WebSession, User)
-                    .join(User, User.id == WebSession.user_id)
+                    select(WebSession, Account)
+                    .join(Account, Account.id == WebSession.account_id)
                     .where(
                         WebSession.token_hash == token_hash,
                         WebSession.revoked_at.is_(None),
@@ -69,16 +81,14 @@ class PostgresWebSessionRepository(WebSessionRepository):
             ).one_or_none()
             if row is None:
                 return None
-            web_session, user = row
-            if user.discord_id is None:
-                return None
+            web_session, account = row
             await session.execute(update(WebSession).where(WebSession.id == web_session.id).values(last_seen_at=now))
             await session.commit()
             return WebSessionIdentity(
                 str(web_session.id),
-                user.id,
-                user.discord_id,
-                consent_pending(user.created_at, user.consent_version, CURRENT_CONSENT_VERSION),
+                account.id,
+                web_session.discord_id,
+                consent_pending(account.created_at, account.consent_version, CURRENT_CONSENT_VERSION),
             )
 
     @override
