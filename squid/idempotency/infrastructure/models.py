@@ -17,6 +17,14 @@ class IdempotencyRequest(Base, kw_only=True):
     __tablename__ = "idempotency_requests"
     __table_args__ = (
         CheckConstraint("state IN ('in_progress', 'completed')", name="idempotency_requests_state_check"),
+        CheckConstraint(
+            "(state = 'in_progress' AND response_status IS NULL AND response_headers IS NULL "
+            "AND response_body_ciphertext IS NULL AND response_body_key_id IS NULL AND response_body_nonce IS NULL "
+            "AND completed_at IS NULL) OR (state = 'completed' AND response_status IS NOT NULL "
+            "AND response_headers IS NOT NULL AND response_body_ciphertext IS NOT NULL "
+            "AND response_body_key_id IS NOT NULL AND response_body_nonce IS NOT NULL AND completed_at IS NOT NULL)",
+            name="idempotency_requests_response_state_check",
+        ),
         UniqueConstraint("principal", "idempotency_key", name="idempotency_requests_principal_key"),
         Index("idempotency_requests_expires_at_idx", "expires_at"),
     )
@@ -32,7 +40,9 @@ class IdempotencyRequest(Base, kw_only=True):
     )
     response_status: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     response_headers: Mapped[dict[str, str] | None] = mapped_column(JSONB, default=None)
-    response_body: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
+    response_body_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
+    response_body_key_id: Mapped[str | None] = mapped_column(Text, default=None)
+    response_body_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

@@ -32,6 +32,8 @@ class IdempotencyRepository(Protocol):
 
     async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None: ...
 
+    async def purge_expired(self, *, now: Instant) -> int: ...
+
 
 class IdempotencyService:
     """Claim caller keys and distinguish replay from conflicting reuse."""
@@ -80,6 +82,10 @@ class IdempotencyService:
     async def complete(self, request: PendingRequest, response: StoredResponse) -> None:
         """Make a buffered response available to later equivalent requests."""
         await self._repository.complete(request, response, now=self._now())
+
+    async def purge_expired(self) -> int:
+        """Remove replay state whose bounded retention window has elapsed."""
+        return await self._repository.purge_expired(now=self._now())
 
     @staticmethod
     def _validate_existing(existing: ExistingRequest, fingerprint: bytes) -> None:

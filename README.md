@@ -55,8 +55,15 @@ cp .env.example .env
 
 The complete deployment requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_PEPPER`,
 `SQUID_DISCORD_TOKEN`, `SQUID_API_SECRET`, `SQUID_API_KEY_PEPPER`, `SQUID_API_SESSION_PEPPER`, and
-`SQUID_CURSOR_SECRET`. Exported environment variables take precedence over `.env`. Discord OAuth,
+`SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID`, `SQUID_API_IDEMPOTENCY_KEYS`, and `SQUID_CURSOR_SECRET`. Exported environment
+variables take precedence over `.env`. Discord OAuth,
 REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
+
+The API encrypts retained idempotency responses with AES-256-GCM. Generate key values with
+`openssl rand -base64 32`; configure the resulting JSON keyring in `SQUID_API_IDEMPOTENCY_KEYS` and select the key
+used for new responses with `SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID`. To rotate, add the new key, deploy it as active,
+wait at least the 24-hour replay-retention window, and only then remove the old entry. Every API replica must receive
+the same keyring. The worker purges expired replay state on its regular maintenance schedule.
 
 The API applies layered five-minute limits by client IP, authenticated principal, write request, and vote write.
 Production Compose runs a private, non-persistent Redis service so limits are shared across API replicas; when Redis is

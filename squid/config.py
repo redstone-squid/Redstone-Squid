@@ -1,5 +1,7 @@
 """Typed process configuration loaded and validated at application boundaries."""
 
+import base64
+import binascii
 import json
 import logging
 import os
@@ -240,6 +242,52 @@ class CursorConfig(_FrozenModel):
         return value
 
 
+class IdempotencyEncryptionConfig(_FrozenModel):
+    """Active and retained AES-256 keys for encrypted API response replay."""
+
+    active_key_id: str
+    keys: dict[str, SecretStr] = Field(min_length=1, max_length=8)
+
+    @field_validator("active_key_id")
+    @classmethod
+    def _validate_active_key_id(cls, value: str) -> str:
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value) is None:
+            msg = "Must be a 1-64 character identifier containing only letters, digits, dot, underscore, or hyphen."
+            raise ValueError(msg)
+        return value
+
+    @field_validator("keys")
+    @classmethod
+    def _validate_keys(cls, value: dict[str, SecretStr]) -> dict[str, SecretStr]:
+        for key_id, encoded_key in value.items():
+            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", key_id) is None:
+                msg = "Every key ID must use the same format as active_key_id."
+                raise ValueError(msg)
+            try:
+                key = base64.b64decode(encoded_key.get_secret_value(), validate=True)
+            except (binascii.Error, ValueError) as exc:
+                msg = "Every idempotency key must be valid padded base64."
+                raise ValueError(msg) from exc
+            if len(key) != 32:
+                msg = "Every idempotency key must decode to exactly 32 bytes."
+                raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def _require_active_key(self) -> Self:
+        if self.active_key_id not in self.keys:
+            msg = "The active idempotency key ID must exist in the keyring."
+            raise ValueError(msg)
+        return self
+
+    def decoded_keys(self) -> dict[str, bytes]:
+        """Return validated binary keys for the encryption adapter."""
+        return {
+            key_id: base64.b64decode(encoded_key.get_secret_value(), validate=True)
+            for key_id, encoded_key in self.keys.items()
+        }
+
+
 class DiscordConfig(_FrozenModel):
     """Discord transport credentials."""
 
@@ -260,6 +308,8 @@ class ApiConfig(_FrozenModel):
     secret: SecretStr
     key_pepper: SecretStr
     session_pepper: SecretStr
+    idempotency_active_key_id: str
+    idempotency_keys: dict[str, SecretStr] = Field(min_length=1, max_length=8)
     bot_token: SecretStr | None = None
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
@@ -286,6 +336,22 @@ class ApiConfig(_FrozenModel):
             msg = "Must contain at least 16 bytes."
             raise ValueError(msg)
         return value
+
+    @model_validator(mode="after")
+    def _validate_idempotency_encryption(self) -> Self:
+        IdempotencyEncryptionConfig(
+            active_key_id=self.idempotency_active_key_id,
+            keys=self.idempotency_keys,
+        )
+        return self
+
+    @property
+    def idempotency_encryption(self) -> IdempotencyEncryptionConfig:
+        """Return the validated response-encryption keyring."""
+        return IdempotencyEncryptionConfig(
+            active_key_id=self.idempotency_active_key_id,
+            keys=self.idempotency_keys,
+        )
 
     @field_validator("trusted_proxy_ips")
     @classmethod
@@ -666,6 +732,7 @@ class RuntimeConfig(_FrozenModel):
     api_key_pepper: SecretStr | None = None
     discord_bot_token: SecretStr | None = None
     session_pepper: SecretStr | None = None
+    idempotency_encryption: IdempotencyEncryptionConfig | None = None
     oauth: OAuthConfig | None = None
 
 
@@ -800,6 +867,7 @@ class ApiProcessConfig(_ProcessSettings):
                 "api_key_pepper": self.api.key_pepper,
                 "discord_bot_token": self.api.bot_token,
                 "session_pepper": self.api.session_pepper,
+                "idempotency_encryption": self.api.idempotency_encryption,
                 "oauth": self.oauth,
             }
         )
@@ -1090,6 +1158,7 @@ __all__ = [
     "DatabaseConfig",
     "EmbeddingConfig",
     "GoogleConfig",
+    "IdempotencyEncryptionConfig",
     "LoggingConfig",
     "NotificationConfig",
     "OAuthConfig",

@@ -36,7 +36,7 @@ from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency import IdempotencyService
-from squid.idempotency.infrastructure import PostgresIdempotencyRepository
+from squid.idempotency.infrastructure import IdempotencyResponseCipher, PostgresIdempotencyRepository
 from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService
 from squid.media.application.services import MediaNormalizationService
 from squid.media.domain import MediaLimits
@@ -484,11 +484,19 @@ class _ServiceGraph:
 def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> ApiServices:
     """Create only capabilities used by the HTTP API."""
     graph = _ServiceGraph(db, config, resources_stack)
+    encryption = config.idempotency_encryption
+    if encryption is None:
+        msg = "The API runtime requires an idempotency response-encryption keyring."
+        raise RuntimeError(msg)
+    idempotency_cipher = IdempotencyResponseCipher(
+        active_key_id=encryption.active_key_id,
+        keys=encryption.decoded_keys(),
+    )
     return ApiServices(
         builds=graph.builds,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
-        idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session)),
+        idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session, idempotency_cipher)),
         notifications=graph.notifications,
         build_queries=graph.build_queries,
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
@@ -552,6 +560,7 @@ def create_worker_services(
 ) -> WorkerServices:
     """Create only capabilities used by transport-neutral background jobs."""
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
+    idempotency = IdempotencyService(PostgresIdempotencyRepository(db.async_session))
     return WorkerServices(
         builds=graph.builds,
         artifacts=graph.artifacts,
@@ -570,6 +579,7 @@ def create_worker_services(
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(run_projection_batch, db.async_session),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
+        purge_idempotency=idempotency.purge_expired,
     )
 
 
