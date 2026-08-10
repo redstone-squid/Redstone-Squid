@@ -83,15 +83,43 @@
         "summary": "Get Verification Code",
         "description": "Generate a verification code for a user.",
         "operationId": "get_verification_code_v1_verify_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/User"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -106,7 +134,6 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -118,10 +145,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -133,10 +160,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -148,10 +175,25 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -163,10 +205,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           },
           "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -178,14 +220,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Service Unavailable"
           }
-        },
-        "security": [
-          {
-            "ApiCredential": []
-          }
-        ]
+        }
       }
     },
     "/verify": {
@@ -193,15 +231,43 @@
         "summary": "Get Verification Code",
         "description": "Generate a verification code for a user.",
         "operationId": "get_verification_code_verify_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/User"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -216,7 +282,6 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -228,10 +293,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -243,10 +308,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -258,10 +323,25 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -273,10 +353,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           },
           "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -288,14 +368,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Service Unavailable"
           }
-        },
-        "security": [
-          {
-            "ApiCredential": []
-          }
-        ]
+        }
       }
     },
     "/v1/auth/discord": {
@@ -474,12 +550,39 @@
         "summary": "Logout",
         "description": "Revoke the current browser session and clear its cookies.",
         "operationId": "logout_v1_auth_logout_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+          }
+        ],
         "responses": {
           "204": {
             "description": "Successful Response"
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -491,10 +594,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -506,10 +609,25 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -521,14 +639,20 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
             }
           }
-        },
-        "security": [
-          {
-            "ApiCredential": []
-          }
-        ]
+        }
       }
     },
     "/v1/builds": {
@@ -542,6 +666,29 @@
         "security": [
           {
             "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
           }
         ],
         "requestBody": {
@@ -609,6 +756,21 @@
               }
             },
             "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -862,6 +1024,27 @@
               ],
               "title": "If-Match"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
           }
         ],
         "requestBody": {
@@ -1194,6 +1377,34 @@
         "summary": "Grant Consent",
         "description": "Accept the current privacy notice for future writes.",
         "operationId": "grant_consent_v1_users_me_consent_post",
+        "security": [
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1206,7 +1417,6 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1218,10 +1428,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1233,10 +1443,10 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1248,10 +1458,25 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
-            }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1263,14 +1488,20 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
             }
           }
-        },
-        "security": [
-          {
-            "ApiCredential": []
-          }
-        ]
+        }
       }
     },
     "/v1/users/me/builds": {
@@ -2610,6 +2841,27 @@
               "type": "integer",
               "title": "Vote Session Id"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation by this authenticated caller for 24 hours."
           }
         ],
         "requestBody": {
@@ -3838,6 +4090,8 @@
           "DATA_INTEGRITY_ERROR",
           "DOMAIN_ERROR",
           "INFRASTRUCTURE_ERROR",
+          "IDEMPOTENCY_CONFLICT",
+          "IDEMPOTENCY_IN_PROGRESS",
           "INTERNAL_ERROR",
           "INVALID_BUILD",
           "INVALID_CURSOR",

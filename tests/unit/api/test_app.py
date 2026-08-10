@@ -105,15 +105,18 @@ def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) 
         )
     )
     web_auth.logout = mocker.AsyncMock()
-    app, database = build_app(web_auth=web_auth)
+    idempotency = mocker.Mock()
+    idempotency.reserve = mocker.AsyncMock()
+    app, database = build_app(web_auth=web_auth, idempotency=idempotency)
 
     with TestClient(app, base_url="https://testserver") as session_client:
         session_client.cookies.set("__Host-squid_session", "session-token")
         session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout")
+        response = session_client.post("/v1/auth/logout", headers={"Idempotency-Key": "logout-request"})
 
     assert database.closed
     assert response.status_code == 403
+    idempotency.reserve.assert_not_awaited()
     web_auth.logout.assert_not_awaited()
 
 

@@ -225,6 +225,9 @@ def register_exception_handlers(app: ExceptionRegistrar) -> None:
     """Register application-wide FastAPI exception handlers."""
     from fastapi.exceptions import RequestValidationError
 
+    from squid.api.idempotency import IdempotencyReplay, replay_response
+
+    app.add_exception_handler(IdempotencyReplay, replay_response)
     app.add_exception_handler(SquidError, handle_squid_error)
     app.add_exception_handler(RequestValidationError, handle_request_validation_error)
     app.add_exception_handler(StarletteHTTPException, handle_http_error)

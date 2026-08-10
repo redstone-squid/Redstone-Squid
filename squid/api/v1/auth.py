@@ -4,11 +4,12 @@ import secrets
 from typing import Annotated
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
 from squid.api.dependencies import CurrentPrincipal, WebAuth
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.core.errors import AuthenticationError, ValidationError
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -58,7 +59,12 @@ async def discord_callback(
     return response
 
 
-@router.post("/logout", status_code=204, responses=responses(401, 403, 503))
+@router.post(
+    "/logout",
+    status_code=204,
+    responses=responses(401, 403, 409, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+)
 async def logout(request: Request, web_auth: WebAuth, principal: CurrentPrincipal) -> Response:
     """Revoke the current browser session and clear its cookies."""
     token = request.cookies.get("__Host-squid_session")

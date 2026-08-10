@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from squid.api.app import create_api_app
 from squid.config import ApiProcessConfig
+from squid.idempotency import PendingRequest
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -118,7 +119,20 @@ class MockRecords:
         return ()
 
 
-def build_app(*, web_auth: object | None = None) -> tuple[FastAPI, MockDatabaseManager]:
+class MockIdempotency:
+    async def reserve(self, **_kwargs: object) -> PendingRequest:
+        return PendingRequest(uuid.uuid4())
+
+    async def complete(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+
+def build_app(
+    *,
+    web_auth: object | None = None,
+    idempotency: object | None = None,
+    users: object | None = None,
+) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
     database = MockDatabaseManager()
     services = cast(
@@ -126,8 +140,9 @@ def build_app(*, web_auth: object | None = None) -> tuple[FastAPI, MockDatabaseM
         SimpleNamespace(
             api_keys=None,
             web_auth=web_auth,
+            idempotency=idempotency or MockIdempotency(),
             builds=SimpleNamespace(),
-            users=MockUserManager(),
+            users=users or MockUserManager(),
             build_queries=MockBuildQueries(),
             authorization=MockAuthorization(),
             search=MockSearch(),

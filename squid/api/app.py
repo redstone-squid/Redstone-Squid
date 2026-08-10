@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from squid.api.dependencies import Users
 from squid.api.errors import register_exception_handlers, responses
+from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
 from squid.api.security import Principal, Scope, require
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
@@ -51,8 +52,19 @@ class User(BaseModel):
     uuid: UUID
 
 
-@router.post("/verify", status_code=201, responses=responses(401, 403, 404, 422, 503))
-@router.post("/v1/verify", status_code=201, responses=responses(401, 403, 404, 422, 503), tags=["users"])
+@router.post(
+    "/verify",
+    status_code=201,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+)
+@router.post(
+    "/v1/verify",
+    status_code=201,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    tags=["users"],
+    dependencies=[Depends(enforce_request_idempotency)],
+)
 async def get_verification_code(
     user: User,
     users: Users,
@@ -88,6 +100,7 @@ def create_api_app(
     register_exception_handlers(api)
     api.include_router(router)
     api.include_router(v1_router)
+    api.add_middleware(IdempotencyResponseMiddleware)
     resolved_for_middleware = config
     cors_origins = (
         resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()
@@ -98,7 +111,15 @@ def create_api_app(
             allow_origins=list(cors_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST", "PATCH"],
-            allow_headers=["Accept", "Accept-Language", "Authorization", "Content-Type", "If-Match", "X-CSRF-Token"],
+            allow_headers=[
+                "Accept",
+                "Accept-Language",
+                "Authorization",
+                "Content-Type",
+                "Idempotency-Key",
+                "If-Match",
+                "X-CSRF-Token",
+            ],
             expose_headers=["ETag"],
         )
     if config is not None:

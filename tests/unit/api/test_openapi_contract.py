@@ -80,6 +80,21 @@ def test_catalogue_extensions_are_registered_in_openapi() -> None:
     assert "500" in document["paths"]["/v1/records/{record_id}"]["get"]["responses"]
 
 
+def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
+    document = _app.openapi()
+
+    for path, path_item in document["paths"].items():
+        for method in ("post", "put", "patch", "delete"):
+            operation = path_item.get(method)
+            if operation is None:
+                continue
+            parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
+            assert any(
+                parameter.get("in") == "header" and parameter.get("name") == "Idempotency-Key"
+                for parameter in parameters
+            ), f"{method.upper()} {path} does not declare Idempotency-Key"
+
+
 def test_committed_openapi_document_matches_application() -> None:
     committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
 

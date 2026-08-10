@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.api.dependencies import Authorization, BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Search
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page
 from squid.api.security import Principal, Scope, require
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
@@ -29,7 +30,13 @@ UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
 
 
-@router.post("", response_model=BuildDetail, status_code=201, responses=responses(400, 401, 403, 422, 503))
+@router.post(
+    "",
+    response_model=BuildDetail,
+    status_code=201,
+    responses=responses(400, 401, 403, 409, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+)
 async def submit_build(
     submission: DoorSubmission,
     response: Response,
@@ -73,6 +80,7 @@ async def submit_build(
     "/{build_id}",
     response_model=BuildDetail,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def edit_build(
     build_id: int,

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from squid.api.dependencies import BuildQueries, CursorSigner, Users
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page
 from squid.api.security import Principal, Scope, require
 from squid.api.v1.builds import after_id_from_cursor, keyset_page
@@ -31,7 +32,12 @@ async def get_me(users: Users, principal: UserPrincipal) -> UserMe:
     return UserMe.from_domain(account, consent_pending=principal.consent_pending)
 
 
-@router.post("/consent", response_model=UserMe, responses=responses(401, 403, 404, 503))
+@router.post(
+    "/consent",
+    response_model=UserMe,
+    responses=responses(401, 403, 404, 409, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+)
 async def grant_consent(users: Users, principal: UserPrincipal) -> UserMe:
     """Accept the current privacy notice for future writes."""
     if principal.kind != "user" or principal.discord_id is None:

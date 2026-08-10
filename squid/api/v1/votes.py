@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.rate_limit import SlidingWindowRateLimiter
 from squid.api.security import Principal, Scope, require
 from squid.api.v1.schemas.votes import VoteSessionDetail
@@ -47,7 +48,10 @@ async def get_vote_session(
 
 
 @router.post(
-    "/{vote_session_id}/votes", response_model=VoteSessionDetail, responses=responses(400, 401, 403, 404, 409, 429, 503)
+    "/{vote_session_id}/votes",
+    response_model=VoteSessionDetail,
+    responses=responses(400, 401, 403, 404, 409, 429, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
 )
 async def cast_vote(
     vote_session_id: int,
