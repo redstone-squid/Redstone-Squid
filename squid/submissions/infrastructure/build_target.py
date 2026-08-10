@@ -19,6 +19,7 @@ from squid.submissions.domain.finalization import (
     SubmissionTargetResult,
 )
 from squid.tags.domain import TagAssignment, TagDefinition, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.versions.domain import MinecraftVersion
 
 TARGET_KEY = "postgres_builds"
 
@@ -65,12 +66,24 @@ class ApprovedSubmissionTags(Protocol):
     async def public_definitions(self) -> Sequence[TagDefinition]: ...
 
 
+class CanonicalSubmissionVersions(Protocol):
+    """Read exact version names recognized by build persistence."""
+
+    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+
+
 class BuildSubmissionTarget:
     """Create or retrieve one build using its source draft as the retry key."""
 
-    def __init__(self, builds: ProviderNeutralBuilds, tags: ApprovedSubmissionTags) -> None:
+    def __init__(
+        self,
+        builds: ProviderNeutralBuilds,
+        tags: ApprovedSubmissionTags,
+        versions: CanonicalSubmissionVersions,
+    ) -> None:
         self._builds = builds
         self._tags = tags
+        self._versions = versions
 
     async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
         """Translate a normalized payload and delegate retry-safe creation to builds."""
@@ -80,6 +93,7 @@ class BuildSubmissionTarget:
                 raise _target_rejected()
             return _target_result(existing, submission)
 
+        await self._validate_source_version(submission.source_version)
         definitions = await self._resolve_tags(submission)
         build = _to_build(submission, definitions)
         category = _CATEGORY_MAP[submission.category]
@@ -95,6 +109,13 @@ class BuildSubmissionTarget:
         except (InvalidBuildError, InvalidStateError) as error:
             raise _target_rejected() from error
         return _target_result(persisted, submission)
+
+    async def _validate_source_version(self, source_version: str) -> None:
+        canonical_versions = {str(version) for version in await self._versions.list_all()}
+        if source_version not in canonical_versions:
+            raise ActionableSubmissionError(
+                (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+            )
 
     async def _resolve_tags(self, submission: NormalizedSubmission) -> Mapping[str, TagDefinition]:
         definitions = {
@@ -168,7 +189,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
 
     build = Build(
         category=_CATEGORY_MAP[submission.category],
-        versions=[_qualified_java_version(submission.source_version)],
+        versions=[submission.source_version],
         version_spec=submission.version_compatibility,
         width=submission.capture_dimensions.width,
         height=submission.capture_dimensions.height,
@@ -216,13 +237,6 @@ def _target_rejected() -> ActionableSubmissionError:
     return ActionableSubmissionError(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
     )
-
-
-def _qualified_java_version(source_version: str) -> str:
-    normalized = source_version.strip()
-    if normalized.casefold().startswith(("java ", "bedrock ")):
-        return normalized
-    return f"Java {normalized}"
 
 
 def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:

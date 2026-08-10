@@ -11,6 +11,7 @@ from squid.submissions.application import (
 )
 from squid.submissions.domain import (
     ChoiceOption,
+    ControlKind,
     DraftChange,
     DraftRevisionConflictError,
     DraftSnapshot,
@@ -54,6 +55,9 @@ def test_manifest_has_stable_categories_without_a_type_label() -> None:
         for category in manifest.categories
     )
     assert "display_name" in {field.id for field in manifest.fields_for("other")}
+    source_version = next(field for field in manifest.fields_for("other") if field.id == "source_version")
+    assert source_version.control is ControlKind.CHOICE
+    assert source_version.option_source == "approved_source_versions"
 
 
 def test_manifest_validates_category_fields_and_server_defaults() -> None:
