@@ -61,7 +61,7 @@ jobs:
 
       - name: Check committed OpenAPI document
         run: |
-          uv run --locked python scripts/export_openapi.py
+          uv run --locked python -m scripts.export_openapi
           git diff --exit-code -- web/openapi.json
 
       - name: Check all files have corresponding gitattributes
