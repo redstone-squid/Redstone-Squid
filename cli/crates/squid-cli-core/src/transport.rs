@@ -128,6 +128,19 @@ impl ApiRequest {
         self.idempotency_key = Some(value);
         self
     }
+
+    /// Validate the same-origin routing and body limits before persistence or sending.
+    pub fn validate(&self) -> Result<(), TransportError> {
+        validate_endpoint_path(&self.path)?;
+        if self
+            .body
+            .as_ref()
+            .is_some_and(|body| body.len() > MAXIMUM_REQUEST_BYTES)
+        {
+            return Err(TransportError::RequestTooLarge);
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for ApiRequest {
@@ -260,7 +273,7 @@ impl ApiClient {
         request: ApiRequest,
         bearer_token: Option<&SecretBytes>,
     ) -> Result<ApiResponse<T>, TransportError> {
-        validate_endpoint_path(&request.path)?;
+        request.validate()?;
         let url = format!("{}{}", self.origin.as_str(), request.path);
         let mut builder = self.client.request(request.method.as_reqwest(), url);
         if let Some(body) = request.body {

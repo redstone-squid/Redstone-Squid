@@ -7,6 +7,7 @@ pub mod locale;
 pub mod origin;
 pub mod output;
 pub mod profile;
+pub mod recovery;
 pub mod terminal;
 pub mod transport;
 pub mod version;
