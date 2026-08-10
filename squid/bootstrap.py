@@ -31,6 +31,8 @@ from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
+from squid.idempotency import IdempotencyService
+from squid.idempotency.infrastructure import PostgresIdempotencyRepository
 from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.permissions.application import AuthorizationService
@@ -327,6 +329,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         builds=graph.builds,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
+        idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session)),
         build_queries=graph.build_queries,
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         records=graph.records,
