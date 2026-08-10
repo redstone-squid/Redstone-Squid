@@ -158,6 +158,22 @@ public data class CategoryForm(
         get() = sections.flatMap(FormSection::fields)
 }
 
+/** Exact response shape of `GET /v1/submissions/form/options/{source}`. */
+@Serializable
+public data class FormOptionSet(
+    public val source: String,
+    public val category: String,
+    public val revision: Int,
+    public val options: List<ChoiceOption>,
+) {
+    init {
+        requireStableId(source, "option source")
+        requireStableId(category, "category")
+        require(revision > 0) { "revision must be positive" }
+        require(options.map(ChoiceOption::value).distinct().size == options.size) { "option values must be unique" }
+    }
+}
+
 /** Exact response shape of `GET /v1/submissions/form/current`. */
 @Serializable
 public data class FormManifest(
@@ -308,7 +324,15 @@ public data class StoredDraft(
     public val updatedAt: String,
     @SerialName("expires_at")
     public val expiresAt: String,
-)
+) {
+    init {
+        require(runCatching { UUID.fromString(id) }.isSuccess) { "draft ID must be a UUID" }
+        requireStableId(category, "category")
+        require(schemaRevision > 0) { "schema_revision must be positive" }
+        require(revision >= 0) { "revision must not be negative" }
+        requireStableId(origin, "origin")
+    }
+}
 
 @Serializable
 public data class DraftChangeResponse(
@@ -332,11 +356,15 @@ public object FormProtocolJson {
         return json.decodeFromString<FormManifest>(document)
     }
 
+    public fun decodeOptions(document: String): FormOptionSet = json.decodeFromString(document)
+
     public fun encodeDraftCreate(request: DraftCreateRequest): String = json.encodeToString(request)
 
     public fun encodeDraftChange(request: DraftChangeRequest): String = json.encodeToString(request)
 
     public fun decodeStoredDraft(document: String): StoredDraft = json.decodeFromString(document)
+
+    public fun decodeDraftChange(document: String): DraftChangeResponse = json.decodeFromString(document)
 }
 
 private fun requireStableId(value: String, name: String) {

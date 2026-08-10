@@ -18,6 +18,37 @@ class FormProtocolTest {
     }
 
     @Test
+    fun `draft and option responses have typed decoders`() {
+        val options = FormProtocolJson.decodeOptions(
+            """{"source":"versions","category":"door","revision":2,"options":[{"value":"java","label":"Java"}]}""",
+        )
+        val changed = FormProtocolJson.decodeDraftChange(
+            """
+            {
+              "draft":{
+                "id":"123e4567-e89b-12d3-a456-426614174000",
+                "schema_id":"redstone_squid_submission",
+                "schema_revision":1,
+                "category":"door",
+                "revision":2,
+                "status":"editing",
+                "answers":{"description":"hi"},
+                "origin":"fabric",
+                "created_at":"2030-01-01T00:00:00Z",
+                "updated_at":"2030-01-01T00:00:01Z",
+                "expires_at":"2030-01-08T00:00:00Z"
+              },
+              "replayed":true
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(2, options.revision)
+        assertEquals("hi", changed.draft.answers.getValue("description").toString().trim('"'))
+        assertTrue(changed.replayed)
+    }
+
+    @Test
     fun `client parses the backend manifest and blocks unknown required controls`() {
         val document = manifestDocument(
             extraField =

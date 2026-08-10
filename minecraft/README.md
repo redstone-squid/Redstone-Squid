@@ -8,7 +8,8 @@ submission artifacts.
 
 ## Modules
 
-- `protocol`: bounded JSON parsing and versioned form/capability DTOs.
+- `protocol`: bounded JSON parsing and versioned form, draft, and device-auth
+  DTOs.
 - `safe-snapshot`: vanilla-only capture values, selection/budget validation,
   safe-NBT checks, and a deterministic write-only Sponge Schematic v3 encoder.
 - `core`: platform-neutral submission services and the shared Brigadier tree.
@@ -18,11 +19,24 @@ submission artifacts.
   version classes.
 - `platform:fabric-26_1`: the Fabric 26.1.2 entrypoint and first version adapter.
 
-The platform entrypoints intentionally expose the current boundary: commands
-are registered and report that the network/draft workflow is not connected yet.
-World capture, selection rendering, dialogs/screens, authentication, backend
-transport, protection hooks, and encrypted local draft storage are follow-up
-milestones. No placeholder reports a submission as accepted.
+The shared core now contains a real JDK HTTP transport, Paper installation and
+player authorization, Fabric S256 PKCE authorization, and synchronized-draft
+operations. The transport accepts a base URI ending at the backend's `/v1/`
+prefix, refuses plaintext remote HTTP, never follows redirects, applies bounded
+timeouts/body sizes, and requires `no-store` on successful auth responses.
+
+Secret persistence is deliberately a port instead of a plaintext config file.
+`FailClosedMinecraftSecretStore` is the default; a platform must provide an
+audited OS credential-vault adapter before enabling persistence. The in-memory
+adapter exists only in tests. Pending device codes and Fabric PKCE verifiers
+remain in memory, and secret-bearing values redact their string forms.
+
+The platform entrypoints still expose the current boundary: commands are
+registered and report that the workflow is not connected. Wiring backend URL
+configuration, an OS-vault adapter, player-facing device-code UI and polling,
+form screens/dialogs, world capture, selection rendering, protection hooks,
+schematic upload, and final submission are follow-up milestones. No placeholder
+reports a submission as accepted.
 
 ## Build
 
@@ -53,3 +67,7 @@ Loader, Fabric API, and Fabric Language Kotlin at runtime.
 - The writer emits only Sponge v3, uses sorted palettes/compounds, and fixes the
   gzip header so identical snapshots produce identical bytes.
 - This encoder is defense in depth, not a substitute for backend sanitization.
+- Paper draft calls send both the installation credential and the short-lived
+  player bearer; Fabric sends only its PKCE-issued player bearer. Draft origin is
+  derived from that authenticated session, and client APIs never accept account
+  IDs.
