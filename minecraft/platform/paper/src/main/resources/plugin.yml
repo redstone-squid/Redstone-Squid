@@ -1,0 +1,18 @@
+name: RedstoneSquid
+version: '0.1.0-SNAPSHOT'
+main: com.redstonesquid.minecraft.paper.RedstoneSquidPaperPlugin
+description: Capture and submit redstone builds to Redstone Squid.
+api-version: '26.1'
+authors:
+  - Redstone Squid contributors
+website: https://github.com/Redstone-Squid/Redstone-Squid
+permissions:
+  redstonesquid.use:
+    description: View status and begin account linking.
+    default: true
+  redstonesquid.submit:
+    description: Select, capture, and submit builds.
+    default: false
+  redstonesquid.server.manage:
+    description: Claim, inspect, rotate, and revoke this server installation.
+    default: op
