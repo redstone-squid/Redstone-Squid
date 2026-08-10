@@ -10,10 +10,14 @@
 **/.classpath
 **/.dockerignore
 **/*.env
+**/.gradle
 **/.git
 **/.gitignore
+**/.kotlin
 **/.python-version
 **/.project
+**/.pytest_cache
+**/.ruff_cache
 **/.settings
 **/.toolstarget
 **/.vs
@@ -42,3 +46,7 @@ dist/
 site/
 .coverage
 schema_dump.sql
+
+# The backend image does not execute either independently built client workspace.
+minecraft/
+web/

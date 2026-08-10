@@ -74,6 +74,7 @@ jobs:
             --platform linux/amd64 \
             --build-arg "GIT_COMMIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_COMMIT_MESSAGE=$commit_message" \
+            --build-arg WITH_MEDIA=1 \
             --build-arg WITH_OBSERVABILITY=1 \
             --build-arg WITH_SCHEMATICS=1 \
             --provenance=mode=max \

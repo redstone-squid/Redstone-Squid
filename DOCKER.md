@@ -41,6 +41,15 @@ docker run -d \
   redstone-squid
 ```
 
+The dedicated worker build includes the pinned FFmpeg/ffprobe toolchain but leaves media processing disabled:
+
+```bash
+docker build --build-arg WITH_MEDIA=1 --build-arg WITH_SCHEMATICS=1 -t redstone-squid-worker .
+```
+
+See [Media normalization deployment](docs/media-normalization.md) before setting `SQUID_MEDIA_ENABLED=true`; it
+documents the required paths, shared object storage, scratch-space arithmetic, and subprocess/container limits.
+
 ## Updating
 
 To update the bot:

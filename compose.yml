@@ -65,9 +65,19 @@ services:
     build:
       context: .
       args:
+        WITH_MEDIA: ${WITH_MEDIA:-1}
         WITH_OBSERVABILITY: ${WITH_OBSERVABILITY:-1}
         WITH_SCHEMATICS: ${WITH_SCHEMATICS:-1}
     command: ["python", "-m", "squid.worker.app"]
+    environment:
+      <<: *app-environment
+      SQUID_MEDIA_FFMPEG: /usr/bin/ffmpeg
+      SQUID_MEDIA_FFPROBE: /usr/bin/ffprobe
+      SQUID_MEDIA_WORKING_DIRECTORY: /var/lib/app/media-tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test:
         [
