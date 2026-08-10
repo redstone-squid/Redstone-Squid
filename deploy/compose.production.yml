@@ -21,6 +21,7 @@ services:
     env_file:
       - ${SQUID_ENV_FILE:-.env}
     environment:
+      SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
       SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
     volumes:
       - squid-objects:/var/lib/app/objects

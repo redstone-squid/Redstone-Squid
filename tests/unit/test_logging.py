@@ -177,3 +177,4 @@ class TestBuildLoggingConfig:
         assert payload["name"] == "squid.test"
         assert payload["message"] == "Build 42 submitted"
         assert payload["squid.build.id"] == 42
+        assert payload["service_name"] == "redstone-squid"

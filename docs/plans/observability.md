@@ -374,6 +374,14 @@ provider-failure counters, and vote-close lag. FastAPI instrumentation supplies 
 server metrics for API alerting, while aiohttp and httpx instrumentation cover provider child
 requests. Invalid schematic uploads are recorded as `rejected`, not operational errors.
 
+Every supervised periodic job also emits `squid.background.job.duration` and
+`squid.background.job.runs`, plus a `squid.background.job.last_success` Unix timestamp gauge.
+The worker samples durable queues in one read-only PostgreSQL query and emits ready, in-flight,
+dead-letter, and oldest-ready-age gauges keyed by `squid.queue.name`; domain events are split by
+consumer so a Discord outage is distinguishable from stalled core work. JSON logs carry the
+process-specific service identity, which the bundled Collector promotes to `service.name`. The
+Collector is independently restarted and exposes its health extension on loopback port 13133.
+
 Building this proved the OOM portion of the exit criterion too strong: Linux reports SIGKILL
 for both OOM kills and supervisor deadline kills, so the application cannot label a SIGKILL as
 OOM without cgroup/kernel telemetry. CPU (`SIGXCPU`) and file-size (`SIGXFSZ`) rlimit kills are

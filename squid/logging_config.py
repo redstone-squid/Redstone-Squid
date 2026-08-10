@@ -39,7 +39,7 @@ DEFAULT_ACCESS_LOG_FORMAT = (
 )
 """Format for uvicorn access log records."""
 
-JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s"
+JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s %(service_name)s"
 """Fields emitted for structured application and worker logs."""
 
 JSON_ACCESS_LOG_FORMAT = f"{JSON_LOG_FORMAT} %(client_addr)s %(request_line)s %(status_code)s"
@@ -102,6 +102,7 @@ def build_logging_config(
     include_uvicorn_loggers: bool = False,
     use_queue: bool = False,
     development_mode: bool = False,
+    service_name: str = "redstone-squid",
 ) -> dict[str, object]:
     """Build a logging configuration dictionary for dictConfig."""
     level = resolve_level(config.level)
@@ -206,10 +207,12 @@ def build_logging_config(
             "json": {
                 "()": "pythonjsonlogger.json.JsonFormatter",
                 "format": JSON_LOG_FORMAT,
+                "static_fields": {"service_name": service_name},
             },
             "json_access": {
                 "()": "pythonjsonlogger.json.JsonFormatter",
                 "format": JSON_ACCESS_LOG_FORMAT,
+                "static_fields": {"service_name": service_name},
             },
         },
         "handlers": handlers,
@@ -238,6 +241,7 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
             named_logger_levels=named_logger_levels,
             use_queue=True,
             development_mode=dev_mode,
+            service_name="redstone-squid-bot",
         )
     )
     queue_handler = logging.getHandlerByName("queue")
@@ -259,6 +263,7 @@ def configure_api_logging(config: LoggingConfig) -> None:
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
+            service_name="redstone-squid-api",
         )
     )
 
@@ -269,6 +274,7 @@ def configure_service_worker_logging(config: LoggingConfig) -> None:
         build_logging_config(
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
+            service_name="redstone-squid-worker",
         )
     )
 
@@ -283,6 +289,7 @@ def configure_worker_logging() -> None:
                 "json": {
                     "()": "pythonjsonlogger.json.JsonFormatter",
                     "format": JSON_LOG_FORMAT,
+                    "static_fields": {"service_name": "redstone-squid-schematic-worker"},
                 }
             },
             "handlers": {

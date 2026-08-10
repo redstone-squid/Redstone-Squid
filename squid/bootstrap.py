@@ -77,6 +77,7 @@ from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.voting.infrastructure.repository import VoteRepository
+from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -392,6 +393,7 @@ def create_worker_services(
         schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(run_projection_batch, db.async_session),
+        record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
     )
 
 

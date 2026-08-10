@@ -12,6 +12,14 @@ receivers:
     include_file_path: true
     operators:
       - type: json_parser
+      - type: move
+        if: 'body.service_name != nil'
+        from: body.service_name
+        to: resource["service.name"]
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
 
 processors:
   memory_limiter:
@@ -29,6 +37,7 @@ exporters:
     verbosity: basic
 
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]

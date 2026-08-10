@@ -275,6 +275,28 @@ def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
     assert secret_value not in str(record.__dict__)
 
 
+def test_strict_unknown_environment_keys_fail_without_exposing_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    secret_value = "must-not-appear-in-diagnostics"
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_STRICT_UNKNOWN_KEYS="true",
+        SQUID_SCHEMATIC_WORKRES=secret_value,
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert _issues(exc_info.value) == [
+        {
+            "field": "SQUID_SCHEMATIC_WORKRES",
+            "message": "Unknown configuration key; did you mean SQUID_SCHEMATIC_WORKERS?",
+            "type": "unknown_key",
+        }
+    ]
+    assert secret_value not in str(exc_info.value.context)
+
+
 def test_sibling_process_keys_in_shared_dotenv_are_not_reported_unknown(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

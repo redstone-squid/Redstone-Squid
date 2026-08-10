@@ -60,6 +60,9 @@ REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.
 
 Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments must rename their settings:
 
+Unknown names are warning-only for local processes. Production Compose sets
+`SQUID_STRICT_UNKNOWN_KEYS=true`, making likely deployment typos fail startup without logging their values.
+
 | Previous setting | Replacement |
 | --- | --- |
 | `DATABASE_URL` | `SQUID_DATABASE_URL` |

@@ -7,6 +7,7 @@ x-app: &app
   env_file:
     - ${SQUID_ENV_FILE:-.env}
   environment:
+    SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
     SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
     SQUID_OBSERVABILITY_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
     SQUID_OBSERVABILITY_ENVIRONMENT: ${SQUID_OBSERVABILITY_ENVIRONMENT:-production}
@@ -77,12 +78,15 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.157.0@sha256:f2f01157055a9b2aab9df7118e1f1c9abf345e99b23bc7a2bc791db374a7d0f6
+    restart: unless-stopped
+    stop_grace_period: 20s
     profiles:
       - observability
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     ports:
       - "4318:4318"
+      - "127.0.0.1:13133:13133"
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - ./logs:/var/log/app:ro

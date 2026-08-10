@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable, Collection, Coroutine
 from dataclasses import dataclass
 from types import TracebackType
@@ -16,6 +17,7 @@ from squid.builds.application import BuildInferenceService, BuildQueryService, B
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.events.application import DomainEventService
 from squid.messages.application import MessageService
+from squid.observability import add_counter, record_gauge, record_histogram
 from squid.permissions.application import AuthorizationService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
@@ -91,6 +93,7 @@ class WorkerServices:
     schematic_renders: SchematicRenderJobService
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
+    record_queue_health: Callable[[], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,14 +222,30 @@ class BackgroundTaskSupervisor:
         if not run_immediately:
             await asyncio.sleep(interval)
         while True:
+            started = time.perf_counter()
+            attributes = {"squid.job.name": name}
             try:
                 await operation()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Background job %s failed", name)
+                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
+                record_histogram(
+                    "squid.background.job.duration",
+                    time.perf_counter() - started,
+                    attributes={**attributes, "squid.outcome": "error"},
+                )
             else:
-                self._last_success[name] = Instant.now()
+                succeeded_at = Instant.now()
+                self._last_success[name] = succeeded_at
+                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "ok"})
+                record_histogram(
+                    "squid.background.job.duration",
+                    time.perf_counter() - started,
+                    attributes={**attributes, "squid.outcome": "ok"},
+                )
+                record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
             await asyncio.sleep(interval)
 
     def _task_done(self, task: asyncio.Task[None]) -> None:

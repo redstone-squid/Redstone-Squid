@@ -82,6 +82,7 @@ _meter: Any | None = None
 _metric_lock = threading.Lock()
 _counters: dict[str, Any] = {}
 _histograms: dict[str, Any] = {}
+_gauges: dict[str, Any] = {}
 
 
 def configure_observability(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
@@ -243,6 +244,18 @@ def record_histogram(name: str, value: float, *, attributes: Mapping[str, SpanAt
     histogram.record(value, dict(attributes or {}))
 
 
+def record_gauge(name: str, value: int | float, *, attributes: Mapping[str, SpanAttribute] | None = None) -> None:
+    """Set the current value of an application gauge when metrics are configured."""
+    if _meter is None:
+        return
+    with _metric_lock:
+        gauge = _gauges.get(name)
+        if gauge is None:
+            gauge = _meter.create_gauge(name)
+            _gauges[name] = gauge
+    gauge.set(value, dict(attributes or {}))
+
+
 def _current_trace_id() -> str | None:
     context = _current_trace_context()
     return context[0] if context is not None else None
@@ -373,6 +386,7 @@ __all__ = [
     "inject_trace_context",
     "instrument_api_app",
     "record_current_exception",
+    "record_gauge",
     "record_histogram",
     "trace_span",
 ]

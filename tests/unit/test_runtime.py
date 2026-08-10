@@ -25,6 +25,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "schematic_renders",
         "search_embeddings",
         "refresh_search_index",
+        "record_queue_health",
     }
 
 

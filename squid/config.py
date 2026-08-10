@@ -603,6 +603,8 @@ class _ProcessSettings(BaseSettings):
     community: CommunityConfig = CommunityConfig()
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
+    strict_unknown_keys: bool = False
+    """Reject unknown ``SQUID_*`` names instead of logging and ignoring them."""
 
     @classmethod
     @override
@@ -729,6 +731,7 @@ class ApplicationConfig(BotProcessConfig):
                     "community",
                     "log",
                     "observability",
+                    "strict_unknown_keys",
                     "development_mode",
                     "discord",
                     "bot",
@@ -753,6 +756,7 @@ class ApplicationConfig(BotProcessConfig):
                     "community",
                     "log",
                     "observability",
+                    "strict_unknown_keys",
                     "oauth",
                     "api",
                 }
@@ -773,6 +777,7 @@ class ApplicationConfig(BotProcessConfig):
                     "community",
                     "log",
                     "observability",
+                    "strict_unknown_keys",
                     "worker",
                 }
             )
@@ -813,8 +818,8 @@ def _configured_environment_keys() -> set[str]:
     return names
 
 
-def _audit_unknown_environment_keys() -> None:
-    """Warn about likely deployment typos while accepting sibling-process keys."""
+def _audit_unknown_environment_keys(*, strict: bool) -> None:
+    """Report likely deployment typos while accepting sibling-process keys."""
     known = _known_environment_keys()
     unknown = sorted(name for name in _configured_environment_keys() if name.upper() not in known)
     if not unknown:
@@ -822,6 +827,29 @@ def _audit_unknown_environment_keys() -> None:
     suggestions = {
         name: match[0] for name in unknown if (match := get_close_matches(name.upper(), known, n=1, cutoff=0.8))
     }
+    if strict:
+        issues = [
+            {
+                "field": name,
+                "message": (
+                    f"Unknown configuration key; did you mean {suggestions[name]}?"
+                    if name in suggestions
+                    else "Unknown configuration key."
+                ),
+                "type": "unknown_key",
+            }
+            for name in unknown
+        ]
+        message = f"Application configuration has {len(issues)} unknown key(s)."
+        raise ConfigurationError(
+            message,
+            context={
+                "issues": cast(list[Mapping[str, Any]], issues),
+                "unknown_keys": tuple(unknown),
+                "suggestions": suggestions,
+            },
+            developer_action="Correct or remove the listed SQUID_* settings and restart the process.",
+        )
     logger.warning(
         "Unknown SQUID configuration key names will be ignored",
         extra={
@@ -854,11 +882,12 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
 
 
 def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> ConfigT:
-    _audit_unknown_environment_keys()
     try:
-        return config_type()  # type: ignore[call-arg]
+        config = config_type()  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=config.strict_unknown_keys)
+    return config
 
 
 def load_application_config() -> ApplicationConfig:
@@ -887,12 +916,14 @@ def load_database_config() -> DatabaseConfig:
     class DatabaseSettings(BaseSettings):
         model_config = _ProcessSettings.model_config
         database: DatabaseConfig
+        strict_unknown_keys: bool = False
 
-    _audit_unknown_environment_keys()
     try:
-        return DatabaseSettings().database  # type: ignore[call-arg]
+        settings = DatabaseSettings()  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    return settings.database
 
 
 def load_worker_observability_config() -> ObservabilityConfig:
@@ -901,12 +932,14 @@ def load_worker_observability_config() -> ObservabilityConfig:
     class WorkerObservabilitySettings(BaseSettings):
         model_config = _ProcessSettings.model_config
         observability: ObservabilityConfig = ObservabilityConfig()
+        strict_unknown_keys: bool = False
 
-    _audit_unknown_environment_keys()
     try:
-        return WorkerObservabilitySettings().observability  # type: ignore[call-arg]
+        settings = WorkerObservabilitySettings()  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    return settings.observability
 
 
 __all__ = [

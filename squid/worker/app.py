@@ -100,6 +100,11 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
+            self._services.record_queue_health,
+            name="queue-health",
+            interval=maintenance_interval,
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -123,6 +128,7 @@ class DatabaseWorker:
             "stale-build-locks",
             "artifact-maintenance",
             "schematic-job-cleanup",
+            "queue-health",
         }
         longest_interval = max(
             self._config.event_interval_seconds,
