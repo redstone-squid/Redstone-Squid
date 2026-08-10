@@ -20,7 +20,6 @@ from squid.submissions.errors import (
     DraftIncompleteError,
     DraftNotFoundError,
     DraftSchemaUnsupportedError,
-    SanitizedSchematicRequiredError,
 )
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
@@ -47,8 +46,8 @@ class AppliedDraftChange:
 
 
 @dataclass(frozen=True, slots=True)
-class ProcessingDraft:
-    """A validated draft locked for asynchronous artifact processing/finalization."""
+class ValidatedDraft:
+    """A complete pinned draft prepared for server-owned finalization checks."""
 
     draft: StoredDraft
     normalized_answers: dict[str, JSONValue]
@@ -225,19 +224,19 @@ class SubmissionDraftService:
             expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
         )
 
-    async def begin_processing(
+    async def validate_for_finalization(
         self,
         draft_id: UUID,
         account_id: int,
         *,
-        has_sanitized_schematic: bool,
         locale: str | None,
-        now: Instant | None = None,
-    ) -> ProcessingDraft:
-        """Validate and lock a complete draft for asynchronous finalization."""
+    ) -> ValidatedDraft:
+        """Validate a pinned manifest without trusting client artifact assertions.
+
+        The finalization service performs backend-owned artifact checks and atomically
+        changes the draft state while enqueuing its durable job.
+        """
         current = await self.get_owned(draft_id, account_id)
-        if current.origin in {SubmissionOrigin.PAPER, SubmissionOrigin.FABRIC} and not has_sanitized_schematic:
-            raise SanitizedSchematicRequiredError
         manifest = await self._pinned_manifest(current, locale)
         errors = manifest.validate_answers(
             current.snapshot.category,
@@ -251,16 +250,7 @@ class SubmissionDraftService:
             current.snapshot.answers,
             origin=current.origin,
         )
-        touched_at = now or Instant.now()
-        transitioned = await self._repository.transition(
-            draft_id,
-            account_id,
-            expected_revision=current.snapshot.revision,
-            status=DraftStatus.PROCESSING,
-            updated_at=touched_at,
-            expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
-        )
-        return ProcessingDraft(transitioned, normalized)
+        return ValidatedDraft(current, normalized)
 
     async def _pinned_manifest(self, draft: StoredDraft, locale: str | None) -> FormManifest:
         manifest = await self._manifests.get(

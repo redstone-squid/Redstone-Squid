@@ -57,11 +57,3 @@ class DraftIncompleteError(ValidationError):
 
     def __init__(self, errors: dict[str, str]) -> None:
         super().__init__(public_context={"field_errors": errors})
-
-
-class SanitizedSchematicRequiredError(ValidationError):
-    """A Minecraft-origin draft has no backend-sanitized schematic."""
-
-    default_message = "Minecraft submissions require a sanitized schematic before processing."
-    default_title = "Schematic required"
-    default_resource = "schematic"

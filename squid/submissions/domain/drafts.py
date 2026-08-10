@@ -135,7 +135,7 @@ class DraftSnapshot:
     def transition(self, status: DraftStatus) -> "DraftSnapshot":
         """Apply an allowed lifecycle transition."""
         allowed: dict[DraftStatus, frozenset[DraftStatus]] = {
-            DraftStatus.EDITING: frozenset({DraftStatus.PROCESSING, DraftStatus.EXPIRED}),
+            DraftStatus.EDITING: frozenset({DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION, DraftStatus.EXPIRED}),
             DraftStatus.PROCESSING: frozenset(
                 {DraftStatus.SUBMITTED, DraftStatus.NEEDS_ATTENTION, DraftStatus.EXPIRED}
             ),

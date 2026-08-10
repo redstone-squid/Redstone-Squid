@@ -26,7 +26,6 @@ from squid.submissions.errors import (
     DraftCapacityExceededError,
     DraftIncompleteError,
     DraftSchemaUnsupportedError,
-    SanitizedSchematicRequiredError,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
@@ -244,7 +243,7 @@ async def test_change_is_idempotent_even_after_revision_advances() -> None:
 
 
 @pytest.mark.asyncio
-async def test_processing_requires_complete_answers_and_sanitized_minecraft_schematic() -> None:
+async def test_finalization_validation_uses_complete_pinned_answers() -> None:
     repository = FakeDraftRepository()
     service = SubmissionDraftService(repository, FakeManifestRegistry())
     created = await service.create(
@@ -257,15 +256,6 @@ async def test_processing_requires_complete_answers_and_sanitized_minecraft_sche
         draft_id=DRAFT_ID,
     )
 
-    with pytest.raises(SanitizedSchematicRequiredError):
-        await service.begin_processing(
-            DRAFT_ID,
-            7,
-            has_sanitized_schematic=False,
-            locale="en",
-            now=NOW,
-        )
-
     repository.drafts[DRAFT_ID] = replace(
         created,
         snapshot=DraftSnapshot(
@@ -277,16 +267,14 @@ async def test_processing_requires_complete_answers_and_sanitized_minecraft_sche
             answers=_complete_answers(),
         ),
     )
-    processing = await service.begin_processing(
+    validated = await service.validate_for_finalization(
         DRAFT_ID,
         7,
-        has_sanitized_schematic=True,
         locale="en",
-        now=NOW,
     )
 
-    assert processing.draft.snapshot.status is DraftStatus.PROCESSING
-    assert processing.normalized_answers["ai_generated"] is False
+    assert validated.draft.snapshot.status is DraftStatus.EDITING
+    assert validated.normalized_answers["ai_generated"] is False
 
 
 @pytest.mark.asyncio
@@ -304,11 +292,9 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
     )
 
     with pytest.raises(DraftIncompleteError) as error:
-        await service.begin_processing(
+        await service.validate_for_finalization(
             DRAFT_ID,
             7,
-            has_sanitized_schematic=False,
             locale="en",
-            now=NOW,
         )
     assert error.value.public_context["field_errors"]
