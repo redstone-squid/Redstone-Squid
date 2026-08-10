@@ -1,5 +1,6 @@
 //! Complete compile-time message catalogs for supported CLI locales.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::str::FromStr;
 
@@ -95,6 +96,42 @@ pub enum MessageKey {
     SuggestedCheckFilesystem,
 }
 
+/// A catalog key plus untrusted values substituted only after selecting a locale.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalizedMessage {
+    key: MessageKey,
+    values: BTreeMap<String, String>,
+}
+
+impl LocalizedMessage {
+    /// Construct a message with no placeholder values.
+    #[must_use]
+    pub fn new(key: MessageKey) -> Self {
+        Self {
+            key,
+            values: BTreeMap::new(),
+        }
+    }
+
+    /// Add one named placeholder value.
+    #[must_use]
+    pub fn with(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.values.insert(key.into(), value.into());
+        self
+    }
+
+    /// Render using one complete compile-time catalog.
+    #[must_use]
+    pub fn render(&self, locale: Locale) -> String {
+        let values = self
+            .values
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect::<Vec<_>>();
+        format_message(locale.message(self.key), &values)
+    }
+}
+
 /// A locale name not shipped by this binary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UnsupportedLocale;
@@ -113,7 +150,7 @@ pub fn format_message(template: &str, values: &[(&str, &str)]) -> String {
 mod tests {
     use std::str::FromStr;
 
-    use super::{Locale, MessageKey, format_message};
+    use super::{Locale, LocalizedMessage, MessageKey, format_message};
 
     #[test]
     fn accepts_supported_locale_spellings() {
@@ -142,5 +179,16 @@ mod tests {
             rendered,
             "squid 1.2.3 (test-target; submission protocol 1..=2)"
         );
+    }
+
+    #[test]
+    fn renders_owned_placeholder_values() {
+        let rendered = LocalizedMessage::new(MessageKey::VersionLine)
+            .with("version", "1.2.3")
+            .with("target", "test-target")
+            .with("minimum", "1")
+            .with("maximum", "2")
+            .render(Locale::ZhCn);
+        assert_eq!(rendered, "squid 1.2.3（test-target；投稿协议 1..=2）");
     }
 }

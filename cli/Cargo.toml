@@ -17,9 +17,18 @@ repository = "https://github.com/redstone-squid/Redstone-Squid"
 [workspace.dependencies]
 clap = { version = "4.5.32", features = ["derive"] }
 clap_complete = "4.5.46"
+directories = "5.0.1"
+fs2 = "0.4.3"
+hex = "0.4.3"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
+sha2 = "0.10.8"
 squid-cli-core = { path = "crates/squid-cli-core" }
+tempfile = "3.19.1"
+thiserror = "2.0.12"
+toml = "0.8.20"
+# Keep this exact: newer URL/IDNA releases currently exceed the workspace's Rust 1.85 MSRV.
+url = { version = "=2.5.4", features = ["serde"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
