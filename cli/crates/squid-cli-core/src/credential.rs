@@ -300,7 +300,9 @@ impl<N: CredentialStore> CredentialVault<N> {
 
     /// Delete all known local credentials from the selected backend.
     pub fn purge(&self) -> Result<CredentialBackend, CredentialError> {
-        let backend = self.backend()?;
+        let Some(backend) = read_backend_marker(&self.marker_path)? else {
+            return Ok(CredentialBackend::System);
+        };
         match backend {
             CredentialBackend::System => {
                 for kind in CredentialKind::ALL {
