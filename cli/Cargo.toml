@@ -31,6 +31,10 @@ keyring = { version = "=3.6.3", default-features = false, features = [
     "windows-native",
 ] }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
+reqwest = { version = "=0.13.4", default-features = false, features = [
+    "blocking",
+    "rustls",
+] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 sha2 = "0.10.8"
@@ -40,6 +44,7 @@ thiserror = "2.0.12"
 toml = "0.8.20"
 # Keep this exact: newer URL/IDNA releases currently exceed the workspace's Rust 1.85 MSRV.
 url = { version = "=2.5.4", features = ["serde"] }
+uuid = { version = "1.16.0", features = ["serde", "v4"] }
 zeroize = "1.8.1"
 
 [workspace.lints.rust]

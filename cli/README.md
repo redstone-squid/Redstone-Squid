@@ -32,6 +32,11 @@ Draft caches, resumable operation records, and short-lived sessions are stored i
 XChaCha20-Poly1305 envelopes. Authentication binds every file to its exact origin and state kind,
 so copied, swapped, or modified ciphertext fails closed.
 
+HTTP clients are constructed only from validated trusted profiles. They never follow redirects or
+inherit ambient proxy settings, require TLS 1.2 or newer outside the literal-loopback development
+exception, cap JSON requests and responses, and send protocol, renderer-capability, locale, and
+instance headers on every request.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
