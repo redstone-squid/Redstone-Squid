@@ -28,6 +28,7 @@ class BuildQueryRepository(Protocol):
         *,
         statuses: frozenset[Status],
         submitter_id: int | None,
+        submitter_account_id: int | None,
         after_id: int | None,
         limit: int,
     ) -> list[Build]: ...
@@ -79,6 +80,7 @@ class BuildQueryService:
         *,
         statuses: frozenset[Status],
         submitter_id: int | None = None,
+        submitter_account_id: int | None = None,
         after_id: int | None = None,
         limit: int = 21,
     ) -> list[Build]:
@@ -86,6 +88,7 @@ class BuildQueryService:
         return await self._builds.list_page(
             statuses=statuses,
             submitter_id=submitter_id,
+            submitter_account_id=submitter_account_id,
             after_id=after_id,
             limit=limit,
         )

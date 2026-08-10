@@ -73,6 +73,7 @@ def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> No
     )
     build = catalogue_build(
         42,
+        display_name="Vault prototype",
         tags=[TagAssignment(definition)],
         render_urls=["http://unsafe.example/render.png", "https://media.example/render.png"],
         image_urls=["https://media.example/submitted.png"],
@@ -81,6 +82,7 @@ def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> No
     summary = BuildSummary.from_domain(build)
 
     assert summary.preview is not None
+    assert summary.display_name == "Vault prototype"
     assert summary.preview.model_dump() == {"kind": "render", "url": "https://media.example/render.png"}
     assert summary.version_spec == ">=1.21"
     assert summary.versions == ["Java 1.21.5"]

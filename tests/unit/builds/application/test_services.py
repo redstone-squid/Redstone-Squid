@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal, cast
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from whenever import Instant
@@ -25,6 +26,11 @@ class FakeBuildRepository:
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:
+            return self.build
+        return None
+
+    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+        if self.build is not None and self.build.source_submission_draft_id == draft_id:
             return self.build
         return None
 
@@ -249,6 +255,53 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
     assert build.wiring_placement_restrictions == ["Seamless"]
     assert build.component_restrictions == []
     assert build.miscellaneous_restrictions == []
+    repository.save.assert_not_awaited()
+
+
+async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
+    repository = FakeBuildRepository()
+    service = build_service(repository)
+    draft_id = UUID("11111111-1111-1111-1111-111111111111")
+
+    build = await service.submit_for_account(
+        Build(description="A transport-neutral submission"),
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        display_name="  Workshop prototype  ",
+        ai_generated=False,
+        category=BuildCategory.OTHER,
+    )
+
+    assert build.submitter_account_id == 17
+    assert build.submitter_id is None
+    assert build.source_submission_draft_id == draft_id
+    assert build.display_name == "Workshop prototype"
+    assert build.category is BuildCategory.OTHER
+    assert build.submission_status is Status.PENDING
+    repository.save.assert_awaited_once_with(build)
+
+
+async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry() -> None:
+    draft_id = UUID("22222222-2222-2222-2222-222222222222")
+    existing = Build(
+        id=42,
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        category=BuildCategory.UTILITY,
+        submission_status=Status.PENDING,
+    )
+    repository = FakeBuildRepository(existing)
+
+    result = await build_service(repository).submit_for_account(
+        Build(),
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        display_name="ignored retry value",
+        ai_generated=False,
+        category=BuildCategory.UTILITY,
+    )
+
+    assert result is existing
     repository.save.assert_not_awaited()
 
 

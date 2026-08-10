@@ -60,13 +60,13 @@ async def list_my_builds(
     This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
     pending and denied builds, which the public search path deliberately cannot return.
     """
-    if principal.kind != "account" or principal.discord_id is None:
+    if principal.kind != "account" or principal.account_id is None:
         raise AuthenticationError
     statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
-    binding = f"users:{principal.discord_id}:builds:status={status or 'all'}:id-desc"
+    binding = f"accounts:{principal.account_id}:builds:status={status or 'all'}:id-desc"
     builds = await build_queries.list_page(
         statuses=statuses,
-        submitter_id=principal.discord_id,
+        submitter_account_id=principal.account_id,
         after_id=after_id_from_cursor(signer, cursor, binding),
         limit=page_size + 1,
     )

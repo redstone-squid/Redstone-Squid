@@ -515,6 +515,17 @@ class AccountRepository:
         parameters = {"survivor": survivor, "absorbed": absorbed}
         statements = (
             "UPDATE builds SET submitter_account_id = :survivor WHERE submitter_account_id = :absorbed",
+            "DELETE FROM submission_draft_access access_row WHERE access_row.id IN ("
+            "SELECT CASE WHEN draft.owner_account_id = :absorbed THEN survivor_access.id ELSE absorbed_access.id END "
+            "FROM submission_draft_access survivor_access "
+            "JOIN submission_draft_access absorbed_access ON absorbed_access.draft_id = survivor_access.draft_id "
+            "JOIN submission_drafts draft ON draft.id = survivor_access.draft_id "
+            "WHERE survivor_access.account_id = :survivor AND absorbed_access.account_id = :absorbed)",
+            "UPDATE submission_drafts SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
+            "UPDATE submission_draft_access SET account_id = :survivor WHERE account_id = :absorbed",
+            "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
+            "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
+            "WHERE rights_attested_by_account_id = :absorbed",
             "UPDATE api_keys SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
             "UPDATE api_keys SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
             "UPDATE web_sessions SET account_id = :survivor WHERE account_id = :absorbed",

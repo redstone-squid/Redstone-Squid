@@ -194,8 +194,19 @@ async def test_submitters_see_their_own_builds_in_every_status() -> None:
 
     kwargs = awaited_kwargs(graph.list_page)
     assert kwargs["statuses"] == frozenset(Status)
-    assert kwargs["submitter_id"] == 123
+    assert kwargs["submitter_account_id"] == 1
     assert [item.id for item in page.items] == [5, 4]
+
+
+@pytest.mark.asyncio
+async def test_provider_neutral_submitter_can_list_builds_without_discord() -> None:
+    graph = fakes(builds=[persisted_build(5)])
+    minecraft_only = Principal(kind="account", subject="account:7", scopes=frozenset(Scope), account_id=7)
+
+    page = await list_my_builds(graph.services.build_queries, SIGNER, minecraft_only)
+
+    assert awaited_kwargs(graph.list_page)["submitter_account_id"] == 7
+    assert [item.id for item in page.items] == [5]
 
 
 @pytest.mark.asyncio

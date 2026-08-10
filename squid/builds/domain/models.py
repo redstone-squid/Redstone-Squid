@@ -2,6 +2,7 @@
 
 import re
 import typing
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import IntEnum, StrEnum
@@ -28,7 +29,7 @@ RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
     Sequence[RecordCategoryLiteral], get_args(RecordCategoryLiteral)
 )
-BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance"]
+BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance", "Other"]
 BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
 DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
@@ -92,6 +93,7 @@ class BuildCategory(StrEnum):
     EXTENDER = "Extender"
     UTILITY = "Utility"
     ENTRANCE = "Entrance"
+    OTHER = "Other"
 
 
 class FrozenField[T]:
@@ -218,6 +220,11 @@ class Build:
     schematic_urls: list[str] = field(default_factory=list)
     render_urls: list[str] = field(default_factory=list)
 
+    display_name: str | None = None
+    source_submission_draft_id: uuid.UUID | None = None
+    submitter_account_id: int | None = None
+    # Discord entry points retain the snowflake for compatibility. Internal ownership uses
+    # ``submitter_account_id`` and does not require this provider identity to exist.
     submitter_id: int | None = None
     # TODO: save the submitted time too
     completion_time: str | None = None

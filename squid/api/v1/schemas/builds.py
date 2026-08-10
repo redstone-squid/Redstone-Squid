@@ -157,6 +157,7 @@ class BuildSummary(BaseModel):
     id: int
     revision: int
     title: str
+    display_name: str | None
     status: str
     category: str
     dimensions: Dimensions
@@ -180,6 +181,7 @@ class BuildSummary(BaseModel):
             id=build.id,
             revision=build.revision,
             title=build.title,
+            display_name=build.display_name,
             status=_status_name(build.submission_status),
             category=build.category.value if build.category is not None else "unknown",
             dimensions=Dimensions(width=build.width, height=build.height, depth=build.depth),
@@ -221,6 +223,8 @@ class BuildDetail(BuildSummary):
     door_dimensions: Dimensions
     patterns: list[str]
     orientation: str | None
+    extension_length: int | None
+    extender_type: str | None
     restrictions: dict[str, list[str]]
     description: str | None
     links: BuildLinks
@@ -234,7 +238,9 @@ class BuildDetail(BuildSummary):
             **summary.model_dump(),
             door_dimensions=Dimensions(width=build.door_width, height=build.door_height, depth=build.door_depth),
             patterns=list(build.door_type),
-            orientation=build.door_orientation_type,
+            orientation=build.door_orientation_type or build.extender_orientation,
+            extension_length=build.extension_length,
+            extender_type=build.extender_type,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
             links=BuildLinks(

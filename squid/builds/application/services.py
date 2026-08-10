@@ -1,6 +1,7 @@
 """Application services for build submission and editing."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from whenever import Instant
 
@@ -15,6 +16,7 @@ from squid.builds.application.ports import (
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildNotFoundError
+from squid.core.errors import InvalidStateError
 
 
 class BuildService:
@@ -96,8 +98,41 @@ class BuildService:
         ai_generated: bool,
         category: BuildCategory = BuildCategory.DOOR,
     ) -> Build:
-        """Apply submission metadata and persist an already prepared build."""
+        """Apply legacy Discord submission metadata and persist an already prepared build."""
+        build.submitter_account_id = None
         build.submitter_id = submitter_id
+        build.ai_generated = ai_generated
+        build.category = category
+        build.submission_status = Status.PENDING
+        await self._persist(build)
+        return build
+
+    async def submit_for_account(
+        self,
+        build: Build,
+        *,
+        submitter_account_id: int,
+        source_submission_draft_id: UUID,
+        display_name: str | None,
+        ai_generated: bool,
+        category: BuildCategory,
+    ) -> Build:
+        """Finalize one synchronized draft under a provider-neutral account.
+
+        The draft UUID is both persisted for audit and used as the retry key. A later
+        finalization attempt returns the already-created build without requiring any
+        Discord identity on the owning account.
+        """
+        existing = await self._repository.get_by_source_submission_draft_id(source_submission_draft_id)
+        if existing is not None:
+            if existing.submitter_account_id != submitter_account_id:
+                msg = "The source submission draft is already owned by another account."
+                raise InvalidStateError(msg, context={"source_submission_draft_id": str(source_submission_draft_id)})
+            return existing
+        build.submitter_account_id = submitter_account_id
+        build.submitter_id = None
+        build.source_submission_draft_id = source_submission_draft_id
+        build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
         build.category = category
         build.submission_status = Status.PENDING

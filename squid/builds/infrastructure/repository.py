@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, cast
@@ -34,6 +35,10 @@ from squid.builds.infrastructure.models import (
     BuildLink,
     BuildVersion,
     Door,
+    Entrance,
+    Extender,
+    Other,
+    Utility,
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
@@ -89,11 +94,22 @@ class BuildRepository:
             by_id = {row.id: await self._mapper.to_domain(session, row) for row in rows}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
 
+    async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
+        """Load the build already created from a synchronized submission draft."""
+        async with self._session_factory() as session:
+            sql_build = await session.scalar(
+                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id)
+            )
+            if sql_build is None:
+                return None
+            return await self._mapper.to_domain(session, sql_build)
+
     async def list_page(
         self,
         *,
         statuses: frozenset[Status],
         submitter_id: int | None,
+        submitter_account_id: int | None = None,
         after_id: int | None,
         limit: int,
     ) -> list[Build]:
@@ -102,7 +118,9 @@ class BuildRepository:
             return []
         async with self._session_factory() as session:
             statement = select(SQLBuild).where(SQLBuild.submission_status.in_(statuses))
-            if submitter_id is not None:
+            if submitter_account_id is not None:
+                statement = statement.where(SQLBuild.submitter_account_id == submitter_account_id)
+            elif submitter_id is not None:
                 statement = statement.join(
                     AccountIdentity, AccountIdentity.account_id == SQLBuild.submitter_account_id
                 ).where(
@@ -142,42 +160,9 @@ class BuildRepository:
         build.edited_time = Instant.now()
 
         if build.id is None:
-            if build.submitter_id is None:
-                msg = "Submitter ID must be set for new builds."
-                raise InvalidStateError(msg, context={"resource": "build"})
-
-            if build.category != BuildCategory.DOOR:
-                msg = f"Only doors are supported for now, got {build.category}."
-                raise InvalidBuildError(msg, context={"category": build.category})
-
             async with self._session_factory() as session:
-                sql_build = Door(
-                    submission_status=build.submission_status or Status.PENDING,
-                    record_category=None,
-                    width=build.width,
-                    height=build.height,
-                    depth=build.depth,
-                    completion_time=build.completion_time,
-                    completion_at=build.completion_at,
-                    completion_evidence=build.completion_evidence,
-                    description=build.description,
-                    category=build.category,
-                    submitter_account_id=await self._get_or_create_account(session, build.submitter_id),
-                    version_spec=build.version_spec,
-                    ai_generated=build.ai_generated or False,
-                    embedding=build.embedding,
-                    extra_info=build.extra_info,
-                    edited_time=build.edited_time,
-                    is_locked=False,
-                    orientation=build.door_orientation_type or "Door",
-                    door_width=build.door_width or 1,
-                    door_height=build.door_height or 2,
-                    door_depth=build.door_depth,
-                    normal_opening_time=build.normal_opening_time,
-                    normal_closing_time=build.normal_closing_time,
-                    visible_opening_time=build.visible_opening_time,
-                    visible_closing_time=build.visible_closing_time,
-                )
+                submitter_account_id = await self._resolve_submitter_account_id(session, build)
+                sql_build = self._new_model(build, submitter_account_id)
                 await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
                 await session.flush()
@@ -196,8 +181,8 @@ class BuildRepository:
         if build.submission_status is None:
             msg = "Submission status must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
-        if build.submitter_id is None:
-            msg = "Submitter ID must be set for existing builds."
+        if build.submitter_account_id is None and build.submitter_id is None:
+            msg = "Submitter account ID or Discord ID must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
 
         async with self._session_factory() as session:
@@ -218,6 +203,7 @@ class BuildRepository:
                     expected_revision=build.revision,
                     current_revision=sql_build.revision,
                 )
+            submitter_account_id = await self._resolve_submitter_account_id(session, build)
             try:
                 sql_build.submission_status = build.submission_status
                 sql_build.width = build.width
@@ -227,30 +213,32 @@ class BuildRepository:
                 sql_build.completion_at = build.completion_at
                 sql_build.completion_evidence = build.completion_evidence
                 sql_build.description = build.description
-                sql_build.submitter_account_id = await self._get_or_create_account(session, build.submitter_id)
+                sql_build.display_name = _normalize_display_name(build.display_name)
+                if (
+                    sql_build.source_submission_draft_id is not None
+                    and build.source_submission_draft_id != sql_build.source_submission_draft_id
+                ):
+                    msg = "A build's source submission draft cannot be changed."
+                    raise InvalidStateError(msg, context={"build_id": build.id})
+                sql_build.source_submission_draft_id = build.source_submission_draft_id
+                sql_build.submitter_account_id = submitter_account_id
                 sql_build.version_spec = build.version_spec
                 sql_build.ai_generated = build.ai_generated or False
                 sql_build.embedding = build.embedding
                 sql_build.edited_time = build.edited_time
 
-                if not isinstance(sql_build, Door):
-                    msg = f"Only doors are supported for now, got {sql_build.category}."
-                    raise TypeError(msg)
-                sql_build.orientation = build.door_orientation_type or "Door"
-                sql_build.door_width = build.door_width or 1
-                sql_build.door_height = build.door_height or 2
-                sql_build.door_depth = build.door_depth
-                sql_build.normal_opening_time = build.normal_opening_time
-                sql_build.normal_closing_time = build.normal_closing_time
-                sql_build.visible_opening_time = build.visible_opening_time
-                sql_build.visible_closing_time = build.visible_closing_time
+                self._update_category_fields(build, sql_build)
 
-                sql_build.build_creators.clear()
-                sql_build.build_versions.clear()
-                sql_build.tag_assignments.clear()
-                sql_build.links.clear()
-                await self._setup_relationships(build, session, sql_build)
-                sql_build.extra_info = build.extra_info
+                # Taxonomy and version lookups issue SELECTs. Keep them from autoflushing a
+                # half-rebuilt graph, which would both expose an intermediate state to hooks
+                # and consume more than one optimistic revision for this logical edit.
+                with session.no_autoflush:
+                    sql_build.build_creators.clear()
+                    sql_build.build_versions.clear()
+                    sql_build.tag_assignments.clear()
+                    sql_build.links.clear()
+                    await self._setup_relationships(build, session, sql_build)
+                    sql_build.extra_info = build.extra_info
                 if build.original_message_id is not None:
                     await self._create_or_update_message(build, session)
                 sql_build.original_message_id = build.original_message_id
@@ -260,6 +248,103 @@ class BuildRepository:
                 raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
             build.revision = sql_build.revision
 
+    @staticmethod
+    def _new_model(build: Build, submitter_account_id: int) -> SQLBuild:
+        """Construct the joined row matching the domain category."""
+        if build.category is None:
+            msg = "Category must be set for new builds."
+            raise InvalidBuildError(msg, context={"category": None})
+        common: dict[str, Any] = {
+            "submission_status": build.submission_status or Status.PENDING,
+            "record_category": build.record_category,
+            "width": build.width,
+            "height": build.height,
+            "depth": build.depth,
+            "completion_time": build.completion_time,
+            "completion_at": build.completion_at,
+            "completion_evidence": build.completion_evidence,
+            "description": build.description,
+            "display_name": _normalize_display_name(build.display_name),
+            "source_submission_draft_id": build.source_submission_draft_id,
+            "category": build.category,
+            "submitter_account_id": submitter_account_id,
+            "version_spec": build.version_spec,
+            "ai_generated": build.ai_generated or False,
+            "embedding": build.embedding,
+            "extra_info": build.extra_info,
+            "edited_time": build.edited_time,
+            "is_locked": False,
+        }
+        match build.category:
+            case BuildCategory.DOOR:
+                return Door(
+                    **common,
+                    orientation=build.door_orientation_type or "Door",
+                    door_width=build.door_width or 1,
+                    door_height=build.door_height or 2,
+                    door_depth=build.door_depth,
+                    normal_opening_time=build.normal_opening_time,
+                    normal_closing_time=build.normal_closing_time,
+                    visible_opening_time=build.visible_opening_time,
+                    visible_closing_time=build.visible_closing_time,
+                )
+            case BuildCategory.EXTENDER:
+                return Extender(
+                    **common,
+                    orientation=build.extender_orientation,
+                    extension_length=build.extension_length,
+                    extender_type=build.extender_type,
+                )
+            case BuildCategory.UTILITY:
+                return Utility(**common)
+            case BuildCategory.ENTRANCE:
+                return Entrance(**common)
+            case BuildCategory.OTHER:
+                return Other(**common)
+
+    @staticmethod
+    def _update_category_fields(build: Build, sql_build: SQLBuild) -> None:
+        """Update facts owned by one joined category without allowing a category switch."""
+        if build.category is None or sql_build.category != build.category:
+            msg = "A persisted build's category cannot be changed."
+            raise InvalidBuildError(
+                msg,
+                context={"build_id": build.id, "current_category": sql_build.category, "category": build.category},
+            )
+        match sql_build:
+            case Door():
+                sql_build.orientation = build.door_orientation_type or "Door"
+                sql_build.door_width = build.door_width or 1
+                sql_build.door_height = build.door_height or 2
+                sql_build.door_depth = build.door_depth
+                sql_build.normal_opening_time = build.normal_opening_time
+                sql_build.normal_closing_time = build.normal_closing_time
+                sql_build.visible_opening_time = build.visible_opening_time
+                sql_build.visible_closing_time = build.visible_closing_time
+            case Extender():
+                sql_build.orientation = build.extender_orientation
+                sql_build.extension_length = build.extension_length
+                sql_build.extender_type = build.extender_type
+            case Utility() | Entrance() | Other():
+                pass
+
+    async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
+        """Resolve legacy Discord ownership only when no canonical account ID was supplied."""
+        if build.submitter_account_id is not None:
+            account_exists = await session.scalar(select(Account.id).where(Account.id == build.submitter_account_id))
+            if account_exists is None:
+                msg = "Submitter account does not exist."
+                raise InvalidStateError(
+                    msg,
+                    context={"resource": "build", "submitter_account_id": build.submitter_account_id},
+                )
+            return build.submitter_account_id
+        if build.submitter_id is None:
+            msg = "Submitter account ID or Discord ID must be set for new builds."
+            raise InvalidStateError(msg, context={"resource": "build"})
+        build.submitter_account_id = await self._get_or_create_account(session, build.submitter_id)
+        return build.submitter_account_id
+
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
         """Set up all relationships for the build using SQLAlchemy's relationship handling."""
         # Handle creators
@@ -267,7 +352,7 @@ class BuildRepository:
             alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
             sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
 
-        if not build.door_type:
+        if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} and not build.door_type:
             build.door_type = ["Regular"]
         await self._setup_tag_assignments(build, session, sql_build)
 
@@ -345,7 +430,9 @@ class BuildRepository:
     ) -> list[DomainTagAssignment]:
         """Translate editable taxonomy fields into the sole persisted tag model."""
         restrictions = [value for values in build.restrictions.values() for value in values or ()]
-        patterns = build.door_type or ["Regular"]
+        patterns = build.door_type or (
+            ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
+        )
         rows, unknown_restrictions, unknown_patterns = await _resolve_official_tag_rows(
             session,
             build_kind=build.category.value if build.category is not None else None,
@@ -556,11 +643,11 @@ class BuildRepository:
         """Return pending builds with the relationships required by the domain mapper."""
         async with self._session_factory() as session:
             statement = (
-                select(Door)
-                .where(Door.submission_status == Status.PENDING)
+                select(SQLBuild)
+                .where(SQLBuild.submission_status == Status.PENDING)
                 .options(
-                    selectinload(Door.tag_assignments).selectinload(SQLTagAssignment.definition),
-                    selectinload(Door.links),
+                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
+                    selectinload(SQLBuild.links),
                 )
             )
             result = await session.execute(statement)
@@ -717,3 +804,15 @@ def _merge_unknown_taxonomy(
 
 def _normalize_tag_name(value: str) -> str:
     return " ".join(value.casefold().split())
+
+
+def _normalize_display_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) > 120:
+        msg = "Build display names cannot exceed 120 characters."
+        raise InvalidBuildError(msg, context={"length": len(normalized)})
+    return normalized

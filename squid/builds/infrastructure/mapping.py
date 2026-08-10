@@ -9,7 +9,7 @@ from squid.builds.domain import Build, BuildCategory
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
-from squid.builds.infrastructure.models import BuildCreator, BuildVersion, Door, Extender
+from squid.builds.infrastructure.models import BuildCreator, BuildVersion, Door, Entrance, Extender, Other, Utility
 from squid.messages.infrastructure.models import Message
 from squid.tags.domain import (
     RecordOperator,
@@ -29,8 +29,8 @@ class BuildMapper:
     """Load cross-context values explicitly while mapping a build."""
 
     async def to_domain(self, session: AsyncSession, sql_build: SQLBuild) -> Build:
-        if not isinstance(sql_build, (Door, Extender)):
-            msg = "Can only handle doors and piston extenders right now."
+        if not isinstance(sql_build, (Door, Extender, Utility, Entrance, Other)):
+            msg = f"Unsupported persisted build category: {sql_build.category}."
             raise TypeError(msg)
 
         creator_names = list(
@@ -129,6 +129,9 @@ class BuildMapper:
             world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
             schematic_urls=[link.url for link in sql_build.links if link.media_type == "schematic"],
             render_urls=[link.url for link in sql_build.links if link.media_type == "render"],
+            display_name=sql_build.display_name,
+            source_submission_draft_id=sql_build.source_submission_draft_id,
+            submitter_account_id=sql_build.submitter_account_id,
             submitter_id=submitter_discord_id,
             completion_time=sql_build.completion_time,
             completion_at=sql_build.completion_at,

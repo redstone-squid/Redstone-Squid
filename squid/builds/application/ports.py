@@ -3,6 +3,7 @@
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Literal, Protocol
+from uuid import UUID
 
 from whenever import Instant
 
@@ -32,6 +33,8 @@ class BuildRepository(Protocol):
     """Persistence operations required by the build application service."""
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
+
+    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
 
     async def save(self, build: Build) -> None: ...
 

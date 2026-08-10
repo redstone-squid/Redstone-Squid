@@ -9,6 +9,7 @@ from squid.catalogue.domain import (
     ExtenderCategory,
     FormattedTitle,
     RulesTitleFormatter,
+    TitleSection,
     TitleToken,
 )
 
@@ -76,6 +77,13 @@ def format_build_category(build: Build) -> FormattedTitle:
                         ),
                     ),
                 )
+            )
+        case BuildCategory.UTILITY | BuildCategory.ENTRANCE | BuildCategory.OTHER:
+            assert build.category is not None
+            title = build.category.value
+            return FormattedTitle(
+                title=title,
+                title_tokens=(TitleToken(title, TitleSection.FIXED_NOUN),),
             )
         case _:
             msg = f"Title grammar does not support {build.category or 'uncategorized builds'}."

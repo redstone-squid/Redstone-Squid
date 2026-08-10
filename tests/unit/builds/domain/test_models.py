@@ -119,6 +119,19 @@ class TestBuildTitle:
 
         assert extender.title == "Observerless Upward 3 Piston Extender"
 
+    @pytest.mark.parametrize(
+        ("category", "expected"),
+        [
+            (BuildCategory.UTILITY, "Pending: Utility"),
+            (BuildCategory.ENTRANCE, "Pending: Entrance"),
+            (BuildCategory.OTHER, "Pending: Other"),
+        ],
+    )
+    def test_generic_category_display_titles(self, category: BuildCategory, expected: str) -> None:
+        build = Build(category=category, submission_status=Status.PENDING)
+
+        assert build.title == expected
+
     def test_search_display_title_is_plain_and_keeps_canonical_data(self, sample_build: Build) -> None:
         sample_build.versions = ["Java 1.20.0"]
         sample_build.extra_info = {

@@ -56,6 +56,12 @@ class Build(Base, kw_only=True):
         CheckConstraint("depth > 0", name="submissions_build_depth_check"),
         CheckConstraint("height > 0", name="submissions_build_height_check"),
         CheckConstraint("width > 0", name="submissions_build_width_check"),
+        CheckConstraint(
+            "display_name IS NULL OR (display_name = btrim(display_name) AND display_name <> '' "
+            "AND char_length(display_name) <= 120)",
+            name="builds_display_name_valid",
+        ),
+        UniqueConstraint("source_submission_draft_id", name="builds_source_submission_draft_id_key"),
         Index("idx_builds_category", "category", postgresql_where=text("category IS NOT NULL")),
         Index(
             "idx_builds_record_category",
@@ -83,6 +89,9 @@ class Build(Base, kw_only=True):
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
+    display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    source_submission_draft_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """Stable finalization key retained even if the short-lived source draft is later pruned."""
     category: Mapped[BuildCategory | None] = mapped_column(Text)
     submitter_account_id: Mapped[int] = mapped_column(
         Integer,
@@ -121,13 +130,11 @@ class Build(Base, kw_only=True):
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
-    __mapper_args__ = {"version_id_col": revision}
-
     build_creators: Mapped[list[BuildCreator]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin"
+        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
     )
     build_versions: Mapped[list[BuildVersion]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin"
+        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
     )
 
     tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
@@ -136,10 +143,13 @@ class Build(Base, kw_only=True):
         cascade="all, delete-orphan",
     )
 
-    links: Mapped[list[BuildLink]] = relationship(back_populates="build", default_factory=list, lazy="selectin")
+    links: Mapped[list[BuildLink]] = relationship(
+        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
+    )
 
     __mapper_args__ = {
         "polymorphic_on": category,
+        "version_id_col": revision,
     }
 
 
@@ -205,7 +215,7 @@ class Utility(Build, kw_only=True):
     )
 
 
-class Entrance(Build):
+class Entrance(Build, kw_only=True):
     """An entrance build."""
 
     __tablename__ = "entrances"
@@ -217,6 +227,23 @@ class Entrance(Build):
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="entrances_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        init=False,
+    )
+
+
+class Other(Build, kw_only=True):
+    """A build which does not fit one of the structured catalogue categories."""
+
+    __tablename__ = "other_builds"
+    __mapper_args__ = {
+        "polymorphic_load": "inline",
+        "polymorphic_identity": "Other",
+    }
+
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="other_builds_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
     )
