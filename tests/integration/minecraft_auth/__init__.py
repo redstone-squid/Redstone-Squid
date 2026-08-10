@@ -1,0 +1,1 @@
+"""Minecraft authorization integration tests."""
