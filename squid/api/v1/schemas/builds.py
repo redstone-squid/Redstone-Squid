@@ -5,11 +5,13 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal, Self, override
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from squid.builds.domain import Build, Status
 
 type InputDimensions = tuple[int | None, int | None, int | None]
+
+_HTTP_URL = TypeAdapter(AnyHttpUrl)
 
 
 class BuildStatusFilter(StrEnum):
@@ -132,9 +134,19 @@ class BuildTag(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    key: str
     name: str
     value: Decimal | str | bool | None
     unit: str | None
+
+
+class BuildPreview(BaseModel):
+    """The preferred HTTPS image for a build card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["render", "image"]
+    url: str
 
 
 class BuildSummary(BaseModel):
@@ -150,6 +162,11 @@ class BuildSummary(BaseModel):
     dimensions: Dimensions
     creators: list[str]
     tags: list[BuildTag]
+    preview: BuildPreview | None
+    version_spec: str | None
+    versions: list[str]
+    opening_time: int | None
+    closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
 
@@ -169,12 +186,18 @@ class BuildSummary(BaseModel):
             creators=list(build.creators_ign),
             tags=[
                 BuildTag(
+                    key=assignment.definition.stable_key,
                     name=assignment.definition.display_name,
                     value=assignment.value,
                     unit=assignment.display_unit,
                 )
                 for assignment in build.tags
             ],
+            preview=_preview(build),
+            version_spec=build.version_spec,
+            versions=list(build.versions),
+            opening_time=build.normal_opening_time,
+            closing_time=build.normal_closing_time,
             created_at=build.submission_time.to_stdlib() if build.submission_time is not None else None,
             updated_at=build.edited_time.to_stdlib() if build.edited_time is not None else None,
         )
@@ -195,14 +218,10 @@ class BuildLinks(BaseModel):
 class BuildDetail(BuildSummary):
     """Stable item representation with build-specific facts."""
 
-    version_spec: str | None
-    versions: list[str]
     door_dimensions: Dimensions
     patterns: list[str]
     orientation: str | None
     restrictions: dict[str, list[str]]
-    opening_time: int | None
-    closing_time: int | None
     description: str | None
     links: BuildLinks
 
@@ -213,14 +232,10 @@ class BuildDetail(BuildSummary):
         summary = BuildSummary.from_domain(build)
         return cls(
             **summary.model_dump(),
-            version_spec=build.version_spec,
-            versions=list(build.versions),
             door_dimensions=Dimensions(width=build.door_width, height=build.door_height, depth=build.door_depth),
             patterns=list(build.door_type),
             orientation=build.door_orientation_type,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
-            opening_time=build.normal_opening_time,
-            closing_time=build.normal_closing_time,
             description=build.description,
             links=BuildLinks(
                 images=list(build.image_urls),
@@ -230,6 +245,22 @@ class BuildDetail(BuildSummary):
                 renders=list(build.render_urls),
             ),
         )
+
+
+def _preview(build: Build) -> BuildPreview | None:
+    sources: tuple[tuple[Literal["render", "image"], list[str]], ...] = (
+        ("render", build.render_urls),
+        ("image", build.image_urls),
+    )
+    for kind, urls in sources:
+        for candidate in urls:
+            try:
+                url = _HTTP_URL.validate_python(candidate)
+            except ValidationError:
+                continue
+            if url.scheme == "https":
+                return BuildPreview(kind=kind, url=str(url))
+    return None
 
 
 def _status_name(status: Status | None) -> str:

@@ -62,6 +62,10 @@ generate-schema:
 dependency-report output="dependency-report.json":
     uv export --locked --format cyclonedx1.5 --output-file "{{output}}"
 
+# Refresh the API contract consumed by the public catalogue's generated client.
+export-openapi:
+    uv run --locked python -m scripts.export_openapi
+
 gha-analysis:
     uvx zizmor --gh-token $(gh auth token) --persona=pedantic .
 

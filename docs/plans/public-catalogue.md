@@ -1,10 +1,11 @@
 # A Public Catalogue for Redstone-Squid
 
-> **Status.** Not started; approved as the plan of record on 2026-08-10. The findings below are
-> verified in-tree, not hypothetical — finding 1 breaks every build detail response the moment the
-> contract change lands, and findings 2 and 3 are live defects today regardless of whether this
-> ships. Amend this document in place as phases land, calling out where building it proved part of
-> it wrong rather than silently rewriting.
+> **Status.** Phase 1 completed on 2026-08-10; phases 2–4 have not started. The contract landed as
+> designed: finding 1 was fixed with the summary extension, and holder hydration needed an explicit
+> confirmed-status check to keep stale record results from exposing moderated builds. Findings 2
+> and 3 remain live defects regardless of whether the remaining phases ship. Amend this document in
+> place as phases land, calling out where building it proved part of it wrong rather than silently
+> rewriting.
 
 ## Context
 
@@ -64,10 +65,9 @@ Correct:
 
 Verified in-tree during design.
 
-1. **Blocking — extending `BuildSummary` breaks every `BuildDetail` response.** `BuildDetail`
-   subclasses `BuildSummary` and already declares `versions`, `opening_time`, and `closing_time`
-   (`squid/api/v1/schemas/builds.py:195-207`). Its constructor spreads the summary and then passes
-   those fields again explicitly:
+1. **Resolved in Phase 1 — extending `BuildSummary` would break every `BuildDetail` response.** Before
+   Phase 1, `BuildDetail` subclassed `BuildSummary` and declared `versions`, `opening_time`, and
+   `closing_time`. Its constructor spread the summary and then passed those fields again explicitly:
 
    ```python
    summary = BuildSummary.from_domain(build)
@@ -78,11 +78,10 @@ Verified in-tree during design.
        ...
    ```
 
-   (`squid/api/v1/schemas/builds.py:213-218`.) Moving version and timing fields onto the summary
-   makes that `TypeError: got multiple values for keyword argument 'versions'` on every detail
-   request. **Phase 1 must delete the now-inherited declarations and their constructor arguments
-   from `BuildDetail`, not just add fields to `BuildSummary`.** `RecordDetail(RecordSummary)` has the
-   same shape; `holder_builds` is genuinely new there, so it is safe, but the same check applies.
+   Moving version and timing fields onto the summary without that cleanup would make every detail
+   request raise `TypeError: got multiple values for keyword argument 'versions'`. Phase 1 deleted
+   the inherited declarations and constructor arguments while adding the summary fields.
+   `RecordDetail(RecordSummary)` had the same shape; `holder_builds` was genuinely new there.
 
 2. **Live defect — the documentation workflow targets a branch that does not exist.** The
    repository's default branch is `master`, but `.github/workflows/docs.yml` gates on `main` in
@@ -255,9 +254,9 @@ The security shape of the workflow is unchanged and non-negotiable:
 
 ## Phases
 
-1. **API contract.** `BuildTag` key; `BuildSummary` preview, versions, timings; `BuildDetail`
-   de-duplication per finding 1; `RecordDetail.holder_builds`. Register with the schemathesis
-   contract harness. Commit the regenerated OpenAPI document.
+1. **API contract — complete.** Added the `BuildTag` key; `BuildSummary` preview, versions, and timings;
+   `BuildDetail` de-duplication per finding 1; and `RecordDetail.holder_builds`. The extensions are in
+   the schemathesis contract harness, and the regenerated document is committed at `web/openapi.json`.
 2. **Web foundation.** Scaffold `/web` — Astro, React, strict TypeScript, Bun, custom CSS tokens,
    standalone [`@astrojs/node` adapter](https://docs.astro.build/en/guides/integrations-guide/node/).
    Generated SDK, per-request client, locale mapping helper, typed dictionaries, brand component.

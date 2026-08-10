@@ -4,23 +4,42 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import CursorSigner, Records
+from squid.api.dependencies import BuildQueries, CursorSigner, Records
 from squid.api.errors import responses
 from squid.api.pagination import Page
+from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
-from squid.core.errors import ErrorCode, NotFoundError, ValidationError
+from squid.builds.domain import Status
+from squid.core.errors import DataIntegrityError, ErrorCode, NotFoundError, ValidationError
 
 router = APIRouter(prefix="/records", tags=["records"])
 _BINDING = "records:active:id-desc"
 
 
-@router.get("/{record_id}", response_model=RecordDetail, responses=responses(404, 422, 503))
-async def get_record(record_id: int, records: Records) -> RecordDetail:
+@router.get("/{record_id}", response_model=RecordDetail, responses=responses(404, 422, 500, 503))
+async def get_record(record_id: int, records: Records, build_queries: BuildQueries) -> RecordDetail:
     """Return one result only while its computation run is active."""
     record = await records.get(record_id)
     if record is None:
         raise NotFoundError(resource="record", public_context={"record_id": record_id})
-    return RecordDetail(**RecordSummary.from_domain(record).model_dump())
+
+    found = await build_queries.get_many(record.holder_build_ids)
+    public_builds = {
+        build.id: build for build in found if build.id is not None and build.submission_status is Status.CONFIRMED
+    }
+    unavailable_ids = [build_id for build_id in record.holder_build_ids if build_id not in public_builds]
+    if unavailable_ids:
+        msg = "An active record references holder builds that are unavailable to the public catalogue."
+        raise DataIntegrityError(
+            msg,
+            context={"record_id": record.id, "unavailable_holder_build_ids": unavailable_ids},
+        )
+
+    summary = RecordSummary.from_domain(record)
+    return RecordDetail(
+        **summary.model_dump(),
+        holder_builds=[BuildSummary.from_domain(public_builds[build_id]) for build_id in record.holder_build_ids],
+    )
 
 
 @router.get("", response_model=Page[RecordSummary], responses=responses(400, 422, 503))

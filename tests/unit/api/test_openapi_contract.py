@@ -13,6 +13,8 @@ Add every new route to this schema as the API grows; that's the point of wiring 
 """
 
 import gc
+import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -23,6 +25,7 @@ from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
 schema = schemathesis.openapi.from_asgi("/openapi.json", _app)
+OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "web" / "openapi.json"
 
 
 @pytest.fixture
@@ -63,3 +66,21 @@ def test_api_never_errors_on_accept_language(client: httpx.Client) -> None:
         assert problem["title"]
         assert isinstance(problem["detail"], str)
         assert problem["detail"]
+
+
+def test_catalogue_extensions_are_registered_in_openapi() -> None:
+    document = _app.openapi()
+    schemas = document["components"]["schemas"]
+
+    assert {"preview", "version_spec", "versions", "opening_time", "closing_time"} <= set(
+        schemas["BuildSummary"]["properties"]
+    )
+    assert "key" in schemas["BuildTag"]["properties"]
+    assert "holder_builds" in schemas["RecordDetail"]["properties"]
+    assert "500" in document["paths"]["/v1/records/{record_id}"]["get"]["responses"]
+
+
+def test_committed_openapi_document_matches_application() -> None:
+    committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
+
+    assert committed == _app.openapi()

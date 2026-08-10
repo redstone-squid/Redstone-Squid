@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from squid.api.v1.schemas.builds import BuildSummary
 from squid.records.application.models import ActiveRecord
 
 
@@ -40,4 +41,6 @@ class RecordSummary(BaseModel):
 
 
 class RecordDetail(RecordSummary):
-    """Fixed item representation reserved for future history sub-resources."""
+    """One active record result with its ordered holder builds."""
+
+    holder_builds: list[BuildSummary]
