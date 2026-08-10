@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "start": "ASTRO_TELEMETRY_DISABLED=1 node dist/server/entry.mjs",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
     "format": "prettier --write .",
@@ -17,7 +18,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
-    "test:lighthouse": "lhci autorun",
+    "test:docs-screenshots": "DOCS_SCREENSHOTS=1 playwright test tests/e2e/docs-screenshots.spec.ts --project=chromium-desktop --project=mobile-chrome",
+    "test:lighthouse": "bun scripts/check-lighthouse.ts",
     "check:bundle": "bun scripts/check-bundle.ts"
   },
   "dependencies": {
@@ -28,12 +30,14 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
+  "overrides": {
+    "js-yaml": "4.3.1"
+  },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@axe-core/playwright": "^4.12.1",
     "@eslint/js": "9.39.1",
     "@hey-api/openapi-ts": "^0.99.0",
-    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -41,11 +45,13 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitest/coverage-v8": "^4.1.10",
+    "chrome-launcher": "^1.2.1",
     "eslint": "9.39.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.9.0",
     "jsdom": "^30.0.1",
+    "lighthouse": "^13.4.1",
     "prettier": "^3.9.6",
     "prettier-plugin-astro": "^0.14.1",
     "typescript": "5.9.3",

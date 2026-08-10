@@ -21,7 +21,7 @@ try {
   ]);
 } catch (caught) {
   error = asCatalogueError(caught);
-  Astro.response.status = error.status === 404 ? 404 : 503;
+  Astro.locals.responseStatus = error.status;
 }
 const searchAction = localizePath("/builds", locale);
 ---

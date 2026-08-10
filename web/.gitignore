@@ -6,4 +6,5 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.playwright-browsers/
 .lighthouseci/

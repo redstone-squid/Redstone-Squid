@@ -10,6 +10,7 @@ export default tseslint.config(
       ".bun-cache/**",
       ".bun-tmp/**",
       ".astro/**",
+      ".playwright-browsers/**",
       "dist/**",
       "eslint.config.js",
       "coverage/**",

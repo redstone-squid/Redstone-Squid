@@ -14,13 +14,13 @@ let error;
 let record: RecordDetail | undefined;
 if (!recordId) {
   error = new CatalogueApiError(404);
-  Astro.response.status = 404;
+  Astro.locals.responseStatus = 404;
 } else {
   try {
     record = await fetchRecord(locale, recordId);
   } catch (caught) {
     error = asCatalogueError(caught);
-    Astro.response.status = error.status === 404 ? 404 : 503;
+    Astro.locals.responseStatus = error.status;
   }
 }
 const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : Astro.url.pathname;

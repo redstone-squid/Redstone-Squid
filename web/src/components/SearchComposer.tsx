@@ -104,13 +104,14 @@ export default function SearchComposer({
       aria-label={translate(locale, "search.suggestions")}
     >
       {visibleSuggestions.map((suggestion, index) => (
-        <li
-          id={`${suggestionId}-${index}`}
-          key={suggestion}
-          role="option"
-          aria-selected={activeSuggestion === index}
-        >
-          <button type="button" onClick={() => chooseSuggestion(suggestion)}>
+        <li key={suggestion} role="presentation">
+          <button
+            id={`${suggestionId}-${index}`}
+            type="button"
+            role="option"
+            aria-selected={activeSuggestion === index}
+            onClick={() => chooseSuggestion(suggestion)}
+          >
             {suggestion}
           </button>
         </li>

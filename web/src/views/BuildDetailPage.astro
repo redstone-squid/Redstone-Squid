@@ -29,7 +29,7 @@ let build: BuildDetail | undefined;
 let schematics: PageSchematicSummary | undefined;
 if (!buildId) {
   error = new CatalogueApiError(404);
-  Astro.response.status = 404;
+  Astro.locals.responseStatus = 404;
 } else {
   try {
     [build, schematics] = await Promise.all([
@@ -38,7 +38,7 @@ if (!buildId) {
     ]);
   } catch (caught) {
     error = asCatalogueError(caught);
-    Astro.response.status = error.status === 404 ? 404 : 503;
+    Astro.locals.responseStatus = error.status;
   }
 }
 const media = build ? buildMedia(build) : [];

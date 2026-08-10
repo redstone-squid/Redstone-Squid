@@ -4,7 +4,7 @@ import { localizePath, translate, type Locale } from "../lib/i18n";
 
 type Props = { locale: Locale; status: 404 | 503 };
 const { locale, status } = Astro.props;
-Astro.response.status = status;
+Astro.locals.responseStatus = status;
 const notFound = status === 404;
 ---
 

@@ -1,0 +1,11 @@
+.astro
+.bun-cache
+.bun-tmp
+.git
+.lighthouseci
+.playwright-browsers
+coverage
+dist
+node_modules
+playwright-report
+test-results

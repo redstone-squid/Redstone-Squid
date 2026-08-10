@@ -3,7 +3,13 @@ import { defineMiddleware } from "astro:middleware";
 export const onRequest = defineMiddleware(async (context, next) => {
   const startedAt = performance.now();
   try {
-    const response = await next();
+    const renderedResponse = await next();
+    const body = context.request.method === "HEAD" ? null : await renderedResponse.arrayBuffer();
+    const response = new Response(body, {
+      status: context.locals.responseStatus ?? renderedResponse.status,
+      statusText: context.locals.responseStatus ? undefined : renderedResponse.statusText,
+      headers: renderedResponse.headers,
+    });
     console.info(
       JSON.stringify({
         event: "http_request",

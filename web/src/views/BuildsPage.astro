@@ -25,7 +25,7 @@ try {
   page = await fetchBuilds(locale, { q, sort, cursor });
 } catch (caught) {
   error = asCatalogueError(caught);
-  Astro.response.status = error.status === 404 ? 404 : 503;
+  Astro.locals.responseStatus = error.status;
 }
 ---
 
