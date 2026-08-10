@@ -26,9 +26,7 @@ class SchematicSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    sha256: str
     primary: bool
-    filename: str | None
     format: str
     byte_size: int
     dimensions: SchematicSize
@@ -40,16 +38,21 @@ class SchematicSummary(BaseModel):
     source_data_version: int | None
     analyzer_version: str
     analysis_schema_version: int
+    license: str
+    license_url: str
+    download_url: str
 
     @classmethod
     def from_domain(cls, schematic: StoredSchematic) -> "SchematicSummary":
         analysis = schematic.analysis
         metrics = analysis.metrics
+        license = schematic.publication.license
+        if not schematic.publication.is_public_downloadable or license is None:
+            msg = "Only public downloadable schematics can be rendered in the public API."
+            raise ValueError(msg)
         return cls(
             id=schematic.id,
-            sha256=schematic.file_sha256,
             primary=schematic.is_primary,
-            filename=schematic.original_filename,
             format=metrics.source_format.value,
             byte_size=metrics.byte_size,
             dimensions=SchematicSize.from_domain(metrics.dimensions),
@@ -61,4 +64,7 @@ class SchematicSummary(BaseModel):
             source_data_version=metrics.source_data_version,
             analyzer_version=analysis.analyzer_version,
             analysis_schema_version=analysis.analysis_schema_version,
+            license=license.value,
+            license_url=license.uri,
+            download_url=f"/v1/builds/{schematic.build_id}/schematics/{schematic.id}/content",
         )

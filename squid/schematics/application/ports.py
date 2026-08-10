@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import StoredRender, StoredSchematic
+from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -91,9 +91,12 @@ class SchematicStore(Protocol):
         primary: bool,
         original_filename: str | None = None,
         uploaded_by_discord_id: int | None = None,
+        publication: SchematicPublication | None = None,
     ) -> int: ...
 
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]: ...
+
+    async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None: ...
 
     async def get_primary(self, build_id: int) -> StoredSchematic | None: ...
 

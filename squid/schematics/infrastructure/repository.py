@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.artifacts import ArtifactStore
 from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.models import BuildLink
-from squid.schematics.application.queries import StoredRender, StoredSchematic
+from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,
@@ -198,6 +198,7 @@ class SchematicRepository:
         primary: bool,
         original_filename: str | None = None,
         uploaded_by_discord_id: int | None = None,
+        publication: SchematicPublication | None = None,
     ) -> int:
         """Attach an analysis to a build, replacing any earlier analysis of the same file.
 
@@ -212,6 +213,18 @@ class SchematicRepository:
             "uploaded_by_discord_id": uploaded_by_discord_id,
             **to_row_values(analysis),
         }
+        if publication is not None:
+            values.update(
+                visibility=publication.visibility.value,
+                license_code=publication.license.value if publication.license is not None else None,
+                rights_attested_at=publication.rights_attested_at,
+                rights_attested_by_account_id=publication.rights_attested_by_account_id,
+                sanitized_at=publication.sanitized_at,
+                sanitizer_version=publication.sanitizer_version,
+                sanitization_report=publication.sanitization_report,
+                published_at=publication.published_at,
+                withdrawn_at=publication.withdrawn_at,
+            )
         updatable = {key: value for key, value in values.items() if key not in ("build_id", "file_sha256")}
         statement = (
             insert(BuildSchematic)
@@ -254,6 +267,15 @@ class SchematicRepository:
 
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
         return await self._fetch(self._joined().where(BuildSchematic.build_id == build_id))
+
+    async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None:
+        found = await self._fetch(
+            self._joined().where(
+                BuildSchematic.build_id == build_id,
+                BuildSchematic.id == schematic_id,
+            )
+        )
+        return found[0] if found else None
 
     async def get_primary(self, build_id: int) -> StoredSchematic | None:
         found = await self._fetch(

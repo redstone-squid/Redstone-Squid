@@ -148,6 +148,11 @@ async def test_a_schematic_larger_than_the_budget_is_refused_by_the_worker(
 
     assert raised.value.measure == "allocated volume"
 
+    with pytest.raises(SchematicTooLargeError) as axis_raised:
+        await pool.analyze(periodic_door(), limits=SchematicLimits(max_axis_length=20))
+
+    assert axis_raised.value.measure == "allocated axis length"
+
 
 async def test_corrupt_bytes_come_back_as_a_typed_error_and_the_pool_keeps_serving(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]

@@ -21,9 +21,8 @@ from whenever import Instant
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
-MAX_SCHEMATIC_BYTES = 2 * 1024 * 1024
-"""Hard ceiling enforced in the database as well as at upload. Real doors are single-digit
-kilobytes, so this is generous by three orders of magnitude."""
+MAX_SCHEMATIC_BYTES = 16 * 1024 * 1024
+"""Hard compressed-byte ceiling enforced in the database as well as at upload."""
 
 
 class SchematicFile(Base):
@@ -96,6 +95,34 @@ class BuildSchematic(Base, kw_only=True):
             postgresql_where=text("fingerprint_shape IS NOT NULL"),
         ),
         Index("build_schematics_block_count_idx", "block_count"),
+        CheckConstraint(
+            "visibility IN ('legacy_unverified', 'reviewer_only', 'public_download')",
+            name="build_schematics_visibility_check",
+        ),
+        CheckConstraint(
+            "visibility <> 'public_download' OR (license_code IS NOT NULL AND rights_attested_at IS NOT NULL "
+            "AND rights_attested_by_account_id IS NOT NULL)",
+            name="build_schematics_publication_complete",
+        ),
+        CheckConstraint(
+            "license_code IS NULL OR license_code IN ("
+            "'cc0_1_0', 'cc_by_4_0', 'cc_by_sa_4_0', 'cc_by_nd_4_0', "
+            "'cc_by_nc_4_0', 'cc_by_nc_sa_4_0', 'cc_by_nc_nd_4_0')",
+            name="build_schematics_license_check",
+        ),
+        CheckConstraint(
+            "(sanitized_at IS NULL) = (sanitizer_version IS NULL) AND "
+            "(sanitized_at IS NULL) = (sanitization_report IS NULL)",
+            name="build_schematics_sanitization_complete",
+        ),
+        Index(
+            "build_schematics_public_download_idx",
+            "build_id",
+            "id",
+            postgresql_where=text(
+                "visibility = 'public_download' AND withdrawn_at IS NULL AND sanitized_at IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
@@ -158,6 +185,30 @@ class BuildSchematic(Base, kw_only=True):
     """The highest-coverage repeating unit cell found, if the build has one."""
     simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     """Staff-triggered tick-engine evidence. It never changes the build's declared timing."""
+
+    visibility: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        server_default=text("'legacy_unverified'"),
+        default="legacy_unverified",
+    )
+    """Explicit download choice. Existing attachments remain private until re-attested."""
+    license_code: Mapped[str | None] = mapped_column(Text, default=None)
+    rights_attested_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    rights_attested_by_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey(
+            "accounts.id",
+            name="build_schematics_rights_attested_by_account_id_fkey",
+            ondelete="RESTRICT",
+        ),
+        default=None,
+    )
+    sanitized_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    sanitizer_version: Mapped[str | None] = mapped_column(Text, default=None)
+    sanitization_report: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    published_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    withdrawn_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     uploaded_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     analyzed_at: Mapped[Instant] = mapped_column(

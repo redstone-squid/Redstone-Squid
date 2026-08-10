@@ -3,15 +3,18 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
-from squid.schematics.application.queries import StoredSchematic
+from squid.core.errors import JSONValue
+from squid.schematics.application.queries import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     AutostackLattice,
     SchematicAnalysis,
     SchematicDimensions,
     SchematicFingerprints,
     SchematicFormat,
+    SchematicLicense,
     SchematicMetrics,
     SchematicSign,
+    SchematicVisibility,
     SimulationResult,
     SimulationSample,
     Vector3,
@@ -61,6 +64,19 @@ def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, 
         file_sha256=row.file_sha256,
         is_primary=row.is_primary,
         original_filename=row.original_filename,
+        publication=SchematicPublication(
+            visibility=SchematicVisibility(row.visibility),
+            license=SchematicLicense(row.license_code) if row.license_code is not None else None,
+            rights_attested_at=row.rights_attested_at,
+            rights_attested_by_account_id=row.rights_attested_by_account_id,
+            sanitized_at=row.sanitized_at,
+            sanitizer_version=row.sanitizer_version,
+            sanitization_report=cast(dict[str, JSONValue], row.sanitization_report)
+            if row.sanitization_report is not None
+            else None,
+            published_at=row.published_at,
+            withdrawn_at=row.withdrawn_at,
+        ),
         analysis=SchematicAnalysis(
             metrics=SchematicMetrics(
                 source_format=source_format,

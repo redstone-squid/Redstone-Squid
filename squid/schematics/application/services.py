@@ -19,6 +19,7 @@ from squid.schematics.application.queries import (
     DuplicateCandidate,
     DuplicateTier,
     PreparedRender,
+    SchematicPublication,
     StoredRender,
     StoredSchematic,
 )
@@ -148,14 +149,27 @@ class SchematicService:
             raise
         return IngestedSchematic(sha256, analysis)
 
-    async def attach(self, build_id: int, request: IngestRequest, *, primary: bool = True) -> IngestedSchematic:
+    async def attach(
+        self,
+        build_id: int,
+        request: IngestRequest,
+        *,
+        primary: bool = True,
+        publication: SchematicPublication | None = None,
+    ) -> IngestedSchematic:
         """Ingest a file and record it against a build that already exists."""
         ingested = await self.ingest(request)
-        await self.record(build_id, ingested, request, primary=primary)
+        await self.record(build_id, ingested, request, primary=primary, publication=publication)
         return ingested
 
     async def record(
-        self, build_id: int, ingested: IngestedSchematic, request: IngestRequest, *, primary: bool = True
+        self,
+        build_id: int,
+        ingested: IngestedSchematic,
+        request: IngestRequest,
+        *,
+        primary: bool = True,
+        publication: SchematicPublication | None = None,
     ) -> int:
         """Attach an already-analyzed file to a build.
 
@@ -170,17 +184,29 @@ class SchematicService:
             primary=primary,
             original_filename=request.filename,
             uploaded_by_discord_id=request.uploaded_by_discord_id,
+            publication=publication,
         )
 
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
         return await self._store.list_for_build(build_id)
 
-    async def content(self, sha256: str) -> bytes:
-        """Return stored schematic bytes by digest."""
-        content = await self._store.get_file(sha256)
+    async def list_public_for_build(self, build_id: int) -> list[StoredSchematic]:
+        """Return only explicitly published, sanitized, non-withdrawn attachments."""
+        return [
+            schematic
+            for schematic in await self._store.list_for_build(build_id)
+            if schematic.publication.is_public_downloadable
+        ]
+
+    async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
+        """Return canonical bytes only through an attachment's explicit publication policy."""
+        stored = await self._store.get_for_build(build_id, schematic_id)
+        if stored is None or not stored.publication.is_public_downloadable:
+            raise SchematicNotFoundError
+        content = await self._store.get_file(stored.file_sha256)
         if content is None:
             raise SchematicNotFoundError
-        return content
+        return content, stored
 
     async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
         """Backfill and recover artifact state from the database worker."""
@@ -323,6 +349,8 @@ class SchematicService:
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
+            return None
+        if not stored.publication.is_sanitized:
             return None
         if stored.file_sha256 in self._poisoned:
             return None

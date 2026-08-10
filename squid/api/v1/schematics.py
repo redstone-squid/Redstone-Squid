@@ -32,7 +32,7 @@ async def list_build_schematics(
     build = await build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
-    stored = await schematics.list_for_build(build_id)
+    stored = await schematics.list_public_for_build(build_id)
     binding = f"build-schematics:{build_id}"
     offset = _offset(signer, cursor, binding)
     selected = stored[offset : offset + page_size]
@@ -46,7 +46,7 @@ async def list_build_schematics(
 
 
 @router.get(
-    "/schematics/{sha256}/content",
+    "/builds/{build_id}/schematics/{schematic_id}/content",
     response_class=Response,
     responses={
         **responses(404, 422, 503),
@@ -54,14 +54,28 @@ async def list_build_schematics(
     },
 )
 async def get_schematic_content(
-    sha256: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
+    build_id: int,
+    schematic_id: Annotated[int, Path(ge=1)],
+    build_queries: BuildQueries,
+    schematics: Schematics,
 ) -> Response:
-    """Download stored schematic bytes by their SHA-256 digest."""
-    content = await schematics.content(sha256)
+    """Download explicitly published sanitized bytes from a confirmed build."""
+    build = await build_queries.get(build_id)
+    if build is None or build.submission_status is not Status.CONFIRMED:
+        raise BuildNotFoundError(build_id)
+    content, stored = await schematics.public_content(build_id, schematic_id)
+    publication = stored.publication
+    assert publication.license is not None
     return Response(
         content=content,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{sha256}.schematic"'},
+        headers={
+            "Cache-Control": "public, max-age=300, must-revalidate",
+            "Content-Disposition": f'attachment; filename="build-{build_id}-schematic-{schematic_id}.schem"',
+            "Link": f'<{publication.license.uri}>; rel="license"',
+            "X-Content-Type-Options": "nosniff",
+            "X-Schematic-License": publication.license.value,
+        },
     )
 
 

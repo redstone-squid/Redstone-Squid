@@ -5,7 +5,7 @@ extra installed, which is the deployment the null analyzer exists to support.
 """
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import StoredRender, StoredSchematic
+from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -177,6 +177,7 @@ class FakeSchematicStore:
         primary: bool,
         original_filename: str | None = None,
         uploaded_by_discord_id: int | None = None,
+        publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
         if primary:
@@ -188,6 +189,7 @@ class FakeSchematicStore:
                     is_primary=False,
                     original_filename=stored.original_filename,
                     analysis=stored.analysis,
+                    publication=stored.publication,
                     simulation_evidence=stored.simulation_evidence,
                 )
                 if stored.build_id == build_id
@@ -201,12 +203,19 @@ class FakeSchematicStore:
             is_primary=primary,
             original_filename=original_filename,
             analysis=analysis,
+            publication=publication or SchematicPublication(),
         )
         self.stored.append(stored)
         return stored.id
 
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
         return [stored for stored in self.stored if stored.build_id == build_id]
+
+    async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None:
+        return next(
+            (stored for stored in self.stored if stored.build_id == build_id and stored.id == schematic_id),
+            None,
+        )
 
     async def get_primary(self, build_id: int) -> StoredSchematic | None:
         return next((s for s in self.stored if s.build_id == build_id and s.is_primary), None)

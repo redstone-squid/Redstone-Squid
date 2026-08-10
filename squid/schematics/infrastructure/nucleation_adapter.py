@@ -346,6 +346,14 @@ def _guard_allocated_volume(schematic: "nucleation.Schematic", limits: Schematic
     sparsely populated region orders of magnitude bigger than its blocks, and it is the
     allocation that the engine's later passes have to walk.
     """
+    dimensions = _dimensions(schematic.dimensions())
+    largest_axis = max(dimensions.width, dimensions.height, dimensions.length)
+    if largest_axis > limits.max_axis_length:
+        raise SchematicTooLargeError(
+            actual=largest_axis,
+            limit=limits.max_axis_length,
+            measure="allocated axis length",
+        )
     volume = int(schematic.volume())
     if volume > limits.max_allocated_volume:
         raise SchematicTooLargeError(actual=volume, limit=limits.max_allocated_volume, measure="allocated volume")

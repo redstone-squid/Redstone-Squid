@@ -402,12 +402,14 @@ class SchematicConfig(_FrozenModel):
     job_retention_hours: int = Field(default=24, ge=1, le=168)
     max_job_artifact_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
 
-    max_upload_bytes: int = Field(default=2 * 1024 * 1024, ge=1)
+    max_upload_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
     """Largest attachment accepted, checked before the file is downloaded from Discord."""
     max_inflated_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
     """Largest inflated size accepted, enforced while streaming decompression."""
     max_allocated_volume: int = Field(default=20_000_000, ge=1)
     """Largest allocated bounding box accepted, checked in the worker right after loading."""
+    max_axis_length: int = Field(default=512, ge=1)
+    """Largest allocated extent accepted on any single axis."""
     lattice_max_block_count: int = Field(default=200_000, ge=0)
     """Block count above which repeating-structure detection is skipped as too expensive."""
 

@@ -5,14 +5,17 @@ import logging
 import zlib
 
 import pytest
+from whenever import Instant
 
-from squid.schematics.application import ConvertRequest, IngestRequest, SchematicService
+from squid.schematics.application import ConvertRequest, IngestRequest, SchematicPublication, SchematicService
 from squid.schematics.domain.models import (
     AutostackLattice,
     FingerprintPreset,
     SchematicComparison,
     SchematicFormat,
+    SchematicLicense,
     SchematicLimits,
+    SchematicVisibility,
 )
 from squid.schematics.errors import (
     DecompressionBudgetExceededError,
@@ -83,6 +86,56 @@ def service(
     )
 
 
+def sanitized_publication(*, public: bool = False) -> SchematicPublication:
+    now = Instant.parse_iso("2026-08-11T12:00:00Z")
+    if public:
+        return SchematicPublication(
+            visibility=SchematicVisibility.PUBLIC_DOWNLOAD,
+            license=SchematicLicense.CC_BY_4_0,
+            rights_attested_at=now,
+            rights_attested_by_account_id=7,
+            sanitized_at=now,
+            sanitizer_version="nucleation-test-sanitizer",
+            sanitization_report={"removed": 0},
+            published_at=now,
+        )
+    return SchematicPublication(
+        visibility=SchematicVisibility.REVIEWER_ONLY,
+        sanitized_at=now,
+        sanitizer_version="nucleation-test-sanitizer",
+        sanitization_report={"removed": 0},
+    )
+
+
+def test_default_upload_budgets_match_the_public_plugin_contract() -> None:
+    limits = SchematicLimits()
+
+    assert limits.max_upload_bytes == 16 * 1024 * 1024
+    assert limits.max_inflated_bytes == 64 * 1024 * 1024
+    assert limits.max_allocated_volume == 20_000_000
+    assert limits.max_axis_length == 512
+
+
+def test_publication_requires_rights_and_a_completed_sanitizer_identity() -> None:
+    now = Instant.parse_iso("2026-08-11T12:00:00Z")
+
+    with pytest.raises(ValueError, match="license and rights"):
+        SchematicPublication(visibility=SchematicVisibility.PUBLIC_DOWNLOAD)
+    with pytest.raises(ValueError, match="audit report"):
+        SchematicPublication(sanitizer_version="nucleation-test")
+    assert sanitized_publication(public=True).is_public_downloadable is True
+    assert SchematicLicense.CC_BY_NC_SA_4_0.uri == "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+    assert (
+        SchematicPublication(
+            visibility=SchematicVisibility.PUBLIC_DOWNLOAD,
+            license=SchematicLicense.CC0_1_0,
+            rights_attested_at=now,
+            rights_attested_by_account_id=7,
+        ).is_public_downloadable
+        is False
+    )
+
+
 async def test_ingest_stores_bytes_and_passes_the_sniffed_format_to_the_analyzer() -> None:
     schematics, analyzer, store = service()
     data = litematic_bytes()
@@ -93,13 +146,54 @@ async def test_ingest_stores_bytes_and_passes_the_sniffed_format_to_the_analyzer
     assert analyzer.analyze_calls == [(data, SchematicFormat.LITEMATIC, True)]
 
 
-async def test_content_returns_stored_bytes_and_reports_missing_digest() -> None:
+async def test_public_content_requires_the_build_attachment_and_complete_publication() -> None:
     schematics, _analyzer, store = service()
-    store.files["a" * 64] = b"stored"
+    digest = await store.put_file(b"stored", source_format=SchematicFormat.SPONGE_SCHEM)
+    public_id = await store.record_analysis(
+        7,
+        digest,
+        make_analysis(),
+        primary=True,
+        publication=sanitized_publication(public=True),
+    )
 
-    assert await schematics.content("a" * 64) == b"stored"
+    content, stored = await schematics.public_content(7, public_id)
+
+    assert content == b"stored"
+    assert stored.publication.license is SchematicLicense.CC_BY_4_0
     with pytest.raises(SchematicNotFoundError):
-        await schematics.content("b" * 64)
+        await schematics.public_content(8, public_id)
+
+    private_id = await store.record_analysis(7, digest, make_analysis(), primary=False)
+    with pytest.raises(SchematicNotFoundError):
+        await schematics.public_content(7, private_id)
+
+
+async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
+    schematics, _analyzer, store = service()
+    digest = await store.put_file(b"stored", source_format=SchematicFormat.SPONGE_SCHEM)
+    public = sanitized_publication(public=True)
+    await store.record_analysis(7, digest, make_analysis(), primary=True, publication=public)
+    await store.record_analysis(7, digest, make_analysis(), primary=False)
+    await store.record_analysis(
+        7,
+        digest,
+        make_analysis(),
+        primary=False,
+        publication=SchematicPublication(
+            visibility=public.visibility,
+            license=public.license,
+            rights_attested_at=public.rights_attested_at,
+            rights_attested_by_account_id=public.rights_attested_by_account_id,
+            sanitized_at=public.sanitized_at,
+            sanitizer_version=public.sanitizer_version,
+            sanitization_report=public.sanitization_report,
+            published_at=public.published_at,
+            withdrawn_at=Instant.parse_iso("2026-08-11T13:00:00Z"),
+        ),
+    )
+
+    assert [item.id for item in await schematics.list_public_for_build(7)] == [1]
 
 
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:
@@ -292,7 +386,11 @@ async def test_closing_the_service_closes_the_analyzer() -> None:
 
 async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
 
     prepared = await schematics.prepare_render(7)
 
@@ -307,10 +405,26 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert len(analyzer.render_calls) == 1
 
 
+async def test_render_does_not_process_an_unsanitized_legacy_attachment() -> None:
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+
+    assert await schematics.prepare_render(7) is None
+    assert analyzer.render_calls == []
+
+
 async def test_render_recipe_includes_the_schematic_content_identity() -> None:
     schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="first.litematic"))
-    await schematics.attach(8, IngestRequest(data=litematic_bytes(b"\x00"), filename="second.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="first.litematic"),
+        publication=sanitized_publication(),
+    )
+    await schematics.attach(
+        8,
+        IngestRequest(data=litematic_bytes(b"\x00"), filename="second.litematic"),
+        publication=sanitized_publication(),
+    )
 
     first = await schematics.prepare_render(7)
     second = await schematics.prepare_render(8)
@@ -328,7 +442,11 @@ async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCap
         resource_pack=FakeResourcePack(),
         render_max_block_count=400,
     )
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
         assert await schematics.prepare_render(7) is None
@@ -342,13 +460,23 @@ async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCap
 async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
     analyzer = FakeSchematicAnalyzer()
     schematics, _, store = service(analyzer, render_enabled=True, resource_pack=FakeResourcePack())
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
     analyzer.failure = SchematicWorkerCrashedError(operation="render", exit_code=-9)
 
     with pytest.raises(SchematicWorkerCrashedError):
         await schematics.prepare_render(7)
     assert await schematics.prepare_render(7) is None
-    await store.record_analysis(8, store.records[0][1], analyzer.analysis, primary=True)
+    await store.record_analysis(
+        8,
+        store.records[0][1],
+        analyzer.analysis,
+        primary=True,
+        publication=sanitized_publication(),
+    )
     assert await schematics.prepare_render(8) is None
     assert len(analyzer.render_calls) == 1
 

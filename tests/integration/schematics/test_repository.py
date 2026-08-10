@@ -8,15 +8,26 @@ fingerprint indexes — are all database semantics rather than Python ones.
 import asyncio
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import cast
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Table, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from whenever import Instant
 
+import squid.persistence.model_registry  # noqa: F401
+from squid.accounts.infrastructure.models import Account
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.persistence.base import Base
-from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SimulationResult
+from squid.schematics.application import SchematicPublication
+from squid.schematics.domain.models import (
+    FingerprintPreset,
+    SchematicFormat,
+    SchematicLicense,
+    SchematicVisibility,
+    SimulationResult,
+)
 from squid.schematics.infrastructure.repository import SchematicRepository
 from tests.unit.schematics.fakes import make_analysis
 
@@ -31,12 +42,13 @@ _SETUP = (
     "PRIMARY KEY (build_id, url))",
     "INSERT INTO builds (id) VALUES (1), (2) ON CONFLICT DO NOTHING",
 )
-_TABLES = [
+_TABLES: tuple[Table, ...] = (
+    cast(Table, Account.__table__),
     Base.metadata.tables["schematic_files"],
     Base.metadata.tables["build_schematics"],
     Base.metadata.tables["schematic_render_queue"],
     Base.metadata.tables["schematic_renders"],
-]
+)
 
 
 @pytest.fixture
@@ -49,7 +61,7 @@ async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEng
         yield async_engine
     finally:
         async with async_engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
+            await connection.run_sync(Base.metadata.drop_all, tables=tuple(reversed(_TABLES)))
             await connection.execute(text("DROP TABLE IF EXISTS build_links"))
             await connection.execute(text("DROP TABLE IF EXISTS builds"))
 
@@ -352,12 +364,49 @@ async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
     assert stored.analysis.metrics.byte_size == len(b"sponge-bytes")
 
 
+async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    now = Instant.parse_iso("2026-08-11T12:00:00Z")
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        account_id = account.id
+    digest = await repository.put_file(b"public", source_format=SchematicFormat.SPONGE_SCHEM)
+    publication = SchematicPublication(
+        visibility=SchematicVisibility.PUBLIC_DOWNLOAD,
+        license=SchematicLicense.CC_BY_4_0,
+        rights_attested_at=now,
+        rights_attested_by_account_id=account_id,
+        sanitized_at=now,
+        sanitizer_version="nucleation-test",
+        sanitization_report={"removed": 0},
+        published_at=now,
+    )
+    schematic_id = await repository.record_analysis(
+        1,
+        digest,
+        make_analysis(),
+        primary=True,
+        publication=publication,
+    )
+
+    await repository.record_analysis(1, digest, make_analysis(block_count=99), primary=True)
+    stored = await repository.get_for_build(1, schematic_id)
+
+    assert stored is not None
+    assert stored.publication == publication
+    assert stored.analysis.metrics.block_count == 99
+
+
 async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload_check(
     repository: SchematicRepository,
 ) -> None:
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
     with pytest.raises(IntegrityError):
-        await repository.put_file(b"\x00" * (2 * 1024 * 1024 + 1), source_format=SchematicFormat.LITEMATIC)
+        await repository.put_file(b"\x00" * (16 * 1024 * 1024 + 1), source_format=SchematicFormat.LITEMATIC)
 
 
 async def test_simulation_evidence_round_trips_without_changing_the_analysis(

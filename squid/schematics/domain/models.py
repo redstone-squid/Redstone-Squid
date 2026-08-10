@@ -35,6 +35,35 @@ class FingerprintPreset(StrEnum):
     EXACT = "exact"
 
 
+class SchematicVisibility(StrEnum):
+    """Explicit publication choice for one build attachment."""
+
+    LEGACY_UNVERIFIED = "legacy_unverified"
+    REVIEWER_ONLY = "reviewer_only"
+    PUBLIC_DOWNLOAD = "public_download"
+
+
+class SchematicLicense(StrEnum):
+    """Licenses a submitter may grant for a public schematic download."""
+
+    CC0_1_0 = "cc0_1_0"
+    CC_BY_4_0 = "cc_by_4_0"
+    CC_BY_SA_4_0 = "cc_by_sa_4_0"
+    CC_BY_ND_4_0 = "cc_by_nd_4_0"
+    CC_BY_NC_4_0 = "cc_by_nc_4_0"
+    CC_BY_NC_SA_4_0 = "cc_by_nc_sa_4_0"
+    CC_BY_NC_ND_4_0 = "cc_by_nc_nd_4_0"
+
+    @property
+    def uri(self) -> str:
+        """Return the canonical Creative Commons deed URI."""
+        code = self.value.replace("_", "-")
+        if self is SchematicLicense.CC0_1_0:
+            return "https://creativecommons.org/publicdomain/zero/1.0/"
+        family, major, minor = code.removeprefix("cc-").rsplit("-", 2)
+        return f"https://creativecommons.org/licenses/{family}/{major}.{minor}/"
+
+
 @dataclass(frozen=True, slots=True)
 class SchematicLimits:
     """Resource budgets applied to attacker-controlled schematic uploads.
@@ -44,9 +73,10 @@ class SchematicLimits:
     worker immediately after the engine loads the file.
     """
 
-    max_upload_bytes: int = 2 * 1024 * 1024
+    max_upload_bytes: int = 16 * 1024 * 1024
     max_inflated_bytes: int = 64 * 1024 * 1024
     max_allocated_volume: int = 20_000_000
+    max_axis_length: int = 512
     max_sniff_bytes: int = 64 * 1024
 
 
