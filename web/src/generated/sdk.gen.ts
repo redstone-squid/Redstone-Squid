@@ -629,9 +629,14 @@ export const submitDraftV1SubmissionsDraftsDraftIdSubmissionPost = <ThrowOnError
  * Stream one owned-draft upload through a private bounded staging file.
  */
 export const uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost = <ThrowOnError extends boolean = false>(options: Options<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData, ThrowOnError>): RequestResult<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError> => (options.client ?? client).post<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError>({
+    bodySerializer: null,
     security: [{ name: 'Authorization', type: 'apiKey' }],
     url: '/v1/submissions/drafts/{draft_id}/media/{kind}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'image/*',
+        ...options.headers
+    }
 });
 
 /**

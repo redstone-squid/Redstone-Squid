@@ -440,6 +440,20 @@ async def test_media_dtos_reject_unknown_fields() -> None:
         DraftMediaListResponse.model_validate({"limits": limits, "media": [], "report": {}})
 
 
+async def test_openapi_advertises_streaming_binary_upload_without_a_json_wrapper() -> None:
+    events: list[str] = []
+    operation = app_with_fakes(FakeMedia(events), FakeDrafts(events)).openapi()["paths"][
+        "/submissions/drafts/{draft_id}/media/{kind}"
+    ]["post"]
+
+    request_body = operation["requestBody"]
+    assert request_body["required"] is True
+    assert request_body["content"] == {
+        "image/*": {"schema": {"type": "string", "format": "binary"}},
+        "video/*": {"schema": {"type": "string", "format": "binary"}},
+    }
+
+
 async def test_disabled_media_service_fails_closed_with_service_unavailable() -> None:
     events: list[str] = []
     drafts = FakeDrafts(events)

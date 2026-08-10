@@ -4863,7 +4863,7 @@ export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses = {
 export type SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponse = SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses[keyof SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses];
 
 export type UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData = {
-    body?: never;
+    body: Blob | File;
     path: {
         /**
          * Draft Id

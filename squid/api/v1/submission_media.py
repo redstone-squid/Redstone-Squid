@@ -39,6 +39,13 @@ _CONTENT_ENCODING_UNSUPPORTED = "content_encoding_not_supported"
 _CONTENT_LENGTH_INVALID = "content_length_invalid"
 _CONTENT_LENGTH_MISMATCH = "content_length_mismatch"
 _CONTENT_TYPE_INVALID = "content_type_invalid"
+_STREAMING_REQUEST_BODY = {
+    "required": True,
+    "content": {
+        "image/*": {"schema": {"type": "string", "format": "binary"}},
+        "video/*": {"schema": {"type": "string", "format": "binary"}},
+    },
+}
 
 
 class DraftMediaJobs(Protocol):
@@ -146,6 +153,7 @@ router = APIRouter(prefix="/submissions/drafts/{draft_id}/media", tags=["submiss
     response_model=DraftMediaResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    openapi_extra={"requestBody": _STREAMING_REQUEST_BODY},
 )
 async def upload_draft_media(
     draft_id: UUID,
