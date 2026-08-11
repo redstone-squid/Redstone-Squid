@@ -98,23 +98,16 @@ pub struct DraftMediaList {
 
 impl DraftMediaList {
     pub fn validate(&self, expected_draft_id: Uuid) -> Result<(), MediaContractError> {
-        let advertised_items = usize::try_from(self.limits.max_images)
-            .ok()
-            .and_then(|images| {
-                usize::try_from(self.limits.max_videos)
-                    .ok()
-                    .and_then(|videos| images.checked_add(videos))
-            });
         if self.limits.max_upload_bytes == 0
             || self.limits.max_images == 0
             || self.limits.max_videos == 0
+            || self.limits.max_images > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND as u32
+            || self.limits.max_videos > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND as u32
             || self.limits.max_output_bytes == 0
             || self.limits.max_duration_milliseconds == 0
             || self.limits.max_pixels_per_frame == 0
             || self.limits.max_decoded_pixels_per_second == 0
-            || advertised_items.is_none_or(|maximum| {
-                maximum > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND || self.media.len() > maximum
-            })
+            || self.media.len() > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND
         {
             return Err(MediaContractError::InvalidResponse);
         }
