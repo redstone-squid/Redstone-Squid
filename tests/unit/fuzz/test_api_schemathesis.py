@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from tests.fuzz.api.environment import RunIdentity, RunningApi
+from tests.fuzz.api.environment import RunIdentity, RunningApi, SeededIds
 from tests.fuzz.api.schemathesis import (
     ANONYMOUS,
     AUTHORIZATION_ENV,
@@ -238,6 +238,9 @@ def _unused_running_api() -> RunningApi:
     async def unused_checksum() -> str:
         raise AssertionError("not used")
 
+    async def unused_seed() -> SeededIds:
+        raise AssertionError("not used")
+
     async def unused_attestation():
         raise AssertionError("not used")
 
@@ -248,5 +251,15 @@ def _unused_running_api() -> RunningApi:
         base_url="http://127.0.0.1:8123",
         network_id="unused",
         read_attestation=unused_attestation,
-        reset_hooks=ResetHooks(unused, unused, unused, unused, unused, unused_checksum, "unused"),
+        reset_hooks=ResetHooks(
+            unused,
+            unused,
+            unused,
+            unused_seed,
+            unused,
+            unused,
+            unused_checksum,
+            SeededIds(1, 2, 3, 4, 1, "alice", "bob", "alice", "bob", "pending", "admin", "api"),
+            "unused",
+        ),
     )

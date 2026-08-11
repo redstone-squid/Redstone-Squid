@@ -45,8 +45,11 @@ logs/
 dist/
 site/
 .coverage
+.agents/
+.cache/
 schema_dump.sql
 
-# The backend image does not execute either independently built client workspace.
+# The backend image does not execute any independently built client workspace.
+cli/
 minecraft/
 web/

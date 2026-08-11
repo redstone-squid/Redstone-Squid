@@ -104,6 +104,11 @@ test:
 test-integration:
     uv run pytest tests/integration
 
+# Prove the disposable API stack lifecycle without running an API fuzzer.
+[unix]
+test-api-fuzz-lifecycle:
+    uv run --locked pytest tests/integration/fuzz/test_api_environment_lifecycle.py --no-cov
+
 test-all:
     uv run pytest tests/unit tests/architecture tests/integration
 

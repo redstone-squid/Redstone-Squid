@@ -3340,6 +3340,7 @@ schematics = [
 [package.dev-dependencies]
 dev = [
     { name = "bump-my-version" },
+    { name = "docker" },
     { name = "hypothesis" },
     { name = "pip-tools" },
     { name = "prek" },
@@ -3403,6 +3404,7 @@ provides-extras = ["schematics", "observability"]
 [package.metadata.requires-dev]
 dev = [
     { name = "bump-my-version", specifier = ">=0.29.0" },
+    { name = "docker", specifier = ">=7.2,<8" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "prek", specifier = ">=0.2.28" },
