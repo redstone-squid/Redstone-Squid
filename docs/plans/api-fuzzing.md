@@ -22,10 +22,16 @@ implemented. The first environment layer is also present: loopback-configurable 
 identity, live reset attestation, deterministic in-container Mojang/Discord fakes, fail-closed Docker cleanup guards,
 a 20-second one-worker `st run` watchdog, sanitized NDJSON classification, and versioned redacted finding envelopes.
 
-The next integration slice is the concrete Docker composition and deterministic database seeder/reset. It must add
-the isolated PostgreSQL roles, template-database reset, Redis namespace, container assembly, and the single
-non-fuzzing lifecycle integration test before the local smoke recipe is exposed. No API campaign should be run merely
-to validate those harness mechanics on a resource-constrained development box.
+The concrete local Docker composition and deterministic reset layer are implemented: isolated PostgreSQL roles,
+migrated template-database cloning, deterministic seed IDs, Redis ACL separation, an API container with only
+target-visible synthetic app credentials, an isolated fake-upstream container behind an API-local loopback proxy, exact
+resource-limit attestation, one non-fuzzing lifecycle integration test, and a bounded `just fuzz-api-smoke` recipe.
+The first draft workflow layer is also present as committed OpenAPI producer links, an applicability manifest, and a
+deterministic Alice/web draft lifecycle reducer/state-machine scaffold.
+
+The next integration slice is to connect the draft lifecycle scaffold to a live Schemathesis/Hypothesis state machine,
+then add the next persona/workflow only after the single lifecycle check is green on the intended Docker runner. No API
+campaign should be run merely to validate harness mechanics on a resource-constrained development box.
 
 ## Architecture and Contract Boundaries
 

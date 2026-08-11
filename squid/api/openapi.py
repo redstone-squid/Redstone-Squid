@@ -291,6 +291,54 @@ _SCOPES = {
     "verification_create_compatibility": ("verify",),
 }
 
+_DRAFT_RESPONSE_LINKS: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
+    ("submission_draft_create", "201"): {
+        "GetCreatedDraft": {
+            "operationId": "submission_draft_get",
+            "parameters": {"draft_id": "$response.body#/id"},
+        },
+        "ChangeCreatedDraft": {
+            "operationId": "submission_draft_change",
+            "parameters": {"draft_id": "$response.body#/id"},
+        },
+        "FinalizeCreatedDraft": {
+            "operationId": "submission_finalization_start",
+            "parameters": {"draft_id": "$response.body#/id"},
+        },
+        "DeleteCreatedDraft": {
+            "operationId": "submission_draft_delete",
+            "parameters": {"draft_id": "$response.body#/id"},
+        },
+    },
+    ("submission_draft_change", "200"): {
+        "ChangeDraftAgain": {
+            "operationId": "submission_draft_change",
+            "parameters": {"draft_id": "$response.body#/draft/id"},
+        },
+        "FinalizeChangedDraft": {
+            "operationId": "submission_finalization_start",
+            "parameters": {"draft_id": "$response.body#/draft/id"},
+        },
+    },
+    ("submission_finalization_start", "202"): {
+        "GetFinalization": {
+            "operationId": "submission_finalization_get",
+            "parameters": {"draft_id": "$response.body#/draft_id"},
+        },
+        "DeleteFinalizedDraft": {
+            "operationId": "submission_draft_delete",
+            "parameters": {"draft_id": "$response.body#/draft_id"},
+        },
+    },
+    ("submission_draft_delete", "204"): {
+        "UseAfterDeletedDraft": {
+            "operationId": "submission_draft_get",
+            "parameters": {"draft_id": "$request.path.draft_id"},
+            "description": "Use-after-free check for a deleted draft identifier.",
+        },
+    },
+}
+
 
 def install_openapi_contract(app: FastAPI) -> None:
     """Install deterministic schema generation with permanent operation metadata."""
@@ -327,6 +375,7 @@ def _postprocess(document: dict[str, Any]) -> None:
         operation["operationId"] = contract.operation_id
         operation["security"] = _security(contract)
         operation["x-squid-cli"] = _cli_metadata(contract)
+        _install_response_links(operation, contract)
         if scopes := _SCOPES.get(contract.operation_id):
             operation["x-required-api-scopes"] = list(scopes)
 
@@ -368,6 +417,14 @@ def _security(contract: OperationContract) -> list[SecurityRequirement]:
     return [_ANONYMOUS]
 
 
+def _install_response_links(operation: dict[str, Any], contract: OperationContract) -> None:
+    for (operation_id, status_code), links in _DRAFT_RESPONSE_LINKS.items():
+        if operation_id != contract.operation_id:
+            continue
+        response = operation["responses"][status_code]
+        response["links"] = links
+
+
 def validate_operation_manifest() -> None:
     """Raise when permanent contract metadata is internally inconsistent."""
     identifiers = {contract.operation_id for contract in OPERATIONS}
@@ -386,6 +443,12 @@ def validate_operation_manifest() -> None:
             target = next(item for item in OPERATIONS if item.operation_id == contract.canonical_operation_id)
             if target.classification == "compatibility-alias":
                 msg = f"Chained compatibility alias at {contract.operation_id}."
+                raise ValueError(msg)
+    for links in _DRAFT_RESPONSE_LINKS.values():
+        for link in links.values():
+            linked_operation = link.get("operationId")
+            if linked_operation not in identifiers:
+                msg = f"Unknown OpenAPI response link target: {linked_operation}."
                 raise ValueError(msg)
 
 
