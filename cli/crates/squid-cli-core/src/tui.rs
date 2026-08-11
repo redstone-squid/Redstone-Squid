@@ -17,7 +17,7 @@ use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 
 use crate::form::{
     ChoiceOption, FormAnswer, FormControl, FormError, FormField, parse_boolean_answer,
-    parse_integer_answer, validate_text_answer,
+    parse_integer_answer, parse_repeatable_answer, validate_text_answer,
 };
 use crate::locale::{Locale, MessageKey};
 use crate::terminal::sanitize_terminal_text;
@@ -99,6 +99,7 @@ impl TuiFieldState {
         match &field.control {
             FormControl::Text { .. }
             | FormControl::MultilineText { .. }
+            | FormControl::RepeatableText { .. }
             | FormControl::Integer { .. } => self.handle_text_key(field, key),
             FormControl::Boolean => self.handle_boolean_key(field, key),
             FormControl::SingleChoice { options } => {
@@ -125,10 +126,12 @@ impl TuiFieldState {
     ) -> Result<TuiAction, FormError> {
         match key.code {
             KeyCode::Enter
-                if matches!(field.control, FormControl::MultilineText { .. })
-                    && key
-                        .modifiers
-                        .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT) =>
+                if matches!(
+                    field.control,
+                    FormControl::MultilineText { .. } | FormControl::RepeatableText { .. }
+                ) && key
+                    .modifiers
+                    .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT) =>
             {
                 self.insert_text(field, "\n");
                 Ok(TuiAction::Continue)
@@ -165,6 +168,19 @@ impl TuiFieldState {
                 *minimum_characters,
                 *maximum_characters,
             ),
+            FormControl::RepeatableText {
+                minimum_items,
+                maximum_items,
+                minimum_characters,
+                maximum_characters,
+            } => parse_repeatable_answer(
+                &self.input,
+                field.required,
+                *minimum_items,
+                *maximum_items,
+                *minimum_characters,
+                *maximum_characters,
+            ),
             FormControl::Integer { minimum, maximum } => {
                 parse_integer_answer(&self.input, field.required, *minimum, *maximum)
             }
@@ -181,6 +197,18 @@ impl TuiFieldState {
             | FormControl::MultilineText {
                 maximum_characters, ..
             } => maximum_characters.unwrap_or(MAXIMUM_TUI_INPUT_CHARACTERS),
+            FormControl::RepeatableText {
+                maximum_items,
+                maximum_characters,
+                ..
+            } => maximum_items
+                .zip(maximum_characters)
+                .and_then(|(items, characters)| {
+                    items
+                        .checked_mul(characters)
+                        .and_then(|total| total.checked_add(items.saturating_sub(1)))
+                })
+                .unwrap_or(MAXIMUM_TUI_INPUT_CHARACTERS),
             FormControl::Integer { .. } => 32,
             _ => return,
         }
@@ -191,7 +219,8 @@ impl TuiFieldState {
             .filter(|character| {
                 !character.is_control()
                     || (matches!(field.control, FormControl::MultilineText { .. })
-                        && *character == '\n')
+                        || matches!(field.control, FormControl::RepeatableText { .. }))
+                        && *character == '\n'
             })
             .take(remaining)
             .collect::<String>();
@@ -388,6 +417,7 @@ fn draw_control(
     match &field.control {
         FormControl::Text { .. }
         | FormControl::MultilineText { .. }
+        | FormControl::RepeatableText { .. }
         | FormControl::Integer { .. } => {
             frame.render_widget(
                 Paragraph::new(Text::from(sanitize_terminal_text(&state.input)))
@@ -474,6 +504,7 @@ fn footer(field: &FormField, locale: Locale) -> &'static str {
             locale.message(MessageKey::TuiFooterText)
         }
         FormControl::MultilineText { .. } => locale.message(MessageKey::TuiFooterMultiline),
+        FormControl::RepeatableText { .. } => locale.message(MessageKey::TuiFooterMultiline),
         FormControl::Boolean => locale.message(MessageKey::TuiFooterBoolean),
         FormControl::SingleChoice { .. } => locale.message(MessageKey::TuiFooterSingleChoice),
         FormControl::MultipleChoice { .. } => locale.message(MessageKey::TuiFooterMultipleChoice),
@@ -577,6 +608,37 @@ mod tests {
         assert_eq!(
             state.handle_key(&field, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
             TuiAction::Submit(Some(FormAnswer::Choices(vec![FormCode::parse("a")?])))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn repeatable_text_uses_modified_enter_between_items() -> Result<(), FormError> {
+        let field = field(
+            FormControl::RepeatableText {
+                minimum_items: Some(2),
+                maximum_items: Some(3),
+                minimum_characters: Some(1),
+                maximum_characters: Some(80),
+            },
+            true,
+        )?;
+        let mut state = TuiFieldState::new(&field);
+        state.handle_key(
+            &field,
+            KeyEvent::new(KeyCode::Char('A'), KeyModifiers::NONE),
+        )?;
+        state.handle_key(&field, KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT))?;
+        state.handle_key(
+            &field,
+            KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE),
+        )?;
+        assert_eq!(
+            state.handle_key(&field, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))?,
+            TuiAction::Submit(Some(FormAnswer::Texts(vec![
+                String::from("A"),
+                String::from("B"),
+            ])))
         );
         Ok(())
     }
