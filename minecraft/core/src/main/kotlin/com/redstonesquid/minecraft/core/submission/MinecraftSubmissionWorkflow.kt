@@ -15,6 +15,8 @@ import com.redstonesquid.minecraft.core.http.BackendTransport
 import com.redstonesquid.minecraft.core.http.BackendTransportException
 import com.redstonesquid.minecraft.protocol.ClientCapabilities
 import com.redstonesquid.minecraft.protocol.CURRENT_PROTOCOL_VERSION
+import com.redstonesquid.minecraft.protocol.DraftListResponse
+import com.redstonesquid.minecraft.protocol.DraftSummary
 import com.redstonesquid.minecraft.protocol.FormCapabilityNegotiator
 import com.redstonesquid.minecraft.protocol.FormField
 import com.redstonesquid.minecraft.protocol.FormManifest
@@ -104,7 +106,7 @@ public class MinecraftSubmissionWorkflow(
         }
     }
 
-    public fun submit(playerId: UUID, locale: String, category: String?, notify: (String) -> Unit) {
+    public fun submit(playerId: UUID, locale: String, target: String?, notify: (String) -> Unit) {
         val session = session(playerId, notify) ?: return
         if (!requireGrant(playerId, notify)) {
             removeIfIdle(playerId, session)
@@ -118,7 +120,15 @@ public class MinecraftSubmissionWorkflow(
             session.busy = true
         }
         val client = draftClient(playerId, locale)
-        client.currentForm().whenComplete { manifest, failure ->
+        val discovery = runCatching {
+            client.currentForm().thenCombine(client.listDrafts()) { manifest, drafts -> manifest to drafts }
+        }.getOrElse { error ->
+            synchronized(session) { session.busy = false }
+            removeIfIdle(playerId, session)
+            notify(safeFailure(error))
+            return
+        }
+        discovery.whenComplete { result, failure ->
             dispatch {
                 if (failure != null) {
                     synchronized(session) { session.busy = false }
@@ -126,7 +136,8 @@ public class MinecraftSubmissionWorkflow(
                     notify(safeFailure(failure))
                     return@dispatch
                 }
-                continueSubmit(playerId, session, client, checkNotNull(manifest), category, notify)
+                val (manifest, drafts) = checkNotNull(result)
+                continueSubmit(playerId, session, client, manifest, drafts, target, notify)
             }
         }
     }
@@ -148,6 +159,9 @@ public class MinecraftSubmissionWorkflow(
             session.pendingAuthorization?.let {
                 notify("Authorization code ${it.userCode} is waiting for approval until ${it.expiresAt}.")
             }
+            session.pendingCreate?.let {
+                notify("Draft creation for '${it.category}' is awaiting confirmation; /squid submit will retry it.")
+            }
             val draft = session.draft
             if (draft == null) {
                 notify("No synchronized draft is active on this client.")
@@ -159,7 +173,8 @@ public class MinecraftSubmissionWorkflow(
                     "Missing required fields: ${missing.take(8).joinToString()}${if (missing.size > 8) ", …" else ""}."
                 }
                 notify(
-                    "Draft ${draft.id}: ${draft.category}, revision ${draft.revision}, ${draft.answers.size} answers. $suffix",
+                    "Draft ${draft.id}: ${draft.category}, revision ${draft.revision}, " +
+                        "${draft.answers.size} answers. $suffix",
                 )
             }
         }
@@ -225,73 +240,357 @@ public class MinecraftSubmissionWorkflow(
         session: PlayerSession,
         client: SubmissionDraftClient,
         manifest: FormManifest,
-        category: String?,
+        discovery: DraftListResponse,
+        target: String?,
         notify: (String) -> Unit,
     ) {
-        if (category == null) {
-            synchronized(session) {
-                session.manifest = manifest
-                session.busy = false
+        val summaries = discovery.drafts
+        synchronized(session) {
+            val current = session.draft
+            val currentSummary = current?.let { draft ->
+                val draftId = UUID.fromString(draft.id)
+                summaries.singleOrNull { UUID.fromString(it.id) == draftId }
             }
-            removeIfIdle(playerId, session)
-            notify("Build categories: ${manifest.categories.joinToString { "${it.code} (${it.label})" }}")
-            notify("Use /squid submit <category> to create or resume a synchronized draft.")
+            if (current != null && (currentSummary == null || !matchesCurrent(manifest, current, currentSummary))) {
+                session.draft = null
+                session.manifest = null
+            }
+        }
+        val unresolvedCreate = synchronized(session) { session.pendingCreate }
+        if (unresolvedCreate != null) {
+            val matching = summaries.filter { it.category == unresolvedCreate.category }
+            if (matching.size > 1) {
+                clearPendingCreate(session, unresolvedCreate)
+                finishSubmit(playerId, session)
+                notify(
+                    "Draft creation for '${unresolvedCreate.category}' completed ambiguously; " +
+                        "choose the intended draft by its full ID.",
+                )
+                showDrafts(matching, notify)
+                notify("Use /squid submit <draft-id> to resume exactly one draft.")
+                return
+            }
+            if (matching.size == 1) {
+                clearPendingCreate(session, unresolvedCreate)
+                val resolved = matching.single()
+                val requestedId = target?.let(::canonicalUuid)
+                if (
+                    target == null ||
+                    target == unresolvedCreate.category ||
+                    requestedId == UUID.fromString(resolved.id)
+                ) {
+                    resumeDraft(playerId, session, client, manifest, resolved, notify)
+                    return
+                }
+            } else if (target == null || target == unresolvedCreate.category) {
+                if (!client.canSafelyReplay(unresolvedCreate)) {
+                    clearPendingCreate(session, unresolvedCreate)
+                    finishSubmit(playerId, session)
+                    notify(
+                        "The earlier draft creation was not found and its authenticated replay window changed. " +
+                            "Run /squid submit ${unresolvedCreate.category} again to start a new request.",
+                    )
+                    return
+                }
+                val label = manifest.categories.singleOrNull { it.code == unresolvedCreate.category }?.label
+                    ?: unresolvedCreate.category
+                submitPreparedCreate(
+                    playerId,
+                    session,
+                    client,
+                    manifest,
+                    label,
+                    unresolvedCreate,
+                    notify,
+                    attempt = 1,
+                )
+                return
+            } else {
+                finishSubmit(playerId, session)
+                notify(
+                    "Draft creation for '${unresolvedCreate.category}' is still unresolved. " +
+                        "Use /squid submit ${unresolvedCreate.category} to reconcile it first.",
+                )
+                return
+            }
+        }
+        if (target == null) {
+            if (summaries.size == 1 && canEdit(manifest, summaries.single())) {
+                resumeDraft(playerId, session, client, manifest, summaries.single(), notify)
+                return
+            }
+            finishDiscovery(playerId, session, manifest, summaries, notify)
             return
         }
-        val categoryForm = manifest.categories.singleOrNull { it.code == category }
+        val requestedId = canonicalUuid(target)
+        if (requestedId != null) {
+            val selected = summaries.singleOrNull { UUID.fromString(it.id) == requestedId }
+            if (selected == null) {
+                finishSubmit(playerId, session)
+                notify("No active synchronized draft matches '$target'. Run /squid submit to refresh the list.")
+                return
+            }
+            resumeDraft(playerId, session, client, manifest, selected, notify)
+            return
+        }
+        val categoryForm = manifest.categories.singleOrNull { it.code == target }
         if (categoryForm == null) {
-            synchronized(session) { session.busy = false }
-            removeIfIdle(playerId, session)
-            notify("Unknown build category '$category'. Use /squid submit to list current categories.")
+            finishSubmit(playerId, session)
+            notify(
+                "Unknown build category or draft ID '$target'. " +
+                    "Use /squid submit to list active drafts and categories.",
+            )
+            return
+        }
+        val matching = summaries.filter { it.category == target }
+        if (matching.size > 1) {
+            finishSubmit(playerId, session)
+            notify("More than one active '${categoryForm.label}' draft exists; choose one by its full ID.")
+            showDrafts(matching, notify)
+            notify("Use /squid submit <draft-id> to resume exactly one draft.")
+            return
+        }
+        if (matching.size == 1) {
+            resumeDraft(playerId, session, client, manifest, matching.single(), notify)
             return
         }
         val negotiation = FormCapabilityNegotiator.negotiate(
             manifest,
-            category,
+            target,
             origin.wireValue,
             clientCapabilities(),
         )
         if (!negotiation.compatible) {
-            synchronized(session) { session.busy = false }
-            removeIfIdle(playerId, session)
+            finishSubmit(playerId, session)
             notify("This Minecraft client cannot safely edit all required fields in the current form.")
             return
         }
-        val existing = synchronized(session) { session.draft }
-        if (existing != null && existing.category != category) {
-            synchronized(session) { session.busy = false }
-            notify("Draft ${existing.id} is for '${existing.category}'. Use /squid cancel before changing category.")
+        val pending = runCatching { client.prepareCreate(target, CLIENT_CAPABILITIES) }.getOrElse { error ->
+            finishSubmit(playerId, session)
+            notify(safeFailure(error))
             return
         }
-        val operation = if (existing == null) {
-            client.createDraft(category, CLIENT_CAPABILITIES)
-        } else {
-            client.getDraft(UUID.fromString(existing.id))
+        synchronized(session) { session.pendingCreate = pending }
+        submitPreparedCreate(
+            playerId,
+            session,
+            client,
+            manifest,
+            categoryForm.label,
+            pending,
+            notify,
+            attempt = 1,
+        )
+    }
+
+    private fun resumeDraft(
+        playerId: UUID,
+        session: PlayerSession,
+        client: SubmissionDraftClient,
+        manifest: FormManifest,
+        summary: DraftSummary,
+        notify: (String) -> Unit,
+    ) {
+        if (summary.status == "processing") {
+            finishSubmit(playerId, session)
+            notify("Draft ${summary.id} is still processing and cannot be edited.")
+            return
+        }
+        if (!canEdit(manifest, summary)) {
+            finishSubmit(playerId, session)
+            notify("Draft ${summary.id} uses a form or required feature this client cannot safely edit.")
+            return
+        }
+        val operation = runCatching { client.getDraft(UUID.fromString(summary.id)) }.getOrElse { error ->
+            finishSubmit(playerId, session)
+            notify(safeFailure(error))
+            return
         }
         operation.whenComplete { draft, failure ->
             dispatch {
-                synchronized(session) { session.busy = false }
                 if (failure != null) {
-                    removeIfIdle(playerId, session)
+                    finishSubmit(playerId, session)
                     notify(safeFailure(failure))
                     return@dispatch
                 }
                 val stored = checkNotNull(draft)
-                if (stored.schemaId != manifest.schemaId || stored.schemaRevision != manifest.revision) {
-                    removeIfIdle(playerId, session)
-                    notify("The draft uses a form revision this client cannot safely edit.")
+                if (
+                    stored.schemaId != summary.schemaId ||
+                    stored.schemaRevision != summary.schemaRevision ||
+                    stored.category != summary.category ||
+                    stored.revision != summary.revision ||
+                    stored.status != summary.status ||
+                    stored.status !in EDITABLE_DRAFT_STATUSES
+                ) {
+                    clearCurrentDraft(session, summary.id)
+                    finishSubmit(playerId, session)
+                    notify("The draft changed state while it was being resumed. Run /squid submit to refresh.")
                     return@dispatch
                 }
                 synchronized(session) {
                     session.manifest = manifest
                     session.draft = stored
+                    session.busy = false
                 }
-                val verb = if (existing == null) "Created" else "Resumed"
-                notify("$verb ${categoryForm.label} draft ${stored.id} at revision ${stored.revision}.")
+                val label = manifest.categories.single { it.code == stored.category }.label
+                notify("Resumed $label draft ${stored.id} at revision ${stored.revision}.")
                 notify("Use /squid set <field> <value>, /squid unset <field>, and /squid status.")
             }
         }
     }
+
+    private fun submitPreparedCreate(
+        playerId: UUID,
+        session: PlayerSession,
+        client: SubmissionDraftClient,
+        manifest: FormManifest,
+        categoryLabel: String,
+        pending: PendingDraftCreate,
+        notify: (String) -> Unit,
+        attempt: Int,
+    ) {
+        val operation = runCatching { client.submitCreate(pending) }.getOrElse { error ->
+            finishSubmit(playerId, session)
+            notify(safeFailure(error))
+            return
+        }
+        operation.whenComplete { draft, failure ->
+            if (failure != null && retryableCreateFailure(failure) && attempt < MAX_CREATE_ATTEMPTS) {
+                scheduler.schedule(
+                    {
+                        dispatch {
+                            submitPreparedCreate(
+                                playerId,
+                                session,
+                                client,
+                                manifest,
+                                categoryLabel,
+                                pending,
+                                notify,
+                                attempt = attempt + 1,
+                            )
+                        }
+                    },
+                    createRetryDelaySeconds(failure),
+                    TimeUnit.SECONDS,
+                )
+                return@whenComplete
+            }
+            dispatch {
+                if (failure != null) {
+                    if (!retryableCreateFailure(failure)) {
+                        clearPendingCreate(session, pending)
+                    }
+                    finishSubmit(playerId, session)
+                    if (retryableCreateFailure(failure)) {
+                        notify(
+                            "Draft creation could not be confirmed after bounded retries. " +
+                                "Run /squid submit ${pending.category} to retry the same request safely.",
+                        )
+                    } else {
+                        notify(safeFailure(failure))
+                    }
+                    return@dispatch
+                }
+                val stored = checkNotNull(draft)
+                clearPendingCreate(session, pending)
+                if (
+                    stored.schemaId != manifest.schemaId ||
+                    stored.schemaRevision != manifest.revision ||
+                    stored.status !in EDITABLE_DRAFT_STATUSES
+                ) {
+                    finishSubmit(playerId, session)
+                    notify("The created draft uses a form or state this client cannot safely edit.")
+                    return@dispatch
+                }
+                synchronized(session) {
+                    session.manifest = manifest
+                    session.draft = stored
+                    session.busy = false
+                }
+                notify("Created $categoryLabel draft ${stored.id} at revision ${stored.revision}.")
+                notify("Use /squid set <field> <value>, /squid unset <field>, and /squid status.")
+            }
+        }
+    }
+
+    private fun finishDiscovery(
+        playerId: UUID,
+        session: PlayerSession,
+        manifest: FormManifest,
+        summaries: List<DraftSummary>,
+        notify: (String) -> Unit,
+    ) {
+        finishSubmit(playerId, session)
+        if (summaries.isNotEmpty()) {
+            showDrafts(summaries, notify)
+            notify("Use /squid submit <draft-id> to resume one, or choose a category without an active draft.")
+        }
+        notify("Build categories: ${manifest.categories.joinToString { "${it.code} (${it.label})" }}")
+        notify("Use /squid submit <category> to create or resume a synchronized draft.")
+    }
+
+    private fun finishSubmit(playerId: UUID, session: PlayerSession) {
+        synchronized(session) { session.busy = false }
+        removeIfIdle(playerId, session)
+    }
+
+    private fun clearPendingCreate(session: PlayerSession, pending: PendingDraftCreate) {
+        synchronized(session) {
+            if (session.pendingCreate === pending) {
+                session.pendingCreate = null
+            }
+        }
+    }
+
+    private fun clearCurrentDraft(session: PlayerSession, draftId: String) {
+        val expectedId = UUID.fromString(draftId)
+        synchronized(session) {
+            if (session.draft?.let { UUID.fromString(it.id) == expectedId } == true) {
+                session.draft = null
+                session.manifest = null
+            }
+        }
+    }
+
+    private fun showDrafts(summaries: List<DraftSummary>, notify: (String) -> Unit) {
+        notify("Active synchronized drafts:")
+        summaries.forEach { summary ->
+            val name = summary.displayName?.let(::safeChatText)?.takeIf(String::isNotBlank)?.let { " “$it”" }.orEmpty()
+            notify("${summary.id} — ${summary.category}$name, ${summary.status}, revision ${summary.revision}.")
+        }
+    }
+
+    private fun canEdit(manifest: FormManifest, summary: DraftSummary): Boolean =
+        summary.status in EDITABLE_DRAFT_STATUSES &&
+            summary.schemaId == manifest.schemaId &&
+            summary.schemaRevision == manifest.revision &&
+            manifest.categories.any { it.code == summary.category } &&
+            FormCapabilityNegotiator.negotiate(
+                manifest,
+                summary.category,
+                origin.wireValue,
+                clientCapabilities(),
+            ).compatible
+
+    private fun matchesCurrent(manifest: FormManifest, draft: StoredDraft, summary: DraftSummary): Boolean =
+        canEdit(manifest, summary) &&
+            draft.schemaId == summary.schemaId &&
+            draft.schemaRevision == summary.schemaRevision &&
+            draft.category == summary.category &&
+            draft.revision == summary.revision &&
+            draft.status == summary.status &&
+            draft.origin == summary.origin
+
+    private fun retryableCreateFailure(error: Throwable): Boolean = when (val cause = unwrap(error)) {
+        is BackendTransportException -> true
+        is BackendApiException -> cause.code.equals(IDEMPOTENCY_IN_PROGRESS_CODE, ignoreCase = true)
+        else -> false
+    }
+
+    private fun createRetryDelaySeconds(error: Throwable): Long =
+        (unwrap(error) as? BackendApiException)?.retryAfterSeconds?.coerceIn(1, MAX_CREATE_RETRY_DELAY_SECONDS)
+            ?: DEFAULT_CREATE_RETRY_DELAY_SECONDS
 
     private fun mutateField(
         playerId: UUID,
@@ -546,7 +845,11 @@ public class MinecraftSubmissionWorkflow(
                 return
             }
             val idle = synchronized(session) {
-                !session.linking && !session.busy && session.pendingAuthorization == null && session.draft == null
+                !session.linking &&
+                    !session.busy &&
+                    session.pendingAuthorization == null &&
+                    session.pendingCreate == null &&
+                    session.draft == null
             }
             if (idle) {
                 sessions.remove(playerId)
@@ -569,7 +872,7 @@ public class MinecraftSubmissionWorkflow(
             cause.statusCode == 401 || cause.statusCode == 403 ->
                 "Redstone Squid rejected these credentials. Link the account again or contact the server operator."
             cause.statusCode == 409 ->
-                "The synchronized draft changed elsewhere. Run /squid submit <category> to refresh it."
+                "The synchronized draft changed elsewhere. Run /squid submit to refresh the active draft list."
             cause.statusCode == 429 -> "Redstone Squid is rate limiting requests. Try again shortly."
             else -> "Redstone Squid rejected the request (HTTP ${cause.statusCode})."
         }
@@ -597,6 +900,7 @@ public class MinecraftSubmissionWorkflow(
         var linking: Boolean = false
         var busy: Boolean = false
         var pendingAuthorization: PendingPlayerAuthorization? = null
+        var pendingCreate: PendingDraftCreate? = null
         var manifest: FormManifest? = null
         var draft: StoredDraft? = null
     }
@@ -604,12 +908,28 @@ public class MinecraftSubmissionWorkflow(
     private companion object {
         val SUPPORTED_CONTROLS: Set<String> = setOf("text", "number", "choice", "multi_choice", "duration", "boolean")
         val CLIENT_CAPABILITIES: Set<String> = setOf("repeatable_text")
+        val EDITABLE_DRAFT_STATUSES: Set<String> = setOf("editing", "needs_attention")
+        const val MAX_CREATE_ATTEMPTS: Int = 4
+        const val DEFAULT_CREATE_RETRY_DELAY_SECONDS: Long = 1
+        const val MAX_CREATE_RETRY_DELAY_SECONDS: Long = 5
+        const val IDEMPOTENCY_IN_PROGRESS_CODE: String = "IDEMPOTENCY_IN_PROGRESS"
+
+        fun canonicalUuid(value: String): UUID? = runCatching { UUID.fromString(value) }
+            .getOrNull()
+            ?.takeIf { it.toString().equals(value, ignoreCase = true) }
+
+        fun safeChatText(value: String): String = value.map { character ->
+            if (character.isISOControl()) ' ' else character
+        }.joinToString("").trim()
 
         fun unwrap(error: Throwable): Throwable {
             var current = error
             repeat(8) {
                 val cause = current.cause
-                if ((current is CompletionException || current is java.util.concurrent.ExecutionException) && cause != null) {
+                if (
+                    (current is CompletionException || current is java.util.concurrent.ExecutionException) &&
+                    cause != null
+                ) {
                     current = cause
                 } else {
                     return current

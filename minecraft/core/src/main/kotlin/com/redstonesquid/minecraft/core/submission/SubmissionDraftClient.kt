@@ -4,6 +4,7 @@ import com.redstonesquid.minecraft.core.auth.ExpiredMinecraftGrantException
 import com.redstonesquid.minecraft.core.auth.MinecraftSecretStore
 import com.redstonesquid.minecraft.core.auth.MissingMinecraftCredentialException
 import com.redstonesquid.minecraft.core.auth.PaperInstallationKey
+import com.redstonesquid.minecraft.core.auth.PlayerGrantCredential
 import com.redstonesquid.minecraft.core.auth.PlayerGrantKey
 import com.redstonesquid.minecraft.core.http.BackendHttpMethod
 import com.redstonesquid.minecraft.core.http.BackendRequest
@@ -13,10 +14,13 @@ import com.redstonesquid.minecraft.core.http.executeJson
 import com.redstonesquid.minecraft.protocol.DraftChangeRequest
 import com.redstonesquid.minecraft.protocol.DraftChangeResponse
 import com.redstonesquid.minecraft.protocol.DraftCreateRequest
+import com.redstonesquid.minecraft.protocol.DraftListResponse
+import com.redstonesquid.minecraft.protocol.DraftSummary
 import com.redstonesquid.minecraft.protocol.FieldOperationRequest
 import com.redstonesquid.minecraft.protocol.FormManifest
 import com.redstonesquid.minecraft.protocol.FormOptionSet
 import com.redstonesquid.minecraft.protocol.FormProtocolJson
+import com.redstonesquid.minecraft.protocol.MAX_DRAFT_LIST_BYTES
 import com.redstonesquid.minecraft.protocol.MAX_FORM_MANIFEST_BYTES
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 import com.redstonesquid.minecraft.protocol.StoredDraft
@@ -24,6 +28,8 @@ import com.redstonesquid.minecraft.protocol.SubmissionApiPaths
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import kotlinx.serialization.json.JsonElement
@@ -48,6 +54,18 @@ public class PendingDraftChange internal constructor(
 ) {
     override fun toString(): String =
         "PendingDraftChange(draftId=$draftId, baseRevision=$baseRevision, request=<redacted>)"
+}
+
+/** A retry-safe draft creation. Reuse this object after uncertain network failures. */
+public class PendingDraftCreate internal constructor(
+    public val category: String,
+    internal val body: String,
+    internal val idempotencyKey: String,
+    internal val grantId: UUID,
+    internal val replayBefore: Instant,
+) {
+    override fun toString(): String =
+        "PendingDraftCreate(category=$category, body=<redacted>, idempotencyKey=<redacted>)"
 }
 
 /**
@@ -109,7 +127,12 @@ public class SubmissionDraftClient(
     public fun createDraft(
         category: String,
         clientCapabilities: Set<String> = emptySet(),
-    ): CompletableFuture<StoredDraft> {
+    ): CompletableFuture<StoredDraft> = submitCreate(prepareCreate(category, clientCapabilities))
+
+    public fun prepareCreate(
+        category: String,
+        clientCapabilities: Set<String> = emptySet(),
+    ): PendingDraftCreate {
         val body = FormProtocolJson.encodeDraftCreate(
             DraftCreateRequest(
                 category = category,
@@ -117,11 +140,53 @@ public class SubmissionDraftClient(
                 clientCapabilities = clientCapabilities,
             ),
         )
+        val preparedAt = clock.instant()
+        val grant = playerGrant(preparedAt)
+        return PendingDraftCreate(
+            category = category,
+            body = body,
+            idempotencyKey = "$clientInstanceId:create:${UUID.randomUUID()}",
+            grantId = grant.grantId,
+            replayBefore = minOf(grant.expiresAt, preparedAt.plus(CREATE_IDEMPOTENCY_RETENTION)),
+        )
+    }
+
+    public fun submitCreate(create: PendingDraftCreate): CompletableFuture<StoredDraft> {
+        require(clock.instant().isBefore(create.replayBefore)) {
+            "the safe draft-creation replay window has expired"
+        }
         return transport.executeJson(
-            authenticatedRequest(BackendHttpMethod.POST, SubmissionApiPaths.DRAFTS, body),
+            authenticatedRequest(
+                BackendHttpMethod.POST,
+                SubmissionApiPaths.DRAFTS,
+                create.body,
+                extraHeaders = mapOf("Idempotency-Key" to create.idempotencyKey),
+                expectedGrantId = create.grantId,
+            ),
             "created submission draft",
             FormProtocolJson::decodeStoredDraft,
-        ).thenApply { draft -> validateDraft(draft, expectedCategory = category) }
+        ).thenApply { draft -> validateDraft(draft, expectedCategory = create.category) }
+    }
+
+    internal fun canSafelyReplay(create: PendingDraftCreate): Boolean {
+        val now = clock.instant()
+        if (!now.isBefore(create.replayBefore)) {
+            return false
+        }
+        val grant = runCatching { secretStore.loadPlayerGrant(grantKey) }.getOrNull() ?: return false
+        return grant.grantId == create.grantId && grant.isUsable(now)
+    }
+
+    public fun listDrafts(): CompletableFuture<DraftListResponse> = transport.executeJson(
+        authenticatedRequest(
+            BackendHttpMethod.GET,
+            SubmissionApiPaths.DRAFTS,
+            maxResponseBytes = MAX_DRAFT_LIST_BYTES,
+        ),
+        "active submission drafts",
+        FormProtocolJson::decodeDraftList,
+    ).thenApply { response ->
+        response.copy(drafts = response.drafts.map(::validateSummary))
     }
 
     public fun getDraft(draftId: UUID): CompletableFuture<StoredDraft> = transport.executeJson(
@@ -197,22 +262,23 @@ public class SubmissionDraftClient(
         path: String,
         body: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
+        maxResponseBytes: Int = MAX_DRAFT_RESPONSE_BYTES,
+        expectedGrantId: UUID? = null,
     ): BackendRequest = BackendRequest(
         method = method,
         pathAndQuery = path,
         body = body,
-        headers = authenticationHeaders() + localeHeaders() + mapOf(
+        headers = authenticationHeaders(expectedGrantId) + localeHeaders() + mapOf(
             "Cache-Control" to "no-store",
             "Pragma" to "no-cache",
         ) + extraHeaders,
-        maxResponseBytes = MAX_DRAFT_RESPONSE_BYTES,
+        maxResponseBytes = maxResponseBytes,
     )
 
-    private fun authenticationHeaders(): Map<String, String> {
-        val grant = secretStore.loadPlayerGrant(grantKey)
-            ?: throw MissingMinecraftCredentialException("player grant")
-        if (!grant.isUsable(clock.instant())) {
-            throw ExpiredMinecraftGrantException()
+    private fun authenticationHeaders(expectedGrantId: UUID? = null): Map<String, String> {
+        val grant = playerGrant(clock.instant())
+        require(expectedGrantId == null || grant.grantId == expectedGrantId) {
+            "the player grant changed before draft creation was reconciled"
         }
         val headers = mutableMapOf("Authorization" to grant.authorizationHeader())
         if (grantKey.origin == MinecraftOrigin.PAPER) {
@@ -227,6 +293,15 @@ public class SubmissionDraftClient(
     }
 
     private fun localeHeaders(): Map<String, String> = mapOf("Accept-Language" to locale)
+
+    private fun playerGrant(at: Instant): PlayerGrantCredential {
+        val grant = secretStore.loadPlayerGrant(grantKey)
+            ?: throw MissingMinecraftCredentialException("player grant")
+        if (!grant.isUsable(at)) {
+            throw ExpiredMinecraftGrantException()
+        }
+        return grant
+    }
 
     private fun validateDraft(
         draft: StoredDraft,
@@ -243,7 +318,16 @@ public class SubmissionDraftClient(
         return draft
     }
 
+    private fun validateSummary(summary: DraftSummary): DraftSummary {
+        require(summary.origin == grantKey.origin.wireValue) {
+            "backend draft summary origin did not match the player grant"
+        }
+        return summary
+    }
+
     private companion object {
+        val CREATE_IDEMPOTENCY_RETENTION: Duration = Duration.ofHours(24)
+
         fun requireStableId(value: String, name: String) {
             require(stableIdPattern.matches(value)) { "$name has an invalid format" }
         }

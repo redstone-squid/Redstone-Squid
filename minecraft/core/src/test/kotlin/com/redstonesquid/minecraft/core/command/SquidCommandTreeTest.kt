@@ -29,12 +29,12 @@ class SquidCommandTreeTest {
 
     @Test
     fun `draft arguments remain native Brigadier values`() {
-        var category: String? = null
+        var target: String? = null
         var field: String? = null
         var value: String? = null
         val dispatcher = dispatcher { action, context ->
             when (action) {
-                SquidCommandAction.SUBMIT -> category = StringArgumentType.getString(context, "category")
+                SquidCommandAction.SUBMIT -> target = StringArgumentType.getString(context, "target")
                 SquidCommandAction.SET -> {
                     field = StringArgumentType.getString(context, "field")
                     value = StringArgumentType.getString(context, "value")
@@ -48,9 +48,12 @@ class SquidCommandTreeTest {
         dispatcher.execute("squid submit door", source)
         dispatcher.execute("squid set description compact and fast", source)
 
-        assertEquals("door", category)
+        assertEquals("door", target)
         assertEquals("description", field)
         assertEquals("compact and fast", value)
+
+        dispatcher.execute("squid submit 123e4567-e89b-42d3-a456-426614174000", source)
+        assertEquals("123e4567-e89b-42d3-a456-426614174000", target)
     }
 
     @Test

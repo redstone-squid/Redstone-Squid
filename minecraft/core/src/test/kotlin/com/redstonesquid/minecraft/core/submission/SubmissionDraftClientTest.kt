@@ -6,14 +6,17 @@ import com.redstonesquid.minecraft.core.auth.PaperInstallationCredential
 import com.redstonesquid.minecraft.core.auth.PaperInstallationKey
 import com.redstonesquid.minecraft.core.auth.PlayerGrantCredential
 import com.redstonesquid.minecraft.core.auth.PlayerGrantKey
+import com.redstonesquid.minecraft.core.http.BackendHttpMethod
 import com.redstonesquid.minecraft.core.http.RecordingBackendTransport
 import com.redstonesquid.minecraft.core.http.jsonResponse
+import com.redstonesquid.minecraft.protocol.MAX_DRAFT_LIST_BYTES
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 import com.redstonesquid.minecraft.protocol.SubmissionApiPaths
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
+import java.util.concurrent.CompletionException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -46,7 +49,78 @@ class SubmissionDraftClientTest {
         assertFalse("account_id" in body)
         assertTrue(checkNotNull(request.headers["Authorization"]).startsWith("Bearer sqpt_"))
         assertEquals(installationId.toString(), request.headers["X-Squid-Installation-ID"])
+        assertTrue(checkNotNull(request.headers["Idempotency-Key"]).startsWith("paper:test:create:"))
         assertEquals("no-store", request.headers["Cache-Control"])
+    }
+
+    @Test
+    fun `prepared draft creation reuses its exact body and idempotency key`() {
+        val (store, grantKey, installationKey) = paperCredentials()
+        val transport = RecordingBackendTransport { jsonResponse(201, draftJson(origin = "paper")) }
+        val client = client(transport, store, grantKey, installationKey)
+        val pending = client.prepareCreate("door", setOf("schematic_capture"))
+
+        client.submitCreate(pending).join()
+        client.submitCreate(pending).join()
+
+        assertEquals(transport.requests[0].body, transport.requests[1].body)
+        assertEquals(
+            transport.requests[0].headers["Idempotency-Key"],
+            transport.requests[1].headers["Idempotency-Key"],
+        )
+        assertTrue("<redacted>" in pending.toString())
+        assertFalse("schematic_capture" in pending.toString())
+    }
+
+    @Test
+    fun `prepared draft creation cannot cross a player grant principal`() {
+        val (store, grantKey, installationKey) = paperCredentials()
+        val transport = RecordingBackendTransport { jsonResponse(201, draftJson(origin = "paper")) }
+        val client = client(transport, store, grantKey, installationKey)
+        val pending = client.prepareCreate("door")
+        val replacementGrantId = UUID.fromString("123e4567-e89b-12d3-a456-426614174031")
+        store.savePlayerGrant(
+            PlayerGrantCredential(
+                grantId = replacementGrantId,
+                key = grantKey,
+                token = playerToken(replacementGrantId),
+                expiresAt = now.plusSeconds(300),
+            ),
+        )
+
+        assertFalse(client.canSafelyReplay(pending))
+        assertFailsWith<IllegalArgumentException> { client.submitCreate(pending) }
+        assertTrue(transport.requests.isEmpty())
+    }
+
+    @Test
+    fun `active draft discovery uses an authenticated compact response budget`() {
+        val (store, grantKey, installationKey) = paperCredentials()
+        val transport = RecordingBackendTransport {
+            jsonResponse(body = """{"drafts":[${draftSummaryJson(origin = "paper")}]}""")
+        }
+        val client = client(transport, store, grantKey, installationKey)
+
+        val discovered = client.listDrafts().join()
+
+        assertEquals(listOf(draftId.toString()), discovered.drafts.map { it.id })
+        val request = transport.requests.single()
+        assertEquals(BackendHttpMethod.GET, request.method)
+        assertEquals(SubmissionApiPaths.DRAFTS, request.pathAndQuery)
+        assertEquals(MAX_DRAFT_LIST_BYTES, request.maxResponseBytes)
+        assertTrue(checkNotNull(request.headers["Authorization"]).startsWith("Bearer sqpt_"))
+        assertEquals(installationId.toString(), request.headers["X-Squid-Installation-ID"])
+    }
+
+    @Test
+    fun `active draft discovery rejects a backend origin outside the player grant`() {
+        val (store, grantKey, installationKey) = paperCredentials()
+        val transport = RecordingBackendTransport {
+            jsonResponse(body = """{"drafts":[${draftSummaryJson(origin = "fabric")}]}""")
+        }
+        val client = client(transport, store, grantKey, installationKey)
+
+        assertFailsWith<CompletionException> { client.listDrafts().join() }
     }
 
     @Test
@@ -147,8 +221,9 @@ class SubmissionDraftClientTest {
         clock = Clock.fixed(now, ZoneOffset.UTC),
     )
 
-    private fun playerToken(): String =
-        "sqpt_123e4567e89b12d3a456426614174030_abcdefghijklmnopqrstuvwxyzABCDE_123456"
+    private fun playerToken(
+        grantId: UUID = UUID.fromString("123e4567-e89b-12d3-a456-426614174030"),
+    ): String = "sqpt_${grantId.toString().replace("-", "")}_abcdefghijklmnopqrstuvwxyzABCDE_123456"
 
     private fun draftJson(origin: String, revision: Int = 1): String =
         """
@@ -169,6 +244,23 @@ class SubmissionDraftClientTest {
 
     private fun changeJson(): String =
         """{"draft":${draftJson(origin = "paper", revision = 2)},"replayed":true}"""
+
+    private fun draftSummaryJson(origin: String): String =
+        """
+        {
+          "id":"$draftId",
+          "schema_id":"redstone_squid_submission",
+          "schema_revision":1,
+          "category":"door",
+          "revision":1,
+          "status":"editing",
+          "origin":"$origin",
+          "display_name":"Workshop door",
+          "created_at":"2030-01-01T00:00:00Z",
+          "updated_at":"2030-01-01T00:00:01Z",
+          "expires_at":"2030-01-08T00:00:00Z"
+        }
+        """.trimIndent()
 
     private fun manifestJson(): String =
         """
