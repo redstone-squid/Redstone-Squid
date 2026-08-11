@@ -8,8 +8,9 @@ import logging
 import os
 import stat
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -41,6 +42,16 @@ logger = logging.getLogger(__name__)
 MAX_MEDIA_JOB_CLAIM = 32
 MAX_MEDIA_JOB_CLEANUP = 500
 DEFAULT_MEDIA_JOB_ATTEMPTS = 3
+MEDIA_ARTIFACT_PUBLICATION_LEASE = timedelta(hours=24)
+"""Crash-recovery lease covering the object-store publish phase after normalization.
+
+Object storage allows at most ten retries with 60-second connect and one-hour read
+timeouts. Even conservatively counting an initial attempt plus all ten retries takes
+under twelve hours before SDK backoff, leaving more than twelve hours of lease margin.
+Local publications are single atomic writes of artifacts bounded to 500 MiB.
+"""
+MEDIA_ARTIFACT_CLEANUP_CLAIM = timedelta(hours=24)
+"""Recovery window for an object deletion that may still be running after worker loss."""
 
 
 class MediaJobStatus(StrEnum):
@@ -210,6 +221,16 @@ class MediaJobFailureOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaArtifactCleanupOutcome:
+    """Counts from one durable normalized-artifact cleanup pass."""
+
+    attempted: int
+    deleted: int
+    failed: int
+    publishers_active: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class MediaEnqueueOutcome:
     """Whether registration created a job and the durable state now in effect."""
 
@@ -249,6 +270,10 @@ class MediaJobArtifactError(RuntimeError):
     """Object storage did not confirm a content-addressed normalized artifact."""
 
 
+class MediaArtifactCleanupInProgressError(RuntimeError):
+    """A retryable publication conflict with a token-fenced object deletion."""
+
+
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
 
@@ -281,6 +306,25 @@ class MediaJobRepository(Protocol):
     async def terminal_sources(self, *, limit: int) -> Sequence[TerminalMediaSource]: ...
 
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool: ...
+
+    async def track_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> bool: ...
+
+    async def release_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> None: ...
+
+    async def cleanup_artifacts(
+        self,
+        delete: Callable[[str], Awaitable[None]],
+        *,
+        limit: int,
+    ) -> MediaArtifactCleanupOutcome: ...
 
 
 class MediaNormalizationJobService:
@@ -435,34 +479,41 @@ class MediaNormalizationJobService:
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
         return await self._repository.mark_source_deleted(source)
 
-
-class MediaNormalizationJobRunner:
-    """Normalize claimed uploads in private directories and publish verified outputs."""
-
-    def __init__(
+    async def track_artifacts(
         self,
-        jobs: MediaNormalizationJobService,
-        artifacts: ArtifactStore,
-        normalization: MediaNormalizationService,
-        *,
-        working_directory: Path | None = None,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> bool:
+        """Register possible object keys before publishing bytes to storage."""
+        return await self._repository.track_artifacts(job, artifacts)
+
+    async def release_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
     ) -> None:
-        if jobs.limits != normalization.limits:
-            msg = "Media queue and normalizer limits must match."
+        """Release only this claim's per-object publication leases."""
+        await self._repository.release_artifacts(job, artifacts)
+
+    async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
+        """Delete due unreferenced artifacts through the durable repository fence."""
+        if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
+            msg = f"Media artifact cleanup limit must be between 1 and {MAX_MEDIA_JOB_CLEANUP}."
             raise ValueError(msg)
+        return await self._repository.cleanup_artifacts(self._artifacts.delete, limit=limit)
+
+
+class MediaStorageCleanup:
+    """Always-on cleanup for raw and normalized media object storage."""
+
+    def __init__(self, jobs: MediaNormalizationJobService, artifacts: ArtifactStore) -> None:
         self._jobs = jobs
         self._artifacts = artifacts
-        self._normalization = normalization
-        self._working_directory = working_directory
 
-    async def process_batch(self, *, limit: int = 8) -> None:
-        """Claim and process a bounded batch, including overdue raw-object cleanup."""
-        await self.cleanup_terminal_sources()
-        claimed = await self._jobs.claim(limit=limit)
-        try:
-            await asyncio.gather(*(self._process(job) for job in claimed))
-        finally:
-            await self.cleanup_terminal_sources()
+    async def process_batch(self, *, limit: int = 100) -> None:
+        """Retry a bounded batch of raw and reference-fenced normalized deletions."""
+        await self.cleanup_terminal_sources(limit=limit)
+        await self.cleanup_terminal_artifacts(limit=limit)
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""
@@ -476,6 +527,58 @@ class MediaNormalizationJobRunner:
                     extra={"squid.media.upload_id": str(source.upload_id)},
                 )
 
+    async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
+        """Retry reference-fenced deletion of normalized objects and reports."""
+        outcome = await self._jobs.cleanup_artifacts(limit=limit)
+        if outcome.failed:
+            logger.warning(
+                "Media normalized-artifact cleanup completed with failures",
+                extra={
+                    "squid.media.cleanup.attempted": outcome.attempted,
+                    "squid.media.cleanup.deleted": outcome.deleted,
+                    "squid.media.cleanup.failed": outcome.failed,
+                },
+            )
+
+
+class MediaNormalizationJobRunner:
+    """Normalize claimed uploads in private directories and publish verified outputs."""
+
+    def __init__(
+        self,
+        jobs: MediaNormalizationJobService,
+        artifacts: ArtifactStore,
+        normalization: MediaNormalizationService,
+        *,
+        working_directory: Path | None = None,
+        cleanup: MediaStorageCleanup | None = None,
+    ) -> None:
+        if jobs.limits != normalization.limits:
+            msg = "Media queue and normalizer limits must match."
+            raise ValueError(msg)
+        self._jobs = jobs
+        self._artifacts = artifacts
+        self._normalization = normalization
+        self._working_directory = working_directory
+        self._cleanup = cleanup or MediaStorageCleanup(jobs, artifacts)
+
+    async def process_batch(self, *, limit: int = 8) -> None:
+        """Claim and process a bounded batch, including overdue object cleanup."""
+        await self._cleanup.process_batch()
+        claimed = await self._jobs.claim(limit=limit)
+        try:
+            await asyncio.gather(*(self._process(job) for job in claimed))
+        finally:
+            await self._cleanup.process_batch()
+
+    async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
+        """Retry idempotent deletion of raw objects committed to terminal states."""
+        await self._cleanup.cleanup_terminal_sources(limit=limit)
+
+    async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
+        """Retry reference-fenced deletion of normalized objects and reports."""
+        await self._cleanup.cleanup_terminal_artifacts(limit=limit)
+
     async def _process(self, job: ClaimedMediaJob) -> None:
         with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:
             temporary = Path(temporary_name)
@@ -484,7 +587,11 @@ class MediaNormalizationJobRunner:
             try:
                 await self._load_source(job, source_path)
                 artifacts = await self._normalize_and_store(job, source_path, temporary)
-                await self._jobs.complete(job, artifacts)
+                if artifacts is not None:
+                    try:
+                        await self._jobs.complete(job, artifacts)
+                    finally:
+                        await self._jobs.release_artifacts(job, artifacts)
             except Exception as error:
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
@@ -517,7 +624,7 @@ class MediaNormalizationJobRunner:
         job: ClaimedMediaJob,
         source_path: Path,
         temporary: Path,
-    ) -> tuple[StoredMediaArtifact, ...]:
+    ) -> tuple[StoredMediaArtifact, ...] | None:
         output_path = temporary / ("normalized.png" if job.upload.kind is MediaKind.IMAGE else "normalized.mp4")
         poster_path = temporary / "poster.jpg" if job.upload.kind is MediaKind.VIDEO else None
         result = await self._normalization.normalize(
@@ -535,14 +642,17 @@ class MediaNormalizationJobRunner:
             result.report.output,
             self._jobs.limits.max_output_bytes,
         )
-        stored = [
-            await self._store_artifact(
-                MediaArtifactRole.OUTPUT,
+        prepared: list[tuple[StoredMediaArtifact, bytes]] = [
+            (
+                self._artifact_metadata(
+                    MediaArtifactRole.OUTPUT,
+                    output,
+                    result.report.output.content_type,
+                    result.report.output.sha256,
+                    width=result.report.output.width,
+                    height=result.report.output.height,
+                ),
                 output,
-                result.report.output.content_type,
-                result.report.output.sha256,
-                width=result.report.output.width,
-                height=result.report.output.height,
             )
         ]
         if result.report.poster is not None:
@@ -555,32 +665,47 @@ class MediaNormalizationJobRunner:
                 result.report.poster,
                 self._jobs.limits.max_output_bytes,
             )
-            stored.append(
-                await self._store_artifact(
-                    MediaArtifactRole.POSTER,
+            prepared.append(
+                (
+                    self._artifact_metadata(
+                        MediaArtifactRole.POSTER,
+                        poster,
+                        result.report.poster.content_type,
+                        result.report.poster.sha256,
+                        width=result.report.poster.width,
+                        height=result.report.poster.height,
+                    ),
                     poster,
-                    result.report.poster.content_type,
-                    result.report.poster.sha256,
-                    width=result.report.poster.width,
-                    height=result.report.poster.height,
                 )
             )
         report = _encode_report(result.report)
         report_digest = hashlib.sha256(report).hexdigest()
-        stored.append(
-            await self._store_artifact(
-                MediaArtifactRole.REPORT,
+        prepared.append(
+            (
+                self._artifact_metadata(
+                    MediaArtifactRole.REPORT,
+                    report,
+                    "application/json",
+                    report_digest,
+                    width=None,
+                    height=None,
+                ),
                 report,
-                "application/json",
-                report_digest,
-                width=None,
-                height=None,
             )
         )
-        return tuple(stored)
+        artifacts = tuple(artifact for artifact, _ in prepared)
+        if not await self._jobs.track_artifacts(job, artifacts):
+            return None
+        try:
+            for artifact, data in prepared:
+                await self._store_artifact(artifact, data)
+        except Exception:
+            await self._jobs.release_artifacts(job, artifacts)
+            raise
+        return artifacts
 
-    async def _store_artifact(
-        self,
+    @staticmethod
+    def _artifact_metadata(
         role: MediaArtifactRole,
         data: bytes,
         content_type: str,
@@ -595,10 +720,6 @@ class MediaNormalizationJobRunner:
             MediaArtifactRole.REPORT: "reports",
         }[role]
         object_key = f"media/{namespace}/{digest[:2]}/{digest}"
-        metadata = await self._artifacts.put(object_key, data, content_type=content_type)
-        if metadata.byte_size != len(data) or metadata.sha256 not in {None, digest}:
-            msg = "Object storage did not confirm a normalized media artifact."
-            raise MediaJobArtifactError(msg)
         return StoredMediaArtifact(
             role=role,
             object_key=object_key,
@@ -608,6 +729,12 @@ class MediaNormalizationJobRunner:
             width=width,
             height=height,
         )
+
+    async def _store_artifact(self, artifact: StoredMediaArtifact, data: bytes) -> None:
+        metadata = await self._artifacts.put(artifact.object_key, data, content_type=artifact.content_type)
+        if metadata.byte_size != len(data) or metadata.sha256 not in {None, artifact.sha256}:
+            msg = "Object storage did not confirm a normalized media artifact."
+            raise MediaJobArtifactError(msg)
 
 
 def _is_terminal(error: Exception) -> bool:

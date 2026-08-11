@@ -37,7 +37,7 @@ from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency import IdempotencyService
 from squid.idempotency.infrastructure import IdempotencyResponseCipher, PostgresIdempotencyRepository
-from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService
+from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService, MediaStorageCleanup
 from squid.media.application.services import MediaNormalizationService
 from squid.media.domain import MediaLimits
 from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits
@@ -277,15 +277,24 @@ class _ServiceGraph:
         return store
 
     @cached_property
-    def media_jobs(self) -> MediaNormalizationJobService | None:
-        if not self.config.media.enabled:
-            return None
+    def media_job_service(self) -> MediaNormalizationJobService:
+        """Build durable media metadata services even when normalization is disabled."""
         return MediaNormalizationJobService(
             self.media_repository,
             self.artifacts,
             limits=MediaLimits(),
             max_attempts=self.config.media.job_max_attempts,
         )
+
+    @cached_property
+    def media_jobs(self) -> MediaNormalizationJobService | None:
+        if not self.config.media.enabled:
+            return None
+        return self.media_job_service
+
+    @cached_property
+    def media_cleanup(self) -> MediaStorageCleanup:
+        return MediaStorageCleanup(self.media_job_service, self.artifacts)
 
     @cached_property
     def media_repository(self) -> PostgresMediaJobRepository:
@@ -320,6 +329,7 @@ class _ServiceGraph:
             self.artifacts,
             normalization,
             working_directory=media.working_directory,
+            cleanup=self.media_cleanup,
         )
 
     @cached_property
@@ -575,6 +585,7 @@ def create_worker_services(
         schematic_jobs=graph.schematic_jobs,
         schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),
         media_runner=graph.media_runner,
+        media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submission_finalization_worker,
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(run_projection_batch, db.async_session),

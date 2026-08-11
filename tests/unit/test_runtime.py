@@ -26,10 +26,13 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "schematic_jobs",
         "schematic_renders",
         "media_runner",
+        "media_cleanup",
         "submission_finalization",
         "search_embeddings",
         "refresh_search_index",
         "record_queue_health",
+        "purge_idempotency",
+        "expire_submission_drafts",
     }
 
 

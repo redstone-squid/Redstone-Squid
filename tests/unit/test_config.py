@@ -9,6 +9,7 @@ import pytest
 from squid.config import (
     EMBEDDING_DIMENSION,
     ApplicationConfig,
+    ObjectStorageConfig,
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
@@ -16,6 +17,7 @@ from squid.config import (
     load_worker_process_config,
 )
 from squid.core.errors import ConfigurationError
+from squid.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
 
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
@@ -40,6 +42,23 @@ def _isolate_dotenv(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def _set_environment(monkeypatch: pytest.MonkeyPatch, **values: str) -> None:
     for name, value in {**BASE_ENVIRONMENT, **values}.items():
         monkeypatch.setenv(name, value)
+
+
+def test_media_publication_lease_exceeds_the_configured_s3_retry_envelope() -> None:
+    storage = ObjectStorageConfig(
+        connect_timeout_seconds=60,
+        read_timeout_seconds=3600,
+        max_attempts=10,
+    )
+    conservative_attempts = storage.max_attempts + 1
+    configured_io_seconds = conservative_attempts * (storage.connect_timeout_seconds + storage.read_timeout_seconds)
+    retry_backoff_margin_seconds = 60 * 60
+
+    assert MEDIA_ARTIFACT_PUBLICATION_LEASE.total_seconds() > configured_io_seconds + retry_backoff_margin_seconds
+    with pytest.raises(ValueError, match="less than or equal to 60"):
+        ObjectStorageConfig(connect_timeout_seconds=61)
+    with pytest.raises(ValueError, match="less than or equal to 3600"):
+        ObjectStorageConfig(read_timeout_seconds=3601)
 
 
 def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

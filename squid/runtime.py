@@ -19,7 +19,7 @@ from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
-from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService
+from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService, MediaStorageCleanup
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
@@ -114,6 +114,7 @@ class WorkerServices:
     schematic_jobs: SchematicJobService
     schematic_renders: SchematicRenderJobService
     media_runner: MediaNormalizationJobRunner | None
+    media_cleanup: MediaStorageCleanup
     submission_finalization: SubmissionFinalizationWorker
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]

@@ -37,11 +37,16 @@ SQUID_MEDIA_FFMPEG=/usr/bin/ffmpeg
 SQUID_MEDIA_FFPROBE=/usr/bin/ffprobe
 SQUID_MEDIA_WORKING_DIRECTORY=/var/lib/app/media-tmp
 SQUID_WORKER_MEDIA_JOB_CONCURRENCY=1
+SQUID_WORKER_MEDIA_CLEANUP_INTERVAL_SECONDS=60
 ```
 
 The Compose worker supplies the three path settings, but keeping them explicit in a non-Compose deployment avoids a
 PATH-dependent executable choice. Enabling must reach both processes: the API owns upload registration, while the
 worker owns FFmpeg execution. No media-specific secret is required.
+
+The worker retains the 60-second storage-cleanup loop even when `SQUID_MEDIA_ENABLED=false`, so disabling FFmpeg does
+not strand raw objects or previously discarded normalized artifacts. Active normalization also performs opportunistic
+pre/post cleanup; PostgreSQL row locks and idempotent object deletion make overlapping passes safe.
 
 With the local artifact backend, `/var/lib/app/objects` must be the same durable volume in the API and worker. With the
 S3 backend, both processes instead need the same bucket, prefix, endpoint, and credentials through the existing
@@ -73,6 +78,7 @@ The defaults below are subprocess backstops, not a substitute for a container or
 | Setting | Default | Scope |
 | --- | ---: | --- |
 | `SQUID_WORKER_MEDIA_JOB_CONCURRENCY` | 1 | Simultaneous normalization jobs in one worker |
+| `SQUID_WORKER_MEDIA_CLEANUP_INTERVAL_SECONDS` | 60 s | Always-on raw and normalized object cleanup cadence |
 | `SQUID_MEDIA_THREADS` | 2 | FFmpeg threads per child process |
 | `SQUID_MEDIA_MEMORY_BYTES` | 2 GiB | Address-space limit per FFmpeg/ffprobe child |
 | `SQUID_MEDIA_CPU_SECONDS` | 540 s | CPU-time limit per child |
