@@ -1,6 +1,7 @@
 """Durable media upload and normalization job orchestration."""
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
@@ -42,13 +43,15 @@ logger = logging.getLogger(__name__)
 MAX_MEDIA_JOB_CLAIM = 32
 MAX_MEDIA_JOB_CLEANUP = 500
 DEFAULT_MEDIA_JOB_ATTEMPTS = 3
-MEDIA_ARTIFACT_PUBLICATION_LEASE = timedelta(hours=24)
+MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
+MEDIA_ARTIFACT_PUBLICATION_LEASE = timedelta(hours=48)
 """Crash-recovery lease covering the object-store publish phase after normalization.
 
 Object storage allows at most ten retries with 60-second connect and one-hour read
-timeouts. Even conservatively counting an initial attempt plus all ten retries takes
-under twelve hours before SDK backoff, leaving more than twelve hours of lease margin.
-Local publications are single atomic writes of artifacts bounded to 500 MiB.
+timeouts. A video publishes at most three sequential objects; conservatively counting
+an initial attempt plus all ten retries for every object takes under thirty-four hours
+before SDK backoff, leaving more than fourteen hours of lease margin. Active workers
+also renew their claim before and after every publication.
 """
 MEDIA_ARTIFACT_CLEANUP_CLAIM = timedelta(hours=24)
 """Recovery window for an object deletion that may still be running after worker loss."""
@@ -273,6 +276,14 @@ class MediaJobArtifactError(RuntimeError):
 class MediaArtifactCleanupInProgressError(RuntimeError):
     """A retryable publication conflict with a token-fenced object deletion."""
 
+    def __init__(self, retry_at: Instant) -> None:
+        super().__init__("A normalized media object is being cleaned up.")
+        self.retry_at = retry_at
+
+
+class MediaJobClaimLostError(RuntimeError):
+    """A worker must stop after its durable claim token is revoked or reclaimed."""
+
 
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
@@ -286,6 +297,10 @@ class MediaJobRepository(Protocol):
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]: ...
+
+    async def heartbeat(self, job: ClaimedMediaJob) -> bool: ...
+
+    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool: ...
 
     async def complete(
         self,
@@ -452,6 +467,14 @@ class MediaNormalizationJobService:
             raise ValueError(msg)
         return await self._repository.claim(limit=limit)
 
+    async def heartbeat(self, job: ClaimedMediaJob) -> bool:
+        """Renew a current media claim and every publication lease it owns."""
+        return await self._repository.heartbeat(job)
+
+    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
+        """Release a current claim without consuming a normalization attempt."""
+        return await self._repository.defer(job, until=until)
+
     async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
         return await self._repository.complete(job, artifacts, self._limits)
 
@@ -552,24 +575,25 @@ class MediaNormalizationJobRunner:
         *,
         working_directory: Path | None = None,
         cleanup: MediaStorageCleanup | None = None,
+        heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
         if jobs.limits != normalization.limits:
             msg = "Media queue and normalizer limits must match."
+            raise ValueError(msg)
+        if heartbeat_interval_seconds <= 0:
+            msg = "Media job heartbeat interval must be positive."
             raise ValueError(msg)
         self._jobs = jobs
         self._artifacts = artifacts
         self._normalization = normalization
         self._working_directory = working_directory
         self._cleanup = cleanup or MediaStorageCleanup(jobs, artifacts)
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
     async def process_batch(self, *, limit: int = 8) -> None:
-        """Claim and process a bounded batch, including overdue object cleanup."""
-        await self._cleanup.process_batch()
+        """Claim and process a bounded batch without coupling work to storage cleanup."""
         claimed = await self._jobs.claim(limit=limit)
-        try:
-            await asyncio.gather(*(self._process(job) for job in claimed))
-        finally:
-            await self._cleanup.process_batch()
+        await asyncio.gather(*(self._process(job) for job in claimed))
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""
@@ -580,20 +604,61 @@ class MediaNormalizationJobRunner:
         await self._cleanup.cleanup_terminal_artifacts(limit=limit)
 
     async def _process(self, job: ClaimedMediaJob) -> None:
+        claim_lost = asyncio.Event()
+        heartbeat = asyncio.create_task(
+            self._maintain_claim(job, claim_lost),
+            name=f"media-heartbeat-{job.upload.id}",
+        )
+        try:
+            await self._process_claim(job, claim_lost)
+        finally:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat
+
+    async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
         with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:
             temporary = Path(temporary_name)
             temporary.chmod(0o700)
             source_path = temporary / "source"
             try:
                 await self._load_source(job, source_path)
-                artifacts = await self._normalize_and_store(job, source_path, temporary)
-                if artifacts is not None:
-                    try:
-                        await self._jobs.complete(job, artifacts)
-                    finally:
-                        await self._jobs.release_artifacts(job, artifacts)
+                artifacts = await self._normalize_and_store(job, source_path, temporary, claim_lost)
+                await self._require_claim(job, claim_lost)
+                try:
+                    completed = await self._jobs.complete(job, artifacts)
+                finally:
+                    await self._jobs.release_artifacts(job, artifacts)
+                if not completed:
+                    return
+            except MediaArtifactCleanupInProgressError as error:
+                await self._jobs.defer(job, until=error.retry_at)
+            except MediaJobClaimLostError:
+                return
             except Exception as error:
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
+
+    async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
+        """Keep long normalization work owned, and self-fence on any renewal failure."""
+        while True:
+            await asyncio.sleep(self._heartbeat_interval_seconds)
+            try:
+                current = await self._jobs.heartbeat(job)
+            except Exception:
+                logger.exception(
+                    "Media job heartbeat failed",
+                    extra={"squid.media.upload_id": str(job.upload.id)},
+                )
+                claim_lost.set()
+                return
+            if not current:
+                claim_lost.set()
+                return
+
+    async def _require_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
+        if claim_lost.is_set() or not await self._jobs.heartbeat(job):
+            claim_lost.set()
+            raise MediaJobClaimLostError
 
     async def _load_source(self, job: ClaimedMediaJob, destination: Path) -> None:
         try:
@@ -624,7 +689,8 @@ class MediaNormalizationJobRunner:
         job: ClaimedMediaJob,
         source_path: Path,
         temporary: Path,
-    ) -> tuple[StoredMediaArtifact, ...] | None:
+        claim_lost: asyncio.Event,
+    ) -> tuple[StoredMediaArtifact, ...]:
         output_path = temporary / ("normalized.png" if job.upload.kind is MediaKind.IMAGE else "normalized.mp4")
         poster_path = temporary / "poster.jpg" if job.upload.kind is MediaKind.VIDEO else None
         result = await self._normalization.normalize(
@@ -636,6 +702,7 @@ class MediaNormalizationJobRunner:
                 strip_audio=job.upload.strip_audio,
             )
         )
+        await self._require_claim(job, claim_lost)
         output = await asyncio.to_thread(
             _read_verified,
             result.output_path,
@@ -695,10 +762,16 @@ class MediaNormalizationJobRunner:
         )
         artifacts = tuple(artifact for artifact, _ in prepared)
         if not await self._jobs.track_artifacts(job, artifacts):
-            return None
+            raise MediaJobClaimLostError
         try:
             for artifact, data in prepared:
+                await self._require_claim(job, claim_lost)
                 await self._store_artifact(artifact, data)
+                try:
+                    await self._require_claim(job, claim_lost)
+                except MediaJobClaimLostError:
+                    await self._jobs.track_artifacts(job, artifacts)
+                    raise
         except Exception:
             await self._jobs.release_artifacts(job, artifacts)
             raise
