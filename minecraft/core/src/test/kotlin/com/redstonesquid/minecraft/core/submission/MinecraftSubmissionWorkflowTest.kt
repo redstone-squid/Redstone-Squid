@@ -161,7 +161,7 @@ class MinecraftSubmissionWorkflowTest {
         val store = authorizedFabricStore(playerId)
         val summaries = draftListJson(
             draftSummaryJson(),
-            draftSummaryJson(id = selectedId, displayName = "Second door"),
+            draftSummaryJson(id = selectedId, displayName = "Second door", revision = 4),
         )
         val transport = RecordingBackendTransport { request ->
             when {
