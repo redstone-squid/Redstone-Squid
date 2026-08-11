@@ -253,7 +253,7 @@ The security shape of the workflow is unchanged and non-negotiable:
 
 1. **API contract — complete.** Added the `BuildTag` key; `BuildSummary` preview, versions, and timings;
    `BuildDetail` de-duplication per finding 1; and `RecordDetail.holder_builds`. The extensions are in
-   the schemathesis contract harness, and the regenerated document is committed at `web/openapi.json`.
+   the schemathesis contract harness, and the regenerated document is committed at `contracts/openapi.json`.
 2. **Web foundation — complete.** Scaffolded `/web` with Astro, React, strict TypeScript, Bun,
    custom CSS tokens,
    standalone [`@astrojs/node` adapter](https://docs.astro.build/en/guides/integrations-guide/node/).

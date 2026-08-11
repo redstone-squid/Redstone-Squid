@@ -25,7 +25,7 @@ from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
 schema = schemathesis.openapi.from_asgi("/openapi.json", _app)
-OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "web" / "openapi.json"
+OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
 
 
 @pytest.fixture
@@ -92,8 +92,7 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
             parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
             if (path, method) in streaming_retries:
                 assert any(
-                    parameter.get("in") == "query" and parameter.get("name") == "upload_id"
-                    for parameter in parameters
+                    parameter.get("in") == "query" and parameter.get("name") == "upload_id" for parameter in parameters
                 ), f"{method.upper()} {path} lacks its streaming-safe retry UUID"
                 continue
             assert any(
