@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from tests.fuzz.api.environment import CONTROL_NONCE_ENV, FAKE_PORT_ENV
+from tests.fuzz.api.environment import CONTROL_NONCE_ENV, FAKE_BIND_HOST_ENV, FAKE_PORT_ENV
 
 CONTROL_HEADER = "X-Squid-Fuzz-Nonce"
 
@@ -165,8 +165,11 @@ def create_fake_upstream_app(control_nonce: str) -> FastAPI:
 
 
 def main() -> None:
-    """Run the fake service only on API-container loopback."""
+    """Run the fake service inside its isolated container."""
     nonce = os.environ.get(CONTROL_NONCE_ENV, "")
+    host = os.environ.get(FAKE_BIND_HOST_ENV, "127.0.0.1")
+    if host not in {"127.0.0.1", "0.0.0.0"}:
+        raise SystemExit(f"{FAKE_BIND_HOST_ENV} must be 127.0.0.1 or 0.0.0.0")
     try:
         port = int(os.environ.get(FAKE_PORT_ENV, "8101"))
     except ValueError:
@@ -174,7 +177,7 @@ def main() -> None:
     if not 1 <= port <= 65535:
         raise SystemExit(f"{FAKE_PORT_ENV} must be between 1 and 65535")
     app = create_fake_upstream_app(nonce)
-    uvicorn.run(app, host="127.0.0.1", port=port, log_config=None, access_log=False)
+    uvicorn.run(app, host=host, port=port, log_config=None, access_log=False)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ async def test_disposable_api_stack_resets_every_mutable_store_and_cleans_up() -
             assert isinstance(generic_running, DockerRunningApi)
             running = generic_running
             assert running.database_controller.observer_cannot_write()
+            assert running.redis_controller.application_cannot_control()
             assert running.verification_code_count() == 0
             assert running.redis_keys() == {redis_sentinel}
             assert running.fake_snapshot().requests == []

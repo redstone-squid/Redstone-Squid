@@ -4,12 +4,14 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import subprocess
 import sys
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import psycopg2
 from psycopg2 import sql
@@ -46,17 +48,13 @@ class DatabaseCredentials:
     observer_password: str = field(repr=False)
 
     @classmethod
-    def for_identity(cls, identity: RunIdentity) -> "DatabaseCredentials":
-        """Derive per-run role passwords from the random sentinel."""
-
-        def derive(label: str) -> str:
-            return hmac.digest(identity.sentinel.encode(), label.encode(), hashlib.sha256).hex()
-
+    def generate(cls) -> "DatabaseCredentials":
+        """Generate coordinator-owned passwords independent of container-visible identity."""
         return cls(
-            administrator_password=derive("postgres-administrator"),
-            migrator_password=derive("postgres-migrator"),
-            application_password=derive("postgres-application"),
-            observer_password=derive("postgres-observer"),
+            administrator_password=secrets.token_urlsafe(32),
+            migrator_password=secrets.token_urlsafe(32),
+            application_password=secrets.token_urlsafe(32),
+            observer_password=secrets.token_urlsafe(32),
         )
 
 
@@ -427,7 +425,24 @@ class DatabaseController:
         ):
             msg = "Disposable PostgreSQL application-role attestation failed."
             raise UnsafeEnvironmentError(msg)
-        return row[0], application[2]
+        return row[0], self.identity.application_name
+
+    def verify_live_application_sessions(self, expected_client_address: str) -> None:
+        """Require live API sessions to use the exact role, database, name, and network address."""
+        with (
+            closing(self._connect_admin(POSTGRES_DATABASE, autocommit=True)) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "SELECT usename, application_name, client_addr::text FROM pg_stat_activity "
+                "WHERE datname = %s AND backend_type = 'client backend' AND pid <> pg_backend_pid()",
+                (self.identity.database_name,),
+            )
+            sessions = cursor.fetchall()
+        expected = (self.identity.application_role, self.identity.application_name, expected_client_address)
+        if not sessions or any(session != expected for session in sessions):
+            msg = "Disposable PostgreSQL live application-session attestation failed."
+            raise UnsafeEnvironmentError(msg)
 
     def observer_cannot_write(self) -> bool:
         """Return whether the observer role is denied application-table mutation."""
@@ -492,16 +507,17 @@ class DatabaseController:
             "PYTHONUTF8": "1",
             "SQUID_DATABASE_URL": migration_url,
         }
-        result = subprocess.run(
-            [sys.executable, "-m", "alembic", "-c", str(_ROOT / "alembic.ini"), "upgrade", "head"],
-            cwd=_ROOT,
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=MIGRATION_SECONDS,
-            check=False,
-        )
+        with TemporaryDirectory(prefix="squid-api-fuzz-migration-") as working_directory:
+            result = subprocess.run(
+                [sys.executable, "-m", "alembic", "-c", str(_ROOT / "alembic.ini"), "upgrade", "head"],
+                cwd=working_directory,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=MIGRATION_SECONDS,
+                check=False,
+            )
         if result.returncode != 0:
             msg = "Disposable PostgreSQL template migration failed."
             raise RuntimeError(msg)

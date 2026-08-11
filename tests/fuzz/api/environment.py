@@ -19,6 +19,8 @@ APPLICATION_PREFIX = "squid-api-fuzz-"
 RUN_ID_ENV = "REDSTONE_SQUID_FUZZ_RUN_ID"
 SENTINEL_ENV = "REDSTONE_SQUID_FUZZ_SENTINEL"
 CONTROL_NONCE_ENV = "REDSTONE_SQUID_FUZZ_CONTROL_NONCE"
+FAKE_BIND_HOST_ENV = "REDSTONE_SQUID_FUZZ_FAKE_BIND_HOST"
+FAKE_HOST_ENV = "REDSTONE_SQUID_FUZZ_FAKE_HOST"
 FAKE_PORT_ENV = "REDSTONE_SQUID_FUZZ_FAKE_PORT"
 
 type AsyncAction = Callable[[], Awaitable[None]]
@@ -229,12 +231,12 @@ class RunningApi:
             if seeded_ids != hooks.seeded_ids:
                 msg = "Disposable API environment reseeded different stable identifiers."
                 raise UnsafeEnvironmentError(msg)
-            await hooks.resume()
             await hooks.reset_fakes()
             actual = await hooks.checksum()
             if not secrets.compare_digest(actual, hooks.baseline_checksum):
                 msg = "Disposable API environment baseline checksum does not match after reset."
                 raise UnsafeEnvironmentError(msg)
+            await hooks.resume()
 
 
 class ApiEnvironment:
@@ -301,10 +303,6 @@ def synthetic_api_environment(
         raise ValueError(msg)
     resolved_secrets = secrets_ or SyntheticSecrets.for_identity(identity)
     return {
-        CONTROL_NONCE_ENV: identity.sentinel,
-        FAKE_PORT_ENV: "8101",
-        RUN_ID_ENV: identity.run_id,
-        SENTINEL_ENV: identity.sentinel,
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONUTF8": "1",
         "PYTHONUNBUFFERED": "1",
