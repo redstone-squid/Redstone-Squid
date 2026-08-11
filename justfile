@@ -104,22 +104,20 @@ test-all:
     uv run pytest tests/unit tests/architecture tests/integration
 
 [unix]
-fuzz-version:
-    mkdir -p .fuzz/corpus/version_parser .fuzz/artifacts/version_parser
-    cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
-    uv run --group fuzz python -m tests.fuzz.fuzz_version_parser .fuzz/corpus/version_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/version_parser/
+fuzz-target *settings:
+    uv run --locked --group fuzz python -m scripts.run_fuzz_target {{settings}}
 
 [unix]
-fuzz-cursor:
-    mkdir -p .fuzz/corpus/cursor_codec .fuzz/artifacts/cursor_codec
-    cp tests/fuzz/corpus/cursor_codec/* .fuzz/corpus/cursor_codec/
-    uv run --group fuzz python -m tests.fuzz.fuzz_cursor_codec .fuzz/corpus/cursor_codec -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/cursor_codec/
+fuzz-version seconds="20":
+    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=version_parser seconds={{seconds}}
 
 [unix]
-fuzz-search-parser:
-    mkdir -p .fuzz/corpus/search_parser .fuzz/artifacts/search_parser
-    cp tests/fuzz/corpus/search_parser/* .fuzz/corpus/search_parser/
-    uv run --group fuzz python -m tests.fuzz.fuzz_search_parser .fuzz/corpus/search_parser -max_total_time=600 -max_len=4096 -artifact_prefix=.fuzz/artifacts/search_parser/
+fuzz-cursor seconds="20":
+    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=cursor_codec seconds={{seconds}}
+
+[unix]
+fuzz-search-parser seconds="20":
+    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=search_parser seconds={{seconds}}
 
 backdate start_commit:
     git backdate --no-business-hours {{start_commit}}..
