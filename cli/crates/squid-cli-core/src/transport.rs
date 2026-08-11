@@ -31,6 +31,8 @@ use crate::version::VersionInfo;
 const MAXIMUM_CA_BYTES: u64 = 1024 * 1024;
 const MAXIMUM_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
+const MAXIMUM_QUERY_PARAMETERS: usize = 32;
+const MAXIMUM_QUERY_VALUE_BYTES: usize = 1024;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const PROTOCOL_HEADER: &str = "x-squid-protocol";
@@ -98,6 +100,7 @@ impl ClientInstanceId {
 pub struct ApiRequest {
     method: ApiMethod,
     path: String,
+    query: Vec<(String, String)>,
     body: Option<Vec<u8>>,
     idempotency_key: Option<Uuid>,
 }
@@ -109,9 +112,33 @@ impl ApiRequest {
         Self {
             method,
             path: path.into(),
+            query: Vec::new(),
             body: None,
             idempotency_key: None,
         }
+    }
+
+    /// Add one bounded query parameter which will be percent-encoded by the URL serializer.
+    pub fn with_query_param(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<Self, TransportError> {
+        let name = name.into();
+        let value = value.into();
+        let valid_name = !name.is_empty()
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
+        if !valid_name
+            || value.len() > MAXIMUM_QUERY_VALUE_BYTES
+            || value.chars().any(char::is_control)
+            || self.query.len() >= MAXIMUM_QUERY_PARAMETERS
+        {
+            return Err(TransportError::InvalidQueryParameter);
+        }
+        self.query.push((name, value));
+        Ok(self)
     }
 
     /// Serialize a bounded JSON request body.
@@ -151,6 +178,7 @@ impl std::fmt::Debug for ApiRequest {
             .debug_struct("ApiRequest")
             .field("method", &self.method)
             .field("path", &self.path)
+            .field("query", &format_args!("[{} parameters]", self.query.len()))
             .field(
                 "body",
                 &self
@@ -350,7 +378,22 @@ impl ApiClient {
         bearer_token: Option<&SecretBytes>,
     ) -> Result<Response, TransportError> {
         request.validate()?;
-        let url = format!("{}{}", self.origin.as_str(), request.path);
+        let mut url = format!("{}{}", self.origin.as_str(), request.path);
+        if !request.query.is_empty() {
+            let query = request
+                .query
+                .iter()
+                .fold(
+                    url::form_urlencoded::Serializer::new(String::new()),
+                    |mut query, (name, value)| {
+                        query.append_pair(name, value);
+                        query
+                    },
+                )
+                .finish();
+            url.push('?');
+            url.push_str(&query);
+        }
         let mut builder = self.client.request(request.method.as_reqwest(), url);
         if let Some(body) = request.body {
             builder = builder
@@ -532,6 +575,8 @@ pub enum TransportError {
     InvalidProfile(#[source] ProfileError),
     #[error("endpoint must be a normalized /api/v1/ path without a query or fragment")]
     InvalidEndpointPath,
+    #[error("query parameter name, value, or count is invalid")]
+    InvalidQueryParameter,
     #[error("request header value is invalid")]
     InvalidHeader,
     #[error("bearer token cannot be represented safely in an HTTP header")]
@@ -702,7 +747,8 @@ mod tests {
             &RendererCapabilities::prompt(false),
         )?;
         let response = client.send_json::<ResponseBody>(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities"),
+            ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities")
+                .with_query_param("category", "door & gate")?,
             None,
         )?;
         assert_eq!(response.data, ResponseBody { ok: true });
@@ -711,6 +757,7 @@ mod tests {
             .join()
             .map_err(|_error| io::Error::other("test server panicked"))??;
         let lowercase = request.to_ascii_lowercase();
+        assert!(lowercase.starts_with("get /api/v1/capabilities?category=door+%26+gate http/1.1"));
         assert!(lowercase.contains("x-squid-protocol:"));
         assert!(lowercase.contains("x-squid-renderer-capabilities:"));
         assert!(lowercase.contains("cli.control.text.v1"));
