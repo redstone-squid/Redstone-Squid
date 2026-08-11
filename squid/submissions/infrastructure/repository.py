@@ -54,6 +54,34 @@ class PostgresDraftRepository(DraftRepository):
         return int(count or 0)
 
     @override
+    async def list_active_for_account(
+        self,
+        account_id: int,
+        *,
+        now: Instant,
+        limit: int,
+    ) -> tuple[StoredDraft, ...]:
+        if not 1 <= limit <= 10:
+            msg = "active draft list limit must be between 1 and 10"
+            raise ValueError(msg)
+        async with self._session_factory() as session:
+            models = tuple(
+                (
+                    await session.scalars(
+                        select(SubmissionDraft)
+                        .where(
+                            SubmissionDraft.owner_account_id == account_id,
+                            SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                            SubmissionDraft.expires_at > now,
+                        )
+                        .order_by(SubmissionDraft.updated_at.desc(), SubmissionDraft.id)
+                        .limit(limit)
+                    )
+                ).all()
+            )
+        return tuple(_to_stored(model) for model in models)
+
+    @override
     async def create(self, draft: StoredDraft) -> StoredDraft:
         model = _to_model(draft)
         async with self._session_factory.begin() as session:

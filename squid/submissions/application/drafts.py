@@ -66,6 +66,14 @@ class DraftRepository(Protocol):
 
     async def count_active_for_account(self, account_id: int) -> int: ...
 
+    async def list_active_for_account(
+        self,
+        account_id: int,
+        *,
+        now: Instant,
+        limit: int,
+    ) -> tuple[StoredDraft, ...]: ...
+
     async def create(self, draft: StoredDraft) -> StoredDraft: ...
 
     async def get(self, draft_id: UUID) -> StoredDraft | None: ...
@@ -193,6 +201,13 @@ class SubmissionDraftService:
             source_installation_id=source_installation_id,
         )
         return await self._repository.create(stored)
+
+    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+        """List a bounded newest-first view of one account's unexpired active drafts."""
+        if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
+            msg = f"draft discovery limit must be between 1 and {DEFAULT_ACCOUNT_DRAFT_CAPACITY}"
+            raise ValueError(msg)
+        return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         """Return one draft after enforcing its v1 single-owner boundary."""

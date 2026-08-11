@@ -119,6 +119,11 @@ class FakeDrafts:
         )
         return self.current
 
+    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+        assert account_id == ACCOUNT_ID
+        assert limit == 10
+        return (self.current,)
+
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
@@ -287,6 +292,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
                 ],
             },
         )
+        list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
         submit_response = await client.post(f"/submissions/drafts/{draft_id}/submission")
         submission_response = await client.get(f"/submissions/drafts/{draft_id}/submission")
@@ -313,6 +319,24 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert change_response.json()["replayed"] is False
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
+    assert list_response.status_code == 200
+    assert list_response.json() == {
+        "drafts": [
+            {
+                "id": draft_id,
+                "schema_id": "build_submission.v1",
+                "schema_revision": 1,
+                "category": "door",
+                "revision": 1,
+                "status": "editing",
+                "origin": "web",
+                "display_name": "Compact door",
+                "created_at": "2026-08-11T12:00:00Z",
+                "updated_at": "2026-08-11T12:00:00Z",
+                "expires_at": "2026-08-18T12:00:00Z",
+            }
+        ]
+    }
     assert get_response.json()["answers"] == {"display_name": "Compact door"}
     assert submit_response.status_code == 202
     assert submit_response.json() == {

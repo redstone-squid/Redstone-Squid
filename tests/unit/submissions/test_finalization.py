@@ -81,6 +81,16 @@ class FakeDraftRepository:
         del account_id
         return 1
 
+    async def list_active_for_account(
+        self,
+        account_id: int,
+        *,
+        now: Instant,
+        limit: int,
+    ) -> tuple[StoredDraft, ...]:
+        del now, limit
+        return (self.draft,) if self.draft.snapshot.owner_account_id == account_id else ()
+
     async def create(self, draft: StoredDraft) -> StoredDraft:
         self.draft = draft
         return draft

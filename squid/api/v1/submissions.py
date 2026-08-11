@@ -15,6 +15,7 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
     DraftCreateRequest,
+    DraftListResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
@@ -46,6 +47,8 @@ class SubmissionDraftCommands(Protocol):
         locale: str | None,
         source_installation_id: UUID | None = None,
     ) -> StoredDraft: ...
+
+    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]: ...
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
 
@@ -184,6 +187,16 @@ router = APIRouter(
     tags=["submissions"],
     dependencies=[Depends(enforce_request_idempotency)],
 )
+
+
+@router.get(
+    "/drafts",
+    response_model=DraftListResponse,
+    responses=responses(401, 403, 503),
+)
+async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListResponse:
+    """Return at most ten compact active drafts owned by the signed-in account."""
+    return DraftListResponse.from_domain(await drafts.list_active(account_id))
 
 
 @router.get(
