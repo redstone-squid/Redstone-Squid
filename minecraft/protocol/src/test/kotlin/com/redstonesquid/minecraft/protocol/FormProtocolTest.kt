@@ -49,6 +49,59 @@ class FormProtocolTest {
     }
 
     @Test
+    fun `active draft discovery is bounded validated and additive-field tolerant`() {
+        val discovered = FormProtocolJson.decodeDraftList(
+            """
+            {
+              "drafts":[${draftSummaryDocument(1, extra = ",\"future_summary_value\":true")}],
+              "future_collection_value":"kept forward-compatible"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(1, discovered.drafts.size)
+        assertEquals("Workshop door", discovered.drafts.single().displayName)
+        assertEquals("needs_attention", discovered.drafts.single().status)
+
+        val duplicate = """{"drafts":[${draftSummaryDocument(1)},${draftSummaryDocument(1)}]}"""
+        assertFailsWith<IllegalArgumentException> { FormProtocolJson.decodeDraftList(duplicate) }
+
+        val inactive = """{"drafts":[${draftSummaryDocument(1, status = "submitted")}]}"""
+        assertFailsWith<IllegalArgumentException> { FormProtocolJson.decodeDraftList(inactive) }
+
+        val tooMany = (1..(MAX_DISCOVERED_DRAFTS + 1)).joinToString(",") { draftSummaryDocument(it) }
+        assertFailsWith<IllegalArgumentException> {
+            FormProtocolJson.decodeDraftList("""{"drafts":[$tooMany]}""")
+        }
+    }
+
+    @Test
+    fun `active draft discovery enforces its own byte budget before decoding`() {
+        val oversized = " ".repeat(MAX_DRAFT_LIST_BYTES + 1)
+        assertFailsWith<IllegalArgumentException> { FormProtocolJson.decodeDraftList(oversized) }
+    }
+
+    @Test
+    fun `active draft discovery rejects invalid known summary values`() {
+        val valid = draftSummaryDocument(1)
+        val invalid = listOf(
+            valid.replace("123e4567-e89b-42d3-a456-000000000001", "not-a-uuid"),
+            valid.replace("123e4567-e89b-42d3-a456-000000000001", "1-1-1-1-1"),
+            valid.replace("\"origin\":\"fabric\"", "\"origin\":\"unknown\""),
+            valid.replace("\"created_at\":\"2030-01-01T00:00:00Z\"", "\"created_at\":\"tomorrow\""),
+            valid.replace("\"expires_at\":\"2030-01-08T00:00:00Z\"", "\"expires_at\":\"2030-01-01T00:00:00Z\""),
+            valid.replace("Workshop door", "x".repeat(121)),
+            valid.replace("Workshop door", "   "),
+        )
+
+        invalid.forEach { summary ->
+            assertFailsWith<IllegalArgumentException> {
+                FormProtocolJson.decodeDraftList("""{"drafts":[$summary]}""")
+            }
+        }
+    }
+
+    @Test
     fun `client parses the backend manifest and blocks unknown required controls`() {
         val document = manifestDocument(
             extraField =
@@ -189,6 +242,30 @@ class FormProtocolTest {
               "categories": [
                 {"code": "door", "label": "Door", "sections": []}
               ]
+            }
+        """.trimIndent()
+    }
+
+    private fun draftSummaryDocument(
+        number: Int,
+        status: String = "needs_attention",
+        extra: String = "",
+    ): String {
+        val suffix = number.toString().padStart(12, '0')
+        return """
+            {
+              "id":"123e4567-e89b-42d3-a456-$suffix",
+              "schema_id":"redstone_squid_submission",
+              "schema_revision":1,
+              "category":"door",
+              "revision":2,
+              "status":"$status",
+              "origin":"fabric",
+              "display_name":"Workshop door",
+              "created_at":"2030-01-01T00:00:00Z",
+              "updated_at":"2030-01-01T00:00:01Z",
+              "expires_at":"2030-01-08T00:00:00Z"
+              $extra
             }
         """.trimIndent()
     }

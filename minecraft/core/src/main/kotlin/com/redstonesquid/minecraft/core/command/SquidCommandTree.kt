@@ -81,7 +81,7 @@ public object SquidCommandTree {
         when (action) {
             SquidCommandAction.SUBMIT -> node.then(
                 RequiredArgumentBuilder.argument<S, String>(
-                    "category",
+                    "target",
                     StringArgumentType.word(),
                 ).executes { actions.execute(action, it) },
             )

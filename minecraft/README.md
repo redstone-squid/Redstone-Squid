@@ -32,8 +32,8 @@ installation ID and secret only from an environment variable or JVM system
 property and keeps them in memory. An audited OS-vault adapter remains required
 before either platform may persist credentials.
 
-The platform entrypoints now wire `/squid link`, category draft creation/resume,
-status, cancellation, and manifest-aware `set`/`unset` edits. Device polling runs
+The platform entrypoints now wire `/squid link`, bounded server-side draft discovery,
+category draft creation/resume, status, cancellation, and manifest-aware `set`/`unset` edits. Device polling runs
 off the game thread and every result is dispatched back to the Paper/Fabric game
 thread. No command claims final submission, media, world capture, or schematic
 support. The native Brigadier tree remains a better fit than Stick here because
@@ -63,13 +63,22 @@ Paper-only settings.
 Available synchronized-draft commands are:
 
 - `/squid link`
-- `/squid submit` and `/squid submit <category>`
+- `/squid submit`, `/squid submit <category>`, and `/squid submit <draft-id>`
 - `/squid set <field> <value>` and `/squid unset <field>`
 - `/squid status` and `/squid cancel`
 
 List values use comma-separated stable values. Durations require an explicit
 unit such as `20t`, `10rt`, or `1.5s`. This text editor is intentionally small;
 the backend remains authoritative for validation.
+
+`/squid submit` reads at most ten compact active-draft summaries from the backend.
+It resumes a sole compatible editable draft, lists multiple drafts without guessing,
+and accepts a full draft UUID for an unambiguous choice. Category submission resumes
+the only active draft in that category or creates a new one when none exists. Creation
+retries first reconcile the authoritative list, then reuse the exact request body and
+idempotency key only while the original grant and 24-hour replay window remain valid.
+This recovers draft sessions after restart once the player links again; credential
+persistence still requires the planned OS-vault adapter.
 
 ## Build
 

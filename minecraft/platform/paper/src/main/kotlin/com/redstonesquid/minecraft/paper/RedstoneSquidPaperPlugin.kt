@@ -92,7 +92,7 @@ private class PaperCommandActions(
             SquidCommandAction.SUBMIT -> workflow.submit(
                 player.uniqueId,
                 player.locale().toLanguageTag(),
-                optionalArgument(context, "category"),
+                optionalArgument(context, "target"),
                 notify,
             )
             SquidCommandAction.STATUS -> workflow.status(player.uniqueId, notify)

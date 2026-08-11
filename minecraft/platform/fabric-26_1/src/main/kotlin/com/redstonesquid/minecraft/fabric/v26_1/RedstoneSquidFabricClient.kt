@@ -89,7 +89,7 @@ private class FabricCommandActions(
             SquidCommandAction.SUBMIT -> workflow.submit(
                 playerId,
                 locale,
-                optionalArgument(context, "category"),
+                optionalArgument(context, "target"),
                 notify,
             )
             SquidCommandAction.STATUS -> workflow.status(playerId, notify)
@@ -127,14 +127,18 @@ private class FabricCommandActions(
         return 1
     }
 
-    private fun optionalArgument(context: CommandContext<FabricClientCommandSource>, name: String): String? =
-        runCatching { StringArgumentType.getString(context, name) }.getOrNull()
+    private fun optionalArgument(
+        context: CommandContext<FabricClientCommandSource>,
+        name: String,
+    ): String? = runCatching { StringArgumentType.getString(context, name) }.getOrNull()
 }
 
 private object UnavailableFabricCommandActions : CommandActions<FabricClientCommandSource> {
     override fun execute(action: SquidCommandAction, context: CommandContext<FabricClientCommandSource>): Int {
         context.source.sendFeedback(
-            Component.literal("Redstone Squid is inactive because its HTTPS API/approval endpoints are not configured."),
+            Component.literal(
+                "Redstone Squid is inactive because its HTTPS API/approval endpoints are not configured.",
+            ),
         )
         return 1
     }

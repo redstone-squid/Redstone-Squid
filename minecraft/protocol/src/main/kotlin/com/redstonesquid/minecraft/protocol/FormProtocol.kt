@@ -1,5 +1,6 @@
 package com.redstonesquid.minecraft.protocol
 
+import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -8,9 +9,14 @@ import kotlinx.serialization.json.JsonElement
 
 public const val CURRENT_PROTOCOL_VERSION: Int = 1
 public const val MAX_FORM_MANIFEST_BYTES: Int = 256 * 1024
+public const val MAX_DRAFT_LIST_BYTES: Int = 64 * 1024
+public const val MAX_DISCOVERED_DRAFTS: Int = 10
 
 private val stableIdPattern = Regex("[a-z][a-z0-9_]{0,63}")
+private val schemaIdPattern = Regex("[a-z][a-z0-9_.-]{0,127}")
 private val clientInstanceIdPattern = Regex("[A-Za-z0-9_.:-]{1,128}")
+private val activeDraftStatuses = setOf("editing", "processing", "needs_attention")
+private val submissionOrigins = setOf("discord", "web", "paper", "fabric")
 
 /** Capabilities of a concrete renderer; this value is not sent as one object. */
 public data class ClientCapabilities(
@@ -334,6 +340,62 @@ public data class StoredDraft(
     }
 }
 
+/** One compact, answer-free entry from the caller's active-draft collection. */
+@Serializable
+public data class DraftSummary(
+    public val id: String,
+    @SerialName("schema_id")
+    public val schemaId: String,
+    @SerialName("schema_revision")
+    public val schemaRevision: Int,
+    public val category: String,
+    public val revision: Long,
+    public val status: String,
+    public val origin: String,
+    @SerialName("display_name")
+    public val displayName: String? = null,
+    @SerialName("created_at")
+    public val createdAt: String,
+    @SerialName("updated_at")
+    public val updatedAt: String,
+    @SerialName("expires_at")
+    public val expiresAt: String,
+) {
+    init {
+        requireCanonicalUuid(id, "draft summary ID")
+        require(schemaIdPattern.matches(schemaId)) { "draft summary schema_id has an invalid format" }
+        require(schemaRevision > 0) { "draft summary schema_revision must be positive" }
+        requireStableId(category, "draft summary category")
+        require(revision >= 0) { "draft summary revision must not be negative" }
+        require(status in activeDraftStatuses) { "draft summary status is not active: $status" }
+        require(origin in submissionOrigins) { "draft summary origin is unsupported: $origin" }
+        require(
+            displayName == null ||
+                (displayName.isNotBlank() && displayName.codePointCount(0, displayName.length) <= 120),
+        ) { "draft summary display_name must contain 1-120 characters" }
+        val created = parseInstant(createdAt, "created_at")
+        val updated = parseInstant(updatedAt, "updated_at")
+        val expires = parseInstant(expiresAt, "expires_at")
+        require(updated >= created) { "draft summary updated_at precedes created_at" }
+        require(expires > updated) { "draft summary expires_at must follow updated_at" }
+    }
+}
+
+/** Bounded known fields from `GET /v1/submissions/drafts`; additive v1 fields are ignored. */
+@Serializable
+public data class DraftListResponse(
+    public val drafts: List<DraftSummary>,
+) {
+    init {
+        require(drafts.size <= MAX_DISCOVERED_DRAFTS) {
+            "draft list exceeds $MAX_DISCOVERED_DRAFTS entries"
+        }
+        require(drafts.map { UUID.fromString(it.id) }.distinct().size == drafts.size) {
+            "draft list contains duplicate IDs"
+        }
+    }
+}
+
 @Serializable
 public data class DraftChangeResponse(
     public val draft: StoredDraft,
@@ -358,6 +420,13 @@ public object FormProtocolJson {
 
     public fun decodeOptions(document: String): FormOptionSet = json.decodeFromString(document)
 
+    public fun decodeDraftList(document: String): DraftListResponse {
+        require(document.encodeToByteArray().size <= MAX_DRAFT_LIST_BYTES) {
+            "draft list exceeds $MAX_DRAFT_LIST_BYTES bytes"
+        }
+        return json.decodeFromString(document)
+    }
+
     public fun encodeDraftCreate(request: DraftCreateRequest): String = json.encodeToString(request)
 
     public fun encodeDraftChange(request: DraftChangeRequest): String = json.encodeToString(request)
@@ -365,6 +434,16 @@ public object FormProtocolJson {
     public fun decodeStoredDraft(document: String): StoredDraft = json.decodeFromString(document)
 
     public fun decodeDraftChange(document: String): DraftChangeResponse = json.decodeFromString(document)
+}
+
+private fun parseInstant(value: String, name: String): Instant = runCatching { Instant.parse(value) }
+    .getOrElse { throw IllegalArgumentException("draft summary $name is not an ISO-8601 instant", it) }
+
+private fun requireCanonicalUuid(value: String, name: String): UUID {
+    val parsed = runCatching { UUID.fromString(value) }
+        .getOrElse { throw IllegalArgumentException("$name must be a UUID", it) }
+    require(parsed.toString().equals(value, ignoreCase = true)) { "$name must use canonical UUID syntax" }
+    return parsed
 }
 
 private fun requireStableId(value: String, name: String) {
