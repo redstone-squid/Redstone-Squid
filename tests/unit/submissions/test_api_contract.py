@@ -19,6 +19,7 @@ from squid.api.v1.schemas.submissions import (
 )
 from squid.api.v1.submissions import (
     AuthenticatedSubmissionActor,
+    SubmissionFormRevisionNotFoundError,
     authenticated_account,
     authenticated_submission_actor,
     get_submission_drafts,
@@ -76,11 +77,18 @@ def stored_draft(
 class FakeForms:
     def __init__(self) -> None:
         self.manifest_locales: list[str | None] = []
+        self.revision_calls: list[tuple[str, int, str | None]] = []
         self.option_calls: list[tuple[str, str, str | None]] = []
 
     def manifest(self, *, locale: str | None):
         self.manifest_locales.append(locale)
         return build_submission_manifest(locale)
+
+    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
+        self.revision_calls.append((schema_id, revision, locale))
+        if schema_id == "build_submission.v1" and revision == 1:
+            return build_submission_manifest(locale)
+        return None
 
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         self.option_calls.append((source, category, locale))
@@ -263,6 +271,12 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         manifest_response = await client.get("/submissions/form/current", headers={"Accept-Language": "zh-TW"})
+        pinned_manifest_response = await client.get(
+            "/submissions/form/schemas/build_submission.v1/revisions/1",
+            headers={"Accept-Language": "zh-TW"},
+        )
+        with pytest.raises(SubmissionFormRevisionNotFoundError):
+            await client.get("/submissions/form/schemas/build_submission.v1/revisions/999")
         options_response = await client.get(
             "/submissions/form/options/approved_restrictions",
             params={"category": "door"},
@@ -301,6 +315,12 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert manifest_response.status_code == 200
     assert manifest_response.json()["schema_id"] == "build_submission.v1"
     assert forms.manifest_locales == ["zh-CN"]
+    assert pinned_manifest_response.status_code == 200
+    assert pinned_manifest_response.json()["revision"] == 1
+    assert forms.revision_calls == [
+        ("build_submission.v1", 1, "zh-CN"),
+        ("build_submission.v1", 999, "en"),
+    ]
     assert options_response.status_code == 200
     assert options_response.json()["options"] == [{"value": "slim", "label": "Slim"}]
     assert forms.option_calls == [("approved_restrictions", "door", "en")]
