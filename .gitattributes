@@ -47,6 +47,9 @@
 *.css      text
 *.ts       text
 *.tsx      text
+*.rs       text
+*.kt       text
+*.kts      text
 # If you want to treat it as binary,
 # use the following line instead.
 # *.svg    binary
@@ -66,6 +69,10 @@
 # Serialisation
 *.json     text
 *.toml     text
+*.properties text
+*.lockfile text
+*.base64   text
+*.sha256   text
 *.xml      text
 *.yaml     text
 *.yml      text
@@ -89,6 +96,7 @@
 *.xz       binary
 *.Z        binary
 *.zip      binary
+*.jar      binary
 *.zst      binary
 
 # Text files where line endings should be preserved
@@ -114,6 +122,8 @@ alembic.ini    text
 babel.cfg      text
 justfile       text
 scripts/pre-push text
+gradlew        text eol=lf
+web/.prettierignore text
 tests/fuzz/corpus/** text
 tests/supabase -text
 *.js           text

@@ -134,6 +134,37 @@ jobs:
         if: always()
         run: uv cache prune --ci
 
+  cli-quality:
+    name: CLI quality (Rust 1.85)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.85.0 --profile minimal --component clippy,rustfmt
+
+      - name: Check CLI formatting
+        run: cargo +1.85.0 fmt --all -- --check
+
+      - name: Lint the CLI workspace
+        run: cargo +1.85.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test the CLI workspace
+        run: cargo +1.85.0 test --locked --workspace --no-fail-fast
+
+      - name: Build and smoke test the CLI
+        run: |
+          cargo +1.85.0 build --locked --release --package squid-cli
+          ./target/release/squid --output json version
+
   web-quality:
     name: Catalogue quality
     runs-on: ubuntu-latest
@@ -286,7 +317,7 @@ jobs:
   deploy:
     name: Deploy
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: [actions-security, dependency-security, quality, unit, integration, web-quality, web-e2e-full]
+    needs: [actions-security, cli-quality, dependency-security, quality, unit, integration, web-quality, web-e2e-full]
     permissions: {}
     uses: ./.github/workflows/cd.yml
     secrets:
