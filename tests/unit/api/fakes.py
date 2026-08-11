@@ -145,6 +145,12 @@ class MockSubmissionForms:
     def manifest(self, *, locale: str | None):
         return build_submission_manifest(locale)
 
+    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
+        manifest = build_submission_manifest(locale)
+        if manifest.schema_id == schema_id and manifest.revision == revision:
+            return manifest
+        return None
+
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         del locale
         return FormOptionSet(source, category, 1, ())

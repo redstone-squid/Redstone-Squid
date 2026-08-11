@@ -61,6 +61,16 @@ class SubmissionFormService:
         """Return the localized current form with revisioned option-source references."""
         return build_submission_manifest(locale)
 
+    async def manifest_revision(
+        self,
+        schema_id: str,
+        revision: int,
+        *,
+        locale: str | None,
+    ) -> FormManifest | None:
+        """Return one immutable checked-in form revision while this server can validate it."""
+        return await CheckedInFormManifestRegistry().get(schema_id, revision, locale=locale)
+
     async def options(
         self,
         source: str,

@@ -5410,6 +5410,60 @@ export type CurrentFormV1SubmissionsFormCurrentGetResponses = {
 
 export type CurrentFormV1SubmissionsFormCurrentGetResponse = CurrentFormV1SubmissionsFormCurrentGetResponses[keyof CurrentFormV1SubmissionsFormCurrentGetResponses];
 
+export type PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Schema Id
+         */
+        schema_id: string;
+        /**
+         * Revision
+         */
+        revision: number;
+    };
+    query?: never;
+    url: '/v1/submissions/form/schemas/{schema_id}/revisions/{revision}';
+};
+
+export type PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetError = PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors[keyof PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors];
+
+export type PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FormManifestResponse;
+};
+
+export type PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponse = PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses[keyof PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses];
+
 export type FormOptionsV1SubmissionsFormOptionsSourceGetData = {
     body?: never;
     headers?: {

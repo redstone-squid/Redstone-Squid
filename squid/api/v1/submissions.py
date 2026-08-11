@@ -31,6 +31,14 @@ class SubmissionFormReader(Protocol):
 
     def manifest(self, *, locale: str | None) -> FormManifest: ...
 
+    async def manifest_revision(
+        self,
+        schema_id: str,
+        revision: int,
+        *,
+        locale: str | None,
+    ) -> FormManifest | None: ...
+
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet: ...
 
 
@@ -120,6 +128,14 @@ class SubmissionFinalizationNotFoundError(NotFoundError):
     default_resource = "submission_finalization"
 
 
+class SubmissionFormRevisionNotFoundError(NotFoundError):
+    """The requested immutable form revision is not available from this deployment."""
+
+    default_message = "This submission form revision is not available."
+    default_title = "Submission form revision not found"
+    default_resource = "submission_form_revision"
+
+
 async def authenticated_account(
     principal: Annotated[Principal, Depends(current_principal)],
 ) -> int:
@@ -181,6 +197,7 @@ AccountId = Annotated[int, Depends(authenticated_account)]
 SubmissionActor = Annotated[AuthenticatedSubmissionActor, Depends(authenticated_submission_actor)]
 OptionSource = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 Category = Annotated[str, Query(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+SchemaId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_.-]{0,95}$")]
 
 router = APIRouter(
     prefix="/submissions",
@@ -207,6 +224,24 @@ async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListRespons
 async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
     manifest = forms.manifest(locale=locale_for_request(request))
+    return FormManifestResponse.from_domain(manifest)
+
+
+@router.get(
+    "/form/schemas/{schema_id}/revisions/{revision}",
+    response_model=FormManifestResponse,
+    responses=responses(404, 422, 503),
+)
+async def pinned_form(
+    schema_id: SchemaId,
+    revision: Annotated[int, Path(ge=1)],
+    request: Request,
+    forms: Forms,
+) -> FormManifestResponse:
+    """Return an exact immutable schema revision retained for an unexpired draft."""
+    manifest = await forms.manifest_revision(schema_id, revision, locale=locale_for_request(request))
+    if manifest is None:
+        raise SubmissionFormRevisionNotFoundError
     return FormManifestResponse.from_domain(manifest)
 
 
