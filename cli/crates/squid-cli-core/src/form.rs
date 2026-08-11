@@ -26,6 +26,7 @@ const CAPABILITY_INTEGER: &str = "cli.control.integer.v1";
 const CAPABILITY_BOOLEAN: &str = "cli.control.boolean.v1";
 const CAPABILITY_SINGLE_CHOICE: &str = "cli.control.single_choice.v1";
 const CAPABILITY_MULTIPLE_CHOICE: &str = "cli.control.multiple_choice.v1";
+const CAPABILITY_REPEATABLE_TEXT: &str = "repeatable_text";
 
 /// A validated stable field or option code.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -230,6 +231,7 @@ impl RendererCapabilities {
         ]);
         if external_editor {
             values.insert(CAPABILITY_MULTILINE);
+            values.insert(CAPABILITY_REPEATABLE_TEXT);
         }
         Self(values)
     }
@@ -245,6 +247,7 @@ impl RendererCapabilities {
             CAPABILITY_BOOLEAN,
             CAPABILITY_SINGLE_CHOICE,
             CAPABILITY_MULTIPLE_CHOICE,
+            CAPABILITY_REPEATABLE_TEXT,
         ]))
     }
 
@@ -252,6 +255,16 @@ impl RendererCapabilities {
     #[must_use]
     pub fn header_value(&self) -> String {
         self.0.iter().copied().collect::<Vec<_>>().join(",")
+    }
+
+    /// Stable server form capabilities accepted in draft-creation request bodies.
+    #[must_use]
+    pub fn submission_capabilities(&self) -> Vec<String> {
+        [CAPABILITY_REPEATABLE_TEXT]
+            .into_iter()
+            .filter(|capability| self.0.contains(capability))
+            .map(String::from)
+            .collect()
     }
 
     /// Evaluate required controls separately from ignorable optional presentation hints.
@@ -670,6 +683,15 @@ mod tests {
         assert_eq!(
             assessment.ignored_optional,
             [String::from("cli.presentation.sparkles.v1")]
+        );
+        assert_eq!(
+            RendererCapabilities::tui().submission_capabilities(),
+            [String::from("repeatable_text")],
+        );
+        assert!(
+            RendererCapabilities::prompt(false)
+                .submission_capabilities()
+                .is_empty()
         );
     }
 

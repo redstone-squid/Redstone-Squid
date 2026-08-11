@@ -11,6 +11,7 @@ pub mod output;
 pub mod process;
 pub mod profile;
 pub mod recovery;
+pub mod submission;
 pub mod terminal;
 pub mod transport;
 pub mod tui;
