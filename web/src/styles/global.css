@@ -558,7 +558,8 @@ textarea:disabled {
   max-width: 980px;
 }
 
-.minecraft-link-page {
+.minecraft-link-page,
+.cli-link-page {
   max-width: 780px;
 }
 
@@ -579,18 +580,50 @@ textarea:disabled {
 .submission-start,
 .submission-alert,
 .submission-section,
-.minecraft-link-card {
+.minecraft-link-card,
+.cli-link-card {
   padding: clamp(1.25rem, 4vw, 2rem);
 }
 
-.minecraft-link-card {
+.minecraft-link-card,
+.cli-link-card {
   display: grid;
   max-width: 620px;
   gap: 1.2rem;
 }
 
-.minecraft-link-card .button {
+.minecraft-link-card .button,
+.cli-link-card .button {
   justify-self: start;
+}
+
+.cli-device-preview {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.4rem;
+}
+
+.cli-device-preview dl,
+.cli-device-preview dl div {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.cli-device-preview dl {
+  margin: 0;
+  gap: 0.9rem;
+}
+
+.cli-device-preview dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cli-device-preview dd {
+  margin: 0;
 }
 
 .submission-start {

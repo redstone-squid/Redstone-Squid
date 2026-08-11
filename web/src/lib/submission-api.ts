@@ -1,5 +1,6 @@
 import {
   approveChallengeV1MinecraftAuthChallengesApprovalPost,
+  approveEnrollmentV1CliAuthEnrollmentsApprovalPost,
   changeDraftV1SubmissionsDraftsDraftIdChangesPost,
   createDraftV1SubmissionsDraftsPost,
   csrfTokenV1AuthCsrfGet,
@@ -10,12 +11,14 @@ import {
   getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet,
   getDraftV1SubmissionsDraftsDraftIdGet,
   listDraftMediaV1SubmissionsDraftsDraftIdMediaGet,
+  previewEnrollmentV1CliAuthEnrollmentsApprovalGet,
   submitDraftV1SubmissionsDraftsDraftIdSubmissionPost,
   uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost,
 } from "../generated/sdk.gen";
 import { createClient, type Client } from "../generated/client";
 import type {
   ChallengeApprovalResponse,
+  CliEnrollmentApprovalResponse,
   DraftChangeRequest,
   DraftChangeResponse,
   DraftMediaListResponse,
@@ -88,6 +91,12 @@ export type SubmissionApi = {
 
 export type MinecraftLinkApi = {
   approve: (userCode: string) => Promise<ChallengeApprovalResponse>;
+  signInUrl: (returnTo: string) => string;
+};
+
+export type CliLinkApi = {
+  preview: (userCode: string) => Promise<CliEnrollmentApprovalResponse>;
+  approve: (userCode: string) => Promise<CliEnrollmentApprovalResponse>;
   signInUrl: (returnTo: string) => string;
 };
 
@@ -344,6 +353,47 @@ export function createMinecraftLinkApi(
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
             await approveChallengeV1MinecraftAuthChallengesApprovalPost({
+              client,
+              body: { user_code: userCode },
+              headers,
+            }),
+          ),
+        );
+      try {
+        return await request();
+      } catch (error) {
+        if (!(error instanceof SubmissionApiError) || !error.networkFailure) throw error;
+        return await request();
+      }
+    },
+    signInUrl: (returnTo) => {
+      const url = new URL(`${config.apiBaseUrl}/v1/auth/discord`);
+      url.searchParams.set("redirect_to", returnTo);
+      return url.toString();
+    },
+  };
+}
+
+export function createCliLinkApi(
+  locale: Locale,
+  config: RuntimeConfig = getRuntimeConfig(),
+): CliLinkApi {
+  const client = createSubmissionClient(locale, config);
+  const mutations = createMutationSession(client);
+  return {
+    preview: async (userCode) =>
+      unwrap(
+        await previewEnrollmentV1CliAuthEnrollmentsApprovalGet({
+          client,
+          query: { user_code: userCode },
+        }),
+      ),
+    approve: async (userCode) => {
+      const idempotencyKey = requestId();
+      const request = async () =>
+        mutations.execute(idempotencyKey, async (headers) =>
+          unwrap(
+            await approveEnrollmentV1CliAuthEnrollmentsApprovalPost({
               client,
               body: { user_code: userCode },
               headers,

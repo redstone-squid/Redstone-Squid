@@ -9,6 +9,7 @@ import type {
 } from "../../src/generated/types.gen";
 import {
   asSubmissionError,
+  createCliLinkApi,
   createMinecraftLinkApi,
   createSubmissionApi,
   SubmissionApiError,
@@ -304,5 +305,44 @@ describe("Minecraft user-code approval transport", () => {
     await expect(first.clone().json()).resolves.toEqual({ user_code: "ABCD-EFGH-IJKL-MNOP" });
     expect(JSON.stringify(await second.clone().json())).not.toMatch(/device|token/i);
     expect(api.signInUrl("https://catalogue.test/minecraft/link")).toContain("redirect_to=");
+  });
+});
+
+describe("CLI user-code approval transport", () => {
+  it("previews without mutation credentials and retry-safely approves only the short code", async () => {
+    const approval = {
+      id: "55555555-5555-4555-8555-555555555555",
+      client_instance_id: "66666666-6666-4666-8666-666666666666",
+      label: "Alice's workstation",
+      public_key_fingerprint: "1234-5678-90AB-CDEF-1234",
+      created_at: "2026-08-11T00:00:00Z",
+      expires_at: "2026-08-11T00:10:00Z",
+      approved_at: null,
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(approval))
+      .mockRejectedValueOnce(new TypeError("connection reset"))
+      .mockResolvedValueOnce(jsonResponse({ ...approval, approved_at: "2026-08-11T00:01:00Z" }));
+    const api = createCliLinkApi("en", config);
+
+    await expect(api.preview("ABCD-EFGH")).resolves.toEqual(approval);
+    const previewRequest = capturedRequest(0);
+    expect(previewRequest.method).toBe("GET");
+    expect(new URL(previewRequest.url).searchParams.get("user_code")).toBe("ABCD-EFGH");
+    expect(previewRequest.headers.get("Idempotency-Key")).toBeNull();
+
+    await expect(api.approve("ABCD-EFGH")).resolves.toMatchObject({
+      approved_at: expect.any(String),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const first = capturedRequest(1);
+    const second = capturedRequest(2);
+    expect(first.method).toBe("POST");
+    expect(first.headers.get("X-CSRF-Token")).toBe("csrf-token");
+    expect(first.headers.get("Idempotency-Key")).toBe(second.headers.get("Idempotency-Key"));
+    await expect(first.clone().json()).resolves.toEqual({ user_code: "ABCD-EFGH" });
+    expect(JSON.stringify(await second.clone().json())).not.toMatch(
+      /device_code|private_key|token/i,
+    );
   });
 });
