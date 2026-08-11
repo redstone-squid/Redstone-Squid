@@ -220,6 +220,10 @@ impl Locale {
                 "CLI authorization state could not be read or written"
             }
             (Self::ZhCn, MessageKey::AuthStateFailed) => "无法读取或写入 CLI 授权状态",
+            (Self::En, MessageKey::AuthLoginRequired) => "this profile is not signed in",
+            (Self::ZhCn, MessageKey::AuthLoginRequired) => "此配置尚未登录",
+            (Self::En, MessageKey::SuggestedLogin) => "run squid auth login, then retry",
+            (Self::ZhCn, MessageKey::SuggestedLogin) => "请运行 squid auth login，然后重试",
             (Self::En, MessageKey::ApiRequestFailed) => "the Squid API request failed",
             (Self::ZhCn, MessageKey::ApiRequestFailed) => "Squid API 请求失败",
             (Self::En, MessageKey::SuggestedRetry) => {
@@ -231,6 +235,78 @@ impl Locale {
             }
             (Self::ZhCn, MessageKey::SuggestedApproveDevice) => {
                 "请重新开始登录，并在显示的设备过期前批准它"
+            }
+            (Self::En, MessageKey::DraftListEmpty) => "no active synchronized drafts",
+            (Self::ZhCn, MessageKey::DraftListEmpty) => "没有活动的同步草稿",
+            (Self::En, MessageKey::DraftCreated) => "created draft {draft_id} for {category}",
+            (Self::ZhCn, MessageKey::DraftCreated) => "已为 {category} 创建草稿 {draft_id}",
+            (Self::En, MessageKey::DraftChanged) => {
+                "updated draft {draft_id} to revision {revision}"
+            }
+            (Self::ZhCn, MessageKey::DraftChanged) => "已将草稿 {draft_id} 更新到修订版 {revision}",
+            (Self::En, MessageKey::DraftDeleted) => "deleted draft {draft_id}",
+            (Self::ZhCn, MessageKey::DraftDeleted) => "已删除草稿 {draft_id}",
+            (Self::En, MessageKey::DraftDeletionCancelled) => "kept draft {draft_id}",
+            (Self::ZhCn, MessageKey::DraftDeletionCancelled) => "已保留草稿 {draft_id}",
+            (Self::En, MessageKey::DraftSubmitted) => "draft {draft_id} finalization is {status}",
+            (Self::ZhCn, MessageKey::DraftSubmitted) => "草稿 {draft_id} 的最终处理状态为 {status}",
+            (Self::En, MessageKey::DraftConfirmationRequired) => {
+                "draft deletion requires interactive confirmation"
+            }
+            (Self::ZhCn, MessageKey::DraftConfirmationRequired) => "删除草稿需要交互式确认",
+            (Self::En, MessageKey::ConfirmDraftDeletion) => {
+                "delete draft {draft_id} and its private pending media? Type the draft ID to continue: "
+            }
+            (Self::ZhCn, MessageKey::ConfirmDraftDeletion) => {
+                "要删除草稿 {draft_id} 及其待处理的私有媒体吗？请输入草稿 ID 继续："
+            }
+            (Self::En, MessageKey::SuggestedUseDraftYes) => {
+                "review the draft ID, then pass --yes in non-interactive use"
+            }
+            (Self::ZhCn, MessageKey::SuggestedUseDraftYes) => {
+                "请核对草稿 ID，然后在非交互环境中传入 --yes"
+            }
+            (Self::En, MessageKey::InvalidJsonValue) => "field value must be valid JSON",
+            (Self::ZhCn, MessageKey::InvalidJsonValue) => "字段值必须是有效的 JSON",
+            (Self::En, MessageKey::InvalidFormContract) => {
+                "the server returned an invalid or incompatible submission form"
+            }
+            (Self::ZhCn, MessageKey::InvalidFormContract) => "服务器返回了无效或不兼容的投稿表单",
+            (Self::En, MessageKey::FormRequiresWeb) => {
+                "this draft contains a required field the selected terminal renderer cannot display"
+            }
+            (Self::ZhCn, MessageKey::FormRequiresWeb) => {
+                "此草稿包含所选终端渲染器无法显示的必填字段"
+            }
+            (Self::En, MessageKey::SuggestedContinueOnWeb) => {
+                "continue this synchronized draft on the Redstone Squid website"
+            }
+            (Self::ZhCn, MessageKey::SuggestedContinueOnWeb) => {
+                "请在 Redstone Squid 网站上继续编辑此同步草稿"
+            }
+            (Self::En, MessageKey::FormInteractionRequired) => {
+                "interactive form editing requires a terminal"
+            }
+            (Self::ZhCn, MessageKey::FormInteractionRequired) => "交互式表单编辑需要终端",
+            (Self::En, MessageKey::FormAnswerInvalid) => {
+                "the answer does not satisfy this field's constraints; try again"
+            }
+            (Self::ZhCn, MessageKey::FormAnswerInvalid) => "回答不符合字段约束；请重试",
+            (Self::En, MessageKey::FormEditingCancelled) => {
+                "form editing was cancelled; the synchronized draft was kept"
+            }
+            (Self::ZhCn, MessageKey::FormEditingCancelled) => "表单编辑已取消；同步草稿已保留",
+            (Self::En, MessageKey::FinalizationWaitTimedOut) => {
+                "finalization is still running after the local wait timeout"
+            }
+            (Self::ZhCn, MessageKey::FinalizationWaitTimedOut) => {
+                "本地等待超时后，最终处理仍在运行"
+            }
+            (Self::En, MessageKey::SuggestedCheckStatus) => {
+                "run squid draft status with this draft ID"
+            }
+            (Self::ZhCn, MessageKey::SuggestedCheckStatus) => {
+                "请使用此草稿 ID 运行 squid draft status"
             }
             (Self::En, MessageKey::FormBooleanPrompt) => "[y/n] ",
             (Self::ZhCn, MessageKey::FormBooleanPrompt) => "[是/否] ",
@@ -363,9 +439,29 @@ pub enum MessageKey {
     AuthFallbackWarning,
     AuthWaitTimedOut,
     AuthStateFailed,
+    AuthLoginRequired,
+    SuggestedLogin,
     ApiRequestFailed,
     SuggestedRetry,
     SuggestedApproveDevice,
+    DraftListEmpty,
+    DraftCreated,
+    DraftChanged,
+    DraftDeleted,
+    DraftDeletionCancelled,
+    DraftSubmitted,
+    DraftConfirmationRequired,
+    ConfirmDraftDeletion,
+    SuggestedUseDraftYes,
+    InvalidJsonValue,
+    InvalidFormContract,
+    FormRequiresWeb,
+    SuggestedContinueOnWeb,
+    FormInteractionRequired,
+    FormAnswerInvalid,
+    FormEditingCancelled,
+    FinalizationWaitTimedOut,
+    SuggestedCheckStatus,
     FormBooleanPrompt,
     FormRepeatablePrompt,
     TuiAppTitle,

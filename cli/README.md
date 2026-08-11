@@ -4,9 +4,8 @@ This workspace contains the standalone `squid` command-line client. It is intent
 from the Python backend, Astro catalogue, and Minecraft clients so its native releases can use an
 independent SemVer lifecycle.
 
-The connected API client is gated on the completed provider-neutral platform contract. The first
-milestones establish local configuration, output, credential, transport, recovery, and process
-supervision behavior without depending on unfinished server routes.
+The connected client uses the provider-neutral draft and form contract shared by the web,
+Discord, Paper, and Fabric renderers. CLI and protocol versions remain independent.
 
 ## Profiles
 
@@ -80,6 +79,36 @@ success, cancellation, or failure.
 External editor commands are tokenized without invoking a shell. Documents use bounded,
 owner-readable temporary files, symlink replacements are rejected, and timed-out child processes
 are terminated and reaped before the command returns.
+
+## Drafts and submission
+
+Connected draft commands use the account selected during device approval. Draft writes carry an
+optimistic base revision and one idempotency key, so a stale second client receives a conflict
+instead of silently overwriting another edit:
+
+```console
+squid draft list
+squid draft create door --edit
+squid draft show 64760b2f-b352-45e0-9ed1-67b9da901992
+squid draft set 64760b2f-b352-45e0-9ed1-67b9da901992 capture_width 7
+squid draft unset 64760b2f-b352-45e0-9ed1-67b9da901992 display_name
+squid draft submit 64760b2f-b352-45e0-9ed1-67b9da901992 --wait
+```
+
+`draft set` accepts one JSON value, so strings must include JSON quotes. `draft delete` asks for
+the exact draft ID unless `--yes` is supplied. Interactive editing always loads the immutable form
+revision pinned to the draft, resolves current dynamic options, and stops with a web-continuation
+instruction when a required control is unsupported. Cancellation preserves the synchronized draft.
+
+For the shortest interactive path, create, edit, and finalize in one command:
+
+```console
+squid submit door --wait
+```
+
+Finalization may continue asynchronously. Without `--wait`, or after a local wait timeout, inspect
+the durable result with `squid draft status DRAFT_ID`. Add global `--output json` for stable
+versioned envelopes; prompts remain on stderr so stdout stays machine-readable.
 
 ## Development
 
