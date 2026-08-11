@@ -1,0 +1,236 @@
+"""Safety and lifecycle boundary for one disposable API fuzzing stack."""
+
+import asyncio
+import base64
+import secrets
+from collections.abc import Awaitable, Callable, Mapping
+from contextlib import AsyncExitStack
+from dataclasses import dataclass, field
+from ipaddress import ip_address
+from typing import Self
+from urllib.parse import urlsplit
+
+RUN_LABEL = "dev.redstone-squid.api-fuzz.run"
+RESOURCE_LABEL = "dev.redstone-squid.api-fuzz.resource"
+DATABASE_PREFIX = "squid_fuzz_"
+APPLICATION_PREFIX = "squid-api-fuzz-"
+
+type AsyncAction = Callable[[], Awaitable[None]]
+type Checksum = Callable[[], Awaitable[str]]
+type StackStarter = Callable[["RunIdentity", AsyncExitStack], Awaitable["RunningApi"]]
+
+
+class UnsafeEnvironmentError(RuntimeError):
+    """A target or owned resource failed its mandatory disposable-stack attestation."""
+
+
+@dataclass(frozen=True, slots=True)
+class RunIdentity:
+    """Unguessable names and sentinels shared by resources in one fuzz run."""
+
+    run_id: str
+    sentinel: str
+    database_name: str
+    application_name: str
+    network_name: str
+
+    @classmethod
+    def generate(cls) -> Self:
+        """Create a collision-resistant identity without reading process configuration."""
+        run_id = secrets.token_hex(16)
+        return cls(
+            run_id=run_id,
+            sentinel=secrets.token_urlsafe(32),
+            database_name=f"{DATABASE_PREFIX}{run_id}",
+            application_name=f"{APPLICATION_PREFIX}{run_id}",
+            network_name=f"redstone-squid-api-fuzz-{run_id}",
+        )
+
+    @property
+    def labels(self) -> dict[str, str]:
+        """Return the exact labels required on every owned Docker resource."""
+        return {RUN_LABEL: self.run_id, RESOURCE_LABEL: "disposable"}
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceAttestation:
+    """Facts read back from the live stack before a destructive action."""
+
+    labels: Mapping[str, str]
+    network_id: str
+    database_name: str
+    sentinel: str
+    application_name: str
+
+    def verify(self, identity: RunIdentity, *, expected_network_id: str) -> None:
+        """Refuse any resource set that is not exactly owned by this run."""
+        failures: list[str] = []
+        for key, expected in identity.labels.items():
+            if self.labels.get(key) != expected:
+                failures.append(f"label:{key}")
+        if not expected_network_id or self.network_id != expected_network_id:
+            failures.append("network_id")
+        if not self.database_name.startswith(DATABASE_PREFIX) or self.database_name != identity.database_name:
+            failures.append("database_name")
+        if not secrets.compare_digest(self.sentinel, identity.sentinel):
+            failures.append("sentinel")
+        if self.application_name != identity.application_name:
+            failures.append("application_name")
+        if failures:
+            names = ", ".join(failures)
+            msg = f"Disposable API environment attestation failed: {names}."
+            raise UnsafeEnvironmentError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class ResetHooks:
+    """Narrow operations needed to rebuild one deterministic example baseline."""
+
+    quiesce: AsyncAction
+    reset_database: AsyncAction
+    clear_redis: AsyncAction
+    reset_fakes: AsyncAction
+    seed: AsyncAction
+    checksum: Checksum
+    baseline_checksum: str
+
+
+@dataclass(slots=True)
+class RunningApi:
+    """One attested live API stack and its serialized reset boundary."""
+
+    identity: RunIdentity
+    base_url: str
+    network_id: str
+    read_attestation: Callable[[], Awaitable[ResourceAttestation]]
+    reset_hooks: ResetHooks
+    _reset_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+
+    async def attest(self) -> ResourceAttestation:
+        """Read and verify live ownership facts before stack mutation."""
+        validate_target_url(self.base_url)
+        attestation = await self.read_attestation()
+        attestation.verify(self.identity, expected_network_id=self.network_id)
+        return attestation
+
+    async def reset(self) -> None:
+        """Quiesce, reset, and reseed one worker after fresh live attestation."""
+        async with self._reset_lock:
+            await self.attest()
+            hooks = self.reset_hooks
+            await hooks.quiesce()
+            await hooks.reset_database()
+            await hooks.clear_redis()
+            await hooks.reset_fakes()
+            await hooks.seed()
+            actual = await hooks.checksum()
+            if not secrets.compare_digest(actual, hooks.baseline_checksum):
+                msg = "Disposable API environment baseline checksum does not match after reset."
+                raise UnsafeEnvironmentError(msg)
+
+
+class ApiEnvironment:
+    """Own every disposable resource through one asynchronous exit stack."""
+
+    def __init__(self, starter: StackStarter, *, identity: RunIdentity | None = None) -> None:
+        self._starter = starter
+        self.identity = identity or RunIdentity.generate()
+        self._stack: AsyncExitStack | None = None
+        self._running: RunningApi | None = None
+
+    async def __aenter__(self) -> RunningApi:
+        if self._stack is not None:
+            msg = "An API fuzz environment cannot be entered more than once."
+            raise RuntimeError(msg)
+        stack = AsyncExitStack()
+        await stack.__aenter__()
+        self._stack = stack
+        try:
+            running = await self._starter(self.identity, stack)
+            _require_identity(running, self.identity)
+            await running.attest()
+        except BaseException:
+            await stack.aclose()
+            self._stack = None
+            raise
+        self._running = running
+        return running
+
+    async def __aexit__(self, *_exc: object) -> None:
+        stack, self._stack = self._stack, None
+        self._running = None
+        if stack is not None:
+            await stack.aclose()
+
+
+def _require_identity(running: RunningApi, expected: RunIdentity) -> None:
+    if running.identity != expected:
+        msg = "The API stack starter returned a different run identity."
+        raise UnsafeEnvironmentError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class SyntheticEndpoints:
+    """Loopback endpoints assigned to harness-owned fake services."""
+
+    api_port: int
+    postgres_url: str
+    redis_url: str
+    mojang_profile_url: str
+    discord_api_url: str
+    discord_authorize_url: str
+
+
+def synthetic_api_environment(identity: RunIdentity, endpoints: SyntheticEndpoints) -> dict[str, str]:
+    """Build an allowlisted API environment containing only synthetic credentials."""
+    validate_target_url(f"http://127.0.0.1:{endpoints.api_port}")
+    idempotency_key = base64.b64encode(secrets.token_bytes(32)).decode()
+    return {
+        "PYTHONUNBUFFERED": "1",
+        "SQUID_STRICT_UNKNOWN_KEYS": "true",
+        "SQUID_DATABASE_URL": endpoints.postgres_url,
+        "SQUID_VERIFICATION_CODE_PEPPER": f"synthetic-verification-{identity.run_id}",
+        "SQUID_CURSOR_SECRET": f"synthetic-cursor-{identity.run_id}",
+        "SQUID_API_SECRET": f"synthetic-api-{identity.run_id}",
+        "SQUID_API_KEY_PEPPER": f"synthetic-api-key-{identity.run_id}",
+        "SQUID_API_SESSION_PEPPER": f"synthetic-session-{identity.run_id}",
+        "SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID": "fuzz-v1",
+        "SQUID_API_IDEMPOTENCY_KEYS": f'{{"fuzz-v1":"{idempotency_key}"}}',
+        "SQUID_API_PORT": str(endpoints.api_port),
+        "SQUID_RATE_LIMIT_REDIS_URL": endpoints.redis_url,
+        "SQUID_UPSTREAM_HTTP_MOJANG_PROFILE_URL": endpoints.mojang_profile_url,
+        "SQUID_UPSTREAM_HTTP_DISCORD_API_URL": endpoints.discord_api_url,
+        "SQUID_UPSTREAM_HTTP_DISCORD_AUTHORIZE_URL": endpoints.discord_authorize_url,
+        "SQUID_SCHEMATIC_ENABLED": "false",
+        "SQUID_MEDIA_ENABLED": "false",
+        "SQUID_OBSERVABILITY_ENABLED": "false",
+    }
+
+
+def validate_target_url(url: str) -> str:
+    """Return a normalized literal-loopback HTTP origin or refuse it."""
+    parsed = urlsplit(url)
+    host: str | None = None
+    try:
+        host = parsed.hostname
+        port = parsed.port
+        loopback = host is not None and ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+        port = None
+    if (
+        parsed.scheme != "http"
+        or not loopback
+        or port is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        msg = "API fuzz targets must be explicit literal-loopback HTTP origins with a port."
+        raise UnsafeEnvironmentError(msg)
+    assert host is not None
+    if ":" in host:
+        return f"http://[{host}]:{port}"
+    return f"http://{host}:{port}"
