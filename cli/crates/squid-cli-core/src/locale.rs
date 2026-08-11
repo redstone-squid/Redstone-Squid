@@ -176,6 +176,52 @@ impl Locale {
             (Self::ZhCn, MessageKey::OriginHttpsRequired) => {
                 "除字面量回环开发地址外，API 来源必须使用 HTTPS"
             }
+            (Self::En, MessageKey::FormBooleanPrompt) => "[y/n] ",
+            (Self::ZhCn, MessageKey::FormBooleanPrompt) => "[是/否] ",
+            (Self::En, MessageKey::TuiAppTitle) => "Redstone Squid",
+            (Self::ZhCn, MessageKey::TuiAppTitle) => "红石鱿鱼",
+            (Self::En, MessageKey::TuiHelpTitle) => "Help",
+            (Self::ZhCn, MessageKey::TuiHelpTitle) => "帮助",
+            (Self::En, MessageKey::TuiAnswerTitle) => "Answer",
+            (Self::ZhCn, MessageKey::TuiAnswerTitle) => "回答",
+            (Self::En, MessageKey::TuiChooseOneTitle) => "Choose one",
+            (Self::ZhCn, MessageKey::TuiChooseOneTitle) => "请选择一项",
+            (Self::En, MessageKey::TuiChooseManyTitle) => "Choose values",
+            (Self::ZhCn, MessageKey::TuiChooseManyTitle) => "请选择多项",
+            (Self::En, MessageKey::TuiInvalidAnswer) => {
+                "Answer does not satisfy this field's constraints"
+            }
+            (Self::ZhCn, MessageKey::TuiInvalidAnswer) => "回答不符合此字段的限制",
+            (Self::En, MessageKey::TuiBooleanUnset) => "Not selected",
+            (Self::ZhCn, MessageKey::TuiBooleanUnset) => "尚未选择",
+            (Self::En, MessageKey::TuiBooleanYes) => "Yes",
+            (Self::ZhCn, MessageKey::TuiBooleanYes) => "是",
+            (Self::En, MessageKey::TuiBooleanNo) => "No",
+            (Self::ZhCn, MessageKey::TuiBooleanNo) => "否",
+            (Self::En, MessageKey::TuiFooterText) => "Enter submit · Esc/Ctrl-C cancel",
+            (Self::ZhCn, MessageKey::TuiFooterText) => "Enter 提交 · Esc/Ctrl-C 取消",
+            (Self::En, MessageKey::TuiFooterMultiline) => {
+                "Shift/Alt-Enter newline · Enter submit · Esc/Ctrl-C cancel"
+            }
+            (Self::ZhCn, MessageKey::TuiFooterMultiline) => {
+                "Shift/Alt-Enter 换行 · Enter 提交 · Esc/Ctrl-C 取消"
+            }
+            (Self::En, MessageKey::TuiFooterBoolean) => {
+                "Y/N choose · Enter submit · Esc/Ctrl-C cancel"
+            }
+            (Self::ZhCn, MessageKey::TuiFooterBoolean) => "Y/N 选择 · Enter 提交 · Esc/Ctrl-C 取消",
+            (Self::En, MessageKey::TuiFooterSingleChoice) => {
+                "↑/↓ or J/K choose · Enter submit · Esc/Ctrl-C cancel"
+            }
+            (Self::ZhCn, MessageKey::TuiFooterSingleChoice) => {
+                "↑/↓ 或 J/K 选择 · Enter 提交 · Esc/Ctrl-C 取消"
+            }
+            (Self::En, MessageKey::TuiFooterMultipleChoice) => {
+                "↑/↓ or J/K move · Space toggle · Enter submit · Esc/Ctrl-C cancel"
+            }
+            (Self::ZhCn, MessageKey::TuiFooterMultipleChoice) => {
+                "↑/↓ 或 J/K 移动 · 空格切换 · Enter 提交 · Esc/Ctrl-C 取消"
+            }
         }
     }
 }
@@ -247,6 +293,21 @@ pub enum MessageKey {
     OriginHostMissing,
     OriginPortMissing,
     OriginHttpsRequired,
+    FormBooleanPrompt,
+    TuiAppTitle,
+    TuiHelpTitle,
+    TuiAnswerTitle,
+    TuiChooseOneTitle,
+    TuiChooseManyTitle,
+    TuiInvalidAnswer,
+    TuiBooleanUnset,
+    TuiBooleanYes,
+    TuiBooleanNo,
+    TuiFooterText,
+    TuiFooterMultiline,
+    TuiFooterBoolean,
+    TuiFooterSingleChoice,
+    TuiFooterMultipleChoice,
 }
 
 /// A catalog key plus untrusted values substituted only after selecting a locale.

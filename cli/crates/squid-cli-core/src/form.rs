@@ -10,6 +10,7 @@ use thiserror::Error;
 
 use crate::process::{EditorError, ExternalTextEditor};
 use crate::terminal::sanitize_terminal_text;
+use crate::{locale::Locale, locale::MessageKey};
 
 const MAXIMUM_FIELD_CODE_BYTES: usize = 96;
 const MAXIMUM_CAPABILITY_BYTES: usize = 128;
@@ -18,6 +19,7 @@ const MAXIMUM_OPTIONS: usize = 500;
 const MAXIMUM_PROMPT_BYTES: u64 = 1024 * 1024;
 
 const CAPABILITY_PROMPT: &str = "cli.prompt.v1";
+const CAPABILITY_TUI: &str = "cli.tui.v1";
 const CAPABILITY_TEXT: &str = "cli.control.text.v1";
 const CAPABILITY_MULTILINE: &str = "cli.control.multiline_text.v1";
 const CAPABILITY_INTEGER: &str = "cli.control.integer.v1";
@@ -232,6 +234,20 @@ impl RendererCapabilities {
         Self(values)
     }
 
+    /// Capabilities of the full-screen renderer, including inline multiline text editing.
+    #[must_use]
+    pub fn tui() -> Self {
+        Self(BTreeSet::from([
+            CAPABILITY_TUI,
+            CAPABILITY_TEXT,
+            CAPABILITY_MULTILINE,
+            CAPABILITY_INTEGER,
+            CAPABILITY_BOOLEAN,
+            CAPABILITY_SINGLE_CHOICE,
+            CAPABILITY_MULTIPLE_CHOICE,
+        ]))
+    }
+
     /// Sorted, comma-separated HTTP header value.
     #[must_use]
     pub fn header_value(&self) -> String {
@@ -299,6 +315,7 @@ pub enum InteractionMode {
 #[derive(Debug)]
 pub struct PromptRenderer<'a> {
     mode: InteractionMode,
+    locale: Locale,
     external_editor: Option<&'a ExternalTextEditor>,
     editor_timeout: Option<Duration>,
 }
@@ -309,9 +326,17 @@ impl<'a> PromptRenderer<'a> {
     pub const fn new(mode: InteractionMode) -> Self {
         Self {
             mode,
+            locale: Locale::En,
             external_editor: None,
             editor_timeout: None,
         }
+    }
+
+    /// Localize renderer-authored prompt chrome independently of server field text.
+    #[must_use]
+    pub const fn with_locale(mut self, locale: Locale) -> Self {
+        self.locale = locale;
+        self
     }
 
     /// Enable external editing for multiline text fields.
@@ -378,7 +403,12 @@ impl<'a> PromptRenderer<'a> {
                 parse_integer_answer(&value, field.required, *minimum, *maximum)
             }
             FormControl::Boolean => {
-                write!(output, "[y/n] ").map_err(FormError::Io)?;
+                write!(
+                    output,
+                    "{}",
+                    self.locale.message(MessageKey::FormBooleanPrompt)
+                )
+                .map_err(FormError::Io)?;
                 let value = read_line(input, output)?;
                 parse_boolean_answer(&value, field.required)
             }
@@ -459,7 +489,7 @@ fn read_line(input: &mut impl BufRead, output: &mut impl Write) -> Result<String
     Ok(value)
 }
 
-fn validate_text_answer(
+pub(crate) fn validate_text_answer(
     value: &str,
     required: bool,
     minimum: Option<usize>,
@@ -478,7 +508,7 @@ fn validate_text_answer(
     Ok(Some(FormAnswer::Text(String::from(value))))
 }
 
-fn parse_integer_answer(
+pub(crate) fn parse_integer_answer(
     value: &str,
     required: bool,
     minimum: Option<i64>,
@@ -499,7 +529,10 @@ fn parse_integer_answer(
     Ok(Some(FormAnswer::Integer(parsed)))
 }
 
-fn parse_boolean_answer(value: &str, required: bool) -> Result<Option<FormAnswer>, FormError> {
+pub(crate) fn parse_boolean_answer(
+    value: &str,
+    required: bool,
+) -> Result<Option<FormAnswer>, FormError> {
     match value.trim().to_lowercase().as_str() {
         "" if !required => Ok(None),
         "y" | "yes" | "true" | "1" | "是" => Ok(Some(FormAnswer::Boolean(true))),
@@ -571,6 +604,8 @@ pub enum FormError {
     InteractionRequired,
     #[error("terminal input ended before an answer was read")]
     EndOfInput,
+    #[error("interactive form editing was cancelled")]
+    Cancelled,
     #[error("terminal input exceeds the safety limit")]
     InputTooLarge,
     #[error("the answer does not satisfy the field constraints")]

@@ -12,5 +12,6 @@ pub mod profile;
 pub mod recovery;
 pub mod terminal;
 pub mod transport;
+pub mod tui;
 pub mod update;
 pub mod version;
