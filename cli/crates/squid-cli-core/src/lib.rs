@@ -6,6 +6,7 @@ pub mod exit;
 pub mod locale;
 pub mod origin;
 pub mod output;
+pub mod process;
 pub mod profile;
 pub mod recovery;
 pub mod terminal;
