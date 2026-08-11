@@ -35,6 +35,7 @@ def attestation(run: RunIdentity) -> ResourceAttestation:
     return ResourceAttestation(
         labels=run.labels,
         network_id="network-0123",
+        network_internal=True,
         database_name=run.database_name,
         sentinel=run.sentinel,
         application_name=run.application_name,
@@ -46,6 +47,8 @@ def attestation(run: RunIdentity) -> ResourceAttestation:
     [
         "https://127.0.0.1:8000",
         "http://localhost:8000",
+        "http://127.0.0.2:8000",
+        "http://[::1]:8000",
         "http://192.0.2.1:8000",
         "http://127.0.0.1",
         "http://user:password@127.0.0.1:8000",
@@ -54,13 +57,12 @@ def attestation(run: RunIdentity) -> ResourceAttestation:
     ],
 )
 def test_target_validation_refuses_non_literal_or_ambiguous_origins(url: str) -> None:
-    with pytest.raises(UnsafeEnvironmentError, match="literal-loopback"):
+    with pytest.raises(UnsafeEnvironmentError, match=r"127\.0\.0\.1"):
         validate_target_url(url)
 
 
-def test_target_validation_normalizes_ipv4_and_ipv6_loopback() -> None:
+def test_target_validation_normalizes_ipv4_loopback() -> None:
     assert validate_target_url("http://127.0.0.1:8000/") == "http://127.0.0.1:8000"
-    assert validate_target_url("http://[::1]:8000") == "http://[::1]:8000"
 
 
 @pytest.mark.parametrize(
@@ -68,6 +70,7 @@ def test_target_validation_normalizes_ipv4_and_ipv6_loopback() -> None:
     [
         (lambda observed: replace(observed, labels={}), "label:"),
         (lambda observed: replace(observed, network_id="other-network"), "network_id"),
+        (lambda observed: replace(observed, network_internal=False), "network_internal"),
         (lambda observed: replace(observed, database_name="production"), "database_name"),
         (lambda observed: replace(observed, sentinel="wrong-sentinel"), "sentinel"),
         (lambda observed: replace(observed, application_name="psql"), "application_name"),

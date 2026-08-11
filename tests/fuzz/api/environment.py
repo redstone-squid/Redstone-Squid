@@ -6,7 +6,6 @@ import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
-from ipaddress import ip_address
 from typing import Self
 from urllib.parse import urlsplit
 
@@ -58,6 +57,7 @@ class ResourceAttestation:
 
     labels: Mapping[str, str]
     network_id: str
+    network_internal: bool
     database_name: str
     sentinel: str
     application_name: str
@@ -70,6 +70,8 @@ class ResourceAttestation:
                 failures.append(f"label:{key}")
         if not expected_network_id or self.network_id != expected_network_id:
             failures.append("network_id")
+        if not self.network_internal:
+            failures.append("network_internal")
         if not self.database_name.startswith(DATABASE_PREFIX) or self.database_name != identity.database_name:
             failures.append("database_name")
         if not secrets.compare_digest(self.sentinel, identity.sentinel):
@@ -208,19 +210,17 @@ def synthetic_api_environment(identity: RunIdentity, endpoints: SyntheticEndpoin
 
 
 def validate_target_url(url: str) -> str:
-    """Return a normalized literal-loopback HTTP origin or refuse it."""
+    """Return a normalized IPv4-loopback HTTP origin or refuse it."""
     parsed = urlsplit(url)
-    host: str | None = None
     try:
         host = parsed.hostname
         port = parsed.port
-        loopback = host is not None and ip_address(host).is_loopback
     except ValueError:
-        loopback = False
+        host = None
         port = None
     if (
         parsed.scheme != "http"
-        or not loopback
+        or host != "127.0.0.1"
         or port is None
         or parsed.username is not None
         or parsed.password is not None
@@ -228,9 +228,6 @@ def validate_target_url(url: str) -> str:
         or parsed.fragment
         or parsed.path not in {"", "/"}
     ):
-        msg = "API fuzz targets must be explicit literal-loopback HTTP origins with a port."
+        msg = "API fuzz targets must be explicit 127.0.0.1 HTTP origins with a port."
         raise UnsafeEnvironmentError(msg)
-    assert host is not None
-    if ":" in host:
-        return f"http://[{host}]:{port}"
     return f"http://{host}:{port}"
