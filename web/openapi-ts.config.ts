@@ -1,6 +1,6 @@
 import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
-  input: "openapi.json",
+  input: "../contracts/openapi.json",
   output: "src/generated",
 });

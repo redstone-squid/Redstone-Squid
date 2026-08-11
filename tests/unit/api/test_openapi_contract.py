@@ -25,7 +25,7 @@ from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
 schema = schemathesis.openapi.from_asgi("/openapi.json", _app)
-OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "web" / "openapi.json"
+OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
 
 
 @pytest.fixture
