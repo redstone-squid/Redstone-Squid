@@ -1,5 +1,6 @@
 """Durable media job service and runner behavior."""
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Awaitable, Callable, Sequence
@@ -15,6 +16,7 @@ from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
     ClaimedMediaJob,
+    MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
     MediaArtifactRole,
     MediaEnqueueOutcome,
@@ -119,6 +121,7 @@ class FailingDeleteArtifacts(MemoryArtifacts):
 class _JobState:
     upload: MediaUploadMetadata
     status: MediaJobStatus = MediaJobStatus.PENDING
+    available_at: Instant = NOW
     attempts: int = 0
     claim_token: UUID | None = None
     claimed_at: Instant | None = None
@@ -134,6 +137,8 @@ class MemoryMediaJobs:
         self.states: dict[UUID, _JobState] = {}
         self.artifact_objects: dict[str, bool] = {}
         self.artifact_publications: set[tuple[str, UUID, UUID]] = set()
+        self.heartbeat_calls = 0
+        self.artifact_cleanup_calls = 0
 
     async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
         existing = self.states.get(upload.id)
@@ -177,7 +182,7 @@ class MemoryMediaJobs:
             upload=state.upload,
             status=state.status,
             attempts=state.attempts,
-            available_at=NOW,
+            available_at=state.available_at,
             claimed_at=state.claimed_at,
             claim_token=state.claim_token,
             completed_at=state.completed_at,
@@ -216,6 +221,30 @@ class MemoryMediaJobs:
             state.claimed_at = NOW
             claimed.append(ClaimedMediaJob(state.upload, state.attempts, NOW, token))
         return tuple(claimed)
+
+    async def heartbeat(self, job: ClaimedMediaJob) -> bool:
+        self.heartbeat_calls += 1
+        state = self.states[job.upload.id]
+        if state.status is not MediaJobStatus.CLAIMED or state.claim_token != job.claim_token:
+            return False
+        state.claimed_at = NOW
+        return True
+
+    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
+        state = self.states[job.upload.id]
+        if state.status is not MediaJobStatus.CLAIMED or state.claim_token != job.claim_token:
+            return False
+        state.status = MediaJobStatus.PENDING
+        state.available_at = until
+        state.claim_token = None
+        state.claimed_at = None
+        state.last_error = "artifact_cleanup_in_progress"
+        self.artifact_publications = {
+            publication
+            for publication in self.artifact_publications
+            if publication[1:] != (job.upload.id, job.claim_token)
+        }
+        return True
 
     async def complete(
         self,
@@ -297,6 +326,7 @@ class MemoryMediaJobs:
         *,
         limit: int,
     ) -> MediaArtifactCleanupOutcome:
+        self.artifact_cleanup_calls += 1
         referenced = {
             artifact.object_key
             for state in self.states.values()
@@ -349,6 +379,23 @@ class DiscardingCompletionMediaJobs(MemoryMediaJobs):
         state.claimed_at = None
         state.discarded_at = NOW
         return False
+
+
+class CleanupContendingMediaJobs(MemoryMediaJobs):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cleanup_conflicts = 1
+
+    @override
+    async def track_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> bool:
+        if self.cleanup_conflicts:
+            self.cleanup_conflicts -= 1
+            raise MediaArtifactCleanupInProgressError(NOW.add(hours=24))
+        return await super().track_artifacts(job, artifacts)
 
 
 class WritingNormalizer:
@@ -427,6 +474,26 @@ class WritingNormalizer:
 
     async def aclose(self) -> None:
         pass
+
+
+class BlockingNormalizer(WritingNormalizer):
+    def __init__(self, kind: MediaKind) -> None:
+        super().__init__(kind)
+        self.started = asyncio.Event()
+        self.resume = asyncio.Event()
+
+    @override
+    async def normalize(
+        self,
+        request: MediaNormalizationRequest,
+        *,
+        probe: MediaProbe,
+        source_bytes: int,
+        limits: MediaLimits,
+    ) -> MediaNormalizationResult:
+        self.started.set()
+        await self.resume.wait()
+        return await super().normalize(request, probe=probe, source_bytes=source_bytes, limits=limits)
 
 
 async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() -> None:
@@ -581,6 +648,12 @@ async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_an
 
     await runner.process_batch()
 
+    before_cleanup = await jobs.get(UPLOAD_ID)
+    assert before_cleanup is not None
+    assert before_cleanup.upload.raw_deleted_at is None
+    assert before_cleanup.upload.source_object_key in artifacts.objects
+    assert repository.artifact_cleanup_calls == 0
+    await runner.cleanup_terminal_sources()
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
@@ -597,6 +670,109 @@ async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_an
 
     await jobs.submit(submission)
     assert snapshot.upload.source_object_key not in artifacts.objects
+
+
+async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    normalizer = BlockingNormalizer(MediaKind.IMAGE)
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(normalizer),
+        working_directory=tmp_path,
+        heartbeat_interval_seconds=0.01,
+    )
+
+    processing = asyncio.create_task(runner.process_batch())
+    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
+    await asyncio.sleep(0.035)
+    assert repository.heartbeat_calls >= 2
+    normalizer.resume.set()
+    await asyncio.wait_for(processing, timeout=1)
+
+    snapshot = await jobs.get(UPLOAD_ID)
+    assert snapshot is not None
+    assert snapshot.status is MediaJobStatus.COMPLETED
+
+
+async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    normalizer = BlockingNormalizer(MediaKind.IMAGE)
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(normalizer),
+        working_directory=tmp_path,
+        heartbeat_interval_seconds=0.01,
+    )
+
+    processing = asyncio.create_task(runner.process_batch())
+    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
+    assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+    await asyncio.sleep(0.02)
+    normalizer.resume.set()
+    await asyncio.wait_for(processing, timeout=1)
+
+    snapshot = await jobs.get(UPLOAD_ID)
+    assert snapshot is not None
+    assert snapshot.status is MediaJobStatus.DISCARDED
+    assert snapshot.attempts == 0
+    assert snapshot.artifacts == ()
+    assert set(artifacts.objects) == {snapshot.upload.source_object_key}
+
+
+async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = CleanupContendingMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts, max_attempts=1)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
+        working_directory=tmp_path,
+    )
+
+    await runner.process_batch()
+
+    snapshot = await jobs.get(UPLOAD_ID)
+    assert snapshot is not None
+    assert snapshot.status is MediaJobStatus.PENDING
+    assert snapshot.attempts == 0
+    assert snapshot.available_at == NOW.add(hours=24)
+    assert snapshot.last_error == "artifact_cleanup_in_progress"
+    assert set(artifacts.objects) == {snapshot.upload.source_object_key}
+    assert repository.artifact_cleanup_calls == 0
 
 
 async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path) -> None:
@@ -620,6 +796,8 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
     )
 
     await runner.process_batch()
+    await runner.cleanup_terminal_sources()
+    await runner.cleanup_terminal_artifacts()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -696,6 +874,7 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
         )
 
         await runner.process_batch()
+        await runner.cleanup_terminal_sources()
 
         snapshot = await jobs.get(upload_id)
         assert snapshot is not None

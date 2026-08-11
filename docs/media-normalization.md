@@ -45,8 +45,19 @@ PATH-dependent executable choice. Enabling must reach both processes: the API ow
 worker owns FFmpeg execution. No media-specific secret is required.
 
 The worker retains the 60-second storage-cleanup loop even when `SQUID_MEDIA_ENABLED=false`, so disabling FFmpeg does
-not strand raw objects or previously discarded normalized artifacts. Active normalization also performs opportunistic
-pre/post cleanup; PostgreSQL row locks and idempotent object deletion make overlapping passes safe.
+not strand raw objects or previously discarded normalized artifacts. That dedicated loop is the sole cleanup owner;
+normalization batches never wait for object-store deletions during a storage incident.
+
+Normalization workers heartbeat their queue claim while FFmpeg or object storage is busy. Publication leases are
+renewed with that heartbeat and retain a 48-hour crash-recovery envelope, covering all three sequential video objects
+under the maximum configured S3 retry and timeout bounds. Cleanup revokes an expired publisher before deleting its
+partial objects, and periodically reconciles any committed artifact rows missing lifecycle metadata.
+
+The first deployment containing migration `f4a5b6c7d8e9` is not a rolling worker upgrade: stop every older media
+normalization worker before applying the migration, then start only lease-aware workers. Older binaries do not publish
+leases, so no database cleanup design can fence a put they resume after its bytes were deleted. Media is default-off
+until the migration and new worker are both deployed; the 48-hour backfill grace protects rows committed before the
+quiesced upgrade, but it is not a substitute for quiescing an old in-flight publisher.
 
 With the local artifact backend, `/var/lib/app/objects` must be the same durable volume in the API and worker. With the
 S3 backend, both processes instead need the same bucket, prefix, endpoint, and credentials through the existing

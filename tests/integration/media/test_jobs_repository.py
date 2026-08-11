@@ -193,6 +193,40 @@ async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
     )
 
 
+async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresMediaJobRepository(async_session_factory)
+    await repository.enqueue(upload(), LIMITS)
+    (first,) = await repository.claim(limit=1)
+    artifacts = completed_artifacts()
+    assert await repository.track_artifacts(first, artifacts)
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaNormalizationJobRecord)
+            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            .values(claimed_at=first.claimed_at.subtract(minutes=6))
+        )
+
+    assert await repository.heartbeat(first)
+    assert await repository.claim(limit=1) == ()
+    async with async_session_factory() as session:
+        expiries = tuple((await session.scalars(select(MediaArtifactPublicationRecord.expires_at))).all())
+    assert len(expiries) == 2
+    assert all(expiry > Instant.now().add(hours=47) for expiry in expiries)
+
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaNormalizationJobRecord)
+            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            .values(claimed_at=first.claimed_at.subtract(minutes=6))
+        )
+    (second,) = await repository.claim(limit=1)
+    assert await repository.heartbeat(first) is False
+    assert await repository.complete(first, artifacts, LIMITS) is False
+    assert await repository.heartbeat(second)
+
+
 async def test_cleanup_preserves_shared_objects_until_every_reference_is_discarded(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -319,6 +353,78 @@ async def test_crashed_publication_lease_expires_for_eventual_cleanup(
         assert await session.scalar(select(func.count()).select_from(MediaArtifactPublicationRecord)) == 0
 
 
+async def test_expired_publication_revokes_paused_worker_before_deleting_partial_objects(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresMediaJobRepository(async_session_factory)
+    await repository.enqueue(upload(), LIMITS)
+    (paused,) = await repository.claim(limit=1)
+    artifacts = completed_artifacts()
+    assert await repository.track_artifacts(paused, artifacts)
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaArtifactPublicationRecord).values(
+                created_at=func.now() - timedelta(days=3),
+                expires_at=func.now() - timedelta(days=1),
+            )
+        )
+    deleted: list[str] = []
+
+    async def delete(object_key: str) -> None:
+        snapshot = await repository.get(UPLOAD_ID)
+        assert snapshot is not None
+        assert snapshot.status is MediaJobStatus.PENDING
+        assert snapshot.claim_token is None
+        assert snapshot.attempts == 0
+        deleted.append(object_key)
+
+    cleanup = await repository.cleanup_artifacts(delete, limit=10)
+
+    assert cleanup.deleted == 2
+    assert set(deleted) == {artifact.object_key for artifact in artifacts}
+    assert await repository.heartbeat(paused) is False
+    assert await repository.complete(paused, artifacts, LIMITS) is False
+    assert await repository.track_artifacts(paused, artifacts) is False
+
+    deleted.clear()
+    cleanup = await repository.cleanup_artifacts(delete, limit=10)
+    assert cleanup.deleted == 2
+    assert set(deleted) == {artifact.object_key for artifact in artifacts}
+
+
+async def test_bounded_lease_pruning_never_exposes_an_unprocessed_publisher(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresMediaJobRepository(async_session_factory)
+    first = upload()
+    second = upload(upload_id=uuid4(), source=b"second raw image")
+    artifacts = completed_artifacts()
+    await repository.enqueue(first, LIMITS)
+    (first_claim,) = await repository.claim(limit=1)
+    assert await repository.track_artifacts(first_claim, artifacts)
+    assert (await repository.fail(first_claim, "crashed", max_attempts=1, terminal=True)).dead
+    await repository.enqueue(second, LIMITS)
+    (second_claim,) = await repository.claim(limit=1)
+    assert await repository.track_artifacts(second_claim, artifacts)
+    assert (await repository.fail(second_claim, "crashed", max_attempts=1, terminal=True)).dead
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaArtifactPublicationRecord).values(
+                created_at=func.now() - timedelta(days=3),
+                expires_at=func.now() - timedelta(days=1),
+            )
+        )
+    deleted: list[str] = []
+
+    async def delete(object_key: str) -> None:
+        deleted.append(object_key)
+
+    assert (await repository.cleanup_artifacts(delete, limit=1)).attempted == 0
+    assert deleted == []
+    assert (await repository.cleanup_artifacts(delete, limit=1)).deleted == 1
+    assert len(deleted) == 1
+
+
 async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_flight(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -342,13 +448,109 @@ async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_fli
 
     cleanup_task = asyncio.create_task(repository.cleanup_artifacts(blocking_delete, limit=10))
     await asyncio.wait_for(delete_started.wait(), timeout=1)
-    with pytest.raises(MediaArtifactCleanupInProgressError):
+    with pytest.raises(MediaArtifactCleanupInProgressError) as exc_info:
         await repository.track_artifacts(publisher_claim, artifacts)
+    assert await repository.defer(publisher_claim, until=exc_info.value.retry_at)
+    deferred = await repository.get(publisher.id)
+    assert deferred is not None
+    assert deferred.status is MediaJobStatus.PENDING
+    assert deferred.attempts == 0
+    assert deferred.available_at == exc_info.value.retry_at
 
     allow_delete.set()
     assert (await cleanup_task).deleted == 2
-    assert await repository.track_artifacts(publisher_claim, artifacts)
-    await repository.release_artifacts(publisher_claim, artifacts)
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaNormalizationJobRecord)
+            .where(MediaNormalizationJobRecord.upload_id == publisher.id)
+            .values(available_at=func.now())
+        )
+    (retry,) = await repository.claim(limit=1)
+    assert retry.attempts == 0
+    assert await repository.track_artifacts(retry, artifacts)
+    await repository.release_artifacts(retry, artifacts)
+
+
+async def test_stale_put_observed_during_delete_keeps_the_object_due_for_cleanup(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresMediaJobRepository(async_session_factory)
+    await repository.enqueue(upload(), LIMITS)
+    (stale_claim,) = await repository.claim(limit=1)
+    artifacts = completed_artifacts()
+    assert await repository.track_artifacts(stale_claim, artifacts)
+    assert (await repository.fail(stale_claim, "invalid", max_attempts=1, terminal=True)).dead
+    await repository.release_artifacts(stale_claim, artifacts)
+    delete_started = asyncio.Event()
+    allow_delete = asyncio.Event()
+
+    async def blocking_delete(_object_key: str) -> None:
+        delete_started.set()
+        await allow_delete.wait()
+
+    cleanup_task = asyncio.create_task(repository.cleanup_artifacts(blocking_delete, limit=10))
+    await asyncio.wait_for(delete_started.wait(), timeout=1)
+    assert await repository.track_artifacts(stale_claim, artifacts) is False
+    allow_delete.set()
+    assert (await cleanup_task).deleted == 2
+
+    async with async_session_factory() as session:
+        objects = tuple((await session.scalars(select(MediaArtifactObjectRecord))).all())
+    assert all(row.deleted_at is None for row in objects)
+    assert all(row.cleanup_claim_token is None for row in objects)
+    assert (await repository.cleanup_artifacts(lambda _key: asyncio.sleep(0), limit=10)).deleted == 2
+
+
+async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresMediaJobRepository(async_session_factory)
+    await repository.enqueue(upload(), LIMITS)
+    (_claim,) = await repository.claim(limit=1)
+    artifacts = completed_artifacts()
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(MediaNormalizationJobRecord)
+            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            .values(
+                status=MediaJobStatus.COMPLETED.value,
+                claimed_at=None,
+                claim_token=None,
+                completed_at=func.now(),
+            )
+        )
+        session.add_all(
+            MediaArtifactRecord(
+                upload_id=UPLOAD_ID,
+                role=artifact.role.value,
+                object_key=artifact.object_key,
+                content_type=artifact.content_type,
+                byte_size=artifact.byte_size,
+                sha256=artifact.sha256,
+                width=artifact.width,
+                height=artifact.height,
+            )
+            for artifact in artifacts
+        )
+    deleted: list[str] = []
+
+    async def delete(object_key: str) -> None:
+        deleted.append(object_key)
+
+    reconciled = await repository.cleanup_artifacts(delete, limit=10)
+    assert reconciled.attempted == 0
+    assert deleted == []
+    async with async_session_factory() as session:
+        objects = tuple((await session.scalars(select(MediaArtifactObjectRecord))).all())
+    assert {row.object_key for row in objects} == {artifact.object_key for artifact in artifacts}
+    assert all(row.available_at > Instant.now().add(hours=47) for row in objects)
+
+    assert await repository.discard(DRAFT_ID, UPLOAD_ID)
+    assert (await repository.cleanup_artifacts(delete, limit=10)).attempted == 0
+    async with async_session_factory.begin() as session:
+        await session.execute(update(MediaArtifactObjectRecord).values(available_at=func.now()))
+    assert (await repository.cleanup_artifacts(delete, limit=10)).deleted == 2
+    assert set(deleted) == {artifact.object_key for artifact in artifacts}
 
 
 async def test_retry_backoff_then_dead_state_and_raw_cleanup_acknowledgment(

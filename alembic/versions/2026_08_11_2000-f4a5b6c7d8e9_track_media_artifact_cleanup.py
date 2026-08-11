@@ -93,8 +93,9 @@ def upgrade() -> None:
         ["expires_at"],
         unique=False,
     )
-    # Rolling-deploy workers from before this revision publish without leases. Delay the
-    # backfill by one full publication lease so their in-flight puts can settle safely.
+    # The first rollout must quiesce pre-f4 normalization workers before this migration;
+    # those binaries cannot fence an in-flight put. Give already-committed rows one full
+    # publication lease of additional grace before the new cleanup loop can delete them.
     op.execute(
         sa.text(
             """
@@ -114,7 +115,7 @@ def upgrade() -> None:
                 byte_size,
                 upload_id,
                 upload_id,
-                now() + interval '24 hours',
+                now() + interval '48 hours',
                 created_at,
                 created_at
             FROM media_artifacts
