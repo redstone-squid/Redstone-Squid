@@ -66,6 +66,10 @@ dependency-report output="dependency-report.json":
 export-openapi:
     uv run --locked python -m scripts.export_openapi
 
+# Refresh the versioned finding schemas consumed across fuzz workflow trust boundaries.
+export-fuzz-schemas:
+    uv run --locked python -m scripts.export_fuzz_schemas
+
 gha-analysis:
     uvx zizmor --gh-token $(gh auth token) --persona=pedantic .
 
