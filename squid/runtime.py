@@ -119,6 +119,7 @@ class WorkerServices:
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     record_queue_health: Callable[[], Awaitable[None]]
     purge_idempotency: Callable[[], Awaitable[int]]
+    expire_submission_drafts: Callable[[], Awaitable[int]]
 
 
 @dataclass(frozen=True, slots=True)

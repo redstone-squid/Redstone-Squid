@@ -129,6 +129,10 @@ class FakeDraftRepository:
         del draft_id, account_id
         return False
 
+    async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
+        del now, limit
+        return 0
+
 
 class FakeArtifacts:
     def __init__(self, readiness: SubmissionArtifactReadiness) -> None:

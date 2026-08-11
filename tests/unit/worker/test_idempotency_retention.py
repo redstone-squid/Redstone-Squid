@@ -18,6 +18,7 @@ async def test_worker_schedules_and_invokes_explicit_idempotency_purge() -> None
         media_runner=None,
         record_queue_health=AsyncMock(),
         purge_idempotency=AsyncMock(return_value=3),
+        expire_submission_drafts=AsyncMock(return_value=0),
     )
     supervisor = Mock()
     worker = DatabaseWorker(

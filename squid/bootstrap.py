@@ -580,6 +580,7 @@ def create_worker_services(
         refresh_search_index=partial(run_projection_batch, db.async_session),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=idempotency.purge_expired,
+        expire_submission_drafts=graph.submission_drafts.expire_due,
     )
 
 
