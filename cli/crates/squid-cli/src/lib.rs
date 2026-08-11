@@ -27,6 +27,9 @@ use squid_cli_core::form::{
     FormAnswer, FormCode, FormError, InteractionMode, PromptRenderer, RendererCapabilities,
 };
 use squid_cli_core::locale::{Locale, LocalizedMessage, MessageKey, format_message};
+use squid_cli_core::media::{
+    DraftMedia, DraftMediaList, MediaContractError, MediaKind, SubmissionMediaApi,
+};
 use squid_cli_core::origin::{ApiOrigin, OriginError};
 use squid_cli_core::output::{FailureEnvelope, SuccessEnvelope, write_json};
 use squid_cli_core::profile::{
@@ -81,6 +84,11 @@ enum Command {
         #[command(subcommand)]
         command: CompletionCommand,
     },
+    /// Upload, inspect, wait for, and discard normalized draft media.
+    Media {
+        #[command(subcommand)]
+        command: MediaCommand,
+    },
     /// Manage isolated API origins and local preferences.
     Profile {
         #[command(subcommand)]
@@ -99,6 +107,55 @@ enum Command {
     },
     /// Report CLI and submission-protocol compatibility.
     Version,
+}
+
+#[derive(Debug, Subcommand)]
+enum MediaCommand {
+    /// Stream one image or video into an owned synchronized draft.
+    Upload {
+        draft_id: Uuid,
+        #[arg(value_enum)]
+        kind: MediaKindArgument,
+        path: PathBuf,
+        /// Explicit image/* or video/* type when the file extension is unknown.
+        #[arg(long)]
+        content_type: Option<String>,
+        /// Remove audio while normalizing a video.
+        #[arg(long)]
+        strip_audio: bool,
+        /// Wait for normalization to complete or fail.
+        #[arg(long)]
+        wait: bool,
+        #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=3600))]
+        timeout_seconds: u64,
+    },
+    /// List retained media and server-advertised limits for one draft.
+    List { draft_id: Uuid },
+    /// Read one durable media processing state.
+    Status { draft_id: Uuid, upload_id: Uuid },
+    /// Stop processing and withdraw one retained media upload.
+    Discard {
+        draft_id: Uuid,
+        upload_id: Uuid,
+        /// Skip the interactive discard confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum MediaKindArgument {
+    Image,
+    Video,
+}
+
+impl From<MediaKindArgument> for MediaKind {
+    fn from(value: MediaKindArgument) -> Self {
+        match value {
+            MediaKindArgument::Image => Self::Image,
+            MediaKindArgument::Video => Self::Video,
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -338,6 +395,11 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
             }
             generate(shell, &mut Cli::command(), "squid", output);
             Ok(())
+        }
+        Command::Media { command } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            let mut session = ConnectedSession::open(locale, &store)?;
+            run_media(command, cli.output, locale, &mut session, output)
         }
         Command::Profile { command } => {
             let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
@@ -608,6 +670,352 @@ fn run_draft(
     result?;
     write_credential_warning(format, locale, session.backend, output)?;
     Ok(())
+}
+
+fn run_media(
+    command: MediaCommand,
+    format: OutputFormat,
+    locale: Locale,
+    session: &mut ConnectedSession,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let result = match command {
+        MediaCommand::Upload {
+            draft_id,
+            kind,
+            path,
+            content_type,
+            strip_audio,
+            wait,
+            timeout_seconds,
+        } => {
+            let kind = MediaKind::from(kind);
+            if kind == MediaKind::Image && strip_audio {
+                return Err(invalid_media_input("strip_audio_requires_video").into());
+            }
+            let content_type = resolve_media_content_type(kind, &path, content_type.as_deref())?;
+            let current = session
+                .request(|client, token| SubmissionMediaApi::new(client).list(draft_id, token))?;
+            current
+                .data
+                .validate(draft_id)
+                .map_err(media_contract_failure)?;
+            let maximum_bytes = current.data.limits.max_upload_bytes;
+            let upload_id = Uuid::new_v4();
+            let response = session.request(|client, token| {
+                SubmissionMediaApi::new(client).upload(
+                    draft_id,
+                    kind,
+                    &path,
+                    &content_type,
+                    strip_audio,
+                    upload_id,
+                    maximum_bytes,
+                    token,
+                )
+            })?;
+            response
+                .data
+                .validate(draft_id)
+                .map_err(media_contract_failure)?;
+            if response.data.id != upload_id {
+                return Err(
+                    media_contract_failure(MediaContractError::MismatchedIdentifier).into(),
+                );
+            }
+            let media = if wait && !response.data.is_terminal() {
+                wait_for_media(session, draft_id, upload_id, timeout_seconds)?
+            } else {
+                response.data
+            };
+            write_media_result(
+                "media.upload",
+                format,
+                locale,
+                &media,
+                response.request_id,
+                output,
+            )
+        }
+        MediaCommand::List { draft_id } => {
+            let response = session
+                .request(|client, token| SubmissionMediaApi::new(client).list(draft_id, token))?;
+            response
+                .data
+                .validate(draft_id)
+                .map_err(media_contract_failure)?;
+            write_media_list(format, locale, &response.data, response.request_id, output)
+        }
+        MediaCommand::Status {
+            draft_id,
+            upload_id,
+        } => {
+            let response = session.request(|client, token| {
+                SubmissionMediaApi::new(client).get(draft_id, upload_id, token)
+            })?;
+            response
+                .data
+                .validate(draft_id)
+                .map_err(media_contract_failure)?;
+            if response.data.id != upload_id {
+                return Err(
+                    media_contract_failure(MediaContractError::MismatchedIdentifier).into(),
+                );
+            }
+            write_media_result(
+                "media.status",
+                format,
+                locale,
+                &response.data,
+                response.request_id,
+                output,
+            )
+        }
+        MediaCommand::Discard {
+            draft_id,
+            upload_id,
+            yes,
+        } => {
+            if !yes && !confirm_media_discard(locale, upload_id)? {
+                write_connected_result(
+                    "media.discard",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::MediaDiscardCancelled)
+                        .with("upload_id", upload_id.hyphenated().to_string()),
+                    &MediaDiscardView {
+                        draft_id,
+                        upload_id,
+                        discarded: false,
+                    },
+                    None,
+                    output,
+                )
+            } else {
+                let idempotency_key = Uuid::new_v4();
+                let response = session.request(|client, token| {
+                    SubmissionMediaApi::new(client).discard(
+                        draft_id,
+                        upload_id,
+                        token,
+                        idempotency_key,
+                    )
+                })?;
+                write_connected_result(
+                    "media.discard",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::MediaDiscarded)
+                        .with("upload_id", upload_id.hyphenated().to_string()),
+                    &MediaDiscardView {
+                        draft_id,
+                        upload_id,
+                        discarded: true,
+                    },
+                    response.request_id,
+                    output,
+                )
+            }
+        }
+    };
+    result?;
+    write_credential_warning(format, locale, session.backend, output)?;
+    Ok(())
+}
+
+fn resolve_media_content_type(
+    kind: MediaKind,
+    path: &std::path::Path,
+    explicit: Option<&str>,
+) -> Result<String, RunError> {
+    let content_type = explicit.map_or_else(
+        || {
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            match (kind, extension.as_str()) {
+                (MediaKind::Image, "png") => Some("image/png"),
+                (MediaKind::Image, "jpg" | "jpeg") => Some("image/jpeg"),
+                (MediaKind::Image, "webp") => Some("image/webp"),
+                (MediaKind::Image, "gif") => Some("image/gif"),
+                (MediaKind::Image, "avif") => Some("image/avif"),
+                (MediaKind::Video, "mp4") => Some("video/mp4"),
+                (MediaKind::Video, "webm") => Some("video/webm"),
+                (MediaKind::Video, "mov") => Some("video/quicktime"),
+                (MediaKind::Video, "mkv") => Some("video/x-matroska"),
+                (MediaKind::Video, "m4v") => Some("video/x-m4v"),
+                _ => None,
+            }
+            .map(String::from)
+        },
+        |value| Some(value.trim().to_ascii_lowercase()),
+    );
+    let Some(content_type) = content_type else {
+        return Err(invalid_media_input("content_type_required").into());
+    };
+    if !content_type.starts_with(&format!("{}/", kind.as_str())) {
+        return Err(invalid_media_input("content_type_kind_mismatch").into());
+    }
+    Ok(content_type)
+}
+
+fn wait_for_media(
+    session: &mut ConnectedSession,
+    draft_id: Uuid,
+    upload_id: Uuid,
+    timeout_seconds: u64,
+) -> Result<DraftMedia, RunError> {
+    let timeout = Duration::from_secs(timeout_seconds);
+    let started = Instant::now();
+    loop {
+        let elapsed = started.elapsed();
+        if elapsed >= timeout {
+            return Err(CommandFailure::new(
+                ExitStatus::WaitTimeout,
+                "media_wait_timeout",
+                MessageKey::MediaWaitTimedOut,
+            )
+            .with_suggested_action(MessageKey::SuggestedCheckMediaStatus)
+            .with_field_error("draft_id", draft_id.hyphenated().to_string())
+            .with_field_error("upload_id", upload_id.hyphenated().to_string())
+            .into());
+        }
+        thread::sleep(Duration::from_secs(2).min(timeout - elapsed));
+        let response = session.request(|client, token| {
+            SubmissionMediaApi::new(client).get(draft_id, upload_id, token)
+        })?;
+        response
+            .data
+            .validate(draft_id)
+            .map_err(media_contract_failure)?;
+        if response.data.id != upload_id {
+            return Err(media_contract_failure(MediaContractError::MismatchedIdentifier).into());
+        }
+        if response.data.is_terminal() {
+            return Ok(response.data);
+        }
+    }
+}
+
+fn media_contract_failure(error: MediaContractError) -> CommandFailure {
+    CommandFailure::new(
+        ExitStatus::Security,
+        "invalid_media_contract",
+        MessageKey::MediaContractInvalid,
+    )
+    .with_field_error("media", sanitize_terminal_text(&error.to_string()))
+}
+
+fn invalid_media_input(detail: &str) -> CommandFailure {
+    CommandFailure::new(
+        ExitStatus::Usage,
+        "invalid_media_input",
+        MessageKey::MediaInputInvalid,
+    )
+    .with_field_error("media", sanitize_terminal_text(detail))
+}
+
+#[derive(Debug, Serialize)]
+struct MediaDiscardView {
+    draft_id: Uuid,
+    upload_id: Uuid,
+    discarded: bool,
+}
+
+fn write_media_list(
+    format: OutputFormat,
+    locale: Locale,
+    list: &DraftMediaList,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new("media.list", list);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human if list.media.is_empty() => {
+            writeln!(output, "{}", locale.message(MessageKey::MediaListEmpty))?;
+        }
+        OutputFormat::Human => {
+            for media in &list.media {
+                writeln!(
+                    output,
+                    "{}  {}  {}  {}",
+                    media.id,
+                    sanitize_terminal_text(&media.kind),
+                    sanitize_terminal_text(&media.status),
+                    sanitize_terminal_text(&media.source_content_type),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_media_result(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    media: &DraftMedia,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new(command, media);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human => {
+            writeln!(
+                output,
+                "{}",
+                LocalizedMessage::new(MessageKey::MediaUploaded)
+                    .with("upload_id", media.id.hyphenated().to_string())
+                    .with("draft_id", media.draft_id.hyphenated().to_string())
+                    .with("status", sanitize_terminal_text(&media.status))
+                    .render(locale),
+            )?;
+            for artifact in &media.artifacts {
+                writeln!(
+                    output,
+                    "  {}: {} ({}×{})",
+                    sanitize_terminal_text(&artifact.role),
+                    sanitize_terminal_text(&artifact.content_type),
+                    artifact.width,
+                    artifact.height,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn confirm_media_discard(locale: Locale, upload_id: Uuid) -> Result<bool, RunError> {
+    let stdin = io::stdin();
+    if !stdin.is_terminal() {
+        return Err(CommandFailure::new(
+            ExitStatus::Usage,
+            "confirmation_required",
+            MessageKey::MediaConfirmationRequired,
+        )
+        .with_suggested_action(MessageKey::SuggestedUseMediaYes)
+        .into());
+    }
+    let upload_id = upload_id.hyphenated().to_string();
+    let prompt = LocalizedMessage::new(MessageKey::ConfirmMediaDiscard)
+        .with("upload_id", &upload_id)
+        .render(locale);
+    let mut stderr = io::stderr().lock();
+    write!(stderr, "{prompt}")?;
+    stderr.flush()?;
+    let mut response = String::new();
+    stdin.lock().read_line(&mut response)?;
+    Ok(response.trim().eq_ignore_ascii_case(&upload_id))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2091,6 +2499,15 @@ fn auth_api_failure(error: CliAuthError) -> CommandFailure {
 
 fn transport_failure(error: TransportError) -> CommandFailure {
     match error {
+        error @ (TransportError::InvalidUploadFile
+        | TransportError::EmptyUploadFile
+        | TransportError::UploadFileTooLarge
+        | TransportError::InvalidUploadContentType) => CommandFailure::new(
+            ExitStatus::Usage,
+            "invalid_media_input",
+            MessageKey::MediaInputInvalid,
+        )
+        .with_field_error("media", sanitize_terminal_text(&error.to_string())),
         TransportError::Http {
             status,
             problem,
@@ -2120,7 +2537,7 @@ fn transport_failure(error: TransportError) -> CommandFailure {
                     failure.with_field_error("retry_after", sanitize_terminal_text(&retry_after));
             }
             if failure.status == ExitStatus::Authentication {
-                failure.with_suggested_action(MessageKey::SuggestedApproveDevice)
+                failure.with_suggested_action(MessageKey::SuggestedLogin)
             } else {
                 failure.with_suggested_action(MessageKey::SuggestedRetry)
             }
@@ -2314,6 +2731,12 @@ const fn command_name(command: &Command) -> &'static str {
             DraftCommand::Status { .. } => "draft.status",
         },
         Command::Completion { .. } => "completion.generate",
+        Command::Media { command } => match command {
+            MediaCommand::Upload { .. } => "media.upload",
+            MediaCommand::List { .. } => "media.list",
+            MediaCommand::Status { .. } => "media.status",
+            MediaCommand::Discard { .. } => "media.discard",
+        },
         Command::Profile { command } => match command {
             ProfileCommand::Add { .. } => "profile.add",
             ProfileCommand::List => "profile.list",
@@ -2350,8 +2773,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AuthCommand, Cli, Command, DraftCommand, Locale, OutputFormat, resolve_locale, run,
-        run_profile,
+        AuthCommand, Cli, Command, DraftCommand, Locale, MediaCommand, MediaKindArgument,
+        OutputFormat, resolve_locale, run, run_profile,
     };
     use squid_cli_core::profile::{ProfilePaths, ProfileStore};
 
@@ -2499,6 +2922,52 @@ mod tests {
             .is_err()
         );
         assert!(Cli::try_parse_from(["squid", "draft", "show", "not-a-uuid"]).is_err());
+    }
+
+    #[test]
+    fn media_commands_parse_explicit_upload_policy() {
+        let draft_id = "64760b2f-b352-45e0-9ed1-67b9da901992";
+        let upload = Cli::try_parse_from([
+            "squid",
+            "media",
+            "upload",
+            draft_id,
+            "video",
+            "demo.mp4",
+            "--strip-audio",
+            "--wait",
+            "--timeout-seconds",
+            "60",
+        ]);
+        assert!(matches!(
+            upload,
+            Ok(Cli {
+                command: Command::Media {
+                    command: MediaCommand::Upload {
+                        kind: MediaKindArgument::Video,
+                        strip_audio: true,
+                        wait: true,
+                        timeout_seconds: 60,
+                        ..
+                    },
+                },
+                ..
+            })
+        ));
+        assert!(Cli::try_parse_from(["squid", "media", "list", draft_id]).is_ok());
+        assert!(
+            Cli::try_parse_from([
+                "squid",
+                "media",
+                "upload",
+                draft_id,
+                "image",
+                "shot.png",
+                "--timeout-seconds",
+                "0",
+            ])
+            .is_err()
+        );
     }
 
     #[test]

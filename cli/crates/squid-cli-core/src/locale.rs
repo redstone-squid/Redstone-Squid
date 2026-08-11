@@ -308,6 +308,52 @@ impl Locale {
             (Self::ZhCn, MessageKey::SuggestedCheckStatus) => {
                 "请使用此草稿 ID 运行 squid draft status"
             }
+            (Self::En, MessageKey::MediaListEmpty) => "this draft has no retained media",
+            (Self::ZhCn, MessageKey::MediaListEmpty) => "此草稿没有保留的媒体",
+            (Self::En, MessageKey::MediaUploaded) => {
+                "media {upload_id} for draft {draft_id} is {status}"
+            }
+            (Self::ZhCn, MessageKey::MediaUploaded) => {
+                "草稿 {draft_id} 的媒体 {upload_id} 状态为 {status}"
+            }
+            (Self::En, MessageKey::MediaDiscarded) => "discarded media {upload_id}",
+            (Self::ZhCn, MessageKey::MediaDiscarded) => "已丢弃媒体 {upload_id}",
+            (Self::En, MessageKey::MediaDiscardCancelled) => "kept media {upload_id}",
+            (Self::ZhCn, MessageKey::MediaDiscardCancelled) => "已保留媒体 {upload_id}",
+            (Self::En, MessageKey::ConfirmMediaDiscard) => {
+                "discard media {upload_id}? Type the upload ID to continue: "
+            }
+            (Self::ZhCn, MessageKey::ConfirmMediaDiscard) => {
+                "要丢弃媒体 {upload_id} 吗？请输入上传 ID 继续："
+            }
+            (Self::En, MessageKey::MediaConfirmationRequired) => {
+                "media discard requires interactive confirmation"
+            }
+            (Self::ZhCn, MessageKey::MediaConfirmationRequired) => "丢弃媒体需要交互式确认",
+            (Self::En, MessageKey::SuggestedUseMediaYes) => {
+                "review the upload ID, then pass --yes in non-interactive use"
+            }
+            (Self::ZhCn, MessageKey::SuggestedUseMediaYes) => {
+                "请核对上传 ID，然后在非交互环境中传入 --yes"
+            }
+            (Self::En, MessageKey::MediaInputInvalid) => {
+                "the media source path, type, or size is invalid"
+            }
+            (Self::ZhCn, MessageKey::MediaInputInvalid) => "媒体源路径、类型或大小无效",
+            (Self::En, MessageKey::MediaContractInvalid) => {
+                "the server returned invalid draft media data"
+            }
+            (Self::ZhCn, MessageKey::MediaContractInvalid) => "服务器返回了无效的草稿媒体数据",
+            (Self::En, MessageKey::MediaWaitTimedOut) => {
+                "media processing is still running after the local wait timeout"
+            }
+            (Self::ZhCn, MessageKey::MediaWaitTimedOut) => "本地等待超时后，媒体处理仍在运行",
+            (Self::En, MessageKey::SuggestedCheckMediaStatus) => {
+                "run squid media status with this draft and upload ID"
+            }
+            (Self::ZhCn, MessageKey::SuggestedCheckMediaStatus) => {
+                "请使用此草稿和上传 ID 运行 squid media status"
+            }
             (Self::En, MessageKey::FormBooleanPrompt) => "[y/n] ",
             (Self::ZhCn, MessageKey::FormBooleanPrompt) => "[是/否] ",
             (Self::En, MessageKey::FormRepeatablePrompt) => {
@@ -462,6 +508,17 @@ pub enum MessageKey {
     FormEditingCancelled,
     FinalizationWaitTimedOut,
     SuggestedCheckStatus,
+    MediaListEmpty,
+    MediaUploaded,
+    MediaDiscarded,
+    MediaDiscardCancelled,
+    ConfirmMediaDiscard,
+    MediaConfirmationRequired,
+    SuggestedUseMediaYes,
+    MediaInputInvalid,
+    MediaContractInvalid,
+    MediaWaitTimedOut,
+    SuggestedCheckMediaStatus,
     FormBooleanPrompt,
     FormRepeatablePrompt,
     TuiAppTitle,

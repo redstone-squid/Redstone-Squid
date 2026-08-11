@@ -110,6 +110,22 @@ Finalization may continue asynchronously. Without `--wait`, or after a local wai
 the durable result with `squid draft status DRAFT_ID`. Add global `--output json` for stable
 versioned envelopes; prompts remain on stderr so stdout stays machine-readable.
 
+Images and videos are streamed directly from a regular non-symlink file after the CLI reads the
+draft's current server limits. The stable upload UUID makes a lost-response retry safe; the source
+path and bytes are never copied into CLI state:
+
+```console
+squid media upload DRAFT_ID image screenshot.png --wait
+squid media upload DRAFT_ID video demonstration.mp4 --strip-audio
+squid media list DRAFT_ID
+squid media status DRAFT_ID UPLOAD_ID
+squid media discard DRAFT_ID UPLOAD_ID
+```
+
+Common extensions select the source content type. Use `--content-type image/...` or
+`--content-type video/...` for another supported format. Discard confirmation requires the exact
+upload ID unless `--yes` is supplied.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
