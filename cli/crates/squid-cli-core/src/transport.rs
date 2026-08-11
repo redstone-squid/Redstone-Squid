@@ -101,8 +101,17 @@ pub struct ApiRequest {
     method: ApiMethod,
     path: String,
     query: Vec<(String, String)>,
-    body: Option<Vec<u8>>,
+    body: Option<ApiRequestBody>,
     idempotency_key: Option<Uuid>,
+}
+
+enum ApiRequestBody {
+    Json(Vec<u8>),
+    File {
+        file: fs::File,
+        length: u64,
+        content_type: String,
+    },
 }
 
 impl ApiRequest {
@@ -147,7 +156,40 @@ impl ApiRequest {
         if body.len() > MAXIMUM_REQUEST_BYTES {
             return Err(TransportError::RequestTooLarge);
         }
-        self.body = Some(body);
+        self.body = Some(ApiRequestBody::Json(body));
+        Ok(self)
+    }
+
+    /// Open one regular non-symlink file as a bounded fixed-length request body.
+    pub fn with_file(
+        mut self,
+        path: &Path,
+        content_type: &str,
+        maximum_bytes: u64,
+    ) -> Result<Self, TransportError> {
+        if maximum_bytes == 0 || !is_request_media_type(content_type) {
+            return Err(TransportError::InvalidUploadContentType);
+        }
+        let metadata = fs::symlink_metadata(path).map_err(TransportError::Io)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(TransportError::InvalidUploadFile);
+        }
+        if metadata.len() == 0 {
+            return Err(TransportError::EmptyUploadFile);
+        }
+        if metadata.len() > maximum_bytes {
+            return Err(TransportError::UploadFileTooLarge);
+        }
+        let file = fs::File::open(path).map_err(TransportError::Io)?;
+        let opened_metadata = file.metadata().map_err(TransportError::Io)?;
+        if !opened_metadata.is_file() || opened_metadata.len() != metadata.len() {
+            return Err(TransportError::InvalidUploadFile);
+        }
+        self.body = Some(ApiRequestBody::File {
+            file,
+            length: metadata.len(),
+            content_type: String::from(content_type),
+        });
         Ok(self)
     }
 
@@ -161,11 +203,9 @@ impl ApiRequest {
     /// Validate the same-origin routing and body limits before persistence or sending.
     pub fn validate(&self) -> Result<(), TransportError> {
         validate_endpoint_path(&self.path)?;
-        if self
-            .body
-            .as_ref()
-            .is_some_and(|body| body.len() > MAXIMUM_REQUEST_BYTES)
-        {
+        if self.body.as_ref().is_some_and(
+            |body| matches!(body, ApiRequestBody::Json(bytes) if bytes.len() > MAXIMUM_REQUEST_BYTES),
+        ) {
             return Err(TransportError::RequestTooLarge);
         }
         Ok(())
@@ -179,15 +219,18 @@ impl std::fmt::Debug for ApiRequest {
             .field("method", &self.method)
             .field("path", &self.path)
             .field("query", &format_args!("[{} parameters]", self.query.len()))
-            .field(
-                "body",
-                &self
-                    .body
-                    .as_ref()
-                    .map(|body| format!("[{} bytes]", body.len())),
-            )
+            .field("body", &self.body.as_ref().map(ApiRequestBody::redacted))
             .field("idempotency_key", &self.idempotency_key)
             .finish()
+    }
+}
+
+impl ApiRequestBody {
+    fn redacted(&self) -> String {
+        match self {
+            Self::Json(body) => format!("[{} JSON bytes]", body.len()),
+            Self::File { length, .. } => format!("[{length} file bytes]"),
+        }
     }
 }
 
@@ -396,9 +439,22 @@ impl ApiClient {
         }
         let mut builder = self.client.request(request.method.as_reqwest(), url);
         if let Some(body) = request.body {
-            builder = builder
-                .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-                .body(body);
+            builder = match body {
+                ApiRequestBody::Json(body) => builder
+                    .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+                    .body(body),
+                ApiRequestBody::File {
+                    file,
+                    length,
+                    content_type,
+                } => builder
+                    .header(
+                        CONTENT_TYPE,
+                        HeaderValue::from_str(&content_type)
+                            .map_err(|_error| TransportError::InvalidUploadContentType)?,
+                    )
+                    .body(reqwest::blocking::Body::sized(file, length)),
+            };
         }
         if let Some(key) = request.idempotency_key {
             builder = builder.header(IDEMPOTENCY_HEADER, key.hyphenated().to_string());
@@ -529,6 +585,36 @@ fn is_json_content_type(value: &str) -> bool {
         || essence.eq_ignore_ascii_case("application/problem+json")
 }
 
+fn is_request_media_type(value: &str) -> bool {
+    let Some((top_level, subtype)) = value.split_once('/') else {
+        return false;
+    };
+    matches!(top_level, "image" | "video")
+        && !subtype.is_empty()
+        && !subtype.contains('/')
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'/'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
+        })
+}
+
 fn read_ca_certificate(path: &Path) -> Result<reqwest::Certificate, TransportError> {
     let metadata = fs::symlink_metadata(path).map_err(TransportError::Io)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -583,6 +669,14 @@ pub enum TransportError {
     InvalidBearerToken,
     #[error("JSON request exceeded eight MiB")]
     RequestTooLarge,
+    #[error("upload path must be a regular non-symlink file that does not change while opening")]
+    InvalidUploadFile,
+    #[error("upload file must not be empty")]
+    EmptyUploadFile,
+    #[error("upload file exceeds the server-advertised source-byte limit")]
+    UploadFileTooLarge,
+    #[error("upload content type must be a valid image/* or video/* media type")]
+    InvalidUploadContentType,
     #[error("custom CA certificate must be a regular non-symlink file")]
     InvalidCaCertificate,
     #[error("custom CA certificate exceeds one MiB")]
@@ -640,7 +734,7 @@ mod tests {
     use std::error::Error;
     use std::io;
     use std::io::{Read, Write};
-    use std::net::TcpListener;
+    use std::net::{TcpListener, TcpStream};
     use std::thread;
 
     use serde::Deserialize;
@@ -659,6 +753,38 @@ mod tests {
     #[derive(Debug, Deserialize, Eq, PartialEq)]
     struct ResponseBody {
         ok: bool,
+    }
+
+    fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+        let mut request = Vec::new();
+        let mut expected_length = None;
+        loop {
+            let mut chunk = [0_u8; 1024];
+            let length = stream.read(&mut chunk)?;
+            if length == 0 {
+                break;
+            }
+            request.extend_from_slice(&chunk[..length]);
+            if expected_length.is_none() {
+                if let Some(header_end) =
+                    request.windows(4).position(|window| window == b"\r\n\r\n")
+                {
+                    let headers = String::from_utf8_lossy(&request[..header_end]);
+                    let content_length = headers.lines().find_map(|line| {
+                        line.split_once(':').and_then(|(name, value)| {
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().ok())
+                                .flatten()
+                        })
+                    });
+                    expected_length = content_length.map(|length| header_end + 4 + length);
+                }
+            }
+            if expected_length.is_some_and(|length| request.len() >= length) {
+                break;
+            }
+        }
+        Ok(request)
     }
 
     #[test]
@@ -695,7 +821,49 @@ mod tests {
             .with_json(&serde_json::json!({"private": "do-not-print"}))?;
         let debug = format!("{request:?}");
         assert!(!debug.contains("do-not-print"));
-        assert!(debug.contains("[26 bytes]"));
+        assert!(debug.contains("[26 JSON bytes]"));
+        Ok(())
+    }
+
+    #[test]
+    fn streams_a_bounded_file_with_fixed_framing() -> Result<(), Box<dyn Error>> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = thread::spawn(move || -> io::Result<Vec<u8>> {
+            let (mut stream, _peer) = listener.accept()?;
+            let request = read_http_request(&mut stream)?;
+            stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}",
+            )?;
+            Ok(request)
+        });
+        let mut source = tempfile::NamedTempFile::new()?;
+        source.write_all(b"pixels")?;
+        source.flush()?;
+        let profile = Profile::new(ApiOrigin::parse(&format!("http://{address}"))?);
+        let client = ApiClient::for_profile(
+            &profile,
+            Locale::En,
+            ClientInstanceId::generate(),
+            &RendererCapabilities::prompt(false),
+        )?;
+        let response = client.send_json::<ResponseBody>(
+            ApiRequest::new(ApiMethod::Post, "/api/v1/submissions/media").with_file(
+                source.path(),
+                "image/png",
+                32,
+            )?,
+            None,
+        )?;
+        assert_eq!(response.data, ResponseBody { ok: true });
+        let request = server
+            .join()
+            .map_err(|_error| io::Error::other("test server panicked"))??;
+        let request_text = String::from_utf8_lossy(&request);
+        let lowercase = request_text.to_ascii_lowercase();
+        assert!(lowercase.contains("content-type: image/png"));
+        assert!(lowercase.contains("content-length: 6"));
+        assert!(request.ends_with(b"pixels"));
         Ok(())
     }
 
