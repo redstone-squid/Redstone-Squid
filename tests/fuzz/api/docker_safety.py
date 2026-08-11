@@ -3,7 +3,7 @@
 import re
 import secrets
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from tests.fuzz.api.environment import (
@@ -49,7 +49,16 @@ class ContainerExpectation:
     network_id: str
     container_port: int
     tmpfs_targets: frozenset[str] = frozenset()
+    tmpfs_options: Mapping[str, str] = field(default_factory=dict)
     require_published_port: bool = True
+    require_identity_environment: bool = True
+    forbidden_environment: frozenset[str] = frozenset()
+    healthcheck_test: tuple[str, ...] | None = None
+    memory_bytes: int = 536_870_912
+    nano_cpus: int = 500_000_000
+    pids_limit: int = 128
+    log_max_size: str = "10m"
+    log_max_file: str = "1"
 
     def __post_init__(self) -> None:
         if not self.container_id or not self.network_id:
@@ -60,6 +69,12 @@ class ContainerExpectation:
             raise ValueError(msg)
         if not 1 <= self.container_port <= 65535:
             msg = "Expected Docker container ports must be between 1 and 65535."
+            raise ValueError(msg)
+        if set(self.tmpfs_options) != self.tmpfs_targets:
+            msg = "Expected Docker tmpfs targets and options must describe the same destinations."
+            raise ValueError(msg)
+        if self.memory_bytes <= 0 or self.nano_cpus <= 0 or self.pids_limit <= 0:
+            msg = "Expected Docker resource limits must be positive."
             raise ValueError(msg)
 
 
@@ -98,11 +113,19 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
     if any(labels.get(key) != value for key, value in resource_labels(identity, expected.resource).items()):
         failures.append("labels")
     environment = _environment(config.get("Env"))
-    if environment.get(RUN_ID_ENV) != identity.run_id:
-        failures.append("run_id")
-    sentinel = environment.get(SENTINEL_ENV)
-    if sentinel is None or not secrets.compare_digest(sentinel, identity.sentinel):
-        failures.append("sentinel")
+    if expected.require_identity_environment:
+        if environment.get(RUN_ID_ENV) != identity.run_id:
+            failures.append("run_id")
+        sentinel = environment.get(SENTINEL_ENV)
+        if sentinel is None or not secrets.compare_digest(sentinel, identity.sentinel):
+            failures.append("sentinel")
+    if expected.forbidden_environment & environment.keys():
+        failures.append("forbidden_environment")
+    if expected.healthcheck_test is not None:
+        healthcheck = _mapping(config.get("Healthcheck"))
+        test = healthcheck.get("Test")
+        if not isinstance(test, list) or tuple(str(item) for item in test) != expected.healthcheck_test:
+            failures.append("healthcheck")
 
     network_settings = _mapping(attrs.get("NetworkSettings"))
     networks = _mapping(network_settings.get("Networks"))
@@ -112,11 +135,11 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
     _verify_ports(network_settings, expected, failures)
 
     host_config = _mapping(attrs.get("HostConfig"))
-    if not _positive_int(host_config.get("Memory")):
+    if host_config.get("Memory") != expected.memory_bytes:
         failures.append("memory_limit")
-    if not _positive_int(host_config.get("NanoCpus")):
+    if host_config.get("NanoCpus") != expected.nano_cpus:
         failures.append("cpu_limit")
-    if not _positive_int(host_config.get("PidsLimit")):
+    if host_config.get("PidsLimit") != expected.pids_limit:
         failures.append("pid_limit")
     if host_config.get("ReadonlyRootfs") is not True:
         failures.append("readonly_root")
@@ -136,8 +159,8 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
         failures.append("devices")
     if host_config.get("PidMode") not in {None, ""}:
         failures.append("pid_mode")
-    tmpfs = _mapping(host_config.get("Tmpfs"))
-    if set(tmpfs) != expected.tmpfs_targets:
+    tmpfs = _string_mapping(host_config.get("Tmpfs"))
+    if tmpfs != dict(expected.tmpfs_options):
         failures.append("tmpfs")
     mounts = attrs.get("Mounts")
     if not isinstance(mounts, list) or any(
@@ -147,7 +170,11 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
         failures.append("mounts")
     log_config = _mapping(host_config.get("LogConfig"))
     log_options = _string_mapping(log_config.get("Config"))
-    if log_config.get("Type") != "json-file" or not log_options.get("max-size") or not log_options.get("max-file"):
+    if (
+        log_config.get("Type") != "json-file"
+        or log_options.get("max-size") != expected.log_max_size
+        or log_options.get("max-file") != expected.log_max_file
+    ):
         failures.append("log_limit")
     _raise_failures("container", failures)
 
@@ -236,10 +263,6 @@ def _environment(value: object) -> dict[str, str]:
             if separator:
                 environment[key] = setting
     return environment
-
-
-def _positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def _empty_collection(value: object) -> bool:

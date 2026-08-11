@@ -43,3 +43,16 @@ def test_loopback_proxy_forwards_and_stops_deterministically() -> None:
 def test_loopback_proxy_refuses_unresolved_or_public_targets(target: str) -> None:
     with pytest.raises(ValueError, match="concrete target"):
         LoopbackTcpProxy(target, 8000)
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"idle_seconds": 0},
+        {"lifetime_seconds": 121},
+        {"max_bytes": 0},
+    ],
+)
+def test_loopback_proxy_requires_bounded_connection_limits(limits: dict[str, int]) -> None:
+    with pytest.raises(ValueError, match="bounded"):
+        LoopbackTcpProxy("127.0.0.1", 8000, **limits)

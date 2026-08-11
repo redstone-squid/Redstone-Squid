@@ -1,25 +1,9 @@
 """API-container child environment isolation tests."""
 
-from tests.fuzz.api.container_entrypoint import api_environment, fake_environment
-from tests.fuzz.api.fake_upstreams import CONTROL_NONCE_ENV, FAKE_PORT_ENV
+import pytest
 
-
-def test_fake_child_receives_no_api_database_or_host_credentials() -> None:
-    source = {
-        "PATH": "/app/.venv/bin",
-        "HOME": "/root",
-        "AWS_SECRET_ACCESS_KEY": "host-canary",
-        "SQUID_DATABASE_URL": "postgresql://app-secret",
-        "SQUID_API_SECRET": "api-secret",
-        CONTROL_NONCE_ENV: "control-secret",
-        FAKE_PORT_ENV: "8101",
-    }
-
-    assert fake_environment(source) == {
-        "PATH": "/app/.venv/bin",
-        CONTROL_NONCE_ENV: "control-secret",
-        FAKE_PORT_ENV: "8101",
-    }
+from tests.fuzz.api.container_entrypoint import api_environment, fake_proxy
+from tests.fuzz.api.environment import CONTROL_NONCE_ENV, FAKE_HOST_ENV, FAKE_PORT_ENV
 
 
 def test_api_child_receives_only_squid_and_python_runtime_settings() -> None:
@@ -30,6 +14,8 @@ def test_api_child_receives_only_squid_and_python_runtime_settings() -> None:
         "SQUID_DATABASE_URL": "postgresql://synthetic",
         "SQUID_API_SECRET": "synthetic-api",
         CONTROL_NONCE_ENV: "control-secret",
+        FAKE_HOST_ENV: "172.18.0.5",
+        FAKE_PORT_ENV: "8101",
     }
 
     assert api_environment(source) == {
@@ -37,3 +23,15 @@ def test_api_child_receives_only_squid_and_python_runtime_settings() -> None:
         "SQUID_DATABASE_URL": "postgresql://synthetic",
         "SQUID_API_SECRET": "synthetic-api",
     }
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ({FAKE_HOST_ENV: "172.18.0.5", FAKE_PORT_ENV: "not-a-port"}, "must be an integer"),
+        ({FAKE_HOST_ENV: "172.18.0.5", FAKE_PORT_ENV: "0"}, "between 1 and 65535"),
+    ],
+)
+def test_fake_proxy_refuses_invalid_ports(source: dict[str, str], message: str) -> None:
+    with pytest.raises(SystemExit, match=message):
+        fake_proxy(source)

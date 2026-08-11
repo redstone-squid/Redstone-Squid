@@ -10,6 +10,7 @@ from tests.fuzz.api.environment import (
     APPLICATION_PREFIX,
     CONTROL_NONCE_ENV,
     DATABASE_PREFIX,
+    FAKE_HOST_ENV,
     FAKE_PORT_ENV,
     RUN_ID_ENV,
     SENTINEL_ENV,
@@ -169,7 +170,7 @@ async def test_reset_attests_then_runs_every_hook_and_checks_the_baseline() -> N
 
     await running.reset()
 
-    assert events == ["attest", "quiesce", "database", "redis", "seed", "resume", "fakes", "checksum"]
+    assert events == ["attest", "quiesce", "database", "redis", "seed", "fakes", "checksum", "resume"]
 
 
 async def test_reset_stops_before_mutation_when_attestation_fails() -> None:
@@ -294,14 +295,12 @@ def test_synthetic_environment_is_allowlisted_and_uses_only_supplied_endpoints()
     assert environment["SQUID_API_PORT"] == "8123"
     assert environment["SQUID_API_SECRET"] == SyntheticSecrets.for_identity(run).api_secret
     assert run.sentinel not in environment["SQUID_API_SECRET"]
-    assert environment[CONTROL_NONCE_ENV] == run.sentinel
-    assert environment[RUN_ID_ENV] == run.run_id
-    assert environment[SENTINEL_ENV] == run.sentinel
+    assert CONTROL_NONCE_ENV not in environment
+    assert FAKE_HOST_ENV not in environment
+    assert FAKE_PORT_ENV not in environment
+    assert RUN_ID_ENV not in environment
+    assert SENTINEL_ENV not in environment
     assert set(environment) == {
-        CONTROL_NONCE_ENV,
-        FAKE_PORT_ENV,
-        RUN_ID_ENV,
-        SENTINEL_ENV,
         "PYTHONDONTWRITEBYTECODE",
         "PYTHONUTF8",
         "PYTHONUNBUFFERED",

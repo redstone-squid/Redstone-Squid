@@ -129,8 +129,11 @@ def network_attrs() -> dict[str, object]:
             "published_ports",
         ),
         (lambda attrs: attrs["HostConfig"].update(Memory=0), "memory_limit"),
+        (lambda attrs: attrs["HostConfig"].update(Memory=1_073_741_824), "memory_limit"),
         (lambda attrs: attrs["HostConfig"].update(NanoCpus=0), "cpu_limit"),
+        (lambda attrs: attrs["HostConfig"].update(NanoCpus=1_000_000_000), "cpu_limit"),
         (lambda attrs: attrs["HostConfig"].update(PidsLimit=0), "pid_limit"),
+        (lambda attrs: attrs["HostConfig"].update(PidsLimit=512), "pid_limit"),
         (lambda attrs: attrs["HostConfig"].update(ReadonlyRootfs=False), "readonly_root"),
         (lambda attrs: attrs["HostConfig"].update(Privileged=True), "privileged"),
         (lambda attrs: attrs["HostConfig"].update(CapAdd=["SYS_ADMIN"]), "cap_add"),
@@ -140,6 +143,12 @@ def network_attrs() -> dict[str, object]:
         (lambda attrs: attrs["HostConfig"].update(CapDrop=[]), "cap_drop"),
         (lambda attrs: attrs["HostConfig"].update(SecurityOpt=[]), "security_options"),
         (lambda attrs: attrs["HostConfig"].update(LogConfig={}), "log_limit"),
+        (
+            lambda attrs: attrs["HostConfig"].update(
+                LogConfig={"Type": "json-file", "Config": {"max-size": "100m", "max-file": "1"}}
+            ),
+            "log_limit",
+        ),
     ],
 )
 def test_container_attestation_requires_every_safety_fact(mutate, failure: str) -> None:
@@ -157,6 +166,77 @@ def test_guarded_container_cleanup_reinspects_and_removes_exact_resource() -> No
 
     assert handle.reloaded
     assert handle.removed
+
+
+def test_container_attestation_can_avoid_target_visible_identity_environment() -> None:
+    attrs = container_attrs()
+    config = attrs["Config"]
+    assert isinstance(config, dict)
+    config["Env"] = []
+    expected = ContainerExpectation(
+        container_id="container-id",
+        name="squid-fuzz-api",
+        resource="api",
+        network_id="network-id",
+        container_port=8000,
+        require_identity_environment=False,
+    )
+
+    verify_container(attrs, identity(), expected)
+
+
+def test_container_attestation_rejects_forbidden_target_visible_environment() -> None:
+    attrs = container_attrs()
+    expected = ContainerExpectation(
+        container_id="container-id",
+        name="squid-fuzz-api",
+        resource="api",
+        network_id="network-id",
+        container_port=8000,
+        require_identity_environment=False,
+        forbidden_environment=frozenset({"REDSTONE_SQUID_FUZZ_SENTINEL"}),
+    )
+
+    with pytest.raises(UnsafeEnvironmentError, match="forbidden_environment"):
+        verify_container(attrs, identity(), expected)
+
+
+def test_container_attestation_rejects_an_unexpected_healthcheck() -> None:
+    attrs = container_attrs()
+    config = attrs["Config"]
+    assert isinstance(config, dict)
+    config["Healthcheck"] = {"Test": ["CMD-SHELL", "curl -f http://localhost:8000/readyz"]}
+    expected = ContainerExpectation(
+        container_id="container-id",
+        name="squid-fuzz-api",
+        resource="api",
+        network_id="network-id",
+        container_port=8000,
+        healthcheck_test=("CMD-SHELL", "python -c 'pass'"),
+    )
+
+    with pytest.raises(UnsafeEnvironmentError, match="healthcheck"):
+        verify_container(attrs, identity(), expected)
+
+
+def test_container_attestation_rejects_changed_tmpfs_options() -> None:
+    attrs = container_attrs()
+    host_config = attrs["HostConfig"]
+    assert isinstance(host_config, dict)
+    host_config["Tmpfs"] = {"/tmp": "rw,noexec,nosuid,size=64m"}
+    attrs["Mounts"] = [{"Type": "tmpfs", "Destination": "/tmp"}]
+    expected = ContainerExpectation(
+        container_id="container-id",
+        name="squid-fuzz-api",
+        resource="api",
+        network_id="network-id",
+        container_port=8000,
+        tmpfs_targets=frozenset({"/tmp"}),
+        tmpfs_options={"/tmp": "rw,noexec,nosuid,size=32m"},
+    )
+
+    with pytest.raises(UnsafeEnvironmentError, match="tmpfs"):
+        verify_container(attrs, identity(), expected)
 
 
 def test_guarded_container_cleanup_leaks_a_resource_if_live_labels_changed() -> None:
