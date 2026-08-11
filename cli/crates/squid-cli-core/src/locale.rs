@@ -143,9 +143,9 @@ impl Locale {
             }
             (Self::ZhCn, MessageKey::ProfileStorageFailed) => "无法读取或写入本地配置文件",
             (Self::En, MessageKey::LocalSecurityStateFailed) => {
-                "local credentials or encrypted state could not be purged"
+                "local credentials or encrypted state could not be accessed"
             }
-            (Self::ZhCn, MessageKey::LocalSecurityStateFailed) => "无法清除本地凭据或加密状态",
+            (Self::ZhCn, MessageKey::LocalSecurityStateFailed) => "无法访问本地凭据或加密状态",
             (Self::En, MessageKey::ProfileSymlinkRejected) => {
                 "refused a symbolic link in the CLI state path"
             }
@@ -175,6 +175,62 @@ impl Locale {
             }
             (Self::ZhCn, MessageKey::OriginHttpsRequired) => {
                 "除字面量回环开发地址外，API 来源必须使用 HTTPS"
+            }
+            (Self::En, MessageKey::AuthApprovalInstructions) => {
+                "approve this CLI device in your browser:\n  {url}\n  user code: {code}\n  public-key fingerprint: {fingerprint}\nwaiting for approval…"
+            }
+            (Self::ZhCn, MessageKey::AuthApprovalInstructions) => {
+                "请在浏览器中批准此 CLI 设备：\n  {url}\n  用户代码：{code}\n  公钥指纹：{fingerprint}\n正在等待批准…"
+            }
+            (Self::En, MessageKey::AuthLoginSucceeded) => {
+                "signed in device {device_id}; session expires {expires_at}"
+            }
+            (Self::ZhCn, MessageKey::AuthLoginSucceeded) => {
+                "设备 {device_id} 已登录；会话到期时间为 {expires_at}"
+            }
+            (Self::En, MessageKey::AuthSessionRenewed) => {
+                "renewed device {device_id}; session expires {expires_at}"
+            }
+            (Self::ZhCn, MessageKey::AuthSessionRenewed) => {
+                "设备 {device_id} 的会话已续期；到期时间为 {expires_at}"
+            }
+            (Self::En, MessageKey::AuthLoggedOut) => "signed out this CLI session",
+            (Self::ZhCn, MessageKey::AuthLoggedOut) => "已退出此 CLI 会话",
+            (Self::En, MessageKey::AuthAlreadyLoggedOut) => "this profile is already signed out",
+            (Self::ZhCn, MessageKey::AuthAlreadyLoggedOut) => "此配置已处于退出状态",
+            (Self::En, MessageKey::AuthStatusSignedIn) => {
+                "local session for device {device_id} expires {expires_at}"
+            }
+            (Self::ZhCn, MessageKey::AuthStatusSignedIn) => {
+                "设备 {device_id} 的本地会话到期时间为 {expires_at}"
+            }
+            (Self::En, MessageKey::AuthStatusSignedOut) => "no local CLI session is available",
+            (Self::ZhCn, MessageKey::AuthStatusSignedOut) => "没有可用的本地 CLI 会话",
+            (Self::En, MessageKey::AuthFallbackWarning) => {
+                "warning: credentials are stored in owner-readable files because native credential storage was unavailable"
+            }
+            (Self::ZhCn, MessageKey::AuthFallbackWarning) => {
+                "警告：由于系统凭据存储不可用，凭据保存在仅所有者可读的文件中"
+            }
+            (Self::En, MessageKey::AuthWaitTimedOut) => {
+                "browser approval did not complete before the local wait timeout"
+            }
+            (Self::ZhCn, MessageKey::AuthWaitTimedOut) => "浏览器批准未在本地等待期限内完成",
+            (Self::En, MessageKey::AuthStateFailed) => {
+                "CLI authorization state could not be read or written"
+            }
+            (Self::ZhCn, MessageKey::AuthStateFailed) => "无法读取或写入 CLI 授权状态",
+            (Self::En, MessageKey::ApiRequestFailed) => "the Squid API request failed",
+            (Self::ZhCn, MessageKey::ApiRequestFailed) => "Squid API 请求失败",
+            (Self::En, MessageKey::SuggestedRetry) => {
+                "check the selected profile and network, then retry"
+            }
+            (Self::ZhCn, MessageKey::SuggestedRetry) => "请检查所选配置和网络，然后重试",
+            (Self::En, MessageKey::SuggestedApproveDevice) => {
+                "start login again and approve the displayed device before it expires"
+            }
+            (Self::ZhCn, MessageKey::SuggestedApproveDevice) => {
+                "请重新开始登录，并在显示的设备过期前批准它"
             }
             (Self::En, MessageKey::FormBooleanPrompt) => "[y/n] ",
             (Self::ZhCn, MessageKey::FormBooleanPrompt) => "[是/否] ",
@@ -293,6 +349,19 @@ pub enum MessageKey {
     OriginHostMissing,
     OriginPortMissing,
     OriginHttpsRequired,
+    AuthApprovalInstructions,
+    AuthLoginSucceeded,
+    AuthSessionRenewed,
+    AuthLoggedOut,
+    AuthAlreadyLoggedOut,
+    AuthStatusSignedIn,
+    AuthStatusSignedOut,
+    AuthFallbackWarning,
+    AuthWaitTimedOut,
+    AuthStateFailed,
+    ApiRequestFailed,
+    SuggestedRetry,
+    SuggestedApproveDevice,
     FormBooleanPrompt,
     TuiAppTitle,
     TuiHelpTitle,

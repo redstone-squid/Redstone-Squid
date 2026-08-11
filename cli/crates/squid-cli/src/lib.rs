@@ -6,13 +6,23 @@ use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::str::FromStr;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use serde::Serialize;
-use squid_cli_core::credential::{CredentialBackend, CredentialError, CredentialVault};
+use squid_cli_core::auth::{
+    AuthState, AuthStateError, CliAuthApi, CliAuthError, IssuedCliSession, load_auth_state,
+    load_or_create_auth_state, save_auth_state,
+};
+use squid_cli_core::credential::{
+    CredentialBackend, CredentialError, CredentialKind, CredentialVault, DeviceIdentity,
+    load_or_create_device_identity, load_or_create_draft_cache_key,
+};
 use squid_cli_core::encrypted_state::{EncryptedStateError, EncryptedStateStore};
 use squid_cli_core::exit::ExitStatus;
+use squid_cli_core::form::RendererCapabilities;
 use squid_cli_core::locale::{Locale, LocalizedMessage, MessageKey, format_message};
 use squid_cli_core::origin::{ApiOrigin, OriginError};
 use squid_cli_core::output::{FailureEnvelope, SuccessEnvelope, write_json};
@@ -20,7 +30,9 @@ use squid_cli_core::profile::{
     EditorPreference, Profile, ProfileConfig, ProfileError, ProfileName, ProfileStore,
 };
 use squid_cli_core::terminal::sanitize_terminal_text;
+use squid_cli_core::transport::{ApiClient, TransportError, status_code_class};
 use squid_cli_core::version::VersionInfo;
+use uuid::Uuid;
 
 /// Parsed top-level command line.
 #[derive(Debug, Parser)]
@@ -46,6 +58,11 @@ enum OutputFormat {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Sign in, sign out, and inspect this profile's CLI device session.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
     /// Generate a shell completion script.
     Completion {
         #[command(subcommand)]
@@ -58,6 +75,30 @@ enum Command {
     },
     /// Report CLI and submission-protocol compatibility.
     Version,
+}
+
+#[derive(Debug, Subcommand)]
+enum AuthCommand {
+    /// Enroll this device in a browser, or renew its existing device session.
+    Login {
+        /// Human-readable label displayed before browser approval.
+        #[arg(long, default_value = "Squid CLI")]
+        label: String,
+        /// Permit owner-readable credential files when native storage is unavailable.
+        #[arg(long)]
+        allow_file_fallback: bool,
+        /// Maximum local wait for browser approval.
+        #[arg(long, default_value_t = 600, value_parser = clap::value_parser!(u64).range(1..=900))]
+        timeout_seconds: u64,
+    },
+    /// Revoke the current server session and clear its local bearer.
+    Logout {
+        /// Clear only local state when the server cannot or should not be contacted.
+        #[arg(long)]
+        local_only: bool,
+    },
+    /// Show whether encrypted local state contains a device and session.
+    Status,
 }
 
 #[derive(Debug, Subcommand)]
@@ -206,6 +247,10 @@ pub fn main_entry() -> ExitCode {
 
 fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError> {
     match cli.command {
+        Command::Auth { command } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            run_auth(command, cli.output, locale, &store, output)
+        }
         Command::Completion {
             command: CompletionCommand::Generate { shell },
         } => {
@@ -226,6 +271,425 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
         }
         Command::Version => write_version(cli.output, locale, output).map_err(RunError::Io),
     }
+}
+
+fn run_auth(
+    command: AuthCommand,
+    format: OutputFormat,
+    locale: Locale,
+    store: &ProfileStore,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let config = store.load().map_err(|error| profile_failure(error, None))?;
+    let (profile_name, profile) = config
+        .resolve(None)
+        .map_err(|error| profile_failure(error, None))?;
+    let profile_name = String::from(profile_name);
+    let profile = profile.clone();
+    let vault = CredentialVault::system(store.paths(), &profile.origin);
+
+    match command {
+        AuthCommand::Login {
+            label,
+            allow_file_fallback,
+            timeout_seconds,
+        } => {
+            let (identity, _created, _backend) =
+                load_or_create_device_identity(&vault, allow_file_fallback)
+                    .map_err(credential_failure)?;
+            let (state_key, _created, backend) =
+                load_or_create_draft_cache_key(&vault, allow_file_fallback)
+                    .map_err(credential_failure)?;
+            let state_store = EncryptedStateStore::new(store.paths(), &profile.origin);
+            let mut state =
+                load_or_create_auth_state(&state_store, &state_key).map_err(auth_state_failure)?;
+            let client = ApiClient::for_profile(
+                &profile,
+                locale,
+                state.client_instance_id(),
+                &RendererCapabilities::prompt(false),
+            )
+            .map_err(transport_failure)?;
+            let api = CliAuthApi::new(&client);
+
+            let (issued, renewed) = if let Some(device_id) = state.device_id() {
+                match renew_cli_session(&api, &identity, device_id) {
+                    Ok(issued) => (issued, true),
+                    Err(error) if is_device_unavailable(&error) => {
+                        state.clear_device();
+                        save_auth_state(&state_store, &state_key, &state)
+                            .map_err(auth_state_failure)?;
+                        (
+                            enroll_cli_device(
+                                &api,
+                                &identity,
+                                &state,
+                                &label,
+                                timeout_seconds,
+                                format,
+                                locale,
+                                output,
+                            )?,
+                            false,
+                        )
+                    }
+                    Err(error) => return Err(auth_api_failure(error).into()),
+                }
+            } else {
+                (
+                    enroll_cli_device(
+                        &api,
+                        &identity,
+                        &state,
+                        &label,
+                        timeout_seconds,
+                        format,
+                        locale,
+                        output,
+                    )?,
+                    false,
+                )
+            };
+            let fingerprint = issued.device.public_key_fingerprint.clone();
+            state.set_session(issued);
+            save_auth_state(&state_store, &state_key, &state).map_err(auth_state_failure)?;
+            let view = AuthStatusView::from_state(
+                &profile_name,
+                profile.origin.as_str(),
+                backend,
+                &state,
+                Some(fingerprint),
+            );
+            let key = if renewed {
+                MessageKey::AuthSessionRenewed
+            } else {
+                MessageKey::AuthLoginSucceeded
+            };
+            let message = LocalizedMessage::new(key)
+                .with("device_id", view.device_id.as_deref().unwrap_or("unknown"))
+                .with(
+                    "expires_at",
+                    view.expires_at.as_deref().unwrap_or("unknown"),
+                );
+            write_auth_result("auth.login", format, locale, message, &view, output)?;
+            write_credential_warning(format, locale, backend, output)?;
+            Ok(())
+        }
+        AuthCommand::Logout { local_only } => {
+            let backend = vault.backend().map_err(credential_failure)?;
+            let Some(state_key) = vault
+                .get(CredentialKind::DraftCacheKey)
+                .map_err(credential_failure)?
+            else {
+                return write_auth_signed_out(
+                    "auth.logout",
+                    format,
+                    locale,
+                    &profile_name,
+                    profile.origin.as_str(),
+                    backend,
+                    MessageKey::AuthAlreadyLoggedOut,
+                    output,
+                );
+            };
+            let state_store = EncryptedStateStore::new(store.paths(), &profile.origin);
+            let Some(mut state) =
+                load_auth_state(&state_store, &state_key).map_err(auth_state_failure)?
+            else {
+                return write_auth_signed_out(
+                    "auth.logout",
+                    format,
+                    locale,
+                    &profile_name,
+                    profile.origin.as_str(),
+                    backend,
+                    MessageKey::AuthAlreadyLoggedOut,
+                    output,
+                );
+            };
+            let Some(token) = state.session_token() else {
+                return write_auth_signed_out(
+                    "auth.logout",
+                    format,
+                    locale,
+                    &profile_name,
+                    profile.origin.as_str(),
+                    backend,
+                    MessageKey::AuthAlreadyLoggedOut,
+                    output,
+                );
+            };
+            if !local_only {
+                let client = ApiClient::for_profile(
+                    &profile,
+                    locale,
+                    state.client_instance_id(),
+                    &RendererCapabilities::prompt(false),
+                )
+                .map_err(transport_failure)?;
+                let idempotency_key = Uuid::new_v4();
+                if let Err(error) = retry_cli_network_once(|| {
+                    CliAuthApi::new(&client).revoke_current_session(&token, idempotency_key)
+                }) {
+                    if !is_invalid_session(&error) {
+                        return Err(auth_api_failure(error).into());
+                    }
+                }
+            }
+            state.clear_session();
+            save_auth_state(&state_store, &state_key, &state).map_err(auth_state_failure)?;
+            let view = AuthStatusView::from_state(
+                &profile_name,
+                profile.origin.as_str(),
+                backend,
+                &state,
+                None,
+            );
+            write_auth_result(
+                "auth.logout",
+                format,
+                locale,
+                LocalizedMessage::new(MessageKey::AuthLoggedOut),
+                &view,
+                output,
+            )?;
+            write_credential_warning(format, locale, backend, output)?;
+            Ok(())
+        }
+        AuthCommand::Status => {
+            let backend = vault.backend().map_err(credential_failure)?;
+            let state_key = vault
+                .get(CredentialKind::DraftCacheKey)
+                .map_err(credential_failure)?;
+            let state_store = EncryptedStateStore::new(store.paths(), &profile.origin);
+            let state = state_key
+                .as_ref()
+                .map(|key| load_auth_state(&state_store, key))
+                .transpose()
+                .map_err(auth_state_failure)?
+                .flatten();
+            let view = state.as_ref().map_or_else(
+                || AuthStatusView::signed_out(&profile_name, profile.origin.as_str(), backend),
+                |state| {
+                    AuthStatusView::from_state(
+                        &profile_name,
+                        profile.origin.as_str(),
+                        backend,
+                        state,
+                        None,
+                    )
+                },
+            );
+            let message = if view.signed_in {
+                LocalizedMessage::new(MessageKey::AuthStatusSignedIn)
+                    .with("device_id", view.device_id.as_deref().unwrap_or("unknown"))
+                    .with(
+                        "expires_at",
+                        view.expires_at.as_deref().unwrap_or("unknown"),
+                    )
+            } else {
+                LocalizedMessage::new(MessageKey::AuthStatusSignedOut)
+            };
+            write_auth_result("auth.status", format, locale, message, &view, output)?;
+            write_credential_warning(format, locale, backend, output)?;
+            Ok(())
+        }
+    }
+}
+
+fn renew_cli_session(
+    api: &CliAuthApi<'_>,
+    identity: &DeviceIdentity,
+    device_id: Uuid,
+) -> Result<IssuedCliSession, CliAuthError> {
+    let challenge_key = Uuid::new_v4();
+    let challenge =
+        retry_cli_network_once(|| api.start_session_challenge(device_id, challenge_key))?.data;
+    let exchange_key = Uuid::new_v4();
+    Ok(retry_cli_network_once(|| {
+        api.exchange_session_challenge(identity, &challenge, exchange_key)
+    })?
+    .data)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn enroll_cli_device(
+    api: &CliAuthApi<'_>,
+    identity: &DeviceIdentity,
+    state: &AuthState,
+    label: &str,
+    timeout_seconds: u64,
+    format: OutputFormat,
+    locale: Locale,
+    output: &mut impl Write,
+) -> Result<IssuedCliSession, RunError> {
+    let enrollment_key = Uuid::new_v4();
+    let enrollment = retry_cli_network_once(|| {
+        api.start_enrollment(identity, state.client_instance_id(), label, enrollment_key)
+    })
+    .map_err(auth_api_failure)?
+    .data;
+    let instructions = LocalizedMessage::new(MessageKey::AuthApprovalInstructions)
+        .with(
+            "url",
+            sanitize_terminal_text(&enrollment.verification_uri_complete),
+        )
+        .with("code", sanitize_terminal_text(&enrollment.user_code))
+        .with("fingerprint", identity.public_key_fingerprint())
+        .render(locale);
+    match format {
+        OutputFormat::Human => {
+            writeln!(output, "{instructions}")?;
+            output.flush()?;
+        }
+        OutputFormat::Json => {
+            let mut stderr = io::stderr().lock();
+            writeln!(stderr, "{instructions}")?;
+            stderr.flush()?;
+        }
+    }
+
+    let timeout = Duration::from_secs(timeout_seconds);
+    let started = Instant::now();
+    let polling_interval = Duration::from_secs(enrollment.polling_interval_seconds.clamp(1, 30));
+    loop {
+        let idempotency_key = Uuid::new_v4();
+        match retry_cli_network_once(|| {
+            api.exchange_enrollment(identity, &enrollment, idempotency_key)
+        }) {
+            Ok(response) => return Ok(response.data),
+            Err(error) if is_authorization_pending(&error) => {
+                let elapsed = started.elapsed();
+                if elapsed >= timeout {
+                    return Err(CommandFailure::new(
+                        ExitStatus::WaitTimeout,
+                        "cli_authorization_timeout",
+                        MessageKey::AuthWaitTimedOut,
+                    )
+                    .with_suggested_action(MessageKey::SuggestedApproveDevice)
+                    .into());
+                }
+                thread::sleep(polling_interval.min(timeout - elapsed));
+            }
+            Err(error) => return Err(auth_api_failure(error).into()),
+        }
+    }
+}
+
+fn retry_cli_network_once<T>(
+    mut operation: impl FnMut() -> Result<T, CliAuthError>,
+) -> Result<T, CliAuthError> {
+    match operation() {
+        Err(error) if is_network_failure(&error) => operation(),
+        result => result,
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AuthStatusView {
+    profile: String,
+    origin: String,
+    credential_backend: &'static str,
+    device_enrolled: bool,
+    signed_in: bool,
+    device_id: Option<String>,
+    session_id: Option<String>,
+    expires_at: Option<String>,
+    public_key_fingerprint: Option<String>,
+}
+
+impl AuthStatusView {
+    fn signed_out(profile: &str, origin: &str, credential_backend: CredentialBackend) -> Self {
+        Self {
+            profile: String::from(profile),
+            origin: String::from(origin),
+            credential_backend: credential_backend_name(credential_backend),
+            device_enrolled: false,
+            signed_in: false,
+            device_id: None,
+            session_id: None,
+            expires_at: None,
+            public_key_fingerprint: None,
+        }
+    }
+
+    fn from_state(
+        profile: &str,
+        origin: &str,
+        credential_backend: CredentialBackend,
+        state: &AuthState,
+        public_key_fingerprint: Option<String>,
+    ) -> Self {
+        Self {
+            profile: String::from(profile),
+            origin: String::from(origin),
+            credential_backend: credential_backend_name(credential_backend),
+            device_enrolled: state.device_id().is_some(),
+            signed_in: state.session_id().is_some(),
+            device_id: state
+                .device_id()
+                .map(|value| value.hyphenated().to_string()),
+            session_id: state
+                .session_id()
+                .map(|value| value.hyphenated().to_string()),
+            expires_at: state.expires_at().map(String::from),
+            public_key_fingerprint,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_auth_signed_out(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    profile: &str,
+    origin: &str,
+    backend: CredentialBackend,
+    message: MessageKey,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let view = AuthStatusView::signed_out(profile, origin, backend);
+    write_auth_result(
+        command,
+        format,
+        locale,
+        LocalizedMessage::new(message),
+        &view,
+        output,
+    )?;
+    write_credential_warning(format, locale, backend, output)?;
+    Ok(())
+}
+
+fn write_auth_result(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    message: LocalizedMessage,
+    view: &AuthStatusView,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    match format {
+        OutputFormat::Human => writeln!(output, "{}", message.render(locale)),
+        OutputFormat::Json => write_json(&SuccessEnvelope::new(command, view), output),
+    }
+}
+
+fn write_credential_warning(
+    format: OutputFormat,
+    locale: Locale,
+    backend: CredentialBackend,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    if format == OutputFormat::Human && backend == CredentialBackend::OwnerFile {
+        writeln!(
+            output,
+            "{}",
+            locale.message(MessageKey::AuthFallbackWarning)
+        )?;
+    }
+    Ok(())
 }
 
 fn run_profile(
@@ -683,6 +1147,124 @@ fn credential_failure(error: CredentialError) -> CommandFailure {
     .with_field_error("credentials", sanitize_terminal_text(&error.to_string()))
 }
 
+fn auth_state_failure(error: AuthStateError) -> CommandFailure {
+    match error {
+        AuthStateError::Encrypted(error) => encrypted_state_failure(error),
+        error @ (AuthStateError::UnsupportedSchema(_) | AuthStateError::InvalidState) => {
+            CommandFailure::new(
+                ExitStatus::Security,
+                "invalid_cli_auth_state",
+                MessageKey::AuthStateFailed,
+            )
+            .with_suggested_action(MessageKey::SuggestedCheckFilesystem)
+            .with_field_error("auth_state", sanitize_terminal_text(&error.to_string()))
+        }
+    }
+}
+
+fn auth_api_failure(error: CliAuthError) -> CommandFailure {
+    match error {
+        CliAuthError::Transport(error) => transport_failure(error),
+        CliAuthError::ProofValueTooLong => CommandFailure::new(
+            ExitStatus::Security,
+            "invalid_cli_auth_proof",
+            MessageKey::ApiRequestFailed,
+        )
+        .with_field_error("device_proof", "proof value exceeded the protocol limit"),
+    }
+}
+
+fn transport_failure(error: TransportError) -> CommandFailure {
+    match error {
+        TransportError::Http {
+            status,
+            problem,
+            request_id,
+            retry_after,
+        } => {
+            let mut failure = CommandFailure::new(
+                status_code_class(status),
+                "api_request_failed",
+                MessageKey::ApiRequestFailed,
+            );
+            if let Some(problem) = problem {
+                failure = failure
+                    .with_field_error("server", sanitize_terminal_text(&problem.message))
+                    .with_field_error("api_code", sanitize_terminal_text(&problem.code));
+                if let Some(code) = problem.application_code("cli_auth_code") {
+                    failure =
+                        failure.with_field_error("cli_auth_code", sanitize_terminal_text(code));
+                }
+            }
+            if let Some(request_id) = request_id {
+                failure =
+                    failure.with_field_error("request_id", sanitize_terminal_text(&request_id));
+            }
+            if let Some(retry_after) = retry_after {
+                failure =
+                    failure.with_field_error("retry_after", sanitize_terminal_text(&retry_after));
+            }
+            if failure.status == ExitStatus::Authentication {
+                failure.with_suggested_action(MessageKey::SuggestedApproveDevice)
+            } else {
+                failure.with_suggested_action(MessageKey::SuggestedRetry)
+            }
+        }
+        error => {
+            let status = if matches!(
+                &error,
+                TransportError::CrossOriginResponse
+                    | TransportError::InvalidBearerToken
+                    | TransportError::InvalidContentType
+            ) {
+                ExitStatus::Security
+            } else if matches!(
+                &error,
+                TransportError::Request(_)
+                    | TransportError::BuildClient(_)
+                    | TransportError::ResponseTooLarge
+            ) {
+                ExitStatus::Unavailable
+            } else {
+                ExitStatus::LocalState
+            };
+            CommandFailure::new(status, "api_transport_failed", MessageKey::ApiRequestFailed)
+                .with_suggested_action(MessageKey::SuggestedRetry)
+                .with_field_error("transport", sanitize_terminal_text(&error.to_string()))
+        }
+    }
+}
+
+fn cli_auth_code(error: &CliAuthError) -> Option<&str> {
+    match error {
+        CliAuthError::Transport(TransportError::Http {
+            problem: Some(problem),
+            ..
+        }) => problem.application_code("cli_auth_code"),
+        _ => None,
+    }
+}
+
+fn is_authorization_pending(error: &CliAuthError) -> bool {
+    cli_auth_code(error) == Some("cli_authorization_pending")
+}
+
+fn is_device_unavailable(error: &CliAuthError) -> bool {
+    cli_auth_code(error) == Some("cli_device_unavailable")
+}
+
+fn is_invalid_session(error: &CliAuthError) -> bool {
+    cli_auth_code(error) == Some("invalid_cli_session")
+        || matches!(
+            error,
+            CliAuthError::Transport(TransportError::Http { status: 401, .. })
+        )
+}
+
+fn is_network_failure(error: &CliAuthError) -> bool {
+    matches!(error, CliAuthError::Transport(TransportError::Request(_)))
+}
+
 fn encrypted_state_failure(error: EncryptedStateError) -> CommandFailure {
     let status = if matches!(
         error,
@@ -800,6 +1382,11 @@ fn resolve_locale(explicit: Option<&str>) -> Result<Locale, CommandFailure> {
 
 const fn command_name(command: &Command) -> &'static str {
     match command {
+        Command::Auth { command } => match command {
+            AuthCommand::Login { .. } => "auth.login",
+            AuthCommand::Logout { .. } => "auth.logout",
+            AuthCommand::Status => "auth.status",
+        },
         Command::Completion { .. } => "completion.generate",
         Command::Profile { command } => match command {
             ProfileCommand::Add { .. } => "profile.add",
@@ -835,7 +1422,9 @@ mod tests {
     use clap::Parser;
     use tempfile::tempdir;
 
-    use super::{Cli, Command, Locale, OutputFormat, resolve_locale, run, run_profile};
+    use super::{
+        AuthCommand, Cli, Command, Locale, OutputFormat, resolve_locale, run, run_profile,
+    };
     use squid_cli_core::profile::{ProfilePaths, ProfileStore};
 
     #[test]
@@ -902,6 +1491,36 @@ mod tests {
             let result = run(cli, Locale::En, &mut Vec::new());
             assert!(result.is_err());
         }
+    }
+
+    #[test]
+    fn auth_commands_parse_explicit_security_choices() {
+        let login = Cli::try_parse_from([
+            "squid",
+            "auth",
+            "login",
+            "--label",
+            "Alice workstation",
+            "--allow-file-fallback",
+            "--timeout-seconds",
+            "30",
+        ]);
+        assert!(matches!(
+            login,
+            Ok(Cli {
+                command: Command::Auth {
+                    command: AuthCommand::Login {
+                        allow_file_fallback: true,
+                        timeout_seconds: 30,
+                        ..
+                    },
+                },
+                ..
+            })
+        ));
+        assert!(Cli::try_parse_from(["squid", "auth", "login", "--timeout-seconds", "0"]).is_err());
+        assert!(Cli::try_parse_from(["squid", "auth", "logout", "--local-only"]).is_ok());
+        assert!(Cli::try_parse_from(["squid", "auth", "status"]).is_ok());
     }
 
     #[test]

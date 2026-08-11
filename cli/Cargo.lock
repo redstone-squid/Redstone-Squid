@@ -2456,6 +2456,7 @@ dependencies = [
  "serde_json",
  "squid-cli-core",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

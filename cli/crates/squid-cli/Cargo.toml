@@ -17,6 +17,7 @@ clap_complete.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 squid-cli-core.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

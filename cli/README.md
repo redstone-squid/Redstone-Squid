@@ -38,6 +38,25 @@ inherit ambient proxy settings, require TLS 1.2 or newer outside the literal-loo
 exception, cap JSON requests and responses, and send protocol, renderer-capability, locale, and
 instance headers on every request.
 
+## Authentication
+
+The CLI holds an Ed25519 device key and uses browser approval to bind that public key to an account.
+The browser receives only the short user code; the device code, signing key, and session token stay
+in the CLI. Confirm the public-key fingerprint shown in both places before approving:
+
+```console
+squid auth login --label "Alice's workstation"
+squid auth status
+squid auth logout
+```
+
+After first approval, `auth login` renews a short-lived session by signing a one-time backend nonce.
+It does not repeat browser approval unless the server device was revoked. In a headless environment,
+`--allow-file-fallback` explicitly permits the owner-readable credential fallback and every human
+connected command keeps displaying a warning while that fallback is selected. `auth logout` revokes
+the current server session before clearing its encrypted local bearer; `--local-only` is available
+for deliberate offline recovery.
+
 Mutating operations can be written to the encrypted recovery queue before network I/O. Retries
 reuse the original idempotency key, serialize concurrent queue updates, retain private JSON only in
 encrypted state, and stop automatically on permanent failures or after a bounded backoff budget.
