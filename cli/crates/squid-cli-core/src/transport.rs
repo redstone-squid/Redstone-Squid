@@ -21,6 +21,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::credential::SecretBytes;
+use crate::form::RendererCapabilities;
 use crate::locale::Locale;
 use crate::origin::ApiOrigin;
 use crate::profile::{Profile, ProfileError};
@@ -203,12 +204,14 @@ impl ApiClient {
         profile: &Profile,
         locale: Locale,
         instance: ClientInstanceId,
+        renderer_capabilities: &RendererCapabilities,
     ) -> Result<Self, TransportError> {
         profile.validate().map_err(TransportError::InvalidProfile)?;
         Self::new(
             profile.origin.clone(),
             locale,
             instance,
+            renderer_capabilities,
             profile.ca_certificate.as_deref(),
         )
     }
@@ -217,6 +220,7 @@ impl ApiClient {
         origin: ApiOrigin,
         locale: Locale,
         instance: ClientInstanceId,
+        renderer_capabilities: &RendererCapabilities,
         custom_ca: Option<&Path>,
     ) -> Result<Self, TransportError> {
         let version = VersionInfo::current();
@@ -238,7 +242,8 @@ impl ApiClient {
         );
         default_headers.insert(
             CAPABILITIES_HEADER,
-            HeaderValue::from_static("cli.prompt.v1,cli.handoff.v1"),
+            HeaderValue::from_str(&renderer_capabilities.header_value())
+                .map_err(|_error| TransportError::InvalidHeader)?,
         );
         default_headers.insert(
             INSTANCE_HEADER,
@@ -498,6 +503,7 @@ mod tests {
         validate_endpoint_path,
     };
     use crate::exit::ExitStatus;
+    use crate::form::RendererCapabilities;
     use crate::locale::Locale;
     use crate::origin::ApiOrigin;
     use crate::profile::Profile;
@@ -529,7 +535,12 @@ mod tests {
         let mut profile = Profile::new(ApiOrigin::parse("https://example.com")?);
         profile.trusted = false;
         assert!(matches!(
-            ApiClient::for_profile(&profile, Locale::En, ClientInstanceId::generate()),
+            ApiClient::for_profile(
+                &profile,
+                Locale::En,
+                ClientInstanceId::generate(),
+                &RendererCapabilities::prompt(false),
+            ),
             Err(TransportError::InvalidProfile(_)),
         ));
         let request = ApiRequest::new(ApiMethod::Post, "/api/v1/drafts")
@@ -580,7 +591,12 @@ mod tests {
         });
         let origin = ApiOrigin::parse(&format!("http://{address}"))?;
         let profile = Profile::new(origin);
-        let client = ApiClient::for_profile(&profile, Locale::En, ClientInstanceId::generate())?;
+        let client = ApiClient::for_profile(
+            &profile,
+            Locale::En,
+            ClientInstanceId::generate(),
+            &RendererCapabilities::prompt(false),
+        )?;
         let response = client.send_json::<ResponseBody>(
             ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities"),
             None,
@@ -593,6 +609,8 @@ mod tests {
         let lowercase = request.to_ascii_lowercase();
         assert!(lowercase.contains("x-squid-protocol:"));
         assert!(lowercase.contains("x-squid-renderer-capabilities:"));
+        assert!(lowercase.contains("cli.control.text.v1"));
+        assert!(!lowercase.contains("cli.handoff.v1"));
         assert!(lowercase.contains("x-squid-client-instance:"));
         assert!(lowercase.contains("accept-language: en"));
         Ok(())
@@ -612,7 +630,12 @@ mod tests {
         });
         let origin = ApiOrigin::parse(&format!("http://{address}"))?;
         let profile = Profile::new(origin);
-        let client = ApiClient::for_profile(&profile, Locale::En, ClientInstanceId::generate())?;
+        let client = ApiClient::for_profile(
+            &profile,
+            Locale::En,
+            ClientInstanceId::generate(),
+            &RendererCapabilities::prompt(false),
+        )?;
         let result = client.send_json::<Value>(
             ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities"),
             None,

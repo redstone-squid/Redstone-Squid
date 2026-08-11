@@ -3,6 +3,7 @@
 pub mod credential;
 pub mod encrypted_state;
 pub mod exit;
+pub mod form;
 pub mod locale;
 pub mod origin;
 pub mod output;
