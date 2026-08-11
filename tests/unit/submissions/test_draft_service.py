@@ -68,6 +68,28 @@ class FakeDraftRepository:
             for draft in self.drafts.values()
         )
 
+    async def list_active_for_account(
+        self,
+        account_id: int,
+        *,
+        now: Instant,
+        limit: int,
+    ) -> tuple[StoredDraft, ...]:
+        return tuple(
+            sorted(
+                (
+                    draft
+                    for draft in self.drafts.values()
+                    if draft.snapshot.owner_account_id == account_id
+                    and draft.snapshot.status
+                    in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
+                    and draft.expires_at > now
+                ),
+                key=lambda draft: (draft.updated_at, draft.snapshot.id),
+                reverse=True,
+            )[:limit]
+        )
+
     async def create(self, draft: StoredDraft) -> StoredDraft:
         self.drafts[draft.snapshot.id] = draft
         return draft
@@ -263,6 +285,54 @@ async def test_capacity_and_single_owner_are_enforced() -> None:
         await service.delete(DRAFT_ID, 8)
     await service.delete(DRAFT_ID, 7)
     assert DRAFT_ID not in repository.drafts
+
+
+@pytest.mark.asyncio
+async def test_active_draft_discovery_is_bounded_owned_and_unexpired() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
+    active = StoredDraft(
+        snapshot=DraftSnapshot(
+            id=DRAFT_ID,
+            owner_account_id=7,
+            schema_id="build_submission.v1",
+            schema_revision=1,
+            category="other",
+            answers={"display_name": "CLI build"},
+        ),
+        origin=SubmissionOrigin.CLI,
+        created_at=NOW,
+        updated_at=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+    repository.drafts[DRAFT_ID] = active
+    repository.drafts[UUID("00000000-0000-4000-8000-000000000104")] = replace(
+        active,
+        snapshot=replace(
+            active.snapshot,
+            id=UUID("00000000-0000-4000-8000-000000000104"),
+            owner_account_id=8,
+        ),
+    )
+    repository.drafts[UUID("00000000-0000-4000-8000-000000000105")] = replace(
+        active,
+        snapshot=replace(
+            active.snapshot,
+            id=UUID("00000000-0000-4000-8000-000000000105"),
+            status=DraftStatus.SUBMITTED,
+        ),
+    )
+    repository.drafts[UUID("00000000-0000-4000-8000-000000000106")] = replace(
+        active,
+        snapshot=replace(active.snapshot, id=UUID("00000000-0000-4000-8000-000000000106")),
+        expires_at=NOW,
+    )
+
+    discovered = await service.list_active(7)
+
+    assert discovered == (active,)
+    with pytest.raises(ValueError, match="between 1 and 10"):
+        await service.list_active(7, limit=11)
 
 
 @pytest.mark.asyncio

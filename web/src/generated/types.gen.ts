@@ -920,6 +920,18 @@ export type DraftCreateRequest = {
 };
 
 /**
+ * DraftListResponse
+ *
+ * Bounded active drafts owned by one authenticated account.
+ */
+export type DraftListResponse = {
+    /**
+     * Drafts
+     */
+    drafts: Array<DraftSummaryResponse>;
+};
+
+/**
  * DraftMediaArtifactResponse
  *
  * Safe facts about one normalized visual artifact.
@@ -1035,6 +1047,52 @@ export type DraftMediaStatus = 'processing' | 'completed' | 'dead' | 'discarded'
  * Lifecycle state of a server-side submission draft.
  */
 export type DraftStatus = 'editing' | 'processing' | 'needs_attention' | 'submitted' | 'expired';
+
+/**
+ * DraftSummaryResponse
+ *
+ * Compact active-draft metadata safe for cross-client discovery.
+ */
+export type DraftSummaryResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Schema Id
+     */
+    schema_id: string;
+    /**
+     * Schema Revision
+     */
+    schema_revision: number;
+    /**
+     * Category
+     */
+    category: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    status: DraftStatus;
+    origin: SubmissionOrigin;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
 
 /**
  * ErrorCode
@@ -5205,6 +5263,112 @@ export type SearchV1SearchGetResponses = {
 
 export type SearchV1SearchGetResponse = SearchV1SearchGetResponses[keyof SearchV1SearchGetResponses];
 
+export type ListDraftsV1SubmissionsDraftsGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/submissions/drafts';
+};
+
+export type ListDraftsV1SubmissionsDraftsGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ListDraftsV1SubmissionsDraftsGetError = ListDraftsV1SubmissionsDraftsGetErrors[keyof ListDraftsV1SubmissionsDraftsGetErrors];
+
+export type ListDraftsV1SubmissionsDraftsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftListResponse;
+};
+
+export type ListDraftsV1SubmissionsDraftsGetResponse = ListDraftsV1SubmissionsDraftsGetResponses[keyof ListDraftsV1SubmissionsDraftsGetResponses];
+
+export type CreateDraftV1SubmissionsDraftsPostData = {
+    body: DraftCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/submissions/drafts';
+};
+
+export type CreateDraftV1SubmissionsDraftsPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreateDraftV1SubmissionsDraftsPostError = CreateDraftV1SubmissionsDraftsPostErrors[keyof CreateDraftV1SubmissionsDraftsPostErrors];
+
+export type CreateDraftV1SubmissionsDraftsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: StoredDraftResponse;
+};
+
+export type CreateDraftV1SubmissionsDraftsPostResponse = CreateDraftV1SubmissionsDraftsPostResponses[keyof CreateDraftV1SubmissionsDraftsPostResponses];
+
 export type CurrentFormV1SubmissionsFormCurrentGetData = {
     body?: never;
     headers?: {
@@ -5304,63 +5468,6 @@ export type FormOptionsV1SubmissionsFormOptionsSourceGetResponses = {
 };
 
 export type FormOptionsV1SubmissionsFormOptionsSourceGetResponse = FormOptionsV1SubmissionsFormOptionsSourceGetResponses[keyof FormOptionsV1SubmissionsFormOptionsSourceGetResponses];
-
-export type CreateDraftV1SubmissionsDraftsPostData = {
-    body: DraftCreateRequest;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/submissions/drafts';
-};
-
-export type CreateDraftV1SubmissionsDraftsPostErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type CreateDraftV1SubmissionsDraftsPostError = CreateDraftV1SubmissionsDraftsPostErrors[keyof CreateDraftV1SubmissionsDraftsPostErrors];
-
-export type CreateDraftV1SubmissionsDraftsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: StoredDraftResponse;
-};
-
-export type CreateDraftV1SubmissionsDraftsPostResponse = CreateDraftV1SubmissionsDraftsPostResponses[keyof CreateDraftV1SubmissionsDraftsPostResponses];
 
 export type DeleteDraftV1SubmissionsDraftsDraftIdDeleteData = {
     body?: never;

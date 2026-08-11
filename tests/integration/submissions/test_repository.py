@@ -156,6 +156,44 @@ async def test_paper_draft_round_trip_retains_server_derived_installation(
 
 
 @pytest.mark.asyncio
+async def test_active_draft_discovery_is_newest_first_and_excludes_inactive_rows(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    first = replace(
+        _stored(account_id),
+        snapshot=replace(_stored(account_id).snapshot, id=UUID("00000000-0000-4000-8000-000000000210")),
+    )
+    newest = replace(
+        first,
+        snapshot=replace(first.snapshot, id=UUID("00000000-0000-4000-8000-000000000211")),
+        updated_at=NOW.add(seconds=2),
+    )
+    expired = replace(
+        first,
+        snapshot=replace(first.snapshot, id=UUID("00000000-0000-4000-8000-000000000212")),
+        expires_at=NOW.add(seconds=1),
+    )
+    submitted = replace(
+        first,
+        snapshot=replace(
+            first.snapshot,
+            id=UUID("00000000-0000-4000-8000-000000000213"),
+            status=DraftStatus.SUBMITTED,
+        ),
+    )
+    for draft in (first, newest, expired, submitted):
+        await repository.create(draft)
+
+    discovery_time = NOW.add(seconds=2)
+    discovered = await repository.list_active_for_account(account_id, now=discovery_time, limit=10)
+
+    assert tuple(draft.snapshot.id for draft in discovered) == (newest.snapshot.id, first.snapshot.id)
+    assert await repository.list_active_for_account(account_id, now=discovery_time, limit=1) == (newest,)
+
+
+@pytest.mark.asyncio
 async def test_concurrent_same_revision_changes_have_one_winner(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],

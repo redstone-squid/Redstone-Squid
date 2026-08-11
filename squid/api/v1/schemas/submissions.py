@@ -292,6 +292,49 @@ class StoredDraftResponse(StrictSchema):
         )
 
 
+class DraftSummaryResponse(StrictSchema):
+    """Compact active-draft metadata safe for cross-client discovery."""
+
+    id: UUID
+    schema_id: str
+    schema_revision: int
+    category: StableIdentifier
+    revision: int
+    status: DraftStatus
+    origin: SubmissionOrigin
+    display_name: str | None
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime
+
+    @classmethod
+    def from_domain(cls, draft: StoredDraft) -> "DraftSummaryResponse":
+        display_name = draft.snapshot.answers.get("display_name")
+        return cls(
+            id=draft.snapshot.id,
+            schema_id=draft.snapshot.schema_id,
+            schema_revision=draft.snapshot.schema_revision,
+            category=draft.snapshot.category,
+            revision=draft.snapshot.revision,
+            status=draft.snapshot.status,
+            origin=draft.origin,
+            display_name=display_name if isinstance(display_name, str) else None,
+            created_at=draft.created_at.to_stdlib(),
+            updated_at=draft.updated_at.to_stdlib(),
+            expires_at=draft.expires_at.to_stdlib(),
+        )
+
+
+class DraftListResponse(StrictSchema):
+    """Bounded active drafts owned by one authenticated account."""
+
+    drafts: list[DraftSummaryResponse] = Field(max_length=10)
+
+    @classmethod
+    def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> "DraftListResponse":
+        return cls(drafts=[DraftSummaryResponse.from_domain(draft) for draft in drafts])
+
+
 class DraftChangeResponse(StrictSchema):
     """The state produced by a draft change and whether it was a replay."""
 
