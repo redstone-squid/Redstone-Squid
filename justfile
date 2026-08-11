@@ -109,6 +109,11 @@ test-integration:
 test-api-fuzz-lifecycle:
     uv run --locked pytest tests/integration/fuzz/test_api_environment_lifecycle.py --no-cov
 
+# One worker, one generated example, and a hard 20-second exploration ceiling.
+[unix]
+fuzz-api-smoke seed="0":
+    uv run --locked python -m scripts.run_api_fuzz --seed {{seed}}
+
 test-all:
     uv run pytest tests/unit tests/architecture tests/integration
 
