@@ -67,6 +67,12 @@ test("renders build specifications, safe media, downloads, and schematic analysi
   await expect(page.getByRole("heading", { level: 1, name: "Copper Bolt 5×5" })).toBeVisible();
   await expect(page.getByRole("definition").filter({ hasText: "9 × 7 × 4" })).toBeVisible();
   await expect(page.getByText("184 blocks")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coppercraft" })).toBeVisible();
+  await expect(page.getByText("play.coppercraft.example")).toBeVisible();
+  await expect(page.getByRole("link", { name: "https://coppercraft.example/" })).toHaveAttribute(
+    "href",
+    "https://coppercraft.example/",
+  );
   await expect(page.getByRole("link", { name: "CircuitSage" }).last()).toHaveAttribute(
     "href",
     "/creators/CircuitSage",

@@ -15,6 +15,8 @@ from squid.builds.application.services import (
 )
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
+from squid.core.errors import InvalidStateError
+from squid.sponsors import PublicSponsor
 
 
 class FakeBuildRepository:
@@ -311,6 +313,32 @@ async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry(
     )
 
     assert result is existing
+    repository.save.assert_not_awaited()
+
+
+async def test_submit_for_account_rejects_existing_build_with_different_sponsor() -> None:
+    draft_id = UUID("22222222-2222-4222-8222-222222222223")
+    installation_id = UUID("33333333-3333-4333-8333-333333333333")
+    existing = Build(
+        id=42,
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        category=BuildCategory.UTILITY,
+        submission_status=Status.PENDING,
+        sponsor=PublicSponsor(installation_id, display_name="Original server"),
+    )
+    repository = FakeBuildRepository(existing)
+
+    with pytest.raises(InvalidStateError):
+        await build_service(repository).submit_for_account(
+            Build(sponsor=PublicSponsor(installation_id, display_name="Changed server")),
+            submitter_account_id=17,
+            source_submission_draft_id=draft_id,
+            display_name="Retry",
+            ai_generated=False,
+            category=BuildCategory.UTILITY,
+        )
+
     repository.save.assert_not_awaited()
 
 

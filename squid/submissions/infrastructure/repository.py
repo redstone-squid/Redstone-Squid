@@ -282,6 +282,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         status=snapshot.status.value,
         answers=_json_object(snapshot.answers),
         origin=draft.origin.value,
+        source_installation_id=draft.source_installation_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
         expires_at=draft.expires_at,
@@ -304,6 +305,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         created_at=model.created_at,
         updated_at=model.updated_at,
         expires_at=model.expires_at,
+        source_installation_id=model.source_installation_id,
     )
 
 

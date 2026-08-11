@@ -162,6 +162,10 @@ class InstallationCredentialService:
         """Return only safe projections for installations that explicitly opted into listing."""
         return await self._repository.list_public_servers()
 
+    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
+        """Return one active, public, sponsor-enabled installation without scanning unrelated profiles."""
+        return await self._repository.get_public_server(installation_id)
+
 
 class PlayerAuthorizationService:
     """Approve exact Java identities and issue fenced, origin-bound player grants."""

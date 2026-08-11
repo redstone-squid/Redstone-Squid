@@ -159,6 +159,21 @@ class PostgresMinecraftAuthorizationRepository:
                 for record in records
             )
 
+    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
+        """Return one sponsor-enabled active public profile without loading the public directory."""
+        async with self._session_factory() as session:
+            record = await session.scalar(
+                select(PaperInstallationRecord).where(
+                    PaperInstallationRecord.id == installation_id,
+                    PaperInstallationRecord.public_profile_enabled.is_(True),
+                    PaperInstallationRecord.sponsor_opt_in.is_(True),
+                    PaperInstallationRecord.revoked_at.is_(None),
+                )
+            )
+        if record is None:
+            return None
+        return PublishedPaperServer(installation_id=record.id, profile=_profile(record), created_at=record.created_at)
+
     async def rotate_installation(
         self,
         *,

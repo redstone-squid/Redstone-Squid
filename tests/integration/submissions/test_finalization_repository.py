@@ -7,11 +7,12 @@ from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.core.errors import DataIntegrityError
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
@@ -159,6 +160,37 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     async with async_session_factory() as session:
         draft_status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
     assert draft_status == DraftStatus.SUBMITTED.value
+
+
+async def test_claim_refuses_a_payload_with_a_conflicting_digest(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    await repository.enqueue(
+        stored_draft,
+        _payload(stored_draft),
+        now=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
+            .values(payload_sha256="0" * 64)
+        )
+
+    with pytest.raises(DataIntegrityError, match="payload integrity"):
+        await repository.claim(now=NOW, limit=1)
+
+    async with async_session_factory() as session:
+        job = await session.scalar(
+            select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
+        )
+    assert job is not None
+    assert job.status == FinalizationJobStatus.PENDING.value
+    assert job.attempts == 0
+    assert job.claim_token is None
 
 
 async def _store_media(

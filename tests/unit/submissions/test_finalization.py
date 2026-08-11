@@ -7,7 +7,8 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.errors import JSONValue
+from squid.core.errors import DataIntegrityError, JSONValue
+from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     ActionableSubmissionError,
     AppliedDraftChange,
@@ -41,11 +42,13 @@ from squid.submissions.domain import (
     SubmissionTargetResult,
 )
 from squid.submissions.errors import DraftAccessDeniedError
+from squid.submissions.infrastructure.finalization_repository import _decode_submission, _encode_submission
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
 CLAIM_TOKEN = UUID("00000000-0000-4000-8000-000000000403")
 SCHEMATIC_ID = UUID("00000000-0000-4000-8000-000000000404")
+INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000405")
 NOW = Instant.parse_iso("2026-08-11T16:00:00Z")
 
 
@@ -142,6 +145,16 @@ class FakeArtifacts:
     async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness:
         self.assessed.append(draft_id)
         return self.readiness
+
+
+class FakeSponsors:
+    def __init__(self, sponsor: PublicSponsor | None) -> None:
+        self.sponsor = sponsor
+        self.resolved: list[UUID] = []
+
+    async def resolve(self, installation_id: UUID) -> PublicSponsor | None:
+        self.resolved.append(installation_id)
+        return self.sponsor
 
 
 class FakeFinalizationJobs:
@@ -301,6 +314,7 @@ def _stored(
         created_at=NOW,
         updated_at=NOW,
         expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        source_installation_id=INSTALLATION_ID if origin is SubmissionOrigin.PAPER else None,
     )
 
 
@@ -321,11 +335,12 @@ async def _submit(
     *,
     category: str = "other",
     answers: dict[str, JSONValue] | None = None,
+    sponsor: PublicSponsor | None = None,
 ) -> tuple[FinalizationJobSnapshot, FakeFinalizationJobs]:
     repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
     drafts = SubmissionDraftService(repository, FakeManifestRegistry())
     jobs = FakeFinalizationJobs()
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(readiness), jobs)
+    service = SubmissionFinalizationService(drafts, FakeArtifacts(readiness), jobs, FakeSponsors(sponsor))
     return await service.submit(DRAFT_ID, 7, locale="en", now=NOW), jobs
 
 
@@ -378,6 +393,73 @@ async def test_server_sanitized_artifact_identity_reaches_target_payload() -> No
     assert result.status is FinalizationJobStatus.PENDING
     assert jobs.enqueued is not None
     assert jobs.enqueued.artifacts.sanitized_schematic_id == SCHEMATIC_ID
+
+
+@pytest.mark.asyncio
+async def test_paper_sponsor_request_snapshots_only_resolved_public_profile() -> None:
+    sponsor = PublicSponsor(
+        INSTALLATION_ID,
+        display_name="Example server",
+        address="play.example.test",
+        description="Public description",
+        website_url="https://example.test/server",
+    )
+    answers = _answers() | {"sponsor_attribution": True}
+
+    result, jobs = await _submit(
+        SubmissionOrigin.PAPER,
+        SubmissionArtifactReadiness(
+            schematic_state=SchematicArtifactState.SANITIZED,
+            sanitized_schematic_id=SCHEMATIC_ID,
+        ),
+        answers=answers,
+        sponsor=sponsor,
+    )
+
+    assert result.status is FinalizationJobStatus.PENDING
+    assert jobs.enqueued is not None
+    assert jobs.enqueued.source_installation_id == INSTALLATION_ID
+    assert jobs.enqueued.sponsor == sponsor
+    assert _encode_submission(jobs.enqueued)["payload_schema"] == 2
+
+
+@pytest.mark.asyncio
+async def test_non_attributed_paper_payload_stays_schema_one_and_retains_new_provenance() -> None:
+    result, jobs = await _submit(
+        SubmissionOrigin.PAPER,
+        SubmissionArtifactReadiness(
+            schematic_state=SchematicArtifactState.SANITIZED,
+            sanitized_schematic_id=SCHEMATIC_ID,
+        ),
+    )
+
+    assert result.status is FinalizationJobStatus.PENDING
+    assert jobs.enqueued is not None
+    encoded = _encode_submission(jobs.enqueued)
+    decoded = _decode_submission(encoded)
+    assert encoded["payload_schema"] == 1
+    assert decoded.source_installation_id == INSTALLATION_ID
+    assert decoded.sponsor_attribution is False
+
+
+@pytest.mark.asyncio
+async def test_unavailable_paper_sponsor_returns_stable_attention() -> None:
+    answers = _answers() | {"sponsor_attribution": True}
+
+    result, jobs = await _submit(
+        SubmissionOrigin.PAPER,
+        SubmissionArtifactReadiness(
+            schematic_state=SchematicArtifactState.SANITIZED,
+            sanitized_schematic_id=SCHEMATIC_ID,
+        ),
+        answers=answers,
+    )
+
+    assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert jobs.enqueued is None
+    assert jobs.attention == (
+        SubmissionAttentionIssue("sponsor_attribution", SubmissionAttentionReason.SPONSOR_UNAVAILABLE),
+    )
 
 
 @pytest.mark.asyncio
@@ -504,6 +586,16 @@ async def _payload() -> NormalizedSubmission:
     await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
     assert jobs.enqueued is not None
     return jobs.enqueued
+
+
+@pytest.mark.asyncio
+async def test_legacy_sponsor_request_is_refused_instead_of_silently_dropped() -> None:
+    encoded = _encode_submission(await _payload())
+    encoded["payload_schema"] = 1
+    encoded["sponsor_attribution"] = True
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        _decode_submission(encoded)
 
 
 def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizationJob:

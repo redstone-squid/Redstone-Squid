@@ -1,8 +1,10 @@
 """Structural tests for the bot's Components V2 views."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import discord
 import pytest
@@ -21,6 +23,7 @@ from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
+from squid.sponsors import PublicSponsor
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -93,6 +96,51 @@ async def test_build_handler_surfaces_schematic_duplicate_evidence(display_build
     assert "Review warnings" in str(payload)
     assert "Possible duplicate" in str(payload)
     assert "Build #1234 (same structure, moved or rotated)" in str(payload)
+
+
+@pytest.mark.asyncio
+async def test_build_handler_credits_the_sponsoring_server_and_website(display_build: Build) -> None:
+    build = replace(
+        display_build,
+        sponsor=PublicSponsor(
+            UUID("00000000-0000-4000-8000-000000000801"),
+            display_name="Sponsor Network",
+            address="play.example.test",
+            website_url="https://example.test/",
+        ),
+    )
+    versions = SimpleNamespace(newest=AsyncMock(return_value="Java 1.20"))
+    bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), build)
+
+    metadata = handler.get_metadata_fields()
+    payload = (await handler.render_layout()).to_components()
+
+    assert metadata["Sponsoring Server"] == "Sponsor Network"
+    assert metadata["Sponsor Website"] == "https://example.test/"
+    assert "Credits" in str(payload)
+    assert "Sponsoring Server" in str(payload)
+    assert "Sponsor Network" in str(payload)
+    assert "Resources" in str(payload)
+    assert "https://example.test/" in str(payload)
+
+
+def test_build_handler_uses_the_sponsor_address_when_no_name_is_public(display_build: Build) -> None:
+    website_url = "https://example.test/" + "a" * 700
+    build = replace(
+        display_build,
+        sponsor=PublicSponsor(
+            UUID("00000000-0000-4000-8000-000000000802"),
+            address="play.example.test",
+            website_url=website_url,
+        ),
+    )
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", object()), build)
+    metadata = handler.get_metadata_fields()
+
+    assert metadata["Sponsoring Server"] == "play.example.test"
+    assert len(metadata["Sponsor Website"]) == 512
+    assert metadata["Sponsor Website"].endswith("…")
 
 
 def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:

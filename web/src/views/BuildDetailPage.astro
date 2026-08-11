@@ -74,6 +74,16 @@ const linkGroups = build
         name: build.title,
         description: build.description,
         creator: build.creators.map((name) => ({ "@type": "Person", name })),
+        sponsor: build.sponsor
+          ? {
+              "@type": "Organization",
+              name:
+                build.sponsor.display_name ??
+                build.sponsor.address ??
+                translate(locale, "build.sponsorFallback"),
+              url: build.sponsor.website_url,
+            }
+          : undefined,
         image: media.map((item) => item.url),
         dateCreated: build.created_at,
         dateModified: build.updated_at,
@@ -223,6 +233,37 @@ const linkGroups = build
                 ))}
               </ul>
             </section>
+            {build!.sponsor && (
+              <section class="surface">
+                <h2>{translate(locale, "build.sponsor")}</h2>
+                <h3>
+                  {build!.sponsor.display_name ??
+                    build!.sponsor.address ??
+                    translate(locale, "build.sponsorFallback")}
+                </h3>
+                {build!.sponsor.description && (
+                  <p class="text-content">{build!.sponsor.description}</p>
+                )}
+                <dl class="spec-list">
+                  {build!.sponsor.address && (
+                    <div>
+                      <dt>{translate(locale, "build.serverAddress")}</dt>
+                      <dd>{build!.sponsor.address}</dd>
+                    </div>
+                  )}
+                  {build!.sponsor.website_url && (
+                    <div>
+                      <dt>{translate(locale, "build.serverWebsite")}</dt>
+                      <dd>
+                        <a href={build!.sponsor.website_url} target="_blank" rel="noreferrer">
+                          {build!.sponsor.website_url}
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            )}
             {build!.versions.length > 0 && (
               <section class="surface">
                 <h2>{translate(locale, "build.versions")}</h2>

@@ -10,6 +10,7 @@ from uuid import UUID, uuid5
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError, JSONValue
+from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import DEFAULT_DRAFT_RETENTION_DAYS, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.domain.finalization import (
@@ -135,6 +136,12 @@ class DraftArtifactReadiness(Protocol):
     async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness: ...
 
 
+class SubmissionSponsorResolver(Protocol):
+    """Resolve only an installation's currently authorized public sponsor projection."""
+
+    async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
+
+
 class SubmissionTarget(Protocol):
     """Create or find a build using the source draft UUID as its idempotency key.
 
@@ -219,6 +226,7 @@ class SubmissionFinalizationService:
         drafts: SubmissionDraftService,
         artifacts: DraftArtifactReadiness,
         jobs: FinalizationJobRepository,
+        sponsors: SubmissionSponsorResolver | None = None,
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
@@ -228,6 +236,7 @@ class SubmissionFinalizationService:
         self._drafts = drafts
         self._artifacts = artifacts
         self._jobs = jobs
+        self._sponsors = sponsors
         self._retention_days = retention_days
 
     async def submit(
@@ -276,9 +285,11 @@ class SubmissionFinalizationService:
                 expires_at=expires_at,
             )
 
+        sponsor, sponsor_issues = await self._resolve_sponsor(validated.draft, validated.normalized_answers)
         assessment = await self._artifacts.assess(draft_id)
         issues = _artifact_issues(validated.draft.origin, assessment)
         issues += _taxonomy_issues(validated.normalized_answers, validated.draft.snapshot.category)
+        issues += sponsor_issues
         if issues:
             return await self._jobs.record_preparation_attention(
                 validated.draft,
@@ -286,7 +297,7 @@ class SubmissionFinalizationService:
                 now=touched_at,
                 expires_at=expires_at,
             )
-        payload = _normalize(validated.draft, validated.normalized_answers, assessment)
+        payload = _normalize(validated.draft, validated.normalized_answers, assessment, sponsor)
         return await self._jobs.enqueue(
             validated.draft,
             payload,
@@ -298,6 +309,21 @@ class SubmissionFinalizationService:
         """Return retained finalization state after rechecking draft ownership."""
         await self._drafts.get_owned(draft_id, account_id)
         return await self._jobs.get(draft_id)
+
+    async def _resolve_sponsor(
+        self,
+        draft: StoredDraft,
+        answers: Mapping[str, JSONValue],
+    ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
+        requested = draft.origin is SubmissionOrigin.PAPER and _required_bool(answers, "sponsor_attribution")
+        if not requested:
+            return None, ()
+        if draft.source_installation_id is None or self._sponsors is None:
+            return None, (_sponsor_unavailable(),)
+        sponsor = await self._sponsors.resolve(draft.source_installation_id)
+        if sponsor is None or sponsor.installation_id != draft.source_installation_id:
+            return None, (_sponsor_unavailable(),)
+        return sponsor, ()
 
 
 class SubmissionFinalizationWorker:
@@ -469,6 +495,7 @@ def _normalize(
     draft: StoredDraft,
     answers: Mapping[str, JSONValue],
     readiness: SubmissionArtifactReadiness,
+    sponsor: PublicSponsor | None,
 ) -> NormalizedSubmission:
     category = SubmissionCategory(draft.snapshot.category)
     visibility = SubmissionSchematicVisibility(_required_str(answers, "schematic_visibility"))
@@ -542,7 +569,13 @@ def _normalize(
         ),
         artifacts=readiness.artifacts,
         details=details,
+        source_installation_id=draft.source_installation_id,
+        sponsor=sponsor,
     )
+
+
+def _sponsor_unavailable() -> SubmissionAttentionIssue:
+    return SubmissionAttentionIssue("sponsor_attribution", SubmissionAttentionReason.SPONSOR_UNAVAILABLE)
 
 
 def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:

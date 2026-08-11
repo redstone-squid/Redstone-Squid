@@ -40,6 +40,8 @@ class MinecraftAuthorizationRepository(Protocol):
 
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]: ...
 
+    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None: ...
+
     async def rotate_installation(
         self,
         *,

@@ -131,7 +131,16 @@ class BuildService:
         if existing is not None:
             if existing.submitter_account_id != submitter_account_id:
                 msg = "The source submission draft is already owned by another account."
-                raise InvalidStateError(msg, context={"source_submission_draft_id": str(source_submission_draft_id)})
+                raise InvalidStateError(
+                    msg,
+                    context={"source_submission_draft_id": str(source_submission_draft_id)},
+                )
+            if existing.sponsor != build.sponsor:
+                msg = "The source submission draft already produced a build with different immutable provenance."
+                raise InvalidStateError(
+                    msg,
+                    context={"source_submission_draft_id": str(source_submission_draft_id)},
+                )
             return existing
         build.submitter_account_id = submitter_account_id
         build.submitter_id = None

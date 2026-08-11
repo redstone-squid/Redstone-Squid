@@ -9,6 +9,7 @@ import pytest
 
 from squid.builds.domain import Build, BuildCategory
 from squid.builds.errors import InvalidBuildError
+from squid.sponsors import PublicSponsor
 from squid.submissions.application import ActionableSubmissionError
 from squid.submissions.domain import (
     DoorOrientation,
@@ -42,6 +43,7 @@ from squid.versions.domain import MinecraftVersion
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 MEDIA_ID = UUID("00000000-0000-4000-8000-000000000502")
 SCHEMATIC_ID = UUID("00000000-0000-4000-8000-000000000503")
+INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000504")
 
 
 class FakeBuilds:
@@ -230,6 +232,87 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     }
     assert result.provenance["normalized_media_upload_ids"] == [str(MEDIA_ID)]
     assert result.provenance["sanitized_schematic_id"] == str(SCHEMATIC_ID)
+
+
+async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
+    sponsor = PublicSponsor(
+        INSTALLATION_ID,
+        display_name="Example server",
+        address="play.example.test",
+        website_url="https://example.test/server",
+    )
+    submission = replace(
+        _submission(SubmissionCategory.OTHER),
+        origin=SubmissionOrigin.PAPER,
+        sponsor_attribution=True,
+        source_installation_id=INSTALLATION_ID,
+        sponsor=sponsor,
+    )
+    builds = FakeBuilds()
+
+    result = await BuildSubmissionTarget(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+
+    build = builds.calls[0][0]
+    provenance = cast(Mapping[str, object], build.extra_info)["submission_provenance"]
+    assert build.sponsor == sponsor
+    assert isinstance(provenance, Mapping)
+    assert provenance["source_installation_id"] == str(INSTALLATION_ID)
+    assert provenance["sponsor"] == {
+        "installation_id": str(INSTALLATION_ID),
+        "display_name": "Example server",
+        "address": "play.example.test",
+        "description": None,
+        "website_url": "https://example.test/server",
+    }
+    assert result.provenance["sponsor_installation_id"] == str(INSTALLATION_ID)
+
+
+async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_build() -> None:
+    sponsor = PublicSponsor(INSTALLATION_ID, display_name="Original server")
+    submission = replace(
+        _submission(SubmissionCategory.OTHER),
+        origin=SubmissionOrigin.PAPER,
+        sponsor_attribution=True,
+        source_installation_id=INSTALLATION_ID,
+        sponsor=sponsor,
+    )
+    builds = FakeBuilds()
+    target = BuildSubmissionTarget(builds, FakeTags(), FakeVersions())
+    await target.create_or_get(submission)
+
+    changed = replace(
+        submission,
+        sponsor=PublicSponsor(INSTALLATION_ID, display_name="Changed server"),
+    )
+    with pytest.raises(ActionableSubmissionError) as error:
+        await target.create_or_get(changed)
+
+    assert error.value.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+
+
+async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_provenance() -> None:
+    sponsor = PublicSponsor(INSTALLATION_ID, display_name="Expected server")
+    submission = replace(
+        _submission(SubmissionCategory.OTHER),
+        origin=SubmissionOrigin.PAPER,
+        sponsor_attribution=True,
+        source_installation_id=INSTALLATION_ID,
+        sponsor=sponsor,
+    )
+
+    class RacingBuilds(FakeBuilds):
+        async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
+            return Build(
+                id=41,
+                submitter_account_id=17,
+                source_submission_draft_id=DRAFT_ID,
+                sponsor=None,
+            )
+
+    with pytest.raises(ActionableSubmissionError) as error:
+        await BuildSubmissionTarget(RacingBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
+
+    assert error.value.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
 
 
 async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no_slot() -> None:

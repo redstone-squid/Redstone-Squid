@@ -27,7 +27,7 @@ const english = {
   "home.recordsIntro": "Computed results, linked to the builds that currently hold them.",
   "home.communityTitle": "Build with the community",
   "home.communityBody":
-    "Start a private submission here or in game. Review delivery is still being connected; community discussion remains in Discord.",
+    "Start a private submission here or in game. New builds are queued for Discord review and community discussion.",
   "builds.title": "Build catalogue",
   "builds.intro": "Filter confirmed designs by their measured and submitted specifications.",
   "builds.empty": "No public builds match this query.",
@@ -49,6 +49,10 @@ const english = {
   "build.restrictions": "Restrictions",
   "build.tags": "Tags",
   "build.creators": "Creators",
+  "build.sponsor": "Sponsoring server",
+  "build.sponsorFallback": "Paper server",
+  "build.serverAddress": "Server address",
+  "build.serverWebsite": "Server website",
   "build.description": "Builder notes",
   "build.media": "Media",
   "build.links": "Downloads and links",
@@ -123,7 +127,7 @@ const english = {
     "Redstone Squid manages community submissions and record competitions for Minecraft redstone engineering.",
   "about.readOnlyTitle": "Public catalogue, private drafting",
   "about.readOnlyBody":
-    "Only confirmed builds appear publicly. Account-owned drafts can begin here or in game; automatic review delivery is not connected yet.",
+    "Only confirmed builds appear publicly. Account-owned drafts can begin here or in game and are queued for Discord review.",
   "about.recordsTitle": "Computed records",
   "about.recordsBody":
     "Record holders come from active competitions and are hydrated from confirmed builds, so a missing holder is treated as an error instead of a partial claim.",
@@ -186,7 +190,7 @@ const chinese: Dictionary = {
   "home.recordsIntro": "由系统计算并链接至当前纪录作品的权威结果。",
   "home.communityTitle": "与社区一起建造",
   "home.communityBody":
-    "可在网页或游戏内开始私人投稿。审核分发仍在接通中；社区讨论继续在 Discord 中进行。",
+    "可在网页或游戏内开始私人投稿。新作品会排队等待发送至 Discord 进行审核和社区讨论。",
   "builds.title": "作品目录",
   "builds.intro": "按测量和投稿规格筛选已确认的设计。",
   "builds.empty": "没有公开作品符合此查询。",
@@ -207,6 +211,10 @@ const chinese: Dictionary = {
   "build.restrictions": "限制",
   "build.tags": "标签",
   "build.creators": "作者",
+  "build.sponsor": "赞助服务器",
+  "build.sponsorFallback": "Paper 服务器",
+  "build.serverAddress": "服务器地址",
+  "build.serverWebsite": "服务器网站",
   "build.description": "建造者说明",
   "build.media": "媒体",
   "build.links": "下载与链接",
@@ -279,7 +287,7 @@ const chinese: Dictionary = {
   "about.intro": "Redstone Squid 管理 Minecraft 红石工程的社区投稿和纪录竞赛。",
   "about.readOnlyTitle": "公开目录，私人草稿",
   "about.readOnlyBody":
-    "这里只有已确认的作品会公开显示。账号草稿可从网页或游戏内开始；自动审核分发尚未接通。",
+    "这里只有已确认的作品会公开显示。账号草稿可从网页或游戏内开始，并会排队等待发送至 Discord 进行审核。",
   "about.recordsTitle": "计算纪录",
   "about.recordsBody":
     "纪录保持者来自当前竞赛，并从已确认作品加载；缺少保持作品会显示错误，而不会展示不完整的结论。",

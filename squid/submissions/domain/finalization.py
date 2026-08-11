@@ -8,6 +8,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import JSONValue
+from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
 
 _STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -87,6 +88,7 @@ class SubmissionAttentionReason(StrEnum):
     SCHEMATIC_REJECTED = "schematic_rejected"
     MEDIA_PROCESSING = "media_processing"
     MEDIA_REJECTED = "media_rejected"
+    SPONSOR_UNAVAILABLE = "sponsor_unavailable"
     TARGET_REJECTED = "target_rejected"
     RETRY_EXHAUSTED = "retry_exhausted"
 
@@ -285,6 +287,8 @@ class NormalizedSubmission:
     sponsor_attribution: bool
     artifacts: VerifiedSubmissionArtifacts
     details: SubmissionCategoryDetails
+    source_installation_id: UUID | None = None
+    sponsor: PublicSponsor | None = None
 
     def __post_init__(self) -> None:
         if self.source_draft_id.int == 0 or self.owner_account_id < 1:
@@ -307,6 +311,21 @@ class NormalizedSubmission:
         if not compatible:
             msg = f"{self.category.value} submission has incompatible category details"
             raise TypeError(msg)
+        if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
+            msg = "Only Paper submissions may retain an installation provenance ID."
+            raise ValueError(msg)
+        if self.sponsor_attribution:
+            if (
+                self.origin is not SubmissionOrigin.PAPER
+                or self.source_installation_id is None
+                or self.sponsor is None
+                or self.sponsor.installation_id != self.source_installation_id
+            ):
+                msg = "Sponsor attribution requires a matching Paper installation projection."
+                raise ValueError(msg)
+        elif self.sponsor is not None:
+            msg = "A submission cannot retain a sponsor projection when attribution was not requested."
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)

@@ -89,7 +89,7 @@ class BuildSubmissionTarget:
         """Translate a normalized payload and delegate retry-safe creation to builds."""
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
-            if existing.submitter_account_id != submission.owner_account_id:
+            if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
                 raise _target_rejected()
             return _target_result(existing, submission)
 
@@ -108,6 +108,8 @@ class BuildSubmissionTarget:
             )
         except (InvalidBuildError, InvalidStateError) as error:
             raise _target_rejected() from error
+        if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
+            raise _target_rejected()
         return _target_result(persisted, submission)
 
     async def _validate_source_version(self, source_version: str) -> None:
@@ -203,6 +205,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         creators_ign=[creator.strip() for creator in submission.creators if creator.strip()],
         completion_time=submission.completion,
         description=submission.description,
+        sponsor=submission.sponsor,
     )
     if isinstance(submission.details, DoorSubmissionDetails):
         build.door_width = submission.details.opening.width
@@ -260,6 +263,10 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
         "schema_id": submission.schema_id,
         "schema_revision": submission.schema_revision,
         "sponsor_attribution": submission.sponsor_attribution,
+        "source_installation_id": (
+            str(submission.source_installation_id) if submission.source_installation_id is not None else None
+        ),
+        "sponsor": _sponsor_provenance(submission),
         "timing": timing,
         "schematic_policy": {
             "visibility": submission.schematic_policy.visibility.value,
@@ -288,10 +295,28 @@ def _result_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]
         "origin": submission.origin.value,
         "schema_id": submission.schema_id,
         "schema_revision": submission.schema_revision,
+        "source_installation_id": (
+            str(submission.source_installation_id) if submission.source_installation_id is not None else None
+        ),
+        "sponsor_installation_id": (
+            str(submission.sponsor.installation_id) if submission.sponsor is not None else None
+        ),
         "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
         "sanitized_schematic_id": (
             str(submission.artifacts.sanitized_schematic_id)
             if submission.artifacts.sanitized_schematic_id is not None
             else None
         ),
+    }
+
+
+def _sponsor_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue] | None:
+    if submission.sponsor is None:
+        return None
+    return {
+        "installation_id": str(submission.sponsor.installation_id),
+        "display_name": submission.sponsor.display_name,
+        "address": submission.sponsor.address,
+        "description": submission.sponsor.description,
+        "website_url": submission.sponsor.website_url,
     }

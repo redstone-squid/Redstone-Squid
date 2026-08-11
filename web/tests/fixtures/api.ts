@@ -91,6 +91,13 @@ const detail: BuildDetail = {
   },
   description:
     "A compact showcase door built for reliable survival use. The input line is exposed at the rear and the reset is fully automatic.",
+  sponsor: {
+    installation_id: "77777777-7777-4777-8777-777777777777",
+    display_name: "Coppercraft",
+    address: "play.coppercraft.example",
+    description: "A public survival redstone server.",
+    website_url: "https://coppercraft.example/",
+  },
   links: {
     images: ["https://media.fixture.invalid/build-1-alt.png", "http://unsafe.fixture/image.png"],
     videos: ["https://video.example.org/watch/door"],

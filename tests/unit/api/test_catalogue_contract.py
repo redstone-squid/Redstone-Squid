@@ -13,6 +13,7 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildSummary
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.core.errors import DataIntegrityError
 from squid.records.application.models import ActiveRecord
+from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
     TagAuthority,
@@ -122,6 +123,31 @@ def test_build_detail_inherits_card_fields_without_duplicate_constructor_values(
     assert detail.versions == ["Java 1.21.5"]
     assert detail.opening_time == 8
     assert detail.description == "A compact door."
+
+
+def test_build_detail_exposes_only_the_immutable_public_sponsor_projection() -> None:
+    installation_id = UUID("33333333-3333-4333-8333-333333333333")
+    detail = BuildDetail.from_domain(
+        catalogue_build(
+            42,
+            sponsor=PublicSponsor(
+                installation_id,
+                display_name="Example server",
+                address="play.example.test",
+                description="A public profile",
+                website_url="https://example.test/server",
+            ),
+        )
+    )
+
+    assert detail.sponsor is not None
+    assert detail.sponsor.model_dump(mode="json") == {
+        "installation_id": str(installation_id),
+        "display_name": "Example server",
+        "address": "play.example.test",
+        "description": "A public profile",
+        "website_url": "https://example.test/server",
+    }
 
 
 @pytest.mark.asyncio

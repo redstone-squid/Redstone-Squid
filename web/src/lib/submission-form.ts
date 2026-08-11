@@ -208,6 +208,7 @@ export function issueMessage(
       schematic_rejected: "的原理图无法被接受",
       media_processing: "正在等待媒体处理",
       media_rejected: "的媒体无法被接受；请丢弃并上传替代文件",
+      sponsor_unavailable: "请求署名的服务器已不再公开或未选择接受赞助署名",
       target_rejected: "无法创建目标作品记录",
       retry_exhausted: "多次重试后仍无法完成投稿",
     };
@@ -233,6 +234,7 @@ export function issueMessage(
     schematic_rejected: "has a schematic that could not be accepted",
     media_processing: "is waiting for media processing",
     media_rejected: "has media that could not be accepted; discard it and upload a replacement",
+    sponsor_unavailable: "references a server that is no longer public or opted into sponsorship",
     target_rejected: "could not create the target build record",
     retry_exhausted: "could not be finalized after several retries",
   };

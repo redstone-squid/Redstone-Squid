@@ -30,6 +30,7 @@ from squid.submissions.errors import (
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
+INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000103")
 OPERATION_ID = UUID("00000000-0000-4000-8000-000000000102")
 NOW = Instant.parse_iso("2026-08-11T00:00:00Z")
 
@@ -206,6 +207,33 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("origin", "source_installation_id"),
+    [
+        (SubmissionOrigin.PAPER, None),
+        (SubmissionOrigin.WEB, INSTALLATION_ID),
+    ],
+)
+async def test_create_requires_server_derived_installation_provenance_only_for_paper(
+    origin: SubmissionOrigin,
+    source_installation_id: UUID | None,
+) -> None:
+    service = SubmissionDraftService(FakeDraftRepository(), FakeManifestRegistry())
+
+    with pytest.raises(ValueError, match="Paper drafts require server-derived installation provenance"):
+        await service.create(
+            owner_account_id=7,
+            category="other",
+            origin=origin,
+            client_capabilities=frozenset({"repeatable_text"}),
+            locale="en",
+            source_installation_id=source_installation_id,
+            now=NOW,
+            draft_id=DRAFT_ID,
+        )
+
+
+@pytest.mark.asyncio
 async def test_capacity_and_single_owner_are_enforced() -> None:
     repository = FakeDraftRepository()
     service = SubmissionDraftService(repository, FakeManifestRegistry(), FixedAccountDraftCapacity(1))
@@ -354,6 +382,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
         origin=SubmissionOrigin.PAPER,
         client_capabilities=frozenset({"repeatable_text"}),
         locale="en",
+        source_installation_id=INSTALLATION_ID,
         now=NOW,
         draft_id=DRAFT_ID,
     )

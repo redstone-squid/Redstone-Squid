@@ -46,6 +46,9 @@ from squid.submissions.domain import (
 )
 
 ACCOUNT_ID = 42
+JAVA_UUID = UUID("00000000-0000-4000-8000-000000000051")
+INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000052")
+GRANT_ID = UUID("00000000-0000-4000-8000-000000000053")
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 
 
@@ -87,7 +90,7 @@ class FakeForms:
 class FakeDrafts:
     def __init__(self) -> None:
         self.current = stored_draft()
-        self.created_with: tuple[int, str, SubmissionOrigin, frozenset[str], str | None] | None = None
+        self.created_with: tuple[int, str, SubmissionOrigin, frozenset[str], str | None, UUID | None] | None = None
         self.change_seen: DraftChange | None = None
         self.deleted: tuple[UUID, int] | None = None
 
@@ -99,8 +102,16 @@ class FakeDrafts:
         origin: SubmissionOrigin,
         client_capabilities: frozenset[str],
         locale: str | None,
+        source_installation_id: UUID | None = None,
     ) -> StoredDraft:
-        self.created_with = (owner_account_id, category, origin, client_capabilities, locale)
+        self.created_with = (
+            owner_account_id,
+            category,
+            origin,
+            client_capabilities,
+            locale,
+            source_installation_id,
+        )
         self.current = stored_draft(
             owner_account_id=owner_account_id,
             category=category,
@@ -289,7 +300,14 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert forms.option_calls == [("approved_restrictions", "door", "en")]
     assert create_response.status_code == 201
     assert create_response.json()["origin"] == "web"
-    assert drafts.created_with == (ACCOUNT_ID, "door", SubmissionOrigin.WEB, frozenset({"repeatable_text"}), "en")
+    assert drafts.created_with == (
+        ACCOUNT_ID,
+        "door",
+        SubmissionOrigin.WEB,
+        frozenset({"repeatable_text"}),
+        "en",
+        None,
+    )
     assert change_response.status_code == 200
     assert change_response.json()["draft"]["revision"] == 1
     assert change_response.json()["replayed"] is False
@@ -337,11 +355,20 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         subject="minecraft-grant:test",
         account_id=42,
         minecraft_origin="paper",
+        java_uuid=JAVA_UUID,
+        installation_id=INSTALLATION_ID,
+        grant_id=GRANT_ID,
     )
 
     actor = await authenticated_submission_actor(principal)
 
-    assert actor == AuthenticatedSubmissionActor(42, SubmissionOrigin.PAPER)
+    assert actor == AuthenticatedSubmissionActor(
+        42,
+        SubmissionOrigin.PAPER,
+        java_uuid=JAVA_UUID,
+        installation_id=INSTALLATION_ID,
+        grant_id=GRANT_ID,
+    )
 
 
 def test_finalization_response_does_not_expose_worker_or_target_internals() -> None:

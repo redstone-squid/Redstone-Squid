@@ -2,15 +2,17 @@
 
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 
 import psycopg2
 import pytest
 from alembic.config import Config
 from psycopg2 import sql
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
+from whenever import Instant
 
 from alembic import command
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
@@ -23,8 +25,13 @@ from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
-from squid.submissions.application import ActionableSubmissionError
+from squid.core.errors import DataIntegrityError
+from squid.sponsors import PublicSponsor
+from squid.submissions.application import ActionableSubmissionError, StoredDraft
 from squid.submissions.domain import (
+    DraftSnapshot,
+    DraftStatus,
+    FinalizationJobStatus,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -34,10 +41,16 @@ from squid.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
+    SubmissionTargetResult,
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
 from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
+from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.payload_integrity import submission_payload_digest
 from squid.tags.domain import TagDefinition
 from squid.versions.application import VersionService
 from squid.versions.infrastructure.models import Version
@@ -145,12 +158,19 @@ def _normalized_submission(account_id: int, draft_id: uuid.UUID, source_version:
     )
 
 
-def _build(category: BuildCategory, account_id: int, *, draft_id: uuid.UUID | None = None) -> Build:
+def _build(
+    category: BuildCategory,
+    account_id: int,
+    *,
+    draft_id: uuid.UUID | None = None,
+    sponsor: PublicSponsor | None = None,
+) -> Build:
     build = Build(
         category=category,
         submission_status=Status.PENDING,
         submitter_account_id=account_id,
         source_submission_draft_id=draft_id,
+        sponsor=sponsor,
         display_name="Workshop prototype" if draft_id is not None else None,
         versions=["Java 1.21.0"],
         width=3,
@@ -217,6 +237,39 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     duplicate = _build(BuildCategory.OTHER, account_id, draft_id=draft_id)
     with pytest.raises(IntegrityError):
         await repository.save(duplicate)
+
+
+async def test_repository_round_trips_immutable_public_sponsor_snapshot(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_account_and_version(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    installation_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
+    sponsor = PublicSponsor(
+        installation_id,
+        display_name="Example server",
+        address="play.example.test",
+        website_url="https://example.test/server",
+    )
+    build = _build(BuildCategory.OTHER, account_id, sponsor=sponsor)
+
+    await repository.save(build)
+    assert build.id is not None
+    loaded = await repository.get_by_id(build.id)
+
+    assert loaded is not None
+    assert loaded.sponsor == sponsor
+    async with migrated_session_factory() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT sponsor_installation_id, sponsor_display_name, sponsor_address, sponsor_website_url "
+                    "FROM builds WHERE id = :build_id"
+                ),
+                {"build_id": build.id},
+            )
+        ).one()
+    assert row == (installation_id, "Example server", "play.example.test", "https://example.test/server")
 
 
 async def test_submission_target_persists_only_the_exact_canonical_source_version(
@@ -286,11 +339,12 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         await session.execute(
             text(
                 "INSERT INTO submission_drafts "
-                "(id, owner_account_id, schema_id, schema_revision, category, answers, origin, expires_at) "
+                "(id, owner_account_id, schema_id, schema_revision, category, answers, origin, "
+                "source_installation_id, expires_at) "
                 "VALUES (:draft_id, :absorbed, 'redstone_squid.submission', 1, 'utility', '{}'::jsonb, "
-                "'web', now() + interval '7 days')"
+                "'paper', :installation_id, now() + interval '7 days')"
             ),
-            {"draft_id": draft_id, "absorbed": absorbed.id},
+            {"draft_id": draft_id, "absorbed": absorbed.id, "installation_id": installation_id},
         )
         await session.execute(
             text(
@@ -376,10 +430,12 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
 
     async with migrated_session_factory() as session:
         build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
-        draft_owner = await session.scalar(
-            text("SELECT owner_account_id FROM submission_drafts WHERE id = :draft_id"),
-            {"draft_id": draft_id},
-        )
+        draft_owner = (
+            await session.execute(
+                text("SELECT owner_account_id, source_installation_id FROM submission_drafts WHERE id = :draft_id"),
+                {"draft_id": draft_id},
+            )
+        ).one()
         access = (
             await session.execute(
                 text("SELECT account_id, role FROM submission_draft_access WHERE draft_id = :draft_id"),
@@ -424,7 +480,7 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         )
 
     assert build_owner == survivor.id
-    assert draft_owner == survivor.id
+    assert draft_owner == (survivor.id, installation_id)
     assert access == [(survivor.id, "owner")]
     assert change_actor == survivor.id
     assert rights_actor == survivor.id
@@ -433,3 +489,185 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     assert grant == (survivor.id, java_uuid, installation_id)
     assert java_identity_owner == survivor.id
     assert await accounts.get_by_id(absorbed.id) is None
+
+
+async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    pending_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777771")
+    claimed_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777772")
+    installation_id = uuid.UUID("77777777-7777-4777-8777-777777777773")
+    sponsor = PublicSponsor(installation_id, display_name="Merge-safe server")
+    queued_at = Instant.now()
+
+    def draft(draft_id: uuid.UUID) -> StoredDraft:
+        return StoredDraft(
+            snapshot=DraftSnapshot(
+                id=draft_id,
+                owner_account_id=absorbed.id,
+                schema_id="build_submission.v1",
+                schema_revision=1,
+                category="other",
+            ),
+            origin=SubmissionOrigin.PAPER,
+            source_installation_id=installation_id,
+            created_at=queued_at,
+            updated_at=queued_at,
+            expires_at=queued_at.add(days=7, days_assumed_24h_ok=True),
+        )
+
+    pending_draft = draft(pending_draft_id)
+    claimed_draft = draft(claimed_draft_id)
+    drafts = PostgresDraftRepository(migrated_session_factory)
+    await drafts.create(pending_draft)
+    await drafts.create(claimed_draft)
+    pending_payload = replace(
+        _normalized_submission(absorbed.id, pending_draft_id, "Java 1.21.0"),
+        origin=SubmissionOrigin.PAPER,
+        source_installation_id=installation_id,
+    )
+    claimed_payload = replace(
+        _normalized_submission(absorbed.id, claimed_draft_id, "Java 1.21.0"),
+        origin=SubmissionOrigin.PAPER,
+        sponsor_attribution=True,
+        source_installation_id=installation_id,
+        sponsor=sponsor,
+    )
+    finalizations = PostgresFinalizationJobRepository(migrated_session_factory)
+    await finalizations.enqueue(
+        pending_draft,
+        pending_payload,
+        now=queued_at.add(days=1, days_assumed_24h_ok=True),
+        expires_at=pending_draft.expires_at,
+    )
+    await finalizations.enqueue(
+        claimed_draft,
+        claimed_payload,
+        now=queued_at,
+        expires_at=claimed_draft.expires_at,
+    )
+    (stale_claim,) = await finalizations.claim(now=queued_at, limit=1)
+    assert stale_claim.draft_id == claimed_draft_id
+
+    async with migrated_session_factory.begin() as session:
+        build_id = (
+            await session.execute(
+                text(
+                    "INSERT INTO builds (submission_status, category, submitter_account_id, "
+                    "source_submission_draft_id, ai_generated, sponsor_installation_id, sponsor_display_name) "
+                    "VALUES (0, 'Other', :absorbed, :draft_id, false, :installation_id, 'Merge-safe server') "
+                    "RETURNING id"
+                ),
+                {
+                    "absorbed": absorbed.id,
+                    "draft_id": claimed_draft_id,
+                    "installation_id": installation_id,
+                },
+            )
+        ).scalar_one()
+        await session.execute(text("INSERT INTO other_builds (build_id) VALUES (:build_id)"), {"build_id": build_id})
+
+    await accounts.merge(survivor.id, absorbed.id)
+
+    result = SubmissionTargetResult(
+        build_id=build_id,
+        target_key="postgres_builds",
+        provenance={"source_draft_id": str(claimed_draft_id)},
+    )
+    assert await finalizations.complete(stale_claim, result, now=Instant.now()) is False
+    (replacement_claim,) = await finalizations.claim(now=Instant.now().add(minutes=1), limit=1)
+    assert replacement_claim.draft_id == claimed_draft_id
+    assert replacement_claim.payload.owner_account_id == survivor.id
+    assert replacement_claim.payload.sponsor == sponsor
+    assert await finalizations.complete(replacement_claim, result, now=Instant.now()) is True
+
+    async with migrated_session_factory() as session:
+        jobs = {
+            job.draft_id: job
+            for job in (
+                await session.scalars(
+                    select(SubmissionFinalizationJob).where(
+                        SubmissionFinalizationJob.draft_id.in_((pending_draft_id, claimed_draft_id))
+                    )
+                )
+            ).all()
+        }
+        build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
+        pending_status = await session.scalar(
+            text("SELECT status FROM submission_drafts WHERE id = :draft_id"),
+            {"draft_id": pending_draft_id},
+        )
+
+    pending_job = jobs[pending_draft_id]
+    completed_job = jobs[claimed_draft_id]
+    assert pending_job.status == FinalizationJobStatus.PENDING.value
+    assert pending_job.payload is not None
+    assert pending_job.payload["payload_schema"] == 1
+    assert pending_job.payload["owner_account_id"] == survivor.id
+    assert pending_job.payload_sha256 == submission_payload_digest(pending_job.payload)
+    assert completed_job.status == FinalizationJobStatus.COMPLETED.value
+    assert completed_job.payload is not None
+    assert completed_job.payload["payload_schema"] == 2
+    assert completed_job.payload["owner_account_id"] == survivor.id
+    assert completed_job.payload_sha256 == submission_payload_digest(completed_job.payload)
+    assert stale_claim.claim_token != replacement_claim.claim_token
+    assert replacement_claim.attempts == stale_claim.attempts + 1
+    assert build_owner == survivor.id
+    assert pending_status == DraftStatus.PROCESSING.value
+
+
+async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    draft_id = uuid.UUID("77777777-7777-4777-8777-777777777774")
+    queued_at = Instant.now()
+    draft = StoredDraft(
+        snapshot=DraftSnapshot(
+            id=draft_id,
+            owner_account_id=absorbed.id,
+            schema_id="build_submission.v1",
+            schema_revision=1,
+            category="other",
+        ),
+        origin=SubmissionOrigin.WEB,
+        created_at=queued_at,
+        updated_at=queued_at,
+        expires_at=queued_at.add(days=7, days_assumed_24h_ok=True),
+    )
+    await PostgresDraftRepository(migrated_session_factory).create(draft)
+    await PostgresFinalizationJobRepository(migrated_session_factory).enqueue(
+        draft,
+        _normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
+        now=queued_at,
+        expires_at=draft.expires_at,
+    )
+    async with migrated_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(SubmissionFinalizationJob.draft_id == draft_id)
+            .values(payload_sha256="0" * 64)
+        )
+
+    with pytest.raises(DataIntegrityError, match="integrity check"):
+        await accounts.merge(survivor.id, absorbed.id)
+
+    assert await accounts.get_by_id(absorbed.id) is not None
+    async with migrated_session_factory() as session:
+        draft_owner = await session.scalar(
+            select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == draft_id)
+        )
+        payload_sha256 = await session.scalar(
+            select(SubmissionFinalizationJob.payload_sha256).where(SubmissionFinalizationJob.draft_id == draft_id)
+        )
+    assert draft_owner == absorbed.id
+    assert payload_sha256 == "0" * 64

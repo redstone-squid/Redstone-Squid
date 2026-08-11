@@ -70,7 +70,7 @@ async def account_id(
         return account.id
 
 
-def _stored(account_id: int) -> StoredDraft:
+def _stored(account_id: int, *, origin: SubmissionOrigin = SubmissionOrigin.WEB) -> StoredDraft:
     return StoredDraft(
         snapshot=DraftSnapshot(
             id=DRAFT_ID,
@@ -79,10 +79,13 @@ def _stored(account_id: int) -> StoredDraft:
             schema_revision=1,
             category="other",
         ),
-        origin=SubmissionOrigin.WEB,
+        origin=origin,
         created_at=NOW,
         updated_at=NOW,
         expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        source_installation_id=(
+            UUID("00000000-0000-4000-8000-000000000299") if origin is SubmissionOrigin.PAPER else None
+        ),
     )
 
 
@@ -135,6 +138,21 @@ async def test_create_adds_owner_grant_and_replays_change(
         changes = await session.scalar(select(func.count()).select_from(SubmissionDraftChange))
     assert grants == 1
     assert changes == 1
+
+
+@pytest.mark.asyncio
+async def test_paper_draft_round_trip_retains_server_derived_installation(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+
+    created = await repository.create(_stored(account_id, origin=SubmissionOrigin.PAPER))
+    loaded = await repository.get(created.snapshot.id)
+
+    assert loaded is not None
+    assert loaded.origin is SubmissionOrigin.PAPER
+    assert loaded.source_installation_id == UUID("00000000-0000-4000-8000-000000000299")
 
 
 @pytest.mark.asyncio

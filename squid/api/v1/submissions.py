@@ -44,6 +44,7 @@ class SubmissionDraftCommands(Protocol):
         origin: SubmissionOrigin,
         client_capabilities: frozenset[str],
         locale: str | None,
+        source_installation_id: UUID | None = None,
     ) -> StoredDraft: ...
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
@@ -129,6 +130,9 @@ class AuthenticatedSubmissionActor:
 
     account_id: int
     origin: SubmissionOrigin
+    java_uuid: UUID | None = None
+    installation_id: UUID | None = None
+    grant_id: UUID | None = None
 
 
 async def authenticated_submission_actor(
@@ -149,7 +153,18 @@ def _submission_actor(principal: Principal) -> AuthenticatedSubmissionActor:
         origin = SubmissionOrigin(principal.minecraft_origin)
     else:
         raise AuthenticationError
-    return AuthenticatedSubmissionActor(principal.account_id, origin)
+    if principal.kind == "minecraft_player":
+        if principal.java_uuid is None or principal.grant_id is None:
+            raise AuthenticationError
+        if (origin is SubmissionOrigin.PAPER) != (principal.installation_id is not None):
+            raise AuthenticationError
+    return AuthenticatedSubmissionActor(
+        principal.account_id,
+        origin,
+        java_uuid=principal.java_uuid,
+        installation_id=principal.installation_id,
+        grant_id=principal.grant_id,
+    )
 
 
 Forms = Annotated[SubmissionFormReader, Depends(get_submission_forms)]
@@ -215,6 +230,7 @@ async def create_draft(
         origin=actor.origin,
         client_capabilities=frozenset(payload.client_capabilities),
         locale=locale_for_request(request),
+        source_installation_id=actor.installation_id,
     )
     return StoredDraftResponse.from_domain(draft)
 

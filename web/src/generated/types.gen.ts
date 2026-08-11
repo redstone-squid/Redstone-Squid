@@ -96,6 +96,7 @@ export type BuildDetail = {
      */
     description: string | null;
     links: BuildLinks;
+    sponsor?: BuildSponsor | null;
 };
 
 /**
@@ -255,6 +256,34 @@ export type BuildSearchResult = {
      */
     score: number | null;
     build: BuildSummary;
+};
+
+/**
+ * BuildSponsor
+ *
+ * Immutable public sponsor metadata captured when the build was finalized.
+ */
+export type BuildSponsor = {
+    /**
+     * Installation Id
+     */
+    installation_id: string;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Address
+     */
+    address: string | null;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Website Url
+     */
+    website_url: string | null;
 };
 
 /**
@@ -1914,6 +1943,10 @@ export type StoredDraftResponse = {
      * Expires At
      */
     expires_at: string;
+    /**
+     * Source Installation Id
+     */
+    source_installation_id?: string | null;
 };
 
 /**
@@ -1934,7 +1967,7 @@ export type SubmissionAttentionIssueResponse = {
  *
  * Stable repair reasons shared by every submission transport.
  */
-export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'media_processing' | 'media_rejected' | 'target_rejected' | 'retry_exhausted';
+export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'media_processing' | 'media_rejected' | 'sponsor_unavailable' | 'target_rejected' | 'retry_exhausted';
 
 /**
  * SubmissionFinalizationResponse

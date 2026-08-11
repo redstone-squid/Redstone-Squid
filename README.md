@@ -72,6 +72,14 @@ quota through `RateLimit-Policy` and `RateLimit`, and rejected requests also inc
 `SQUID_API_TRUSTED_PROXY_IPS` only with addresses or CIDR ranges owned by the reverse proxy so forwarded client IPs
 cannot be spoofed. The thresholds and Redis connection settings are listed in `.env.example`.
 
+Paper sponsor attribution has a staged producer gate, `SQUID_MINECRAFT_AUTH_SPONSOR_ATTRIBUTION_ENABLED`, which is
+false by default. Deploy the compatibility release with the gate off, replace every API and worker replica, and only
+enable it in a later, second deployment. Enabling the gate may create payload-schema-two finalization jobs that older
+workers cannot process.
+Treat activation as one-way for rollback purposes until every schema-two job has been drained or exported: do not
+restore an image from before schema-two reader support while such jobs remain. Disabling the gate stops new attributed
+jobs but does not rewrite retained work.
+
 Configuration uses a strict `SQUID_`-prefixed contract. Previous deployments must rename their settings:
 
 Unknown names are warning-only for local processes. Production Compose sets

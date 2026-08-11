@@ -130,7 +130,16 @@ async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
     (published,) = await installations.public_servers()
     assert published.installation_id == private.installation.id
     assert published.profile == profile
+    assert await installations.get_public_server(private.installation.id) == published
     assert not hasattr(published, "secret_hash")
+
+    await installations.update_profile(
+        installation_id=private.installation.id,
+        owner_account_id=ACCOUNT_ID,
+        profile=PublicServerProfile(enabled=True, display_name="Listed without sponsor consent"),
+    )
+    assert len(await installations.public_servers()) == 1
+    assert await installations.get_public_server(private.installation.id) is None
 
 
 async def test_rotation_invalidates_old_secret_and_increments_fence() -> None:

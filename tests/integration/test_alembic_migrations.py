@@ -217,6 +217,146 @@ def test_migrations_create_schema_without_drift(
     assert updated_projection_state == ("delete", 2, 1, 2)
 
 
+def test_sponsor_migration_refuses_to_discard_retained_provenance(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sponsor downgrade is allowed only after every new provenance field is empty."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "head")
+    engine = create_engine(migration_database_url)
+    installation_id = "77777777-7777-4777-8777-777777777777"
+    draft_id = "88888888-8888-4888-8888-888888888888"
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            build_id = connection.execute(
+                text(
+                    "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated, "
+                    "sponsor_installation_id, sponsor_display_name) "
+                    "VALUES (0, 'Utility', :account_id, false, :installation_id, 'Example server') RETURNING id"
+                ),
+                {"account_id": account_id, "installation_id": installation_id},
+            ).scalar_one()
+
+        with pytest.raises(DBAPIError, match="cannot downgrade while sponsor attribution schema data is retained"):
+            command.downgrade(config, "f4a5b6c7d8e9")
+
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE builds SET sponsor_installation_id = NULL, sponsor_display_name = NULL WHERE id = :id"),
+                {"id": build_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, source_installation_id, expires_at) VALUES "
+                    "(:draft_id, :account_id, 'test', 1, 'utility', '{}'::jsonb, 'paper', :installation_id, "
+                    "now() + interval '1 day')"
+                ),
+                {"draft_id": draft_id, "account_id": account_id, "installation_id": installation_id},
+            )
+
+        with pytest.raises(DBAPIError, match="cannot downgrade while sponsor attribution schema data is retained"):
+            command.downgrade(config, "f4a5b6c7d8e9")
+
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE submission_drafts SET source_installation_id = NULL WHERE id = :id"),
+                {"id": draft_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs ("
+                    "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
+                    ") VALUES ("
+                    "'99999999-9999-4999-8999-999999999999', :draft_id, 0, "
+                    "'{\"payload_schema\": 2}'::jsonb, 'needs_attention', now(), "
+                    '\'[{"field_id": "submission", "reason": "target_rejected"}]\'::jsonb'
+                    ")"
+                ),
+                {"draft_id": draft_id},
+            )
+
+        with pytest.raises(DBAPIError, match="cannot downgrade while sponsor attribution schema data is retained"):
+            command.downgrade(config, "f4a5b6c7d8e9")
+
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM submission_finalization_jobs WHERE draft_id = :draft_id"),
+                {"draft_id": draft_id},
+            )
+        command.downgrade(config, "f4a5b6c7d8e9")
+    finally:
+        engine.dispose()
+
+
+def test_sponsor_migration_refuses_unresolved_legacy_attribution(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Schema-one requests cannot cross the migration without a verified sponsor snapshot."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "f4a5b6c7d8e9")
+    engine = create_engine(migration_database_url)
+    draft_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, expires_at) VALUES ("
+                    ":draft_id, :account_id, 'test', 1, 'utility', '{}'::jsonb, 'paper', now() + interval '1 day')"
+                ),
+                {"draft_id": draft_id, "account_id": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs ("
+                    "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
+                    ") VALUES ("
+                    "'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', :draft_id, 0, "
+                    '\'{"payload_schema": 1, "sponsor_attribution": true}\'::jsonb, '
+                    "'needs_attention', now(), "
+                    '\'[{"field_id": "sponsor_attribution", "reason": "target_rejected"}]\'::jsonb'
+                    ")"
+                ),
+                {"draft_id": draft_id},
+            )
+
+        with pytest.raises(DBAPIError, match="cannot migrate unresolved legacy sponsor attribution requests"):
+            command.upgrade(config, "head")
+
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM submission_finalization_jobs WHERE draft_id = :draft_id"), {"draft_id": draft_id}
+            )
+        command.upgrade(config, "head")
+
+        with (
+            pytest.raises(DBAPIError, match="submission_finalization_jobs_legacy_sponsor_forbidden"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs ("
+                    "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
+                    ") VALUES ("
+                    "'cccccccc-cccc-4ccc-8ccc-cccccccccccc', :draft_id, 0, "
+                    '\'{"payload_schema": "1", "sponsor_attribution": "true"}\'::jsonb, '
+                    "'needs_attention', now(), "
+                    '\'[{"field_id": "sponsor_attribution", "reason": "target_rejected"}]\'::jsonb'
+                    ")"
+                ),
+                {"draft_id": draft_id},
+            )
+    finally:
+        engine.dispose()
+
+
 def test_alembic_detects_managed_function_and_trigger_drift(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,

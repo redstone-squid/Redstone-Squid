@@ -37,6 +37,12 @@ class StoredDraft:
     created_at: Instant
     updated_at: Instant
     expires_at: Instant
+    source_installation_id: UUID | None = None
+
+    def __post_init__(self) -> None:
+        if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
+            msg = "Only Paper drafts may retain an installation provenance ID."
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,10 +161,14 @@ class SubmissionDraftService:
         origin: SubmissionOrigin,
         client_capabilities: frozenset[str],
         locale: str | None,
+        source_installation_id: UUID | None = None,
         now: Instant | None = None,
         draft_id: UUID | None = None,
     ) -> StoredDraft:
         """Create an empty synchronized draft pinned to the current schema revision."""
+        if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
+            msg = "Paper drafts require server-derived installation provenance."
+            raise ValueError(msg)
         limit = await self._capacity.limit_for(owner_account_id)
         if await self._repository.count_active_for_account(owner_account_id) >= limit:
             raise DraftCapacityExceededError(limit)
@@ -180,6 +190,7 @@ class SubmissionDraftService:
             created_at=created_at,
             updated_at=created_at,
             expires_at=created_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+            source_installation_id=source_installation_id,
         )
         return await self._repository.create(stored)
 

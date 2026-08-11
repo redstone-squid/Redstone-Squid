@@ -10,7 +10,9 @@ from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
 from squid.builds.infrastructure.models import BuildCreator, BuildVersion, Door, Entrance, Extender, Other, Utility
+from squid.core.errors import DataIntegrityError
 from squid.messages.infrastructure.models import Message
+from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     RecordOperator,
     TagAssignment,
@@ -131,6 +133,7 @@ class BuildMapper:
             render_urls=[link.url for link in sql_build.links if link.media_type == "render"],
             display_name=sql_build.display_name,
             source_submission_draft_id=sql_build.source_submission_draft_id,
+            sponsor=_sponsor(sql_build),
             submitter_account_id=sql_build.submitter_account_id,
             submitter_id=submitter_discord_id,
             completion_time=sql_build.completion_time,
@@ -188,3 +191,28 @@ def _tag_assignment_to_domain(assignment: BuildTagAssignment) -> TagAssignment:
         evidence=assignment.evidence,
         provenance=assignment.provenance,
     )
+
+
+def _sponsor(build: SQLBuild) -> PublicSponsor | None:
+    values = (
+        build.sponsor_display_name,
+        build.sponsor_address,
+        build.sponsor_description,
+        build.sponsor_website_url,
+    )
+    if build.sponsor_installation_id is None:
+        if any(value is not None for value in values):
+            msg = "A persisted build has sponsor metadata without its installation ID."
+            raise DataIntegrityError(msg)
+        return None
+    try:
+        return PublicSponsor(
+            installation_id=build.sponsor_installation_id,
+            display_name=build.sponsor_display_name,
+            address=build.sponsor_address,
+            description=build.sponsor_description,
+            website_url=build.sponsor_website_url,
+        )
+    except ValueError as error:
+        msg = "A persisted build has invalid public sponsor metadata."
+        raise DataIntegrityError(msg) from error

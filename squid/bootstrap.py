@@ -103,6 +103,7 @@ from squid.submissions.infrastructure.finalization_events import (
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
@@ -378,10 +379,16 @@ class _ServiceGraph:
             FailClosedDraftSchematicReader(),
             media_limits=MediaLimits(),
         )
+        sponsors = (
+            PaperSponsorResolver(self.minecraft_installations)
+            if self.config.minecraft_auth.sponsor_attribution_enabled and self.minecraft_installations is not None
+            else None
+        )
         return SubmissionFinalizationService(
             self.submission_drafts,
             readiness,
             self.submission_finalization_jobs,
+            sponsors,
         )
 
     @cached_property
