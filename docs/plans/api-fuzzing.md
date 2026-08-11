@@ -1,4 +1,4 @@
-# Advanced API Fuzzing Architecture, Prepared for the Rust CLI
+# Advanced API Fuzzing Architecture for the Rust CLI Contract
 
 ## Summary
 
@@ -10,9 +10,22 @@ universal fuzzing framework. Share environment lifecycle and finding metadata on
 state machines, Atheris, and race/chaos scenarios keep their native generators, shrinkers, corpora, and replay
 formats.
 
-The fuzzer will prepare the backend contract for the future Rust CLI, but it will not be reused as CLI runtime
+The fuzzer hardens the backend contract consumed by the existing Rust CLI, but it is not reused as CLI runtime
 infrastructure. This preserves the approaches proven by RESTler, OSS-Fuzz, and SQLite without reproducing those
 systems inside this repository.
+
+### Implementation status (2026-08-12)
+
+The canonical contract, stable operation IDs, authentication alternatives, complete `x-squid-cli` audit,
+capability endpoint, language-neutral fixtures, pinned Schemathesis dependency, and bounded Atheris launcher are
+implemented. The first environment layer is also present: loopback-configurable upstream adapters, unguessable run
+identity, live reset attestation, deterministic in-container Mojang/Discord fakes, fail-closed Docker cleanup guards,
+a 20-second one-worker `st run` watchdog, sanitized NDJSON classification, and versioned redacted finding envelopes.
+
+The next integration slice is the concrete Docker composition and deterministic database seeder/reset. It must add
+the isolated PostgreSQL roles, template-database reset, Redis namespace, container assembly, and the single
+non-fuzzing lifecycle integration test before the local smoke recipe is exposed. No API campaign should be run merely
+to validate those harness mechanics on a resource-constrained development box.
 
 ## Architecture and Contract Boundaries
 
@@ -70,8 +83,8 @@ a small versioned `ScenarioV1` JSON format.
 
 ### Canonical API and CLI capability contract
 
-- Move `web/openapi.json` to `contracts/openapi.json`; Astro, Schemathesis preflight, and the future Rust generator
-  consume that one file.
+- Keep `contracts/openapi.json` as the one contract consumed by Astro, Schemathesis preflight, Rust CLI contract
+  checks, and any generated private transport models.
 - Continue fuzzing the live `/openapi.json`, but fail preflight when it differs from the committed contract.
 - Replace FastAPI-derived operation IDs with explicit stable identifiers suitable for generated Rust methods and
   permanent CLI mappings.
@@ -80,7 +93,7 @@ a small versioned `ScenarioV1` JSON format.
   - Service credentials: `ApiCredential`.
   - Browser sessions: `WebSession`.
   - Unsafe browser writes: combined `WebSession` and `CsrfToken`.
-  - Future CLI devices: a separate `DeviceSession` scheme.
+  - CLI devices: a separate `DeviceSession` scheme.
   - API-key scopes through `x-required-api-scopes`, since OpenAPI API-key schemes cannot express scopes.
 - Add `x-squid-cli` to every operation with exactly one classification:
   - `command`
@@ -103,8 +116,9 @@ a small versioned `ScenarioV1` JSON format.
 - Generate language-neutral fixtures under `contracts/fixtures/`, keyed by operation ID. Each CLI `command`
   operation gets a representative success and Problem Detail; binary and streaming operations also get
   header/boundary fixtures.
-- Generated Rust models will later remain private transport types behind handwritten CLI output models. Rust
-  generation drift and command-registry coverage start only when `cli/` exists.
+- The existing Rust CLI keeps handwritten output models. Generated Rust models, when introduced, remain private
+  transport types behind them; generation drift and command-registry coverage are now active work because `cli/`
+  exists.
 
 ### Production/test seam
 
@@ -227,7 +241,6 @@ Add these only as their backend APIs land:
   - Cover changed files, missing/overlapping/reordered parts, duplicate completion, checksum mismatch, expired
     capability, cross-account reuse, quota limits, interrupted resume, and orphan cleanup.
   - Use the deterministic fake store for state exploration and a pinned S3-compatible service for smaller weekly
-    compatibility tests.
 - Inbox/WebSockets:
   - Keep HTTP inbox as the durable source of truth.
   - Publish a sibling versioned JSON Schema or AsyncAPI contract for event envelopes, cursors, close codes, and
@@ -370,5 +383,5 @@ Acceptance requires:
 - Any Nucleation defect or documentation mismatch found during integration is reported upstream with its exact
   version and minimized reproducer.
 
-The Rust CLI itself remains sequenced after the provider-neutral platform and pilot. It consumes the contracts and
-fixtures produced here but does not import, embed, or depend on the Python fuzz harness.
+The Rust CLI consumes the contracts and fixtures produced here but does not import, embed, or depend on the Python
+fuzz harness. New CLI protocols remain sequenced after their provider-neutral backend prerequisites and pilot APIs.
