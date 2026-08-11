@@ -1,0 +1,1 @@
+"""CLI authorization unit tests."""

@@ -549,6 +549,9 @@ class AccountRepository:
             "UPDATE api_keys SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
             "UPDATE api_keys SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
             "UPDATE web_sessions SET account_id = :survivor WHERE account_id = :absorbed",
+            "UPDATE cli_device_enrollments SET approved_by_account_id = :survivor "
+            "WHERE approved_by_account_id = :absorbed",
+            "UPDATE cli_devices SET account_id = :survivor WHERE account_id = :absorbed",
             "UPDATE creator_aliases SET account_id = :survivor WHERE account_id = :absorbed",
             "UPDATE creator_alias_claims SET resolved_by_account_id = :survivor "
             "WHERE resolved_by_account_id = :absorbed",
