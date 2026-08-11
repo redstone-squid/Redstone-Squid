@@ -9,14 +9,21 @@ import aiohttp
 from squid.accounts.errors import MinecraftServiceUnavailableError
 
 MAX_PROFILE_RESPONSE_BYTES = 64 * 1024
+DEFAULT_PROFILE_URL = "https://sessionserver.mojang.com/session/minecraft/profile"
 
 
 class MojangClient:
     """Resolve current Minecraft names through one reusable HTTP session."""
 
-    def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(
+        self,
+        session: aiohttp.ClientSession | None = None,
+        *,
+        profile_url: str = DEFAULT_PROFILE_URL,
+    ) -> None:
         self._session = session
         self._owns_session = session is None
+        self._profile_url = profile_url.rstrip("/")
 
     async def get_username(self, minecraft_uuid: UUID) -> str | None:
         """Return the current username for a Minecraft UUID."""
@@ -27,7 +34,7 @@ class MojangClient:
                 raise_for_status=False,
             )
             self._session = session
-        url = f"https://sessionserver.mojang.com/session/minecraft/profile/{minecraft_uuid!s}"
+        url = f"{self._profile_url}/{minecraft_uuid!s}"
         try:
             async with session.get(url, allow_redirects=False) as response:
                 if response.status == 204:

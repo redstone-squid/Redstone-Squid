@@ -14,7 +14,7 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CONSENT_CUTOFF
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
-from squid.config import OAuthConfig
+from squid.config import OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, ServiceUnavailableError, ValidationError
 
 
@@ -52,6 +52,7 @@ class DiscordOAuthService:
         *,
         client: httpx.AsyncClient | None = None,
         now: Callable[[], Instant] = Instant.now,
+        upstreams: UpstreamHttpConfig | None = None,
     ) -> None:
         self._repository = repository
         self._accounts = accounts
@@ -60,6 +61,9 @@ class DiscordOAuthService:
         self._client = client or httpx.AsyncClient(timeout=10)
         self._owns_client = client is None
         self._now = now
+        resolved_upstreams = upstreams or UpstreamHttpConfig()
+        self._discord_api_url = str(resolved_upstreams.discord_api_url).rstrip("/")
+        self._discord_authorize_url = str(resolved_upstreams.discord_authorize_url).rstrip("/")
 
     @property
     def configured(self) -> bool:
@@ -83,7 +87,7 @@ class DiscordOAuthService:
                 "code_challenge_method": "S256",
             }
         )
-        return f"https://discord.com/oauth2/authorize?{query}"
+        return f"{self._discord_authorize_url}?{query}"
 
     async def callback(self, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
         """Consume state, exchange the code, and issue an opaque session token."""
@@ -97,7 +101,7 @@ class DiscordOAuthService:
             if client_secret is None:
                 raise self._discord_unavailable()
             token_response = await self._client.post(
-                "https://discord.com/api/v10/oauth2/token",
+                f"{self._discord_api_url}/oauth2/token",
                 data={
                     "client_id": self._config.discord_client_id,
                     "client_secret": client_secret.get_secret_value(),
@@ -111,7 +115,7 @@ class DiscordOAuthService:
                 raise self._discord_unavailable()
             access_token = token_response.json()["access_token"]
             identity_response = await self._client.get(
-                "https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"}
+                f"{self._discord_api_url}/users/@me", headers={"Authorization": f"Bearer {access_token}"}
             )
             if identity_response.status_code != 200:
                 raise self._discord_unavailable()

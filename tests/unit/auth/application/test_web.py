@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.auth.application.web import DiscordOAuthService, consent_pending
 from squid.auth.domain.sessions import OAuthState
-from squid.config import OAuthConfig
+from squid.config import OAuthConfig, UpstreamHttpConfig
 
 
 class SessionRepository:
@@ -80,6 +80,47 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
     assert repository.token_hash is not None
     assert repository.token_hash == service.hash_token(token)
     assert token.encode() not in repository.token_hash
+
+
+async def test_oauth_service_uses_configured_loopback_endpoints() -> None:
+    repository = SessionRepository()
+    accounts = AsyncMock()
+    accounts.get_or_create_account.return_value.id = 42
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        payload = {"access_token": "discord-token"} if request.url.path.endswith("/oauth2/token") else {"id": "123"}
+        return httpx.Response(200, json=payload)
+
+    service = DiscordOAuthService(
+        repository,
+        accounts,
+        OAuthConfig(
+            discord_client_id="client",
+            discord_client_secret=SecretStr("secret"),
+            redirect_uri=AnyHttpUrl("https://api.example/v1/auth/discord/callback"),
+        ),
+        "session-pepper-for-tests",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        now=lambda: Instant.from_utc(2026, 8, 5),
+        upstreams=UpstreamHttpConfig.model_validate(
+            {
+                "discord_api_url": "http://127.0.0.1:8102/discord/api",
+                "discord_authorize_url": "http://127.0.0.1:8102/discord/authorize",
+            }
+        ),
+    )
+
+    authorize_url = await service.authorize_url(None)
+    assert authorize_url.startswith("http://127.0.0.1:8102/discord/authorize?")
+    assert repository.state is not None
+    await service.callback("code", repository.state.state, user_agent=None)
+
+    assert [request.url.path for request in requests] == [
+        "/discord/api/oauth2/token",
+        "/discord/api/users/@me",
+    ]
 
 
 def test_consent_gate_grandfathers_accounts_before_cutoff() -> None:

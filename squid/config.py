@@ -450,6 +450,33 @@ class OAuthConfig(_FrozenModel):
         return self
 
 
+class UpstreamHttpConfig(_FrozenModel):
+    """Production upstream endpoints with tightly constrained test overrides."""
+
+    mojang_profile_url: AnyHttpUrl = AnyHttpUrl("https://sessionserver.mojang.com/session/minecraft/profile")
+    discord_api_url: AnyHttpUrl = AnyHttpUrl("https://discord.com/api/v10")
+    discord_authorize_url: AnyHttpUrl = AnyHttpUrl("https://discord.com/oauth2/authorize")
+
+    @model_validator(mode="after")
+    def _official_or_loopback(self) -> Self:
+        official = {
+            "mojang_profile_url": "https://sessionserver.mojang.com/session/minecraft/profile",
+            "discord_api_url": "https://discord.com/api/v10",
+            "discord_authorize_url": "https://discord.com/oauth2/authorize",
+        }
+        for field, expected in official.items():
+            value = getattr(self, field)
+            if str(value).rstrip("/") == expected:
+                continue
+            if value.host not in {"127.0.0.1", "[::1]", "localhost"} or value.username or value.password:
+                msg = f"{field} overrides must use an explicit loopback HTTP endpoint."
+                raise ValueError(msg)
+            if value.query is not None or value.fragment is not None:
+                msg = f"{field} overrides cannot contain a query or fragment."
+                raise ValueError(msg)
+        return self
+
+
 class BotConfig(_FrozenModel):
     """Discord-process-specific settings."""
 
@@ -770,6 +797,7 @@ class RuntimeConfig(_FrozenModel):
     session_pepper: SecretStr | None = None
     idempotency_encryption: IdempotencyEncryptionConfig | None = None
     oauth: OAuthConfig | None = None
+    upstream_http: UpstreamHttpConfig = UpstreamHttpConfig()
 
 
 class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
@@ -822,6 +850,7 @@ class _ProcessSettings(BaseSettings):
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
     notification: NotificationConfig = NotificationConfig()
+    upstream_http: UpstreamHttpConfig = UpstreamHttpConfig()
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
     strict_unknown_keys: bool = False
@@ -865,6 +894,7 @@ class _ProcessSettings(BaseSettings):
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
             cursor_secret=self.cursor.secret,
+            upstream_http=self.upstream_http,
         )
 
 
@@ -971,6 +1001,7 @@ class ApplicationConfig(BotProcessConfig):
                     "catbox",
                     "google",
                     "build",
+                    "upstream_http",
                 }
             )
         )
@@ -998,6 +1029,7 @@ class ApplicationConfig(BotProcessConfig):
                     "oauth",
                     "api",
                     "rate_limit",
+                    "upstream_http",
                 }
             )
         )
@@ -1023,6 +1055,7 @@ class ApplicationConfig(BotProcessConfig):
                     "observability",
                     "strict_unknown_keys",
                     "worker",
+                    "upstream_http",
                 }
             )
         )
@@ -1208,6 +1241,7 @@ __all__ = [
     "RateLimitConfig",
     "RuntimeConfig",
     "SchematicConfig",
+    "UpstreamHttpConfig",
     "WorkerConfig",
     "WorkerProcessConfig",
     "load_api_process_config",
