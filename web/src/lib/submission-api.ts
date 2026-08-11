@@ -1,19 +1,19 @@
 import {
-  approveChallengeV1MinecraftAuthChallengesApprovalPost,
-  approveEnrollmentV1CliAuthEnrollmentsApprovalPost,
-  changeDraftV1SubmissionsDraftsDraftIdChangesPost,
-  createDraftV1SubmissionsDraftsPost,
-  csrfTokenV1AuthCsrfGet,
-  currentFormV1SubmissionsFormCurrentGet,
-  deleteDraftV1SubmissionsDraftsDraftIdDelete,
-  discardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDelete,
-  formOptionsV1SubmissionsFormOptionsSourceGet,
-  getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet,
-  getDraftV1SubmissionsDraftsDraftIdGet,
-  listDraftMediaV1SubmissionsDraftsDraftIdMediaGet,
-  previewEnrollmentV1CliAuthEnrollmentsApprovalGet,
-  submitDraftV1SubmissionsDraftsDraftIdSubmissionPost,
-  uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost,
+  browserCsrfGet,
+  cliEnrollmentApprove,
+  cliEnrollmentPreview,
+  minecraftChallengeApprove,
+  submissionDraftChange,
+  submissionDraftCreate,
+  submissionDraftDelete,
+  submissionDraftGet,
+  submissionFinalizationGet,
+  submissionFinalizationStart,
+  submissionFormCurrent,
+  submissionFormOptionsGet,
+  submissionMediaDiscard,
+  submissionMediaList,
+  submissionMediaUpload,
 } from "../generated/sdk.gen";
 import { createClient, type Client } from "../generated/client";
 import type {
@@ -177,7 +177,7 @@ function createMutationSession(client: Client): MutationSession {
         return localToken;
       }
     }
-    pendingToken ??= csrfTokenV1AuthCsrfGet({ client }).then((result) => unwrap(result).csrf_token);
+    pendingToken ??= browserCsrfGet({ client }).then((result) => unwrap(result).csrf_token);
     try {
       cachedToken = await pendingToken;
       return cachedToken;
@@ -212,7 +212,7 @@ async function uploadRawMedia(
 ): Promise<DraftMediaResponse> {
   return mutations.execute(undefined, async (headers) =>
     unwrap(
-      await uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost({
+      await submissionMediaUpload({
         client,
         path: { draft_id: draftId, kind },
         query: {
@@ -233,10 +233,10 @@ export function createSubmissionApi(
   const client = createSubmissionClient(locale, config);
   const mutations = createMutationSession(client);
   return {
-    currentForm: async () => unwrap(await currentFormV1SubmissionsFormCurrentGet({ client })),
+    currentForm: async () => unwrap(await submissionFormCurrent({ client })),
     formOptions: async (source, category) =>
       unwrap(
-        await formOptionsV1SubmissionsFormOptionsSourceGet({
+        await submissionFormOptionsGet({
           client,
           path: { source },
           query: { category },
@@ -247,7 +247,7 @@ export function createSubmissionApi(
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
-            await createDraftV1SubmissionsDraftsPost({
+            await submissionDraftCreate({
               client,
               body: {
                 category,
@@ -266,11 +266,11 @@ export function createSubmissionApi(
       }
     },
     getDraft: async (draftId) =>
-      unwrap(await getDraftV1SubmissionsDraftsDraftIdGet({ client, path: { draft_id: draftId } })),
+      unwrap(await submissionDraftGet({ client, path: { draft_id: draftId } })),
     changeDraft: async (draftId, change) =>
       mutations.execute(change.idempotency_key, async (headers) =>
         unwrap(
-          await changeDraftV1SubmissionsDraftsDraftIdChangesPost({
+          await submissionDraftChange({
             client,
             path: { draft_id: draftId },
             body: change,
@@ -281,7 +281,7 @@ export function createSubmissionApi(
     deleteDraft: async (draftId) => {
       const idempotencyKey = requestId();
       await mutations.execute(idempotencyKey, async (headers) => {
-        const result = await deleteDraftV1SubmissionsDraftsDraftIdDelete({
+        const result = await submissionDraftDelete({
           client,
           path: { draft_id: draftId },
           headers,
@@ -291,7 +291,7 @@ export function createSubmissionApi(
     },
     listMedia: async (draftId) =>
       unwrap(
-        await listDraftMediaV1SubmissionsDraftsDraftIdMediaGet({
+        await submissionMediaList({
           client,
           path: { draft_id: draftId },
         }),
@@ -307,7 +307,7 @@ export function createSubmissionApi(
     discardMedia: async (draftId, uploadId) => {
       const idempotencyKey = requestId();
       await mutations.execute(idempotencyKey, async (headers) => {
-        const result = await discardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDelete({
+        const result = await submissionMediaDiscard({
           client,
           path: { draft_id: draftId, upload_id: uploadId },
           headers,
@@ -318,7 +318,7 @@ export function createSubmissionApi(
     submitDraft: async (draftId) =>
       mutations.execute(requestId(), async (headers) =>
         unwrap(
-          await submitDraftV1SubmissionsDraftsDraftIdSubmissionPost({
+          await submissionFinalizationStart({
             client,
             path: { draft_id: draftId },
             headers,
@@ -327,7 +327,7 @@ export function createSubmissionApi(
       ),
     submissionStatus: async (draftId) =>
       unwrap(
-        await getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet({
+        await submissionFinalizationGet({
           client,
           path: { draft_id: draftId },
         }),
@@ -352,7 +352,7 @@ export function createMinecraftLinkApi(
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
-            await approveChallengeV1MinecraftAuthChallengesApprovalPost({
+            await minecraftChallengeApprove({
               client,
               body: { user_code: userCode },
               headers,
@@ -383,7 +383,7 @@ export function createCliLinkApi(
   return {
     preview: async (userCode) =>
       unwrap(
-        await previewEnrollmentV1CliAuthEnrollmentsApprovalGet({
+        await cliEnrollmentPreview({
           client,
           query: { user_code: userCode },
         }),
@@ -393,7 +393,7 @@ export function createCliLinkApi(
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
-            await approveEnrollmentV1CliAuthEnrollmentsApprovalPost({
+            await cliEnrollmentApprove({
               client,
               body: { user_code: userCode },
               headers,

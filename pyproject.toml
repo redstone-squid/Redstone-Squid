@@ -76,7 +76,7 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
-    "schemathesis>=4.24.2",
+    "schemathesis==4.24.2",
     # Matches the 'schematics' extra so CI (x86_64 Linux) always exercises the real adapter
     # rather than only the fakes.
     "nucleation==0.10.1 ; platform_machine == 'x86_64' or platform_machine == 'arm64'",

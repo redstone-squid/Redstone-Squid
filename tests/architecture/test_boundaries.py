@@ -79,6 +79,22 @@ def test_native_schematic_engine_stays_in_its_adapter() -> None:
     )
 
 
+def test_production_modules_do_not_import_fuzz_engines() -> None:
+    """Keep generators, native instrumentation, and their runtime costs test-only."""
+    fuzz_packages = ("atheris", "hypothesis", "schemathesis")
+    violations: list[tuple[Path, int, str]] = []
+    for path in Path("squid").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                violations.extend(
+                    (path, node.lineno, alias.name) for alias in node.names if alias.name.startswith(fuzz_packages)
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(fuzz_packages):
+                violations.append((path, node.lineno, node.module))
+
+    assert violations == []
+
+
 # The adapter modules are allowed to name the engine; everything else must not, including via
 # a string handed to importlib, which an import-graph rule would not see.
 ENGINE_REFERENCE_ALLOWLIST = frozenset(

@@ -1,12 +1,12 @@
 import { createClient, type Client } from "../generated/client";
 import {
-  getBuildV1BuildsBuildIdGet,
-  getRecordV1RecordsRecordIdGet,
-  listBuildSchematicsV1BuildsBuildIdSchematicsGet,
-  listBuildsV1BuildsGet,
-  listRecordsV1RecordsGet,
-  searchV1SearchGet,
-  suggestTermsV1SearchSuggestGet,
+  buildSchematicsList,
+  buildsGet,
+  buildsList,
+  recordsGet,
+  recordsList,
+  searchExecute,
+  searchTermsSuggest,
 } from "../generated/sdk.gen";
 import type {
   BuildDetail,
@@ -79,7 +79,7 @@ export async function fetchBuilds(
   locale: Locale,
   query: BuildQuery = {},
 ): Promise<PageBuildSummary> {
-  const result = await listBuildsV1BuildsGet({
+  const result = await buildsList({
     client: createCatalogueClient(locale),
     query: {
       ...(query.q ? { q: query.q } : {}),
@@ -92,7 +92,7 @@ export async function fetchBuilds(
 }
 
 export async function fetchBuild(locale: Locale, id: number): Promise<BuildDetail> {
-  const result = await getBuildV1BuildsBuildIdGet({
+  const result = await buildsGet({
     client: createCatalogueClient(locale),
     path: { build_id: id },
   });
@@ -104,7 +104,7 @@ export async function fetchRecords(
   cursor?: string,
   pageSize = 20,
 ): Promise<PageRecordSummary> {
-  const result = await listRecordsV1RecordsGet({
+  const result = await recordsList({
     client: createCatalogueClient(locale),
     query: { ...(cursor ? { cursor } : {}), page_size: Math.min(pageSize, 50) },
   });
@@ -112,7 +112,7 @@ export async function fetchRecords(
 }
 
 export async function fetchRecord(locale: Locale, id: number): Promise<RecordDetail> {
-  const result = await getRecordV1RecordsRecordIdGet({
+  const result = await recordsGet({
     client: createCatalogueClient(locale),
     path: { record_id: id },
   });
@@ -123,7 +123,7 @@ export async function fetchSchematics(
   locale: Locale,
   buildId: number,
 ): Promise<PageSchematicSummary> {
-  const result = await listBuildSchematicsV1BuildsBuildIdSchematicsGet({
+  const result = await buildSchematicsList({
     client: createCatalogueClient(locale),
     path: { build_id: buildId },
     query: { page_size: 50 },
@@ -143,7 +143,7 @@ export async function fetchSearch(
   locale: Locale,
   query: CatalogueSearchQuery,
 ): Promise<SearchPage> {
-  const result = await searchV1SearchGet({
+  const result = await searchExecute({
     client: createCatalogueClient(locale),
     query: {
       q: query.q,
@@ -157,7 +157,7 @@ export async function fetchSearch(
 }
 
 export async function fetchSuggestions(locale: Locale, q: string): Promise<SearchSuggestions> {
-  const result = await suggestTermsV1SearchSuggestGet({
+  const result = await searchTermsSuggest({
     client: createCatalogueClient(locale),
     query: { q, limit: 8 },
   });

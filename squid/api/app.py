@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from squid.api.dependencies import Accounts
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
+from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.request_body import BoundedRequestBodyMiddleware
@@ -109,6 +110,7 @@ def create_api_app(
     register_exception_handlers(api)
     api.include_router(router)
     api.include_router(v1_router)
+    install_openapi_contract(api)
     api.add_middleware(RateLimitMiddleware)
     api.add_middleware(IdempotencyResponseMiddleware)
     api.add_middleware(BoundedRequestBodyMiddleware)

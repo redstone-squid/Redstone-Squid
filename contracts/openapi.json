@@ -10,7 +10,7 @@
       "get": {
         "summary": "Live",
         "description": "Report only whether the API process can service requests.",
-        "operationId": "live_livez_get",
+        "operationId": "health_live",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -26,6 +26,13 @@
               }
             }
           }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "internal",
+          "rationale": "Process liveness probe."
         }
       }
     },
@@ -33,7 +40,7 @@
       "get": {
         "summary": "Ready",
         "description": "Report whether required database state matches this release.",
-        "operationId": "ready_readyz_get",
+        "operationId": "health_ready",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -49,6 +56,13 @@
               }
             }
           }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "internal",
+          "rationale": "Deployment readiness probe."
         }
       }
     },
@@ -56,7 +70,7 @@
       "get": {
         "summary": "Ready",
         "description": "Report whether required database state matches this release.",
-        "operationId": "ready_health_get",
+        "operationId": "health_ready_compatibility",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -72,6 +86,13 @@
               }
             }
           }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "compatibility-alias",
+          "canonical_operation_id": "health_ready"
         }
       }
     },
@@ -82,10 +103,17 @@
         ],
         "summary": "Get Verification Code",
         "description": "Generate a verification code for a user.",
-        "operationId": "get_verification_code_v1_verify_post",
+        "operationId": "verification_create",
         "security": [
           {
             "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
           }
         ],
         "parameters": [
@@ -238,17 +266,30 @@
             },
             "description": "Service Unavailable"
           }
-        }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "verify"
+        ]
       }
     },
     "/verify": {
       "post": {
         "summary": "Get Verification Code",
         "description": "Generate a verification code for a user.",
-        "operationId": "get_verification_code_verify_post",
+        "operationId": "verification_create_compatibility",
         "security": [
           {
             "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
           }
         ],
         "parameters": [
@@ -401,7 +442,14 @@
             },
             "description": "Service Unavailable"
           }
-        }
+        },
+        "x-squid-cli": {
+          "classification": "compatibility-alias",
+          "canonical_operation_id": "verification_create"
+        },
+        "x-required-api-scopes": [
+          "verify"
+        ]
       }
     },
     "/v1/auth/csrf": {
@@ -411,7 +459,7 @@
         ],
         "summary": "Csrf Token",
         "description": "Return the session-bound write token to a credentialed CORS frontend.",
-        "operationId": "csrf_token_v1_auth_csrf_get",
+        "operationId": "browser_csrf_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -471,9 +519,12 @@
         },
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
-        ]
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
       }
     },
     "/v1/auth/discord": {
@@ -483,11 +534,9 @@
         ],
         "summary": "Discord Authorize",
         "description": "Begin Discord authorization with PKCE and durable one-time state.",
-        "operationId": "discord_authorize_v1_auth_discord_get",
+        "operationId": "browser_authorization_start",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -567,6 +616,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -577,11 +629,9 @@
         ],
         "summary": "Discord Callback",
         "description": "Exchange a Discord code and set a revocable opaque session cookie.",
-        "operationId": "discord_callback_v1_auth_discord_callback_get",
+        "operationId": "browser_authorization_callback",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -681,6 +731,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -691,10 +744,11 @@
         ],
         "summary": "Logout",
         "description": "Revoke the current browser session and clear its cookies.",
-        "operationId": "logout_v1_auth_logout_post",
+        "operationId": "browser_session_revoke",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -809,6 +863,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -819,10 +876,11 @@
         ],
         "summary": "Submit Build",
         "description": "Submit a door build for Discord moderation.",
-        "operationId": "submit_build_v1_builds_post",
+        "operationId": "builds_create",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -974,6 +1032,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "get": {
@@ -982,10 +1043,17 @@
         ],
         "summary": "List Builds",
         "description": "Search public builds, or list one authoritative moderation-status view.",
-        "operationId": "list_builds_v1_builds_get",
+        "operationId": "builds_list",
         "security": [
+          {},
           {
             "ApiCredential": []
+          },
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
           }
         ],
         "parameters": [
@@ -1170,6 +1238,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -1180,10 +1251,11 @@
         ],
         "summary": "Edit Build",
         "description": "Edit an owned pending build, or any build as a global administrator.",
-        "operationId": "edit_build_v1_builds__build_id__patch",
+        "operationId": "builds_update",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -1405,6 +1477,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "get": {
@@ -1413,11 +1488,9 @@
         ],
         "summary": "Get Build",
         "description": "Return one confirmed public build.",
-        "operationId": "get_build_v1_builds__build_id__get",
+        "operationId": "builds_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -1501,6 +1574,52 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "tags": [
+          "capabilities"
+        ],
+        "summary": "Capabilities",
+        "description": "Publish independently versioned client compatibility and safety limits.",
+        "operationId": "capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCapabilities"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -1511,11 +1630,9 @@
         ],
         "summary": "Start Enrollment",
         "description": "Start browser approval for a client-held Ed25519 public key.",
-        "operationId": "start_enrollment_v1_cli_auth_enrollments_post",
+        "operationId": "cli_enrollment_start",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -1636,6 +1753,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "auth.login",
+          "required_api_features": [
+            "cli-device-auth"
+          ],
+          "interaction": "browser-continuation"
         }
       }
     },
@@ -1646,11 +1771,9 @@
         ],
         "summary": "Exchange Enrollment",
         "description": "Exchange browser approval after proving possession of the enrolled key.",
-        "operationId": "exchange_enrollment_v1_cli_auth_enrollments_exchange_post",
+        "operationId": "cli_enrollment_exchange",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -1771,6 +1894,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -1781,10 +1907,10 @@
         ],
         "summary": "Preview Enrollment",
         "description": "Show a device label and fingerprint before the browser grants access.",
-        "operationId": "preview_enrollment_v1_cli_auth_enrollments_approval_get",
+        "operationId": "cli_enrollment_preview",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "parameters": [
@@ -1917,6 +2043,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "post": {
@@ -1925,10 +2054,11 @@
         ],
         "summary": "Approve Enrollment",
         "description": "Approve the previewed CLI device as the signed-in browser account.",
-        "operationId": "approve_enrollment_v1_cli_auth_enrollments_approval_post",
+        "operationId": "cli_enrollment_approve",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -2080,6 +2210,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -2090,11 +2223,9 @@
         ],
         "summary": "Start Session Challenge",
         "description": "Issue a one-time nonce for an enrolled device to sign.",
-        "operationId": "start_session_challenge_v1_cli_auth_session_challenges_post",
+        "operationId": "cli_session_challenge_start",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -2230,6 +2361,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -2240,11 +2374,9 @@
         ],
         "summary": "Exchange Session Challenge",
         "description": "Exchange a signed device nonce for a short-lived bearer session.",
-        "operationId": "exchange_session_challenge_v1_cli_auth_sessions_post",
+        "operationId": "cli_session_exchange",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -2380,6 +2512,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -2390,7 +2525,7 @@
         ],
         "summary": "List Devices",
         "description": "List browser-account-owned devices without exposing public keys.",
-        "operationId": "list_devices_v1_cli_auth_devices_get",
+        "operationId": "cli_devices_list",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2480,9 +2615,12 @@
         },
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
-        ]
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
       }
     },
     "/v1/cli/auth/devices/{device_id}": {
@@ -2492,10 +2630,11 @@
         ],
         "summary": "Revoke Device",
         "description": "Revoke an account-owned device and every session issued beneath it.",
-        "operationId": "revoke_device_v1_cli_auth_devices__device_id__delete",
+        "operationId": "cli_device_revoke",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -2640,6 +2779,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -2650,10 +2792,10 @@
         ],
         "summary": "Revoke Current Session",
         "description": "Revoke the exact CLI bearer session authenticating this request.",
-        "operationId": "revoke_current_session_v1_cli_auth_sessions_current_delete",
+        "operationId": "cli_session_revoke",
         "security": [
           {
-            "ApiCredential": []
+            "DeviceSession": []
           }
         ],
         "parameters": [
@@ -2768,6 +2910,14 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "auth.logout",
+          "required_api_features": [
+            "cli-device-auth"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -2778,7 +2928,7 @@
         ],
         "summary": "Get Me",
         "description": "Return the authenticated user's own linked account.",
-        "operationId": "get_me_v1_users_me_get",
+        "operationId": "account_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2868,9 +3018,12 @@
         },
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
-        ]
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
       }
     },
     "/v1/users/me/consent": {
@@ -2880,10 +3033,11 @@
         ],
         "summary": "Grant Consent",
         "description": "Accept the current privacy notice for future writes.",
-        "operationId": "grant_consent_v1_users_me_consent_post",
+        "operationId": "account_consent_grant",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -3020,6 +3174,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3030,10 +3187,10 @@
         ],
         "summary": "List My Builds",
         "description": "List the caller's own submissions, including the ones still awaiting review.\n\nThis is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own\npending and denied builds, which the public search path deliberately cannot return.",
-        "operationId": "list_my_builds_v1_users_me_builds_get",
+        "operationId": "account_builds_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "parameters": [
@@ -3184,6 +3341,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3194,10 +3354,11 @@
         ],
         "summary": "Create Installation",
         "description": "Register a Paper server and return its plaintext secret exactly once.",
-        "operationId": "create_installation_v1_minecraft_auth_paper_installations_post",
+        "operationId": "paper_installation_create",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -3334,6 +3495,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "get": {
@@ -3342,10 +3506,10 @@
         ],
         "summary": "List Installations",
         "description": "List only the signed-in account's Paper installations, without secrets or digests.",
-        "operationId": "list_installations_v1_minecraft_auth_paper_installations_get",
+        "operationId": "paper_installations_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "responses": {
@@ -3434,6 +3598,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3444,10 +3611,11 @@
         ],
         "summary": "Rotate Installation",
         "description": "Fence an owned installation's old credentials and return one replacement secret.",
-        "operationId": "rotate_installation_v1_minecraft_auth_paper_installations__installation_id__rotate_post",
+        "operationId": "paper_installation_rotate",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -3599,6 +3767,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3609,10 +3780,11 @@
         ],
         "summary": "Update Installation Profile",
         "description": "Replace an owned server's explicit public-listing and sponsorship preferences.",
-        "operationId": "update_installation_profile_v1_minecraft_auth_paper_installations__installation_id__profile_put",
+        "operationId": "paper_installation_profile_update",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -3774,6 +3946,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3784,10 +3959,11 @@
         ],
         "summary": "Revoke Installation",
         "description": "Revoke an owned server and all pending or active authorization derived from it.",
-        "operationId": "revoke_installation_v1_minecraft_auth_paper_installations__installation_id__delete",
+        "operationId": "paper_installation_revoke",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -3932,6 +4108,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -3942,10 +4121,11 @@
         ],
         "summary": "Start Paper Challenge",
         "description": "Start player authorization bound to the authenticated Paper credential generation.",
-        "operationId": "start_paper_challenge_v1_minecraft_auth_paper_challenges_post",
+        "operationId": "paper_challenge_start",
         "security": [
           {
-            "ApiCredential": []
+            "PaperInstallationId": [],
+            "PaperInstallationSecret": []
           }
         ],
         "parameters": [
@@ -4114,6 +4294,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -4124,10 +4307,11 @@
         ],
         "summary": "Exchange Paper Challenge",
         "description": "Exchange one approved Paper challenge on the same authenticated installation.",
-        "operationId": "exchange_paper_challenge_v1_minecraft_auth_paper_challenges_exchange_post",
+        "operationId": "paper_challenge_exchange",
         "security": [
           {
-            "ApiCredential": []
+            "PaperInstallationId": [],
+            "PaperInstallationSecret": []
           }
         ],
         "parameters": [
@@ -4296,6 +4480,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -4306,11 +4493,9 @@
         ],
         "summary": "Start Fabric Challenge",
         "description": "Start an anonymous Fabric challenge committed to a client-held S256 verifier.",
-        "operationId": "start_fabric_challenge_v1_minecraft_auth_fabric_challenges_post",
+        "operationId": "fabric_challenge_start",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -4431,6 +4616,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -4441,11 +4629,9 @@
         ],
         "summary": "Exchange Fabric Challenge",
         "description": "Exchange one approved Fabric challenge by proving its client-held PKCE verifier.",
-        "operationId": "exchange_fabric_challenge_v1_minecraft_auth_fabric_challenges_exchange_post",
+        "operationId": "fabric_challenge_exchange",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -4566,6 +4752,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -4576,10 +4765,11 @@
         ],
         "summary": "Approve Challenge",
         "description": "Approve only the Java UUID authoritatively attached to the signed-in account.",
-        "operationId": "approve_challenge_v1_minecraft_auth_challenges_approval_post",
+        "operationId": "minecraft_challenge_approve",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -4731,6 +4921,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -4741,10 +4934,11 @@
         ],
         "summary": "Revoke Grant",
         "description": "Revoke one grant only when it belongs to the signed-in account.",
-        "operationId": "revoke_grant_v1_minecraft_auth_grants__grant_id__delete",
+        "operationId": "minecraft_grant_revoke",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -4889,6 +5083,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -4899,10 +5096,10 @@
         ],
         "summary": "Get Preferences",
         "description": "Return disabled defaults before the notification notice has been accepted.",
-        "operationId": "get_preferences_v1_users_me_notifications_preferences_get",
+        "operationId": "notification_preferences_get",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "responses": {
@@ -4976,6 +5173,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "patch": {
@@ -4984,10 +5184,11 @@
         ],
         "summary": "Update Preferences",
         "description": "Update web and DM channels independently after consent.",
-        "operationId": "update_preferences_v1_users_me_notifications_preferences_patch",
+        "operationId": "notification_preferences_update",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -5119,6 +5320,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5129,10 +5333,11 @@
         ],
         "summary": "Accept Notice",
         "description": "Accept the notification-specific notice and choose initial channels.",
-        "operationId": "accept_notice_v1_users_me_notifications_consent_post",
+        "operationId": "notification_consent_grant",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -5264,6 +5469,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5274,10 +5482,10 @@
         ],
         "summary": "List Subscriptions",
         "description": "List enabled subscriptions owned by the caller.",
-        "operationId": "list_subscriptions_v1_users_me_notifications_subscriptions_get",
+        "operationId": "notification_subscriptions_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "responses": {
@@ -5355,6 +5563,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       },
       "post": {
@@ -5363,10 +5574,11 @@
         ],
         "summary": "Create Subscription",
         "description": "Subscribe to a public creator, record competition, or structured filter.",
-        "operationId": "create_subscription_v1_users_me_notifications_subscriptions_post",
+        "operationId": "notification_subscription_create",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -5518,6 +5730,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5528,10 +5743,11 @@
         ],
         "summary": "Delete Subscription",
         "description": "Remove one caller-owned subscription.",
-        "operationId": "delete_subscription_v1_users_me_notifications_subscriptions__subscription_id__delete",
+        "operationId": "notification_subscription_delete",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -5670,6 +5886,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5680,10 +5899,10 @@
         ],
         "summary": "List Inbox",
         "description": "List the caller's web-visible inbox, hiding staff items after access revocation.",
-        "operationId": "list_inbox_v1_users_me_notifications_inbox_get",
+        "operationId": "notification_inbox_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
           }
         ],
         "parameters": [
@@ -5813,6 +6032,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5823,10 +6045,11 @@
         ],
         "summary": "Mark Read",
         "description": "Mark one visible inbox item as read.",
-        "operationId": "mark_read_v1_users_me_notifications_inbox__notification_id__read_post",
+        "operationId": "notification_inbox_mark_read",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -5965,6 +6188,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     },
@@ -5975,11 +6201,9 @@
         ],
         "summary": "Get Record",
         "description": "Return one result only while its computation run is active.",
-        "operationId": "get_record_v1_records__record_id__get",
+        "operationId": "records_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6078,6 +6302,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6088,11 +6315,9 @@
         ],
         "summary": "List Records",
         "description": "List authoritative active record results.",
-        "operationId": "list_records_v1_records_get",
+        "operationId": "records_list",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6196,6 +6421,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6206,11 +6434,9 @@
         ],
         "summary": "List Build Schematics",
         "description": "List analyzed schematics attached to a confirmed build.",
-        "operationId": "list_build_schematics_v1_builds__build_id__schematics_get",
+        "operationId": "build_schematics_list",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6338,6 +6564,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6348,11 +6577,9 @@
         ],
         "summary": "Get Schematic Content",
         "description": "Download explicitly published sanitized bytes from a confirmed build.",
-        "operationId": "get_schematic_content_v1_builds__build_id__schematics__schematic_id__content_get",
+        "operationId": "build_schematic_content_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6442,6 +6669,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6452,11 +6682,9 @@
         ],
         "summary": "Get Schematic Render Content",
         "description": "Return a content-addressed PNG preview from private object storage.",
-        "operationId": "get_schematic_render_content_v1_schematic_renders__recipe_hash__content_get",
+        "operationId": "schematic_render_content_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6537,6 +6765,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6547,7 +6778,7 @@
         ],
         "summary": "List Search Fields",
         "description": "Publish the effective allowlisted query-field registry.",
-        "operationId": "list_search_fields_v1_search_fields_get",
+        "operationId": "search_fields_list",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6595,10 +6826,11 @@
           }
         },
         "security": [
-          {
-            "ApiCredential": []
-          }
-        ]
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
       }
     },
     "/v1/search/suggest": {
@@ -6608,11 +6840,9 @@
         ],
         "summary": "Suggest Terms",
         "description": "Suggest indexed terms completing a valid query.",
-        "operationId": "suggest_terms_v1_search_suggest_get",
+        "operationId": "search_terms_suggest",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6709,6 +6939,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6719,11 +6952,9 @@
         ],
         "summary": "Search",
         "description": "Match builds, computed records, and taxonomy entries in one ranked page.",
-        "operationId": "search_v1_search_get",
+        "operationId": "search_execute",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -6863,6 +7094,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -6873,10 +7107,16 @@
         ],
         "summary": "List Drafts",
         "description": "Return at most ten compact active drafts owned by the signed-in account.",
-        "operationId": "list_drafts_v1_submissions_drafts_get",
+        "operationId": "submission_drafts_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -6983,6 +7223,14 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.list",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       },
       "post": {
@@ -6991,10 +7239,17 @@
         ],
         "summary": "Create Draft",
         "description": "Create an empty synchronized draft owned by the signed-in account.",
-        "operationId": "create_draft_v1_submissions_drafts_post",
+        "operationId": "submission_draft_create",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -7146,6 +7401,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.create",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -7156,11 +7419,9 @@
         ],
         "summary": "Current Form",
         "description": "Return the localized form and protocol bounds authored by this server.",
-        "operationId": "current_form_v1_submissions_form_current_get",
+        "operationId": "submission_form_current",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -7236,6 +7497,9 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -7246,11 +7510,9 @@
         ],
         "summary": "Pinned Form",
         "description": "Return an exact immutable schema revision retained for an unexpired draft.",
-        "operationId": "pinned_form_v1_submissions_form_schemas__schema_id__revisions__revision__get",
+        "operationId": "submission_form_revision_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -7366,6 +7628,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -7376,11 +7641,9 @@
         ],
         "summary": "Form Options",
         "description": "Return one revisioned dynamic option source for a build category.",
-        "operationId": "form_options_v1_submissions_form_options__source__get",
+        "operationId": "submission_form_options_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -7511,6 +7774,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -7521,10 +7787,16 @@
         ],
         "summary": "Get Draft",
         "description": "Return one synchronized draft after enforcing caller ownership.",
-        "operationId": "get_draft_v1_submissions_drafts__draft_id__get",
+        "operationId": "submission_draft_get",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -7661,6 +7933,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.show",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       },
       "delete": {
@@ -7669,10 +7949,17 @@
         ],
         "summary": "Delete Draft",
         "description": "Immediately delete one caller-owned synchronized draft.",
-        "operationId": "delete_draft_v1_submissions_drafts__draft_id__delete",
+        "operationId": "submission_draft_delete",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -7802,6 +8089,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.delete",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -7812,10 +8107,17 @@
         ],
         "summary": "Change Draft",
         "description": "Atomically apply a retry-safe optimistic edit to an owned draft.",
-        "operationId": "change_draft_v1_submissions_drafts__draft_id__changes_post",
+        "operationId": "submission_draft_change",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -7992,6 +8294,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.change",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -8002,10 +8312,17 @@
         ],
         "summary": "Submit Draft",
         "description": "Validate an owned draft and start retry-safe durable finalization.",
-        "operationId": "submit_draft_v1_submissions_drafts__draft_id__submission_post",
+        "operationId": "submission_finalization_start",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8172,6 +8489,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.submit",
+          "required_api_features": [
+            "submission-finalization"
+          ],
+          "interaction": "direct"
         }
       },
       "get": {
@@ -8180,10 +8505,16 @@
         ],
         "summary": "Get Draft Submission",
         "description": "Return retained finalization state after rechecking draft ownership.",
-        "operationId": "get_draft_submission_v1_submissions_drafts__draft_id__submission_get",
+        "operationId": "submission_finalization_get",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8320,6 +8651,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.status",
+          "required_api_features": [
+            "submission-finalization"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -8330,10 +8669,17 @@
         ],
         "summary": "Upload Draft Media",
         "description": "Stream one owned-draft upload through a private bounded staging file.",
-        "operationId": "upload_draft_media_v1_submissions_drafts__draft_id__media__kind__post",
+        "operationId": "submission_media_upload",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8535,6 +8881,14 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "media.upload",
+          "required_api_features": [
+            "submission-media"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -8545,10 +8899,16 @@
         ],
         "summary": "List Draft Media",
         "description": "List all retained states and safe normalized facts for an owned draft.",
-        "operationId": "list_draft_media_v1_submissions_drafts__draft_id__media_get",
+        "operationId": "submission_media_list",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8679,6 +9039,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "media.list",
+          "required_api_features": [
+            "submission-media"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -8689,10 +9057,16 @@
         ],
         "summary": "Get Draft Media",
         "description": "Return one upload after enforcing both draft ownership and association.",
-        "operationId": "get_draft_media_v1_submissions_drafts__draft_id__media__upload_id__get",
+        "operationId": "submission_media_get",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8833,6 +9207,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "media.status",
+          "required_api_features": [
+            "submission-media"
+          ],
+          "interaction": "direct"
         }
       },
       "delete": {
@@ -8841,10 +9223,17 @@
         ],
         "summary": "Discard Draft Media",
         "description": "Withdraw one upload while retaining a stable discarded state.",
-        "operationId": "discard_draft_media_v1_submissions_drafts__draft_id__media__upload_id__delete",
+        "operationId": "submission_media_discard",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
           }
         ],
         "parameters": [
@@ -8999,6 +9388,14 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "media.discard",
+          "required_api_features": [
+            "submission-media"
+          ],
+          "interaction": "direct"
         }
       }
     },
@@ -9009,11 +9406,9 @@
         ],
         "summary": "List Tags",
         "description": "List published tag definitions.",
-        "operationId": "list_tags_v1_tags_get",
+        "operationId": "tags_list",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -9117,6 +9512,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9127,11 +9525,9 @@
         ],
         "summary": "Get Tag",
         "description": "Return one published tag definition.",
-        "operationId": "get_tag_v1_tags__tag_id__get",
+        "operationId": "tags_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -9215,6 +9611,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9225,11 +9624,9 @@
         ],
         "summary": "Get Creator Alias",
         "description": "Return a creator credit without exposing its linked account.",
-        "operationId": "get_creator_alias_v1_creator_aliases__name__get",
+        "operationId": "creator_alias_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -9315,6 +9712,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9325,11 +9725,9 @@
         ],
         "summary": "Get Creator Profile",
         "description": "Return every public alias grouped under a stable creator identity.",
-        "operationId": "get_creator_profile_v1_creators__creator_id__get",
+        "operationId": "creator_profile_get",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -9414,6 +9812,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9424,11 +9825,9 @@
         ],
         "summary": "List Versions",
         "description": "List recognized Java and Bedrock releases.",
-        "operationId": "list_versions_v1_versions_get",
+        "operationId": "minecraft_versions_list",
         "security": [
-          {
-            "ApiCredential": []
-          }
+          {}
         ],
         "parameters": [
           {
@@ -9532,6 +9931,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9542,10 +9944,17 @@
         ],
         "summary": "Get Vote Session",
         "description": "Return aggregate vote state without exposing ballot identities.",
-        "operationId": "get_vote_session_v1_vote_sessions__vote_session_id__get",
+        "operationId": "vote_session_get",
         "security": [
+          {},
           {
             "ApiCredential": []
+          },
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
           }
         ],
         "parameters": [
@@ -9630,6 +10039,9 @@
             },
             "description": "Service Unavailable"
           }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -9640,10 +10052,11 @@
         ],
         "summary": "Cast Vote",
         "description": "Cast the authenticated Discord member's weighted vote.",
-        "operationId": "cast_vote_v1_vote_sessions__vote_session_id__votes_post",
+        "operationId": "vote_cast",
         "security": [
           {
-            "ApiCredential": []
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "parameters": [
@@ -9814,12 +10227,80 @@
               }
             }
           }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
         }
       }
     }
   },
   "components": {
     "schemas": {
+      "ApiCapabilities": {
+        "properties": {
+          "api": {
+            "$ref": "#/components/schemas/ApiVersionCapabilities"
+          },
+          "features": {
+            "$ref": "#/components/schemas/ApiFeatureCapabilities"
+          },
+          "protocols": {
+            "$ref": "#/components/schemas/ProtocolCapabilities"
+          },
+          "uploads": {
+            "$ref": "#/components/schemas/UploadCapabilities"
+          },
+          "renderer": {
+            "$ref": "#/components/schemas/RendererCapabilities"
+          },
+          "sanitization": {
+            "$ref": "#/components/schemas/SanitizationCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api",
+          "features",
+          "protocols",
+          "uploads",
+          "renderer",
+          "sanitization"
+        ],
+        "title": "ApiCapabilities",
+        "description": "Namespaced compatibility facts for generated and handwritten clients."
+      },
+      "ApiFeatureCapabilities": {
+        "properties": {
+          "identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Identifiers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identifiers"
+        ],
+        "title": "ApiFeatureCapabilities",
+        "description": "Stable feature identifiers understood by this API deployment."
+      },
+      "ApiVersionCapabilities": {
+        "properties": {
+          "semantic_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Semantic Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "semantic_version"
+        ],
+        "title": "ApiVersionCapabilities",
+        "description": "Version of the public HTTP API, independent of payload protocols."
+      },
       "BuildDetail": {
         "properties": {
           "id": {
@@ -13347,6 +13828,40 @@
         "title": "ProblemDetail",
         "description": "RFC 9457 problem detail response with application extensions."
       },
+      "ProtocolCapabilities": {
+        "properties": {
+          "submission": {
+            "$ref": "#/components/schemas/ProtocolInterval"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission"
+        ],
+        "title": "ProtocolCapabilities",
+        "description": "Compatibility intervals for protocols outside HTTP API SemVer."
+      },
+      "ProtocolInterval": {
+        "properties": {
+          "minimum": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Minimum"
+          },
+          "maximum": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Maximum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "title": "ProtocolInterval",
+        "description": "Inclusive versions accepted for one independently versioned protocol."
+      },
       "RecordDetail": {
         "properties": {
           "id": {
@@ -13678,6 +14193,61 @@
         ],
         "title": "RecordSummary",
         "description": "One active computed record result."
+      },
+      "RendererCapabilities": {
+        "properties": {
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/RendererControl"
+            },
+            "type": "array",
+            "title": "Controls"
+          },
+          "capability_identifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capability Identifiers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "controls",
+          "capability_identifiers"
+        ],
+        "title": "RendererCapabilities",
+        "description": "Form controls and optional renderer features emitted by the API."
+      },
+      "RendererControl": {
+        "type": "string",
+        "enum": [
+          "text",
+          "number",
+          "choice",
+          "multi_choice",
+          "duration",
+          "boolean"
+        ]
+      },
+      "SanitizationCapabilities": {
+        "properties": {
+          "media": {
+            "type": "string",
+            "const": "normalization",
+            "title": "Media",
+            "default": "normalization"
+          },
+          "schematics": {
+            "type": "string",
+            "const": "unavailable",
+            "title": "Schematics",
+            "default": "unavailable"
+          }
+        },
+        "type": "object",
+        "title": "SanitizationCapabilities",
+        "description": "Artifact transformations whose availability is compatibility-relevant."
       },
       "SchematicSize": {
         "properties": {
@@ -14293,6 +14863,57 @@
         "title": "TagPredicateInput",
         "description": "A required tag presence or exact typed value."
       },
+      "UploadCapabilities": {
+        "properties": {
+          "max_images": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Images"
+          },
+          "max_videos": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Videos"
+          },
+          "max_duration_milliseconds": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Duration Milliseconds"
+          },
+          "max_source_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Source Bytes"
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Output Bytes"
+          },
+          "max_pixels_per_frame": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Pixels Per Frame"
+          },
+          "max_decoded_pixels_per_second": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Decoded Pixels Per Second"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_images",
+          "max_videos",
+          "max_duration_milliseconds",
+          "max_source_bytes",
+          "max_output_bytes",
+          "max_pixels_per_frame",
+          "max_decoded_pixels_per_second"
+        ],
+        "title": "UploadCapabilities",
+        "description": "Upload, aggregate, and decoder-work limits enforced by the backend."
+      },
       "User": {
         "properties": {
           "uuid": {
@@ -14717,10 +15338,44 @@
         "type": "apiKey",
         "in": "header",
         "name": "Authorization"
+      },
+      "WebSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-squid_session"
+      },
+      "CsrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token"
+      },
+      "DeviceSession": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Squid CLI session"
+      },
+      "MinecraftPlayer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Squid player grant"
+      },
+      "PaperInstallationId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Squid-Installation-ID"
+      },
+      "PaperInstallationSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Squid-Installation-Secret"
       }
     }
   },
   "tags": [
+    {
+      "name": "capabilities",
+      "description": "API, protocol, renderer, and upload compatibility."
+    },
     {
       "name": "authentication",
       "description": "Discord OAuth2 browser sessions."

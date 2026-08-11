@@ -2955,7 +2955,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "ruff", specifier = ">=0.5.1" },
-    { name = "schemathesis", specifier = ">=4.24.2" },
+    { name = "schemathesis", specifier = "==4.24.2" },
     { name = "testcontainers", specifier = ">=4.10.0" },
 ]
 docs = [

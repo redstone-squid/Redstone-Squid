@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptNoticeV1UsersMeNotificationsConsentPostData, AcceptNoticeV1UsersMeNotificationsConsentPostErrors, AcceptNoticeV1UsersMeNotificationsConsentPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostData, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostData, ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors, ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses, CastVoteV1VoteSessionsVoteSessionIdVotesPostData, CastVoteV1VoteSessionsVoteSessionIdVotesPostErrors, CastVoteV1VoteSessionsVoteSessionIdVotesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostData, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, CreateDraftV1SubmissionsDraftsPostData, CreateDraftV1SubmissionsDraftsPostErrors, CreateDraftV1SubmissionsDraftsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostData, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostData, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostErrors, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostResponses, CsrfTokenV1AuthCsrfGetData, CsrfTokenV1AuthCsrfGetErrors, CsrfTokenV1AuthCsrfGetResponses, CurrentFormV1SubmissionsFormCurrentGetData, CurrentFormV1SubmissionsFormCurrentGetErrors, CurrentFormV1SubmissionsFormCurrentGetResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteData, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteData, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteErrors, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteData, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscordAuthorizeV1AuthDiscordGetData, DiscordAuthorizeV1AuthDiscordGetErrors, DiscordCallbackV1AuthDiscordCallbackGetData, DiscordCallbackV1AuthDiscordCallbackGetErrors, EditBuildV1BuildsBuildIdPatchData, EditBuildV1BuildsBuildIdPatchErrors, EditBuildV1BuildsBuildIdPatchResponses, ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostData, ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors, ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostData, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostData, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, ExchangeSessionChallengeV1CliAuthSessionsPostData, ExchangeSessionChallengeV1CliAuthSessionsPostErrors, ExchangeSessionChallengeV1CliAuthSessionsPostResponses, FormOptionsV1SubmissionsFormOptionsSourceGetData, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, FormOptionsV1SubmissionsFormOptionsSourceGetResponses, GetBuildV1BuildsBuildIdGetData, GetBuildV1BuildsBuildIdGetErrors, GetBuildV1BuildsBuildIdGetResponses, GetCreatorAliasV1CreatorAliasesNameGetData, GetCreatorAliasV1CreatorAliasesNameGetErrors, GetCreatorAliasV1CreatorAliasesNameGetResponses, GetCreatorProfileV1CreatorsCreatorIdGetData, GetCreatorProfileV1CreatorsCreatorIdGetErrors, GetCreatorProfileV1CreatorsCreatorIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetData, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetData, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetData, GetDraftV1SubmissionsDraftsDraftIdGetErrors, GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetMeV1UsersMeGetData, GetMeV1UsersMeGetErrors, GetMeV1UsersMeGetResponses, GetPreferencesV1UsersMeNotificationsPreferencesGetData, GetPreferencesV1UsersMeNotificationsPreferencesGetErrors, GetPreferencesV1UsersMeNotificationsPreferencesGetResponses, GetRecordV1RecordsRecordIdGetData, GetRecordV1RecordsRecordIdGetErrors, GetRecordV1RecordsRecordIdGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetData, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetErrors, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetResponses, GetTagV1TagsTagIdGetData, GetTagV1TagsTagIdGetErrors, GetTagV1TagsTagIdGetResponses, GetVerificationCodeV1VerifyPostData, GetVerificationCodeV1VerifyPostErrors, GetVerificationCodeV1VerifyPostResponses, GetVerificationCodeVerifyPostData, GetVerificationCodeVerifyPostErrors, GetVerificationCodeVerifyPostResponses, GetVoteSessionV1VoteSessionsVoteSessionIdGetData, GetVoteSessionV1VoteSessionsVoteSessionIdGetErrors, GetVoteSessionV1VoteSessionsVoteSessionIdGetResponses, GrantConsentV1UsersMeConsentPostData, GrantConsentV1UsersMeConsentPostErrors, GrantConsentV1UsersMeConsentPostResponses, ListBuildSchematicsV1BuildsBuildIdSchematicsGetData, ListBuildSchematicsV1BuildsBuildIdSchematicsGetErrors, ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses, ListBuildsV1BuildsGetData, ListBuildsV1BuildsGetErrors, ListBuildsV1BuildsGetResponses, ListDevicesV1CliAuthDevicesGetData, ListDevicesV1CliAuthDevicesGetErrors, ListDevicesV1CliAuthDevicesGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetData, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListDraftsV1SubmissionsDraftsGetData, ListDraftsV1SubmissionsDraftsGetErrors, ListDraftsV1SubmissionsDraftsGetResponses, ListInboxV1UsersMeNotificationsInboxGetData, ListInboxV1UsersMeNotificationsInboxGetErrors, ListInboxV1UsersMeNotificationsInboxGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetData, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListMyBuildsV1UsersMeBuildsGetData, ListMyBuildsV1UsersMeBuildsGetErrors, ListMyBuildsV1UsersMeBuildsGetResponses, ListRecordsV1RecordsGetData, ListRecordsV1RecordsGetErrors, ListRecordsV1RecordsGetResponses, ListSearchFieldsV1SearchFieldsGetData, ListSearchFieldsV1SearchFieldsGetErrors, ListSearchFieldsV1SearchFieldsGetResponses, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetData, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetErrors, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetResponses, ListTagsV1TagsGetData, ListTagsV1TagsGetErrors, ListTagsV1TagsGetResponses, ListVersionsV1VersionsGetData, ListVersionsV1VersionsGetErrors, ListVersionsV1VersionsGetResponses, LiveLivezGetData, LiveLivezGetResponses, LogoutV1AuthLogoutPostData, LogoutV1AuthLogoutPostErrors, LogoutV1AuthLogoutPostResponses, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostData, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostErrors, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostResponses, PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetData, PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors, PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses, PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetData, PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors, PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses, ReadyHealthGetData, ReadyHealthGetResponses, ReadyReadyzGetData, ReadyReadyzGetResponses, RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteData, RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors, RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses, RevokeDeviceV1CliAuthDevicesDeviceIdDeleteData, RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors, RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteData, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteData, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostData, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, SearchV1SearchGetData, SearchV1SearchGetErrors, SearchV1SearchGetResponses, StartEnrollmentV1CliAuthEnrollmentsPostData, StartEnrollmentV1CliAuthEnrollmentsPostErrors, StartEnrollmentV1CliAuthEnrollmentsPostResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostData, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostData, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, StartSessionChallengeV1CliAuthSessionChallengesPostData, StartSessionChallengeV1CliAuthSessionChallengesPostErrors, StartSessionChallengeV1CliAuthSessionChallengesPostResponses, SubmitBuildV1BuildsPostData, SubmitBuildV1BuildsPostErrors, SubmitBuildV1BuildsPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostData, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SuggestTermsV1SearchSuggestGetData, SuggestTermsV1SearchSuggestGetErrors, SuggestTermsV1SearchSuggestGetResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutData, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchData, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchErrors, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses } from './types.gen';
+import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationConsentGrantData, NotificationConsentGrantErrors, NotificationConsentGrantResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -23,29 +23,42 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  *
  * Report only whether the API process can service requests.
  */
-export const liveLivezGet = <ThrowOnError extends boolean = false>(options?: Options<LiveLivezGetData, ThrowOnError>): RequestResult<LiveLivezGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<LiveLivezGetResponses, unknown, ThrowOnError>({ url: '/livez', ...options });
+export const healthLive = <ThrowOnError extends boolean = false>(options?: Options<HealthLiveData, ThrowOnError>): RequestResult<HealthLiveResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthLiveResponses, unknown, ThrowOnError>({ url: '/livez', ...options });
 
 /**
  * Ready
  *
  * Report whether required database state matches this release.
  */
-export const readyReadyzGet = <ThrowOnError extends boolean = false>(options?: Options<ReadyReadyzGetData, ThrowOnError>): RequestResult<ReadyReadyzGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ReadyReadyzGetResponses, unknown, ThrowOnError>({ url: '/readyz', ...options });
+export const healthReady = <ThrowOnError extends boolean = false>(options?: Options<HealthReadyData, ThrowOnError>): RequestResult<HealthReadyResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthReadyResponses, unknown, ThrowOnError>({ url: '/readyz', ...options });
 
 /**
  * Ready
  *
  * Report whether required database state matches this release.
  */
-export const readyHealthGet = <ThrowOnError extends boolean = false>(options?: Options<ReadyHealthGetData, ThrowOnError>): RequestResult<ReadyHealthGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ReadyHealthGetResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+export const healthReadyCompatibility = <ThrowOnError extends boolean = false>(options?: Options<HealthReadyCompatibilityData, ThrowOnError>): RequestResult<HealthReadyCompatibilityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HealthReadyCompatibilityResponses, unknown, ThrowOnError>({ url: '/health', ...options });
 
 /**
  * Get Verification Code
  *
  * Generate a verification code for a user.
  */
-export const getVerificationCodeV1VerifyPost = <ThrowOnError extends boolean = false>(options: Options<GetVerificationCodeV1VerifyPostData, ThrowOnError>): RequestResult<GetVerificationCodeV1VerifyPostResponses, GetVerificationCodeV1VerifyPostErrors, ThrowOnError> => (options.client ?? client).post<GetVerificationCodeV1VerifyPostResponses, GetVerificationCodeV1VerifyPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const verificationCreate = <ThrowOnError extends boolean = false>(options: Options<VerificationCreateData, ThrowOnError>): RequestResult<VerificationCreateResponses, VerificationCreateErrors, ThrowOnError> => (options.client ?? client).post<VerificationCreateResponses, VerificationCreateErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/verify',
     ...options,
     headers: {
@@ -59,8 +72,21 @@ export const getVerificationCodeV1VerifyPost = <ThrowOnError extends boolean = f
  *
  * Generate a verification code for a user.
  */
-export const getVerificationCodeVerifyPost = <ThrowOnError extends boolean = false>(options: Options<GetVerificationCodeVerifyPostData, ThrowOnError>): RequestResult<GetVerificationCodeVerifyPostResponses, GetVerificationCodeVerifyPostErrors, ThrowOnError> => (options.client ?? client).post<GetVerificationCodeVerifyPostResponses, GetVerificationCodeVerifyPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const verificationCreateCompatibility = <ThrowOnError extends boolean = false>(options: Options<VerificationCreateCompatibilityData, ThrowOnError>): RequestResult<VerificationCreateCompatibilityResponses, VerificationCreateCompatibilityErrors, ThrowOnError> => (options.client ?? client).post<VerificationCreateCompatibilityResponses, VerificationCreateCompatibilityErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/verify',
     ...options,
     headers: {
@@ -74,8 +100,12 @@ export const getVerificationCodeVerifyPost = <ThrowOnError extends boolean = fal
  *
  * Return the session-bound write token to a credentialed CORS frontend.
  */
-export const csrfTokenV1AuthCsrfGet = <ThrowOnError extends boolean = false>(options?: Options<CsrfTokenV1AuthCsrfGetData, ThrowOnError>): RequestResult<CsrfTokenV1AuthCsrfGetResponses, CsrfTokenV1AuthCsrfGetErrors, ThrowOnError> => (options?.client ?? client).get<CsrfTokenV1AuthCsrfGetResponses, CsrfTokenV1AuthCsrfGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const browserCsrfGet = <ThrowOnError extends boolean = false>(options?: Options<BrowserCsrfGetData, ThrowOnError>): RequestResult<BrowserCsrfGetResponses, BrowserCsrfGetErrors, ThrowOnError> => (options?.client ?? client).get<BrowserCsrfGetResponses, BrowserCsrfGetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/auth/csrf',
     ...options
 });
@@ -85,30 +115,26 @@ export const csrfTokenV1AuthCsrfGet = <ThrowOnError extends boolean = false>(opt
  *
  * Begin Discord authorization with PKCE and durable one-time state.
  */
-export const discordAuthorizeV1AuthDiscordGet = <ThrowOnError extends boolean = false>(options?: Options<DiscordAuthorizeV1AuthDiscordGetData, ThrowOnError>): RequestResult<unknown, DiscordAuthorizeV1AuthDiscordGetErrors, ThrowOnError> => (options?.client ?? client).get<unknown, DiscordAuthorizeV1AuthDiscordGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/auth/discord',
-    ...options
-});
+export const browserAuthorizationStart = <ThrowOnError extends boolean = false>(options?: Options<BrowserAuthorizationStartData, ThrowOnError>): RequestResult<unknown, BrowserAuthorizationStartErrors, ThrowOnError> => (options?.client ?? client).get<unknown, BrowserAuthorizationStartErrors, ThrowOnError>({ url: '/v1/auth/discord', ...options });
 
 /**
  * Discord Callback
  *
  * Exchange a Discord code and set a revocable opaque session cookie.
  */
-export const discordCallbackV1AuthDiscordCallbackGet = <ThrowOnError extends boolean = false>(options: Options<DiscordCallbackV1AuthDiscordCallbackGetData, ThrowOnError>): RequestResult<unknown, DiscordCallbackV1AuthDiscordCallbackGetErrors, ThrowOnError> => (options.client ?? client).get<unknown, DiscordCallbackV1AuthDiscordCallbackGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/auth/discord/callback',
-    ...options
-});
+export const browserAuthorizationCallback = <ThrowOnError extends boolean = false>(options: Options<BrowserAuthorizationCallbackData, ThrowOnError>): RequestResult<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError> => (options.client ?? client).get<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError>({ url: '/v1/auth/discord/callback', ...options });
 
 /**
  * Logout
  *
  * Revoke the current browser session and clear its cookies.
  */
-export const logoutV1AuthLogoutPost = <ThrowOnError extends boolean = false>(options?: Options<LogoutV1AuthLogoutPostData, ThrowOnError>): RequestResult<LogoutV1AuthLogoutPostResponses, LogoutV1AuthLogoutPostErrors, ThrowOnError> => (options?.client ?? client).post<LogoutV1AuthLogoutPostResponses, LogoutV1AuthLogoutPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const browserSessionRevoke = <ThrowOnError extends boolean = false>(options?: Options<BrowserSessionRevokeData, ThrowOnError>): RequestResult<BrowserSessionRevokeResponses, BrowserSessionRevokeErrors, ThrowOnError> => (options?.client ?? client).post<BrowserSessionRevokeResponses, BrowserSessionRevokeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/auth/logout',
     ...options
 });
@@ -118,8 +144,20 @@ export const logoutV1AuthLogoutPost = <ThrowOnError extends boolean = false>(opt
  *
  * Search public builds, or list one authoritative moderation-status view.
  */
-export const listBuildsV1BuildsGet = <ThrowOnError extends boolean = false>(options?: Options<ListBuildsV1BuildsGetData, ThrowOnError>): RequestResult<ListBuildsV1BuildsGetResponses, ListBuildsV1BuildsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListBuildsV1BuildsGetResponses, ListBuildsV1BuildsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const buildsList = <ThrowOnError extends boolean = false>(options?: Options<BuildsListData, ThrowOnError>): RequestResult<BuildsListResponses, BuildsListErrors, ThrowOnError> => (options?.client ?? client).get<BuildsListResponses, BuildsListErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/builds',
     ...options
 });
@@ -129,8 +167,12 @@ export const listBuildsV1BuildsGet = <ThrowOnError extends boolean = false>(opti
  *
  * Submit a door build for Discord moderation.
  */
-export const submitBuildV1BuildsPost = <ThrowOnError extends boolean = false>(options: Options<SubmitBuildV1BuildsPostData, ThrowOnError>): RequestResult<SubmitBuildV1BuildsPostResponses, SubmitBuildV1BuildsPostErrors, ThrowOnError> => (options.client ?? client).post<SubmitBuildV1BuildsPostResponses, SubmitBuildV1BuildsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const buildsCreate = <ThrowOnError extends boolean = false>(options: Options<BuildsCreateData, ThrowOnError>): RequestResult<BuildsCreateResponses, BuildsCreateErrors, ThrowOnError> => (options.client ?? client).post<BuildsCreateResponses, BuildsCreateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds',
     ...options,
     headers: {
@@ -144,19 +186,19 @@ export const submitBuildV1BuildsPost = <ThrowOnError extends boolean = false>(op
  *
  * Return one confirmed public build.
  */
-export const getBuildV1BuildsBuildIdGet = <ThrowOnError extends boolean = false>(options: Options<GetBuildV1BuildsBuildIdGetData, ThrowOnError>): RequestResult<GetBuildV1BuildsBuildIdGetResponses, GetBuildV1BuildsBuildIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetBuildV1BuildsBuildIdGetResponses, GetBuildV1BuildsBuildIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/builds/{build_id}',
-    ...options
-});
+export const buildsGet = <ThrowOnError extends boolean = false>(options: Options<BuildsGetData, ThrowOnError>): RequestResult<BuildsGetResponses, BuildsGetErrors, ThrowOnError> => (options.client ?? client).get<BuildsGetResponses, BuildsGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}', ...options });
 
 /**
  * Edit Build
  *
  * Edit an owned pending build, or any build as a global administrator.
  */
-export const editBuildV1BuildsBuildIdPatch = <ThrowOnError extends boolean = false>(options: Options<EditBuildV1BuildsBuildIdPatchData, ThrowOnError>): RequestResult<EditBuildV1BuildsBuildIdPatchResponses, EditBuildV1BuildsBuildIdPatchErrors, ThrowOnError> => (options.client ?? client).patch<EditBuildV1BuildsBuildIdPatchResponses, EditBuildV1BuildsBuildIdPatchErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Options<BuildsUpdateData, ThrowOnError>): RequestResult<BuildsUpdateResponses, BuildsUpdateErrors, ThrowOnError> => (options.client ?? client).patch<BuildsUpdateResponses, BuildsUpdateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds/{build_id}',
     ...options,
     headers: {
@@ -166,12 +208,18 @@ export const editBuildV1BuildsBuildIdPatch = <ThrowOnError extends boolean = fal
 });
 
 /**
+ * Capabilities
+ *
+ * Publish independently versioned client compatibility and safety limits.
+ */
+export const capabilitiesGet = <ThrowOnError extends boolean = false>(options?: Options<CapabilitiesGetData, ThrowOnError>): RequestResult<CapabilitiesGetResponses, CapabilitiesGetErrors, ThrowOnError> => (options?.client ?? client).get<CapabilitiesGetResponses, CapabilitiesGetErrors, ThrowOnError>({ url: '/v1/capabilities', ...options });
+
+/**
  * Start Enrollment
  *
  * Start browser approval for a client-held Ed25519 public key.
  */
-export const startEnrollmentV1CliAuthEnrollmentsPost = <ThrowOnError extends boolean = false>(options: Options<StartEnrollmentV1CliAuthEnrollmentsPostData, ThrowOnError>): RequestResult<StartEnrollmentV1CliAuthEnrollmentsPostResponses, StartEnrollmentV1CliAuthEnrollmentsPostErrors, ThrowOnError> => (options.client ?? client).post<StartEnrollmentV1CliAuthEnrollmentsPostResponses, StartEnrollmentV1CliAuthEnrollmentsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliEnrollmentStart = <ThrowOnError extends boolean = false>(options: Options<CliEnrollmentStartData, ThrowOnError>): RequestResult<CliEnrollmentStartResponses, CliEnrollmentStartErrors, ThrowOnError> => (options.client ?? client).post<CliEnrollmentStartResponses, CliEnrollmentStartErrors, ThrowOnError>({
     url: '/v1/cli/auth/enrollments',
     ...options,
     headers: {
@@ -185,8 +233,7 @@ export const startEnrollmentV1CliAuthEnrollmentsPost = <ThrowOnError extends boo
  *
  * Exchange browser approval after proving possession of the enrolled key.
  */
-export const exchangeEnrollmentV1CliAuthEnrollmentsExchangePost = <ThrowOnError extends boolean = false>(options: Options<ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostData, ThrowOnError>): RequestResult<ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses, ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors, ThrowOnError> => (options.client ?? client).post<ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses, ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliEnrollmentExchange = <ThrowOnError extends boolean = false>(options: Options<CliEnrollmentExchangeData, ThrowOnError>): RequestResult<CliEnrollmentExchangeResponses, CliEnrollmentExchangeErrors, ThrowOnError> => (options.client ?? client).post<CliEnrollmentExchangeResponses, CliEnrollmentExchangeErrors, ThrowOnError>({
     url: '/v1/cli/auth/enrollments/exchange',
     ...options,
     headers: {
@@ -200,8 +247,12 @@ export const exchangeEnrollmentV1CliAuthEnrollmentsExchangePost = <ThrowOnError 
  *
  * Show a device label and fingerprint before the browser grants access.
  */
-export const previewEnrollmentV1CliAuthEnrollmentsApprovalGet = <ThrowOnError extends boolean = false>(options: Options<PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetData, ThrowOnError>): RequestResult<PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses, PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors, ThrowOnError> => (options.client ?? client).get<PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses, PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliEnrollmentPreview = <ThrowOnError extends boolean = false>(options: Options<CliEnrollmentPreviewData, ThrowOnError>): RequestResult<CliEnrollmentPreviewResponses, CliEnrollmentPreviewErrors, ThrowOnError> => (options.client ?? client).get<CliEnrollmentPreviewResponses, CliEnrollmentPreviewErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/cli/auth/enrollments/approval',
     ...options
 });
@@ -211,8 +262,12 @@ export const previewEnrollmentV1CliAuthEnrollmentsApprovalGet = <ThrowOnError ex
  *
  * Approve the previewed CLI device as the signed-in browser account.
  */
-export const approveEnrollmentV1CliAuthEnrollmentsApprovalPost = <ThrowOnError extends boolean = false>(options: Options<ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostData, ThrowOnError>): RequestResult<ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses, ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors, ThrowOnError> => (options.client ?? client).post<ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses, ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliEnrollmentApprove = <ThrowOnError extends boolean = false>(options: Options<CliEnrollmentApproveData, ThrowOnError>): RequestResult<CliEnrollmentApproveResponses, CliEnrollmentApproveErrors, ThrowOnError> => (options.client ?? client).post<CliEnrollmentApproveResponses, CliEnrollmentApproveErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/enrollments/approval',
     ...options,
     headers: {
@@ -226,8 +281,7 @@ export const approveEnrollmentV1CliAuthEnrollmentsApprovalPost = <ThrowOnError e
  *
  * Issue a one-time nonce for an enrolled device to sign.
  */
-export const startSessionChallengeV1CliAuthSessionChallengesPost = <ThrowOnError extends boolean = false>(options: Options<StartSessionChallengeV1CliAuthSessionChallengesPostData, ThrowOnError>): RequestResult<StartSessionChallengeV1CliAuthSessionChallengesPostResponses, StartSessionChallengeV1CliAuthSessionChallengesPostErrors, ThrowOnError> => (options.client ?? client).post<StartSessionChallengeV1CliAuthSessionChallengesPostResponses, StartSessionChallengeV1CliAuthSessionChallengesPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliSessionChallengeStart = <ThrowOnError extends boolean = false>(options: Options<CliSessionChallengeStartData, ThrowOnError>): RequestResult<CliSessionChallengeStartResponses, CliSessionChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<CliSessionChallengeStartResponses, CliSessionChallengeStartErrors, ThrowOnError>({
     url: '/v1/cli/auth/session-challenges',
     ...options,
     headers: {
@@ -241,8 +295,7 @@ export const startSessionChallengeV1CliAuthSessionChallengesPost = <ThrowOnError
  *
  * Exchange a signed device nonce for a short-lived bearer session.
  */
-export const exchangeSessionChallengeV1CliAuthSessionsPost = <ThrowOnError extends boolean = false>(options: Options<ExchangeSessionChallengeV1CliAuthSessionsPostData, ThrowOnError>): RequestResult<ExchangeSessionChallengeV1CliAuthSessionsPostResponses, ExchangeSessionChallengeV1CliAuthSessionsPostErrors, ThrowOnError> => (options.client ?? client).post<ExchangeSessionChallengeV1CliAuthSessionsPostResponses, ExchangeSessionChallengeV1CliAuthSessionsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliSessionExchange = <ThrowOnError extends boolean = false>(options: Options<CliSessionExchangeData, ThrowOnError>): RequestResult<CliSessionExchangeResponses, CliSessionExchangeErrors, ThrowOnError> => (options.client ?? client).post<CliSessionExchangeResponses, CliSessionExchangeErrors, ThrowOnError>({
     url: '/v1/cli/auth/sessions',
     ...options,
     headers: {
@@ -256,8 +309,12 @@ export const exchangeSessionChallengeV1CliAuthSessionsPost = <ThrowOnError exten
  *
  * List browser-account-owned devices without exposing public keys.
  */
-export const listDevicesV1CliAuthDevicesGet = <ThrowOnError extends boolean = false>(options?: Options<ListDevicesV1CliAuthDevicesGetData, ThrowOnError>): RequestResult<ListDevicesV1CliAuthDevicesGetResponses, ListDevicesV1CliAuthDevicesGetErrors, ThrowOnError> => (options?.client ?? client).get<ListDevicesV1CliAuthDevicesGetResponses, ListDevicesV1CliAuthDevicesGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliDevicesList = <ThrowOnError extends boolean = false>(options?: Options<CliDevicesListData, ThrowOnError>): RequestResult<CliDevicesListResponses, CliDevicesListErrors, ThrowOnError> => (options?.client ?? client).get<CliDevicesListResponses, CliDevicesListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/cli/auth/devices',
     ...options
 });
@@ -267,8 +324,12 @@ export const listDevicesV1CliAuthDevicesGet = <ThrowOnError extends boolean = fa
  *
  * Revoke an account-owned device and every session issued beneath it.
  */
-export const revokeDeviceV1CliAuthDevicesDeviceIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeDeviceV1CliAuthDevicesDeviceIdDeleteData, ThrowOnError>): RequestResult<RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses, RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses, RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliDeviceRevoke = <ThrowOnError extends boolean = false>(options: Options<CliDeviceRevokeData, ThrowOnError>): RequestResult<CliDeviceRevokeResponses, CliDeviceRevokeErrors, ThrowOnError> => (options.client ?? client).delete<CliDeviceRevokeResponses, CliDeviceRevokeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/devices/{device_id}',
     ...options
 });
@@ -278,8 +339,12 @@ export const revokeDeviceV1CliAuthDevicesDeviceIdDelete = <ThrowOnError extends 
  *
  * Revoke the exact CLI bearer session authenticating this request.
  */
-export const revokeCurrentSessionV1CliAuthSessionsCurrentDelete = <ThrowOnError extends boolean = false>(options?: Options<RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteData, ThrowOnError>): RequestResult<RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses, RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors, ThrowOnError> => (options?.client ?? client).delete<RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses, RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?: Options<CliSessionRevokeData, ThrowOnError>): RequestResult<CliSessionRevokeResponses, CliSessionRevokeErrors, ThrowOnError> => (options?.client ?? client).delete<CliSessionRevokeResponses, CliSessionRevokeErrors, ThrowOnError>({
+    security: [{
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }],
     url: '/v1/cli/auth/sessions/current',
     ...options
 });
@@ -289,8 +354,12 @@ export const revokeCurrentSessionV1CliAuthSessionsCurrentDelete = <ThrowOnError 
  *
  * Return the authenticated user's own linked account.
  */
-export const getMeV1UsersMeGet = <ThrowOnError extends boolean = false>(options?: Options<GetMeV1UsersMeGetData, ThrowOnError>): RequestResult<GetMeV1UsersMeGetResponses, GetMeV1UsersMeGetErrors, ThrowOnError> => (options?.client ?? client).get<GetMeV1UsersMeGetResponses, GetMeV1UsersMeGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const accountGet = <ThrowOnError extends boolean = false>(options?: Options<AccountGetData, ThrowOnError>): RequestResult<AccountGetResponses, AccountGetErrors, ThrowOnError> => (options?.client ?? client).get<AccountGetResponses, AccountGetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/users/me',
     ...options
 });
@@ -300,8 +369,12 @@ export const getMeV1UsersMeGet = <ThrowOnError extends boolean = false>(options?
  *
  * Accept the current privacy notice for future writes.
  */
-export const grantConsentV1UsersMeConsentPost = <ThrowOnError extends boolean = false>(options?: Options<GrantConsentV1UsersMeConsentPostData, ThrowOnError>): RequestResult<GrantConsentV1UsersMeConsentPostResponses, GrantConsentV1UsersMeConsentPostErrors, ThrowOnError> => (options?.client ?? client).post<GrantConsentV1UsersMeConsentPostResponses, GrantConsentV1UsersMeConsentPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const accountConsentGrant = <ThrowOnError extends boolean = false>(options?: Options<AccountConsentGrantData, ThrowOnError>): RequestResult<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError> => (options?.client ?? client).post<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/consent',
     ...options
 });
@@ -314,8 +387,12 @@ export const grantConsentV1UsersMeConsentPost = <ThrowOnError extends boolean = 
  * This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
  * pending and denied builds, which the public search path deliberately cannot return.
  */
-export const listMyBuildsV1UsersMeBuildsGet = <ThrowOnError extends boolean = false>(options?: Options<ListMyBuildsV1UsersMeBuildsGetData, ThrowOnError>): RequestResult<ListMyBuildsV1UsersMeBuildsGetResponses, ListMyBuildsV1UsersMeBuildsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListMyBuildsV1UsersMeBuildsGetResponses, ListMyBuildsV1UsersMeBuildsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const accountBuildsList = <ThrowOnError extends boolean = false>(options?: Options<AccountBuildsListData, ThrowOnError>): RequestResult<AccountBuildsListResponses, AccountBuildsListErrors, ThrowOnError> => (options?.client ?? client).get<AccountBuildsListResponses, AccountBuildsListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/users/me/builds',
     ...options
 });
@@ -325,8 +402,12 @@ export const listMyBuildsV1UsersMeBuildsGet = <ThrowOnError extends boolean = fa
  *
  * List only the signed-in account's Paper installations, without secrets or digests.
  */
-export const listInstallationsV1MinecraftAuthPaperInstallationsGet = <ThrowOnError extends boolean = false>(options?: Options<ListInstallationsV1MinecraftAuthPaperInstallationsGetData, ThrowOnError>): RequestResult<ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListInstallationsV1MinecraftAuthPaperInstallationsGetResponses, ListInstallationsV1MinecraftAuthPaperInstallationsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperInstallationsList = <ThrowOnError extends boolean = false>(options?: Options<PaperInstallationsListData, ThrowOnError>): RequestResult<PaperInstallationsListResponses, PaperInstallationsListErrors, ThrowOnError> => (options?.client ?? client).get<PaperInstallationsListResponses, PaperInstallationsListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/minecraft/auth/paper/installations',
     ...options
 });
@@ -336,8 +417,12 @@ export const listInstallationsV1MinecraftAuthPaperInstallationsGet = <ThrowOnErr
  *
  * Register a Paper server and return its plaintext secret exactly once.
  */
-export const createInstallationV1MinecraftAuthPaperInstallationsPost = <ThrowOnError extends boolean = false>(options: Options<CreateInstallationV1MinecraftAuthPaperInstallationsPostData, ThrowOnError>): RequestResult<CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, ThrowOnError> => (options.client ?? client).post<CreateInstallationV1MinecraftAuthPaperInstallationsPostResponses, CreateInstallationV1MinecraftAuthPaperInstallationsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperInstallationCreate = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationCreateData, ThrowOnError>): RequestResult<PaperInstallationCreateResponses, PaperInstallationCreateErrors, ThrowOnError> => (options.client ?? client).post<PaperInstallationCreateResponses, PaperInstallationCreateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations',
     ...options,
     headers: {
@@ -351,8 +436,12 @@ export const createInstallationV1MinecraftAuthPaperInstallationsPost = <ThrowOnE
  *
  * Fence an owned installation's old credentials and return one replacement secret.
  */
-export const rotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePost = <ThrowOnError extends boolean = false>(options: Options<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostData, ThrowOnError>): RequestResult<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, ThrowOnError> => (options.client ?? client).post<RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostResponses, RotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRotatePostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperInstallationRotate = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationRotateData, ThrowOnError>): RequestResult<PaperInstallationRotateResponses, PaperInstallationRotateErrors, ThrowOnError> => (options.client ?? client).post<PaperInstallationRotateResponses, PaperInstallationRotateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/rotate',
     ...options
 });
@@ -362,8 +451,12 @@ export const rotateInstallationV1MinecraftAuthPaperInstallationsInstallationIdRo
  *
  * Replace an owned server's explicit public-listing and sponsorship preferences.
  */
-export const updateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePut = <ThrowOnError extends boolean = false>(options: Options<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutData, ThrowOnError>): RequestResult<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, ThrowOnError> => (options.client ?? client).put<UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutResponses, UpdateInstallationProfileV1MinecraftAuthPaperInstallationsInstallationIdProfilePutErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperInstallationProfileUpdate = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationProfileUpdateData, ThrowOnError>): RequestResult<PaperInstallationProfileUpdateResponses, PaperInstallationProfileUpdateErrors, ThrowOnError> => (options.client ?? client).put<PaperInstallationProfileUpdateResponses, PaperInstallationProfileUpdateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/profile',
     ...options,
     headers: {
@@ -377,8 +470,12 @@ export const updateInstallationProfileV1MinecraftAuthPaperInstallationsInstallat
  *
  * Revoke an owned server and all pending or active authorization derived from it.
  */
-export const revokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteData, ThrowOnError>): RequestResult<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteResponses, RevokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationRevokeData, ThrowOnError>): RequestResult<PaperInstallationRevokeResponses, PaperInstallationRevokeErrors, ThrowOnError> => (options.client ?? client).delete<PaperInstallationRevokeResponses, PaperInstallationRevokeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}',
     ...options
 });
@@ -388,8 +485,8 @@ export const revokeInstallationV1MinecraftAuthPaperInstallationsInstallationIdDe
  *
  * Start player authorization bound to the authenticated Paper credential generation.
  */
-export const startPaperChallengeV1MinecraftAuthPaperChallengesPost = <ThrowOnError extends boolean = false>(options: Options<StartPaperChallengeV1MinecraftAuthPaperChallengesPostData, ThrowOnError>): RequestResult<StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, ThrowOnError> => (options.client ?? client).post<StartPaperChallengeV1MinecraftAuthPaperChallengesPostResponses, StartPaperChallengeV1MinecraftAuthPaperChallengesPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperChallengeStart = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeStartData, ThrowOnError>): RequestResult<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError>({
+    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges',
     ...options,
     headers: {
@@ -403,8 +500,8 @@ export const startPaperChallengeV1MinecraftAuthPaperChallengesPost = <ThrowOnErr
  *
  * Exchange one approved Paper challenge on the same authenticated installation.
  */
-export const exchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePost = <ThrowOnError extends boolean = false>(options: Options<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostData, ThrowOnError>): RequestResult<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ThrowOnError> => (options.client ?? client).post<ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostResponses, ExchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const paperChallengeExchange = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeExchangeData, ThrowOnError>): RequestResult<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError>({
+    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges/exchange',
     ...options,
     headers: {
@@ -418,8 +515,7 @@ export const exchangePaperChallengeV1MinecraftAuthPaperChallengesExchangePost = 
  *
  * Start an anonymous Fabric challenge committed to a client-held S256 verifier.
  */
-export const startFabricChallengeV1MinecraftAuthFabricChallengesPost = <ThrowOnError extends boolean = false>(options: Options<StartFabricChallengeV1MinecraftAuthFabricChallengesPostData, ThrowOnError>): RequestResult<StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, ThrowOnError> => (options.client ?? client).post<StartFabricChallengeV1MinecraftAuthFabricChallengesPostResponses, StartFabricChallengeV1MinecraftAuthFabricChallengesPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const fabricChallengeStart = <ThrowOnError extends boolean = false>(options: Options<FabricChallengeStartData, ThrowOnError>): RequestResult<FabricChallengeStartResponses, FabricChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<FabricChallengeStartResponses, FabricChallengeStartErrors, ThrowOnError>({
     url: '/v1/minecraft/auth/fabric/challenges',
     ...options,
     headers: {
@@ -433,8 +529,7 @@ export const startFabricChallengeV1MinecraftAuthFabricChallengesPost = <ThrowOnE
  *
  * Exchange one approved Fabric challenge by proving its client-held PKCE verifier.
  */
-export const exchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePost = <ThrowOnError extends boolean = false>(options: Options<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostData, ThrowOnError>): RequestResult<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ThrowOnError> => (options.client ?? client).post<ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostResponses, ExchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const fabricChallengeExchange = <ThrowOnError extends boolean = false>(options: Options<FabricChallengeExchangeData, ThrowOnError>): RequestResult<FabricChallengeExchangeResponses, FabricChallengeExchangeErrors, ThrowOnError> => (options.client ?? client).post<FabricChallengeExchangeResponses, FabricChallengeExchangeErrors, ThrowOnError>({
     url: '/v1/minecraft/auth/fabric/challenges/exchange',
     ...options,
     headers: {
@@ -448,8 +543,12 @@ export const exchangeFabricChallengeV1MinecraftAuthFabricChallengesExchangePost 
  *
  * Approve only the Java UUID authoritatively attached to the signed-in account.
  */
-export const approveChallengeV1MinecraftAuthChallengesApprovalPost = <ThrowOnError extends boolean = false>(options: Options<ApproveChallengeV1MinecraftAuthChallengesApprovalPostData, ThrowOnError>): RequestResult<ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ThrowOnError> => (options.client ?? client).post<ApproveChallengeV1MinecraftAuthChallengesApprovalPostResponses, ApproveChallengeV1MinecraftAuthChallengesApprovalPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const minecraftChallengeApprove = <ThrowOnError extends boolean = false>(options: Options<MinecraftChallengeApproveData, ThrowOnError>): RequestResult<MinecraftChallengeApproveResponses, MinecraftChallengeApproveErrors, ThrowOnError> => (options.client ?? client).post<MinecraftChallengeApproveResponses, MinecraftChallengeApproveErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/challenges/approval',
     ...options,
     headers: {
@@ -463,8 +562,12 @@ export const approveChallengeV1MinecraftAuthChallengesApprovalPost = <ThrowOnErr
  *
  * Revoke one grant only when it belongs to the signed-in account.
  */
-export const revokeGrantV1MinecraftAuthGrantsGrantIdDelete = <ThrowOnError extends boolean = false>(options: Options<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteData, ThrowOnError>): RequestResult<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteResponses, RevokeGrantV1MinecraftAuthGrantsGrantIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const minecraftGrantRevoke = <ThrowOnError extends boolean = false>(options: Options<MinecraftGrantRevokeData, ThrowOnError>): RequestResult<MinecraftGrantRevokeResponses, MinecraftGrantRevokeErrors, ThrowOnError> => (options.client ?? client).delete<MinecraftGrantRevokeResponses, MinecraftGrantRevokeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/grants/{grant_id}',
     ...options
 });
@@ -474,8 +577,12 @@ export const revokeGrantV1MinecraftAuthGrantsGrantIdDelete = <ThrowOnError exten
  *
  * Return disabled defaults before the notification notice has been accepted.
  */
-export const getPreferencesV1UsersMeNotificationsPreferencesGet = <ThrowOnError extends boolean = false>(options?: Options<GetPreferencesV1UsersMeNotificationsPreferencesGetData, ThrowOnError>): RequestResult<GetPreferencesV1UsersMeNotificationsPreferencesGetResponses, GetPreferencesV1UsersMeNotificationsPreferencesGetErrors, ThrowOnError> => (options?.client ?? client).get<GetPreferencesV1UsersMeNotificationsPreferencesGetResponses, GetPreferencesV1UsersMeNotificationsPreferencesGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationPreferencesGet = <ThrowOnError extends boolean = false>(options?: Options<NotificationPreferencesGetData, ThrowOnError>): RequestResult<NotificationPreferencesGetResponses, NotificationPreferencesGetErrors, ThrowOnError> => (options?.client ?? client).get<NotificationPreferencesGetResponses, NotificationPreferencesGetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/users/me/notifications/preferences',
     ...options
 });
@@ -485,8 +592,12 @@ export const getPreferencesV1UsersMeNotificationsPreferencesGet = <ThrowOnError 
  *
  * Update web and DM channels independently after consent.
  */
-export const updatePreferencesV1UsersMeNotificationsPreferencesPatch = <ThrowOnError extends boolean = false>(options: Options<UpdatePreferencesV1UsersMeNotificationsPreferencesPatchData, ThrowOnError>): RequestResult<UpdatePreferencesV1UsersMeNotificationsPreferencesPatchResponses, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchErrors, ThrowOnError> => (options.client ?? client).patch<UpdatePreferencesV1UsersMeNotificationsPreferencesPatchResponses, UpdatePreferencesV1UsersMeNotificationsPreferencesPatchErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationPreferencesUpdate = <ThrowOnError extends boolean = false>(options: Options<NotificationPreferencesUpdateData, ThrowOnError>): RequestResult<NotificationPreferencesUpdateResponses, NotificationPreferencesUpdateErrors, ThrowOnError> => (options.client ?? client).patch<NotificationPreferencesUpdateResponses, NotificationPreferencesUpdateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/preferences',
     ...options,
     headers: {
@@ -500,8 +611,12 @@ export const updatePreferencesV1UsersMeNotificationsPreferencesPatch = <ThrowOnE
  *
  * Accept the notification-specific notice and choose initial channels.
  */
-export const acceptNoticeV1UsersMeNotificationsConsentPost = <ThrowOnError extends boolean = false>(options: Options<AcceptNoticeV1UsersMeNotificationsConsentPostData, ThrowOnError>): RequestResult<AcceptNoticeV1UsersMeNotificationsConsentPostResponses, AcceptNoticeV1UsersMeNotificationsConsentPostErrors, ThrowOnError> => (options.client ?? client).post<AcceptNoticeV1UsersMeNotificationsConsentPostResponses, AcceptNoticeV1UsersMeNotificationsConsentPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationConsentGrant = <ThrowOnError extends boolean = false>(options: Options<NotificationConsentGrantData, ThrowOnError>): RequestResult<NotificationConsentGrantResponses, NotificationConsentGrantErrors, ThrowOnError> => (options.client ?? client).post<NotificationConsentGrantResponses, NotificationConsentGrantErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/consent',
     ...options,
     headers: {
@@ -515,8 +630,12 @@ export const acceptNoticeV1UsersMeNotificationsConsentPost = <ThrowOnError exten
  *
  * List enabled subscriptions owned by the caller.
  */
-export const listSubscriptionsV1UsersMeNotificationsSubscriptionsGet = <ThrowOnError extends boolean = false>(options?: Options<ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetData, ThrowOnError>): RequestResult<ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetResponses, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetResponses, ListSubscriptionsV1UsersMeNotificationsSubscriptionsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationSubscriptionsList = <ThrowOnError extends boolean = false>(options?: Options<NotificationSubscriptionsListData, ThrowOnError>): RequestResult<NotificationSubscriptionsListResponses, NotificationSubscriptionsListErrors, ThrowOnError> => (options?.client ?? client).get<NotificationSubscriptionsListResponses, NotificationSubscriptionsListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/users/me/notifications/subscriptions',
     ...options
 });
@@ -526,8 +645,12 @@ export const listSubscriptionsV1UsersMeNotificationsSubscriptionsGet = <ThrowOnE
  *
  * Subscribe to a public creator, record competition, or structured filter.
  */
-export const createSubscriptionV1UsersMeNotificationsSubscriptionsPost = <ThrowOnError extends boolean = false>(options: Options<CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostData, ThrowOnError>): RequestResult<CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostResponses, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostErrors, ThrowOnError> => (options.client ?? client).post<CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostResponses, CreateSubscriptionV1UsersMeNotificationsSubscriptionsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationSubscriptionCreate = <ThrowOnError extends boolean = false>(options: Options<NotificationSubscriptionCreateData, ThrowOnError>): RequestResult<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError> => (options.client ?? client).post<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions',
     ...options,
     headers: {
@@ -541,8 +664,12 @@ export const createSubscriptionV1UsersMeNotificationsSubscriptionsPost = <ThrowO
  *
  * Remove one caller-owned subscription.
  */
-export const deleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteData, ThrowOnError>): RequestResult<DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteResponses, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteResponses, DeleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationSubscriptionDelete = <ThrowOnError extends boolean = false>(options: Options<NotificationSubscriptionDeleteData, ThrowOnError>): RequestResult<NotificationSubscriptionDeleteResponses, NotificationSubscriptionDeleteErrors, ThrowOnError> => (options.client ?? client).delete<NotificationSubscriptionDeleteResponses, NotificationSubscriptionDeleteErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions/{subscription_id}',
     ...options
 });
@@ -552,8 +679,12 @@ export const deleteSubscriptionV1UsersMeNotificationsSubscriptionsSubscriptionId
  *
  * List the caller's web-visible inbox, hiding staff items after access revocation.
  */
-export const listInboxV1UsersMeNotificationsInboxGet = <ThrowOnError extends boolean = false>(options?: Options<ListInboxV1UsersMeNotificationsInboxGetData, ThrowOnError>): RequestResult<ListInboxV1UsersMeNotificationsInboxGetResponses, ListInboxV1UsersMeNotificationsInboxGetErrors, ThrowOnError> => (options?.client ?? client).get<ListInboxV1UsersMeNotificationsInboxGetResponses, ListInboxV1UsersMeNotificationsInboxGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationInboxList = <ThrowOnError extends boolean = false>(options?: Options<NotificationInboxListData, ThrowOnError>): RequestResult<NotificationInboxListResponses, NotificationInboxListErrors, ThrowOnError> => (options?.client ?? client).get<NotificationInboxListResponses, NotificationInboxListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
     url: '/v1/users/me/notifications/inbox',
     ...options
 });
@@ -563,8 +694,12 @@ export const listInboxV1UsersMeNotificationsInboxGet = <ThrowOnError extends boo
  *
  * Mark one visible inbox item as read.
  */
-export const markReadV1UsersMeNotificationsInboxNotificationIdReadPost = <ThrowOnError extends boolean = false>(options: Options<MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostData, ThrowOnError>): RequestResult<MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostResponses, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostErrors, ThrowOnError> => (options.client ?? client).post<MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostResponses, MarkReadV1UsersMeNotificationsInboxNotificationIdReadPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(options: Options<NotificationInboxMarkReadData, ThrowOnError>): RequestResult<NotificationInboxMarkReadResponses, NotificationInboxMarkReadErrors, ThrowOnError> => (options.client ?? client).post<NotificationInboxMarkReadResponses, NotificationInboxMarkReadErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/inbox/{notification_id}/read',
     ...options
 });
@@ -574,96 +709,80 @@ export const markReadV1UsersMeNotificationsInboxNotificationIdReadPost = <ThrowO
  *
  * Return one result only while its computation run is active.
  */
-export const getRecordV1RecordsRecordIdGet = <ThrowOnError extends boolean = false>(options: Options<GetRecordV1RecordsRecordIdGetData, ThrowOnError>): RequestResult<GetRecordV1RecordsRecordIdGetResponses, GetRecordV1RecordsRecordIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetRecordV1RecordsRecordIdGetResponses, GetRecordV1RecordsRecordIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/records/{record_id}',
-    ...options
-});
+export const recordsGet = <ThrowOnError extends boolean = false>(options: Options<RecordsGetData, ThrowOnError>): RequestResult<RecordsGetResponses, RecordsGetErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetResponses, RecordsGetErrors, ThrowOnError>({ url: '/v1/records/{record_id}', ...options });
 
 /**
  * List Records
  *
  * List authoritative active record results.
  */
-export const listRecordsV1RecordsGet = <ThrowOnError extends boolean = false>(options?: Options<ListRecordsV1RecordsGetData, ThrowOnError>): RequestResult<ListRecordsV1RecordsGetResponses, ListRecordsV1RecordsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListRecordsV1RecordsGetResponses, ListRecordsV1RecordsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/records',
-    ...options
-});
+export const recordsList = <ThrowOnError extends boolean = false>(options?: Options<RecordsListData, ThrowOnError>): RequestResult<RecordsListResponses, RecordsListErrors, ThrowOnError> => (options?.client ?? client).get<RecordsListResponses, RecordsListErrors, ThrowOnError>({ url: '/v1/records', ...options });
 
 /**
  * List Build Schematics
  *
  * List analyzed schematics attached to a confirmed build.
  */
-export const listBuildSchematicsV1BuildsBuildIdSchematicsGet = <ThrowOnError extends boolean = false>(options: Options<ListBuildSchematicsV1BuildsBuildIdSchematicsGetData, ThrowOnError>): RequestResult<ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses, ListBuildSchematicsV1BuildsBuildIdSchematicsGetErrors, ThrowOnError> => (options.client ?? client).get<ListBuildSchematicsV1BuildsBuildIdSchematicsGetResponses, ListBuildSchematicsV1BuildsBuildIdSchematicsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/builds/{build_id}/schematics',
-    ...options
-});
+export const buildSchematicsList = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicsListData, ThrowOnError>): RequestResult<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics', ...options });
 
 /**
  * Get Schematic Content
  *
  * Download explicitly published sanitized bytes from a confirmed build.
  */
-export const getSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGet = <ThrowOnError extends boolean = false>(options: Options<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData, ThrowOnError>): RequestResult<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError> => (options.client ?? client).get<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/builds/{build_id}/schematics/{schematic_id}/content',
-    ...options
-});
+export const buildSchematicContentGet = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicContentGetData, ThrowOnError>): RequestResult<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics/{schematic_id}/content', ...options });
 
 /**
  * Get Schematic Render Content
  *
  * Return a content-addressed PNG preview from private object storage.
  */
-export const getSchematicRenderContentV1SchematicRendersRecipeHashContentGet = <ThrowOnError extends boolean = false>(options: Options<GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetData, ThrowOnError>): RequestResult<GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetResponses, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetErrors, ThrowOnError> => (options.client ?? client).get<GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetResponses, GetSchematicRenderContentV1SchematicRendersRecipeHashContentGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/schematic-renders/{recipe_hash}/content',
-    ...options
-});
+export const schematicRenderContentGet = <ThrowOnError extends boolean = false>(options: Options<SchematicRenderContentGetData, ThrowOnError>): RequestResult<SchematicRenderContentGetResponses, SchematicRenderContentGetErrors, ThrowOnError> => (options.client ?? client).get<SchematicRenderContentGetResponses, SchematicRenderContentGetErrors, ThrowOnError>({ url: '/v1/schematic-renders/{recipe_hash}/content', ...options });
 
 /**
  * List Search Fields
  *
  * Publish the effective allowlisted query-field registry.
  */
-export const listSearchFieldsV1SearchFieldsGet = <ThrowOnError extends boolean = false>(options?: Options<ListSearchFieldsV1SearchFieldsGetData, ThrowOnError>): RequestResult<ListSearchFieldsV1SearchFieldsGetResponses, ListSearchFieldsV1SearchFieldsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListSearchFieldsV1SearchFieldsGetResponses, ListSearchFieldsV1SearchFieldsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/search/fields',
-    ...options
-});
+export const searchFieldsList = <ThrowOnError extends boolean = false>(options?: Options<SearchFieldsListData, ThrowOnError>): RequestResult<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError> => (options?.client ?? client).get<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError>({ url: '/v1/search/fields', ...options });
 
 /**
  * Suggest Terms
  *
  * Suggest indexed terms completing a valid query.
  */
-export const suggestTermsV1SearchSuggestGet = <ThrowOnError extends boolean = false>(options: Options<SuggestTermsV1SearchSuggestGetData, ThrowOnError>): RequestResult<SuggestTermsV1SearchSuggestGetResponses, SuggestTermsV1SearchSuggestGetErrors, ThrowOnError> => (options.client ?? client).get<SuggestTermsV1SearchSuggestGetResponses, SuggestTermsV1SearchSuggestGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/search/suggest',
-    ...options
-});
+export const searchTermsSuggest = <ThrowOnError extends boolean = false>(options: Options<SearchTermsSuggestData, ThrowOnError>): RequestResult<SearchTermsSuggestResponses, SearchTermsSuggestErrors, ThrowOnError> => (options.client ?? client).get<SearchTermsSuggestResponses, SearchTermsSuggestErrors, ThrowOnError>({ url: '/v1/search/suggest', ...options });
 
 /**
  * Search
  *
  * Match builds, computed records, and taxonomy entries in one ranked page.
  */
-export const searchV1SearchGet = <ThrowOnError extends boolean = false>(options: Options<SearchV1SearchGetData, ThrowOnError>): RequestResult<SearchV1SearchGetResponses, SearchV1SearchGetErrors, ThrowOnError> => (options.client ?? client).get<SearchV1SearchGetResponses, SearchV1SearchGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/search',
-    ...options
-});
+export const searchExecute = <ThrowOnError extends boolean = false>(options: Options<SearchExecuteData, ThrowOnError>): RequestResult<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError> => (options.client ?? client).get<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError>({ url: '/v1/search', ...options });
 
 /**
  * List Drafts
  *
  * Return at most ten compact active drafts owned by the signed-in account.
  */
-export const listDraftsV1SubmissionsDraftsGet = <ThrowOnError extends boolean = false>(options?: Options<ListDraftsV1SubmissionsDraftsGetData, ThrowOnError>): RequestResult<ListDraftsV1SubmissionsDraftsGetResponses, ListDraftsV1SubmissionsDraftsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListDraftsV1SubmissionsDraftsGetResponses, ListDraftsV1SubmissionsDraftsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionDraftsList = <ThrowOnError extends boolean = false>(options?: Options<SubmissionDraftsListData, ThrowOnError>): RequestResult<SubmissionDraftsListResponses, SubmissionDraftsListErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionDraftsListResponses, SubmissionDraftsListErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts',
     ...options
 });
@@ -673,8 +792,25 @@ export const listDraftsV1SubmissionsDraftsGet = <ThrowOnError extends boolean = 
  *
  * Create an empty synchronized draft owned by the signed-in account.
  */
-export const createDraftV1SubmissionsDraftsPost = <ThrowOnError extends boolean = false>(options: Options<CreateDraftV1SubmissionsDraftsPostData, ThrowOnError>): RequestResult<CreateDraftV1SubmissionsDraftsPostResponses, CreateDraftV1SubmissionsDraftsPostErrors, ThrowOnError> => (options.client ?? client).post<CreateDraftV1SubmissionsDraftsPostResponses, CreateDraftV1SubmissionsDraftsPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionDraftCreate = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftCreateData, ThrowOnError>): RequestResult<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts',
     ...options,
     headers: {
@@ -688,41 +824,46 @@ export const createDraftV1SubmissionsDraftsPost = <ThrowOnError extends boolean 
  *
  * Return the localized form and protocol bounds authored by this server.
  */
-export const currentFormV1SubmissionsFormCurrentGet = <ThrowOnError extends boolean = false>(options?: Options<CurrentFormV1SubmissionsFormCurrentGetData, ThrowOnError>): RequestResult<CurrentFormV1SubmissionsFormCurrentGetResponses, CurrentFormV1SubmissionsFormCurrentGetErrors, ThrowOnError> => (options?.client ?? client).get<CurrentFormV1SubmissionsFormCurrentGetResponses, CurrentFormV1SubmissionsFormCurrentGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/submissions/form/current',
-    ...options
-});
+export const submissionFormCurrent = <ThrowOnError extends boolean = false>(options?: Options<SubmissionFormCurrentData, ThrowOnError>): RequestResult<SubmissionFormCurrentResponses, SubmissionFormCurrentErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionFormCurrentResponses, SubmissionFormCurrentErrors, ThrowOnError>({ url: '/v1/submissions/form/current', ...options });
 
 /**
  * Pinned Form
  *
  * Return an exact immutable schema revision retained for an unexpired draft.
  */
-export const pinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGet = <ThrowOnError extends boolean = false>(options: Options<PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetData, ThrowOnError>): RequestResult<PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses, PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors, ThrowOnError> => (options.client ?? client).get<PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetResponses, PinnedFormV1SubmissionsFormSchemasSchemaIdRevisionsRevisionGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/submissions/form/schemas/{schema_id}/revisions/{revision}',
-    ...options
-});
+export const submissionFormRevisionGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFormRevisionGetData, ThrowOnError>): RequestResult<SubmissionFormRevisionGetResponses, SubmissionFormRevisionGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFormRevisionGetResponses, SubmissionFormRevisionGetErrors, ThrowOnError>({ url: '/v1/submissions/form/schemas/{schema_id}/revisions/{revision}', ...options });
 
 /**
  * Form Options
  *
  * Return one revisioned dynamic option source for a build category.
  */
-export const formOptionsV1SubmissionsFormOptionsSourceGet = <ThrowOnError extends boolean = false>(options: Options<FormOptionsV1SubmissionsFormOptionsSourceGetData, ThrowOnError>): RequestResult<FormOptionsV1SubmissionsFormOptionsSourceGetResponses, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, ThrowOnError> => (options.client ?? client).get<FormOptionsV1SubmissionsFormOptionsSourceGetResponses, FormOptionsV1SubmissionsFormOptionsSourceGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/submissions/form/options/{source}',
-    ...options
-});
+export const submissionFormOptionsGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFormOptionsGetData, ThrowOnError>): RequestResult<SubmissionFormOptionsGetResponses, SubmissionFormOptionsGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFormOptionsGetResponses, SubmissionFormOptionsGetErrors, ThrowOnError>({ url: '/v1/submissions/form/options/{source}', ...options });
 
 /**
  * Delete Draft
  *
  * Immediately delete one caller-owned synchronized draft.
  */
-export const deleteDraftV1SubmissionsDraftsDraftIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteDraftV1SubmissionsDraftsDraftIdDeleteData, ThrowOnError>): RequestResult<DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DeleteDraftV1SubmissionsDraftsDraftIdDeleteResponses, DeleteDraftV1SubmissionsDraftsDraftIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionDraftDelete = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftDeleteData, ThrowOnError>): RequestResult<SubmissionDraftDeleteResponses, SubmissionDraftDeleteErrors, ThrowOnError> => (options.client ?? client).delete<SubmissionDraftDeleteResponses, SubmissionDraftDeleteErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}',
     ...options
 });
@@ -732,8 +873,24 @@ export const deleteDraftV1SubmissionsDraftsDraftIdDelete = <ThrowOnError extends
  *
  * Return one synchronized draft after enforcing caller ownership.
  */
-export const getDraftV1SubmissionsDraftsDraftIdGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftV1SubmissionsDraftsDraftIdGetData, ThrowOnError>): RequestResult<GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftV1SubmissionsDraftsDraftIdGetResponses, GetDraftV1SubmissionsDraftsDraftIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionDraftGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftGetData, ThrowOnError>): RequestResult<SubmissionDraftGetResponses, SubmissionDraftGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionDraftGetResponses, SubmissionDraftGetErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}',
     ...options
 });
@@ -743,8 +900,25 @@ export const getDraftV1SubmissionsDraftsDraftIdGet = <ThrowOnError extends boole
  *
  * Atomically apply a retry-safe optimistic edit to an owned draft.
  */
-export const changeDraftV1SubmissionsDraftsDraftIdChangesPost = <ThrowOnError extends boolean = false>(options: Options<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostData, ThrowOnError>): RequestResult<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ThrowOnError> => (options.client ?? client).post<ChangeDraftV1SubmissionsDraftsDraftIdChangesPostResponses, ChangeDraftV1SubmissionsDraftsDraftIdChangesPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionDraftChange = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftChangeData, ThrowOnError>): RequestResult<SubmissionDraftChangeResponses, SubmissionDraftChangeErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftChangeResponses, SubmissionDraftChangeErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/changes',
     ...options,
     headers: {
@@ -758,8 +932,24 @@ export const changeDraftV1SubmissionsDraftsDraftIdChangesPost = <ThrowOnError ex
  *
  * Return retained finalization state after rechecking draft ownership.
  */
-export const getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetData, ThrowOnError>): RequestResult<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetResponses, GetDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationGetData, ThrowOnError>): RequestResult<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/submission',
     ...options
 });
@@ -769,8 +959,25 @@ export const getDraftSubmissionV1SubmissionsDraftsDraftIdSubmissionGet = <ThrowO
  *
  * Validate an owned draft and start retry-safe durable finalization.
  */
-export const submitDraftV1SubmissionsDraftsDraftIdSubmissionPost = <ThrowOnError extends boolean = false>(options: Options<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostData, ThrowOnError>): RequestResult<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, ThrowOnError> => (options.client ?? client).post<SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostResponses, SubmitDraftV1SubmissionsDraftsDraftIdSubmissionPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionFinalizationStart = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationStartData, ThrowOnError>): RequestResult<SubmissionFinalizationStartResponses, SubmissionFinalizationStartErrors, ThrowOnError> => (options.client ?? client).post<SubmissionFinalizationStartResponses, SubmissionFinalizationStartErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/submission',
     ...options
 });
@@ -780,9 +987,26 @@ export const submitDraftV1SubmissionsDraftsDraftIdSubmissionPost = <ThrowOnError
  *
  * Stream one owned-draft upload through a private bounded staging file.
  */
-export const uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost = <ThrowOnError extends boolean = false>(options: Options<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostData, ThrowOnError>): RequestResult<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError> => (options.client ?? client).post<UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostResponses, UploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPostErrors, ThrowOnError>({
+export const submissionMediaUpload = <ThrowOnError extends boolean = false>(options: Options<SubmissionMediaUploadData, ThrowOnError>): RequestResult<SubmissionMediaUploadResponses, SubmissionMediaUploadErrors, ThrowOnError> => (options.client ?? client).post<SubmissionMediaUploadResponses, SubmissionMediaUploadErrors, ThrowOnError>({
     bodySerializer: null,
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/media/{kind}',
     ...options,
     headers: {
@@ -796,8 +1020,24 @@ export const uploadDraftMediaV1SubmissionsDraftsDraftIdMediaKindPost = <ThrowOnE
  *
  * List all retained states and safe normalized facts for an owned draft.
  */
-export const listDraftMediaV1SubmissionsDraftsDraftIdMediaGet = <ThrowOnError extends boolean = false>(options: Options<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetData, ThrowOnError>): RequestResult<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ThrowOnError> => (options.client ?? client).get<ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetResponses, ListDraftMediaV1SubmissionsDraftsDraftIdMediaGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionMediaList = <ThrowOnError extends boolean = false>(options: Options<SubmissionMediaListData, ThrowOnError>): RequestResult<SubmissionMediaListResponses, SubmissionMediaListErrors, ThrowOnError> => (options.client ?? client).get<SubmissionMediaListResponses, SubmissionMediaListErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/media',
     ...options
 });
@@ -807,8 +1047,25 @@ export const listDraftMediaV1SubmissionsDraftsDraftIdMediaGet = <ThrowOnError ex
  *
  * Withdraw one upload while retaining a stable discarded state.
  */
-export const discardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDelete = <ThrowOnError extends boolean = false>(options: Options<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteData, ThrowOnError>): RequestResult<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteResponses, DiscardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDeleteErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionMediaDiscard = <ThrowOnError extends boolean = false>(options: Options<SubmissionMediaDiscardData, ThrowOnError>): RequestResult<SubmissionMediaDiscardResponses, SubmissionMediaDiscardErrors, ThrowOnError> => (options.client ?? client).delete<SubmissionMediaDiscardResponses, SubmissionMediaDiscardErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'X-CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
     ...options
 });
@@ -818,8 +1075,24 @@ export const discardDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdDelete = <T
  *
  * Return one upload after enforcing both draft ownership and association.
  */
-export const getDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGet = <ThrowOnError extends boolean = false>(options: Options<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetData, ThrowOnError>): RequestResult<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetResponses, GetDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const submissionMediaGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionMediaGetData, ThrowOnError>): RequestResult<SubmissionMediaGetResponses, SubmissionMediaGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionMediaGetResponses, SubmissionMediaGetErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
     ...options
 });
@@ -829,63 +1102,55 @@ export const getDraftMediaV1SubmissionsDraftsDraftIdMediaUploadIdGet = <ThrowOnE
  *
  * List published tag definitions.
  */
-export const listTagsV1TagsGet = <ThrowOnError extends boolean = false>(options?: Options<ListTagsV1TagsGetData, ThrowOnError>): RequestResult<ListTagsV1TagsGetResponses, ListTagsV1TagsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListTagsV1TagsGetResponses, ListTagsV1TagsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/tags',
-    ...options
-});
+export const tagsList = <ThrowOnError extends boolean = false>(options?: Options<TagsListData, ThrowOnError>): RequestResult<TagsListResponses, TagsListErrors, ThrowOnError> => (options?.client ?? client).get<TagsListResponses, TagsListErrors, ThrowOnError>({ url: '/v1/tags', ...options });
 
 /**
  * Get Tag
  *
  * Return one published tag definition.
  */
-export const getTagV1TagsTagIdGet = <ThrowOnError extends boolean = false>(options: Options<GetTagV1TagsTagIdGetData, ThrowOnError>): RequestResult<GetTagV1TagsTagIdGetResponses, GetTagV1TagsTagIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetTagV1TagsTagIdGetResponses, GetTagV1TagsTagIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/tags/{tag_id}',
-    ...options
-});
+export const tagsGet = <ThrowOnError extends boolean = false>(options: Options<TagsGetData, ThrowOnError>): RequestResult<TagsGetResponses, TagsGetErrors, ThrowOnError> => (options.client ?? client).get<TagsGetResponses, TagsGetErrors, ThrowOnError>({ url: '/v1/tags/{tag_id}', ...options });
 
 /**
  * Get Creator Alias
  *
  * Return a creator credit without exposing its linked account.
  */
-export const getCreatorAliasV1CreatorAliasesNameGet = <ThrowOnError extends boolean = false>(options: Options<GetCreatorAliasV1CreatorAliasesNameGetData, ThrowOnError>): RequestResult<GetCreatorAliasV1CreatorAliasesNameGetResponses, GetCreatorAliasV1CreatorAliasesNameGetErrors, ThrowOnError> => (options.client ?? client).get<GetCreatorAliasV1CreatorAliasesNameGetResponses, GetCreatorAliasV1CreatorAliasesNameGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/creator-aliases/{name}',
-    ...options
-});
+export const creatorAliasGet = <ThrowOnError extends boolean = false>(options: Options<CreatorAliasGetData, ThrowOnError>): RequestResult<CreatorAliasGetResponses, CreatorAliasGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorAliasGetResponses, CreatorAliasGetErrors, ThrowOnError>({ url: '/v1/creator-aliases/{name}', ...options });
 
 /**
  * Get Creator Profile
  *
  * Return every public alias grouped under a stable creator identity.
  */
-export const getCreatorProfileV1CreatorsCreatorIdGet = <ThrowOnError extends boolean = false>(options: Options<GetCreatorProfileV1CreatorsCreatorIdGetData, ThrowOnError>): RequestResult<GetCreatorProfileV1CreatorsCreatorIdGetResponses, GetCreatorProfileV1CreatorsCreatorIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetCreatorProfileV1CreatorsCreatorIdGetResponses, GetCreatorProfileV1CreatorsCreatorIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/creators/{creator_id}',
-    ...options
-});
+export const creatorProfileGet = <ThrowOnError extends boolean = false>(options: Options<CreatorProfileGetData, ThrowOnError>): RequestResult<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError>({ url: '/v1/creators/{creator_id}', ...options });
 
 /**
  * List Versions
  *
  * List recognized Java and Bedrock releases.
  */
-export const listVersionsV1VersionsGet = <ThrowOnError extends boolean = false>(options?: Options<ListVersionsV1VersionsGetData, ThrowOnError>): RequestResult<ListVersionsV1VersionsGetResponses, ListVersionsV1VersionsGetErrors, ThrowOnError> => (options?.client ?? client).get<ListVersionsV1VersionsGetResponses, ListVersionsV1VersionsGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
-    url: '/v1/versions',
-    ...options
-});
+export const minecraftVersionsList = <ThrowOnError extends boolean = false>(options?: Options<MinecraftVersionsListData, ThrowOnError>): RequestResult<MinecraftVersionsListResponses, MinecraftVersionsListErrors, ThrowOnError> => (options?.client ?? client).get<MinecraftVersionsListResponses, MinecraftVersionsListErrors, ThrowOnError>({ url: '/v1/versions', ...options });
 
 /**
  * Get Vote Session
  *
  * Return aggregate vote state without exposing ballot identities.
  */
-export const getVoteSessionV1VoteSessionsVoteSessionIdGet = <ThrowOnError extends boolean = false>(options: Options<GetVoteSessionV1VoteSessionsVoteSessionIdGetData, ThrowOnError>): RequestResult<GetVoteSessionV1VoteSessionsVoteSessionIdGetResponses, GetVoteSessionV1VoteSessionsVoteSessionIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetVoteSessionV1VoteSessionsVoteSessionIdGetResponses, GetVoteSessionV1VoteSessionsVoteSessionIdGetErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const voteSessionGet = <ThrowOnError extends boolean = false>(options: Options<VoteSessionGetData, ThrowOnError>): RequestResult<VoteSessionGetResponses, VoteSessionGetErrors, ThrowOnError> => (options.client ?? client).get<VoteSessionGetResponses, VoteSessionGetErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
     url: '/v1/vote-sessions/{vote_session_id}',
     ...options
 });
@@ -895,8 +1160,12 @@ export const getVoteSessionV1VoteSessionsVoteSessionIdGet = <ThrowOnError extend
  *
  * Cast the authenticated Discord member's weighted vote.
  */
-export const castVoteV1VoteSessionsVoteSessionIdVotesPost = <ThrowOnError extends boolean = false>(options: Options<CastVoteV1VoteSessionsVoteSessionIdVotesPostData, ThrowOnError>): RequestResult<CastVoteV1VoteSessionsVoteSessionIdVotesPostResponses, CastVoteV1VoteSessionsVoteSessionIdVotesPostErrors, ThrowOnError> => (options.client ?? client).post<CastVoteV1VoteSessionsVoteSessionIdVotesPostResponses, CastVoteV1VoteSessionsVoteSessionIdVotesPostErrors, ThrowOnError>({
-    security: [{ name: 'Authorization', type: 'apiKey' }],
+export const voteCast = <ThrowOnError extends boolean = false>(options: Options<VoteCastData, ThrowOnError>): RequestResult<VoteCastResponses, VoteCastErrors, ThrowOnError> => (options.client ?? client).post<VoteCastResponses, VoteCastErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
     url: '/v1/vote-sessions/{vote_session_id}/votes',
     ...options,
     headers: {

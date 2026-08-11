@@ -1,52 +1,17 @@
-"""OpenAPI contract fuzzing for the HTTP API.
+"""Deterministic audits for the canonical HTTP API contract."""
 
-Schemathesis generates schema-conformant requests straight from the FastAPI app's own OpenAPI
-document and exercises the real ASGI app in-process, lifespan included. It targets a different bug
-class than the coverage-guided Atheris harnesses under tests/fuzz/: those hit pure parsing
-functions directly and can reach deep edge cases fast, but they can't reach anything that requires
-a live request (routing, dependency injection, header/body coercion). Schemathesis can't reach
-those deep parser edge cases the way Atheris does, but it can catch a handler crashing on a
-structurally valid combination of headers, body, and query parameters that no one wrote a unit
-test for.
-
-Add every new route to this schema as the API grows; that's the point of wiring this up early.
-"""
-
-import gc
 import json
 from pathlib import Path
 
 import httpx
-import pytest
-import schemathesis
-from hypothesis import HealthCheck, settings
 
+from squid.api.capabilities import API_FEATURES
+from squid.api.errors import ProblemDetail
+from squid.api.openapi import OPERATIONS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
-schema = schemathesis.openapi.from_asgi("/openapi.json", _app)
 OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
-
-
-@pytest.fixture
-def collect_asgi_portals():
-    """Collect Schemathesis's per-example TestClient portals after each fuzz test."""
-    yield
-    gc.collect()
-
-
-@schema.parametrize()
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-# schemathesis's ASGI transport opens a fresh starlette TestClient per generated example, and its
-# anyio portal is only torn down when garbage collected. Force collection before the test ends so
-# that cleanup, and the ResourceWarning it emits, stays inside this test's ignore scope instead of
-# leaking into session teardown where this suite's `filterwarnings = ["error"]` would fail on it.
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_api_never_returns_a_server_error(case: schemathesis.Case, collect_asgi_portals: None) -> None:
-    case.call_and_validate(
-        headers={"Authorization": TEST_SYNERGY_SECRET},
-        checks=[schemathesis.checks.not_a_server_error],  # pyrefly: ignore  # pyright: ignore[reportAttributeAccessIssue]
-    )
 
 
 # Locale negotiation (squid/api/i18n.py) sits in front of every response, including error
@@ -105,3 +70,60 @@ def test_committed_openapi_document_matches_application() -> None:
     committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
 
     assert committed == _app.openapi()
+
+
+def test_every_operation_has_stable_cli_and_security_metadata() -> None:
+    document = _app.openapi()
+    expected_locations = {(contract.path, contract.method) for contract in OPERATIONS}
+    actual_locations = {
+        (path, method)
+        for path, path_item in document["paths"].items()
+        for method in ("get", "post", "put", "patch", "delete")
+        if method in path_item
+    }
+    assert actual_locations == expected_locations
+
+    identifiers: list[str] = []
+    command_paths: list[str] = []
+    for contract in OPERATIONS:
+        operation = document["paths"][contract.path][contract.method]
+        assert operation["operationId"] == contract.operation_id
+        assert operation["security"]
+        assert operation["x-squid-cli"]["classification"] == contract.classification
+        identifiers.append(operation["operationId"])
+        if contract.classification == "command":
+            metadata = operation["x-squid-cli"]
+            assert metadata["interaction"] in {"direct", "browser-continuation"}
+            assert set(metadata["required_api_features"]) <= API_FEATURES
+            command_paths.append(metadata["command"])
+
+    assert len(identifiers) == len(set(identifiers))
+    assert len(command_paths) == len(set(command_paths))
+
+
+def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
+    document = _app.openapi()
+    schemes = document["components"]["securitySchemes"]
+    assert {"ApiCredential", "WebSession", "CsrfToken", "DeviceSession"} <= schemes.keys()
+    assert document["paths"]["/v1/capabilities"]["get"]["security"] == [{}]
+    assert document["paths"]["/v1/auth/logout"]["post"]["security"] == [{"WebSession": [], "CsrfToken": []}]
+    assert document["paths"]["/v1/cli/auth/sessions/current"]["delete"]["security"] == [{"DeviceSession": []}]
+    assert document["paths"]["/v1/verify"]["post"]["x-required-api-scopes"] == ["verify"]
+
+
+def test_cli_command_operations_have_language_neutral_fixtures() -> None:
+    fixture_path = OPENAPI_DOCUMENT.parent / "fixtures" / "cli-operations.json"
+    fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
+    commands = {contract.operation_id for contract in OPERATIONS if contract.classification == "command"}
+
+    assert fixtures["version"] == 1
+    assert set(fixtures["operations"]) == commands
+    for operation_id, fixture in fixtures["operations"].items():
+        assert fixture["success"]["status"] in {200, 201, 202, 204}
+        assert fixture["problem"]["status"] >= 400
+        problem = ProblemDetail.model_validate(fixture["problem"]["body"])
+        assert problem.status == fixture["problem"]["status"]
+        assert problem.code is not None
+        if operation_id == "submission_media_upload":
+            assert fixture["request"]["headers"]["Content-Type"] == "image/png"
+            assert fixture["request"]["boundary"] == "raw request body is the exact file byte sequence"
