@@ -6,6 +6,7 @@ pub mod encrypted_state;
 pub mod exit;
 pub mod form;
 pub mod locale;
+pub mod media;
 pub mod origin;
 pub mod output;
 pub mod process;
