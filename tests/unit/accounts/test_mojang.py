@@ -45,7 +45,19 @@ async def test_mojang_client_validates_a_bounded_profile_response() -> None:
     username = await client.get_username(UUID("12345678-1234-5678-1234-567812345678"))
 
     assert username == "Builder"
+    assert session.get.call_args.args == (
+        "https://sessionserver.mojang.com/session/minecraft/profile/12345678-1234-5678-1234-567812345678",
+    )
     assert session.get.call_args.kwargs == {"allow_redirects": False}
+
+
+async def test_mojang_client_uses_a_configured_loopback_profile_service() -> None:
+    session = Mock()
+    session.get.return_value = FakeRequest(FakeResponse(204))
+    client = MojangClient(cast(aiohttp.ClientSession, session), profile_url="http://127.0.0.1:8101/profile/")
+
+    assert await client.get_username(UUID("12345678-1234-5678-1234-567812345678")) is None
+    assert session.get.call_args.args == ("http://127.0.0.1:8101/profile/12345678-1234-5678-1234-567812345678",)
 
 
 async def test_mojang_client_rejects_malformed_success_payloads() -> None:

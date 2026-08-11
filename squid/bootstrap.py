@@ -434,14 +434,17 @@ class _ServiceGraph:
     def vote_members(self) -> DiscordRestActorResolver | None:
         if self.config.discord_bot_token is None:
             return None
-        resolver = DiscordRestActorResolver(self.config.discord_bot_token.get_secret_value())
+        resolver = DiscordRestActorResolver(
+            self.config.discord_bot_token.get_secret_value(),
+            api_url=str(self.config.upstream_http.discord_api_url),
+        )
         self.resources.push_async_callback(resolver.aclose)
         self.votes.set_actor_resolver(resolver)
         return resolver
 
     @cached_property
     def accounts(self) -> AccountService:
-        mojang = MojangClient()
+        mojang = MojangClient(profile_url=str(self.config.upstream_http.mojang_profile_url))
         self.resources.push_async_callback(mojang.aclose)
         return AccountService(
             AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
@@ -486,6 +489,7 @@ class _ServiceGraph:
             self.accounts,
             self.config.oauth,
             self.config.session_pepper.get_secret_value(),
+            upstreams=self.config.upstream_http,
         )
         self.resources.push_async_callback(service.aclose)
         return service

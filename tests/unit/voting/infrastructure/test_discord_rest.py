@@ -35,6 +35,20 @@ async def test_member_returns_role_facts_with_transport_privileges_disabled() ->
     assert requests[0].headers["Authorization"] == "Bot secret-token"
 
 
+async def test_member_uses_a_configured_loopback_discord_api() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(404)
+
+    async with client_for(handler) as client:
+        resolver = DiscordRestActorResolver("token", client=client, api_url="http://127.0.0.1:8102/discord/api/")
+        assert await resolver.member(1, 7, 10, "generic") is None
+
+    assert requests[0].url == httpx.URL("http://127.0.0.1:8102/discord/api/guilds/10/members/7")
+
+
 @pytest.mark.parametrize("status", [403, 404])
 async def test_member_returns_none_when_member_is_not_accessible(status: int) -> None:
     async with client_for(lambda _request: httpx.Response(status)) as client:

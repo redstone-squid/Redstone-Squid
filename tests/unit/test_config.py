@@ -10,6 +10,7 @@ from squid.config import (
     EMBEDDING_DIMENSION,
     ApplicationConfig,
     ObjectStorageConfig,
+    UpstreamHttpConfig,
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
@@ -64,6 +65,55 @@ def test_media_publication_lease_exceeds_the_configured_s3_retry_envelope() -> N
         ObjectStorageConfig(connect_timeout_seconds=61)
     with pytest.raises(ValueError, match="less than or equal to 3600"):
         ObjectStorageConfig(read_timeout_seconds=3601)
+
+
+def test_upstream_http_overrides_are_explicitly_loopback_only() -> None:
+    configured = UpstreamHttpConfig.model_validate(
+        {
+            "mojang_profile_url": "http://127.0.0.1:8101/mojang/profile",
+            "discord_api_url": "http://localhost:8102/discord/api",
+            "discord_authorize_url": "http://[::1]:8103/discord/authorize",
+        }
+    )
+
+    assert configured.mojang_profile_url.host == "127.0.0.1"
+    assert configured.discord_api_url.host == "localhost"
+    assert configured.discord_authorize_url.host == "[::1]"
+
+
+@pytest.mark.parametrize(
+    ("field", "url"),
+    [
+        ("mojang_profile_url", "https://attacker.example/mojang"),
+        ("discord_api_url", "https://discord.example/api"),
+        ("discord_authorize_url", "http://fake-upstream.internal/authorize"),
+    ],
+)
+def test_upstream_http_rejects_non_official_remote_overrides(field: str, url: str) -> None:
+    with pytest.raises(ValueError, match="loopback"):
+        UpstreamHttpConfig.model_validate({field: url})
+
+
+def test_upstream_http_rejects_loopback_queries_and_credentials() -> None:
+    with pytest.raises(ValueError, match="query or fragment"):
+        UpstreamHttpConfig.model_validate({"discord_api_url": "http://127.0.0.1:8102/api?credential=leak"})
+    with pytest.raises(ValueError, match="loopback"):
+        UpstreamHttpConfig.model_validate({"mojang_profile_url": "http://user:password@127.0.0.1:8101/profile"})
+
+
+def test_api_process_projects_loopback_upstreams_into_the_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret",
+        SQUID_UPSTREAM_HTTP_MOJANG_PROFILE_URL="http://127.0.0.1:8101/mojang/profile",
+        SQUID_UPSTREAM_HTTP_DISCORD_API_URL="http://127.0.0.1:8102/discord/api",
+        SQUID_UPSTREAM_HTTP_DISCORD_AUTHORIZE_URL="http://127.0.0.1:8102/discord/authorize",
+    )
+
+    config = load_api_process_config()
+
+    assert str(config.runtime.upstream_http.mojang_profile_url).startswith("http://127.0.0.1:8101/")
+    assert str(config.runtime.upstream_http.discord_api_url).startswith("http://127.0.0.1:8102/")
 
 
 def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

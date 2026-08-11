@@ -11,6 +11,7 @@ from squid.voting.domain import VoteActor, VoteKindLiteral
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 
 logger = logging.getLogger(__name__)
+DEFAULT_DISCORD_API_URL = "https://discord.com/api/v10"
 type Sleep = Callable[[float], Awaitable[None]]
 type Clock = Callable[[], float]
 
@@ -26,6 +27,7 @@ class DiscordRestActorResolver:
         cache_ttl_seconds: float = 300,
         sleep: Sleep = asyncio.sleep,
         clock: Clock = monotonic,
+        api_url: str = DEFAULT_DISCORD_API_URL,
     ) -> None:
         self._token = bot_token
         self._client = client or httpx.AsyncClient(timeout=10)
@@ -34,6 +36,7 @@ class DiscordRestActorResolver:
         self._sleep = sleep
         self._clock = clock
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None]] = {}
+        self._api_url = api_url.rstrip("/")
 
     async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
         """Return current member facts, raising when Discord cannot answer reliably."""
@@ -72,7 +75,7 @@ class DiscordRestActorResolver:
             await self._client.aclose()
 
     async def _request_member(self, discord_id: int, guild_id: int) -> httpx.Response:
-        url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{discord_id}"
+        url = f"{self._api_url}/guilds/{guild_id}/members/{discord_id}"
         try:
             response = await self._client.get(url, headers={"Authorization": f"Bot {self._token}"})
             if response.status_code == 429:
