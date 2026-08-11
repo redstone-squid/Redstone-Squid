@@ -46,6 +46,22 @@ Update metadata is notification-only. The verifier authenticates the exact manif
 pinned Ed25519 release key before parsing them, requires HTTPS artifact URLs, compares independent
 CLI/protocol versions, and can stream-check the signed size and SHA-256 without replacing a binary.
 
+## Terminal forms and processes
+
+The form core is deliberately independent of the unfinished API DTOs. An adapter can map a pinned
+server manifest into validated stable field codes, localized labels, constraints, and supported
+controls. Required renderer capabilities fail closed and request web continuation; unknown optional
+presentation hints are reported but may be ignored. Non-interactive invocations never open a prompt.
+
+Profiles can select either localized line prompts or a full-screen terminal editor. Both sanitize
+server-authored terminal text. The full-screen editor supports bounded text, multiline text,
+integers, booleans, single choice, and multiple choice, and restores raw/alternate-screen state on
+success, cancellation, or failure.
+
+External editor commands are tokenized without invoking a shell. Documents use bounded,
+owner-readable temporary files, symlink replacements are rejected, and timed-out child processes
+are terminated and reaped before the command returns.
+
 ## Development
 
 Install Rust 1.85 and run from this directory:
