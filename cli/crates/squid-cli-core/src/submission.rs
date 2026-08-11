@@ -352,7 +352,7 @@ pub struct DraftSummary {
 }
 
 /// Bounded account-owned active draft list.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DraftList {
     pub drafts: Vec<DraftSummary>,
 }
@@ -427,7 +427,7 @@ pub struct DraftChangeRequest {
 }
 
 /// Accepted change and replay indicator.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DraftChangeResponse {
     pub draft: StoredDraft,
     pub replayed: bool,
@@ -468,6 +468,25 @@ impl<'a> SubmissionApi<'a> {
     ) -> Result<ApiResponse<FormManifest>, TransportError> {
         self.client.send_json(
             ApiRequest::new(ApiMethod::Get, "/api/v1/submissions/form/current"),
+            token,
+        )
+    }
+
+    pub fn pinned_form(
+        &self,
+        schema_id: &str,
+        revision: u32,
+        token: Option<&SecretBytes>,
+    ) -> Result<ApiResponse<FormManifest>, TransportError> {
+        FormCode::parse(schema_id).map_err(|_error| TransportError::InvalidEndpointPath)?;
+        if revision == 0 {
+            return Err(TransportError::InvalidEndpointPath);
+        }
+        self.client.send_json(
+            ApiRequest::new(
+                ApiMethod::Get,
+                format!("/api/v1/submissions/form/schemas/{schema_id}/revisions/{revision}"),
+            ),
             token,
         )
     }

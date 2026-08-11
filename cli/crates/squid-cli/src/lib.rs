@@ -12,25 +12,33 @@ use std::time::{Duration, Instant};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use serde::Serialize;
+use serde_json::Value;
 use squid_cli_core::auth::{
     AuthState, AuthStateError, CliAuthApi, CliAuthError, IssuedCliSession, load_auth_state,
     load_or_create_auth_state, save_auth_state,
 };
 use squid_cli_core::credential::{
     CredentialBackend, CredentialError, CredentialKind, CredentialVault, DeviceIdentity,
-    load_or_create_device_identity, load_or_create_draft_cache_key,
+    SecretBytes, load_or_create_device_identity, load_or_create_draft_cache_key,
 };
 use squid_cli_core::encrypted_state::{EncryptedStateError, EncryptedStateStore};
 use squid_cli_core::exit::ExitStatus;
-use squid_cli_core::form::RendererCapabilities;
+use squid_cli_core::form::{
+    FormAnswer, FormCode, FormError, InteractionMode, PromptRenderer, RendererCapabilities,
+};
 use squid_cli_core::locale::{Locale, LocalizedMessage, MessageKey, format_message};
 use squid_cli_core::origin::{ApiOrigin, OriginError};
 use squid_cli_core::output::{FailureEnvelope, SuccessEnvelope, write_json};
 use squid_cli_core::profile::{
     EditorPreference, Profile, ProfileConfig, ProfileError, ProfileName, ProfileStore,
 };
+use squid_cli_core::submission::{
+    DraftChangeRequest, DraftList, DraftSummary, FieldOperation, FieldOperationKind, FormManifest,
+    FormOptionSet, StoredDraft, SubmissionApi, SubmissionContractError, SubmissionFinalization,
+};
 use squid_cli_core::terminal::sanitize_terminal_text;
 use squid_cli_core::transport::{ApiClient, TransportError, status_code_class};
+use squid_cli_core::tui::read_answer_tui;
 use squid_cli_core::version::VersionInfo;
 use uuid::Uuid;
 
@@ -63,6 +71,11 @@ enum Command {
         #[command(subcommand)]
         command: AuthCommand,
     },
+    /// Create, inspect, edit, and finalize synchronized submission drafts.
+    Draft {
+        #[command(subcommand)]
+        command: DraftCommand,
+    },
     /// Generate a shell completion script.
     Completion {
         #[command(subcommand)]
@@ -73,8 +86,64 @@ enum Command {
         #[command(subcommand)]
         command: ProfileCommand,
     },
+    /// Create a draft, complete its server-authored form, and submit it.
+    Submit {
+        /// Stable build category such as door, extender, utility, entrance, or other.
+        category: String,
+        /// Wait for durable finalization to complete or require attention.
+        #[arg(long)]
+        wait: bool,
+        /// Maximum wait for asynchronous finalization.
+        #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=3600))]
+        timeout_seconds: u64,
+    },
     /// Report CLI and submission-protocol compatibility.
     Version,
+}
+
+#[derive(Debug, Subcommand)]
+enum DraftCommand {
+    /// List up to ten active synchronized drafts.
+    List,
+    /// Create an empty synchronized draft pinned to the current form.
+    Create {
+        /// Stable build category.
+        category: String,
+        /// Immediately complete unanswered fields interactively.
+        #[arg(long)]
+        edit: bool,
+    },
+    /// Show one full owned draft snapshot.
+    Show { draft_id: Uuid },
+    /// Set one stable field to an explicit JSON value.
+    Set {
+        draft_id: Uuid,
+        field_id: String,
+        /// JSON primitive, array, or object accepted by the pinned form.
+        value: String,
+    },
+    /// Remove one stable field answer.
+    Unset { draft_id: Uuid, field_id: String },
+    /// Complete currently unanswered visible fields using the configured renderer.
+    Edit { draft_id: Uuid },
+    /// Delete one editable draft and its private pending media.
+    Delete {
+        draft_id: Uuid,
+        /// Skip the interactive deletion confirmation.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Start durable finalization for a complete draft.
+    Submit {
+        draft_id: Uuid,
+        /// Wait for completion or actionable attention.
+        #[arg(long)]
+        wait: bool,
+        #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=3600))]
+        timeout_seconds: u64,
+    },
+    /// Read retained durable finalization status.
+    Status { draft_id: Uuid },
 }
 
 #[derive(Debug, Subcommand)]
@@ -251,6 +320,11 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
             let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
             run_auth(command, cli.output, locale, &store, output)
         }
+        Command::Draft { command } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            let mut session = ConnectedSession::open(locale, &store)?;
+            run_draft(command, cli.output, locale, &mut session, output)
+        }
         Command::Completion {
             command: CompletionCommand::Generate { shell },
         } => {
@@ -269,8 +343,849 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
             let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
             run_profile(command, cli.output, locale, &store, output)
         }
+        Command::Submit {
+            category,
+            wait,
+            timeout_seconds,
+        } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            let mut session = ConnectedSession::open(locale, &store)?;
+            run_guided_submission(
+                &category,
+                wait,
+                timeout_seconds,
+                cli.output,
+                locale,
+                &mut session,
+                output,
+            )
+        }
         Command::Version => write_version(cli.output, locale, output).map_err(RunError::Io),
     }
+}
+
+struct ConnectedSession {
+    profile: Profile,
+    backend: CredentialBackend,
+    identity: DeviceIdentity,
+    state_key: SecretBytes,
+    state_store: EncryptedStateStore,
+    state: AuthState,
+    client: ApiClient,
+}
+
+impl ConnectedSession {
+    fn open(locale: Locale, store: &ProfileStore) -> Result<Self, RunError> {
+        let config = store.load().map_err(|error| profile_failure(error, None))?;
+        let (_profile_name, profile) = config
+            .resolve(None)
+            .map_err(|error| profile_failure(error, None))?;
+        let profile = profile.clone();
+        let vault = CredentialVault::system(store.paths(), &profile.origin);
+        let backend = vault.backend().map_err(credential_failure)?;
+        let signing_key = vault
+            .get(CredentialKind::DeviceSigningKey)
+            .map_err(credential_failure)?
+            .ok_or_else(authentication_required)?;
+        let identity = DeviceIdentity::from_secret(&signing_key).map_err(credential_failure)?;
+        let state_key = vault
+            .get(CredentialKind::DraftCacheKey)
+            .map_err(credential_failure)?
+            .ok_or_else(authentication_required)?;
+        let state_store = EncryptedStateStore::new(store.paths(), &profile.origin);
+        let state = load_auth_state(&state_store, &state_key)
+            .map_err(auth_state_failure)?
+            .ok_or_else(authentication_required)?;
+        let capabilities = match profile.editor {
+            EditorPreference::Tui => RendererCapabilities::tui(),
+            EditorPreference::Prompt => RendererCapabilities::prompt(false),
+        };
+        let client =
+            ApiClient::for_profile(&profile, locale, state.client_instance_id(), &capabilities)
+                .map_err(transport_failure)?;
+        let mut session = Self {
+            profile,
+            backend,
+            identity,
+            state_key,
+            state_store,
+            state,
+            client,
+        };
+        if session.state.session_token().is_none() {
+            session.refresh()?;
+        }
+        Ok(session)
+    }
+
+    fn request<T>(
+        &mut self,
+        mut operation: impl FnMut(&ApiClient, &SecretBytes) -> Result<T, TransportError>,
+    ) -> Result<T, RunError> {
+        let mut refreshed = false;
+        let mut network_retried = false;
+        loop {
+            let token = self
+                .state
+                .session_token()
+                .ok_or_else(authentication_required)?;
+            match operation(&self.client, &token) {
+                Ok(value) => return Ok(value),
+                Err(error) if is_transport_network_failure(&error) && !network_retried => {
+                    network_retried = true;
+                }
+                Err(error) if is_transport_unauthorized(&error) && !refreshed => {
+                    self.refresh()?;
+                    refreshed = true;
+                    network_retried = false;
+                }
+                Err(error) => return Err(transport_failure(error).into()),
+            }
+        }
+    }
+
+    fn refresh(&mut self) -> Result<(), RunError> {
+        let device_id = self.state.device_id().ok_or_else(authentication_required)?;
+        let issued = renew_cli_session(&CliAuthApi::new(&self.client), &self.identity, device_id)
+            .map_err(auth_api_failure)?;
+        self.state.set_session(issued);
+        save_auth_state(&self.state_store, &self.state_key, &self.state)
+            .map_err(auth_state_failure)?;
+        Ok(())
+    }
+
+    fn renderer_capabilities(&self) -> RendererCapabilities {
+        match self.profile.editor {
+            EditorPreference::Tui => RendererCapabilities::tui(),
+            EditorPreference::Prompt => RendererCapabilities::prompt(false),
+        }
+    }
+}
+
+fn run_draft(
+    command: DraftCommand,
+    format: OutputFormat,
+    locale: Locale,
+    session: &mut ConnectedSession,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let result = match command {
+        DraftCommand::List => {
+            let response =
+                session.request(|client, token| SubmissionApi::new(client).list_drafts(token))?;
+            response
+                .data
+                .validate()
+                .map_err(submission_contract_failure)?;
+            write_draft_list(format, locale, &response.data, response.request_id, output)
+        }
+        DraftCommand::Create { category, edit } => {
+            let (draft, request_id) = create_connected_draft(session, &category)?;
+            if edit {
+                let draft = edit_draft_interactively(session, draft.id, locale)
+                    .map_err(|error| attach_preserved_draft(error, draft.id))?;
+                write_connected_result(
+                    "draft.create",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::DraftChanged)
+                        .with("draft_id", draft.id.hyphenated().to_string())
+                        .with("revision", draft.revision.to_string()),
+                    &draft,
+                    None,
+                    output,
+                )
+            } else {
+                write_connected_result(
+                    "draft.create",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::DraftCreated)
+                        .with("draft_id", draft.id.hyphenated().to_string())
+                        .with("category", sanitize_terminal_text(&draft.category)),
+                    &draft,
+                    request_id,
+                    output,
+                )
+            }
+        }
+        DraftCommand::Show { draft_id } => {
+            let response = session
+                .request(|client, token| SubmissionApi::new(client).get_draft(draft_id, token))?;
+            write_draft_snapshot(format, &response.data, response.request_id, output)
+        }
+        DraftCommand::Set {
+            draft_id,
+            field_id,
+            value,
+        } => {
+            FormCode::parse(&field_id).map_err(form_failure)?;
+            let value = serde_json::from_str::<Value>(&value).map_err(|error| {
+                CommandFailure::new(
+                    ExitStatus::Usage,
+                    "invalid_json_value",
+                    MessageKey::InvalidJsonValue,
+                )
+                .with_field_error("value", sanitize_terminal_text(&error.to_string()))
+            })?;
+            let (draft, request_id) = change_draft_field(
+                session,
+                draft_id,
+                field_id,
+                FieldOperationKind::Set,
+                Some(value),
+            )?;
+            write_changed_draft(format, locale, &draft, request_id, output)
+        }
+        DraftCommand::Unset { draft_id, field_id } => {
+            FormCode::parse(&field_id).map_err(form_failure)?;
+            let (draft, request_id) =
+                change_draft_field(session, draft_id, field_id, FieldOperationKind::Unset, None)?;
+            write_changed_draft(format, locale, &draft, request_id, output)
+        }
+        DraftCommand::Edit { draft_id } => {
+            let draft = edit_draft_interactively(session, draft_id, locale)?;
+            write_changed_draft(format, locale, &draft, None, output)
+        }
+        DraftCommand::Delete { draft_id, yes } => {
+            if !yes && !confirm_draft_deletion(locale, draft_id)? {
+                write_connected_result(
+                    "draft.delete",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::DraftDeletionCancelled)
+                        .with("draft_id", draft_id.hyphenated().to_string()),
+                    &DraftDeletionView {
+                        draft_id,
+                        deleted: false,
+                    },
+                    None,
+                    output,
+                )
+            } else {
+                let idempotency_key = Uuid::new_v4();
+                let response = session.request(|client, token| {
+                    SubmissionApi::new(client).delete_draft(draft_id, token, idempotency_key)
+                })?;
+                write_connected_result(
+                    "draft.delete",
+                    format,
+                    locale,
+                    LocalizedMessage::new(MessageKey::DraftDeleted)
+                        .with("draft_id", draft_id.hyphenated().to_string()),
+                    &DraftDeletionView {
+                        draft_id,
+                        deleted: true,
+                    },
+                    response.request_id,
+                    output,
+                )
+            }
+        }
+        DraftCommand::Submit {
+            draft_id,
+            wait,
+            timeout_seconds,
+        } => {
+            let finalization = submit_connected_draft(session, draft_id, wait, timeout_seconds)?;
+            write_finalization_result("draft.submit", format, locale, &finalization, output)
+        }
+        DraftCommand::Status { draft_id } => {
+            let response = session.request(|client, token| {
+                SubmissionApi::new(client).submission_status(draft_id, token)
+            })?;
+            validate_finalization(&response.data, draft_id)?;
+            write_finalization_result_with_request(
+                "draft.status",
+                format,
+                locale,
+                &response.data,
+                response.request_id,
+                output,
+            )
+        }
+    };
+    result?;
+    write_credential_warning(format, locale, session.backend, output)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_guided_submission(
+    category: &str,
+    wait: bool,
+    timeout_seconds: u64,
+    format: OutputFormat,
+    locale: Locale,
+    session: &mut ConnectedSession,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let (draft, _request_id) = create_connected_draft(session, category)?;
+    if let Err(error) = edit_draft_interactively(session, draft.id, locale) {
+        return Err(attach_preserved_draft(error, draft.id));
+    }
+    let finalization = submit_connected_draft(session, draft.id, wait, timeout_seconds)?;
+    write_finalization_result("submit", format, locale, &finalization, output)?;
+    write_credential_warning(format, locale, session.backend, output)?;
+    Ok(())
+}
+
+fn create_connected_draft(
+    session: &mut ConnectedSession,
+    category: &str,
+) -> Result<(StoredDraft, Option<String>), RunError> {
+    FormCode::parse(category).map_err(form_failure)?;
+    let form_response =
+        session.request(|client, token| SubmissionApi::new(client).current_form(Some(token)))?;
+    form_response
+        .data
+        .validate_for_category(category)
+        .map_err(submission_contract_failure)?;
+    require_renderer_capabilities(session, &form_response.data, category, &BTreeMap::new())?;
+    let capabilities = session.renderer_capabilities().submission_capabilities();
+    let idempotency_key = Uuid::new_v4();
+    let response = session.request(|client, token| {
+        SubmissionApi::new(client).create_draft(category, &capabilities, token, idempotency_key)
+    })?;
+    if response.data.category != category
+        || response.data.schema_id != form_response.data.schema_id
+        || response.data.schema_revision != form_response.data.revision
+    {
+        return Err(invalid_form_contract("created_draft").into());
+    }
+    Ok((response.data, response.request_id))
+}
+
+fn change_draft_field(
+    session: &mut ConnectedSession,
+    draft_id: Uuid,
+    field_id: String,
+    kind: FieldOperationKind,
+    value: Option<Value>,
+) -> Result<(StoredDraft, Option<String>), RunError> {
+    let current = session
+        .request(|client, token| SubmissionApi::new(client).get_draft(draft_id, token))?
+        .data;
+    let idempotency_key = Uuid::new_v4();
+    let change = DraftChangeRequest {
+        base_revision: current.revision,
+        client_instance_id: session.state.client_instance_id().as_string(),
+        idempotency_key: idempotency_key.hyphenated().to_string(),
+        operations: vec![FieldOperation {
+            operation_id: Uuid::new_v4(),
+            field_id,
+            kind,
+            value,
+        }],
+    };
+    let response = session.request(|client, token| {
+        SubmissionApi::new(client).change_draft(draft_id, &change, token, idempotency_key)
+    })?;
+    if response.data.draft.id != draft_id
+        || response.data.draft.revision < current.revision.saturating_add(1)
+    {
+        return Err(invalid_form_contract("changed_draft").into());
+    }
+    Ok((response.data.draft, response.request_id))
+}
+
+fn edit_draft_interactively(
+    session: &mut ConnectedSession,
+    draft_id: Uuid,
+    locale: Locale,
+) -> Result<StoredDraft, RunError> {
+    if !io::stdin().is_terminal()
+        || (session.profile.editor == EditorPreference::Tui && !io::stderr().is_terminal())
+    {
+        return Err(CommandFailure::new(
+            ExitStatus::Usage,
+            "form_interaction_required",
+            MessageKey::FormInteractionRequired,
+        )
+        .with_suggested_action(MessageKey::SuggestedContinueOnWeb)
+        .into());
+    }
+    let mut draft = session
+        .request(|client, token| SubmissionApi::new(client).get_draft(draft_id, token))?
+        .data;
+    let schema_id = draft.schema_id.clone();
+    let schema_revision = draft.schema_revision;
+    let form_response = session.request(|client, token| {
+        SubmissionApi::new(client).pinned_form(&schema_id, schema_revision, Some(token))
+    })?;
+    let manifest = form_response.data;
+    if manifest.schema_id != draft.schema_id || manifest.revision != draft.schema_revision {
+        return Err(invalid_form_contract("pinned_manifest").into());
+    }
+    manifest
+        .validate_for_category(&draft.category)
+        .map_err(submission_contract_failure)?;
+    require_renderer_capabilities(session, &manifest, &draft.category, &draft.answers)?;
+
+    for field in manifest
+        .fields_for(&draft.category)
+        .map_err(submission_contract_failure)?
+    {
+        if !field.is_visible(&draft.answers)
+            || draft.answers.contains_key(&field.id)
+            || !field.default.is_null()
+        {
+            continue;
+        }
+        let option_set = if let Some(source) = field.option_source.as_deref() {
+            let response = session.request(|client, token| {
+                SubmissionApi::new(client).form_options(source, &draft.category, Some(token))
+            })?;
+            validate_option_set(&response.data, source, &draft.category)?;
+            Some(response.data)
+        } else {
+            None
+        };
+        let adapted = match field.adapt(
+            option_set
+                .as_ref()
+                .map(|options| options.options.as_slice()),
+        ) {
+            Ok(adapted) => adapted,
+            Err(SubmissionContractError::UnsupportedControl) if !field.required => continue,
+            Err(error) => return Err(submission_contract_failure(error).into()),
+        };
+        let answer = loop {
+            let answer = read_form_answer(session.profile.editor, &adapted.field, locale)?;
+            if answer.as_ref().is_none_or(|answer| {
+                field.constraints.must_equal.is_null()
+                    || answer.to_json() == field.constraints.must_equal
+            }) {
+                break answer;
+            }
+            let mut stderr = io::stderr().lock();
+            writeln!(stderr, "{}", locale.message(MessageKey::FormAnswerInvalid))?;
+        };
+        if let Some(answer) = answer {
+            let (updated, _request_id) = change_draft_field(
+                session,
+                draft.id,
+                field.id.clone(),
+                FieldOperationKind::Set,
+                Some(answer.to_json()),
+            )?;
+            draft = updated;
+            require_renderer_capabilities(session, &manifest, &draft.category, &draft.answers)?;
+        }
+    }
+    Ok(draft)
+}
+
+fn read_form_answer(
+    editor: EditorPreference,
+    field: &squid_cli_core::form::FormField,
+    locale: Locale,
+) -> Result<Option<FormAnswer>, RunError> {
+    match editor {
+        EditorPreference::Tui => {
+            read_answer_tui(field, locale).map_err(|error| form_failure(error).into())
+        }
+        EditorPreference::Prompt => {
+            let stdin = io::stdin();
+            let mut input = stdin.lock();
+            let stderr = io::stderr();
+            let mut output = stderr.lock();
+            let renderer = PromptRenderer::new(InteractionMode::Interactive).with_locale(locale);
+            loop {
+                match renderer.read_answer(field, &mut input, &mut output) {
+                    Ok(answer) => return Ok(answer),
+                    Err(FormError::InvalidAnswer) => {
+                        writeln!(output, "{}", locale.message(MessageKey::FormAnswerInvalid))?;
+                    }
+                    Err(error) => return Err(form_failure(error).into()),
+                }
+            }
+        }
+    }
+}
+
+fn require_renderer_capabilities(
+    session: &ConnectedSession,
+    manifest: &FormManifest,
+    category: &str,
+    answers: &BTreeMap<String, Value>,
+) -> Result<(), RunError> {
+    let assessment = manifest
+        .assess_capabilities(category, answers, &session.renderer_capabilities())
+        .map_err(submission_contract_failure)?;
+    if assessment.web_continuation_required {
+        return Err(CommandFailure::new(
+            ExitStatus::ServerRejection,
+            "form_requires_web_continuation",
+            MessageKey::FormRequiresWeb,
+        )
+        .with_suggested_action(MessageKey::SuggestedContinueOnWeb)
+        .with_field_error(
+            "missing_capabilities",
+            assessment.missing_required.join(","),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_option_set(
+    option_set: &FormOptionSet,
+    expected_source: &str,
+    expected_category: &str,
+) -> Result<(), RunError> {
+    if option_set.source != expected_source
+        || option_set.category != expected_category
+        || option_set.revision == 0
+        || option_set.options.len() > 500
+    {
+        return Err(invalid_form_contract("option_source").into());
+    }
+    Ok(())
+}
+
+fn submit_connected_draft(
+    session: &mut ConnectedSession,
+    draft_id: Uuid,
+    wait: bool,
+    timeout_seconds: u64,
+) -> Result<SubmissionFinalization, RunError> {
+    let idempotency_key = Uuid::new_v4();
+    let response = session.request(|client, token| {
+        SubmissionApi::new(client).submit_draft(draft_id, token, idempotency_key)
+    })?;
+    validate_finalization(&response.data, draft_id)?;
+    if wait && !finalization_is_terminal(&response.data) {
+        wait_for_finalization(session, draft_id, timeout_seconds)
+    } else {
+        Ok(response.data)
+    }
+}
+
+fn wait_for_finalization(
+    session: &mut ConnectedSession,
+    draft_id: Uuid,
+    timeout_seconds: u64,
+) -> Result<SubmissionFinalization, RunError> {
+    let timeout = Duration::from_secs(timeout_seconds);
+    let started = Instant::now();
+    loop {
+        let elapsed = started.elapsed();
+        if elapsed >= timeout {
+            return Err(CommandFailure::new(
+                ExitStatus::WaitTimeout,
+                "finalization_wait_timeout",
+                MessageKey::FinalizationWaitTimedOut,
+            )
+            .with_suggested_action(MessageKey::SuggestedCheckStatus)
+            .with_field_error("draft_id", draft_id.hyphenated().to_string())
+            .into());
+        }
+        thread::sleep(Duration::from_secs(2).min(timeout - elapsed));
+        let response = session.request(|client, token| {
+            SubmissionApi::new(client).submission_status(draft_id, token)
+        })?;
+        validate_finalization(&response.data, draft_id)?;
+        if finalization_is_terminal(&response.data) {
+            return Ok(response.data);
+        }
+    }
+}
+
+fn validate_finalization(
+    finalization: &SubmissionFinalization,
+    expected_draft_id: Uuid,
+) -> Result<(), RunError> {
+    if finalization.draft_id != expected_draft_id
+        || !matches!(
+            finalization.status.as_str(),
+            "pending" | "claimed" | "needs_attention" | "completed" | "dead"
+        )
+    {
+        return Err(invalid_form_contract("submission_finalization").into());
+    }
+    Ok(())
+}
+
+fn finalization_is_terminal(finalization: &SubmissionFinalization) -> bool {
+    matches!(
+        finalization.status.as_str(),
+        "needs_attention" | "completed" | "dead"
+    )
+}
+
+fn attach_preserved_draft(error: RunError, draft_id: Uuid) -> RunError {
+    match error {
+        RunError::Command(mut failure) => {
+            failure.field_errors.insert(
+                String::from("preserved_draft_id"),
+                draft_id.hyphenated().to_string(),
+            );
+            RunError::Command(failure)
+        }
+        error => error,
+    }
+}
+
+fn submission_contract_failure(error: SubmissionContractError) -> CommandFailure {
+    let status = match &error {
+        SubmissionContractError::UnknownCategory => ExitStatus::Usage,
+        SubmissionContractError::IncompatibleProtocol
+        | SubmissionContractError::UnsupportedControl => ExitStatus::ServerRejection,
+        SubmissionContractError::DuplicateIdentifier
+        | SubmissionContractError::InvalidField
+        | SubmissionContractError::TooManyDrafts
+        | SubmissionContractError::Form(_) => ExitStatus::Security,
+    };
+    let mut failure = CommandFailure::new(
+        status,
+        "invalid_submission_contract",
+        MessageKey::InvalidFormContract,
+    )
+    .with_field_error("form", sanitize_terminal_text(&error.to_string()));
+    if matches!(status, ExitStatus::ServerRejection) {
+        failure = failure.with_suggested_action(MessageKey::SuggestedContinueOnWeb);
+    }
+    failure
+}
+
+fn form_failure(error: FormError) -> CommandFailure {
+    match error {
+        FormError::Cancelled | FormError::EndOfInput => CommandFailure::new(
+            ExitStatus::Interrupted,
+            "form_editing_cancelled",
+            MessageKey::FormEditingCancelled,
+        )
+        .with_suggested_action(MessageKey::SuggestedContinueOnWeb),
+        FormError::InteractionRequired => CommandFailure::new(
+            ExitStatus::Usage,
+            "form_interaction_required",
+            MessageKey::FormInteractionRequired,
+        )
+        .with_suggested_action(MessageKey::SuggestedContinueOnWeb),
+        FormError::UnsupportedControl => CommandFailure::new(
+            ExitStatus::ServerRejection,
+            "form_requires_web_continuation",
+            MessageKey::FormRequiresWeb,
+        )
+        .with_suggested_action(MessageKey::SuggestedContinueOnWeb),
+        FormError::InvalidAnswer | FormError::InputTooLarge => CommandFailure::new(
+            ExitStatus::Usage,
+            "invalid_form_answer",
+            MessageKey::FormAnswerInvalid,
+        ),
+        error => invalid_form_contract(&sanitize_terminal_text(&error.to_string())),
+    }
+}
+
+fn invalid_form_contract(detail: &str) -> CommandFailure {
+    CommandFailure::new(
+        ExitStatus::Security,
+        "invalid_submission_contract",
+        MessageKey::InvalidFormContract,
+    )
+    .with_field_error("form", sanitize_terminal_text(detail))
+}
+
+#[derive(Debug, Serialize)]
+struct DraftDeletionView {
+    draft_id: Uuid,
+    deleted: bool,
+}
+
+fn write_draft_list(
+    format: OutputFormat,
+    locale: Locale,
+    list: &DraftList,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new("draft.list", list);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human if list.drafts.is_empty() => {
+            writeln!(output, "{}", locale.message(MessageKey::DraftListEmpty))?;
+        }
+        OutputFormat::Human => {
+            for draft in &list.drafts {
+                write_draft_summary(draft, output)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_draft_summary(draft: &DraftSummary, output: &mut impl Write) -> io::Result<()> {
+    let display_name = draft
+        .display_name
+        .as_deref()
+        .map(sanitize_terminal_text)
+        .map(|name| format!("  {name}"))
+        .unwrap_or_default();
+    writeln!(
+        output,
+        "{}  {}  {}  r{}{}",
+        draft.id,
+        sanitize_terminal_text(&draft.category),
+        sanitize_terminal_text(&draft.status),
+        draft.revision,
+        display_name,
+    )
+}
+
+fn write_draft_snapshot(
+    format: OutputFormat,
+    draft: &StoredDraft,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new("draft.show", draft);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human => {
+            let rendered = serde_json::to_string_pretty(draft).map_err(io::Error::other)?;
+            writeln!(output, "{}", sanitize_terminal_text(&rendered))?;
+        }
+    }
+    Ok(())
+}
+
+fn write_changed_draft(
+    format: OutputFormat,
+    locale: Locale,
+    draft: &StoredDraft,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    write_connected_result(
+        "draft.change",
+        format,
+        locale,
+        LocalizedMessage::new(MessageKey::DraftChanged)
+            .with("draft_id", draft.id.hyphenated().to_string())
+            .with("revision", draft.revision.to_string()),
+        draft,
+        request_id,
+        output,
+    )
+}
+
+fn write_finalization_result(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    finalization: &SubmissionFinalization,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    write_finalization_result_with_request(command, format, locale, finalization, None, output)
+}
+
+fn write_finalization_result_with_request(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    finalization: &SubmissionFinalization,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new(command, finalization);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human => {
+            writeln!(
+                output,
+                "{}",
+                finalization_message(finalization).render(locale)
+            )?;
+            for issue in &finalization.issues {
+                writeln!(
+                    output,
+                    "  {}: {}",
+                    sanitize_terminal_text(&issue.field_id),
+                    sanitize_terminal_text(&issue.reason),
+                )?;
+            }
+            if let Some(build_id) = finalization.build_id {
+                writeln!(output, "  build: {build_id}")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn finalization_message(finalization: &SubmissionFinalization) -> LocalizedMessage {
+    LocalizedMessage::new(MessageKey::DraftSubmitted)
+        .with("draft_id", finalization.draft_id.hyphenated().to_string())
+        .with("status", sanitize_terminal_text(&finalization.status))
+}
+
+fn write_connected_result<T: Serialize>(
+    command: &'static str,
+    format: OutputFormat,
+    locale: Locale,
+    message: LocalizedMessage,
+    data: &T,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Human => writeln!(output, "{}", message.render(locale))?,
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new(command, data);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+    }
+    Ok(())
+}
+
+fn confirm_draft_deletion(locale: Locale, draft_id: Uuid) -> Result<bool, RunError> {
+    let stdin = io::stdin();
+    if !stdin.is_terminal() {
+        return Err(CommandFailure::new(
+            ExitStatus::Usage,
+            "confirmation_required",
+            MessageKey::DraftConfirmationRequired,
+        )
+        .with_suggested_action(MessageKey::SuggestedUseDraftYes)
+        .into());
+    }
+    let draft_id = draft_id.hyphenated().to_string();
+    let prompt = LocalizedMessage::new(MessageKey::ConfirmDraftDeletion)
+        .with("draft_id", &draft_id)
+        .render(locale);
+    let mut stderr = io::stderr().lock();
+    write!(stderr, "{prompt}")?;
+    stderr.flush()?;
+    let mut response = String::new();
+    stdin.lock().read_line(&mut response)?;
+    Ok(response.trim().eq_ignore_ascii_case(&draft_id))
+}
+
+fn authentication_required() -> CommandFailure {
+    CommandFailure::new(
+        ExitStatus::Authentication,
+        "cli_authentication_required",
+        MessageKey::AuthLoginRequired,
+    )
+    .with_suggested_action(MessageKey::SuggestedLogin)
+}
+
+fn is_transport_unauthorized(error: &TransportError) -> bool {
+    matches!(error, TransportError::Http { status: 401, .. })
+}
+
+fn is_transport_network_failure(error: &TransportError) -> bool {
+    matches!(error, TransportError::Request(_))
 }
 
 fn run_auth(
@@ -1387,6 +2302,17 @@ const fn command_name(command: &Command) -> &'static str {
             AuthCommand::Logout { .. } => "auth.logout",
             AuthCommand::Status => "auth.status",
         },
+        Command::Draft { command } => match command {
+            DraftCommand::List => "draft.list",
+            DraftCommand::Create { .. } => "draft.create",
+            DraftCommand::Show { .. } => "draft.show",
+            DraftCommand::Set { .. } | DraftCommand::Unset { .. } | DraftCommand::Edit { .. } => {
+                "draft.change"
+            }
+            DraftCommand::Delete { .. } => "draft.delete",
+            DraftCommand::Submit { .. } => "draft.submit",
+            DraftCommand::Status { .. } => "draft.status",
+        },
         Command::Completion { .. } => "completion.generate",
         Command::Profile { command } => match command {
             ProfileCommand::Add { .. } => "profile.add",
@@ -1395,6 +2321,7 @@ const fn command_name(command: &Command) -> &'static str {
             ProfileCommand::Use { .. } => "profile.use",
             ProfileCommand::Remove { .. } => "profile.remove",
         },
+        Command::Submit { .. } => "submit",
         Command::Version => "version",
     }
 }
@@ -1423,7 +2350,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AuthCommand, Cli, Command, Locale, OutputFormat, resolve_locale, run, run_profile,
+        AuthCommand, Cli, Command, DraftCommand, Locale, OutputFormat, resolve_locale, run,
+        run_profile,
     };
     use squid_cli_core::profile::{ProfilePaths, ProfileStore};
 
@@ -1521,6 +2449,56 @@ mod tests {
         assert!(Cli::try_parse_from(["squid", "auth", "login", "--timeout-seconds", "0"]).is_err());
         assert!(Cli::try_parse_from(["squid", "auth", "logout", "--local-only"]).is_ok());
         assert!(Cli::try_parse_from(["squid", "auth", "status"]).is_ok());
+    }
+
+    #[test]
+    fn draft_and_guided_submission_commands_parse_stable_inputs() {
+        let draft_id = "64760b2f-b352-45e0-9ed1-67b9da901992";
+        let set = Cli::try_parse_from([
+            "squid",
+            "--output",
+            "json",
+            "draft",
+            "set",
+            draft_id,
+            "capture_width",
+            "7",
+        ]);
+        assert!(matches!(
+            set,
+            Ok(Cli {
+                output: OutputFormat::Json,
+                command: Command::Draft {
+                    command: DraftCommand::Set { field_id, value, .. },
+                },
+                ..
+            }) if field_id == "capture_width" && value == "7"
+        ));
+        assert!(
+            Cli::try_parse_from([
+                "squid",
+                "draft",
+                "submit",
+                draft_id,
+                "--wait",
+                "--timeout-seconds",
+                "30",
+            ])
+            .is_ok()
+        );
+        assert!(Cli::try_parse_from(["squid", "submit", "door", "--wait"]).is_ok());
+        assert!(
+            Cli::try_parse_from([
+                "squid",
+                "draft",
+                "submit",
+                draft_id,
+                "--timeout-seconds",
+                "0",
+            ])
+            .is_err()
+        );
+        assert!(Cli::try_parse_from(["squid", "draft", "show", "not-a-uuid"]).is_err());
     }
 
     #[test]
