@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import override
@@ -15,6 +15,7 @@ from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
     ClaimedMediaJob,
+    MediaArtifactCleanupOutcome,
     MediaArtifactRole,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
@@ -101,6 +102,19 @@ class MemoryArtifacts:
         pass
 
 
+class FailingDeleteArtifacts(MemoryArtifacts):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_once: set[str] = set()
+
+    @override
+    async def delete(self, key: str) -> None:
+        if key in self.fail_once:
+            self.fail_once.remove(key)
+            raise OSError("temporary object-store failure")
+        await super().delete(key)
+
+
 @dataclass(slots=True)
 class _JobState:
     upload: MediaUploadMetadata
@@ -118,6 +132,8 @@ class _JobState:
 class MemoryMediaJobs:
     def __init__(self) -> None:
         self.states: dict[UUID, _JobState] = {}
+        self.artifact_objects: dict[str, bool] = {}
+        self.artifact_publications: set[tuple[str, UUID, UUID]] = set()
 
     async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
         existing = self.states.get(upload.id)
@@ -254,6 +270,58 @@ class MemoryMediaJobs:
         state.upload = replace(state.upload, raw_deleted_at=NOW)
         return True
 
+    async def track_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> bool:
+        state = self.states[job.upload.id]
+        current = state.status is MediaJobStatus.CLAIMED and state.claim_token == job.claim_token
+        for artifact in artifacts:
+            self.artifact_objects[artifact.object_key] = False
+            if current:
+                self.artifact_publications.add((artifact.object_key, job.upload.id, job.claim_token))
+        return current
+
+    async def release_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> None:
+        for artifact in artifacts:
+            self.artifact_publications.discard((artifact.object_key, job.upload.id, job.claim_token))
+
+    async def cleanup_artifacts(
+        self,
+        delete: Callable[[str], Awaitable[None]],
+        *,
+        limit: int,
+    ) -> MediaArtifactCleanupOutcome:
+        referenced = {
+            artifact.object_key
+            for state in self.states.values()
+            if state.status is not MediaJobStatus.DISCARDED
+            for artifact in state.artifacts
+        }
+        candidates = [
+            key
+            for key, deleted in self.artifact_objects.items()
+            if not deleted
+            and key not in referenced
+            and not any(publication[0] == key for publication in self.artifact_publications)
+        ][:limit]
+        deleted_count = 0
+        failures = 0
+        for key in candidates:
+            try:
+                await delete(key)
+            except Exception:
+                failures += 1
+            else:
+                deleted_count += 1
+                self.artifact_objects[key] = True
+        return MediaArtifactCleanupOutcome(len(candidates), deleted_count, failures)
+
 
 class RejectingMediaJobs(MemoryMediaJobs):
     def __init__(self, error: MediaDraftNotFoundError | MediaDraftStateConflictError) -> None:
@@ -264,6 +332,23 @@ class RejectingMediaJobs(MemoryMediaJobs):
     async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
         del upload, limits
         raise self.error
+
+
+class DiscardingCompletionMediaJobs(MemoryMediaJobs):
+    @override
+    async def complete(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+        limits: MediaLimits,
+    ) -> bool:
+        del artifacts, limits
+        state = self.states[job.upload.id]
+        state.status = MediaJobStatus.DISCARDED
+        state.claim_token = None
+        state.claimed_at = None
+        state.discarded_at = NOW
+        return False
 
 
 class WritingNormalizer:
@@ -512,6 +597,76 @@ async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_an
 
     await jobs.submit(submission)
     assert snapshot.upload.source_object_key not in artifacts.objects
+
+
+async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = DiscardingCompletionMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
+        working_directory=tmp_path,
+    )
+
+    await runner.process_batch()
+
+    snapshot = await jobs.get(UPLOAD_ID)
+    assert snapshot is not None
+    assert snapshot.status is MediaJobStatus.DISCARDED
+    assert snapshot.artifacts == ()
+    assert artifacts.objects == {}
+    assert repository.artifact_objects
+    assert all(repository.artifact_objects.values())
+
+
+async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metadata(tmp_path: Path) -> None:
+    artifacts = FailingDeleteArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
+        working_directory=tmp_path,
+    )
+    await runner.process_batch()
+    completed = await jobs.get(UPLOAD_ID)
+    assert completed is not None
+    object_keys = {artifact.object_key for artifact in completed.artifacts}
+    failing_key = next(iter(object_keys))
+    artifacts.fail_once.add(failing_key)
+
+    assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+    await runner.cleanup_terminal_artifacts()
+    assert failing_key in artifacts.objects
+    assert any(key not in artifacts.objects for key in object_keys - {failing_key})
+
+    await runner.cleanup_terminal_artifacts()
+    discarded = await jobs.get(UPLOAD_ID)
+    assert discarded is not None
+    assert discarded.status is MediaJobStatus.DISCARDED
+    assert {artifact.object_key for artifact in discarded.artifacts} == object_keys
+    assert object_keys.isdisjoint(artifacts.objects)
 
 
 async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_keeps_it(tmp_path: Path) -> None:

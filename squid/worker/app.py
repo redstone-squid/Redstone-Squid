@@ -87,6 +87,11 @@ class DatabaseWorker:
                 interval=self._config.media_job_interval_seconds,
             )
         self._supervisor.start_periodic(
+            self._cleanup_media_storage,
+            name="media-storage-cleanup",
+            interval=self._config.media_cleanup_interval_seconds,
+        )
+        self._supervisor.start_periodic(
             self._process_submission_finalization,
             name="submission-finalization",
             interval=self._config.submission_finalization_interval_seconds,
@@ -170,6 +175,7 @@ class DatabaseWorker:
             "stale-build-locks",
             "artifact-maintenance",
             "schematic-job-cleanup",
+            "media-storage-cleanup",
             "queue-health",
             "notification-retention",
             "idempotency-retention",
@@ -183,6 +189,7 @@ class DatabaseWorker:
             self._config.maintenance_interval_seconds,
             self._config.schematic_job_interval_seconds,
             self._config.media_job_interval_seconds if self._services.media_runner is not None else 0,
+            self._config.media_cleanup_interval_seconds,
             self._config.submission_finalization_interval_seconds,
             300,
         )
@@ -207,6 +214,10 @@ class DatabaseWorker:
             return
         with trace_span("squid.worker.media_normalization", {"squid.surface": "background_loop"}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
+
+    async def _cleanup_media_storage(self) -> None:
+        with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": "background_loop"}):
+            await self._services.media_cleanup.process_batch()
 
     async def _process_submission_finalization(self) -> None:
         with trace_span("squid.worker.submission_finalization", {"squid.surface": "background_loop"}):

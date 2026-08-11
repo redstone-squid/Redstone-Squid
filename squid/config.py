@@ -131,8 +131,8 @@ class ObjectStorageConfig(_FrozenModel):
     region: str = "us-east-1"
     prefix: str = "redstone-squid"
     addressing_style: Literal["auto", "path", "virtual"] = "path"
-    connect_timeout_seconds: float = Field(default=5.0, gt=0)
-    read_timeout_seconds: float = Field(default=30.0, gt=0)
+    connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60.0)
+    read_timeout_seconds: float = Field(default=30.0, gt=0, le=3600.0)
     max_attempts: int = Field(default=3, ge=1, le=10)
 
     _empty_bucket = field_validator("bucket", mode="before")(_empty_to_none)
@@ -436,6 +436,7 @@ class WorkerConfig(_FrozenModel):
     keepalive_interval_seconds: float = Field(default=86_400, gt=0)
     schematic_job_interval_seconds: float = Field(default=0.25, gt=0)
     media_job_interval_seconds: float = Field(default=0.25, gt=0)
+    media_cleanup_interval_seconds: float = Field(default=60, ge=1)
     media_job_concurrency: int = Field(default=1, ge=1, le=8)
     submission_finalization_interval_seconds: float = Field(default=0.25, gt=0)
 

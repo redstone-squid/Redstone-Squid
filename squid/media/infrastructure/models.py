@@ -82,6 +82,7 @@ class MediaArtifactRecord(Base, kw_only=True):
             name="media_artifacts_dimensions_by_role",
         ),
         Index("media_artifacts_sha256_idx", "sha256"),
+        Index("media_artifacts_object_key_idx", "object_key"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -98,6 +99,81 @@ class MediaArtifactRecord(Base, kw_only=True):
     width: Mapped[int | None] = mapped_column(Integer, default=None)
     height: Mapped[int | None] = mapped_column(Integer, default=None)
     created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class MediaArtifactObjectRecord(Base, kw_only=True):
+    """Durable lifecycle and cleanup audit state for one content-addressed object."""
+
+    __tablename__ = "media_artifact_objects"
+    __table_args__ = (
+        CheckConstraint("attempts >= 0", name="media_artifact_objects_attempts_nonnegative"),
+        CheckConstraint(
+            "sha256 ~ '^[0-9a-f]{64}$'",
+            name="media_artifact_objects_sha256_check",
+        ),
+        CheckConstraint("byte_size > 0", name="media_artifact_objects_size_positive"),
+        CheckConstraint(
+            "(cleanup_claimed_at IS NULL) = (cleanup_claim_token IS NULL)",
+            name="media_artifact_objects_cleanup_claim_shape",
+        ),
+        Index(
+            "media_artifact_objects_cleanup_idx",
+            "available_at",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+    object_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    first_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    last_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    cleanup_claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    cleanup_claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    first_seen_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    last_seen_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class MediaArtifactPublicationRecord(Base, kw_only=True):
+    """A crash-recoverable lease protecting one claim's in-flight object publication."""
+
+    __tablename__ = "media_artifact_publications"
+    __table_args__ = (
+        CheckConstraint(
+            "expires_at > created_at",
+            name="media_artifact_publications_expiry_after_creation",
+        ),
+        Index("media_artifact_publications_expiry_idx", "expires_at"),
+    )
+
+    object_key: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey(
+            "media_artifact_objects.object_key",
+            name="media_artifact_publications_object_key_fkey",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
+    )
+    upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    claim_token: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    renewed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 

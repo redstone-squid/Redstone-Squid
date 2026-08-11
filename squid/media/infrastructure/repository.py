@@ -1,16 +1,23 @@
 """PostgreSQL metadata and claim-token queue for media normalization."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, cast, override
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy import and_, case, exists, func, or_, select, update
+from sqlalchemy import delete as sql_delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.media.application.jobs import (
+    MEDIA_ARTIFACT_CLEANUP_CLAIM,
+    MEDIA_ARTIFACT_PUBLICATION_LEASE,
     ClaimedMediaJob,
+    MediaArtifactCleanupInProgressError,
+    MediaArtifactCleanupOutcome,
     MediaArtifactRole,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
@@ -25,6 +32,8 @@ from squid.media.application.jobs import (
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
 from squid.media.infrastructure.models import (
+    MediaArtifactObjectRecord,
+    MediaArtifactPublicationRecord,
     MediaArtifactRecord,
     MediaNormalizationJobRecord,
     MediaUploadRecord,
@@ -35,6 +44,12 @@ from squid.submissions.domain import DraftStatus
 from squid.submissions.infrastructure.models import SubmissionDraft
 
 _MEDIA_UPLOAD_LOCK_NAMESPACE = "media-upload-registration-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class _ClaimedArtifactCleanup:
+    object_key: str
+    claim_token: UUID
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
@@ -224,6 +239,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
     ) -> bool:
         """Atomically persist outputs and complete the job if the claim is current."""
         _validate_completed_artifacts(job.upload.kind, artifacts)
+        if not await self.track_artifacts(job, artifacts):
+            return False
         async with self._session_factory.begin() as session:
             await lock_uuid(
                 session,
@@ -281,7 +298,200 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
                 for artifact in artifacts
             )
+            await _release_artifact_leases(session, job, artifacts)
         return True
+
+    @override
+    async def track_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> bool:
+        """Register possible object keys before upload and report whether the claim is current."""
+        _validate_completed_artifacts(job.upload.kind, artifacts)
+        async with self._session_factory.begin() as session:
+            current_claim = await session.scalar(
+                select(MediaNormalizationJobRecord.upload_id).where(*_claim_filter(job)).with_for_update()
+            )
+            object_keys = tuple(sorted(artifact.object_key for artifact in artifacts))
+            existing_objects = tuple(
+                (
+                    await session.scalars(
+                        select(MediaArtifactObjectRecord)
+                        .where(MediaArtifactObjectRecord.object_key.in_(object_keys))
+                        .order_by(MediaArtifactObjectRecord.object_key)
+                        .with_for_update()
+                    )
+                ).all()
+            )
+            if current_claim is not None and any(row.cleanup_claim_token is not None for row in existing_objects):
+                raise MediaArtifactCleanupInProgressError
+            for artifact in artifacts:
+                statement = insert(MediaArtifactObjectRecord).values(
+                    object_key=artifact.object_key,
+                    sha256=artifact.sha256,
+                    byte_size=artifact.byte_size,
+                    first_upload_id=job.upload.id,
+                    last_upload_id=job.upload.id,
+                )
+                was_deleted = MediaArtifactObjectRecord.deleted_at.is_not(None)
+                statement = statement.on_conflict_do_update(
+                    index_elements=[MediaArtifactObjectRecord.object_key],
+                    set_={
+                        "last_upload_id": job.upload.id,
+                        "last_seen_at": func.now(),
+                        "available_at": case(
+                            (was_deleted, func.now()),
+                            else_=MediaArtifactObjectRecord.available_at,
+                        ),
+                        "attempts": case((was_deleted, 0), else_=MediaArtifactObjectRecord.attempts),
+                        "last_error": case((was_deleted, None), else_=MediaArtifactObjectRecord.last_error),
+                        "deleted_at": None,
+                    },
+                    where=and_(
+                        MediaArtifactObjectRecord.sha256 == statement.excluded.sha256,
+                        MediaArtifactObjectRecord.byte_size == statement.excluded.byte_size,
+                    ),
+                )
+                outcome = cast(CursorResult[Any], await session.execute(statement))
+                if not outcome.rowcount:
+                    msg = f"Media artifact object metadata conflicts for {artifact.object_key}."
+                    raise ValueError(msg)
+                if current_claim is not None:
+                    lease = insert(MediaArtifactPublicationRecord).values(
+                        object_key=artifact.object_key,
+                        upload_id=job.upload.id,
+                        claim_token=job.claim_token,
+                        expires_at=_publication_expiry(),
+                    )
+                    lease = lease.on_conflict_do_update(
+                        index_elements=[
+                            MediaArtifactPublicationRecord.object_key,
+                            MediaArtifactPublicationRecord.upload_id,
+                            MediaArtifactPublicationRecord.claim_token,
+                        ],
+                        set_={
+                            "expires_at": lease.excluded.expires_at,
+                            "renewed_at": func.now(),
+                        },
+                    )
+                    await session.execute(lease)
+        return current_claim is not None
+
+    @override
+    async def release_artifacts(
+        self,
+        job: ClaimedMediaJob,
+        artifacts: Sequence[StoredMediaArtifact],
+    ) -> None:
+        """Release exactly one claim's leases after its object-store writes have stopped."""
+        async with self._session_factory.begin() as session:
+            await _release_artifact_leases(session, job, artifacts)
+
+    @override
+    async def cleanup_artifacts(
+        self,
+        delete: Callable[[str], Awaitable[None]],
+        *,
+        limit: int,
+    ) -> MediaArtifactCleanupOutcome:
+        """Claim due keys, perform storage I/O outside transactions, and token-fence acknowledgments."""
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                sql_delete(MediaArtifactPublicationRecord).where(
+                    MediaArtifactPublicationRecord.expires_at <= func.now()
+                )
+            )
+            live_reference = exists(
+                select(MediaArtifactRecord.id)
+                .join(
+                    MediaNormalizationJobRecord,
+                    MediaNormalizationJobRecord.upload_id == MediaArtifactRecord.upload_id,
+                )
+                .where(
+                    MediaArtifactRecord.object_key == MediaArtifactObjectRecord.object_key,
+                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                )
+                .correlate(MediaArtifactObjectRecord)
+            )
+            active_publication = exists(
+                select(MediaArtifactPublicationRecord.object_key)
+                .where(
+                    MediaArtifactPublicationRecord.object_key == MediaArtifactObjectRecord.object_key,
+                    MediaArtifactPublicationRecord.expires_at > func.now(),
+                )
+                .correlate(MediaArtifactObjectRecord)
+            )
+            candidates = tuple(
+                (
+                    await session.scalars(
+                        select(MediaArtifactObjectRecord)
+                        .where(
+                            MediaArtifactObjectRecord.deleted_at.is_(None),
+                            MediaArtifactObjectRecord.available_at <= func.now(),
+                            or_(
+                                MediaArtifactObjectRecord.cleanup_claimed_at.is_(None),
+                                MediaArtifactObjectRecord.cleanup_claimed_at
+                                < func.now() - MEDIA_ARTIFACT_CLEANUP_CLAIM,
+                            ),
+                            ~live_reference,
+                            ~active_publication,
+                        )
+                        .order_by(MediaArtifactObjectRecord.available_at, MediaArtifactObjectRecord.object_key)
+                        .limit(limit)
+                        .with_for_update(skip_locked=True)
+                    )
+                ).all()
+            )
+            for candidate in candidates:
+                candidate.cleanup_claimed_at = Instant.now()
+                candidate.cleanup_claim_token = uuid4()
+            claims = tuple(
+                _ClaimedArtifactCleanup(candidate.object_key, cast(UUID, candidate.cleanup_claim_token))
+                for candidate in candidates
+            )
+
+        deleted = 0
+        failed = 0
+        for claim in claims:
+            error_name: str | None = None
+            try:
+                await delete(claim.object_key)
+            except Exception as error:
+                failed += 1
+                error_name = type(error).__name__[:4000]
+            else:
+                deleted += 1
+            await self._resolve_artifact_cleanup(claim, error_name=error_name)
+        return MediaArtifactCleanupOutcome(len(claims), deleted, failed)
+
+    async def _resolve_artifact_cleanup(
+        self,
+        claim: _ClaimedArtifactCleanup,
+        *,
+        error_name: str | None,
+    ) -> bool:
+        async with self._session_factory.begin() as session:
+            candidate = await session.scalar(
+                select(MediaArtifactObjectRecord)
+                .where(
+                    MediaArtifactObjectRecord.object_key == claim.object_key,
+                    MediaArtifactObjectRecord.cleanup_claim_token == claim.claim_token,
+                )
+                .with_for_update()
+            )
+            if candidate is None:
+                return False
+            candidate.cleanup_claimed_at = None
+            candidate.cleanup_claim_token = None
+            if error_name is not None:
+                candidate.attempts += 1
+                candidate.available_at = Instant.now().add(seconds=int(retry_delay(candidate.attempts).total_seconds()))
+                candidate.last_error = error_name
+            else:
+                candidate.deleted_at = Instant.now()
+                candidate.last_error = None
+            return True
 
     @override
     async def fail(
@@ -389,6 +599,27 @@ async def _lock_mutable_submission_draft(session: AsyncSession, draft_id: UUID) 
         raise MediaDraftNotFoundError(draft_id)
     if DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
         raise MediaDraftStateConflictError(status)
+
+
+def _publication_expiry() -> Instant:
+    return Instant.now().add(seconds=int(MEDIA_ARTIFACT_PUBLICATION_LEASE.total_seconds()))
+
+
+async def _release_artifact_leases(
+    session: AsyncSession,
+    job: ClaimedMediaJob,
+    artifacts: Sequence[StoredMediaArtifact],
+) -> None:
+    object_keys = tuple(artifact.object_key for artifact in artifacts)
+    if not object_keys:
+        return
+    await session.execute(
+        sql_delete(MediaArtifactPublicationRecord).where(
+            MediaArtifactPublicationRecord.object_key.in_(object_keys),
+            MediaArtifactPublicationRecord.upload_id == job.upload.id,
+            MediaArtifactPublicationRecord.claim_token == job.claim_token,
+        )
+    )
 
 
 async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTotals:
