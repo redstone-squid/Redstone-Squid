@@ -137,6 +137,22 @@ class FakeDraftRepository:
         del self.drafts[draft_id]
         return True
 
+    async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
+        due = [
+            draft_id
+            for draft_id, draft in self.drafts.items()
+            if draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
+            and draft.expires_at <= now
+        ][:limit]
+        for draft_id in due:
+            current = self.drafts[draft_id]
+            self.drafts[draft_id] = replace(
+                current,
+                snapshot=replace(current.snapshot, status=DraftStatus.EXPIRED),
+                updated_at=now,
+            )
+        return len(due)
+
 
 def _change(base_revision: int = 0) -> DraftChange:
     return DraftChange(
@@ -301,6 +317,31 @@ async def test_expired_draft_is_inaccessible_even_to_replayed_mutations() -> Non
         await service.delete(DRAFT_ID, 7)
 
     assert access_error.value.public_context == {"status": "expired", "operation": "access"}
+
+
+@pytest.mark.asyncio
+async def test_expiry_batch_uses_the_service_clock_and_a_bounded_limit() -> None:
+    repository = FakeDraftRepository()
+    expiry_time = NOW.add(days=8, days_assumed_24h_ok=True)
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: expiry_time)
+    for index in range(2):
+        draft_id = UUID(f"00000000-0000-4000-8000-{index + 201:012d}")
+        repository.drafts[draft_id] = StoredDraft(
+            snapshot=DraftSnapshot(
+                id=draft_id,
+                owner_account_id=7,
+                schema_id="build_submission.v1",
+                schema_revision=1,
+                category="other",
+            ),
+            origin=SubmissionOrigin.WEB,
+            created_at=NOW,
+            updated_at=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        )
+
+    assert await service.expire_due(limit=1) == 1
+    assert sum(draft.snapshot.status is DraftStatus.EXPIRED for draft in repository.drafts.values()) == 1
 
 
 @pytest.mark.asyncio

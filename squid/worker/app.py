@@ -142,6 +142,11 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
+            self._expire_submission_drafts,
+            name="submission-draft-expiry",
+            interval=max(maintenance_interval, 300),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -168,6 +173,7 @@ class DatabaseWorker:
             "queue-health",
             "notification-retention",
             "idempotency-retention",
+            "submission-draft-expiry",
             "submission-finalization",
         }
         if self._services.media_runner is not None:
@@ -268,6 +274,15 @@ class DatabaseWorker:
             logger.info(
                 "Expired idempotency requests removed",
                 extra={"squid.idempotency.deleted": deleted},
+            )
+
+    async def _expire_submission_drafts(self) -> None:
+        with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": "background_loop"}):
+            expired = await self._services.expire_submission_drafts()
+        if expired:
+            logger.info(
+                "Expired inactive submission drafts",
+                extra={"squid.submissions.drafts_expired": expired},
             )
 
 

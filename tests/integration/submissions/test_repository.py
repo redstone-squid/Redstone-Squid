@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+from dataclasses import replace
 from typing import cast
 from uuid import UUID
 
@@ -23,6 +24,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.submissions.errors import DraftStateConflictError
+from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -37,6 +39,7 @@ _TABLES = (
     cast(Table, SubmissionDraft.__table__),
     cast(Table, SubmissionDraftAccess.__table__),
     cast(Table, SubmissionDraftChange.__table__),
+    cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
 )
@@ -183,6 +186,67 @@ async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
     assert await repository.expire_due(now=NOW) == 0
     assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
     assert await repository.count_active_for_account(account_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_expiry_fences_finalization_and_discards_media(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    stored = _stored(account_id)
+    stored = replace(
+        stored,
+        snapshot=replace(stored.snapshot, status=DraftStatus.NEEDS_ATTENTION),
+        expires_at=NOW.add(seconds=1),
+    )
+    await repository.create(stored)
+    upload_id = UUID("00000000-0000-4000-8000-000000000205")
+    async with async_session_factory.begin() as session:
+        session.add(
+            SubmissionFinalizationJob(
+                draft_id=DRAFT_ID,
+                draft_revision=0,
+                payload=None,
+                payload_sha256=None,
+                status="needs_attention",
+                available_at=NOW,
+                attention_at=NOW,
+                attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        )
+        session.add(
+            MediaUploadRecord(
+                id=upload_id,
+                draft_id=DRAFT_ID,
+                kind="image",
+                source_content_type="image/png",
+                source_byte_size=3,
+                source_sha256="a" * 64,
+                source_object_key=f"media/raw/{upload_id}",
+                strip_audio=False,
+                created_at=NOW,
+            )
+        )
+        await session.flush()
+        session.add(MediaNormalizationJobRecord(upload_id=upload_id, status="pending", available_at=NOW))
+
+    assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
+    async with async_session_factory() as session:
+        draft = await session.get(SubmissionDraft, DRAFT_ID)
+        finalization = await session.scalar(
+            select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
+        )
+        media = await session.get(MediaNormalizationJobRecord, upload_id)
+
+    assert draft is not None
+    assert draft.status == DraftStatus.EXPIRED.value
+    assert finalization is None
+    assert media is not None
+    assert media.status == "discarded"
+    assert media.discarded_at == NOW.add(seconds=2)
 
 
 @pytest.mark.asyncio

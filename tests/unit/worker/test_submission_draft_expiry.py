@@ -1,4 +1,4 @@
-"""Worker scheduling tests for bounded idempotency replay retention."""
+"""Worker scheduling coverage for synchronized-draft retention."""
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -8,7 +8,7 @@ from squid.config import WorkerConfig
 from squid.worker.app import DatabaseWorker
 
 
-async def test_worker_schedules_and_invokes_explicit_idempotency_purge() -> None:
+async def test_worker_schedules_and_invokes_bounded_draft_expiry() -> None:
     services = SimpleNamespace(
         votes=Mock(),
         builds=Mock(),
@@ -17,8 +17,8 @@ async def test_worker_schedules_and_invokes_explicit_idempotency_purge() -> None
         event_wake_listener=None,
         media_runner=None,
         record_queue_health=AsyncMock(),
-        purge_idempotency=AsyncMock(return_value=3),
-        expire_submission_drafts=AsyncMock(return_value=0),
+        purge_idempotency=AsyncMock(return_value=0),
+        expire_submission_drafts=AsyncMock(return_value=2),
     )
     supervisor = Mock()
     worker = DatabaseWorker(
@@ -32,9 +32,9 @@ async def test_worker_schedules_and_invokes_explicit_idempotency_purge() -> None
 
     worker.start()
 
-    retention_call = next(
-        call for call in supervisor.start_periodic.call_args_list if call.kwargs["name"] == "idempotency-retention"
+    expiry_call = next(
+        call for call in supervisor.start_periodic.call_args_list if call.kwargs["name"] == "submission-draft-expiry"
     )
-    assert retention_call.kwargs["interval"] == 300
-    await retention_call.args[0]()
-    services.purge_idempotency.assert_awaited_once_with()
+    assert expiry_call.kwargs["interval"] == 300
+    await expiry_call.args[0]()
+    services.expire_submission_drafts.assert_awaited_once_with()

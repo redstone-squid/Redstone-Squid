@@ -94,6 +94,8 @@ class DraftRepository(Protocol):
 
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
 
+    async def expire_due(self, *, now: Instant, limit: int = 100) -> int: ...
+
 
 class FormManifestRegistry(Protocol):
     """Resolve current and still-pinned form revisions."""
@@ -201,6 +203,13 @@ class SubmissionDraftService:
             raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
         if not await self._repository.delete_owned(draft_id, account_id):
             raise DraftNotFoundError(draft_id)
+
+    async def expire_due(self, *, limit: int = 100, now: Instant | None = None) -> int:
+        """Expire one bounded batch using the same authoritative service clock."""
+        if not 1 <= limit <= 1_000:
+            msg = "draft expiry limit must be between 1 and 1000"
+            raise ValueError(msg)
+        return await self._repository.expire_due(now=now or self._now(), limit=limit)
 
     async def apply_change(
         self,

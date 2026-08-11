@@ -1,11 +1,10 @@
 """PostgreSQL persistence for synchronized submission drafts."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any, cast, override
+from typing import cast, override
 from uuid import UUID
 
-from sqlalchemy import func, select, update
-from sqlalchemy.engine import CursorResult
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -24,6 +23,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
+from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -199,25 +199,63 @@ class PostgresDraftRepository(DraftRepository):
         return True
 
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
-        """Mark a bounded batch of inactive drafts expired for later retention cleanup."""
+        """Expire a fenced batch and cancel every unfinished artifact workflow."""
+        if not 1 <= limit <= 1_000:
+            msg = "draft expiry limit must be between 1 and 1000"
+            raise ValueError(msg)
         async with self._session_factory.begin() as session:
-            due = (
-                select(SubmissionDraft.id)
-                .where(
-                    SubmissionDraft.status.in_(_ACTIVE_STATUSES),
-                    SubmissionDraft.expires_at <= now,
-                )
-                .limit(limit)
+            due = tuple(
+                (
+                    await session.scalars(
+                        select(SubmissionDraft.id)
+                        .where(
+                            SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                            SubmissionDraft.expires_at <= now,
+                        )
+                        .order_by(SubmissionDraft.expires_at, SubmissionDraft.id)
+                        .limit(limit)
+                    )
+                ).all()
             )
-            result = cast(
-                CursorResult[Any],
+            expired = 0
+            for draft_id in due:
+                await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+                model = await session.scalar(
+                    select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
+                )
+                if model is None or model.status not in _ACTIVE_STATUSES or model.expires_at > now:
+                    continue
+                await session.execute(
+                    delete(SubmissionFinalizationJob).where(
+                        SubmissionFinalizationJob.draft_id == draft_id,
+                        SubmissionFinalizationJob.status != "completed",
+                    )
+                )
                 await session.execute(
                     update(SubmissionDraft)
-                    .where(SubmissionDraft.id.in_(due))
+                    .where(SubmissionDraft.id == draft_id)
                     .values(status=DraftStatus.EXPIRED.value, updated_at=now)
-                ),
-            )
-        return int(result.rowcount or 0)
+                )
+                await session.execute(
+                    update(MediaNormalizationJobRecord)
+                    .where(
+                        MediaNormalizationJobRecord.upload_id.in_(
+                            select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                        ),
+                        MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                    )
+                    .values(
+                        status=MediaJobStatus.DISCARDED.value,
+                        claimed_at=None,
+                        claim_token=None,
+                        completed_at=None,
+                        dead_at=None,
+                        discarded_at=now,
+                        last_error=None,
+                    )
+                )
+                expired += 1
+        return expired
 
     @staticmethod
     async def _locked(session: AsyncSession, draft_id: UUID) -> SubmissionDraft:
