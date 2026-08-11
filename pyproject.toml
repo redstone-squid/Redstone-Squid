@@ -64,6 +64,7 @@ observability = [
 # Note: GitHub Actions regenerates requirements/dev.txt when this group changes.
 # Local reproduction: uv export --only-dev -o requirements/dev.txt
 dev = [
+    "docker>=7.2,<8",
     "hypothesis>=6.0.0",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
@@ -267,6 +268,7 @@ filterwarnings = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
+  "docker: requires a local Unix-socket Docker daemon",
   "external: opt-in tests that require live third-party services",
   "schematic: requires the optional native schematic engine",
   "render: requires the schematic engine plus a resource pack and a working GPU adapter",

@@ -84,10 +84,17 @@ def container_attrs() -> dict[str, object]:
             "NanoCpus": 500_000_000,
             "PidsLimit": 128,
             "ReadonlyRootfs": True,
+            "Privileged": False,
             "CapDrop": ["ALL"],
+            "CapAdd": None,
+            "Binds": None,
+            "Devices": None,
+            "PidMode": "",
+            "Tmpfs": {},
             "SecurityOpt": ["no-new-privileges:true"],
             "LogConfig": {"Type": "json-file", "Config": {"max-size": "10m", "max-file": "1"}},
         },
+        "Mounts": [],
     }
 
 
@@ -115,10 +122,21 @@ def network_attrs() -> dict[str, object]:
             ),
             "published_ports",
         ),
+        (
+            lambda attrs: attrs["NetworkSettings"].update(
+                Ports={"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}]}
+            ),
+            "published_ports",
+        ),
         (lambda attrs: attrs["HostConfig"].update(Memory=0), "memory_limit"),
         (lambda attrs: attrs["HostConfig"].update(NanoCpus=0), "cpu_limit"),
         (lambda attrs: attrs["HostConfig"].update(PidsLimit=0), "pid_limit"),
         (lambda attrs: attrs["HostConfig"].update(ReadonlyRootfs=False), "readonly_root"),
+        (lambda attrs: attrs["HostConfig"].update(Privileged=True), "privileged"),
+        (lambda attrs: attrs["HostConfig"].update(CapAdd=["SYS_ADMIN"]), "cap_add"),
+        (lambda attrs: attrs["HostConfig"].update(Binds=["/host:/data"]), "binds"),
+        (lambda attrs: attrs["HostConfig"].update(Devices=[{"PathOnHost": "/dev/kvm"}]), "devices"),
+        (lambda attrs: attrs.update(Mounts=[{"Type": "bind", "Destination": "/data"}]), "mounts"),
         (lambda attrs: attrs["HostConfig"].update(CapDrop=[]), "cap_drop"),
         (lambda attrs: attrs["HostConfig"].update(SecurityOpt=[]), "security_options"),
         (lambda attrs: attrs["HostConfig"].update(LogConfig={}), "log_limit"),
@@ -170,6 +188,17 @@ def test_network_attestation_requires_every_safety_fact(field: str, value: objec
 
     with pytest.raises(UnsafeEnvironmentError, match=failure):
         verify_network(attrs, identity(), NetworkExpectation("network-id", identity().network_name))
+
+
+def test_network_attestation_accepts_only_the_exact_live_attachment_set() -> None:
+    attrs = network_attrs()
+    attrs["Containers"] = {"container-id": {}}
+
+    verify_network(
+        attrs,
+        identity(),
+        NetworkExpectation("network-id", identity().network_name, frozenset({"container-id"})),
+    )
 
 
 def test_guarded_network_cleanup_reinspects_and_removes_only_an_empty_network() -> None:

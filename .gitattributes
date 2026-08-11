@@ -117,6 +117,7 @@
 .env.example   text
 .gitmodules    text
 Dockerfile     text
+Dockerfile.*   text
 LICENSE        text
 alembic.ini    text
 babel.cfg      text

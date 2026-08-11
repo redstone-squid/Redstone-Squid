@@ -2881,6 +2881,7 @@ schematics = [
 [package.dev-dependencies]
 dev = [
     { name = "bump-my-version" },
+    { name = "docker" },
     { name = "hypothesis" },
     { name = "nucleation", marker = "platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "pip-tools" },
@@ -2944,6 +2945,7 @@ provides-extras = ["schematics", "observability"]
 [package.metadata.requires-dev]
 dev = [
     { name = "bump-my-version", specifier = ">=0.29.0" },
+    { name = "docker", specifier = ">=7.2,<8" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "nucleation", marker = "platform_machine == 'arm64' or platform_machine == 'x86_64'", specifier = "==0.10.1" },
     { name = "pip-tools", specifier = ">=7.4.1" },
