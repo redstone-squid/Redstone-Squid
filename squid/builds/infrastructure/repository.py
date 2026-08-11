@@ -219,6 +219,9 @@ class BuildRepository:
                     msg = "A build's source submission draft cannot be changed."
                     raise InvalidStateError(msg, context={"build_id": build.id})
                 sql_build.source_submission_draft_id = build.source_submission_draft_id
+                if _sponsor_columns(sql_build) != _sponsor_values(build):
+                    msg = "A build's sponsor attribution cannot be changed."
+                    raise InvalidStateError(msg, context={"build_id": build.id})
                 sql_build.submitter_account_id = submitter_account_id
                 sql_build.version_spec = build.version_spec
                 sql_build.ai_generated = build.ai_generated or False
@@ -264,6 +267,11 @@ class BuildRepository:
             "description": build.description,
             "display_name": _normalize_display_name(build.display_name),
             "source_submission_draft_id": build.source_submission_draft_id,
+            "sponsor_installation_id": None if build.sponsor is None else build.sponsor.installation_id,
+            "sponsor_display_name": None if build.sponsor is None else build.sponsor.display_name,
+            "sponsor_address": None if build.sponsor is None else build.sponsor.address,
+            "sponsor_description": None if build.sponsor is None else build.sponsor.description,
+            "sponsor_website_url": None if build.sponsor is None else build.sponsor.website_url,
             "category": build.category,
             "submitter_account_id": submitter_account_id,
             "version_spec": build.version_spec,
@@ -821,3 +829,25 @@ def _normalize_display_name(value: str | None) -> str | None:
         msg = "Build display names cannot exceed 120 characters."
         raise InvalidBuildError(msg, context={"length": len(normalized)})
     return normalized
+
+
+def _sponsor_columns(build: SQLBuild) -> tuple[uuid.UUID | None, str | None, str | None, str | None, str | None]:
+    return (
+        build.sponsor_installation_id,
+        build.sponsor_display_name,
+        build.sponsor_address,
+        build.sponsor_description,
+        build.sponsor_website_url,
+    )
+
+
+def _sponsor_values(build: Build) -> tuple[uuid.UUID | None, str | None, str | None, str | None, str | None]:
+    if build.sponsor is None:
+        return (None, None, None, None, None)
+    return (
+        build.sponsor.installation_id,
+        build.sponsor.display_name,
+        build.sponsor.address,
+        build.sponsor.description,
+        build.sponsor.website_url,
+    )

@@ -272,6 +272,7 @@ class StoredDraftResponse(StrictSchema):
     created_at: datetime
     updated_at: datetime
     expires_at: datetime
+    source_installation_id: UUID | None = None
 
     @classmethod
     def from_domain(cls, draft: StoredDraft) -> "StoredDraftResponse":
@@ -287,6 +288,7 @@ class StoredDraftResponse(StrictSchema):
             created_at=draft.created_at.to_stdlib(),
             updated_at=draft.updated_at.to_stdlib(),
             expires_at=draft.expires_at.to_stdlib(),
+            source_installation_id=draft.source_installation_id,
         )
 
 

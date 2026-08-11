@@ -24,6 +24,11 @@ class SubmissionFinalizationJob(Base, kw_only=True):
             name="submission_finalization_jobs_payload_sha256_check",
         ),
         CheckConstraint(
+            "payload IS NULL OR NOT (payload ->> 'payload_schema' = '1' "
+            "AND payload ->> 'sponsor_attribution' = 'true')",
+            name="submission_finalization_jobs_legacy_sponsor_forbidden",
+        ),
+        CheckConstraint(
             "status IN ('pending', 'claimed', 'needs_attention', 'completed', 'dead')",
             name="submission_finalization_jobs_status_check",
         ),

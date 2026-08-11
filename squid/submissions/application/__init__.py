@@ -27,6 +27,7 @@ from squid.submissions.application.finalization import (
     SubmissionNotificationPort,
     SubmissionReviewEvent,
     SubmissionReviewEventPort,
+    SubmissionSponsorResolver,
     SubmissionTarget,
 )
 from squid.submissions.application.forms import (
@@ -71,6 +72,7 @@ __all__ = [
     "SubmissionNotificationPort",
     "SubmissionReviewEvent",
     "SubmissionReviewEventPort",
+    "SubmissionSponsorResolver",
     "SubmissionTarget",
     "ValidatedDraft",
     "build_submission_manifest",

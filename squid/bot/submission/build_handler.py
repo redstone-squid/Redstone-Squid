@@ -19,6 +19,7 @@ from squid.bot.utils.components import (
     card_container,
     edit_layout,
     no_mentions,
+    truncate_display_text,
 )
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 logger = logging.getLogger(__name__)
+
+_SPONSOR_CREDIT_MAX_CHARACTERS = 255
+_SPONSOR_WEBSITE_MAX_CHARACTERS = 512
 
 
 class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
@@ -146,8 +150,16 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             "Visible Opening Time",
             "Visible Closing Time",
         }
-        resource_names = {"Server", "Coordinates", "Command", "World Download", "Schematic", "Videos"}
-        credit_names = {"Creators", "Date Of Completion"}
+        resource_names = {
+            "Server",
+            "Coordinates",
+            "Command",
+            "World Download",
+            "Schematic",
+            "Videos",
+            "Sponsor Website",
+        }
+        credit_names = {"Creators", "Date Of Completion", "Sponsoring Server"}
         review_names = {"⚠ Possible duplicate"}
 
         def section(title: str, names: set[str]) -> CardSection:
@@ -265,6 +277,15 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         if build.completion_time:
             fields["Date Of Completion"] = str(build.completion_time)
+
+        if sponsor := build.sponsor:
+            credit = sponsor.display_name or sponsor.address or "Public Paper server"
+            fields["Sponsoring Server"] = truncate_display_text(credit, _SPONSOR_CREDIT_MAX_CHARACTERS)
+            if sponsor.website_url is not None:
+                fields["Sponsor Website"] = truncate_display_text(
+                    sponsor.website_url,
+                    _SPONSOR_WEBSITE_MAX_CHARACTERS,
+                )
 
         fields["Versions"] = build.version_spec or "Unknown"
 

@@ -12,9 +12,11 @@ from squid.submissions.infrastructure.models import (
 )
 from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 
 __all__ = [
     "ApprovedSubmissionOptionCatalog",
+    "PaperSponsorResolver",
     "PostgresDraftRepository",
     "PostgresFinalizationJobRepository",
     "SubmissionDraft",

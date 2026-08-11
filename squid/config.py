@@ -181,6 +181,7 @@ class MinecraftAuthConfig(_FrozenModel):
 
     pepper: SecretStr | None = None
     verification_uri: AnyHttpUrl | None = None
+    sponsor_attribution_enabled: bool = False
 
     _empty_pepper = field_validator("pepper", mode="before")(_empty_to_none)
     _empty_verification_uri = field_validator("verification_uri", mode="before")(_empty_to_none)
@@ -197,6 +198,9 @@ class MinecraftAuthConfig(_FrozenModel):
     def _require_complete_device_flow(self) -> Self:
         if (self.pepper is None) != (self.verification_uri is None):
             msg = "Minecraft authorization requires both pepper and verification_uri."
+            raise ValueError(msg)
+        if self.sponsor_attribution_enabled and self.pepper is None:
+            msg = "Paper sponsor attribution requires the Minecraft authorization flow."
             raise ValueError(msg)
         if self.verification_uri is not None:
             parsed = urlsplit(str(self.verification_uri))

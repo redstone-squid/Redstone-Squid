@@ -51,7 +51,12 @@ def test_media_publication_lease_exceeds_the_configured_s3_retry_envelope() -> N
         max_attempts=10,
     )
     conservative_attempts = storage.max_attempts + 1
-    configured_io_seconds = conservative_attempts * (storage.connect_timeout_seconds + storage.read_timeout_seconds)
+    maximum_published_objects = 3
+    configured_io_seconds = (
+        maximum_published_objects
+        * conservative_attempts
+        * (storage.connect_timeout_seconds + storage.read_timeout_seconds)
+    )
     retry_backoff_margin_seconds = 60 * 60
 
     assert MEDIA_ARTIFACT_PUBLICATION_LEASE.total_seconds() > configured_io_seconds + retry_backoff_margin_seconds

@@ -67,6 +67,21 @@ class FakeMinecraftAuthorizationRepository:
             if value.profile.enabled and value.revoked_at is None
         )
 
+    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
+        installation = self.installations.get(installation_id)
+        if (
+            installation is None
+            or not installation.profile.enabled
+            or not installation.profile.sponsor_opt_in
+            or installation.revoked_at is not None
+        ):
+            return None
+        return PublishedPaperServer(
+            installation_id=installation.id,
+            profile=installation.profile,
+            created_at=installation.created_at,
+        )
+
     async def rotate_installation(
         self,
         *,

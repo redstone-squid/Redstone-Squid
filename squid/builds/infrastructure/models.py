@@ -61,6 +61,29 @@ class Build(Base, kw_only=True):
             "AND char_length(display_name) <= 120)",
             name="builds_display_name_valid",
         ),
+        CheckConstraint(
+            "sponsor_installation_id IS NOT NULL OR "
+            "(sponsor_display_name IS NULL AND sponsor_address IS NULL AND sponsor_description IS NULL "
+            "AND sponsor_website_url IS NULL)",
+            name="builds_sponsor_projection_complete",
+        ),
+        CheckConstraint(
+            "sponsor_display_name IS NULL OR char_length(sponsor_display_name) BETWEEN 1 AND 80",
+            name="builds_sponsor_display_name_length",
+        ),
+        CheckConstraint(
+            "sponsor_address IS NULL OR char_length(sponsor_address) BETWEEN 1 AND 255",
+            name="builds_sponsor_address_length",
+        ),
+        CheckConstraint(
+            "sponsor_description IS NULL OR char_length(sponsor_description) BETWEEN 1 AND 500",
+            name="builds_sponsor_description_length",
+        ),
+        CheckConstraint(
+            "sponsor_website_url IS NULL OR "
+            "(char_length(sponsor_website_url) BETWEEN 1 AND 2048 AND sponsor_website_url ~ '^https?://')",
+            name="builds_sponsor_website_valid",
+        ),
         UniqueConstraint("source_submission_draft_id", name="builds_source_submission_draft_id_key"),
         Index("idx_builds_category", "category", postgresql_where=text("category IS NOT NULL")),
         Index(
@@ -92,6 +115,12 @@ class Build(Base, kw_only=True):
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     source_submission_draft_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """Stable finalization key retained even if the short-lived source draft is later pruned."""
+    sponsor_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """Opaque Paper installation ID snapshotted without a mutable foreign key."""
+    sponsor_display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    sponsor_address: Mapped[str | None] = mapped_column(Text, default=None)
+    sponsor_description: Mapped[str | None] = mapped_column(Text, default=None)
+    sponsor_website_url: Mapped[str | None] = mapped_column(Text, default=None)
     category: Mapped[BuildCategory | None] = mapped_column(Text)
     submitter_account_id: Mapped[int] = mapped_column(
         Integer,

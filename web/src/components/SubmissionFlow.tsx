@@ -127,7 +127,7 @@ const COPY: Record<Locale, Copy> = {
     pending: "Your draft is being finalized. This page will update automatically.",
     attention: "Your draft needs attention before finalization can complete.",
     completed:
-      "Build #{id} was created in pending state. Review delivery is not yet connected; keep this build ID.",
+      "Build #{id} was created in pending state and queued for Discord staff review. Processed uploads are not yet attached to the build record; keep this build ID.",
     dead: "Finalization could not complete. The stable issue below explains the next action.",
     deleteDraft: "Delete draft",
     deleteConfirm: "Delete this draft and discard its uploaded media? This cannot be undone.",
@@ -171,7 +171,8 @@ const COPY: Record<Locale, Copy> = {
     submitting: "正在提交…",
     pending: "正在完成草稿。本页将自动更新。",
     attention: "草稿需要修改后才能完成投稿。",
-    completed: "作品 #{id} 已创建为待处理状态。审核分发尚未接通，请保存此作品编号。",
+    completed:
+      "作品 #{id} 已创建为待处理状态，并已排队等待发送至 Discord 供工作人员审核。处理后的上传内容尚未附加到作品记录；请保存此作品编号。",
     dead: "无法完成投稿。下方的稳定问题代码说明了下一步。",
     deleteDraft: "删除草稿",
     deleteConfirm: "删除此草稿并丢弃其上传媒体？此操作无法撤销。",

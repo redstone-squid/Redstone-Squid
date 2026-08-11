@@ -23,6 +23,7 @@ from whenever import Instant
 
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError
+from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAssignment
 
 RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
@@ -222,6 +223,7 @@ class Build:
 
     display_name: str | None = None
     source_submission_draft_id: uuid.UUID | None = None
+    sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     submitter_account_id: int | None = None
     # Discord entry points retain the snowflake for compatibility. Internal ownership uses
     # ``submitter_account_id`` and does not require this provider identity to exist.

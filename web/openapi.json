@@ -8495,6 +8495,16 @@
           },
           "links": {
             "$ref": "#/components/schemas/BuildLinks"
+          },
+          "sponsor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildSponsor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -8958,6 +8968,72 @@
         ],
         "title": "BuildSearchResult",
         "description": "A build match, hydrated from the authoritative record."
+      },
+      "BuildSponsor": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Installation Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installation_id",
+          "display_name",
+          "address",
+          "description",
+          "website_url"
+        ],
+        "title": "BuildSponsor",
+        "description": "Immutable public sponsor metadata captured when the build was finalized."
       },
       "BuildStatusFilter": {
         "type": "string",
@@ -11933,6 +12009,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "source_installation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Installation Id"
           }
         },
         "additionalProperties": false,
@@ -11993,6 +12081,7 @@
           "schematic_rejected",
           "media_processing",
           "media_rejected",
+          "sponsor_unavailable",
           "target_rejected",
           "retry_exhausted"
         ],

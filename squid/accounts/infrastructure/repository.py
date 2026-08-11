@@ -35,6 +35,10 @@ from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasMod
 from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
 from squid.accounts.infrastructure.models import PublicCreatorRedirect
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
+from squid.core.errors import DataIntegrityError
+from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.payload_integrity import submission_payload_digest
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
@@ -513,6 +517,17 @@ class AccountRepository:
     async def _merge_references(session: AsyncSession, survivor: int, absorbed: int) -> None:
         """Move every account-keyed resource while resolving unique-key collisions deterministically."""
         parameters = {"survivor": survivor, "absorbed": absorbed}
+        draft_ids = tuple(
+            (
+                await session.scalars(
+                    select(SubmissionDraft.id)
+                    .where(SubmissionDraft.owner_account_id == absorbed)
+                    .order_by(SubmissionDraft.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        await _canonicalize_finalization_job_owners(session, draft_ids, survivor, absorbed)
         statements = (
             "UPDATE builds SET submitter_account_id = :survivor WHERE submitter_account_id = :absorbed",
             "DELETE FROM submission_draft_access access_row WHERE access_row.id IN ("
@@ -577,3 +592,55 @@ class AccountRepository:
         )
         for statement in statements:
             await session.execute(text(statement), parameters)
+
+
+async def _canonicalize_finalization_job_owners(
+    session: AsyncSession,
+    draft_ids: Sequence[uuid.UUID],
+    survivor: int,
+    absorbed: int,
+) -> None:
+    """Rewrite retained payload owners and fence claims that escaped before the merge lock."""
+    if not draft_ids:
+        return
+    jobs = tuple(
+        (
+            await session.scalars(
+                select(SubmissionFinalizationJob)
+                .where(
+                    SubmissionFinalizationJob.draft_id.in_(draft_ids),
+                    SubmissionFinalizationJob.payload.is_not(None),
+                )
+                .order_by(SubmissionFinalizationJob.draft_id, SubmissionFinalizationJob.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    rewritten_at = Instant.now()
+    for job in jobs:
+        payload = job.payload
+        if not isinstance(payload, dict):
+            msg = "A retained submission finalization payload is not a JSON object."
+            raise DataIntegrityError(msg)
+        if job.payload_sha256 != submission_payload_digest(payload):
+            msg = "A retained submission finalization payload failed its integrity check."
+            raise DataIntegrityError(msg)
+        owner = payload.get("owner_account_id")
+        if not isinstance(owner, int) or isinstance(owner, bool) or owner not in {absorbed, survivor}:
+            msg = "A retained submission finalization payload has conflicting account provenance."
+            raise DataIntegrityError(msg)
+        rewritten = dict(payload)
+        rewritten["owner_account_id"] = survivor
+        job.payload = rewritten
+        job.payload_sha256 = submission_payload_digest(rewritten)
+        job.updated_at = rewritten_at
+        if job.status == "claimed":
+            job.status = "pending"
+            job.available_at = rewritten_at
+            job.claimed_at = None
+            job.claim_token = None
+            job.claim_expires_at = None
+            job.completed_at = None
+            job.attention_at = None
+            job.dead_at = None
+            job.attention_issues = []

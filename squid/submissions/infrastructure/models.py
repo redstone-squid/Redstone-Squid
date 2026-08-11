@@ -37,12 +37,21 @@ class SubmissionDraft(Base, kw_only=True):
             "status IN ('editing', 'processing', 'needs_attention', 'submitted', 'expired')",
             name="submission_drafts_status_check",
         ),
+        CheckConstraint(
+            "source_installation_id IS NULL OR origin = 'paper'",
+            name="submission_drafts_installation_requires_paper",
+        ),
         CheckConstraint("expires_at > created_at", name="submission_drafts_expiry_after_creation"),
         Index("submission_drafts_owner_updated_idx", "owner_account_id", "updated_at"),
         Index(
             "submission_drafts_expiry_idx",
             "expires_at",
             postgresql_where=text("status IN ('editing', 'processing', 'needs_attention')"),
+        ),
+        Index(
+            "submission_drafts_source_installation_idx",
+            "source_installation_id",
+            postgresql_where=text("source_installation_id IS NOT NULL"),
         ),
     )
 
@@ -59,6 +68,11 @@ class SubmissionDraft(Base, kw_only=True):
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'editing'"), default="editing")
     answers: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    source_installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+    )
+    """Server-derived Paper installation retained independently of credential generations."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

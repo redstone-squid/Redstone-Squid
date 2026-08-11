@@ -7,7 +7,7 @@ from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -30,6 +30,7 @@ from squid.minecraft_auth.infrastructure.models import (
 )
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.persistence.base import Base
+from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 
 pytestmark = pytest.mark.asyncio
 
@@ -146,6 +147,8 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
 
     assert replacement.installation.id == authenticated.id
     assert replacement.installation.credential_version == authenticated.credential_version + 1
+    (published_after_rotation,) = await installations.public_servers()
+    assert published_after_rotation == published
     with pytest.raises(InvalidInstallationCredentialError):
         await installations.authenticate(first.token)
     with pytest.raises(InvalidPlayerTokenError):
@@ -154,6 +157,42 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
         stored_grant = await session.get(PlayerGrantRecord, grant.grant.id)
     assert stored_grant is not None
     assert stored_grant.revoked_at == NOW
+
+
+async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_profile(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await consenting_account(async_session_factory)
+    installations, _ = services(async_session_factory)
+    valid = await installations.register(
+        owner_account_id=account_id,
+        label="Valid public server",
+        profile=PublicServerProfile(
+            enabled=True,
+            display_name="Valid server",
+            website_url="https://example.test/server",
+            sponsor_opt_in=True,
+        ),
+    )
+    listed_only = await installations.register(
+        owner_account_id=account_id,
+        label="Listed server without sponsor consent",
+        profile=PublicServerProfile(enabled=True, display_name="Listed only"),
+    )
+    malformed = await installations.register(owner_account_id=account_id, label="Malformed public server")
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(PaperInstallationRecord)
+            .where(PaperInstallationRecord.id == malformed.installation.id)
+            .values(public_profile_enabled=True, public_display_name=" ", sponsor_opt_in=True)
+        )
+
+    sponsor = await PaperSponsorResolver(installations).resolve(valid.installation.id)
+
+    assert await installations.get_public_server(listed_only.installation.id) is None
+    assert sponsor is not None
+    assert sponsor.installation_id == valid.installation.id
+    assert sponsor.display_name == "Valid server"
 
 
 async def test_postgres_advisory_fence_enforces_active_challenge_bound(

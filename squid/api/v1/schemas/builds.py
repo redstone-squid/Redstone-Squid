@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Literal, Self, override
+from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
@@ -217,6 +218,18 @@ class BuildLinks(BaseModel):
     renders: list[str]
 
 
+class BuildSponsor(BaseModel):
+    """Immutable public sponsor metadata captured when the build was finalized."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    installation_id: UUID
+    display_name: str | None
+    address: str | None
+    description: str | None
+    website_url: AnyHttpUrl | None
+
+
 class BuildDetail(BuildSummary):
     """Stable item representation with build-specific facts."""
 
@@ -228,6 +241,7 @@ class BuildDetail(BuildSummary):
     restrictions: dict[str, list[str]]
     description: str | None
     links: BuildLinks
+    sponsor: BuildSponsor | None = None
 
     @classmethod
     @override
@@ -249,6 +263,17 @@ class BuildDetail(BuildSummary):
                 world_downloads=list(build.world_download_urls),
                 schematics=list(build.schematic_urls),
                 renders=list(build.render_urls),
+            ),
+            sponsor=(
+                None
+                if build.sponsor is None
+                else BuildSponsor(
+                    installation_id=build.sponsor.installation_id,
+                    display_name=build.sponsor.display_name,
+                    address=build.sponsor.address,
+                    description=build.sponsor.description,
+                    website_url=build.sponsor.website_url,
+                )
             ),
         )
 
