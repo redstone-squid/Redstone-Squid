@@ -15,6 +15,7 @@ from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
+from squid.cli_auth import CliAuthorizationService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
@@ -52,6 +53,7 @@ class ApiServices:
     builds: BuildService
     api_keys: ApiKeyService | None
     web_auth: DiscordOAuthService | None
+    cli_authorization: CliAuthorizationService | None
     idempotency: IdempotencyService
     notifications: NotificationService
     build_queries: BuildQueryService

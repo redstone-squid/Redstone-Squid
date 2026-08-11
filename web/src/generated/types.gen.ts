@@ -489,6 +489,234 @@ export type ChoiceOptionResponse = {
 };
 
 /**
+ * CliDeviceListResponse
+ *
+ * All CLI devices owned by the signed-in browser account.
+ */
+export type CliDeviceListResponse = {
+    /**
+     * Devices
+     */
+    devices: Array<CliDeviceResponse>;
+};
+
+/**
+ * CliDeviceResponse
+ *
+ * Account-visible CLI device metadata without its public key.
+ */
+export type CliDeviceResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Client Instance Id
+     */
+    client_instance_id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Public Key Fingerprint
+     */
+    public_key_fingerprint: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Last Used At
+     */
+    last_used_at: string;
+    /**
+     * Revoked At
+     */
+    revoked_at: string | null;
+};
+
+/**
+ * CliEnrollmentApprovalRequest
+ *
+ * Approve a displayed CLI user code as the signed-in browser account.
+ */
+export type CliEnrollmentApprovalRequest = {
+    /**
+     * User Code
+     */
+    user_code: string;
+};
+
+/**
+ * CliEnrollmentApprovalResponse
+ *
+ * Safe device identity shown before and after browser approval.
+ */
+export type CliEnrollmentApprovalResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Client Instance Id
+     */
+    client_instance_id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Public Key Fingerprint
+     */
+    public_key_fingerprint: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Approved At
+     */
+    approved_at: string | null;
+};
+
+/**
+ * CliEnrollmentCreateRequest
+ *
+ * Enroll one client-held Ed25519 public key.
+ */
+export type CliEnrollmentCreateRequest = {
+    /**
+     * Public Key
+     */
+    public_key: string;
+    /**
+     * Client Instance Id
+     */
+    client_instance_id: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * CliEnrollmentExchangeRequest
+ *
+ * Prove the enrolled private key and exchange browser approval.
+ */
+export type CliEnrollmentExchangeRequest = {
+    /**
+     * Device Code
+     */
+    device_code: string;
+    /**
+     * Signature
+     */
+    signature: string;
+};
+
+/**
+ * CliEnrollmentResponse
+ *
+ * One-time browser approval codes and polling policy.
+ */
+export type CliEnrollmentResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Device Code
+     */
+    device_code: string;
+    /**
+     * User Code
+     */
+    user_code: string;
+    /**
+     * Verification Uri
+     */
+    verification_uri: string;
+    /**
+     * Verification Uri Complete
+     */
+    verification_uri_complete: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Polling Interval Seconds
+     */
+    polling_interval_seconds: number;
+};
+
+/**
+ * CliSessionChallengeRequest
+ *
+ * Request a one-time signing nonce for an enrolled device.
+ */
+export type CliSessionChallengeRequest = {
+    /**
+     * Device Id
+     */
+    device_id: string;
+};
+
+/**
+ * CliSessionChallengeResponse
+ *
+ * A one-time plaintext proof nonce.
+ */
+export type CliSessionChallengeResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Device Id
+     */
+    device_id: string;
+    /**
+     * Nonce
+     */
+    nonce: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
+/**
+ * CliSessionExchangeRequest
+ *
+ * Exchange an Ed25519-signed proof nonce for a short session.
+ */
+export type CliSessionExchangeRequest = {
+    /**
+     * Device Id
+     */
+    device_id: string;
+    /**
+     * Challenge Id
+     */
+    challenge_id: string;
+    /**
+     * Nonce
+     */
+    nonce: string;
+    /**
+     * Signature
+     */
+    signature: string;
+};
+
+/**
  * ControlKind
  *
  * Small renderer-neutral set of supported form controls.
@@ -1139,6 +1367,27 @@ export type InstallationResponse = {
      * Revoked At
      */
     revoked_at: string | null;
+};
+
+/**
+ * IssuedCliSessionResponse
+ *
+ * One-time CLI bearer token response from a verified device proof.
+ */
+export type IssuedCliSessionResponse = {
+    device: CliDeviceResponse;
+    /**
+     * Session Id
+     */
+    session_id: string;
+    /**
+     * Token
+     */
+    token: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
 };
 
 /**
@@ -1999,7 +2248,7 @@ export type SubmissionFinalizationResponse = {
  *
  * A transport that can own or finalize a submission draft.
  */
-export type SubmissionOrigin = 'discord' | 'web' | 'paper' | 'fabric';
+export type SubmissionOrigin = 'discord' | 'web' | 'cli' | 'paper' | 'fabric';
 
 /**
  * SubscriptionKind
@@ -2927,6 +3176,477 @@ export type EditBuildV1BuildsBuildIdPatchResponses = {
 };
 
 export type EditBuildV1BuildsBuildIdPatchResponse = EditBuildV1BuildsBuildIdPatchResponses[keyof EditBuildV1BuildsBuildIdPatchResponses];
+
+export type StartEnrollmentV1CliAuthEnrollmentsPostData = {
+    body: CliEnrollmentCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/enrollments';
+};
+
+export type StartEnrollmentV1CliAuthEnrollmentsPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type StartEnrollmentV1CliAuthEnrollmentsPostError = StartEnrollmentV1CliAuthEnrollmentsPostErrors[keyof StartEnrollmentV1CliAuthEnrollmentsPostErrors];
+
+export type StartEnrollmentV1CliAuthEnrollmentsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: CliEnrollmentResponse;
+};
+
+export type StartEnrollmentV1CliAuthEnrollmentsPostResponse = StartEnrollmentV1CliAuthEnrollmentsPostResponses[keyof StartEnrollmentV1CliAuthEnrollmentsPostResponses];
+
+export type ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostData = {
+    body: CliEnrollmentExchangeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/enrollments/exchange';
+};
+
+export type ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostError = ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors[keyof ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostErrors];
+
+export type ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssuedCliSessionResponse;
+};
+
+export type ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponse = ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses[keyof ExchangeEnrollmentV1CliAuthEnrollmentsExchangePostResponses];
+
+export type PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * User Code
+         */
+        user_code: string;
+    };
+    url: '/v1/cli/auth/enrollments/approval';
+};
+
+export type PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetError = PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors[keyof PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetErrors];
+
+export type PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CliEnrollmentApprovalResponse;
+};
+
+export type PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponse = PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses[keyof PreviewEnrollmentV1CliAuthEnrollmentsApprovalGetResponses];
+
+export type ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostData = {
+    body: CliEnrollmentApprovalRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/enrollments/approval';
+};
+
+export type ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostError = ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors[keyof ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostErrors];
+
+export type ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CliEnrollmentApprovalResponse;
+};
+
+export type ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponse = ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses[keyof ApproveEnrollmentV1CliAuthEnrollmentsApprovalPostResponses];
+
+export type StartSessionChallengeV1CliAuthSessionChallengesPostData = {
+    body: CliSessionChallengeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/session-challenges';
+};
+
+export type StartSessionChallengeV1CliAuthSessionChallengesPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type StartSessionChallengeV1CliAuthSessionChallengesPostError = StartSessionChallengeV1CliAuthSessionChallengesPostErrors[keyof StartSessionChallengeV1CliAuthSessionChallengesPostErrors];
+
+export type StartSessionChallengeV1CliAuthSessionChallengesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: CliSessionChallengeResponse;
+};
+
+export type StartSessionChallengeV1CliAuthSessionChallengesPostResponse = StartSessionChallengeV1CliAuthSessionChallengesPostResponses[keyof StartSessionChallengeV1CliAuthSessionChallengesPostResponses];
+
+export type ExchangeSessionChallengeV1CliAuthSessionsPostData = {
+    body: CliSessionExchangeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/sessions';
+};
+
+export type ExchangeSessionChallengeV1CliAuthSessionsPostErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ExchangeSessionChallengeV1CliAuthSessionsPostError = ExchangeSessionChallengeV1CliAuthSessionsPostErrors[keyof ExchangeSessionChallengeV1CliAuthSessionsPostErrors];
+
+export type ExchangeSessionChallengeV1CliAuthSessionsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: IssuedCliSessionResponse;
+};
+
+export type ExchangeSessionChallengeV1CliAuthSessionsPostResponse = ExchangeSessionChallengeV1CliAuthSessionsPostResponses[keyof ExchangeSessionChallengeV1CliAuthSessionsPostResponses];
+
+export type ListDevicesV1CliAuthDevicesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/devices';
+};
+
+export type ListDevicesV1CliAuthDevicesGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ListDevicesV1CliAuthDevicesGetError = ListDevicesV1CliAuthDevicesGetErrors[keyof ListDevicesV1CliAuthDevicesGetErrors];
+
+export type ListDevicesV1CliAuthDevicesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CliDeviceListResponse;
+};
+
+export type ListDevicesV1CliAuthDevicesGetResponse = ListDevicesV1CliAuthDevicesGetResponses[keyof ListDevicesV1CliAuthDevicesGetResponses];
+
+export type RevokeDeviceV1CliAuthDevicesDeviceIdDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Device Id
+         */
+        device_id: string;
+    };
+    query?: never;
+    url: '/v1/cli/auth/devices/{device_id}';
+};
+
+export type RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RevokeDeviceV1CliAuthDevicesDeviceIdDeleteError = RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors[keyof RevokeDeviceV1CliAuthDevicesDeviceIdDeleteErrors];
+
+export type RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponse = RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses[keyof RevokeDeviceV1CliAuthDevicesDeviceIdDeleteResponses];
+
+export type RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/cli/auth/sessions/current';
+};
+
+export type RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteError = RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors[keyof RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteErrors];
+
+export type RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponse = RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses[keyof RevokeCurrentSessionV1CliAuthSessionsCurrentDeleteResponses];
 
 export type GetMeV1UsersMeGetData = {
     body?: never;

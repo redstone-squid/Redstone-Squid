@@ -225,6 +225,49 @@ def test_minecraft_auth_requires_a_complete_https_device_flow(
     assert any(issue["field"] == "minecraft_auth" for issue in _issues(exc_info.value))
 
 
+def test_cli_auth_runtime_settings_are_process_shared(monkeypatch: pytest.MonkeyPatch) -> None:
+    pepper = "cli-auth-pepper-with-at-least-32-bytes"
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret",
+        SQUID_CLI_AUTH_PEPPER=pepper,
+        SQUID_CLI_AUTH_VERIFICATION_URI="https://catalogue.example/cli/link",
+    )
+
+    config = load_api_process_config().runtime
+
+    assert config.cli_auth.pepper is not None
+    assert config.cli_auth.pepper.get_secret_value() == pepper
+    assert str(config.cli_auth.verification_uri) == "https://catalogue.example/cli/link"
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"SQUID_CLI_AUTH_PEPPER": "cli-auth-pepper-with-at-least-32-bytes"},
+        {"SQUID_CLI_AUTH_VERIFICATION_URI": "https://catalogue.example/cli/link"},
+        {
+            "SQUID_CLI_AUTH_PEPPER": "cli-auth-pepper-with-at-least-32-bytes",
+            "SQUID_CLI_AUTH_VERIFICATION_URI": "http://catalogue.example/cli/link",
+        },
+        {
+            "SQUID_CLI_AUTH_PEPPER": "too-short",
+            "SQUID_CLI_AUTH_VERIFICATION_URI": "https://catalogue.example/cli/link",
+        },
+    ],
+)
+def test_cli_auth_requires_a_complete_strong_https_device_flow(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: dict[str, str],
+) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **settings)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"].startswith("cli_auth") for issue in _issues(exc_info.value))
+
+
 @pytest.mark.parametrize("ratio", ["-0.1", "1.1"])
 def test_observability_sample_ratio_is_bounded(monkeypatch: pytest.MonkeyPatch, ratio: str) -> None:
     _set_environment(

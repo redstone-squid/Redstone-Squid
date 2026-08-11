@@ -9,6 +9,8 @@ from uuid import UUID
 from fastapi import Depends, Request, Security
 from fastapi.security import APIKeyHeader
 
+from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
+from squid.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError
 from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX, PLAYER_TOKEN_PREFIX
 from squid.minecraft_auth.errors import MinecraftAuthorizationError
@@ -28,7 +30,7 @@ class Scope(StrEnum):
 class Principal:
     """Transport-neutral authenticated or anonymous caller identity."""
 
-    kind: Literal["anonymous", "service", "account", "minecraft_player"]
+    kind: Literal["anonymous", "service", "account", "cli", "minecraft_player"]
     subject: str
     scopes: frozenset[Scope] = frozenset()
     discord_id: int | None = None
@@ -38,6 +40,8 @@ class Principal:
     java_uuid: UUID | None = None
     installation_id: UUID | None = None
     grant_id: UUID | None = None
+    cli_device_id: UUID | None = None
+    cli_session_id: UUID | None = None
 
 
 ANONYMOUS = Principal(kind="anonymous", subject="anonymous", scopes=frozenset({Scope.BUILDS_READ}))
@@ -93,6 +97,23 @@ async def current_principal(
             scopes=frozenset(Scope),
         )
     token = authorization.removeprefix("Bearer ")
+    if token.startswith(f"{CLI_SESSION_TOKEN_PREFIX}_"):
+        cli_authorization = request.app.state.runtime.services.cli_authorization
+        if cli_authorization is None:
+            raise AuthenticationError
+        try:
+            identity = await cli_authorization.authenticate(token)
+        except CliAuthorizationError:
+            raise AuthenticationError from None
+        return Principal(
+            kind="cli",
+            subject=f"cli-session:{identity.session_id}",
+            scopes=frozenset(Scope),
+            account_id=identity.account_id,
+            consent_pending=identity.consent_pending,
+            cli_device_id=identity.device_id,
+            cli_session_id=identity.session_id,
+        )
     if token.startswith(f"{PLAYER_TOKEN_PREFIX}_"):
         players = request.app.state.runtime.services.minecraft_player_authorization
         installations = request.app.state.runtime.services.minecraft_installations

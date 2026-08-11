@@ -143,12 +143,16 @@ async def authenticated_submission_actor(
 
 
 def _submission_actor(principal: Principal) -> AuthenticatedSubmissionActor:
-    if principal.account_id is None or principal.kind not in {"account", "minecraft_player"}:
+    if principal.account_id is None or principal.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
     if principal.consent_pending:
         raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
     if principal.kind == "account":
         origin = SubmissionOrigin.WEB
+    elif principal.kind == "cli":
+        if principal.cli_device_id is None or principal.cli_session_id is None:
+            raise AuthenticationError
+        origin = SubmissionOrigin.CLI
     elif principal.minecraft_origin is not None:
         origin = SubmissionOrigin(principal.minecraft_origin)
     else:
