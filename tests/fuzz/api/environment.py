@@ -13,6 +13,10 @@ RUN_LABEL = "dev.redstone-squid.api-fuzz.run"
 RESOURCE_LABEL = "dev.redstone-squid.api-fuzz.resource"
 DATABASE_PREFIX = "squid_fuzz_"
 APPLICATION_PREFIX = "squid-api-fuzz-"
+RUN_ID_ENV = "REDSTONE_SQUID_FUZZ_RUN_ID"
+SENTINEL_ENV = "REDSTONE_SQUID_FUZZ_SENTINEL"
+CONTROL_NONCE_ENV = "REDSTONE_SQUID_FUZZ_CONTROL_NONCE"
+FAKE_PORT_ENV = "REDSTONE_SQUID_FUZZ_FAKE_PORT"
 
 type AsyncAction = Callable[[], Awaitable[None]]
 type Checksum = Callable[[], Awaitable[str]]
@@ -188,6 +192,12 @@ def synthetic_api_environment(identity: RunIdentity, endpoints: SyntheticEndpoin
     validate_target_url(f"http://127.0.0.1:{endpoints.api_port}")
     idempotency_key = base64.b64encode(secrets.token_bytes(32)).decode()
     return {
+        CONTROL_NONCE_ENV: identity.sentinel,
+        FAKE_PORT_ENV: "8101",
+        RUN_ID_ENV: identity.run_id,
+        SENTINEL_ENV: identity.sentinel,
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUTF8": "1",
         "PYTHONUNBUFFERED": "1",
         "SQUID_STRICT_UNKNOWN_KEYS": "true",
         "SQUID_DATABASE_URL": endpoints.postgres_url,
