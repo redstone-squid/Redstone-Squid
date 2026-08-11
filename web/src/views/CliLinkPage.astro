@@ -1,0 +1,44 @@
+---
+import CliLink from "../components/CliLink";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getRuntimeConfig } from "../lib/config";
+import type { Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+
+const { locale } = Astro.props;
+const config = getRuntimeConfig();
+const content =
+  locale === "zh-CN"
+    ? {
+        title: "关联 Squid CLI",
+        description: "检查设备标签和公钥指纹，然后批准 Squid CLI 访问你的私人草稿。",
+        eyebrow: "CLI / 设备批准",
+        intro: "确认代码、设备标签和公钥指纹与你刚刚启动的 CLI 完全一致。你可以随时撤销该设备。",
+      }
+    : {
+        title: "Link the Squid CLI",
+        description:
+          "Review the device label and public-key fingerprint before allowing the Squid CLI to access your private drafts.",
+        eyebrow: "CLI / DEVICE APPROVAL",
+        intro:
+          "Confirm the code, device label, and public-key fingerprint match the CLI you just started. You can revoke the device at any time.",
+      };
+---
+
+<BaseLayout
+  title={content.title}
+  description={content.description}
+  locale={locale}
+  canonicalPath={locale === "zh-CN" ? "/zh-cn/cli/link" : "/cli/link"}
+  noindex
+>
+  <section class="page-shell cli-link-page">
+    <header class="page-heading submission-heading">
+      <p class="eyebrow">{content.eyebrow}</p>
+      <h1>{content.title}</h1>
+      <p>{content.intro}</p>
+    </header>
+    <CliLink client:load locale={locale} config={config} />
+  </section>
+</BaseLayout>
