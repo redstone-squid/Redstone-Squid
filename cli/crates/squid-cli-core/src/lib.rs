@@ -1,5 +1,6 @@
 //! Reusable behavior for the Redstone Squid command-line client.
 
+pub mod auth;
 pub mod credential;
 pub mod encrypted_state;
 pub mod exit;

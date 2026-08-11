@@ -14,8 +14,9 @@ use reqwest::header::{
 };
 use reqwest::redirect::Policy;
 use reqwest::tls::Version;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -171,7 +172,7 @@ pub struct ApiResponse<T> {
 }
 
 /// Stable problem shape authored by the backend.
-#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ApiProblem {
     pub code: String,
     pub message: String,
@@ -181,13 +182,56 @@ pub struct ApiProblem {
     pub retryable: bool,
     #[serde(default)]
     pub suggested_action: Option<String>,
+    #[serde(default)]
+    pub context: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct ProblemEnvelope {
+impl ApiProblem {
+    /// Return a narrower application error code carried in the RFC problem context.
+    #[must_use]
+    pub fn application_code(&self, key: &str) -> Option<&str> {
+        self.context.get(key).and_then(Value::as_str)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyProblemEnvelope {
     error: ApiProblem,
     #[serde(default)]
     request_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RfcProblemDetail {
+    title: String,
+    #[serde(default)]
+    detail: Option<String>,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    context: Option<BTreeMap<String, Value>>,
+}
+
+impl RfcProblemDetail {
+    fn into_problem(self) -> ApiProblem {
+        let context = self.context.unwrap_or_default();
+        let retryable = context
+            .get("retryable")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let suggested_action = context
+            .get("suggested_action")
+            .and_then(Value::as_str)
+            .map(String::from);
+        ApiProblem {
+            code: self.code.unwrap_or_else(|| String::from("HTTP_ERROR")),
+            message: self.detail.unwrap_or(self.title),
+            field_errors: BTreeMap::new(),
+            retryable,
+            suggested_action,
+            context,
+        }
+    }
 }
 
 /// Immutable client tied to one normalized origin, protocol, locale, and instance.
@@ -278,6 +322,33 @@ impl ApiClient {
         request: ApiRequest,
         bearer_token: Option<&SecretBytes>,
     ) -> Result<ApiResponse<T>, TransportError> {
+        let response = self.send(request, bearer_token)?;
+        self.decode_json_response(response)
+    }
+
+    /// Send a request whose successful response must not contain a body.
+    pub fn send_no_content(
+        &self,
+        request: ApiRequest,
+        bearer_token: Option<&SecretBytes>,
+    ) -> Result<ApiResponse<()>, TransportError> {
+        let response = self.send(request, bearer_token)?;
+        let decoded = self.decode_raw_response(response)?;
+        if !decoded.body.is_empty() {
+            return Err(TransportError::UnexpectedResponseBody);
+        }
+        Ok(ApiResponse {
+            status: decoded.status,
+            data: (),
+            request_id: decoded.request_id,
+        })
+    }
+
+    fn send(
+        &self,
+        request: ApiRequest,
+        bearer_token: Option<&SecretBytes>,
+    ) -> Result<Response, TransportError> {
         request.validate()?;
         let url = format!("{}{}", self.origin.as_str(), request.path);
         let mut builder = self.client.request(request.method.as_reqwest(), url);
@@ -297,8 +368,7 @@ impl ApiClient {
             combined.set_sensitive(true);
             builder = builder.header(AUTHORIZATION, combined);
         }
-        let response = builder.send().map_err(TransportError::Request)?;
-        self.decode_response(response)
+        builder.send().map_err(TransportError::Request)
     }
 
     /// Headers fixed at construction, exposed only for contract tests and diagnostics.
@@ -307,10 +377,20 @@ impl ApiClient {
         &self.default_headers
     }
 
-    fn decode_response<T: DeserializeOwned>(
+    fn decode_json_response<T: DeserializeOwned>(
         &self,
         response: Response,
     ) -> Result<ApiResponse<T>, TransportError> {
+        let decoded = self.decode_raw_response(response)?;
+        let data = serde_json::from_slice(&decoded.body).map_err(TransportError::InvalidJson)?;
+        Ok(ApiResponse {
+            status: decoded.status,
+            data,
+            request_id: decoded.request_id,
+        })
+    }
+
+    fn decode_raw_response(&self, response: Response) -> Result<RawApiResponse, TransportError> {
         if response.url().scheme() != self.origin.scheme()
             || response.url().host_str() != origin_host(&self.origin)
             || response.url().port_or_known_default() != Some(self.origin.port())
@@ -338,20 +418,35 @@ impl ApiClient {
             return Err(TransportError::InvalidContentType);
         }
         if !status.is_success() {
-            let envelope = serde_json::from_slice::<ProblemEnvelope>(&body).ok();
+            let (problem, problem_request_id) = decode_problem(&body);
             return Err(TransportError::Http {
                 status: status.as_u16(),
-                problem: envelope.as_ref().map(|value| value.error.clone()),
-                request_id: envelope.and_then(|value| value.request_id).or(request_id),
+                problem,
+                request_id: problem_request_id.or(request_id),
                 retry_after,
             });
         }
-        let data = serde_json::from_slice(&body).map_err(TransportError::InvalidJson)?;
-        Ok(ApiResponse {
+        Ok(RawApiResponse {
             status: status.as_u16(),
-            data,
             request_id,
+            body,
         })
+    }
+}
+
+struct RawApiResponse {
+    status: u16,
+    request_id: Option<String>,
+    body: Vec<u8>,
+}
+
+fn decode_problem(body: &[u8]) -> (Option<ApiProblem>, Option<String>) {
+    if let Ok(envelope) = serde_json::from_slice::<LegacyProblemEnvelope>(body) {
+        return (Some(envelope.error), envelope.request_id);
+    }
+    match serde_json::from_slice::<RfcProblemDetail>(body) {
+        Ok(problem) => (Some(problem.into_problem()), None),
+        Err(_error) => (None, None),
     }
 }
 
@@ -461,6 +556,8 @@ pub enum TransportError {
     InvalidContentType,
     #[error("HTTP response was not valid JSON: {0}")]
     InvalidJson(#[source] serde_json::Error),
+    #[error("HTTP response unexpectedly contained a body")]
+    UnexpectedResponseBody,
     #[error("JSON request could not be serialized: {0}")]
     SerializeJson(#[source] serde_json::Error),
     #[error("backend returned HTTP {status}")]
@@ -477,7 +574,13 @@ pub enum TransportError {
 /// Map an HTTP status to the CLI's stable error class without interpreting localized text.
 #[must_use]
 pub const fn status_class(status: StatusCode) -> crate::exit::ExitStatus {
-    match status.as_u16() {
+    status_code_class(status.as_u16())
+}
+
+/// Map a raw HTTP status to the CLI's stable error class.
+#[must_use]
+pub const fn status_code_class(status: u16) -> crate::exit::ExitStatus {
+    match status {
         401 => crate::exit::ExitStatus::Authentication,
         403 => crate::exit::ExitStatus::Authorization,
         409 => crate::exit::ExitStatus::Conflict,
@@ -500,7 +603,7 @@ mod tests {
 
     use super::{
         ApiClient, ApiMethod, ApiRequest, ClientInstanceId, TransportError, status_class,
-        validate_endpoint_path,
+        status_code_class, validate_endpoint_path,
     };
     use crate::exit::ExitStatus;
     use crate::form::RendererCapabilities;
@@ -573,6 +676,7 @@ mod tests {
             status_class(reqwest::StatusCode::SERVICE_UNAVAILABLE),
             ExitStatus::Unavailable,
         );
+        assert_eq!(status_code_class(422), ExitStatus::ServerRejection);
     }
 
     #[test]
@@ -613,6 +717,60 @@ mod tests {
         assert!(!lowercase.contains("cli.handoff.v1"));
         assert!(lowercase.contains("x-squid-client-instance:"));
         assert!(lowercase.contains("accept-language: en"));
+        Ok(())
+    }
+
+    #[test]
+    fn decodes_rfc_problem_details_and_preserves_application_context() -> Result<(), Box<dyn Error>>
+    {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = thread::spawn(move || -> io::Result<()> {
+            let (mut stream, _peer) = listener.accept()?;
+            let mut request = [0_u8; 1024];
+            let _length = stream.read(&mut request)?;
+            let body = br#"{"title":"Conflict","status":409,"detail":"Awaiting approval.","code":"CONFLICT","context":{"cli_auth_code":"cli_authorization_pending","retryable":true}}"#;
+            let headers = format!(
+                "HTTP/1.1 409 Conflict\r\nContent-Type: application/problem+json\r\nX-Request-Id: req-problem\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len(),
+            );
+            stream.write_all(headers.as_bytes())?;
+            stream.write_all(body)
+        });
+        let origin = ApiOrigin::parse(&format!("http://{address}"))?;
+        let profile = Profile::new(origin);
+        let client = ApiClient::for_profile(
+            &profile,
+            Locale::En,
+            ClientInstanceId::generate(),
+            &RendererCapabilities::prompt(false),
+        )?;
+        let result = client.send_json::<Value>(
+            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/enrollments/exchange"),
+            None,
+        );
+        match result {
+            Err(TransportError::Http {
+                status,
+                problem: Some(problem),
+                request_id,
+                ..
+            }) => {
+                assert_eq!(status, 409);
+                assert_eq!(problem.code, "CONFLICT");
+                assert_eq!(problem.message, "Awaiting approval.");
+                assert!(problem.retryable);
+                assert_eq!(
+                    problem.application_code("cli_auth_code"),
+                    Some("cli_authorization_pending"),
+                );
+                assert_eq!(request_id.as_deref(), Some("req-problem"));
+            }
+            other => return Err(format!("unexpected transport result: {other:?}").into()),
+        }
+        server
+            .join()
+            .map_err(|_error| io::Error::other("test server panicked"))??;
         Ok(())
     }
 

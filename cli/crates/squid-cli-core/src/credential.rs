@@ -13,6 +13,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey};
 use fs2::FileExt;
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 use zeroize::Zeroizing;
@@ -359,6 +360,18 @@ impl DeviceIdentity {
     #[must_use]
     pub fn public_key(&self) -> String {
         URL_SAFE_NO_PAD.encode(self.signing_key.verifying_key().as_bytes())
+    }
+
+    /// Short SHA-256 public-key fingerprint shown in both the CLI and approval page.
+    #[must_use]
+    pub fn public_key_fingerprint(&self) -> String {
+        let digest = Sha256::digest(self.signing_key.verifying_key().as_bytes());
+        let encoded = hex::encode_upper(&digest[..10]);
+        (0..encoded.len())
+            .step_by(4)
+            .map(|index| &encoded[index..index + 4])
+            .collect::<Vec<_>>()
+            .join("-")
     }
 
     /// Sign an enrollment or request challenge and encode the detached signature.
