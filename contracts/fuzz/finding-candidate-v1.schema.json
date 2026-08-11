@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "EngineName": {
+      "enum": [
+        "schemathesis",
+        "hypothesis",
+        "atheris",
+        "scenario",
+        "differential"
+      ],
+      "type": "string"
+    },
+    "Hex40": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "Hex64": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Redacted metadata pointing to one engine-native reproducer.",
+  "properties": {
+    "affected_operations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Affected Operations",
+      "type": "array"
+    },
+    "checker": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Checker",
+      "type": "string"
+    },
+    "engine": {
+      "$ref": "#/$defs/EngineName"
+    },
+    "native_artifact": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Native Artifact",
+      "type": "string"
+    },
+    "normalized_root_cause": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Normalized Root Cause",
+      "type": "string"
+    },
+    "private": {
+      "default": true,
+      "title": "Private",
+      "type": "boolean"
+    },
+    "profile": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Profile",
+      "type": "string"
+    },
+    "revision": {
+      "$ref": "#/$defs/Hex40"
+    },
+    "schema_version": {
+      "const": "finding-candidate-v1",
+      "default": "finding-candidate-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed_builder_hash": {
+      "$ref": "#/$defs/Hex64"
+    }
+  },
+  "required": [
+    "engine",
+    "revision",
+    "profile",
+    "checker",
+    "normalized_root_cause",
+    "seed_builder_hash",
+    "native_artifact"
+  ],
+  "title": "FindingCandidateV1",
+  "type": "object"
+}
