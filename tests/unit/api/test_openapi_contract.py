@@ -8,6 +8,7 @@ import httpx
 from squid.api.capabilities import API_FEATURES
 from squid.api.errors import ProblemDetail
 from squid.api.openapi import OPERATIONS
+from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
@@ -109,6 +110,18 @@ def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
     assert document["paths"]["/v1/auth/logout"]["post"]["security"] == [{"WebSession": [], "CsrfToken": []}]
     assert document["paths"]["/v1/cli/auth/sessions/current"]["delete"]["security"] == [{"DeviceSession": []}]
     assert document["paths"]["/v1/verify"]["post"]["x-required-api-scopes"] == ["verify"]
+
+
+def test_openapi_declares_submission_draft_producer_links() -> None:
+    document = _app.openapi()
+    operation_locations = {contract.operation_id: (contract.path, contract.method) for contract in OPERATIONS}
+
+    for expected in DRAFT_PRODUCER_LINKS:
+        path, method = operation_locations[expected.producer_operation_id]
+        link = document["paths"][path][method]["responses"][expected.status_code]["links"][expected.name]
+
+        assert link["operationId"] == expected.target_operation_id
+        assert link["parameters"] == {"draft_id": expected.draft_id_expression}
 
 
 def test_cli_command_operations_have_language_neutral_fixtures() -> None:

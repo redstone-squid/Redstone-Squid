@@ -7294,6 +7294,32 @@
                   "$ref": "#/components/schemas/StoredDraftResponse"
                 }
               }
+            },
+            "links": {
+              "GetCreatedDraft": {
+                "operationId": "submission_draft_get",
+                "parameters": {
+                  "draft_id": "$response.body#/id"
+                }
+              },
+              "ChangeCreatedDraft": {
+                "operationId": "submission_draft_change",
+                "parameters": {
+                  "draft_id": "$response.body#/id"
+                }
+              },
+              "FinalizeCreatedDraft": {
+                "operationId": "submission_finalization_start",
+                "parameters": {
+                  "draft_id": "$response.body#/id"
+                }
+              },
+              "DeleteCreatedDraft": {
+                "operationId": "submission_draft_delete",
+                "parameters": {
+                  "draft_id": "$response.body#/id"
+                }
+              }
             }
           },
           "429": {
@@ -7997,7 +8023,16 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "links": {
+              "UseAfterDeletedDraft": {
+                "operationId": "submission_draft_get",
+                "parameters": {
+                  "draft_id": "$request.path.draft_id"
+                },
+                "description": "Use-after-free check for a deleted draft identifier."
+              }
+            }
           },
           "429": {
             "content": {
@@ -8170,6 +8205,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DraftChangeResponse"
+                }
+              }
+            },
+            "links": {
+              "ChangeDraftAgain": {
+                "operationId": "submission_draft_change",
+                "parameters": {
+                  "draft_id": "$response.body#/draft/id"
+                }
+              },
+              "FinalizeChangedDraft": {
+                "operationId": "submission_finalization_start",
+                "parameters": {
+                  "draft_id": "$response.body#/draft/id"
                 }
               }
             }
@@ -8365,6 +8414,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubmissionFinalizationResponse"
+                }
+              }
+            },
+            "links": {
+              "GetFinalization": {
+                "operationId": "submission_finalization_get",
+                "parameters": {
+                  "draft_id": "$response.body#/draft_id"
+                }
+              },
+              "DeleteFinalizedDraft": {
+                "operationId": "submission_draft_delete",
+                "parameters": {
+                  "draft_id": "$response.body#/draft_id"
                 }
               }
             }
