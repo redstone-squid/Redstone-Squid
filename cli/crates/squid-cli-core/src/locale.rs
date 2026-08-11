@@ -234,6 +234,10 @@ impl Locale {
             }
             (Self::En, MessageKey::FormBooleanPrompt) => "[y/n] ",
             (Self::ZhCn, MessageKey::FormBooleanPrompt) => "[是/否] ",
+            (Self::En, MessageKey::FormRepeatablePrompt) => {
+                "enter one value per line; submit a blank line when finished"
+            }
+            (Self::ZhCn, MessageKey::FormRepeatablePrompt) => "每行输入一个值；完成后提交空行",
             (Self::En, MessageKey::TuiAppTitle) => "Redstone Squid",
             (Self::ZhCn, MessageKey::TuiAppTitle) => "红石鱿鱼",
             (Self::En, MessageKey::TuiHelpTitle) => "Help",
@@ -363,6 +367,7 @@ pub enum MessageKey {
     SuggestedRetry,
     SuggestedApproveDevice,
     FormBooleanPrompt,
+    FormRepeatablePrompt,
     TuiAppTitle,
     TuiHelpTitle,
     TuiAnswerTitle,

@@ -268,9 +268,11 @@ impl FormFieldSchema {
                 minimum_characters: self.constraints.min_length,
                 maximum_characters: self.constraints.max_length,
             },
-            (ControlKind::Text, ValueKind::StringList, true) => FormControl::MultilineText {
-                minimum_characters: self.required.then_some(1),
-                maximum_characters: repeatable_maximum(&self.constraints)?,
+            (ControlKind::Text, ValueKind::StringList, true) => FormControl::RepeatableText {
+                minimum_items: self.constraints.min_items,
+                maximum_items: self.constraints.max_items,
+                minimum_characters: self.constraints.min_length,
+                maximum_characters: self.constraints.max_length,
             },
             (
                 ControlKind::Number | ControlKind::Duration,
@@ -315,19 +317,6 @@ fn integer_constraint(value: Option<&Number>) -> Result<Option<i64>, SubmissionC
                 .ok_or(SubmissionContractError::UnsupportedControl)
         })
         .transpose()
-}
-
-fn repeatable_maximum(
-    constraints: &FieldConstraints,
-) -> Result<Option<usize>, SubmissionContractError> {
-    match (constraints.max_length, constraints.max_items) {
-        (Some(length), Some(items)) => length
-            .checked_mul(items)
-            .and_then(|value| value.checked_add(items.saturating_sub(1)))
-            .map(Some)
-            .ok_or(SubmissionContractError::InvalidField),
-        _ => Ok(None),
-    }
 }
 
 /// Internal field plus conversion metadata retained by the API adapter.
@@ -706,7 +695,7 @@ mod tests {
         assert!(creators.repeatable);
         assert!(matches!(
             creators.field.control,
-            FormControl::MultilineText { .. }
+            FormControl::RepeatableText { .. }
         ));
         let orientation = fields[1].adapt(Some(&[FormOption {
             value: String::from("floor"),
@@ -723,6 +712,8 @@ mod tests {
     fn fails_closed_for_unknown_required_capabilities_and_protocols() -> Result<(), Box<dyn Error>>
     {
         let mut manifest = manifest()?;
+        manifest.common_sections[0].fields[0].required_capability =
+            Some(String::from("cli.control.future.v1"));
         let assessment = manifest.assess_capabilities(
             "door",
             &BTreeMap::new(),

@@ -73,6 +73,12 @@ pub enum FormControl {
         minimum_characters: Option<usize>,
         maximum_characters: Option<usize>,
     },
+    RepeatableText {
+        minimum_items: Option<usize>,
+        maximum_items: Option<usize>,
+        minimum_characters: Option<usize>,
+        maximum_characters: Option<usize>,
+    },
     Integer {
         minimum: Option<i64>,
         maximum: Option<i64>,
@@ -93,6 +99,7 @@ impl FormControl {
         match self {
             Self::Text { .. } => CAPABILITY_TEXT,
             Self::MultilineText { .. } => CAPABILITY_MULTILINE,
+            Self::RepeatableText { .. } => CAPABILITY_REPEATABLE_TEXT,
             Self::Integer { .. } => CAPABILITY_INTEGER,
             Self::Boolean => CAPABILITY_BOOLEAN,
             Self::SingleChoice { .. } => CAPABILITY_SINGLE_CHOICE,
@@ -131,6 +138,15 @@ impl FormField {
                 minimum_characters,
                 maximum_characters,
             } => validate_range(*minimum_characters, *maximum_characters),
+            FormControl::RepeatableText {
+                minimum_items,
+                maximum_items,
+                minimum_characters,
+                maximum_characters,
+            } => {
+                validate_range(*minimum_items, *maximum_items)?;
+                validate_range(*minimum_characters, *maximum_characters)
+            }
             FormControl::Integer { minimum, maximum } => {
                 if minimum.zip(*maximum).is_some_and(|(min, max)| min > max) {
                     return Err(FormError::InvalidConstraint);
@@ -181,6 +197,7 @@ fn validate_range<T: Ord>(minimum: Option<T>, maximum: Option<T>) -> Result<(), 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FormAnswer {
     Text(String),
+    Texts(Vec<String>),
     Integer(i64),
     Boolean(bool),
     Choice(FormCode),
@@ -193,6 +210,9 @@ impl FormAnswer {
     pub fn to_json(&self) -> Value {
         match self {
             Self::Text(value) => Value::String(value.clone()),
+            Self::Texts(values) => {
+                Value::Array(values.iter().cloned().map(Value::String).collect())
+            }
             Self::Integer(value) => Value::Number((*value).into()),
             Self::Boolean(value) => Value::Bool(*value),
             Self::Choice(value) => Value::String(String::from(value.as_str())),
@@ -228,10 +248,10 @@ impl RendererCapabilities {
             CAPABILITY_BOOLEAN,
             CAPABILITY_SINGLE_CHOICE,
             CAPABILITY_MULTIPLE_CHOICE,
+            CAPABILITY_REPEATABLE_TEXT,
         ]);
         if external_editor {
             values.insert(CAPABILITY_MULTILINE);
-            values.insert(CAPABILITY_REPEATABLE_TEXT);
         }
         Self(values)
     }
@@ -399,6 +419,28 @@ impl<'a> PromptRenderer<'a> {
                     *maximum_characters,
                 )
             }
+            FormControl::RepeatableText {
+                minimum_items,
+                maximum_items,
+                minimum_characters,
+                maximum_characters,
+            } => {
+                writeln!(
+                    output,
+                    "{}",
+                    self.locale.message(MessageKey::FormRepeatablePrompt)
+                )
+                .map_err(FormError::Io)?;
+                read_repeatable_answers(
+                    input,
+                    output,
+                    field.required,
+                    *minimum_items,
+                    *maximum_items,
+                    *minimum_characters,
+                    *maximum_characters,
+                )
+            }
             FormControl::Text {
                 minimum_characters,
                 maximum_characters,
@@ -447,6 +489,40 @@ impl<'a> PromptRenderer<'a> {
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn read_repeatable_answers(
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    required: bool,
+    minimum_items: Option<usize>,
+    maximum_items: Option<usize>,
+    minimum_characters: Option<usize>,
+    maximum_characters: Option<usize>,
+) -> Result<Option<FormAnswer>, FormError> {
+    let mut values = Vec::new();
+    loop {
+        let value = read_line(input, output)?;
+        if value.is_empty() {
+            break;
+        }
+        validate_text_answer(&value, true, minimum_characters, maximum_characters)?;
+        values.push(value);
+        if maximum_items.is_some_and(|maximum| values.len() >= maximum) {
+            break;
+        }
+    }
+    if values.is_empty() && !required && minimum_items.unwrap_or(0) == 0 {
+        return Ok(None);
+    }
+    if values.is_empty()
+        || minimum_items.is_some_and(|minimum| values.len() < minimum)
+        || maximum_items.is_some_and(|maximum| values.len() > maximum)
+    {
+        return Err(FormError::InvalidAnswer);
+    }
+    Ok(Some(FormAnswer::Texts(values)))
 }
 
 fn render_heading(field: &FormField, output: &mut impl Write) -> Result<(), FormError> {
@@ -519,6 +595,30 @@ pub(crate) fn validate_text_answer(
         return Err(FormError::InvalidAnswer);
     }
     Ok(Some(FormAnswer::Text(String::from(value))))
+}
+
+pub(crate) fn parse_repeatable_answer(
+    value: &str,
+    required: bool,
+    minimum_items: Option<usize>,
+    maximum_items: Option<usize>,
+    minimum_characters: Option<usize>,
+    maximum_characters: Option<usize>,
+) -> Result<Option<FormAnswer>, FormError> {
+    if value.is_empty() && !required && minimum_items.unwrap_or(0) == 0 {
+        return Ok(None);
+    }
+    let values = value.split('\n').map(String::from).collect::<Vec<_>>();
+    if values.is_empty()
+        || minimum_items.is_some_and(|minimum| values.len() < minimum)
+        || maximum_items.is_some_and(|maximum| values.len() > maximum)
+    {
+        return Err(FormError::InvalidAnswer);
+    }
+    for item in &values {
+        validate_text_answer(item, true, minimum_characters, maximum_characters)?;
+    }
+    Ok(Some(FormAnswer::Texts(values)))
 }
 
 pub(crate) fn parse_integer_answer(
@@ -688,10 +788,9 @@ mod tests {
             RendererCapabilities::tui().submission_capabilities(),
             [String::from("repeatable_text")],
         );
-        assert!(
-            RendererCapabilities::prompt(false)
-                .submission_capabilities()
-                .is_empty()
+        assert_eq!(
+            RendererCapabilities::prompt(false).submission_capabilities(),
+            [String::from("repeatable_text")],
         );
     }
 
@@ -734,6 +833,31 @@ mod tests {
             Some(FormAnswer::Choices(vec![
                 FormCode::parse("honey")?,
                 FormCode::parse("slime")?,
+            ]))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prompt_renderer_collects_repeatable_text_one_line_at_a_time() -> Result<(), FormError> {
+        let field = field(FormControl::RepeatableText {
+            minimum_items: Some(1),
+            maximum_items: Some(3),
+            minimum_characters: Some(1),
+            maximum_characters: Some(80),
+        })?;
+        let mut input = Cursor::new(b"Alice\nBob\n\n");
+        let mut output = Vec::new();
+        let answer = PromptRenderer::new(InteractionMode::Interactive).read_answer(
+            &field,
+            &mut input,
+            &mut output,
+        )?;
+        assert_eq!(
+            answer,
+            Some(FormAnswer::Texts(vec![
+                String::from("Alice"),
+                String::from("Bob"),
             ]))
         );
         Ok(())
