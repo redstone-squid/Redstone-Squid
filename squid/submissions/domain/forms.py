@@ -15,6 +15,7 @@ class SubmissionOrigin(StrEnum):
 
     DISCORD = "discord"
     WEB = "web"
+    CLI = "cli"
     PAPER = "paper"
     FABRIC = "fabric"
 

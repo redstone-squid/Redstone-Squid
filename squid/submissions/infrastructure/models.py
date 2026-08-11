@@ -30,7 +30,7 @@ class SubmissionDraft(Base, kw_only=True):
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
         CheckConstraint(
-            "origin IN ('discord', 'web', 'paper', 'fabric')",
+            "origin IN ('discord', 'web', 'cli', 'paper', 'fabric')",
             name="submission_drafts_origin_check",
         ),
         CheckConstraint(

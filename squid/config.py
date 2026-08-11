@@ -210,6 +210,36 @@ class MinecraftAuthConfig(_FrozenModel):
         return self
 
 
+class CliAuthConfig(_FrozenModel):
+    """Independent hash material and browser location for CLI device approval."""
+
+    pepper: SecretStr | None = None
+    verification_uri: AnyHttpUrl | None = None
+
+    _empty_pepper = field_validator("pepper", mode="before")(_empty_to_none)
+    _empty_verification_uri = field_validator("verification_uri", mode="before")(_empty_to_none)
+
+    @field_validator("pepper")
+    @classmethod
+    def _require_pepper_strength(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode()) < 32:
+            msg = "Must contain at least 32 bytes."
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def _require_complete_device_flow(self) -> Self:
+        if (self.pepper is None) != (self.verification_uri is None):
+            msg = "CLI authorization requires both pepper and verification_uri."
+            raise ValueError(msg)
+        if self.verification_uri is not None:
+            parsed = urlsplit(str(self.verification_uri))
+            if parsed.scheme != "https" or parsed.query or parsed.fragment:
+                msg = "CLI verification_uri must be HTTPS without a query or fragment."
+                raise ValueError(msg)
+        return self
+
+
 class EmbeddingConfig(_FrozenModel):
     """Resolved embedding provider configuration."""
 
@@ -730,6 +760,7 @@ class RuntimeConfig(_FrozenModel):
     object_storage: ObjectStorageConfig
     media: MediaConfig = MediaConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
+    cli_auth: CliAuthConfig = CliAuthConfig()
     community: CommunityConfig
     notifications: NotificationConfig
     verification_code_pepper: SecretStr
@@ -787,6 +818,7 @@ class _ProcessSettings(BaseSettings):
     storage: ObjectStorageConfig = ObjectStorageConfig()
     media: MediaConfig = MediaConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
+    cli_auth: CliAuthConfig = CliAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
     community: CommunityConfig = CommunityConfig()
     notification: NotificationConfig = NotificationConfig()
@@ -828,6 +860,7 @@ class _ProcessSettings(BaseSettings):
             object_storage=self.storage,
             media=self.media,
             minecraft_auth=self.minecraft_auth,
+            cli_auth=self.cli_auth,
             community=self.community,
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
@@ -926,6 +959,7 @@ class ApplicationConfig(BotProcessConfig):
                     "schematic",
                     "media",
                     "minecraft_auth",
+                    "cli_auth",
                     "community",
                     "notification",
                     "log",
@@ -955,6 +989,7 @@ class ApplicationConfig(BotProcessConfig):
                     "schematic",
                     "media",
                     "minecraft_auth",
+                    "cli_auth",
                     "community",
                     "notification",
                     "log",
@@ -981,6 +1016,7 @@ class ApplicationConfig(BotProcessConfig):
                     "schematic",
                     "media",
                     "minecraft_auth",
+                    "cli_auth",
                     "community",
                     "notification",
                     "log",

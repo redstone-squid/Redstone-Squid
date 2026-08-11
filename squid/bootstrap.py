@@ -29,6 +29,8 @@ from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
+from squid.cli_auth import CliAuthorizationService, CliSecretCodec
+from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
@@ -489,6 +491,17 @@ class _ServiceGraph:
         return service
 
     @cached_property
+    def cli_authorization(self) -> CliAuthorizationService | None:
+        pepper = self.config.cli_auth.pepper
+        if pepper is None:
+            return None
+        return CliAuthorizationService(
+            PostgresCliAuthorizationRepository(self.db.async_session),
+            PostgresAccountIdentityAuthorizer(self.db.async_session),
+            CliSecretCodec(pepper.get_secret_value().encode()),
+        )
+
+    @cached_property
     def api_keys(self) -> ApiKeyService | None:
         if self.config.api_key_pepper is None:
             return None
@@ -513,6 +526,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         builds=graph.builds,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
+        cli_authorization=graph.cli_authorization,
         idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session, idempotency_cipher)),
         notifications=graph.notifications,
         build_queries=graph.build_queries,

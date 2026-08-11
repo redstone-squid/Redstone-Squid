@@ -6,6 +6,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 PRIVATE_API_PATH_PREFIXES = (
     "/v1/auth/csrf",
+    "/v1/cli/auth",
     "/v1/minecraft/auth",
     "/v1/submissions/drafts",
     "/v1/users/me",

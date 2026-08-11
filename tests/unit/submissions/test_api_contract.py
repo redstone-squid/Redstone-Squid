@@ -179,7 +179,7 @@ def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
 
     assert payload["schema_id"] == "build_submission.v1"
     assert payload["common_sections"][0]["fields"][0]["control"] == "text"
-    assert payload["common_sections"][0]["fields"][0]["origins"] == ["discord", "fabric", "paper", "web"]
+    assert payload["common_sections"][0]["fields"][0]["origins"] == ["cli", "discord", "fabric", "paper", "web"]
     assert "type_label" not in {field["id"] for section in payload["common_sections"] for field in section["fields"]}
 
     with pytest.raises(PydanticValidationError):
@@ -369,6 +369,22 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         installation_id=INSTALLATION_ID,
         grant_id=GRANT_ID,
     )
+
+
+async def test_cli_session_derives_distinct_submission_origin() -> None:
+    device_id = UUID("ea252a1c-0bcd-47f7-84d8-36e6801eb374")
+    session_id = UUID("f5f51999-37c1-4a85-9d7e-f53875428f99")
+    principal = Principal(
+        kind="cli",
+        subject=f"cli-session:{session_id}",
+        account_id=42,
+        cli_device_id=device_id,
+        cli_session_id=session_id,
+    )
+
+    actor = await authenticated_submission_actor(principal)
+
+    assert actor == AuthenticatedSubmissionActor(42, SubmissionOrigin.CLI)
 
 
 def test_finalization_response_does_not_expose_worker_or_target_internals() -> None:

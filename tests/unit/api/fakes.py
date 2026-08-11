@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
+from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.idempotency import PendingRequest
 from squid.notifications import NotificationPreferences
@@ -34,6 +35,10 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
             "session_pepper": "session-pepper-for-tests",
             "idempotency_active_key_id": "test-v1",
             "idempotency_keys": {"test-v1": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="},
+        },
+        "cli_auth": {
+            "pepper": "cli-authorization-pepper-for-tests-32-bytes",
+            "verification_uri": "https://catalogue.example/cli/link",
         },
     }
 )
@@ -60,6 +65,16 @@ class MockDatabaseManager:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class MockCliAuthorization:
+    """Fail closed with a client-safe error for generated contract requests."""
+
+    def __getattr__(self, _name: str):
+        async def unavailable(*_args: object, **_kwargs: object):
+            raise InvalidCliEnrollmentError
+
+        return unavailable
 
 
 class MockBuildQueries:
@@ -187,6 +202,7 @@ class MockNotifications:
 def build_app(
     *,
     web_auth: object | None = None,
+    cli_authorization: object | None = None,
     idempotency: object | None = None,
     accounts: object | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
@@ -198,6 +214,7 @@ def build_app(
         SimpleNamespace(
             api_keys=None,
             web_auth=web_auth,
+            cli_authorization=cli_authorization or MockCliAuthorization(),
             idempotency=idempotency or MockIdempotency(),
             notifications=MockNotifications(),
             builds=SimpleNamespace(),
