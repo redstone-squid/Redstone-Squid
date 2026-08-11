@@ -44,7 +44,7 @@ Fuzz targets are pure, synchronous, in-process functions that accept untrusted t
 or an API request: parsers and codecs, not the handlers around them. Handlers themselves are async and do I/O, which
 breaks the fast, deterministic, coverage-guided loop fuzzing depends on.
 
-`tests/unit/api/test_openapi_contract.py` covers handlers instead, using
+`tests/unit/api/test_openapi_fuzz.py` covers handlers instead, using
 [Schemathesis](https://schemathesis.readthedocs.io/) to generate requests from the API's own OpenAPI schema and run
 them against the real ASGI app in-process (routing, dependency injection, header/body coercion included). It only
 asserts the app never answers with a 5xx; it runs as part of `just test` alongside every other unit test. Add every

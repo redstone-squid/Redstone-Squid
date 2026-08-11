@@ -6,6 +6,7 @@ from squid.api.errors import responses
 from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
+from squid.api.v1.capabilities import router as capabilities_router
 from squid.api.v1.cli_auth import router as cli_auth_router
 from squid.api.v1.me import router as me_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
@@ -28,6 +29,7 @@ router = APIRouter(
 )
 router.include_router(auth_router)
 router.include_router(builds_router)
+router.include_router(capabilities_router)
 router.include_router(cli_auth_router)
 router.include_router(me_router)
 router.include_router(minecraft_auth_router)
@@ -44,6 +46,7 @@ router.include_router(versions_router)
 router.include_router(votes_router)
 
 TAGS_METADATA = [
+    {"name": "capabilities", "description": "API, protocol, renderer, and upload compatibility."},
     {"name": "authentication", "description": "Discord OAuth2 browser sessions."},
     {"name": "cli-authentication", "description": "Browser-approved CLI devices and short-lived sessions."},
     {"name": "users", "description": "Authenticated self-service account operations."},

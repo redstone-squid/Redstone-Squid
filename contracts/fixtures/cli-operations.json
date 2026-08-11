@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "operations": {
+    "cli_enrollment_start": {
+      "success": {"status": 201, "body": {"device_code": "fixture-device-code", "user_code": "ABCD-EFGH"}},
+      "problem": {"status": 409, "body": {"title": "CLI authorization conflict", "status": 409, "code": "INVALID_STATE"}}
+    },
+    "cli_session_revoke": {
+      "success": {"status": 204, "body": null},
+      "problem": {"status": 401, "body": {"title": "Authentication required", "status": 401, "code": "UNAUTHORIZED"}}
+    },
+    "submission_drafts_list": {
+      "success": {"status": 200, "body": {"drafts": []}},
+      "problem": {"status": 401, "body": {"title": "Authentication required", "status": 401, "code": "UNAUTHORIZED"}}
+    },
+    "submission_draft_create": {
+      "success": {"status": 201, "body": {"id": "00000000-0000-4000-8000-000000000001", "revision": 1}},
+      "problem": {"status": 409, "body": {"title": "Idempotency conflict", "status": 409, "code": "IDEMPOTENCY_CONFLICT"}}
+    },
+    "submission_draft_get": {
+      "success": {"status": 200, "body": {"id": "00000000-0000-4000-8000-000000000001", "revision": 1}},
+      "problem": {"status": 404, "body": {"title": "Draft not found", "status": 404, "code": "NOT_FOUND"}}
+    },
+    "submission_draft_delete": {
+      "success": {"status": 204, "body": null},
+      "problem": {"status": 404, "body": {"title": "Draft not found", "status": 404, "code": "NOT_FOUND"}}
+    },
+    "submission_draft_change": {
+      "success": {"status": 200, "body": {"replayed": false, "draft": {"revision": 2}}},
+      "problem": {"status": 409, "body": {"title": "Draft revision conflict", "status": 409, "code": "INVALID_STATE"}}
+    },
+    "submission_finalization_get": {
+      "success": {"status": 200, "body": {"state": "pending"}},
+      "problem": {"status": 404, "body": {"title": "Submission not found", "status": 404, "code": "NOT_FOUND"}}
+    },
+    "submission_finalization_start": {
+      "success": {"status": 202, "body": {"state": "pending"}},
+      "problem": {"status": 409, "body": {"title": "Submission incomplete", "status": 409, "code": "INVALID_STATE"}}
+    },
+    "submission_media_upload": {
+      "request": {
+        "headers": {"Content-Type": "image/png"},
+        "boundary": "raw request body is the exact file byte sequence"
+      },
+      "success": {"status": 202, "headers": {"Content-Type": "application/json"}, "body": {"status": "pending"}},
+      "problem": {"status": 413, "body": {"title": "Request body too large", "status": 413, "code": "VALIDATION_ERROR"}}
+    },
+    "submission_media_list": {
+      "success": {"status": 200, "body": {"media": []}},
+      "problem": {"status": 404, "body": {"title": "Draft not found", "status": 404, "code": "NOT_FOUND"}}
+    },
+    "submission_media_get": {
+      "success": {"status": 200, "body": {"status": "completed"}},
+      "problem": {"status": 404, "body": {"title": "Media not found", "status": 404, "code": "NOT_FOUND"}}
+    },
+    "submission_media_discard": {
+      "success": {"status": 204, "body": null},
+      "problem": {"status": 404, "body": {"title": "Media not found", "status": 404, "code": "NOT_FOUND"}}
+    }
+  }
+}
