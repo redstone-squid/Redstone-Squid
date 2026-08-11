@@ -8,7 +8,11 @@ import pytest
 
 from tests.fuzz.api.environment import (
     APPLICATION_PREFIX,
+    CONTROL_NONCE_ENV,
     DATABASE_PREFIX,
+    FAKE_PORT_ENV,
+    RUN_ID_ENV,
+    SENTINEL_ENV,
     ApiEnvironment,
     ResetHooks,
     ResourceAttestation,
@@ -199,7 +203,16 @@ def test_synthetic_environment_is_allowlisted_and_uses_only_supplied_endpoints()
     assert "HOME" not in environment
     assert environment["SQUID_API_PORT"] == "8123"
     assert environment["SQUID_API_SECRET"].endswith(run.run_id)
+    assert environment[CONTROL_NONCE_ENV] == run.sentinel
+    assert environment[RUN_ID_ENV] == run.run_id
+    assert environment[SENTINEL_ENV] == run.sentinel
     assert set(environment) == {
+        CONTROL_NONCE_ENV,
+        FAKE_PORT_ENV,
+        RUN_ID_ENV,
+        SENTINEL_ENV,
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONUTF8",
         "PYTHONUNBUFFERED",
         "SQUID_STRICT_UNKNOWN_KEYS",
         "SQUID_DATABASE_URL",
