@@ -354,7 +354,7 @@ mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
     # via markdown-it-py
-nucleation==0.10.1 ; platform_machine == 'arm64' or platform_machine == 'x86_64' \
+nucleation==0.10.1 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') \
     --hash=sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b \
     --hash=sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba \
     --hash=sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d \

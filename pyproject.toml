@@ -80,7 +80,13 @@ dev = [
     "schemathesis==4.24.2",
     # Matches the 'schematics' extra so CI (x86_64 Linux) always exercises the real adapter
     # rather than only the fakes.
-    "nucleation==0.10.1 ; platform_machine == 'x86_64' or platform_machine == 'arm64'",
+    #
+    # Upstream publishes exactly three wheels: manylinux x86_64, macOS arm64, Windows amd64.
+    # The marker must therefore gate on OS as well as machine -- an Intel Mac reports
+    # `x86_64` but has no wheel, and a machine-only marker sends it to the sdist, which needs
+    # a Rust toolchain and fails `uv sync` outright. PEP 508 has no libc marker, so musl
+    # cannot be excluded the same way; Alpine contributors must skip this group by hand.
+    "nucleation==0.10.1 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
