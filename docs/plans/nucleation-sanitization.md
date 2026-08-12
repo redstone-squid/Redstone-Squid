@@ -12,6 +12,14 @@ entity UUIDs all survived. This agrees with Nucleation's documentation that bloc
 it is expected fidelity, not a parsing bug. The installed API and current upstream source/documentation expose no
 sanitization or redaction operation.
 
+On 2026-08-12, `nucleation==0.10.8` and `0.10.1` were both found to widen the tight bounds when a block is added but
+never narrow them when one is cleared, so `tight_dimensions()` and `tight_bounds_*()` go stale after any removal while
+`block_count()` stays correct; an emptied schematic still reports its historical box. Reported upstream as
+[Schem-at/Nucleation#12](https://github.com/Schem-at/Nucleation/issues/12). Sanitization removes blocks, so measuring
+the handle a sanitizer returns would record the pre-sanitization extent against the post-sanitization block count,
+with no error raised. Until that issue is fixed, the adapter must re-read the sanitized artifact from bytes before
+measuring it rather than measuring the mutated handle.
+
 ## Release gate
 
 - Keep arbitrary imported bytes in private, short-lived quarantine and delete them after processing succeeds or fails.
