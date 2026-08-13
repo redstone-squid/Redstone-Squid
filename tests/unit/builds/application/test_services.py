@@ -1,5 +1,6 @@
 """Build application service tests."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal, cast
@@ -156,6 +157,37 @@ async def test_edit_releases_lock_when_patch_application_fails(existing_build: B
         async with service.edit(42, patch):
             pass
 
+    locks.release.assert_awaited_once_with(42)
+
+
+async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: Build) -> None:
+    """__aexit__ never runs if __aenter__ is cancelled, so __aenter__ must release itself.
+
+    Without this, the process-local lease survives forever and every later
+    acquire for the build spins the backoff loop until it reports the build busy.
+    """
+    loading = asyncio.Event()
+
+    class BlockingRepository(FakeBuildRepository):
+        async def get_by_id(self, build_id: int) -> Build | None:
+            loading.set()
+            await asyncio.sleep(3600)
+            raise AssertionError("unreachable")
+
+    locks = FakeBuildLocks()
+    service = build_service(BlockingRepository(existing_build), locks)
+
+    async def enter() -> None:
+        async with service.edit(42, BuildEditPatch()):
+            pass
+
+    task = asyncio.create_task(enter())
+    await loading.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    locks.acquire.assert_awaited_once()
     locks.release.assert_awaited_once_with(42)
 
 

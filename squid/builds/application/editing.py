@@ -212,23 +212,24 @@ class BuildEditLease:
         )
         if not acquired:
             raise BuildBusyError(self._build_id)
-        build = await self._repository.get_by_id(self._build_id)
-        if build is None:
-            await self._locks.release(self._build_id)
-            raise BuildNotFoundError(self._build_id)
-        if self._expected_revision is not None and build.revision != self._expected_revision:
-            await self._locks.release(self._build_id)
-            raise BuildRevisionMismatchError(
-                self._build_id,
-                expected_revision=self._expected_revision,
-                current_revision=build.revision,
-            )
-        self._build = build
+        # Every exit path from here must release: the lease is held but __aexit__
+        # will not run until __aenter__ returns, so a cancellation at any await
+        # below would otherwise strand it for the lifetime of the process.
         try:
+            build = await self._repository.get_by_id(self._build_id)
+            if build is None:
+                raise BuildNotFoundError(self._build_id)  # noqa: TRY301
+            if self._expected_revision is not None and build.revision != self._expected_revision:
+                raise BuildRevisionMismatchError(  # noqa: TRY301
+                    self._build_id,
+                    expected_revision=self._expected_revision,
+                    current_revision=build.revision,
+                )
+            self._build = build
             self._patch.apply(build)
         except BaseException:
-            await self._locks.release(self._build_id)
             self._build = None
+            await self._locks.release(self._build_id)
             raise
         return self
 
