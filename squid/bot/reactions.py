@@ -199,6 +199,13 @@ class ReactionRouter:
                 await asyncio.gather(
                     *(self._run_subscriber(subscriber, item.method, item.event) for subscriber in item.subscribers)
                 )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # A shard that escapes this loop stops draining its queue for the
+                # rest of the process, and close() then blocks on join() until the
+                # shutdown deadline rather than reporting the real failure.
+                logger.exception("Reaction shard failed to dispatch %s", item.method)
             finally:
                 queue.task_done()
 
