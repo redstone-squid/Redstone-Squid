@@ -12,6 +12,9 @@ license-files = ["LICENSE"]
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
     "alembic>=1.18.5",
+    # Structured concurrency on the asyncio backend. Already arrives transitively via
+    # starlette, httpx and openai; declared here because we import it directly.
+    "anyio>=4.14,<5",
     "babel>=2.17.0",
     "discord-py[speed]>=2.6.0,<3",
     "gspread>=6.1.4",
