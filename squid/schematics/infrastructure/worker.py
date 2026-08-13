@@ -147,8 +147,12 @@ class _Worker:
         """Kill the child and its whole group, returning its exit code if we can learn one."""
         process, self._process = self._process, None
         if self._stderr_pump is not None:
-            self._stderr_pump.cancel()
-            self._stderr_pump = None
+            pump, self._stderr_pump = self._stderr_pump, None
+            pump.cancel()
+            # cancel() only schedules the CancelledError; dropping the last strong
+            # reference before it lands lets the task be collected mid-cancellation.
+            with contextlib.suppress(asyncio.CancelledError):
+                await pump
         if process is None:
             return None
 
