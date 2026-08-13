@@ -102,6 +102,12 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
     try:
         async with asyncio.timeout(timeout_seconds):
             output, _error = await process.communicate(input=video_data)
+    except asyncio.CancelledError:
+        # A cancellation from outside — bot shutdown, or a view timing out — would
+        # otherwise leave ffmpeg running with nobody reading its pipes.
+        process.kill()
+        await process.wait()
+        raise
     except TimeoutError:
         process.kill()
         await process.wait()
