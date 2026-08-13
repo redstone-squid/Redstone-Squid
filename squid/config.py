@@ -36,6 +36,19 @@ logger = logging.getLogger(__name__)
 EMBEDDING_DIMENSION = 1536
 """Vector dimension fixed by the application-owned PostgreSQL schema."""
 
+OPENAI_REQUEST_TIMEOUT_SECONDS = 60.0
+"""Per-request bound on OpenAI-compatible calls.
+
+The SDK defaults to ten minutes with retries on top. Embedding work runs inside
+a periodic job that awaits it to completion, so an unbounded call stalls the
+job's heartbeat and flips the worker readiness probe; inference runs behind
+interactive Discord surfaces that will have given up long before.
+"""
+
+OPENAI_MAX_RETRIES = 2
+"""Retries per OpenAI-compatible call, so the worst case stays a bounded multiple
+of OPENAI_REQUEST_TIMEOUT_SECONDS rather than the SDK's larger default."""
+
 
 def _empty_to_none(value: object) -> object:
     return None if value == "" else value
