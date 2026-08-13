@@ -10,6 +10,20 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - Do not `from __future__ import annotations`, use forward references in type hints instead.
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
 
+### Concurrency
+- **Task lifetime and cancellation go through anyio** — `anyio.create_task_group()`,
+  `CancelScope`, `fail_after`/`move_on_after`. Every task must have an owner; do not reach for
+  a bare `asyncio.create_task`. Process background work belongs to `BackgroundTaskSupervisor`
+  in `squid/runtime.py`.
+- **Everything else stays on asyncio.** `asyncio.Lock`, `Event`, `Queue` and `to_thread`
+  interoperate fine under anyio's asyncio backend, and swapping them buys nothing.
+- **Trio is not an option and anyio must stay on the asyncio backend.** discord.py, asyncpg,
+  SQLAlchemy's greenlet bridge, redis.asyncio, aiohttp and uvloop are all asyncio-only.
+- Tests stay on pytest-asyncio with `asyncio_mode = "auto"`. anyio code runs correctly under a
+  pytest-asyncio loop, so do not add `anyio_backend` fixtures or `@pytest.mark.anyio`.
+- Prefer a task group over `asyncio.gather`. Reach for `gather(..., return_exceptions=True)`
+  only when every branch must settle regardless of failure, and say why in a comment.
+
 ### Git Workflow
 - Always commit changes unless the user explicitly asks not to. Commit early and at each coherent milestone;
   keep every commit small, cohesive, independently valid, and easy to review.
