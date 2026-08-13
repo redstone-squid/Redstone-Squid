@@ -1,6 +1,5 @@
 """Drain the domain-event log for the Discord consumer."""
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, override
 
@@ -9,6 +8,7 @@ from discord.ext.commands import Cog
 from squid.bot.events.handlers import DomainEventHandler, build_handler_registry
 from squid.events import DomainEventDelivery, UnsupportedEventVersionError
 from squid.observability import trace_span
+from squid.runtime import JobHandle
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -26,7 +26,7 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
         self.handlers: dict[str, tuple[DomainEventHandler, ...]] = build_handler_registry(bot)
-        self._task: asyncio.Task[None] | None = None
+        self._task: JobHandle | None = None
 
     @override
     async def cog_load(self) -> None:

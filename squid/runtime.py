@@ -1,13 +1,15 @@
 """Framework-neutral application services and process runtime."""
 
-import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable, Collection, Coroutine
+from collections.abc import AsyncGenerator, Awaitable, Callable, Collection, Coroutine
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Self
 
+import anyio
+from anyio.abc import TaskGroup
 from whenever import Instant
 
 from squid.accounts.application import AccountService
@@ -154,14 +156,63 @@ class ApplicationRuntime[ServicesT]:
         await self.close()
 
 
+@dataclass(eq=False, slots=True)
+class JobHandle:
+    """A supervised task, cancellable independently of its siblings.
+
+    Task groups cancel as a unit, so per-job cancellation needs a scope of its
+    own. The handle carries that scope plus a completion event, because
+    ``start_soon`` returns nothing to await.
+    """
+
+    name: str
+    scope: anyio.CancelScope
+    finished: anyio.Event
+
+    def cancel(self) -> None:
+        """Ask this job to stop without waiting for it."""
+        self.scope.cancel()
+
+
 class BackgroundTaskSupervisor:
-    """Own process background tasks and await every task during shutdown."""
+    """Own process background tasks and await every task during shutdown.
+
+    The supervisor must be entered with ``async with supervisor.running()``
+    before any work is started, and that ``async with`` has to live in the task
+    that owns the process, since a task group can only be exited by the task
+    that entered it.
+    """
 
     def __init__(self, *, shutdown_timeout: float = 10.0) -> None:
         self._shutdown_timeout = shutdown_timeout
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._task_group: TaskGroup | None = None
+        self._handles: set[JobHandle] = set()
         self._closing = False
         self._last_success: dict[str, Instant] = {}
+
+    @asynccontextmanager
+    async def running(self) -> AsyncGenerator[Self]:
+        """Hold the task group that owns every supervised job."""
+        if self._task_group is not None:
+            msg = "The background task supervisor is already running."
+            raise RuntimeError(msg)
+        async with anyio.create_task_group() as task_group:
+            self._task_group = task_group
+            try:
+                yield self
+            finally:
+                # Leaves the task group with no children, so its own exit cannot
+                # block on work that close() was supposed to have stopped.
+                await self.close()
+                # close() gives up at the shutdown deadline, so re-cancel at the
+                # group level to force down anything merely slow to notice.
+                #
+                # Unlike the asyncio.wait this replaces, a task group cannot
+                # abandon a child: a job that shields itself past the deadline
+                # will still delay process exit rather than being left orphaned.
+                # That is the intended trade -- orphaned tasks are what the
+                # supervisor exists to prevent -- and nothing here shields.
+                task_group.cancel_scope.cancel()
 
     @property
     def last_success(self) -> dict[str, Instant]:
@@ -180,16 +231,20 @@ class BackgroundTaskSupervisor:
             for name in required
         )
 
-    def start(self, coroutine: Coroutine[Any, Any, None], *, name: str) -> asyncio.Task[None]:
+    def start(self, coroutine: Coroutine[Any, Any, None], *, name: str) -> JobHandle:
         """Start one owned task while this supervisor is accepting work."""
+        if self._task_group is None:
+            coroutine.close()
+            msg = "Cannot start background work before the supervisor is running."
+            raise RuntimeError(msg)
         if self._closing:
             coroutine.close()
             msg = "Cannot start background work while the supervisor is closing."
             raise RuntimeError(msg)
-        task = asyncio.create_task(coroutine, name=name)
-        self._tasks.add(task)
-        task.add_done_callback(self._task_done)
-        return task
+        handle = JobHandle(name=name, scope=anyio.CancelScope(), finished=anyio.Event())
+        self._handles.add(handle)
+        self._task_group.start_soon(self._run_owned, coroutine, handle, name=name)
+        return handle
 
     def start_periodic(
         self,
@@ -198,7 +253,7 @@ class BackgroundTaskSupervisor:
         name: str,
         interval: float,
         run_immediately: bool = True,
-    ) -> asyncio.Task[None]:
+    ) -> JobHandle:
         """Run an operation repeatedly with uniform failure isolation and ownership."""
         if interval <= 0:
             msg = "Periodic job interval must be positive."
@@ -213,32 +268,27 @@ class BackgroundTaskSupervisor:
         if self._closing:
             return
         self._closing = True
-        tasks = tuple(self._tasks)
-        for task in tasks:
-            task.cancel()
-        if not tasks:
+        await self._stop(tuple(self._handles), description="Background tasks")
+
+    async def cancel(self, *handles: JobHandle) -> None:
+        """Cancel and await a feature's owned tasks without closing the process supervisor."""
+        await self._stop(handles, description="Feature background tasks")
+
+    async def _stop(self, handles: tuple[JobHandle, ...], *, description: str) -> None:
+        if not handles:
             return
-        done, pending = await asyncio.wait(tasks, timeout=self._shutdown_timeout)
-        if done:
-            await asyncio.gather(*done, return_exceptions=True)
+        for handle in handles:
+            handle.cancel()
+        with anyio.move_on_after(self._shutdown_timeout):
+            for handle in handles:
+                await handle.finished.wait()
+        pending = [handle.name for handle in handles if not handle.finished.is_set()]
         if pending:
             logger.error(
-                "Background tasks did not stop before the shutdown deadline", extra={"squid.tasks": len(pending)}
+                "%s did not stop before the shutdown deadline",
+                description,
+                extra={"squid.tasks": len(pending), "squid.task.names": pending},
             )
-
-    async def cancel(self, *tasks: asyncio.Task[Any]) -> None:
-        """Cancel and await a feature's owned tasks without closing the process supervisor."""
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            done, pending = await asyncio.wait(tasks, timeout=self._shutdown_timeout)
-            if done:
-                await asyncio.gather(*done, return_exceptions=True)
-            if pending:
-                logger.error(
-                    "Feature background tasks did not stop before the shutdown deadline",
-                    extra={"squid.tasks": len(pending)},
-                )
 
     async def _run_periodic(
         self,
@@ -249,13 +299,13 @@ class BackgroundTaskSupervisor:
         run_immediately: bool,
     ) -> None:
         if not run_immediately:
-            await asyncio.sleep(interval)
+            await anyio.sleep(interval)
         while True:
             started = time.perf_counter()
             attributes = {"squid.job.name": name}
             try:
                 await operation()
-            except asyncio.CancelledError:
+            except anyio.get_cancelled_exc_class():
                 raise
             except Exception:
                 logger.exception("Background job %s failed", name)
@@ -275,16 +325,18 @@ class BackgroundTaskSupervisor:
                     attributes={**attributes, "squid.outcome": "ok"},
                 )
                 record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
-            await asyncio.sleep(interval)
+            await anyio.sleep(interval)
 
-    def _task_done(self, task: asyncio.Task[None]) -> None:
-        self._tasks.discard(task)
-        if self._closing or task.cancelled():
-            return
-        error = task.exception()
-        if error is not None:
-            logger.error(
-                "Background task %s stopped unexpectedly",
-                task.get_name(),
-                exc_info=(type(error), error, error.__traceback__),
-            )
+    async def _run_owned(self, coroutine: Coroutine[Any, Any, None], handle: JobHandle) -> None:
+        try:
+            with handle.scope:
+                await coroutine
+        except Exception:
+            # Failures stay local to the job. Letting one escape would cancel
+            # every sibling in the task group, which for the worker means one
+            # bad job taking down the other seventeen.
+            if not self._closing:
+                logger.exception("Background task %s stopped unexpectedly", handle.name)
+        finally:
+            self._handles.discard(handle)
+            handle.finished.set()

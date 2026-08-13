@@ -1,11 +1,12 @@
 """Coalescing refresh scheduler for starboard entries."""
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+import anyio
+
 from squid.observability import trace_span
-from squid.runtime import BackgroundTaskSupervisor
+from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 logger = logging.getLogger(__name__)
 type EntryKey = tuple[int, int]
@@ -18,16 +19,16 @@ class EntryDebouncer:
     def __init__(
         self,
         callback: RefreshCallback,
+        supervisor: BackgroundTaskSupervisor,
         *,
         delay: float = 2.0,
-        supervisor: BackgroundTaskSupervisor | None = None,
         shutdown_timeout: float = 10.0,
     ) -> None:
         self._callback = callback
         self._delay = delay
         self._supervisor = supervisor
         self._shutdown_timeout = shutdown_timeout
-        self._tasks: dict[EntryKey, asyncio.Task[None]] = {}
+        self._handles: dict[EntryKey, JobHandle] = {}
         self._force: set[EntryKey] = set()
         self._closing = False
 
@@ -36,39 +37,43 @@ class EntryDebouncer:
             return
         if force:
             self._force.add(key)
-        if key in self._tasks:
+        if key in self._handles:
             return
-        if self._supervisor is None:
-            task = asyncio.create_task(self._run(key))
-        else:
-            task = self._supervisor.start(
-                self._run(key),
-                name=f"starboard-refresh-{key[0]}-{key[1]}",
-            )
-        self._tasks[key] = task
-        task.add_done_callback(lambda _task: self._tasks.pop(key, None))
+        self._handles[key] = self._supervisor.start(
+            self._run(key),
+            name=f"starboard-refresh-{key[0]}-{key[1]}",
+        )
 
     async def drain(self) -> None:
-        if self._tasks:
-            await asyncio.gather(*tuple(self._tasks.values()), return_exceptions=True)
+        for handle in tuple(self._handles.values()):
+            await handle.finished.wait()
 
     async def close(self) -> None:
         """Cancel pending refreshes and bound extension unload latency."""
         if self._closing:
             return
         self._closing = True
-        tasks = tuple(self._tasks.values())
+        handles = tuple(self._handles.values())
         self._force.clear()
-        for task in tasks:
-            task.cancel()
-        if not tasks:
+        if not handles:
             return
-        _done, pending = await asyncio.wait(tasks, timeout=self._shutdown_timeout)
+        for handle in handles:
+            handle.cancel()
+        with anyio.move_on_after(self._shutdown_timeout):
+            for handle in handles:
+                await handle.finished.wait()
+        pending = [handle.name for handle in handles if not handle.finished.is_set()]
         if pending:
             logger.error("Starboard refresh tasks exceeded the shutdown deadline", extra={"squid.tasks": len(pending)})
 
     async def _run(self, key: EntryKey) -> None:
-        await asyncio.sleep(self._delay)
+        try:
+            await anyio.sleep(self._delay)
+            await self._refresh(key)
+        finally:
+            self._handles.pop(key, None)
+
+    async def _refresh(self, key: EntryKey) -> None:
         force = key in self._force
         self._force.discard(key)
         try:
