@@ -247,7 +247,14 @@ async def main(
                 await runtime.ready()
                 return bot.is_operational()
 
-            async with bot, ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port):
+            # The supervisor's task group has to be entered and exited by the same
+            # task, and Bot.close() can be driven from more than one place, so the
+            # group is held here and close() only cancels what it owns.
+            async with (
+                bot.background_tasks.running(),
+                bot,
+                ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port),
+            ):
                 await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
         observability.shutdown()

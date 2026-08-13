@@ -4,7 +4,8 @@ import asyncio
 import contextlib
 import logging
 import signal
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from whenever import Instant
 
@@ -55,6 +56,12 @@ class DatabaseWorker:
                 "vote_session.closed": (outcome_handler,),
             },
         )
+
+    @asynccontextmanager
+    async def running(self) -> AsyncGenerator[None]:
+        """Hold the task group that owns every worker job, for the lifetime of the process."""
+        async with self._supervisor.running():
+            yield
 
     def start(self) -> None:
         """Start all jobs after the runtime has been constructed successfully."""
@@ -338,18 +345,21 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 schematic_jobs,
                 schematic_renders,
             )
-            worker.start()
 
             async def worker_ready() -> bool:
                 await runtime.ready()
                 return worker.is_ready()
 
-            try:
-                async with ProcessHealthServer(worker_ready, port=resolved_config.worker.health_port):
-                    await stop.wait()
-            finally:
-                await worker.close()
-                await native_analyzer.aclose()
+            # The supervisor's task group must be entered and exited by the same
+            # task, so it is held here rather than inside DatabaseWorker.
+            async with worker.running():
+                worker.start()
+                try:
+                    async with ProcessHealthServer(worker_ready, port=resolved_config.worker.health_port):
+                        await stop.wait()
+                finally:
+                    await worker.close()
+                    await native_analyzer.aclose()
     finally:
         observability.shutdown()
 

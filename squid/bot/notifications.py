@@ -1,6 +1,5 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, override
 from uuid import UUID
@@ -16,6 +15,7 @@ from squid.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
+from squid.runtime import JobHandle
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -28,7 +28,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     def __init__(self, bot: "RedstoneSquid") -> None:
         self.bot = bot
-        self._delivery_task: asyncio.Task[None] | None = None
+        self._delivery_task: JobHandle | None = None
 
     @override
     async def cog_load(self) -> None:

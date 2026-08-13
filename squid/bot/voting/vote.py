@@ -1,6 +1,5 @@
 """Handles reaction-based voting for various purposes."""
 
-import asyncio
 import contextlib
 import logging
 from typing import TYPE_CHECKING, Literal, cast, override
@@ -20,6 +19,7 @@ from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
 from squid.core.i18n import _
+from squid.runtime import JobHandle
 from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -34,7 +34,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
-        self._background_tasks: set[asyncio.Task[None]] = set()
+        self._background_tasks: set[JobHandle] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
 
@@ -42,6 +42,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
         await self.bot.background_tasks.cancel(*self._background_tasks)
+
+    def _track(self, handle: JobHandle) -> None:
+        """Hold a handle for cancellation on unload, dropping the settled ones.
+
+        A JobHandle has no completion callback, so the set is swept on insert
+        rather than pruned as each job finishes.
+        """
+        self._background_tasks = {tracked for tracked in self._background_tasks if not tracked.finished.is_set()}
+        self._background_tasks.add(handle)
 
     async def get_vote_session(
         self, message_id: int, *, status: Literal["open", "closed"] | None = None
@@ -99,8 +108,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 message.remove_reaction(payload.emoji, user),
                 name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
             )
-            self._background_tasks.add(remove_reaction_task)
-            remove_reaction_task.add_done_callback(self._background_tasks.discard)
+            self._track(remove_reaction_task)
 
         if isinstance(vote_session, DeleteLogVoteSession) and payload.guild_id is None:
             # Voting in DMs is not implemented

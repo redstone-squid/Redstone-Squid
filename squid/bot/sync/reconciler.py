@@ -1,6 +1,5 @@
 """Apply durable desired Discord message projections."""
 
-import asyncio
 import contextlib
 import logging
 from typing import TYPE_CHECKING, override
@@ -12,6 +11,7 @@ from squid.bot.voting.build_session import BuildVoteSession
 from squid.bot.voting.delete_log_session import DeleteLogVoteSession
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.observability import trace_span
+from squid.runtime import JobHandle
 from squid.sync import SyncJob
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self._task: asyncio.Task[None] | None = None
+        self._task: JobHandle | None = None
 
     @override
     async def cog_load(self) -> None:

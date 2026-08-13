@@ -1,8 +1,11 @@
 """Application runtime lifecycle tests."""
 
 import asyncio
+import contextlib
 from dataclasses import fields
 from unittest.mock import AsyncMock
+
+import anyio
 
 from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, BotServices, WorkerServices
 
@@ -58,60 +61,114 @@ async def test_application_runtime_checks_readiness() -> None:
 
 
 async def test_background_task_supervisor_cancels_and_awaits_periodic_work() -> None:
-    entered = asyncio.Event()
-    cancelled = asyncio.Event()
+    entered = anyio.Event()
+    cancelled = anyio.Event()
 
     async def operation() -> None:
         entered.set()
         try:
-            await asyncio.Future()
+            await anyio.sleep_forever()
         finally:
             cancelled.set()
 
-    supervisor = BackgroundTaskSupervisor()
-    supervisor.start_periodic(operation, name="test-job", interval=60)
-    await entered.wait()
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        supervisor.start_periodic(operation, name="test-job", interval=60)
+        await entered.wait()
 
-    assert supervisor.is_healthy({"test-job"}, max_age_seconds=1) is False
-    await supervisor.close()
+        assert supervisor.is_healthy({"test-job"}, max_age_seconds=1) is False
+        await supervisor.close()
 
-    assert cancelled.is_set()
+        assert cancelled.is_set()
 
 
 async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() -> None:
-    completed = asyncio.Event()
+    completed = anyio.Event()
 
     async def operation() -> None:
         completed.set()
 
-    supervisor = BackgroundTaskSupervisor()
-    supervisor.start_periodic(operation, name="heartbeat", interval=60)
-    await completed.wait()
-    await asyncio.sleep(0)
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        supervisor.start_periodic(operation, name="heartbeat", interval=60)
+        await completed.wait()
+        await asyncio.sleep(0)
 
-    assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
-    assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
-    await supervisor.close()
+        assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
+        assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
 
 
 async def test_background_task_supervisor_bounds_feature_cancellation() -> None:
-    entered = asyncio.Event()
-    release = asyncio.Event()
+    entered = anyio.Event()
+    release = anyio.Event()
 
     async def stubborn_operation() -> None:
         entered.set()
-        try:
-            await asyncio.Future()
-        except asyncio.CancelledError:
+        # Only a shielded scope genuinely resists cancellation now. Merely
+        # catching the cancellation exception no longer stalls shutdown, because
+        # the scope re-delivers it at the next checkpoint.
+        with anyio.CancelScope(shield=True):
             await release.wait()
 
-    supervisor = BackgroundTaskSupervisor(shutdown_timeout=0.01)
-    task = supervisor.start(stubborn_operation(), name="stubborn")
-    await entered.wait()
+    async with BackgroundTaskSupervisor(shutdown_timeout=0.01).running() as supervisor:
+        handle = supervisor.start(stubborn_operation(), name="stubborn")
+        await entered.wait()
 
-    await supervisor.cancel(task)
+        await supervisor.cancel(handle)
 
-    assert task.done() is False
-    release.set()
-    await task
-    await supervisor.close()
+        assert handle.finished.is_set() is False
+        release.set()
+        await handle.finished.wait()
+
+
+async def test_background_task_supervisor_forces_down_a_job_that_swallows_cancellation() -> None:
+    """A job catching the cancellation must not be able to outlast the deadline.
+
+    A shielded job still can -- a task group cannot abandon a child the way the
+    asyncio.wait this replaces could -- but nothing in the codebase shields.
+    """
+    entered = anyio.Event()
+    finished = anyio.Event()
+
+    async def stubborn() -> None:
+        entered.set()
+        try:
+            await anyio.sleep(30)
+        except anyio.get_cancelled_exc_class():
+            with contextlib.suppress(anyio.get_cancelled_exc_class()):
+                await anyio.sleep(30)
+            finished.set()
+            raise
+
+    with anyio.fail_after(5):
+        async with BackgroundTaskSupervisor(shutdown_timeout=0.01).running() as supervisor:
+            supervisor.start(stubborn(), name="stubborn")
+            await entered.wait()
+
+    assert finished.is_set()
+
+
+async def test_background_task_supervisor_isolates_one_job_failure() -> None:
+    """A task group cancels siblings on an unhandled error; the supervisor must not."""
+    failing_started = anyio.Event()
+    survivor_cancelled = False
+
+    async def failing() -> None:
+        failing_started.set()
+        msg = "job blew up"
+        raise RuntimeError(msg)
+
+    async def survivor() -> None:
+        nonlocal survivor_cancelled
+        try:
+            await anyio.sleep_forever()
+        except anyio.get_cancelled_exc_class():
+            survivor_cancelled = True
+            raise
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        survivor_handle = supervisor.start(survivor(), name="survivor")
+        supervisor.start(failing(), name="failing")
+        await failing_started.wait()
+        await asyncio.sleep(0)
+
+        assert survivor_cancelled is False
+        assert survivor_handle.finished.is_set() is False
