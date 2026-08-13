@@ -1,8 +1,8 @@
 """Discord vote sessions for deleting log messages."""
 
 import asyncio
-import contextlib
 from collections.abc import Iterable, Sequence
+from functools import partial
 from textwrap import dedent
 from typing import TYPE_CHECKING, final, override
 
@@ -18,8 +18,9 @@ from squid.bot.utils.components import (
     edit_layout,
     no_mentions,
 )
-from squid.bot.voting.base_session import AbstractVoteSession
+from squid.bot.voting.base_session import AbstractVoteSession, log_reaction_failures
 from squid.bot.voting.message_tracking import track_vote_messages
+from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
@@ -94,9 +95,14 @@ class DeleteLogVoteSession(AbstractVoteSession):
             self.id,
         )
         await self.update_messages()
-        reaction_tasks = [message.add_reaction(option.emoji) for message in self._messages for option in self.options]
-        with contextlib.suppress(discord.Forbidden):
-            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
+        # settle_all, not gather: the suppress used to sit outside the gather, so
+        # one channel denying reactions aborted the whole batch and left the
+        # in-flight siblings unawaited. Each reaction now succeeds or fails alone.
+        outcomes = await settle_all(
+            [partial(message.add_reaction, option.emoji) for message in self._messages for option in self.options],
+            limit=DISCORD_FANOUT_LIMIT,
+        )
+        log_reaction_failures(outcomes)
 
     @classmethod
     @override

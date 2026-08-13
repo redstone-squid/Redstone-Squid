@@ -1,14 +1,16 @@
 """Shared Discord vote-session behavior."""
 
-import asyncio
 import inspect
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
+from functools import partial
 from types import MethodType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, final
 
 import discord
 
+from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     VoteChoice,
@@ -21,6 +23,23 @@ from squid.voting.domain import (
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+logger = logging.getLogger(__name__)
+
+
+def log_reaction_failures(outcomes: Sequence[object]) -> None:
+    """Report reactions the bot could not add, without failing the vote session.
+
+    Missing permission on one channel is expected and must not stop the others,
+    so failures are counted rather than raised. Anything that is not a
+    permission problem is logged loudly, since it is not part of the contract.
+    """
+    forbidden = sum(1 for outcome in outcomes if isinstance(outcome, discord.Forbidden))
+    if forbidden:
+        logger.debug("Missing permission to add %s vote reaction(s)", forbidden)
+    for outcome in outcomes:
+        if isinstance(outcome, Exception) and not isinstance(outcome, discord.Forbidden):
+            logger.warning("Failed to add a vote reaction", exc_info=outcome)
 
 
 class AbstractVoteSession(ABC):
@@ -220,8 +239,9 @@ class AbstractVoteSession(ABC):
             for message_id in self.message_ids - cached_ids
             if message_id in self._message_channels
         ]
-        new_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(channel_id, message_id) for message_id, channel_id in missing)
+        new_messages = await run_all(
+            [partial(self.bot.get_or_fetch_message, channel_id, message_id) for message_id, channel_id in missing],
+            limit=DISCORD_FANOUT_LIMIT,
         )
         self._messages.update(message for message in new_messages if message is not None)
         assert len(self._messages) == len(self.message_ids)

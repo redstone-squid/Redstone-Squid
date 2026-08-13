@@ -1,9 +1,9 @@
 """Discord vote sessions for build changes."""
 
 import asyncio
-import contextlib
 import hashlib
 from collections.abc import Iterable, Sequence
+from functools import partial
 from typing import TYPE_CHECKING, Literal, final, override
 
 import discord
@@ -11,9 +11,10 @@ import discord
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_tracked_message
 from squid.bot.utils.components import StaticLayout, edit_layout, no_mentions
-from squid.bot.voting.base_session import AbstractVoteSession
+from squid.bot.voting.base_session import AbstractVoteSession, log_reaction_failures
 from squid.bot.voting.message_tracking import track_vote_messages
 from squid.builds.domain import Build, Status
+from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, VoteChange, VoteChoice, VoteOption, VoteSessionSnapshot
 
 if TYPE_CHECKING:
@@ -119,15 +120,20 @@ class BuildVoteSession(AbstractVoteSession):
 
         await self.update_messages()
 
-        reaction_tasks = [
-            message.add_reaction(option.emoji)
-            for message in self._messages
-            if message.guild is not None
-            for option in self.options
-            if option.guild_id == message.guild.id
-        ]
-        with contextlib.suppress(discord.Forbidden):
-            await asyncio.gather(*reaction_tasks)  # Bot doesn't have permission to add reactions
+        # settle_all, not gather: the suppress used to sit outside the gather, so
+        # one channel denying reactions aborted the whole batch and left the
+        # in-flight siblings unawaited. Each reaction now succeeds or fails alone.
+        outcomes = await settle_all(
+            [
+                partial(message.add_reaction, option.emoji)
+                for message in self._messages
+                if message.guild is not None
+                for option in self.options
+                if option.guild_id == message.guild.id
+            ],
+            limit=DISCORD_FANOUT_LIMIT,
+        )
+        log_reaction_failures(outcomes)
 
     @classmethod
     async def ensure_submission(
@@ -183,15 +189,17 @@ class BuildVoteSession(AbstractVoteSession):
                 raise result
 
         await self.update_messages()
-        reaction_tasks = [
-            message.add_reaction(option.emoji)
-            for message in await self.fetch_messages()
-            if message.guild is not None
-            for option in self.options
-            if option.guild_id == message.guild.id
-        ]
-        with contextlib.suppress(discord.Forbidden):
-            await asyncio.gather(*reaction_tasks)
+        outcomes = await settle_all(
+            [
+                partial(message.add_reaction, option.emoji)
+                for message in await self.fetch_messages()
+                if message.guild is not None
+                for option in self.options
+                if option.guild_id == message.guild.id
+            ],
+            limit=DISCORD_FANOUT_LIMIT,
+        )
+        log_reaction_failures(outcomes)
 
     @classmethod
     @override

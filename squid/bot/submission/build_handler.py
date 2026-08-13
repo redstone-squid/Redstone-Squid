@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import mimetypes
+from functools import partial
 from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
@@ -24,6 +25,7 @@ from squid.bot.utils.components import (
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, Status
 from squid.builds.domain.titles import format_build_display_title
+from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -108,8 +110,13 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert self.bot.user is not None, "Bot should be logged in"
         assert self.build.id is not None, "Persisted display messages require a build ID"
         messages = await self.bot.services.messages.list_for_build(self.build.id, self.bot.user.id)
-        maybe_messages = await asyncio.gather(
-            *(self.bot.get_or_fetch_message(row.channel_id, row.id) for row in messages if row.channel_id is not None)
+        maybe_messages = await run_all(
+            [
+                partial(self.bot.get_or_fetch_message, row.channel_id, row.id)
+                for row in messages
+                if row.channel_id is not None
+            ],
+            limit=DISCORD_FANOUT_LIMIT,
         )
         return [msg for msg in maybe_messages if msg is not None]
 
@@ -131,7 +138,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             await edit_layout(message, layout, allowed_mentions=no_mentions())
             await self.bot.services.messages.update_edited_time(message.id)
 
-        await asyncio.gather(*(_update_single_message(message) for message in messages))
+        await run_all(
+            [partial(_update_single_message, message) for message in messages],
+            limit=DISCORD_FANOUT_LIMIT,
+        )
 
     async def render_layout(self) -> StaticLayout:
         """Render a standalone Components V2 layout for the build."""
