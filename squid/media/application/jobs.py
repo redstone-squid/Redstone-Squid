@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -20,6 +21,7 @@ from uuid import UUID, uuid4
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
+from squid.core.concurrency import run_all
 from squid.core.errors import SquidError
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.services import MediaNormalizationService
@@ -593,7 +595,9 @@ class MediaNormalizationJobRunner:
     async def process_batch(self, *, limit: int = 8) -> None:
         """Claim and process a bounded batch without coupling work to storage cleanup."""
         claimed = await self._jobs.claim(limit=limit)
-        await asyncio.gather(*(self._process(job) for job in claimed))
+        # A task group rather than gather: an abandoned sibling still holds its
+        # database claim, its heartbeat task and its temporary directory.
+        await run_all([partial(self._process, job) for job in claimed])
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""

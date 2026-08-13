@@ -1,6 +1,5 @@
 """Framework-neutral inference of build submissions from contextual message bundles."""
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from squid.builds.domain import (
     UnknownRestrictions,
     parse_time_string,
 )
+from squid.core.concurrency import run_all_awaitables
 from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)
@@ -249,7 +249,9 @@ class BuildInferenceService:
             destinations.append("door_types")
             validations.append(self._taxonomy.validate_door_types(inferred.door_type))
 
-        results = await asyncio.gather(*validations)
+        # A task group rather than gather: these run on a shared session, so a
+        # sibling left running after the first failure would use it concurrently.
+        results = await run_all_awaitables(validations)
         unknown = UnknownRestrictions()
         build.extra_info["unknown_restrictions"] = unknown
         for destination, (recognized, unrecognized) in zip(destinations, results, strict=True):

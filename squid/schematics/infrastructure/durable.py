@@ -6,10 +6,12 @@ import hashlib
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, cast
 
 from squid.artifacts import ArtifactStore
 from squid.config import SchematicConfig
+from squid.core.concurrency import run_all
 from squid.core.errors import InfrastructureError, SquidError
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.jobs import (
@@ -173,7 +175,7 @@ class QueuedSchematicAnalyzer:
         *,
         timeout_seconds: float,
     ) -> _JobResponse:
-        input_keys = tuple(await asyncio.gather(*(self._stage_input(payload) for payload in payloads)))
+        input_keys = tuple(await run_all([partial(self._stage_input, payload) for payload in payloads]))
         job_id = await self._jobs.submit(operation, params, input_keys)
         try:
             async with asyncio.timeout(timeout_seconds):
@@ -234,7 +236,9 @@ class SchematicJobRunner:
 
     async def process_batch(self, *, limit: int = 8) -> None:
         jobs = await self._jobs.claim(limit=limit)
-        await asyncio.gather(*(self._process(job) for job in jobs))
+        # A task group rather than gather: an abandoned sibling still holds its
+        # database claim and its result object until the next cleanup pass.
+        await run_all([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
         for object_key in await self._jobs.cleanup():
@@ -243,7 +247,7 @@ class SchematicJobRunner:
     async def _process(self, job: ClaimedSchematicJob) -> None:
         result_object_key: str | None = None
         try:
-            inputs = await asyncio.gather(*(self._load_input(job, key) for key in job.input_keys))
+            inputs = await run_all([partial(self._load_input, job, key) for key in job.input_keys])
             result, output = await self._execute(job, inputs)
             if output is not None:
                 result_object_key = f"schematic-jobs/results/{job.id}"
