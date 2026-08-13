@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.infrastructure.models import Build
-from squid.config import EMBEDDING_DIMENSION, EmbeddingConfig
+from squid.config import EMBEDDING_DIMENSION, OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, EmbeddingConfig
 from squid.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,11 @@ class OpenAIEmbeddingModel:
             AsyncOpenAI(
                 base_url=str(config.base_url),
                 api_key=config.api_key.get_secret_value(),
+                # The SDK default is ten minutes with retries. The embedding job
+                # runs inside a periodic loop that awaits it to completion, so a
+                # hung provider would stale the heartbeat and fail readiness.
+                timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+                max_retries=OPENAI_MAX_RETRIES,
             ),
             config.model,
             owns_client=True,

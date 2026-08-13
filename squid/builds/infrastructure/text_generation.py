@@ -12,7 +12,7 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 
 from squid.builds.application.inference import InlineImage
-from squid.config import OpenAIConfig
+from squid.config import OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, OpenAIConfig
 from squid.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,14 @@ class OpenAITextGenerator:
             logger.warning("No OpenAI API key found; build inference is disabled.")
             return cls(None)
         return cls(
-            AsyncOpenAI(base_url=str(config.base_url), api_key=config.api_key.get_secret_value()),
+            AsyncOpenAI(
+                base_url=str(config.base_url),
+                api_key=config.api_key.get_secret_value(),
+                # The SDK default is ten minutes with retries, which is far longer
+                # than any interactive Discord surface is willing to wait.
+                timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+                max_retries=OPENAI_MAX_RETRIES,
+            ),
             owns_client=True,
         )
 

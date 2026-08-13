@@ -5,7 +5,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+import anyio
 from whenever import Instant
+
+EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
+"""Backstop for one embedding call, sized above the OpenAI adapter's own budget.
+
+Deliberately looser than OPENAI_REQUEST_TIMEOUT_SECONDS and its retries, so a
+well-behaved adapter reports its own failure rather than being pre-empted here.
+"""
 
 
 class SearchEmbeddingModel(Protocol):
@@ -57,7 +65,13 @@ class SearchEmbeddingService:
         succeeded = failed = 0
         for job in await self._queue.claim(limit=limit):
             try:
-                embedding = await self._model.embed(job.text)
+                # The model port is a Protocol, so the adapter's own timeout is not
+                # something this loop can rely on. Without a bound here a hung
+                # provider stalls the periodic job that awaits process_batch to
+                # completion, staling its heartbeat and failing worker readiness.
+                # TimeoutError lands in the handler below and retries the job.
+                with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
+                    embedding = await self._model.embed(job.text)
                 embedding = _require_embedding(embedding)
                 if await self._queue.complete(job, embedding, self._model.model_name):
                     succeeded += 1
