@@ -1,8 +1,9 @@
 # RBAC, replacing the four permission tiers
 
-> **Status.** Phase 0 (this document) landed 2026-08-13. Phases 1–8 outstanding. Amend this
-> document in place as building it proves parts of it wrong, calling out the amendments where
-> they occur rather than silently applying them.
+> **Status.** Phase 0 (this document) and Phase 1 (the pure domain: catalogue, matcher, resolver)
+> landed 2026-08-13. Phases 2–8 outstanding. Amend this document in place as building it proves
+> parts of it wrong, calling out the amendments where they occur rather than silently applying
+> them.
 
 ## Context
 
@@ -148,7 +149,7 @@ ordering:
 
 ```python
 specificity(pattern) = (
-    0 if pattern.is_tag else 1,          # concrete patterns beat tag selectors
+    tier,                                # 2 = names a real segment, 1 = tag, 0 = names nothing
     count_of_literal_segments,           # more literals = more specific
     0 if "**" in pattern else 1,         # ** is broader than * at equal literal count
     len(pattern.segments),
@@ -156,6 +157,12 @@ specificity(pattern) = (
 ```
 
 So `build.submission.approve` > `build.*.approve` > `build.*` > `build.**` > `@moderation` > `**`.
+
+> **Amendment (Phase 1).** This first component was originally written as a two-way "concrete
+> patterns beat tag selectors", which contradicted the ordering example directly below it: that
+> rule puts `**` above `@moderation`, but `**` is the broadest possible claim and a tag still
+> excludes something. The example was the correct intent, so the tier is three-way and a bare
+> wildcard sorts *below* a tag.
 
 ### The catalogue itself
 
@@ -180,7 +187,7 @@ Guild:
 
 ```
 settings.server.{view, edit}      settings.voting.edit
-starboard.board.{view, create, edit, delete@destructive, recount}
+starboard.board.{view, create, edit, delete, recount}
 starboard.{emoji, weight}.edit
 message.archive.create            redstoner.{panel.manage, role.resync}
 vote.poll.{cast*, create, close_any}
@@ -188,6 +195,20 @@ vote.log_delete.cast              vote.weight.staff
 perm.node.view*   perm.subject.inspect   perm.audit.view   perm.grant.guild
 role.definition.manage_guild
 ```
+
+> **Amendment (Phase 1).** `bot.{sync, debug}` became `bot.tree.sync` and `bot.runtime.debug` so
+> every node has the same three-segment shape; a two-segment node would have made `bot.*` mean
+> something different from every other namespace.
+>
+> `starboard.board.delete` lost its `@destructive` tag. Both built-in admin roles subtract that
+> tag, so tagging it would have stopped a Discord server administrator from deleting a starboard
+> in their own guild — clearly wrong. `@destructive` is now reserved for irreversible damage to
+> state shared *across* guilds, which is `record.entry.rebuild` and `bot.runtime.debug`.
+>
+> `global-admin` gained `redstoner.**`. The old `check_is_global_admin` tier also satisfied
+> `check_is_server_admin`, so global administrators could already run the redstoner commands, and
+> the first include list silently took that away. `test_global_admin_withholds_nothing_beyond_those`
+> exists to catch exactly this class of omission.
 
 Splitting `tag.proposal` into four leaves rather than one `tag.moderate` is the design paying for
 itself: each is separately grantable, and `tag.proposal.*` remains the one-word bundle.
@@ -290,6 +311,15 @@ exists so the emergency stop does not have to fight specificity.
 The resolver returns `Decision(allowed, reason, node, trace)` with every candidate and its
 lose-reason. `/perm explain` formats exactly this, so there is no second implementation of the
 rules.
+
+> **Amendment (Phase 1).** Rank alone leaves genuine ties, and sorting on it stably would have
+> handed the trace order to whatever order the database returned rows in. Ordering now falls back
+> to `(source, pattern, effect)` after the rank, and a rule that ties the winner on every rank
+> component is labelled `lost_on = "tie"` rather than left blank — equally-ranked rules always
+> agree on the verdict, since deny-first is part of the rank, so the honest thing for `/perm
+> explain` to say is "this one would have given the same answer". The 500-example Hypothesis
+> profile found the blank; the 100-example default did not, so **P13 is worth running under
+> `HYPOTHESIS_PROFILE=ci`** when the resolver changes.
 
 ### Why roles do not outrank each other
 
@@ -572,10 +602,16 @@ so nobody loses access mid-deploy.
 
 ## 10. Testing
 
-**Catalogue** (`tests/unit/permissions/test_catalogue.py`): pinned `(name, scope, default, tags)`
-snapshot; naming convention and depth; every leaf `guild-admin` resolves to is `Scope.GUILD`;
-`owner` is exactly `("**",)`; `global-admin` reaches no `@destructive` node, no `bot.**`, no
-`perm.grant.global`.
+**Catalogue** (`tests/unit/permissions/domain/test_catalogue.py`): naming convention and depth;
+every node is described; every leaf `guild-admin` resolves to is `NodeScope.GUILD`; `owner` is
+exactly `("**",)`; `global-admin` reaches no `@destructive` node, no `bot.**`, no
+`perm.grant.global`, and withholds *nothing else*.
+
+> **Amendment (Phase 1).** The planned pinned `(name, scope, default, tags)` snapshot was dropped.
+> It was a second copy of the catalogue living in the test file, and the `catalogue.py` diff
+> already makes every added or retagged node visible in the change that introduces it, so the
+> snapshot bought nothing and cost an edit in two places per node. The invariant tests that
+> replaced it assert *relationships* — which is what actually caught the two catalogue bugs above.
 
 **Matcher and resolver, property-based.** Hypothesis is already a dependency
 (`pyproject.toml:71`); follow `tests/unit/versions/domain/test_version_properties.py`. Strategies
@@ -601,10 +637,14 @@ generate rule sets, roles and composition graphs over the real catalogue.
 - **P9 owner supremacy** — for every rule set, including forbid rules, the owner is ALLOWed.
 - **P10 rank does not affect resolution** — permuting every role's `rank` leaves every decision for
   every subject unchanged. This keeps the two management gates from leaking into authorization, and
-  will fail loudly if someone later adds rank to the precedence tuple.
+  will fail loudly if someone later adds rank to the precedence tuple. *Phase 1 form:* role rank
+  never reaches `Rule`, so the available guard is that a rule's precedence is a function of exactly
+  the five documented components and of nothing cosmetic. Restate it over real role ranks in
+  Phase 2, once roles are loaded from the database.
 - **P11 management gates are non-escalating** — for any role edit the boundary gate accepts, the
   editor's own effective permissions are unchanged by the edit, and no sequence of accepted edits
-  lets a subject reach a node they could not already reach.
+  lets a subject reach a node they could not already reach. *Deferred to Phase 7*, with the gates
+  themselves; P5 already covers the delegation half of it.
 - **P12 specificity dominance**, **P13 trace soundness** (re-running with only the winning trace
   step reproduces the verdict, which is what keeps `/perm explain` honest), **P14 default
   fallthrough**.
