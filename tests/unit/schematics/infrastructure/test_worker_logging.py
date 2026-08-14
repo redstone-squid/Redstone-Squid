@@ -81,7 +81,7 @@ def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) 
     worker_main.main()
 
     assert events == ["logging", "guardrails", "observability", "serve"]
-    configure.assert_called_once_with(config, service_name="worker")
+    configure.assert_called_once_with(config, service_name="schematic-worker")
     handle.shutdown.assert_called_once_with()
 
 
