@@ -49,6 +49,47 @@ const description =
 const restrictionGroups = build
   ? Object.entries(build.restrictions).filter(([, values]) => values.length > 0)
   : [];
+const details = build?.details;
+const specifications: [string, string][] = build
+  ? [
+      [translate(locale, "build.dimensions"), formatDimensions(locale, build.dimensions)],
+      ...(details?.category === "Door"
+        ? ([
+            [
+              translate(locale, "build.doorDimensions"),
+              formatDimensions(locale, details.door_dimensions),
+            ],
+            [translate(locale, "build.orientation"), details.orientation],
+            [translate(locale, "build.opening"), formatTiming(locale, build.opening_time)],
+            [translate(locale, "build.closing"), formatTiming(locale, build.closing_time)],
+          ] as [string, string][])
+        : []),
+      ...(details?.category === "Extender"
+        ? ([
+            [
+              translate(locale, "build.orientation"),
+              details.orientation ?? translate(locale, "common.notAvailable"),
+            ],
+            [
+              translate(locale, "build.extensionLength"),
+              details.extension_length === null
+                ? translate(locale, "common.notAvailable")
+                : formatNumber(locale, details.extension_length),
+            ],
+            [
+              translate(locale, "build.extenderType"),
+              details.extender_type ?? translate(locale, "common.notAvailable"),
+            ],
+          ] as [string, string][])
+        : []),
+      [
+        translate(locale, "build.versionSpec"),
+        build.version_spec ?? translate(locale, "common.notAvailable"),
+      ],
+    ]
+  : [];
+const patterns =
+  details?.category === "Door" || details?.category === "Extender" ? details.patterns : [];
 const linkGroups = build
   ? (
       [
@@ -130,42 +171,14 @@ const linkGroups = build
             <section class="surface">
               <h2>{translate(locale, "build.specification")}</h2>
               <dl class="spec-list">
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.dimensions")}</dt>
-                    <dd>{formatDimensions(locale, build!.dimensions)}</dd>
-                  </>
-                </div>
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.doorDimensions")}</dt>
-                    <dd>{formatDimensions(locale, build!.door_dimensions)}</dd>
-                  </>
-                </div>
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.opening")}</dt>
-                    <dd>{formatTiming(locale, build!.opening_time)}</dd>
-                  </>
-                </div>
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.closing")}</dt>
-                    <dd>{formatTiming(locale, build!.closing_time)}</dd>
-                  </>
-                </div>
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.orientation")}</dt>
-                    <dd>{build!.orientation ?? translate(locale, "common.notAvailable")}</dd>
-                  </>
-                </div>
-                <div>
-                  <>
-                    <dt>{translate(locale, "build.versionSpec")}</dt>
-                    <dd>{build!.version_spec ?? translate(locale, "common.notAvailable")}</dd>
-                  </>
-                </div>
+                {specifications.map(([label, value]) => (
+                  <div>
+                    <>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </>
+                  </div>
+                ))}
               </dl>
             </section>
             {restrictionGroups.length > 0 && (
@@ -274,11 +287,11 @@ const linkGroups = build
                 </ul>
               </section>
             )}
-            {build!.patterns.length > 0 && (
+            {patterns.length > 0 && (
               <section class="surface">
                 <h2>{translate(locale, "build.patterns")}</h2>
                 <ul class="chip-list">
-                  {build!.patterns.map((pattern) => (
+                  {patterns.map((pattern) => (
                     <li class="chip">{pattern}</li>
                   ))}
                 </ul>

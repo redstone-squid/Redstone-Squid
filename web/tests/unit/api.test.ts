@@ -49,11 +49,14 @@ const summary: BuildSummary = {
 };
 const build: BuildDetail = {
   ...summary,
-  door_dimensions: { width: 3, height: 3, depth: 1 },
-  patterns: ["Flush"],
-  orientation: null,
-  extension_length: null,
-  extender_type: null,
+  details: {
+    category: "Door",
+    door_dimensions: { width: 3, height: 3, depth: 1 },
+    orientation: "Door",
+    patterns: ["Flush"],
+    visible_opening_time: null,
+    visible_closing_time: null,
+  },
   restrictions: {},
   description: "A test build.",
   links: { images: [], videos: [], world_downloads: [], schematics: [], renders: [] },

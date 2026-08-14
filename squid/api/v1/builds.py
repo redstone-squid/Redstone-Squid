@@ -99,7 +99,7 @@ async def edit_build(
     """Edit an owned pending build, or any build as a global administrator."""
     _require_consented_user(principal)
     expected_revision = _expected_revision(build_id, if_match)
-    patch = BuildEditPatch.from_attributes(changes.model_dump(exclude_unset=True))
+    patch = BuildEditPatch.from_attributes(changes.edit_attributes())
     assert principal.discord_id is not None
     async with builds.edit(
         build_id,

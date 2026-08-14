@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import Response
+from pydantic import ValidationError
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Principal
 from squid.api.v1.builds import edit_build, submit_build
-from squid.api.v1.schemas.builds import BuildPatch, DoorSubmission
+from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, DoorSubmission
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
@@ -142,3 +143,32 @@ async def test_edit_requires_an_if_match_revision() -> None:
 
     with pytest.raises(BuildRevisionRequiredError):
         await edit_build(42, BuildPatch(), Response(), builds, cast(Any, None), ACCOUNT)
+
+
+def test_door_patch_flattens_onto_the_application_patch_names() -> None:
+    """The nested wire object maps to the flat names BuildEditPatch speaks."""
+    patch = BuildPatch(
+        version_spec="1.21+",
+        door=DoorPatch(door_dimensions=(2, 3, None), orientation="Trapdoor", patterns=["Full Lamp"]),
+    )
+
+    assert patch.edit_attributes() == {
+        "version_spec": "1.21+",
+        "door_dimensions": (2, 3, None),
+        "door_orientation_type": "Trapdoor",
+        "door_type": ["Full Lamp"],
+    }
+
+
+def test_patch_without_a_door_object_carries_no_door_fields() -> None:
+    assert BuildPatch(extra_user_info="notes").edit_attributes() == {"extra_user_info": "notes"}
+
+
+def test_door_patch_rejects_a_cleared_collection() -> None:
+    with pytest.raises(ValidationError):
+        DoorPatch(patterns=None)
+
+
+def test_door_patch_rejects_non_positive_dimensions() -> None:
+    with pytest.raises(ValidationError):
+        DoorPatch(door_dimensions=(0, 2, None))
