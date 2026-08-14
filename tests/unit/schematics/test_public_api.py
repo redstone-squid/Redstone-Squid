@@ -79,6 +79,8 @@ async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> No
     )
 
     assert response.body == b"sanitized-sponge-v3"
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.headers["content-disposition"] == 'attachment; filename="build-7-schematic-3.schem"'
     assert response.headers["x-schematic-license"] == "cc_by_4_0"
     assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
     assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]
