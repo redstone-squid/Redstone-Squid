@@ -161,8 +161,12 @@ class BuildRepository:
             async with self._session_factory() as session:
                 submitter_account_id = await self._resolve_submitter_account_id(session, build)
                 sql_build = self._new_model(build, submitter_account_id)
-                await self._setup_relationships(build, session, sql_build)
                 session.add(sql_build)
+                # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
+                # letting them autoflush while tag assignments are wired to a not-yet-added
+                # build row raises SAWarning through TagDefinition.assignments.
+                with session.no_autoflush:
+                    await self._setup_relationships(build, session, sql_build)
                 await session.flush()
                 build.id = sql_build.id
                 if build.original_message_id is not None:
