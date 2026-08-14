@@ -239,6 +239,11 @@ class PermissionAdministrationService:
         if (account_id is None) == (discord_role_id is None):
             msg = "A rule applies to exactly one subject: an account or a Discord role."
             raise ValidationError(msg)
+        if discord_role_id is not None and guild_id is None:
+            # A role snowflake means nothing without its guild, and the storage
+            # CHECK would reject it -- as a database error rather than as advice.
+            msg = "Granting to a Discord role has to be done inside that role's server."
+            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
 
         await self._store.upsert_grant(
             pattern=pattern,
@@ -551,6 +556,9 @@ class PermissionAdministrationService:
         if (account_id is None) == (discord_role_id is None):
             msg = "A role is assigned to exactly one subject: an account or a Discord role."
             raise ValidationError(msg)
+        if discord_role_id is not None and guild_id is None:
+            msg = "Assigning to a Discord role has to be done inside that role's server."
+            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
         self._require_rank(actor, role)
         roles = await self._store.list_roles()
         self._require_authority(actor, self.resolved_leaves(role, roles))
