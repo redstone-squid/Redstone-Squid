@@ -59,7 +59,8 @@ def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) 
     events: list[str] = []
     handle = mocker.Mock()
 
-    mocker.patch.object(worker_main, "configure_worker_logging", side_effect=lambda: events.append("logging"))
+    mocker.patch.object(worker_main, "configure_worker_logging", side_effect=lambda **_: events.append("logging"))
+    mocker.patch.object(worker_main, "load_worker_log_config", return_value=mocker.Mock(level="INFO", root_level=None))
     mocker.patch.object(worker_main, "apply_guardrails", side_effect=lambda limits: events.append("guardrails"))
     config = mocker.Mock()
     mocker.patch.object(worker_main, "load_worker_observability_config", return_value=config)

@@ -4,13 +4,19 @@ import io
 import json
 import logging
 import logging.config
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
-from squid.logging_config import build_logging_config, prepare_log_path, resolve_level
+from squid.logging_config import (
+    build_logging_config,
+    configure_worker_logging,
+    prepare_log_path,
+    resolve_level,
+)
 
 
 class TestResolveLevel:
@@ -178,3 +184,29 @@ class TestBuildLoggingConfig:
         assert payload["message"] == "Build 42 submitted"
         assert payload["squid.build.id"] == 42
         assert payload["service_name"] == "redstone-squid"
+
+
+class TestConfigureWorkerLogging:
+    """The schematic worker child's stderr-only configuration."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_logging(self) -> Iterator[None]:
+        yield
+        logging.config.dictConfig({"version": 1, "disable_existing_loggers": False})
+
+    def test_honours_the_levels_the_supervisor_inherited(self) -> None:
+        configure_worker_logging(level="WARNING", root_level="ERROR")
+
+        handler = logging.getHandlerByName("stderr")
+        assert isinstance(handler, logging.StreamHandler)
+        assert handler.level == logging.WARNING
+        assert logging.getLogger().level == logging.ERROR
+        assert logging.getLogger("squid").level == logging.INFO
+
+    def test_defaults_match_the_project_wide_levels(self) -> None:
+        configure_worker_logging()
+
+        handler = logging.getHandlerByName("stderr")
+        assert handler is not None
+        assert handler.level == logging.INFO
+        assert logging.getLogger().level == logging.WARNING

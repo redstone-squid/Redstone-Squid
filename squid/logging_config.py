@@ -279,8 +279,13 @@ def configure_service_worker_logging(config: LoggingConfig) -> None:
     )
 
 
-def configure_worker_logging() -> None:
-    """Configure JSON logging to stderr for a schematic worker child."""
+def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str = DEFAULT_ROOT_LOG_LEVEL) -> None:
+    """Configure JSON logging to stderr for a schematic worker child.
+
+    Levels mirror the supervising process rather than being pinned to DEBUG: every record the
+    child emits is serialised, piped, parsed and rebuilt by the parent, so a record the parent
+    would only discard is work nobody asked for.
+    """
     logging.config.dictConfig(
         {
             "version": 1,
@@ -295,11 +300,18 @@ def configure_worker_logging() -> None:
             "handlers": {
                 "stderr": {
                     "class": "logging.StreamHandler",
-                    "level": "DEBUG",
+                    "level": resolve_level(level),
                     "formatter": "json",
                     "stream": "ext://sys.stderr",
                 }
             },
-            "root": {"level": "DEBUG", "handlers": ["stderr"]},
+            "loggers": {
+                "squid": {
+                    "level": resolve_level(DEFAULT_LOG_LEVEL),
+                    "handlers": ["stderr"],
+                    "propagate": False,
+                }
+            },
+            "root": {"level": resolve_level(root_level), "handlers": ["stderr"]},
         }
     )
