@@ -36,6 +36,9 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
             "session_pepper": "session-pepper-for-tests",
             "idempotency_active_key_id": "test-v1",
             "idempotency_keys": {"test-v1": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="},
+            # The bootstrap secret no longer carries every node by default, so a
+            # deployment that still relays verifications with it has to say so.
+            "secret_nodes": ["account.verify.relay"],
         },
         "cli_auth": {
             "pepper": "cli-authorization-pepper-for-tests-32-bytes",

@@ -271,7 +271,7 @@
           "classification": "transport-only"
         },
         "x-required-api-scopes": [
-          "verify"
+          "account.verify.relay"
         ]
       }
     },
@@ -448,7 +448,7 @@
           "canonical_operation_id": "verification_create"
         },
         "x-required-api-scopes": [
-          "verify"
+          "account.verify.relay"
         ]
       }
     },

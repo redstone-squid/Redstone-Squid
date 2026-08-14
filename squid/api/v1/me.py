@@ -9,15 +9,16 @@ from squid.api.dependencies import Accounts, BuildQueries, CursorSigner
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page
-from squid.api.security import Principal, Scope, require
+from squid.api.security import Principal, requires
 from squid.api.v1.builds import after_id_from_cursor, keyset_page
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.me import UserMe
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
+from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 router = APIRouter(prefix="/users/me", tags=["users"])
-UserPrincipal = Annotated[Principal, Depends(require(Scope.USERS_READ))]
+UserPrincipal = Annotated[Principal, Depends(requires(ACCOUNT_SELF_READ))]
 _ALL_STATUSES = frozenset(Status)
 
 

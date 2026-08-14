@@ -8,6 +8,9 @@ from whenever import Instant
 
 from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService
 from squid.auth.domain import ApiKey
+from squid.core.errors import AuthorizationError
+from squid.permissions.application import PermissionService
+from squid.permissions.application.ports import GrantRecord, SubjectRecords
 
 NOW = Instant.from_utc(2026, 8, 8, 12)
 
@@ -68,7 +71,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
 
     issued = await service(repository).issue(
         label="Minecraft server",
-        scopes={"verify", "builds:write"},
+        scopes={"account.verify.relay", "build.submission.create"},
         owner_account_id=4,
         created_by_account_id=7,
     )
@@ -77,7 +80,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
     secret = issued.token.split("_", 2)[2]
     assert issued.key.secret_hash == service(repository).hash_secret(secret)
     assert secret.encode() not in issued.key.secret_hash
-    assert issued.key.scopes == frozenset({"verify", "builds:write"})
+    assert issued.key.scopes == frozenset({"account.verify.relay", "build.submission.create"})
     assert issued.key.owner_account_id == 4
     assert issued.key.created_by_account_id == 7
 
@@ -86,7 +89,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
 async def test_authenticate_returns_active_key_and_records_throttled_use() -> None:
     repository = FakeApiKeyRepository()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"verify"})
+    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
 
     authenticated = await api_keys.authenticate(issued.token, used_ip="192.0.2.4")
 
@@ -114,7 +117,7 @@ async def test_malformed_tokens_do_not_reach_persistence(token: str) -> None:
 async def test_wrong_secret_is_rejected_without_recording_use() -> None:
     repository = FakeApiKeyRepository()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"verify"})
+    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
 
     assert await api_keys.authenticate(f"sq_{issued.key.key_id}_wrong") is None
     assert repository.touches == []
@@ -132,7 +135,7 @@ async def test_wrong_secret_is_rejected_without_recording_use() -> None:
 async def test_inactive_keys_are_rejected(field: Literal["expires_at", "revoked_at"], value: Instant) -> None:
     repository = FakeApiKeyRepository()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"verify"})
+    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
     if field == "revoked_at":
         repository.keys[issued.key.key_id] = replace(issued.key, revoked_at=value)
     else:
@@ -146,7 +149,7 @@ async def test_inactive_keys_are_rejected(field: Literal["expires_at", "revoked_
 async def test_unexpired_key_remains_active() -> None:
     repository = FakeApiKeyRepository()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"verify"}, expires_at=NOW.add(seconds=1))
+    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"}, expires_at=NOW.add(seconds=1))
 
     assert await api_keys.authenticate(issued.token) is not None
 
@@ -154,3 +157,50 @@ async def test_unexpired_key_remains_active() -> None:
 def test_empty_pepper_is_rejected() -> None:
     with pytest.raises(ValueError, match="must not be empty"):
         ApiKeyService(FakeApiKeyRepository(), "")
+
+
+class TestIssuanceBoundary:
+    """A key may never carry authority its owner does not hold."""
+
+    @staticmethod
+    def _permissions(*held: str) -> PermissionService:
+        class Store:
+            async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+                return SubjectRecords(
+                    epoch=1,
+                    grants=tuple(GrantRecord(pattern=node, effect=1, subject_account_id=4) for node in held),
+                )
+
+            async def epoch(self) -> int:
+                return 1
+
+        return PermissionService(Store())
+
+    async def test_a_pattern_the_owner_holds_is_issued(self) -> None:
+        repository = FakeApiKeyRepository()
+        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions("build.**"))
+
+        issued = await api_keys.issue(label="CI", scopes={"build.submission.create"}, owner_account_id=4)
+
+        assert issued.key.scopes == frozenset({"build.submission.create"})
+
+    async def test_a_pattern_beyond_the_owner_is_refused(self) -> None:
+        """Enforced at issue time as well as at request time, so an over-broad key
+        cannot be minted now and quietly wait for its owner to be promoted."""
+        repository = FakeApiKeyRepository()
+        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions("build.**"))
+
+        with pytest.raises(AuthorizationError):
+            await api_keys.issue(label="CI", scopes={"bot.tree.sync"}, owner_account_id=4)
+
+        assert repository.keys == {}
+
+    async def test_an_ownerless_key_is_bounded_only_by_its_own_nodes(self) -> None:
+        """There is nobody to intersect with, and the machine-to-machine case
+        would otherwise be impossible to serve."""
+        repository = FakeApiKeyRepository()
+        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions())
+
+        issued = await api_keys.issue(label="CI", scopes={"bot.tree.sync"})
+
+        assert issued.key.scopes == frozenset({"bot.tree.sync"})

@@ -1,8 +1,7 @@
-"""HTTP credential principals and declarative scope checks."""
+"""HTTP credential principals and declarative permission-node checks."""
 
 import hmac
-from dataclasses import dataclass
-from enum import StrEnum
+from dataclasses import dataclass, field
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -14,25 +13,23 @@ from squid.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError
 from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX, PLAYER_TOKEN_PREFIX
 from squid.minecraft_auth.errors import MinecraftAuthorizationError
-
-
-class Scope(StrEnum):
-    """Capabilities assignable to API credentials."""
-
-    BUILDS_READ = "builds:read"
-    BUILDS_WRITE = "builds:write"
-    VERIFY = "verify"
-    VOTES_CAST = "votes:cast"
-    USERS_READ = "users:read"
+from squid.permissions.application.services import PermissionService
+from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode, Subject
 
 
 @dataclass(frozen=True, slots=True)
 class Principal:
-    """Transport-neutral authenticated or anonymous caller identity."""
+    """Transport-neutral authenticated or anonymous caller identity.
+
+    `nodes` bounds what a *credential* may do; the permission engine decides what
+    its owner may do. A service key needs both, which is AWS's permissions-
+    boundary rule: revoking the owner's node instantly defangs every key they
+    issued, and a key can never exceed the human behind it.
+    """
 
     kind: Literal["anonymous", "service", "account", "cli", "minecraft_player"]
     subject: str
-    scopes: frozenset[Scope] = frozenset()
+    nodes: frozenset[str] = field(default_factory=frozenset)
     discord_id: int | None = None
     account_id: int | None = None
     consent_pending: bool = False
@@ -44,21 +41,69 @@ class Principal:
     cli_session_id: UUID | None = None
 
 
-ANONYMOUS = Principal(kind="anonymous", subject="anonymous", scopes=frozenset({Scope.BUILDS_READ}))
+UNBOUNDED = frozenset({"**"})
+"""A credential that is not itself narrowed; its holder's own authority decides."""
+
+ANONYMOUS = Principal(kind="anonymous", subject="anonymous", nodes=UNBOUNDED)
+"""Unbounded as a *credential*, which costs nothing: the subject behind it holds
+no account and therefore reaches only default-allow nodes."""
 _authorization = APIKeyHeader(name="Authorization", scheme_name="ApiCredential", auto_error=False)
 
 
-def require(scope: Scope):
-    """Build a FastAPI dependency requiring one credential scope."""
+def requires(node: PermissionNode | str):
+    """Build a FastAPI dependency requiring one permission node.
 
-    async def check(principal: Annotated[Principal, Depends(current_principal)]) -> Principal:
-        if scope not in principal.scopes:
-            if principal.kind == "anonymous":
-                raise AuthenticationError
-            raise AuthorizationError
+    Two questions, both of which must answer yes for a service key: does the
+    credential carry the node, and does the account behind it hold it? An
+    anonymous caller carries nothing, so it reaches only default-allow nodes --
+    which is what keeps public reads public without a special case.
+    """
+    required = CATALOGUE[node] if isinstance(node, str) else node
+
+    async def check(request: Request, principal: Annotated[Principal, Depends(current_principal)]) -> Principal:
+        permissions = request.app.state.runtime.services.permissions
+        if not await principal_allows(permissions, principal, required):
+            raise AuthenticationError if principal.kind == "anonymous" else AuthorizationError
         return principal
 
     return check
+
+
+async def principal_allows(
+    permissions: PermissionService,
+    principal: Principal,
+    node: PermissionNode,
+) -> bool:
+    """Whether an HTTP caller may exercise `node`.
+
+    Both halves of AWS's permissions-boundary rule: the credential must carry the
+    node, and the account behind it must hold it. Revoking someone's node
+    therefore defangs every key they issued, without touching the keys.
+
+    A credential with no owner falls back to its own nodes, since there is nobody
+    to intersect with -- that is the machine-to-machine case, and the alternative
+    would silently make such a credential inert.
+    """
+    if not credential_allows(principal, node):
+        return False
+    if principal.kind == "service" and principal.account_id is None:
+        return True
+    return await permissions.allows(subject_for(principal), node)
+
+
+def credential_allows(principal: Principal, node: PermissionNode) -> bool:
+    """Whether the credential itself carries `node`, before its owner is consulted."""
+    return any(Pattern.parse(pattern).matches(node) for pattern in principal.nodes)
+
+
+def subject_for(principal: Principal) -> Subject:
+    """The permission subject behind an HTTP credential.
+
+    `guild_id` is always None, so only global-scoped rules can ever apply: a
+    grant made inside one Discord server must not authorize an HTTP call. The
+    asymmetry is deliberate and documented in the API reference.
+    """
+    return Subject(account_id=principal.account_id, guild_id=None)
 
 
 async def current_principal(
@@ -82,7 +127,7 @@ async def current_principal(
         return Principal(
             kind="account",
             subject=f"account:{identity.account_id}",
-            scopes=frozenset(Scope),
+            nodes=UNBOUNDED,
             discord_id=identity.discord_id,
             account_id=identity.account_id,
             consent_pending=identity.consent_pending,
@@ -91,10 +136,13 @@ async def current_principal(
         raise AuthenticationError
     config = request.app.state.config
     if hmac.compare_digest(authorization, config.api.secret.get_secret_value()):
+        # Demoted from "every capability, forever" to an explicit list. It also
+        # carries no account, so it is bounded by the anonymous subject's
+        # authority as well -- it can no longer act as a person.
         return Principal(
             kind="service",
             subject="legacy-bootstrap",
-            scopes=frozenset(Scope),
+            nodes=frozenset(config.api.secret_nodes),
         )
     token = authorization.removeprefix("Bearer ")
     if token.startswith(f"{CLI_SESSION_TOKEN_PREFIX}_"):
@@ -108,7 +156,7 @@ async def current_principal(
         return Principal(
             kind="cli",
             subject=f"cli-session:{identity.session_id}",
-            scopes=frozenset(Scope),
+            nodes=UNBOUNDED,
             account_id=identity.account_id,
             consent_pending=identity.consent_pending,
             cli_device_id=identity.device_id,
@@ -139,6 +187,7 @@ async def current_principal(
         return Principal(
             kind="minecraft_player",
             subject=f"minecraft-grant:{context.grant_id}",
+            nodes=UNBOUNDED,
             account_id=context.account_id,
             minecraft_origin=context.origin.value,
             java_uuid=context.java_uuid,
@@ -152,10 +201,9 @@ async def current_principal(
     key = await api_keys.authenticate(token, used_ip=used_ip)
     if key is None:
         raise AuthenticationError
-    valid_scopes = frozenset(Scope(value) for value in key.scopes if value in Scope._value2member_map_)
     return Principal(
         kind="service",
         subject=f"api-key:{key.key_id}",
-        scopes=valid_scopes,
+        nodes=frozenset(key.scopes),
         account_id=key.owner_account_id,
     )

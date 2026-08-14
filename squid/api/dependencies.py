@@ -10,7 +10,7 @@ from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.core.pagination import SignedCursor
 from squid.notifications import NotificationService
-from squid.permissions.application import AuthorizationService
+from squid.permissions.application import AuthorizationService, PermissionService
 from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
@@ -82,6 +82,10 @@ def get_web_auth(services: Services) -> DiscordOAuthService | None:
     return services.web_auth
 
 
+def get_permissions(services: Services) -> PermissionService:
+    return services.permissions
+
+
 async def cursor_signer(request: Request) -> SignedCursor:
     """Return a collection cursor signer using shared runtime configuration."""
     config = request.app.state.config
@@ -90,6 +94,7 @@ async def cursor_signer(request: Request) -> SignedCursor:
 
 PageSize = Annotated[int, Query(ge=1, le=50)]
 Authorization = Annotated[AuthorizationService, Depends(get_authorization)]
+Permissions = Annotated[PermissionService, Depends(get_permissions)]
 BuildCommands = Annotated[BuildService, Depends(get_builds)]
 BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]

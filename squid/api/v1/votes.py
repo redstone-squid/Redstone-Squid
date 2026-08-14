@@ -9,13 +9,14 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.security import Principal, Scope, require
+from squid.api.security import Principal, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.permissions.domain.catalogue import VOTE_POLL_CAST
 from squid.voting.domain import CastVoteResult
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
-UserVoter = Annotated[Principal, Depends(require(Scope.VOTES_CAST))]
+UserVoter = Annotated[Principal, Depends(requires(VOTE_POLL_CAST))]
 
 
 class VoteInput(BaseModel):

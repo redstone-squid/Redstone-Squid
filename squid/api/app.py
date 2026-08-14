@@ -16,13 +16,14 @@ from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.request_body import BoundedRequestBodyMiddleware
-from squid.api.security import Principal, Scope, require
+from squid.api.security import Principal, requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
+from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
 from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, start_permission_epoch_watch
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
@@ -72,7 +73,7 @@ class User(BaseModel):
 async def get_verification_code(
     user: User,
     accounts: Accounts,
-    _principal: Annotated[Principal, Depends(require(Scope.VERIFY))],
+    _principal: Annotated[Principal, Depends(requires(ACCOUNT_VERIFY_RELAY))],
 ) -> int:
     """Generate a verification code for a user."""
     return await accounts.generate_verification_code(user.uuid)

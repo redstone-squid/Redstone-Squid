@@ -550,6 +550,7 @@ class _ServiceGraph:
         return ApiKeyService(
             PostgresApiKeyRepository(self.db.async_session),
             self.config.api_key_pepper.get_secret_value(),
+            permissions=self.permissions,
         )
 
 

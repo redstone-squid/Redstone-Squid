@@ -8,7 +8,7 @@ from squid.api.dependencies import CursorSigner, Notifications
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page
-from squid.api.security import Principal, Scope, require
+from squid.api.security import Principal, requires
 from squid.api.v1.schemas.notifications import (
     InboxNotificationDetail,
     NotificationPreferencesDetail,
@@ -17,9 +17,10 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionDetail,
 )
 from squid.core.errors import AuthenticationError, ValidationError
+from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
-UserPrincipal = Annotated[Principal, Depends(require(Scope.USERS_READ))]
+UserPrincipal = Annotated[Principal, Depends(requires(ACCOUNT_SELF_READ))]
 
 
 @router.get("/preferences", response_model=NotificationPreferencesDetail, responses=responses(401, 403, 503))

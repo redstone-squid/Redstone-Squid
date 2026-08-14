@@ -10,6 +10,9 @@ from whenever import Instant
 
 from squid.auth.application.ports import ApiKeyRepository
 from squid.auth.domain import ApiKey, IssuedApiKey
+from squid.core.errors import AuthorizationError
+from squid.permissions.application.services import PermissionService
+from squid.permissions.domain import CATALOGUE, Subject
 
 API_KEY_PREFIX = "sq"
 API_KEY_SECRET_BYTES = 32
@@ -24,10 +27,12 @@ class ApiKeyService:
         repository: ApiKeyRepository,
         pepper: str | bytes,
         *,
+        permissions: PermissionService | None = None,
         now: Callable[[], Instant] = Instant.now,
         token_bytes: Callable[[int], bytes] = secrets.token_bytes,
     ) -> None:
         self._repository = repository
+        self._permissions = permissions
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
             msg = "API key pepper must not be empty."
@@ -44,19 +49,45 @@ class ApiKeyService:
         created_by_account_id: int | None = None,
         expires_at: Instant | None = None,
     ) -> IssuedApiKey:
-        """Create a credential, returning its plaintext token exactly once."""
+        """Create a credential, returning its plaintext token exactly once.
+
+        A key may never carry authority its owner does not hold: that is AWS's
+        permissions-boundary rule, and enforcing it here as well as at request
+        time means an over-broad key cannot be *created* and then quietly wait
+        for its owner to be promoted.
+        """
+        requested = frozenset(scopes)
+        await self._reject_beyond_owner_authority(requested, owner_account_id)
         key_id = self._urlsafe_token(12)
         secret = self._urlsafe_token(API_KEY_SECRET_BYTES)
         key = await self._repository.add(
             key_id=key_id,
             secret_hash=self.hash_secret(secret),
             label=label,
-            scopes=frozenset(scopes),
+            scopes=requested,
             owner_account_id=owner_account_id,
             created_by_account_id=created_by_account_id,
             expires_at=expires_at,
         )
         return IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")
+
+    async def _reject_beyond_owner_authority(self, patterns: frozenset[str], owner_account_id: int | None) -> None:
+        """Refuse patterns reaching nodes the owner does not hold.
+
+        Skipped when no permission service is wired in, which is the CLI
+        bootstrap path that runs before any owner exists; and an ownerless key is
+        bounded only by its own patterns, since there is nobody to intersect
+        with.
+        """
+        if self._permissions is None or owner_account_id is None:
+            return
+        subject = Subject(account_id=owner_account_id)
+        for pattern in patterns:
+            reached = CATALOGUE.expand(pattern)
+            held = await self._permissions.capabilities(subject, reached)
+            if missing := sorted(reached - held):
+                msg = f"{missing[0]} is outside your authority; you cannot grant what you do not hold."
+                raise AuthorizationError(msg, public_context={"pattern": pattern, "node": missing[0]})
 
     async def authenticate(self, token: str, *, used_ip: str | None = None) -> ApiKey | None:
         """Return the active key matching *token*, or ``None`` for invalid credentials."""
