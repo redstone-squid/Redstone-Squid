@@ -624,3 +624,104 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
         )
     assert draft_owner == absorbed.id
     assert payload_sha256 == "0" * 64
+
+
+async def test_account_merge_carries_permission_rules_and_keeps_the_stricter_effect(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    parameters = {"survivor": survivor.id, "absorbed": absorbed.id}
+
+    async with migrated_session_factory.begin() as session:
+        await session.execute(
+            text(
+                "INSERT INTO permission_grants (pattern, effect, subject_account_id, granted_by_account_id) VALUES "
+                "('build.submission.edit', 1, :survivor, :absorbed), "
+                "('build.submission.edit', -2, :absorbed, :absorbed), "
+                "('vote.poll.cast', 1, :absorbed, :absorbed)"
+            ),
+            parameters,
+        )
+        await session.execute(
+            text(
+                "INSERT INTO permission_role_assignments (role_id, subject_account_id, granted_by_account_id) "
+                "SELECT id, :survivor, :absorbed FROM permission_roles WHERE builtin_key = 'global-admin'"
+            ),
+            parameters,
+        )
+        await session.execute(
+            text(
+                "INSERT INTO permission_role_assignments (role_id, subject_account_id, granted_by_account_id) "
+                "SELECT id, :absorbed, :absorbed FROM permission_roles "
+                "WHERE builtin_key IN ('global-admin', 'trusted')"
+            ),
+            parameters,
+        )
+        await session.execute(
+            text(
+                "INSERT INTO permission_roles (slug, name, guild_id, created_by_account_id) "
+                "VALUES ('legacy-crew', 'Legacy crew', 123, :absorbed)"
+            ),
+            parameters,
+        )
+        await session.execute(
+            text(
+                "INSERT INTO permission_role_patterns (role_id, pattern, mode, added_by_account_id) "
+                "SELECT id, 'build.submission.edit', 1, :absorbed FROM permission_roles WHERE slug = 'legacy-crew'"
+            ),
+            parameters,
+        )
+        await session.execute(
+            text(
+                # `actor_account_id` is an integer and `subject_id` a bigint, so one bind
+                # parameter cannot fill both: asyncpg refuses the ambiguous deduction.
+                "INSERT INTO permission_audit_log (action, actor_account_id, subject_kind, subject_id) "
+                "VALUES ('grant', :absorbed, 'account', :absorbed_subject)"
+            ),
+            {**parameters, "absorbed_subject": absorbed.id},
+        )
+
+    await accounts.merge(survivor.id, absorbed.id)
+
+    async with migrated_session_factory() as session:
+        grants = (
+            await session.execute(
+                text(
+                    "SELECT pattern, effect, subject_account_id, granted_by_account_id "
+                    "FROM permission_grants ORDER BY pattern"
+                )
+            )
+        ).all()
+        assignments = (
+            await session.execute(
+                text(
+                    "SELECT roles.builtin_key, assignment.subject_account_id, assignment.granted_by_account_id "
+                    "FROM permission_role_assignments assignment "
+                    "JOIN permission_roles roles ON roles.id = assignment.role_id "
+                    "ORDER BY roles.builtin_key"
+                )
+            )
+        ).all()
+        role_creator = await session.scalar(
+            text("SELECT created_by_account_id FROM permission_roles WHERE slug = 'legacy-crew'")
+        )
+        pattern_author = await session.scalar(text("SELECT added_by_account_id FROM permission_role_patterns"))
+        audit = (await session.execute(text("SELECT actor_account_id, subject_id FROM permission_audit_log"))).one()
+
+    # The absorbed forbid outranks the survivor's own allow on the same pattern and scope.
+    assert grants == [
+        ("build.submission.edit", -2, survivor.id, survivor.id),
+        ("vote.poll.cast", 1, survivor.id, survivor.id),
+    ]
+    assert assignments == [
+        ("global-admin", survivor.id, survivor.id),
+        ("trusted", survivor.id, survivor.id),
+    ]
+    assert role_creator == survivor.id
+    assert pattern_author == survivor.id
+    assert audit == (survivor.id, survivor.id)
+    assert await accounts.get_by_id(absorbed.id) is None

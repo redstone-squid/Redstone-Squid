@@ -585,12 +585,41 @@ class AccountRepository:
             "UPDATE notification_subscriptions SET account_id = :survivor WHERE account_id = :absorbed",
             "UPDATE notifications SET account_id = :survivor WHERE account_id = :absorbed",
             "UPDATE notification_deliveries SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE global_administrators SET granted_by_account_id = :survivor "
+            # Permission provenance is keyed by account with ON DELETE RESTRICT, so the grantor
+            # columns have to move before the absorbed row can go away at all.
+            "UPDATE permission_roles SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
+            "UPDATE permission_role_patterns SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
+            "UPDATE permission_role_includes SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
+            "UPDATE permission_grants SET granted_by_account_id = :survivor WHERE granted_by_account_id = :absorbed",
+            "UPDATE permission_role_assignments SET granted_by_account_id = :survivor "
             "WHERE granted_by_account_id = :absorbed",
-            "INSERT INTO global_administrators (account_id, granted_by_account_id, granted_at) "
-            "SELECT :survivor, granted_by_account_id, granted_at FROM global_administrators WHERE account_id = :absorbed "
-            "ON CONFLICT (account_id) DO NOTHING",
-            "DELETE FROM global_administrators WHERE account_id = :absorbed",
+            # `permission_grants_account_unique` keeps one row per (subject, pattern, scope), so a
+            # collision has to collapse two effects into one. Take the more restrictive of the two
+            # (-2 forbid < -1 deny < 1 allow) rather than the survivor's: a merge that silently drops
+            # the absorbed account's emergency forbid would hand back the very access it revoked.
+            "UPDATE permission_grants survivor_grant SET effect = LEAST(survivor_grant.effect, absorbed_grant.effect) "
+            "FROM permission_grants absorbed_grant "
+            "WHERE survivor_grant.subject_account_id = :survivor AND absorbed_grant.subject_account_id = :absorbed "
+            "AND absorbed_grant.pattern = survivor_grant.pattern "
+            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
+            "DELETE FROM permission_grants absorbed_grant USING permission_grants survivor_grant "
+            "WHERE absorbed_grant.subject_account_id = :absorbed AND survivor_grant.subject_account_id = :survivor "
+            "AND absorbed_grant.pattern = survivor_grant.pattern "
+            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
+            "UPDATE permission_grants SET subject_account_id = :survivor WHERE subject_account_id = :absorbed",
+            "DELETE FROM permission_role_assignments absorbed_assignment "
+            "USING permission_role_assignments survivor_assignment "
+            "WHERE absorbed_assignment.subject_account_id = :absorbed "
+            "AND survivor_assignment.subject_account_id = :survivor "
+            "AND absorbed_assignment.role_id = survivor_assignment.role_id "
+            "AND absorbed_assignment.scope_guild_id IS NOT DISTINCT FROM survivor_assignment.scope_guild_id",
+            "UPDATE permission_role_assignments SET subject_account_id = :survivor "
+            "WHERE subject_account_id = :absorbed",
+            # The audit log outlives the account it describes. Repointing it at the survivor keeps
+            # the history readable; leaving it would strand entries on an id nothing resolves.
+            "UPDATE permission_audit_log SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
+            "UPDATE permission_audit_log SET subject_id = :survivor "
+            "WHERE subject_kind = 'account' AND subject_id = :absorbed",
             "UPDATE account_identities SET account_id = :survivor WHERE account_id = :absorbed",
         )
         for statement in statements:

@@ -301,9 +301,13 @@ class DatabaseController:
                     "VALUES (%s, 'Java', 1, 21, 0, 3953)",
                     (JAVA_VERSION_ID,),
                 )
+                # Look the role id up rather than hardcoding it: `permission_roles.id` is an
+                # identity column seeded by the migration, so its value is not part of any contract.
                 cursor.execute(
-                    "INSERT INTO global_administrators (account_id, granted_by_account_id, granted_at) "
-                    "VALUES (%s, %s, '2026-08-04T00:00:00Z')",
+                    "INSERT INTO permission_role_assignments "
+                    "(role_id, subject_account_id, granted_by_account_id, granted_at) "
+                    "SELECT id, %s, %s, '2026-08-04T00:00:00Z' "
+                    "FROM permission_roles WHERE builtin_key = 'global-admin'",
                     (ADMINISTRATOR_ACCOUNT_ID, ADMINISTRATOR_ACCOUNT_ID),
                 )
                 cursor.executemany(
@@ -362,7 +366,10 @@ class DatabaseController:
             "SELECT id, public_creator_id::text, consent_version FROM accounts ORDER BY id",
             "SELECT id, account_id, provider, subject FROM account_identities ORDER BY id",
             "SELECT id, edition, major_version, minor_version, patch_number, data_version FROM versions ORDER BY id",
-            "SELECT account_id, granted_by_account_id FROM global_administrators ORDER BY account_id",
+            "SELECT assignment.subject_account_id, roles.builtin_key, assignment.granted_by_account_id "
+            "FROM permission_role_assignments assignment "
+            "JOIN permission_roles roles ON roles.id = assignment.role_id "
+            "ORDER BY assignment.subject_account_id, roles.builtin_key",
             "SELECT id::text, account_id, discord_id FROM web_sessions ORDER BY id",
             "SELECT key_id, scopes, owner_account_id FROM api_keys ORDER BY key_id",
             "SELECT (SELECT count(*) FROM verification_codes), "
