@@ -29,7 +29,8 @@
 - [ ] Connect a semantic candidate provider to the cross-resource search backend.
 - [ ] Process `search_embedding_queue` items and store embeddings for projected search documents.
 - [ ] Consider dynamic `facet.<name>` filters so new projected facets do not require a field-registry code change.
-- [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, facet, RRF, and cursor behavior.
+- [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, and RRF behavior.
+  - Pagination and facet sorting are covered by `tests/integration/search/test_repository_pagination.py`.
 - [ ] Add autocomplete for field names, taxonomy values, and canonical record base keys.
 - [ ] Replace raw showcase qualifiers with parameterized taxonomy tags.
   - Store metric kind, value, unit, display order, and evidence.
