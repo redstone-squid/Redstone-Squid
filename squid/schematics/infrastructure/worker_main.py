@@ -43,6 +43,28 @@ from squid.schematics.infrastructure.wire import ErrorKind, Frame
 
 logger = logging.getLogger(__name__)
 
+
+class _RequestContextFilter(logging.Filter):
+    """Stamp the request being served onto every record the child emits.
+
+    Attached to the handler rather than one logger so that records from the native engine's
+    own loggers are correlated too. `serve` handles one request at a time, so plain mutable
+    state is enough — there is no interleaving to protect against.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fields: dict[str, Any] = {}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in self.fields.items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
+        return True
+
+
+_request_context = _RequestContextFilter()
+
 _RESOURCE_PACK: bytes | None = None
 """Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
 the only reason this is a persistent worker rather than a one-shot subprocess. A `Schematic`
@@ -233,28 +255,37 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
         schematic_format = params.get("source_format") or params.get("target")
         if isinstance(schematic_format, str):
             attributes["squid.schematic.format"] = schematic_format
-        with extracted_trace_span(f"schematic.worker {operation}", header, attributes) as span:
-            try:
-                result, output = handle(operation, params, tuple(payloads))
-                response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
-            except Exception as exc:
-                if isinstance(exc, SquidError):
-                    span.set_attribute("squid.error.code", exc.code.value)
-                # A rejected upload is an ordinary outcome, not an incident: the supervisor
-                # re-raises it as a typed error and the user sees a translated message. Only
-                # failures we did not anticipate deserve a stderr traceback.
-                expected = isinstance(exc, DomainError)
-                if not expected:
-                    span.set_error(exc)
-                logger.log(
-                    logging.DEBUG if expected else logging.WARNING,
-                    "Schematic operation %s failed: %s",
-                    operation,
-                    exc,
-                    exc_info=not expected,
-                    extra={"squid.schematic.operation": operation},
-                )
-                response = Frame({"id": request_id, "ok": False, "error": _error_payload(exc)})
+        context: dict[str, Any] = {
+            "squid.schematic.request_id": request_id,
+            "squid.schematic.operation": operation,
+        }
+        if header.get("job_id") is not None:
+            context["squid.schematic.job_id"] = header["job_id"]
+        _request_context.fields = context
+        try:
+            with extracted_trace_span(f"schematic.worker {operation}", header, attributes) as span:
+                try:
+                    result, output = handle(operation, params, tuple(payloads))
+                    response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
+                except Exception as exc:
+                    if isinstance(exc, SquidError):
+                        span.set_attribute("squid.error.code", exc.code.value)
+                    # A rejected upload is an ordinary outcome, not an incident: the supervisor
+                    # re-raises it as a typed error and the user sees a translated message. Only
+                    # failures we did not anticipate deserve a stderr traceback.
+                    expected = isinstance(exc, DomainError)
+                    if not expected:
+                        span.set_error(exc)
+                    logger.log(
+                        logging.DEBUG if expected else logging.WARNING,
+                        "Schematic operation %s failed: %s",
+                        operation,
+                        exc,
+                        exc_info=not expected,
+                    )
+                    response = Frame({"id": request_id, "ok": False, "error": _error_payload(exc)})
+        finally:
+            _request_context.fields = {}
 
         stdout.write(response.encode())
         stdout.flush()
@@ -265,6 +296,9 @@ def main() -> None:
     log_config = load_worker_log_config()
     # "INFO" matches WorkerProcessConfig.logging, so the child's floor is the supervisor's.
     configure_worker_logging(level=log_config.level, root_level=log_config.root_level or "INFO")
+    stderr_handler = logging.getHandlerByName("stderr")
+    if stderr_handler is not None:
+        stderr_handler.addFilter(_request_context)
     limits = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
     apply_guardrails(
         {
