@@ -238,6 +238,30 @@ class PermissionService:
         """The subset of `nodes` that `subject` holds, from one load."""
         return resolve_many(nodes, subject, await self.rules_for(subject), catalogue=self._catalogue)
 
+    async def capabilities_for(
+        self,
+        *,
+        account_id: int | None,
+        discord_role_ids: Iterable[int],
+        guild_id: int | None,
+        is_bot_owner: bool = False,
+        discord_guild_admin: bool = False,
+        nodes: Iterable[str] = (),
+    ) -> frozenset[str]:
+        """Satisfy `ActorCapabilityResolver` for contexts that must not import us.
+
+        The voting and reactions contexts carry authorization as resolved node
+        names, so they depend on this protocol rather than on this class.
+        """
+        subject = Subject(
+            account_id=account_id,
+            discord_role_ids=frozenset(discord_role_ids),
+            guild_id=guild_id,
+            is_bot_owner=is_bot_owner,
+            discord_guild_admin=discord_guild_admin,
+        )
+        return await self.capabilities(subject, nodes)
+
     def is_delegable_by_guild_admin(self, pattern: str) -> bool:
         """Whether a guild administrator may issue `pattern` inside their guild.
 

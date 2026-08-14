@@ -82,8 +82,13 @@ class VoteActor:
     discord_id: int
     guild_id: int = 0
     role_ids: frozenset[int] = frozenset()
-    is_staff: bool = False
-    is_trusted: bool = False
+    capabilities: frozenset[str] = frozenset()
+    """Permission node names this actor was resolved to hold.
+
+    Names rather than booleans, and already resolved rather than resolvable: the
+    domain stays free of the permission engine, and the edge that built this
+    actor is the only place that knows how to ask.
+    """
 
 
 @dataclass(frozen=True, slots=True)

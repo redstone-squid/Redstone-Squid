@@ -473,6 +473,7 @@ class _ServiceGraph:
             return None
         resolver = DiscordRestActorResolver(
             self.config.discord_bot_token.get_secret_value(),
+            capabilities=self.permissions,
             api_url=str(self.config.upstream_http.discord_api_url),
         )
         self.resources.push_async_callback(resolver.aclose)

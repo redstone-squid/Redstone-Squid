@@ -6,6 +6,7 @@ from math import isfinite
 
 from whenever import Instant
 
+from squid.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
 from squid.voting.application.policies import RoleVoteWeightPolicy
 from squid.voting.application.ports import VoteActorResolver, VoteRepository, VoteWeightPolicy
 from squid.voting.domain import (
@@ -261,7 +262,7 @@ class VoteService:
             return CastVoteResult(None, "not_found")
         if snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.guild_id != actor.guild_id:
             return CastVoteResult(snapshot, "wrong_guild")
-        if actor.account_id != snapshot.author_account_id and not actor.is_staff:
+        if actor.account_id != snapshot.author_account_id and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
             return CastVoteResult(snapshot, "not_authorized")
         await self.refresh(message_id)
         mutation = await self._repository.close(message_id)

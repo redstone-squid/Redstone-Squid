@@ -6,6 +6,7 @@ from whenever import Instant
 
 from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import parse_poll_duration
+from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.voting.application import RoleVoteWeightPolicy
 from squid.voting.domain import (
     GenericPoll,
@@ -19,6 +20,9 @@ from squid.voting.domain import (
     normalize_vote_options,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+
+STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
+DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
 
 
 def generic_snapshot(*, selections: tuple[VoteSelection, ...] = ()) -> VoteSessionSnapshot:
@@ -52,11 +56,11 @@ async def test_role_policy_uses_highest_matching_multiplier_and_staff_fallback()
     snapshot = generic_snapshot()
 
     assert await policy.calculate(VoteActor(1, 100, 10, frozenset({20, 30})), snapshot, "1️⃣") == 2.5
-    assert await policy.calculate(VoteActor(1, 100, 10, is_staff=True), snapshot, "1️⃣") == 3
+    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=STAFF), snapshot, "1️⃣") == 3
     assert await policy.calculate(VoteActor(1, 100, 10), snapshot, "1️⃣") == 1
 
 
-async def test_delete_policy_rejects_untrusted_member() -> None:
+async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> None:
     async def no_weights(guild_id: int, kind: str) -> tuple[RoleWeight, ...]:
         return ()
 
@@ -77,7 +81,7 @@ async def test_delete_policy_rejects_untrusted_member() -> None:
     )
 
     assert await policy.calculate(VoteActor(1, 100, 10), snapshot, "👍") is None
-    assert await policy.calculate(VoteActor(1, 100, 10, is_trusted=True), snapshot, "👍") == 1
+    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=DELETE_LOG), snapshot, "👍") == 1
 
 
 def test_generic_tallies_keep_raw_counts_separate_from_weights() -> None:

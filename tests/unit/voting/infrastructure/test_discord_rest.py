@@ -13,7 +13,17 @@ def client_for(handler: Handler) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
-async def test_member_returns_role_facts_with_transport_privileges_disabled() -> None:
+class FakeCapabilities:
+    """Grants the delete-log node to holders of role 11, as a role grant would."""
+
+    async def capabilities_for(self, *, discord_role_ids, nodes=(), **_kwargs) -> frozenset[str]:
+        held = "vote.log_delete.cast" if 11 in set(discord_role_ids) else ""
+        return frozenset({node for node in nodes if node == held})
+
+
+async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
+    """The REST path used to hardcode both capability flags to False, so a
+    `delete_log` vote cast over HTTP was always rejected as ineligible."""
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -21,7 +31,7 @@ async def test_member_returns_role_facts_with_transport_privileges_disabled() ->
         return httpx.Response(200, json={"roles": ["11", "22"]})
 
     async with client_for(handler) as client:
-        resolver = DiscordRestActorResolver("secret-token", client=client)
+        resolver = DiscordRestActorResolver("secret-token", capabilities=FakeCapabilities(), client=client)
         actor = await resolver.member(1, 7, 10, "build")
 
     assert actor is not None
@@ -29,8 +39,7 @@ async def test_member_returns_role_facts_with_transport_privileges_disabled() ->
     assert actor.discord_id == 7
     assert actor.guild_id == 10
     assert actor.role_ids == frozenset({11, 22})
-    assert not actor.is_staff
-    assert not actor.is_trusted
+    assert actor.capabilities == frozenset({"vote.log_delete.cast"})
     assert requests[0].url == httpx.URL("https://discord.com/api/v10/guilds/10/members/7")
     assert requests[0].headers["Authorization"] == "Bot secret-token"
 

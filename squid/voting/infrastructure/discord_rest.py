@@ -7,6 +7,8 @@ from time import monotonic
 
 import httpx
 
+from squid.permissions.application.ports import ActorCapabilityResolver
+from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.voting.domain import VoteActor, VoteKindLiteral
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 
@@ -23,6 +25,7 @@ class DiscordRestActorResolver:
         self,
         bot_token: str,
         *,
+        capabilities: ActorCapabilityResolver | None = None,
         client: httpx.AsyncClient | None = None,
         cache_ttl_seconds: float = 300,
         sleep: Sleep = asyncio.sleep,
@@ -30,6 +33,7 @@ class DiscordRestActorResolver:
         api_url: str = DEFAULT_DISCORD_API_URL,
     ) -> None:
         self._token = bot_token
+        self._capabilities = capabilities
         self._client = client or httpx.AsyncClient(timeout=10)
         self._owns_client = client is None
         self._cache_ttl_seconds = cache_ttl_seconds
@@ -40,7 +44,7 @@ class DiscordRestActorResolver:
 
     async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
         """Return current member facts, raising when Discord cannot answer reliably."""
-        del kind  # Staff/trusted capabilities deliberately remain Discord-transport-only.
+        del kind  # Every kind's nodes resolve together, so one load answers all of them.
         cache_key = (guild_id, discord_id)
         cached = self._cache.get(cache_key)
         now = self._clock()
@@ -51,7 +55,7 @@ class DiscordRestActorResolver:
         if response.status_code in {403, 404}:
             actor = None
         elif response.status_code == 200:
-            actor = self._actor_from_response(response, account_id, discord_id, guild_id)
+            actor = await self._actor_from_response(response, account_id, discord_id, guild_id)
         else:
             raise self._unavailable(response.status_code)
         self._cache[cache_key] = (now + self._cache_ttl_seconds, actor)
@@ -112,8 +116,18 @@ class DiscordRestActorResolver:
             )
         return value
 
-    @staticmethod
-    def _actor_from_response(response: httpx.Response, account_id: int, discord_id: int, guild_id: int) -> VoteActor:
+    async def _actor_from_response(
+        self, response: httpx.Response, account_id: int, discord_id: int, guild_id: int
+    ) -> VoteActor:
+        """Build an actor from the member payload, capabilities included.
+
+        This used to hardcode both capability flags to False, so a `delete_log`
+        vote cast over REST was always rejected as ineligible. The node is
+        grantable to a Discord role, so the role ids already in this payload
+        answer it -- no extra guild-permission fetch, and the Manage-Server
+        bridge, which is the one source not represented here, is the
+        lowest-priority one anyway.
+        """
         try:
             payload = response.json()
         except ValueError as exc:
@@ -124,7 +138,15 @@ class DiscordRestActorResolver:
             role_ids = frozenset(int(role_id) for role_id in payload["roles"])
         except (TypeError, ValueError) as exc:
             raise DiscordRestActorResolver._malformed_member(response, guild_id) from exc
-        return VoteActor(account_id, discord_id, guild_id, role_ids, is_staff=False, is_trusted=False)
+        capabilities: frozenset[str] = frozenset()
+        if self._capabilities is not None:
+            capabilities = await self._capabilities.capabilities_for(
+                account_id=account_id,
+                discord_role_ids=role_ids,
+                guild_id=guild_id,
+                nodes=(VOTE_LOG_DELETE_CAST.name, VOTE_WEIGHT_STAFF.name, VOTE_POLL_CLOSE_ANY.name),
+            )
+        return VoteActor(account_id, discord_id, guild_id, role_ids, capabilities=capabilities)
 
     @staticmethod
     def _malformed_member(response: httpx.Response, guild_id: int) -> DiscordMemberServiceUnavailableError:

@@ -18,6 +18,7 @@ class RoleWeightPolicy(WeightPolicy):
         provider: RoleMultiplierProvider,
         *,
         eligibility: Eligibility | None = None,
+        staff_capability: str = "",
         staff_multiplier: float = 3.0,
     ) -> None:
         if not isfinite(staff_multiplier) or staff_multiplier <= 0:
@@ -25,6 +26,9 @@ class RoleWeightPolicy(WeightPolicy):
             raise ValueError(msg)
         self._provider = provider
         self._eligibility = eligibility
+        # A node *name*, supplied by whichever context uses this policy, so the
+        # reactions context stays generic and never learns the catalogue.
+        self._staff_capability = staff_capability
         self._staff_multiplier = staff_multiplier
 
     @override
@@ -35,4 +39,5 @@ class RoleWeightPolicy(WeightPolicy):
         configured = [item.multiplier for item in multipliers if item.role_id in actor.role_ids]
         if configured:
             return max(configured)
-        return self._staff_multiplier if actor.is_staff else 1.0
+        has_staff_capability = bool(self._staff_capability) and self._staff_capability in actor.capabilities
+        return self._staff_multiplier if has_staff_capability else 1.0

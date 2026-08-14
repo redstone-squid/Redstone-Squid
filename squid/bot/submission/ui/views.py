@@ -37,11 +37,12 @@ from squid.bot.utils.components import (
     error_layout,
     no_mentions,
 )
-from squid.bot.utils.permissions import is_trusted_or_global_admin
+from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -459,12 +460,16 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         self.expiry_time = Instant.now().add(seconds=timeout)
 
     async def can_edit(self, interaction: Interaction[BotT]) -> bool:
-        """Allow pending-build owners and trusted staff to edit."""
+        """Allow pending-build owners, and anyone holding the build-edit node.
+
+        The guild is no longer part of the answer. `build.submission.edit` is
+        global-scoped, so "the home server only" now comes from where the grant
+        was made rather than from a hardcoded comparison -- and a DM, which used
+        to be refused outright, is fine for someone who holds the node.
+        """
         if self.build.submission_status is Status.PENDING and self.build.submitter_id == interaction.user.id:
             return True
-        if interaction.guild_id is None:
-            return False
-        return await is_trusted_or_global_admin(interaction.client, interaction.guild_id, interaction.user.id)
+        return await allows(interaction, BUILD_SUBMISSION_EDIT)
 
     async def _send_denial(self, interaction: Interaction[BotT], message: str) -> None:
         layout = error_layout(t(self.locale, _("Cannot edit this build")), message)
