@@ -287,9 +287,14 @@ _OPTIONAL_PRINCIPAL = frozenset({"builds_list", "vote_session_get"})
 _VERIFY = frozenset({"verification_create", "verification_create_compatibility"})
 
 _SCOPES = {
-    "verification_create": ("verify",),
-    "verification_create_compatibility": ("verify",),
+    "verification_create": ("account.verify.relay",),
+    "verification_create_compatibility": ("account.verify.relay",),
 }
+"""Permission nodes a credential must carry, published in the contract.
+
+Still `x-required-api-scopes` in the document: the field is part of the public
+contract and renaming it would break consumers for a vocabulary change they do
+not need to care about."""
 
 _DRAFT_RESPONSE_LINKS: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
     ("submission_draft_create", "201"): {

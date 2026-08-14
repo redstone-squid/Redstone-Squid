@@ -363,6 +363,14 @@ class ApiConfig(_FrozenModel):
     access_log_file: str | None = None
     cors_origins: tuple[str, ...] = ()
     trusted_proxy_ips: tuple[str, ...] = ()
+    secret_nodes: tuple[str, ...] = ("build.submission.read",)
+    """Permission nodes the legacy bootstrap secret carries.
+
+    It used to carry every capability the API defined, forever, with no way to
+    narrow it. Deployments that still need it for writes list the nodes here
+    explicitly; the default is what an anonymous caller already has, so leaving
+    it unset makes the secret useless rather than dangerous.
+    """
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
     _empty_bot_token = field_validator("bot_token", mode="before")(_empty_to_none)

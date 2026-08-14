@@ -9,7 +9,7 @@ import pytest
 from fastapi import Response
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import Principal, Scope
+from squid.api.security import Principal
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorSubmission
 from squid.builds.domain import Build, BuildCategory, Status
@@ -20,7 +20,7 @@ from squid.runtime import ApiServices
 ACCOUNT = Principal(
     kind="account",
     subject="account:1",
-    scopes=frozenset({Scope.BUILDS_WRITE}),
+    nodes=frozenset({"build.submission.create"}),
     discord_id=123,
     account_id=1,
 )
@@ -91,7 +91,7 @@ async def test_edit_checks_ownership_while_lease_is_held() -> None:
         ApiServices,
         SimpleNamespace(
             builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-            authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=False)),
+            permissions=SimpleNamespace(allows=AsyncMock(return_value=False)),
         ),
     )
 
@@ -101,7 +101,7 @@ async def test_edit_checks_ownership_while_lease_is_held() -> None:
             BuildPatch(extra_user_info="changed"),
             Response(),
             services.builds,
-            services.authorization,
+            services.permissions,
             ACCOUNT,
             '"build-42-r1"',
         )
@@ -117,7 +117,7 @@ async def test_global_administrator_can_edit_confirmed_build() -> None:
         ApiServices,
         SimpleNamespace(
             builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-            authorization=SimpleNamespace(is_global_administrator=AsyncMock(return_value=True)),
+            permissions=SimpleNamespace(allows=AsyncMock(return_value=True)),
         ),
     )
 
@@ -127,7 +127,7 @@ async def test_global_administrator_can_edit_confirmed_build() -> None:
         BuildPatch(extra_user_info=None),
         http_response,
         services.builds,
-        services.authorization,
+        services.permissions,
         ACCOUNT,
         '"build-42-r1"',
     )

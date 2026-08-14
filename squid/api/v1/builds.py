@@ -6,11 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.dependencies import Authorization, BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Search
+from squid.api.dependencies import BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Permissions, Search
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page
-from squid.api.security import Principal, Scope, require
+from squid.api.security import Principal, principal_allows, requires, subject_for
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput
@@ -22,11 +22,16 @@ from squid.builds.errors import (
     InvalidBuildError,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
-from squid.permissions.application import AuthorizationService
+from squid.permissions.application import PermissionService
+from squid.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_EDIT,
+    BUILD_SUBMISSION_VIEW_PENDING,
+)
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
 
 router = APIRouter(prefix="/builds", tags=["builds"])
-UserWriter = Annotated[Principal, Depends(require(Scope.BUILDS_WRITE))]
+UserWriter = Annotated[Principal, Depends(requires(BUILD_SUBMISSION_CREATE))]
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
 
 
@@ -87,7 +92,7 @@ async def edit_build(
     changes: BuildPatch,
     response: Response,
     builds: BuildCommands,
-    authorization: Authorization,
+    permissions: Permissions,
     principal: UserWriter,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
@@ -103,9 +108,7 @@ async def edit_build(
         expected_revision=expected_revision,
     ) as lease:
         is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
-        assert principal.account_id is not None
-        is_admin = await authorization.is_global_administrator(principal.account_id)
-        if not is_owner and not is_admin:
+        if not is_owner and not await permissions.allows(subject_for(principal), BUILD_SUBMISSION_EDIT):
             raise AuthorizationError
         build = await lease.commit()
     _set_build_etag(response, build)
@@ -126,7 +129,7 @@ async def get_build(build_id: int, response: Response, build_queries: BuildQueri
 async def list_builds(
     build_queries: BuildQueries,
     search_service: Search,
-    authorization: Authorization,
+    permissions: Permissions,
     signer: CursorSigner,
     principal: CurrentPrincipal,
     q: Annotated[str | None, Query(max_length=1_000)] = None,
@@ -168,7 +171,7 @@ async def list_builds(
         )
     effective = status or BuildStatusFilter.CONFIRMED
     if effective is not BuildStatusFilter.CONFIRMED:
-        await _require_global_administrator(authorization, principal)
+        await _require_pending_view(permissions, principal)
     binding = f"builds:status={effective}:id-desc"
     after_id = after_id_from_cursor(signer, cursor, binding)
     builds = await build_queries.list_page(
@@ -180,18 +183,17 @@ async def list_builds(
     return keyset_page(signer, builds, page_size=page_size, binding=binding)
 
 
-async def _require_global_administrator(authorization: AuthorizationService, principal: Principal) -> None:
-    """Gate non-public moderation views on the human, not just the credential.
+async def _require_pending_view(permissions: PermissionService, principal: Principal) -> None:
+    """Gate non-public moderation views on the node, credential included.
 
-    A service key carries no `discord_id` and so can never satisfy this, which keeps a leaked
-    key from reading unreviewed submissions (see finding 1 in docs/plans/rest-api.md).
+    "A service key never reads unreviewed submissions" used to be a hardcoded
+    branch on the principal kind. It is now an expressible policy: no key is
+    issued `build.submission.view_pending` by default, so a leaked key still
+    cannot read them -- and a key that should read them can be given one,
+    which the branch made impossible.
     """
-    if principal.kind != "account" or principal.discord_id is None or principal.account_id is None:
-        if principal.kind == "anonymous":
-            raise AuthenticationError
-        raise AuthorizationError
-    if not await authorization.is_global_administrator(principal.account_id):
-        raise AuthorizationError
+    if not await principal_allows(permissions, principal, BUILD_SUBMISSION_VIEW_PENDING):
+        raise AuthenticationError if principal.kind == "anonymous" else AuthorizationError
 
 
 def keyset_page(

@@ -279,8 +279,9 @@ The approved sketch omitted `guild_id`; implementation proved it is required bec
 session can have messages and option aliases in multiple guilds, while OAuth `identify` supplies
 no authoritative guild context.
 
-Abuse controls: `Principal.kind == "user"` only (**service keys must never hold `votes:cast`** —
-one credential, unlimited ballots); membership proven by the bot-token lookup, not OAuth `guilds`
+Abuse controls: `Principal.kind == "user"` only (**service keys must never hold `vote.poll.cast`** —
+one credential, unlimited ballots; the scope vocabulary became permission nodes in
+[rbac.md](rbac.md) Phase 6); membership proven by the bot-token lookup, not OAuth `guilds`
 claims (which give guild list, not roles, and go stale); weight only from `RoleVoteWeightPolicy`,
 with `None` becoming a 403, so HTTP voting is never *more* permissive than reacting in Discord;
 rate limit roughly 30 writes per 5 minutes. `cast_vote` is already upsert-shaped, so idempotency
