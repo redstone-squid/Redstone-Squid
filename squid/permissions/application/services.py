@@ -216,6 +216,20 @@ class PermissionService:
         """Whether `subject` holds `node`."""
         return (await self.check(subject, node)).allowed
 
+    async def decisions(
+        self,
+        subject: Subject,
+        nodes: Iterable[PermissionNode | str],
+    ) -> tuple[Decision, ...]:
+        """Decide several nodes from one load, keeping each one's reason.
+
+        A command that declares two nodes needs to know *why* it was refused —
+        a `forbid` reads differently to a missing grant — which the capability
+        set alone cannot say.
+        """
+        rules = await self.rules_for(subject)
+        return tuple(resolve(node, subject, rules, catalogue=self._catalogue) for node in nodes)
+
     async def capabilities(
         self,
         subject: Subject,

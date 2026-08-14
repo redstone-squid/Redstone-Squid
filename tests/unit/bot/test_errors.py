@@ -16,12 +16,7 @@ from squid.bot.errors import (
     is_error_presented,
     unwrap_error,
 )
-from squid.bot.utils.permissions import (
-    GlobalAdministratorRequired,
-    HomeServerTrustedOrGlobalAdministratorRequired,
-    ServerAdministratorRequired,
-    TrustedOrGlobalAdministratorRequired,
-)
+from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
 from tests.helpers.discord import make_interaction, make_message
@@ -56,13 +51,11 @@ def test_unexpected_error_presentation_redacts_diagnostic_detail() -> None:
 @pytest.mark.parametrize(
     ("error", "title"),
     [
-        (GlobalAdministratorRequired(), "Global administrator only"),
-        (ServerAdministratorRequired(), "Server administrator only"),
-        (TrustedOrGlobalAdministratorRequired(), "Trusted role required"),
-        (HomeServerTrustedOrGlobalAdministratorRequired(), "Command unavailable"),
+        (PermissionNodeRequired(("build.submission.approve",)), "Missing permission"),
+        (PermissionNodeRequired(("bot.tree.sync",), forbidden=True), "Permission withheld"),
     ],
 )
-def test_permission_errors_identify_the_required_tier(error: Exception, title: str) -> None:
+def test_permission_errors_name_the_missing_nodes(error: Exception, title: str) -> None:
     assert build_error_presentation(error).title == title
 
 

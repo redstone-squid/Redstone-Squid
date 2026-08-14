@@ -22,6 +22,7 @@ from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.domain import Build
@@ -37,7 +38,7 @@ from squid.config import (
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability
-from squid.runtime import BackgroundTaskSupervisor, BotServices
+from squid.runtime import BackgroundTaskSupervisor, BotServices, start_permission_epoch_watch
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -97,6 +98,9 @@ class RedstoneSquid(Bot):
         self.reactions = ReactionRouter(self)
         self.catbox = CatboxClient(catbox_config)
         self.media_previews = MediaPreviewClient()
+        # Permission checks resolve a Discord id to an account on every command,
+        # and must never create one, so the lookup is cached rather than avoided.
+        self.account_ids = AccountIdCache()
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -115,6 +119,10 @@ class RedstoneSquid(Bot):
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
         await self.tree.set_translator(SquidAppCommandTranslator())
+        # Not a cog: every command's permission check reads through the cache this
+        # watcher keeps honest, so it runs before any extension loads rather than
+        # as a side effect of one of them being enabled.
+        start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
 
         extensions = [
             "squid.bot.reactions",
