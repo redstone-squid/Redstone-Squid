@@ -9,8 +9,9 @@ from discord.ext.commands.bot import app_commands
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_global_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -37,7 +38,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         )
 
     @version_group.command(name="add")
-    @check_is_global_admin()
+    @requires(VERSION_ENTRY_CREATE)
     @app_commands.rename(version_string="version")
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a Minecraft version to the database."""
