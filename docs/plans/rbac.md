@@ -745,6 +745,18 @@ Phase 4 carries the only live-behaviour risk, so it is split per cog family: a b
 affects one command family and reverts cleanly. Revision 2 lands *before* the first flipped site,
 so nobody loses access mid-deploy.
 
+> **Amendment (Phases 3–8).** All of it landed on 2026-08-14, in that order, one commit per phase
+> except Phase 4, which is four (the shared `requires()` machinery, then the guild cogs, the
+> submission cogs and the rest).
+>
+> Revision 2 landed *after* the flipped call sites in commit order, not before. On a branch that
+> ships as one unit this is immaterial — migrations run before processes restart either way — but
+> the plan's ordering is the one to keep if these are ever deployed incrementally.
+>
+> The `admin global-admin` group survived until Phase 8 rather than going with the tier checks in
+> Phase 4: it manages `global_administrators` directly, so it had to outlive the tier only until
+> `/perm` and `/role` could replace it.
+
 > **Amendment (Phase 8).** Two dependencies on the tiers that this plan did not list.
 >
 > Staff notification targeting joined `global_administrators` to decide who receives
@@ -814,6 +826,13 @@ generate rule sets, roles and composition graphs over the real catalogue.
   editor's own effective permissions are unchanged by the edit, and no sequence of accepted edits
   lets a subject reach a node they could not already reach. *Deferred to Phase 7*, with the gates
   themselves; P5 already covers the delegation half of it.
+  > **Amendment (Phase 7).** Still not written, and this is the one real gap left in the suite.
+  > The gates have example-based tests — a held pattern is granted, one beyond the actor is
+  > refused, a peer role cannot be managed, a built-in refuses structural edits, an exclusion needs
+  > no authority — but nothing quantifies over *sequences* of accepted edits, which is where a
+  > multi-step escalation would hide. It needs a Hypothesis strategy over role graphs plus edit
+  > operations, and it is worth doing before anyone delegates `role.definition.manage_guild`
+  > widely.
 - **P12 specificity dominance**, **P13 trace soundness** (re-running with only the winning trace
   step reproduces the verdict, which is what keeps `/perm explain` honest), **P14 default
   fallthrough**.
