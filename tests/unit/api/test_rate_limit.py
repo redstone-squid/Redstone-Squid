@@ -202,8 +202,10 @@ def test_minecraft_device_flows_use_polling_aware_dedicated_quotas() -> None:
             headers={"Authorization": TEST_SYNERGY_SECRET},
         )
 
-    assert started.status_code == exchanged_once.status_code == exchanged_twice.status_code == 503
-    assert approved.status_code == 503
+    # The fakes behind these routes fail closed, so a request that got past the limiter
+    # answers 4xx. Only the contrast with 429 below carries the meaning of this test.
+    assert started.status_code == exchanged_once.status_code == exchanged_twice.status_code == 400
+    assert approved.status_code == 401
     assert start_limited.status_code == exchange_limited.status_code == approval_limited.status_code == 429
     assert '"minecraft-challenge-start";q=1' in started.headers["RateLimit-Policy"]
     assert '"minecraft-challenge-exchange";q=2' in exchanged_once.headers["RateLimit-Policy"]

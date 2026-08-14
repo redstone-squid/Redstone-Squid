@@ -13,6 +13,9 @@ from squid.api.app import create_api_app
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.idempotency import PendingRequest
+from squid.media.application.jobs import StagedMediaUploadSubmission
+from squid.media.domain import MediaLimits
+from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.notifications import NotificationPreferences
 from squid.permissions.application import PermissionService, SubjectRecords
 from squid.runtime import ApiServices, ApplicationRuntime
@@ -43,6 +46,12 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
         "cli_auth": {
             "pepper": "cli-authorization-pepper-for-tests-32-bytes",
             "verification_uri": "https://catalogue.example/cli/link",
+        },
+        # Configured so the device-flow routes reach their handlers: an unconfigured
+        # verification URI answers 503, which is indistinguishable from a real fault.
+        "minecraft_auth": {
+            "pepper": "minecraft-authorization-pepper-for-tests",
+            "verification_uri": "https://catalogue.example/minecraft/link",
         },
     }
 )
@@ -125,6 +134,44 @@ class MockSchematics:
 
     async def render_content(self, _recipe_hash: str):
         raise SchematicNotFoundError
+
+
+class MockMinecraftInstallations:
+    """Fail closed with a client-safe error for generated contract requests."""
+
+    def __getattr__(self, _name: str):
+        async def unauthenticated(*_args: object, **_kwargs: object):
+            raise InvalidInstallationCredentialError
+
+        return unauthenticated
+
+
+class MockMinecraftPlayerAuthorization:
+    """Fail closed with a client-safe error for generated contract requests."""
+
+    def __getattr__(self, _name: str):
+        async def invalid(*_args: object, **_kwargs: object):
+            raise InvalidChallengeError
+
+        return invalid
+
+
+class MockMediaJobs:
+    """An empty media store: every lookup misses, which the routes report as a 404."""
+
+    limits = MediaLimits()
+
+    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+        return submission.upload_id or uuid.uuid4()
+
+    async def get(self, _upload_id: UUID):
+        return None
+
+    async def list_for_draft(self, _draft_id: UUID):
+        return ()
+
+    async def discard(self, _draft_id: UUID, _upload_id: UUID) -> bool:
+        return False
 
 
 class MockVotes:
@@ -266,9 +313,9 @@ def build_app(
             submission_forms=MockSubmissionForms(),
             submission_drafts=SimpleNamespace(),
             submission_finalization=SimpleNamespace(),
-            media_jobs=None,
-            minecraft_installations=None,
-            minecraft_player_authorization=None,
+            media_jobs=MockMediaJobs(),
+            minecraft_installations=MockMinecraftInstallations(),
+            minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())
