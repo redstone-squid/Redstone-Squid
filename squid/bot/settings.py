@@ -11,8 +11,13 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
-from squid.bot.utils.permissions import check_is_server_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import SUPPORTED_LOCALES, _
+from squid.permissions.domain.catalogue import (
+    SETTINGS_SERVER_EDIT,
+    SETTINGS_SERVER_VIEW,
+    SETTINGS_VOTING_EDIT,
+)
 from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
 from squid.voting.domain import RoleWeight, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -27,7 +32,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         self.settings_service = bot.services.settings
 
     @hybrid_group(name="settings")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_VIEW, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT, mode="any")
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context[BotT]):
         """Allows you to configure the bot for your server."""
@@ -44,7 +49,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.settings_service.guild_removed(guild.id)
 
     @settings_hybrid_group.command(name="list")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_VIEW)
     async def show_server_settings(self, ctx: Context[BotT]):
         """Show all settings for this server."""
         assert ctx.guild is not None
@@ -78,7 +83,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="get")
     @app_commands.rename(setting="type")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_VIEW)
     async def get_setting(self, ctx: Context[BotT], setting: Setting):
         """Show the server's current setting."""
         assert ctx.guild is not None
@@ -121,7 +126,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         roles=app_commands.locale_str(_("The roles which will have this permission")),
     )
     @app_commands.rename(setting="type")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_EDIT)
     async def change_setting(
         self,
         ctx: Context[BotT],
@@ -214,7 +219,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @settings_hybrid_group.command(name="clear")
     @app_commands.rename(setting="type")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_EDIT)
     async def clear_setting(self, ctx: Context[BotT], setting: Setting):
         """Set this setting to None."""
         assert ctx.guild is not None
@@ -236,7 +241,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     @app_commands.choices(
         language=[app_commands.Choice(name=tag, value=tag) for tag in sorted(SUPPORTED_LOCALES)],
     )
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_EDIT)
     async def set_locale(self, ctx: Context[BotT], language: str):
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
@@ -261,12 +266,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             )
 
     @settings_hybrid_group.group(name="voting")
-    @check_is_server_admin()
+    @requires(SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT, mode="any")
     async def voting_settings(self, ctx: Context[BotT]) -> None:
         """Configure vote emojis and role multipliers."""
         await ctx.send_help("settings voting")
 
     @voting_settings.command(name="show")
+    @requires(SETTINGS_SERVER_VIEW)
     async def show_voting(self, ctx: Context[BotT], kind: VoteKindLiteral = "build") -> None:
         """Show effective voting configuration for a session kind."""
         assert ctx.guild is not None
@@ -277,6 +283,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await ctx.send(f"**{kind} emojis**\n{aliases}\n\n**Role multipliers**\n{roles}", ephemeral=True)
 
     @voting_settings.command(name="emojis")
+    @requires(SETTINGS_VOTING_EDIT)
     async def edit_voting_emojis(self, ctx: Context[BotT], kind: VoteKindLiteral) -> None:
         """Open the emoji preset editor."""
         assert ctx.guild is not None
@@ -290,6 +297,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         )
 
     @voting_settings.command(name="weight-set")
+    @requires(SETTINGS_VOTING_EDIT)
     async def set_vote_weight(
         self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role, multiplier: float
     ) -> None:
@@ -307,6 +315,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await ctx.send("Voting role weight updated.", ephemeral=True)
 
     @voting_settings.command(name="weight-remove")
+    @requires(SETTINGS_VOTING_EDIT)
     async def remove_vote_weight(self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role) -> None:
         """Remove one role multiplier for a session kind."""
         assert ctx.guild is not None
@@ -317,6 +326,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await ctx.send("Voting role weight removed.", ephemeral=True)
 
     @voting_settings.command(name="reset")
+    @requires(SETTINGS_VOTING_EDIT)
     async def reset_voting(self, ctx: Context[BotT], kind: VoteKindLiteral | None = None) -> None:
         """Reset voting configuration for one kind or the whole server."""
         assert ctx.guild is not None

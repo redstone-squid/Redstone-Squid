@@ -14,9 +14,10 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledLayoutView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_home_server, check_is_server_admin
+from squid.bot.utils.permissions import check_is_home_server, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -102,14 +103,14 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @hybrid_group(name="redstoner")
     @check_is_home_server()
-    @check_is_server_admin()
+    @requires(REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
     async def redstoner_group(self, ctx: Context[BotT]) -> None:
         """Manage Redstoner role automation."""
         await ctx.send_help("redstoner")
 
     @redstoner_group.command(name="panel")
     @check_is_home_server()
-    @check_is_server_admin()
+    @requires(REDSTONER_PANEL_MANAGE)
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
@@ -120,7 +121,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @redstoner_group.command(name="resync")
     @check_is_home_server()
-    @check_is_server_admin()
+    @requires(REDSTONER_ROLE_RESYNC)
     async def force_reload_message(self, ctx: Context[BotT], message: discord.Message):
         """Reprocess a message for Redstoner role automation."""
         await self.give_redstoner_from_message(message)

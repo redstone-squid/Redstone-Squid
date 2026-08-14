@@ -17,14 +17,39 @@ from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.render import starboard_layout
 from squid.bot.utils.components import edit_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_server_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import (
+    STARBOARD_BOARD_CREATE,
+    STARBOARD_BOARD_DELETE,
+    STARBOARD_BOARD_EDIT,
+    STARBOARD_BOARD_RECOUNT,
+    STARBOARD_BOARD_VIEW,
+    STARBOARD_EMOJI_EDIT,
+    STARBOARD_WEIGHT_EDIT,
+)
 from squid.reactions.domain import ReactionActor
 from squid.starboard.application import EntryPlan
 from squid.starboard.domain import EntryAction, OriginMessage, StarboardConfig, StarboardEmoji
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+STARBOARD_CAPABILITIES = (
+    STARBOARD_BOARD_VIEW,
+    STARBOARD_BOARD_CREATE,
+    STARBOARD_BOARD_EDIT,
+    STARBOARD_BOARD_DELETE,
+    STARBOARD_BOARD_RECOUNT,
+    STARBOARD_EMOJI_EDIT,
+    STARBOARD_WEIGHT_EDIT,
+)
+"""Every node this cog gates on.
+
+The group gate is `any` of these rather than the view node alone: each is
+separately grantable, so someone handed only `starboard.board.recount` has to be
+able to reach the group that contains it.
+"""
 
 
 class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
@@ -180,12 +205,13 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @hybrid_group(name="starboard")
     @guild_only()
-    @check_is_server_admin()
+    @requires(*STARBOARD_CAPABILITIES, mode="any")
     async def starboard_group(self, ctx: Context[BotT]) -> None:
         """Configure weighted message starboards."""
         await ctx.send_help("starboard")
 
     @starboard_group.command(name="create")
+    @requires(STARBOARD_BOARD_CREATE)
     @app_commands.describe(channel=app_commands.locale_str(_("The channel that receives starred messages.")))
     async def create_starboard(self, ctx: Context[BotT], channel: discord.TextChannel, name: str = "main") -> None:
         assert ctx.guild is not None
@@ -199,12 +225,14 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @starboard_group.command(name="delete")
+    @requires(STARBOARD_BOARD_DELETE)
     async def delete_starboard(self, ctx: Context[BotT], name: str) -> None:
         assert ctx.guild is not None
         deleted = await self.service.delete_starboard(ctx.guild.id, name)
         await self._reply(ctx, _("Starboard deleted.") if deleted else _("No starboard with that name exists."))
 
     @starboard_group.command(name="list")
+    @requires(STARBOARD_BOARD_VIEW)
     async def list_starboards(self, ctx: Context[BotT]) -> None:
         assert ctx.guild is not None
         configs = await self.service.list_for_guild(ctx.guild.id)
@@ -212,6 +240,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self._reply(ctx, "\n".join(lines) or _("No starboards are configured."))
 
     @starboard_group.command(name="show")
+    @requires(STARBOARD_BOARD_VIEW)
     async def show_starboard(self, ctx: Context[BotT], name: str) -> None:
         assert ctx.guild is not None
         config = await self.service.get(ctx.guild.id, name)
@@ -230,6 +259,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @starboard_group.command(name="edit")
+    @requires(STARBOARD_BOARD_EDIT)
     async def edit_starboard(self, ctx: Context[BotT], name: str, setting: str, value: str) -> None:
         assert ctx.guild is not None
         try:
@@ -241,11 +271,13 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self._reply(ctx, _("Starboard updated.") if config else _("No starboard with that name exists."))
 
     @starboard_group.group(name="emoji")
+    @requires(STARBOARD_BOARD_VIEW, STARBOARD_EMOJI_EDIT, mode="any")
     async def emoji_group(self, ctx: Context[BotT]) -> None:
         """Configure starboard reaction aliases."""
         await ctx.send_help("starboard emoji")
 
     @emoji_group.command(name="add")
+    @requires(STARBOARD_EMOJI_EDIT)
     async def emoji_add(
         self,
         ctx: Context[BotT],
@@ -265,6 +297,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self._reply(ctx, _("Starboard emoji added."))
 
     @emoji_group.command(name="remove")
+    @requires(STARBOARD_EMOJI_EDIT)
     async def emoji_remove(self, ctx: Context[BotT], name: str, emoji: str) -> None:
         config = await self._named(ctx, name)
         if config is None:
@@ -273,6 +306,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self._reply(ctx, _("Starboard emoji removed."))
 
     @emoji_group.command(name="list")
+    @requires(STARBOARD_BOARD_VIEW)
     async def emoji_list(self, ctx: Context[BotT], name: str) -> None:
         config = await self._named(ctx, name)
         if config is not None:
@@ -281,11 +315,13 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             )
 
     @starboard_group.group(name="weight")
+    @requires(STARBOARD_BOARD_VIEW, STARBOARD_WEIGHT_EDIT, mode="any")
     async def weight_group(self, ctx: Context[BotT]) -> None:
         """Configure role multipliers."""
         await ctx.send_help("starboard weight")
 
     @weight_group.command(name="set")
+    @requires(STARBOARD_WEIGHT_EDIT)
     async def weight_set(self, ctx: Context[BotT], name: str, role: discord.Role, multiplier: float) -> None:
         config = await self._named(ctx, name)
         if config is not None:
@@ -293,6 +329,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             await self._reply(ctx, _("Starboard role weight updated."))
 
     @weight_group.command(name="remove")
+    @requires(STARBOARD_WEIGHT_EDIT)
     async def weight_remove(self, ctx: Context[BotT], name: str, role: discord.Role) -> None:
         config = await self._named(ctx, name)
         if config is not None:
@@ -300,6 +337,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             await self._reply(ctx, _("Starboard role weight removed."))
 
     @weight_group.command(name="list")
+    @requires(STARBOARD_BOARD_VIEW)
     async def weight_list(self, ctx: Context[BotT], name: str) -> None:
         config = await self._named(ctx, name)
         if config is None:
@@ -310,6 +348,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @starboard_group.command(name="recount")
+    @requires(STARBOARD_BOARD_RECOUNT)
     @commands.cooldown(1, 30, commands.BucketType.guild)
     async def recount(self, ctx: Context[BotT], message: discord.Message) -> None:
         reactions: list[tuple[ReactionActor, str]] = []
