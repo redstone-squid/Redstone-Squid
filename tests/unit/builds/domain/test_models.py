@@ -7,6 +7,9 @@ This module tests:
 4. Attribute iteration
 """
 
+import json
+from dataclasses import fields as dataclass_fields
+
 import pytest
 
 from squid.builds.domain import (
@@ -21,6 +24,7 @@ from squid.builds.domain import (
     UtilityBuild,
 )
 from squid.builds.domain.titles import format_build_category, format_build_display_title
+from squid.builds.errors import InvalidBuildError
 
 
 @pytest.fixture
@@ -199,3 +203,40 @@ class TestBuildTitle:
         assert formatted.subtitle == "Mysteryless No pistons"
         assert display == "Pending: No pistons Mysteryless 1-wide Odd Wiring 2x3 Door [BROKEN]"
         assert "*" not in display
+
+
+class TestBuildDiff:
+    """Tests for the change summary the vote session persists."""
+
+    def test_diff_reports_only_real_fields(self, sample_build: DoorBuild) -> None:
+        other = replace_door(sample_build, door_width=9)
+        names = [name for name, _left, _right in sample_build.diff(other)]
+        assert names == ["door_width"]
+        # Properties are not fields and must not appear as changes.
+        assert "dimensions" not in names
+        assert "door_dimensions" not in names
+        assert "restrictions" not in names
+        assert "title" not in names
+
+    def test_diff_renders_links_as_json_safe_url_lists(self, sample_build: DoorBuild) -> None:
+        """The vote session stores the result in a JSONB column."""
+        other = replace_door(sample_build)
+        other.replace_links("image", ["https://example.com/new.png"])
+
+        changes = dict((name, (left, right)) for name, left, right in sample_build.diff(other))
+        assert "links" not in changes
+        assert changes["image_urls"] == (["https://example.com/image.png"], ["https://example.com/new.png"])
+        assert json.dumps(sample_build.diff(other))
+
+    def test_diff_rejects_builds_of_different_categories(self, sample_build: DoorBuild) -> None:
+        with pytest.raises(InvalidBuildError, match="different categories"):
+            sample_build.diff(UtilityBuild(id=sample_build.id))
+
+
+def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
+    """A copy of *build* with independent collections."""
+    values = {field.name: getattr(build, field.name) for field in dataclass_fields(build)}
+    values.update(changes)
+    copied = DoorBuild(**values)  # type: ignore[arg-type]
+    copied.links = list(build.links)
+    return copied

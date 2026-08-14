@@ -401,6 +401,10 @@ class Build(StagedMedia, StagedTaxonomy):
         """
         Returns the differences between this build and another of the same category.
 
+        Values are rendered as plain data — callers persist the result as JSON —
+        so link collections come back as one entry per media type rather than as
+        :class:`BuildLink` objects.
+
         Args:
             other: Another build to compare to.
             allow_different_id: Whether the ID of the builds can be different.
@@ -420,10 +424,15 @@ class Build(StagedMedia, StagedTaxonomy):
 
         differences: list[tuple[str, T, T]] = []
         for f in fields(self):
-            if f.name == "id" or not f.compare:
+            if f.name in {"id", "links"} or not f.compare:
                 continue
             if getattr(self, f.name) != getattr(other, f.name):
                 differences.append((f.name, getattr(self, f.name), getattr(other, f.name)))
+        for media_type in get_args(MediaTypeLiteral):
+            mine = list(self.urls_of(media_type))
+            theirs = list(other.urls_of(media_type))
+            if mine != theirs:
+                differences.append((f"{media_type.replace('-', '_')}_urls", cast(T, mine), cast(T, theirs)))
         return differences
 
     def get_attr_type(self, attribute: str) -> type:

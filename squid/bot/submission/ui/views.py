@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
@@ -51,6 +52,49 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 BUILD_INFO_TIMEOUT_SECONDS = 300
+
+
+@dataclass(frozen=True, slots=True)
+class EditFieldSpec:
+    """One field of the generic build edit modal.
+
+    ``attribute`` is a :class:`BuildEditPatch` field name rather than a domain
+    attribute: the patch is what the edit ultimately speaks, and some of its
+    names no longer match the entity (patterns and the door facts live on the
+    category subclasses, the url views project ``links``). Reading them back off
+    a build goes through `squid.bot.submission.ui.components.get_text_input`.
+    """
+
+    attribute: str
+    placeholder: str
+    required: bool = False
+    categories: frozenset[BuildCategory] | None = None
+    """Categories that own this field, or None when every category has it."""
+
+    def applies_to(self, build: Build) -> bool:
+        return self.categories is None or build.category in self.categories
+
+
+_DOOR_ONLY = frozenset({BuildCategory.DOOR})
+
+EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
+    EditFieldSpec("dimensions", "Width x Height x Depth", required=True),
+    EditFieldSpec("door_dimensions", "2x2", required=True, categories=_DOOR_ONLY),
+    EditFieldSpec("version_spec", "1.16 - 1.17.3"),
+    EditFieldSpec("door_type", "Full lamp, Funnel"),
+    EditFieldSpec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
+    EditFieldSpec("wiring_placement_restrictions", "Seamless, Full Flush"),
+    EditFieldSpec("component_restrictions", "Observerless"),
+    EditFieldSpec("miscellaneous_restrictions", "Directional, Locational"),
+    EditFieldSpec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
+    EditFieldSpec("normal_opening_time", "in gameticks", categories=_DOOR_ONLY),
+    EditFieldSpec("creators_ign", "Me, My Dog"),
+    EditFieldSpec("image_urls", "any urls, comma separated"),
+    EditFieldSpec("video_urls", "any urls, comma separated"),
+    EditFieldSpec("world_download_urls", "any urls, comma separated"),
+    EditFieldSpec("completion_time", "Any time format works"),
+)
+"""Every entry must name a BuildEditPatch field; a test pins that."""
 
 
 def _split_values(value: str) -> list[str]:
@@ -438,21 +482,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         self.validation_error: str | None = None
         if items is DEFAULT:
             items = [
-                get_text_input(build, "dimensions", placeholder="Width x Height x Depth", required=True),
-                get_text_input(build, "door_dimensions", placeholder="2x2", required=True),
-                get_text_input(build, "version_spec", placeholder="1.16 - 1.17.3"),
-                get_text_input(build, "door_type", placeholder="Full lamp, Funnel"),
-                get_text_input(build, "door_orientation_type", placeholder="Door, Trapdoor, Skydoor"),
-                get_text_input(build, "wiring_placement_restrictions", placeholder="Seamless, Full Flush"),
-                get_text_input(build, "component_restrictions", placeholder="Observerless"),
-                get_text_input(build, "miscellaneous_restrictions", placeholder="Directional, Locational"),
-                get_text_input(build, "normal_closing_time", placeholder="in gameticks"),
-                get_text_input(build, "normal_opening_time", placeholder="in gameticks"),
-                get_text_input(build, "creators_ign", placeholder="Me, My Dog"),
-                get_text_input(build, "image_urls", placeholder="any urls, comma separated"),
-                get_text_input(build, "video_urls", placeholder="any urls, comma separated"),
-                get_text_input(build, "world_download_urls", placeholder="any urls, comma separated"),
-                get_text_input(build, "completion_time", placeholder="Any time format works"),
+                get_text_input(build, field.attribute, placeholder=field.placeholder, required=field.required)
+                for field in EDIT_FIELDS
+                if field.applies_to(build)
             ]
         self.items = items
         self.page = 1
