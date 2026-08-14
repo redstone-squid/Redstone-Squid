@@ -275,20 +275,6 @@ class VerificationConfig(_FrozenModel):
         return value
 
 
-class CursorConfig(_FrozenModel):
-    """Shared signing material for opaque pagination cursors."""
-
-    secret: SecretStr
-
-    @field_validator("secret")
-    @classmethod
-    def _require_secret(cls, value: SecretStr) -> SecretStr:
-        if len(value.get_secret_value().encode()) < 16:
-            msg = "Must contain at least 16 bytes."
-            raise ValueError(msg)
-        return value
-
-
 class IdempotencyEncryptionConfig(_FrozenModel):
     """Active and retained AES-256 keys for encrypted API response replay."""
 
@@ -812,7 +798,6 @@ class RuntimeConfig(_FrozenModel):
     community: CommunityConfig
     notifications: NotificationConfig
     verification_code_pepper: SecretStr
-    cursor_secret: SecretStr
     api_key_pepper: SecretStr | None = None
     discord_bot_token: SecretStr | None = None
     session_pepper: SecretStr | None = None
@@ -861,7 +846,6 @@ class _ProcessSettings(BaseSettings):
 
     database: DatabaseConfig
     verification: VerificationConfig
-    cursor: CursorConfig
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
@@ -914,7 +898,6 @@ class _ProcessSettings(BaseSettings):
             community=self.community,
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
-            cursor_secret=self.cursor.secret,
             upstream_http=self.upstream_http,
         )
 
@@ -1003,7 +986,6 @@ class ApplicationConfig(BotProcessConfig):
                 include={
                     "database",
                     "verification",
-                    "cursor",
                     "openai",
                     "embedding",
                     "storage",
@@ -1034,7 +1016,6 @@ class ApplicationConfig(BotProcessConfig):
                 include={
                     "database",
                     "verification",
-                    "cursor",
                     "openai",
                     "embedding",
                     "storage",
@@ -1062,7 +1043,6 @@ class ApplicationConfig(BotProcessConfig):
                 include={
                     "database",
                     "verification",
-                    "cursor",
                     "openai",
                     "embedding",
                     "storage",
@@ -1083,6 +1063,15 @@ class ApplicationConfig(BotProcessConfig):
 
 
 _DOTENV_KEY = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
+
+
+_RETIRED_ENVIRONMENT_KEYS = frozenset({"SQUID_CURSOR_SECRET"})
+"""Keys a deployment may still be setting for a feature that has since been removed.
+
+They are accepted silently rather than reported: under `SQUID_STRICT_UNKNOWN_KEYS` an unknown key
+is a boot failure, so a leftover in an env file or a compose service would take the process down
+during a deploy that was otherwise a no-op for it.
+"""
 
 
 def _known_environment_keys() -> frozenset[str]:
@@ -1118,7 +1107,7 @@ def _configured_environment_keys() -> set[str]:
 
 def _audit_unknown_environment_keys(*, strict: bool) -> None:
     """Report likely deployment typos while accepting sibling-process keys."""
-    known = _known_environment_keys()
+    known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS
     unknown = sorted(name for name in _configured_environment_keys() if name.upper() not in known)
     if not unknown:
         return
@@ -1265,7 +1254,6 @@ __all__ = [
     "BuildConfig",
     "CatboxConfig",
     "CommunityConfig",
-    "CursorConfig",
     "DatabaseConfig",
     "EmbeddingConfig",
     "GoogleConfig",
