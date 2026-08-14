@@ -86,6 +86,7 @@ async def test_download_preserves_source_format_and_short_revalidation_cache(sou
 
     assert response.body == b"original-schematic"
     assert response.headers["content-disposition"].endswith(f'.{source_format.value}"')
+    assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["x-schematic-license"] == "cc_by_4_0"
     assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
     assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]

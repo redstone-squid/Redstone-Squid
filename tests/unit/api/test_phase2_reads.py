@@ -54,9 +54,6 @@ class AccountFake:
 
 
 class SchematicFake:
-    async def content(self, sha256: str):
-        return b"schematic-data" if sha256 == "a" * 64 else None
-
     async def render_content(self, recipe_hash: str):
         return b"\x89PNG\r\n\x1a\npreview" if recipe_hash == "b" * 64 else None
 
@@ -146,19 +143,6 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockD
         "id": "22222222-2222-2222-2222-222222222222",
         "aliases": ["Builder", "OldBuilder"],
     }
-
-
-def test_schematic_content_is_an_attachment(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
-    app, _database = app_factory
-    _override(app, schematics=SchematicFake())
-
-    with TestClient(app) as client:
-        response = client.get(f"/v1/schematics/{'a' * 64}/content")
-
-    assert response.status_code == 200
-    assert response.content == b"schematic-data"
-    assert response.headers["content-type"] == "application/octet-stream"
-    assert response.headers["content-disposition"] == f'attachment; filename="{"a" * 64}.schematic"'
 
 
 def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:

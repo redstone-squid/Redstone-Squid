@@ -35,6 +35,6 @@ async def test_command_log_excludes_arguments_and_raw_content(caplog: pytest.Log
     record = caplog.records[0]
     assert record.message == "Discord command invoked"
     assert record.__dict__["squid.command.name"] == "build submit"
-    assert record.__dict__["squid.discord.guild_id"] == 456
+    assert record.__dict__["squid.guild.id"] == 456
     assert "super-secret-argument" not in caplog.text
     assert "private-content" not in caplog.text
