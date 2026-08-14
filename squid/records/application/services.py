@@ -263,9 +263,31 @@ class RecordService:
         """Return one currently active computed record result."""
         return await self._runs.get_active_record(result_id)
 
-    async def list_page(self, *, after_id: int | None = None, limit: int = 21) -> Sequence[ActiveRecord]:
-        """Return active record results in descending result-ID order."""
-        return await self._runs.list_active_records(after_id=after_id, limit=limit)
+    async def list_page(
+        self,
+        *,
+        offset: int = 0,
+        after_id: int | None = None,
+        before_id: int | None = None,
+        descending: bool = True,
+        limit: int = 21,
+    ) -> Sequence[ActiveRecord]:
+        """Return one page of active record results in display order.
+
+        ID anchors page relative to the display order; a `before_id` page carries its overfetched
+        row at the front for the caller to trim. `offset` skips rows instead.
+        """
+        return await self._runs.list_active_records(
+            offset=offset,
+            after_id=after_id,
+            before_id=before_id,
+            descending=descending,
+            limit=limit,
+        )
+
+    async def count(self) -> int:
+        """Count the currently active computed record results."""
+        return await self._runs.count_active_records()
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
