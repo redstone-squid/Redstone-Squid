@@ -1,6 +1,5 @@
 """Public search application API."""
 
-from squid.search.application.cursor import CursorCodec, InvalidCursorError
 from squid.search.application.embeddings import (
     SearchEmbeddingJob,
     SearchEmbeddingModel,
@@ -24,11 +23,9 @@ from squid.search.application.services import SearchFieldRegistryProvider, Searc
 __all__ = [
     "DEFAULT_FIELD_REGISTRY",
     "DEFAULT_RRF_WEIGHTS",
-    "CursorCodec",
     "FieldDefinition",
     "FieldRegistry",
     "FieldType",
-    "InvalidCursorError",
     "QuerySyntaxError",
     "RankedCandidate",
     "RankingBranch",

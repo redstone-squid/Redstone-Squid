@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Literal, TypeAlias
 
 from squid.core.errors import ValidationError
+from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 
 
 class SearchScope(StrEnum):
@@ -47,7 +48,7 @@ class SearchRequest:
     scope: SearchScope = SearchScope.RECORDS
     mode: SearchMode = SearchMode.LEXICAL
     page_size: int = 5
-    cursor: str | None = None
+    offset: int = 0
     sort: SearchSort | None = None
     visible_statuses: frozenset[str] | None = None
 
@@ -55,6 +56,11 @@ class SearchRequest:
         if not 1 <= self.page_size <= 50:
             msg = "page_size must be between 1 and 50"
             raise ValidationError(msg, public_context={"field": "page_size", "minimum": 1, "maximum": 50})
+        # The REST layer rejects out-of-range offsets as 422 before reaching here; this guards the
+        # Discord bot and any other in-process caller.
+        if not 0 <= self.offset <= MAX_PAGE_OFFSET:
+            msg = f"offset must be between 0 and {MAX_PAGE_OFFSET}"
+            raise ValidationError(msg, public_context={"field": "offset", "minimum": 0, "maximum": MAX_PAGE_OFFSET})
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,23 +110,16 @@ SearchHit: TypeAlias = RecordSearchHit | BuildSearchHit | MetadataSearchHit
 
 
 @dataclass(frozen=True, slots=True)
-class CursorPosition:
-    """Stable ordering position encoded into an opaque cursor."""
-
-    query_hash: str
-    scope: SearchScope
-    mode: SearchMode
-    score: float | None
-    resource_kind: Literal["record", "build", "metadata"]
-    source_id: str
-
-
-@dataclass(frozen=True, slots=True)
 class SearchPage:
-    """One cursor-addressable page of search results."""
+    """One offset-addressed page of search results.
+
+    Relevance has no identifier sequence to anchor to, so both neighbours are always addressed by
+    offset; the shared anchor type is used so that every page in the system reads the same way.
+    """
 
     hits: tuple[SearchHit, ...]
-    next_cursor: str | None
-    has_more: bool
+    total: int
+    next: PageAnchor | None
+    prev: PageAnchor | None
     warnings: tuple[str, ...] = ()
     generated_at: datetime | None = None

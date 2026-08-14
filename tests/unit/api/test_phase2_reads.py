@@ -109,7 +109,8 @@ def test_tag_and_version_collections_use_page_envelope(
             "numeric_quantum": None,
         }
     ]
-    assert tags.json()["has_more"] is False
+    assert tags.json()["total"] == 1
+    assert tags.json()["next"] is None
     assert [item["display_name"] for item in versions.json()["items"]] == ["Java 1.21.5", "Bedrock 1.21.50"]
 
 

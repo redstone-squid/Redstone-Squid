@@ -2,12 +2,20 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
-from squid.api.dependencies import CursorSigner, Notifications
+from squid.api.dependencies import Notifications
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.pagination import Page
+from squid.api.pagination import (
+    AfterIdParam,
+    BeforeIdParam,
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    render_page,
+    resolve_selector,
+)
 from squid.api.security import Principal, requires
 from squid.api.v1.schemas.notifications import (
     InboxNotificationDetail,
@@ -16,7 +24,7 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionCreate,
     NotificationSubscriptionDetail,
 )
-from squid.core.errors import AuthenticationError, ValidationError
+from squid.core.errors import AuthenticationError
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
@@ -124,32 +132,23 @@ async def delete_subscription(
 @router.get("/inbox", response_model=Page[InboxNotificationDetail], responses=responses(400, 401, 403, 503))
 async def list_inbox(
     notifications: Notifications,
-    signer: CursorSigner,
     principal: UserPrincipal,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
-    cursor: Annotated[str | None, Query(max_length=4096)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
 ) -> Page[InboxNotificationDetail]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     account_id = _account_id(principal)
     include_staff = bool(principal.discord_id is not None and await notifications.can_view_staff(principal.discord_id))
-    binding = f"notifications:account:{account_id}:id-desc"
-    after_id = _after_id(signer, cursor, binding)
-    found = list(
-        await notifications.inbox(
-            account_id,
-            after_id=after_id,
-            limit=page_size + 1,
-            include_staff=include_staff,
-        )
+    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
+    page = await notifications.inbox(
+        account_id,
+        selector=selector,
+        page_size=page_size,
+        include_staff=include_staff,
     )
-    has_more = len(found) > page_size
-    page = found[:page_size]
-    next_cursor = signer.encode({"after_id": page[-1].id}, binding=binding) if has_more and page else None
-    return Page(
-        items=[InboxNotificationDetail.from_domain(item) for item in page],
-        next_cursor=next_cursor,
-        has_more=has_more,
-    )
+    return render_page(page, InboxNotificationDetail.from_domain)
 
 
 @router.post(
@@ -173,13 +172,3 @@ def _account_id(principal: Principal) -> int:
     if principal.kind != "account" or principal.account_id is None:
         raise AuthenticationError
     return principal.account_id
-
-
-def _after_id(signer: CursorSigner, cursor: str | None, binding: str) -> int | None:
-    if cursor is None:
-        return None
-    value = signer.decode(cursor, binding=binding).get("after_id")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        msg = "cursor payload contains an invalid notification identifier"
-        raise ValidationError(msg)
-    return value

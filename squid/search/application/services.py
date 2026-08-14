@@ -3,11 +3,11 @@
 from typing import Protocol
 
 from squid.core.errors import ValidationError
-from squid.search.application.cursor import CursorCodec
+from squid.core.pagination import PageAnchor
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.search.application.parser import SearchQueryParser
 from squid.search.application.ports import SearchBackend
-from squid.search.domain import CursorPosition, SearchPage, SearchQuery, SearchRequest
+from squid.search.domain import SearchPage, SearchQuery, SearchRequest
 
 
 class SearchFieldRegistryProvider(Protocol):
@@ -23,26 +23,23 @@ class SearchService:
         self,
         backend: SearchBackend,
         parser: SearchQueryParser,
-        cursors: CursorCodec,
         fields: SearchFieldRegistryProvider | None = None,
     ) -> None:
         self._backend = backend
         self._parser = parser
-        self._cursors = cursors
         self._fields = fields
 
     async def search(self, request: SearchRequest) -> SearchPage:
-        """Execute a search and encode its next cursor."""
+        """Execute a search and address the pages adjacent to it."""
         query = await self._parse(request.query)
-        cursor = self._decode_cursor(request)
-        result = await self._backend.search(request, query, cursor)
-        next_cursor = None
-        if result.has_more and result.last_position is not None:
-            next_cursor = self._cursors.encode(result.last_position)
+        result = await self._backend.search(request, query, offset=request.offset)
+        offset = request.offset
+        following = offset + request.page_size
         return SearchPage(
             hits=result.hits,
-            next_cursor=next_cursor,
-            has_more=result.has_more,
+            total=result.total,
+            next=PageAnchor(offset=following) if following < result.total else None,
+            prev=PageAnchor(offset=max(offset - request.page_size, 0)) if offset else None,
             warnings=result.warnings,
         )
 
@@ -64,8 +61,3 @@ class SearchService:
         if self._fields is None:
             return self._parser.parse(query)
         return SearchQueryParser(await self._fields.registry()).parse(query)
-
-    def _decode_cursor(self, request: SearchRequest) -> CursorPosition | None:
-        if request.cursor is None:
-            return None
-        return self._cursors.decode(request.cursor, request=request)

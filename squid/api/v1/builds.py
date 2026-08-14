@@ -1,19 +1,35 @@
 """Build read and write routes."""
 
 import re
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.dependencies import BuildCommands, BuildQueries, CurrentPrincipal, CursorSigner, Permissions, Search
+from squid.api.dependencies import BuildCommands, BuildQueries, CurrentPrincipal, Permissions, Search
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.pagination import Page
+from squid.api.pagination import (
+    AfterIdParam,
+    BeforeIdParam,
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    anchor,
+    parse_page_sort,
+    render_page,
+    resolve_selector,
+)
 from squid.api.security import Principal, principal_allows, requires, subject_for
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
-from squid.builds.application import BuildEditPatch, DoorSubmissionInput
+from squid.builds.application import (
+    BUILD_SORT_FIELDS,
+    BuildEditPatch,
+    BuildListSort,
+    BuildSortField,
+    DoorSubmissionInput,
+)
 from squid.builds.domain import Build, Status
 from squid.builds.errors import (
     BuildNotFoundError,
@@ -21,7 +37,7 @@ from squid.builds.errors import (
     BuildRevisionRequiredError,
     InvalidBuildError,
 )
-from squid.core.errors import AuthenticationError, AuthorizationError, ErrorCode, ValidationError
+from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
@@ -130,57 +146,60 @@ async def list_builds(
     build_queries: BuildQueries,
     search_service: Search,
     permissions: Permissions,
-    signer: CursorSigner,
     principal: CurrentPrincipal,
     q: Annotated[str | None, Query(max_length=1_000)] = None,
     status: BuildStatusFilter | None = None,
     sort: Annotated[str | None, Query(max_length=80)] = None,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
-    cursor: Annotated[str | None, Query(max_length=4_096)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
 ) -> Page[BuildSummary]:
     """Search public builds, or list one authoritative moderation-status view."""
     if q is not None:
         if status is not None:
             msg = "status cannot be combined with q"
             raise ValidationError(msg, public_context={"field": "status"})
+        # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
+        selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(
             SearchRequest(
                 query=q,
                 scope=SearchScope.BUILDS,
                 mode=SearchMode.LEXICAL,
                 page_size=page_size,
-                cursor=cursor,
+                offset=selector.offset,
                 sort=parse_sort(sort),
                 visible_statuses=PUBLIC_SEARCH_STATUSES,
             )
         )
         summaries = await hydrate_builds(build_queries, result.hits)
         return Page(
+            # A page can come back short of `total` when the projection outlived a build; the count
+            # is the search backend's, and hydrate_builds has already logged the drift.
             items=[
                 summary for hit in result.hits if (summary := summaries.get(build_hit_id(hit.source_id))) is not None
             ],
-            next_cursor=result.next_cursor,
-            has_more=result.has_more,
+            total=result.total,
+            next=anchor(result.next),
+            prev=anchor(result.prev),
         )
 
-    if sort is not None:
-        msg = "sort is only supported with q"
-        raise ValidationError(
-            msg,
-            public_context={"field": "sort"},
-        )
+    sort_field, descending = parse_page_sort(sort, allowed=BUILD_SORT_FIELDS, default="-id")
+    selector = resolve_selector(
+        offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
+    )
     effective = status or BuildStatusFilter.CONFIRMED
     if effective is not BuildStatusFilter.CONFIRMED:
         await _require_pending_view(permissions, principal)
-    binding = f"builds:status={effective}:id-desc"
-    after_id = after_id_from_cursor(signer, cursor, binding)
-    builds = await build_queries.list_page(
+    page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
         submitter_id=None,
-        after_id=after_id,
-        limit=page_size + 1,
+        sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
+        selector=selector,
+        page_size=page_size,
     )
-    return keyset_page(signer, builds, page_size=page_size, binding=binding)
+    return render_page(page, BuildSummary.from_domain)
 
 
 async def _require_pending_view(permissions: PermissionService, principal: Principal) -> None:
@@ -194,37 +213,6 @@ async def _require_pending_view(permissions: PermissionService, principal: Princ
     """
     if not await principal_allows(permissions, principal, BUILD_SUBMISSION_VIEW_PENDING):
         raise AuthenticationError if principal.kind == "anonymous" else AuthorizationError
-
-
-def keyset_page(
-    signer: CursorSigner,
-    builds: list[Build],
-    *,
-    page_size: int,
-    binding: str,
-) -> Page[BuildSummary]:
-    """Render one descending-ID page from a `limit + 1` overfetch."""
-    has_more = len(builds) > page_size
-    page_builds = builds[:page_size]
-    next_cursor = None
-    if has_more and page_builds:
-        assert page_builds[-1].id is not None
-        next_cursor = signer.encode({"after_id": page_builds[-1].id}, binding=binding)
-    return Page(
-        items=[BuildSummary.from_domain(build) for build in page_builds],
-        next_cursor=next_cursor,
-        has_more=has_more,
-    )
-
-
-def after_id_from_cursor(signer: CursorSigner, cursor: str | None, binding: str) -> int | None:
-    if cursor is None:
-        return None
-    value = signer.decode(cursor, binding=binding).get("after_id")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        msg = "cursor payload contains an invalid build identifier"
-        raise ValidationError(msg, code=ErrorCode.INVALID_CURSOR)
-    return value
 
 
 def _require_consented_user(principal: Principal) -> None:

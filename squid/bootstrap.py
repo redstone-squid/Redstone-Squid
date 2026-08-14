@@ -84,7 +84,7 @@ from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJ
 from squid.schematics.infrastructure.repository import SchematicRepository
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.search.application import CursorCodec, SearchEmbeddingService, SearchQueryParser, SearchService
+from squid.search.application import SearchEmbeddingService, SearchQueryParser, SearchService
 from squid.search.infrastructure import (
     PostgresSearchBackend,
     PostgresSearchEmbeddingQueue,
@@ -457,7 +457,6 @@ class _ServiceGraph:
                 semantic_provider=PostgresSemanticCandidateProvider(self.db.async_session, self.embedding_model),
             ),
             SearchQueryParser(),
-            CursorCodec(self.config.cursor_secret.get_secret_value().encode()),
             self.search_fields,
         )
 
