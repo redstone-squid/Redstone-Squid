@@ -23,7 +23,6 @@ from squid.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
     "SQUID_VERIFICATION_CODE_PEPPER": "verification-pepper",
-    "SQUID_CURSOR_SECRET": "cursor-secret-for-tests",
     "SQUID_API_KEY_PEPPER": "api-key-pepper-for-tests",
     "SQUID_API_SESSION_PEPPER": "session-pepper-for-tests",
     "SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID": "test-v1",
@@ -159,7 +158,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert config.runtime.embeddings.api_key.get_secret_value() == "embedding-key"
     assert str(config.runtime.embeddings.base_url) == "https://embedding.example/v1"
     assert config.runtime.embeddings.model == "embedding-model"
-    assert config.runtime.cursor_secret.get_secret_value() == "cursor-secret-for-tests"
     assert config.bot_process().logging.root_level == "INFO"
     assert config.bot_process().logging.log_file == "bot/discord.log"
     assert config.api_process().api.port == 9000
@@ -522,16 +520,24 @@ def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatc
 
     issues = _issues(exc_info.value)
     fields = {issue["field"] for issue in issues}
-    assert fields == {"database", "verification", "cursor", "discord", "api"}
+    assert fields == {"database", "verification", "discord", "api"}
 
 
-def test_cursor_secret_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
-    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_CURSOR_SECRET="too-short")
+def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SQUID_CURSOR_SECRET outlived the signed cursors it fed.
 
-    with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+    Strict mode turns an unknown key into a boot failure, so without the retired-key tombstone a
+    stale line in an env file would take down deployments during a release that changed nothing
+    for them.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_STRICT_UNKNOWN_KEYS="true",
+        SQUID_CURSOR_SECRET="left-over-from-an-older-release",
+    )
 
-    assert any(issue["field"] == "cursor.secret" for issue in _issues(exc_info.value))
+    assert load_bot_process_config().database is not None
 
 
 def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
