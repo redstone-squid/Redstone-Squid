@@ -350,13 +350,21 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
     )
 
 
-def test_attributable_rlimit_exit_records_crash_and_rlimit_metrics(mocker: MockerFixture) -> None:
+def test_attributable_rlimit_exit_records_crash_and_rlimit_metrics(
+    mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+) -> None:
     sigxcpu = getattr(signal, "SIGXCPU", None)
     if sigxcpu is None:
         pytest.skip("CPU rlimit signals are POSIX-only")
     add = mocker.patch.object(worker_module, "add_counter")
 
-    _record_worker_failure(-sigxcpu, reason="crash")  # pyright: ignore[reportPrivateUsage]
+    with caplog.at_level(logging.WARNING, logger=worker_module.logger.name):
+        _record_worker_failure(-sigxcpu, reason="crash")  # pyright: ignore[reportPrivateUsage]
+
+    # Metrics are a no-op without the observability extra, so the logs carry the same facts.
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Schematic worker failed (crash)" in message for message in messages)
+    assert any("exceeded its cpu limit" in message for message in messages)
 
     assert add.call_args_list == [
         mocker.call(
@@ -367,6 +375,30 @@ def test_attributable_rlimit_exit_records_crash_and_rlimit_metrics(mocker: Mocke
             "squid.schematic.worker.rlimit_kills",
             attributes={"squid.worker.rlimit": "cpu", "squid.worker.exit_code": -sigxcpu},
         ),
+    ]
+
+
+async def test_breaker_transitions_are_logged_once_each(
+    mocker: MockerFixture, caplog: pytest.LogCaptureFixture
+) -> None:
+    pool = SchematicWorkerPool(SchematicConfig(workers=1, max_restarts_per_window=1))
+    add = mocker.patch.object(worker_module, "add_counter")
+    mocker.patch.object(worker_module, "record_gauge")
+    now = asyncio.get_running_loop().time()
+
+    with caplog.at_level(logging.INFO, logger=worker_module.logger.name):
+        pool._breaker.record_failure(now)
+        pool._note_breaker_state(now)
+        pool._note_breaker_state(now)  # A second rejected call must not re-announce the trip.
+        opened = [record for record in caplog.records if record.levelno == logging.ERROR]
+
+        # Sliding the window past the failure closes the breaker again.
+        pool._note_breaker_state(now + SchematicConfig().restart_window_seconds + 1)
+
+    assert len(opened) == 1
+    assert add.call_args_list == [mocker.call("squid.schematic.worker.breaker.trips")]
+    assert [record.getMessage() for record in caplog.records if record.levelno == logging.INFO] == [
+        "Schematic worker circuit breaker closed; schematic operations resume."
     ]
 
 
