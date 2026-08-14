@@ -36,12 +36,14 @@ class DatabaseWorker:
         schematic_renders: SchematicRenderProjector,
         *,
         supervisor: BackgroundTaskSupervisor | None = None,
+        schematic_pool: SchematicWorkerPool | None = None,
     ) -> None:
         self._services = services
         self._keep_database_active = keep_database_active
         self._config = config
         self._schematic_jobs = schematic_jobs
         self._schematic_renders = schematic_renders
+        self._schematic_pool = schematic_pool
         self._supervisor = supervisor or BackgroundTaskSupervisor()
         self._event_lock = asyncio.Lock()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
@@ -143,6 +145,12 @@ class DatabaseWorker:
             name="queue-health",
             interval=maintenance_interval,
         )
+        if self._schematic_pool is not None:
+            self._supervisor.start_periodic(
+                self._schematic_pool.record_health,
+                name="schematic-pool-health",
+                interval=maintenance_interval,
+            )
         self._supervisor.start_periodic(
             self._cleanup_notifications,
             name="notification-retention",
@@ -191,6 +199,8 @@ class DatabaseWorker:
         }
         if self._services.media_runner is not None:
             required.add("media-normalization")
+        if self._schematic_pool is not None:
+            required.add("schematic-pool-health")
         longest_interval = max(
             self._config.event_interval_seconds,
             self._config.maintenance_interval_seconds,
@@ -344,6 +354,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 resolved_config.worker,
                 schematic_jobs,
                 schematic_renders,
+                schematic_pool=native_analyzer if isinstance(native_analyzer, SchematicWorkerPool) else None,
             )
 
             async def worker_ready() -> bool:
