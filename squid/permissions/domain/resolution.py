@@ -230,6 +230,7 @@ def rules_from_role(
     subject_kind: SubjectKind,
     origin: Origin = Origin.ROLE,
     scope_guild_id: int | None = None,
+    expires_at: Instant | None = None,
     source: str = "",
     via: str | None = None,
 ) -> tuple[Rule, ...]:
@@ -241,6 +242,7 @@ def rules_from_role(
             subject_kind=subject_kind,
             origin=origin,
             scope_guild_id=scope_guild_id,
+            expires_at=expires_at,
             excluded=expansion.excluded,
             source=source,
             via=via,
