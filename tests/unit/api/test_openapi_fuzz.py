@@ -12,6 +12,19 @@ _app, _database = build_app()
 schema = schemathesis.openapi.from_asgi("/openapi.json", _app)
 
 
+@schemathesis.serializer("image/*", "video/*")
+def serialize_upload_body(_context: schemathesis.SerializationContext, value: object) -> bytes:
+    """Send generated upload bodies verbatim.
+
+    Schemathesis ships no serializer for the wildcard media types the draft media upload
+    accepts, and an unserializable body is reported as a test failure rather than a skip.
+    """
+    if isinstance(value, bytes):
+        return value
+    data = getattr(value, "data", None)
+    return data if isinstance(data, bytes) else str(value).encode()
+
+
 @pytest.fixture
 def collect_asgi_portals():
     """Collect Schemathesis's per-example TestClient portals after each fuzz test."""
