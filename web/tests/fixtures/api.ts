@@ -79,11 +79,14 @@ const builds = [
 
 const detail: BuildDetail = {
   ...builds[0],
-  door_dimensions: { width: 5, height: 5, depth: 1 },
-  patterns: ["Flush", "Full seamless"],
-  orientation: "Not directional",
-  extension_length: null,
-  extender_type: null,
+  details: {
+    category: "Door",
+    door_dimensions: { width: 5, height: 5, depth: 1 },
+    orientation: "Door",
+    patterns: ["Flush", "Full seamless"],
+    visible_opening_time: null,
+    visible_closing_time: null,
+  },
   restrictions: {
     wiring: ["No observers"],
     component: ["No slime blocks"],

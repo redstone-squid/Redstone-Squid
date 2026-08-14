@@ -46,6 +46,10 @@ export type ApiVersionCapabilities = {
  * BuildDetail
  *
  * Stable item representation with build-specific facts.
+ *
+ * Category-specific facts live under ``details``, a union discriminated by
+ * ``category``, so a client reads a door's opening size from a door and never
+ * from a nullable field on a utility.
  */
 export type BuildDetail = {
     /**
@@ -106,23 +110,7 @@ export type BuildDetail = {
      * Updated At
      */
     updated_at: string | null;
-    door_dimensions: Dimensions;
-    /**
-     * Patterns
-     */
-    patterns: Array<string>;
-    /**
-     * Orientation
-     */
-    orientation: string | null;
-    /**
-     * Extension Length
-     */
-    extension_length: number | null;
-    /**
-     * Extender Type
-     */
-    extender_type: string | null;
+    details: BuildDetails;
     /**
      * Restrictions
      */
@@ -136,6 +124,14 @@ export type BuildDetail = {
     links: BuildLinks;
     sponsor?: BuildSponsor | null;
 };
+
+export type BuildDetails = ({
+    category: 'Door';
+} & DoorDetails) | ({
+    category: 'Extender';
+} & ExtenderDetails) | ({
+    category: 'Entrance' | 'Other' | 'Utility';
+} & GeneralDetails);
 
 /**
  * BuildLinks
@@ -176,15 +172,7 @@ export type BuildPatch = {
      */
     version_spec?: string | null;
     dimensions?: InputDimensions | null;
-    door_dimensions?: InputDimensions | null;
-    /**
-     * Door Type
-     */
-    door_type?: Array<string> | null;
-    /**
-     * Door Orientation Type
-     */
-    door_orientation_type?: string | null;
+    door?: DoorPatch | null;
     /**
      * Wiring Placement Restrictions
      */
@@ -209,14 +197,6 @@ export type BuildPatch = {
      * Directionality
      */
     directionality?: string | null;
-    /**
-     * Normal Closing Time
-     */
-    normal_closing_time?: number | null;
-    /**
-     * Normal Opening Time
-     */
-    normal_opening_time?: number | null;
     /**
      * Extra User Info
      */
@@ -830,6 +810,67 @@ export type Dimensions = {
 };
 
 /**
+ * DoorDetails
+ *
+ * Facts owned by doors.
+ *
+ * The headline ``opening_time`` and ``closing_time`` stay on the summary: the
+ * card projection and the search grammar both already name them there, so
+ * repeating them here would give one value two addresses in one payload.
+ */
+export type DoorDetails = {
+    /**
+     * Category
+     */
+    category?: 'Door';
+    door_dimensions: Dimensions;
+    /**
+     * Orientation
+     */
+    orientation: string;
+    /**
+     * Patterns
+     */
+    patterns: Array<string>;
+    /**
+     * Visible Opening Time
+     */
+    visible_opening_time: number | null;
+    /**
+     * Visible Closing Time
+     */
+    visible_closing_time: number | null;
+};
+
+/**
+ * DoorPatch
+ *
+ * A partial edit of the facts only a door has.
+ *
+ * Sending this for a build of another category is rejected: the category is
+ * structural, so there is no field to set.
+ */
+export type DoorPatch = {
+    door_dimensions?: InputDimensions | null;
+    /**
+     * Orientation
+     */
+    orientation?: string | null;
+    /**
+     * Patterns
+     */
+    patterns?: Array<string> | null;
+    /**
+     * Opening Time
+     */
+    opening_time?: number | null;
+    /**
+     * Closing Time
+     */
+    closing_time?: number | null;
+};
+
+/**
  * DoorSubmission
  *
  * A user-authored door build submission.
@@ -1140,6 +1181,34 @@ export type DraftSummaryResponse = {
 export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_CURSOR' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
 
 /**
+ * ExtenderDetails
+ *
+ * Facts owned by piston extenders.
+ */
+export type ExtenderDetails = {
+    /**
+     * Category
+     */
+    category?: 'Extender';
+    /**
+     * Orientation
+     */
+    orientation: string | null;
+    /**
+     * Patterns
+     */
+    patterns: Array<string>;
+    /**
+     * Extension Length
+     */
+    extension_length: number | null;
+    /**
+     * Extender Type
+     */
+    extender_type: string | null;
+};
+
+/**
  * FabricChallengeCreateRequest
  *
  * Request player authorization from Fabric with an S256 PKCE commitment.
@@ -1359,6 +1428,18 @@ export type FormSectionResponse = {
      * Fields
      */
     fields: Array<FormFieldResponse>;
+};
+
+/**
+ * GeneralDetails
+ *
+ * The categories that add no facts beyond the shared ones.
+ */
+export type GeneralDetails = {
+    /**
+     * Category
+     */
+    category: 'Utility' | 'Entrance' | 'Other';
 };
 
 /**

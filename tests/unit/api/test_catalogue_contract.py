@@ -9,8 +9,8 @@ from uuid import UUID
 import pytest
 
 from squid.api.v1.records import get_record
-from squid.api.v1.schemas.builds import BuildDetail, BuildSummary
-from squid.builds.domain import Build, DoorBuild, MediaTypeLiteral, Status
+from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
+from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLiteral, Status, UtilityBuild
 from squid.core.errors import DataIntegrityError
 from squid.records.application.models import ActiveRecord
 from squid.sponsors import PublicSponsor
@@ -187,3 +187,30 @@ async def test_record_detail_rejects_unavailable_or_non_public_holders(available
         await get_record(7, cast(Any, records), cast(Any, build_queries))
 
     assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
+
+
+def test_detail_details_are_keyed_by_the_build_category() -> None:
+    """Category-specific facts arrive under a member matching the category."""
+    door = BuildDetail.from_domain(catalogue_build(1))
+    assert isinstance(door.details, DoorDetails)
+    assert door.details.category == "Door"
+    assert door.details.door_dimensions.width == 2
+    assert door.details.orientation == "Door"
+    assert door.details.patterns == ["Regular"]
+
+    extender = BuildDetail.from_domain(
+        ExtenderBuild(
+            id=2,
+            submitter_id=1,
+            submission_status=Status.CONFIRMED,
+            orientation="Upward",
+            extension_length=6,
+        )
+    )
+    assert isinstance(extender.details, ExtenderDetails)
+    assert extender.details.category == "Extender"
+    assert extender.details.extension_length == 6
+
+    utility = BuildDetail.from_domain(UtilityBuild(id=3, submitter_id=1, submission_status=Status.CONFIRMED))
+    assert isinstance(utility.details, GeneralDetails)
+    assert utility.details.category == "Utility"

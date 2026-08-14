@@ -10488,48 +10488,8 @@
             ],
             "title": "Updated At"
           },
-          "door_dimensions": {
-            "$ref": "#/components/schemas/Dimensions"
-          },
-          "patterns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Patterns"
-          },
-          "orientation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Orientation"
-          },
-          "extension_length": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extension Length"
-          },
-          "extender_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extender Type"
+          "details": {
+            "$ref": "#/components/schemas/BuildDetails"
           },
           "restrictions": {
             "additionalProperties": {
@@ -10585,17 +10545,36 @@
           "closing_time",
           "created_at",
           "updated_at",
-          "door_dimensions",
-          "patterns",
-          "orientation",
-          "extension_length",
-          "extender_type",
+          "details",
           "restrictions",
           "description",
           "links"
         ],
         "title": "BuildDetail",
-        "description": "Stable item representation with build-specific facts."
+        "description": "Stable item representation with build-specific facts.\n\nCategory-specific facts live under ``details``, a union discriminated by\n``category``, so a client reads a door's opening size from a door and never\nfrom a nullable field on a utility."
+      },
+      "BuildDetails": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DoorDetails"
+          },
+          {
+            "$ref": "#/components/schemas/ExtenderDetails"
+          },
+          {
+            "$ref": "#/components/schemas/GeneralDetails"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "category",
+          "mapping": {
+            "Door": "#/components/schemas/DoorDetails",
+            "Entrance": "#/components/schemas/GeneralDetails",
+            "Extender": "#/components/schemas/ExtenderDetails",
+            "Other": "#/components/schemas/GeneralDetails",
+            "Utility": "#/components/schemas/GeneralDetails"
+          }
+        }
       },
       "BuildLinks": {
         "properties": {
@@ -10671,42 +10650,15 @@
               }
             ]
           },
-          "door_dimensions": {
+          "door": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InputDimensions"
+                "$ref": "#/components/schemas/DoorPatch"
               },
               {
                 "type": "null"
               }
             ]
-          },
-          "door_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "maxItems": 50
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Type"
-          },
-          "door_orientation_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Orientation Type"
           },
           "wiring_placement_restrictions": {
             "anyOf": [
@@ -10791,30 +10743,6 @@
               }
             ],
             "title": "Directionality"
-          },
-          "normal_closing_time": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Normal Closing Time"
-          },
-          "normal_opening_time": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Normal Opening Time"
           },
           "extra_user_info": {
             "anyOf": [
@@ -11926,6 +11854,132 @@
         "title": "Dimensions",
         "description": "A three-dimensional build measurement."
       },
+      "DoorDetails": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "const": "Door",
+            "title": "Category",
+            "default": "Door"
+          },
+          "door_dimensions": {
+            "$ref": "#/components/schemas/Dimensions"
+          },
+          "orientation": {
+            "type": "string",
+            "title": "Orientation"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Patterns"
+          },
+          "visible_opening_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Opening Time"
+          },
+          "visible_closing_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Closing Time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "door_dimensions",
+          "orientation",
+          "patterns",
+          "visible_opening_time",
+          "visible_closing_time"
+        ],
+        "title": "DoorDetails",
+        "description": "Facts owned by doors.\n\nThe headline ``opening_time`` and ``closing_time`` stay on the summary: the\ncard projection and the search grammar both already name them there, so\nrepeating them here would give one value two addresses in one payload."
+      },
+      "DoorPatch": {
+        "properties": {
+          "door_dimensions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputDimensions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "patterns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patterns"
+          },
+          "opening_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Time"
+          },
+          "closing_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Time"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DoorPatch",
+        "description": "A partial edit of the facts only a door has.\n\nSending this for a build of another category is rejected: the category is\nstructural, so there is no field to set."
+      },
       "DoorSubmission": {
         "properties": {
           "category": {
@@ -12520,6 +12574,66 @@
         "title": "ErrorCode",
         "description": "Stable machine-readable application error codes."
       },
+      "ExtenderDetails": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "const": "Extender",
+            "title": "Category",
+            "default": "Extender"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Patterns"
+          },
+          "extension_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extension Length"
+          },
+          "extender_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extender Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "orientation",
+          "patterns",
+          "extension_length",
+          "extender_type"
+        ],
+        "title": "ExtenderDetails",
+        "description": "Facts owned by piston extenders."
+      },
       "FabricChallengeCreateRequest": {
         "properties": {
           "java_uuid": {
@@ -12929,6 +13043,26 @@
         ],
         "title": "FormSectionResponse",
         "description": "An ordered group of related form fields."
+      },
+      "GeneralDetails": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "Utility",
+              "Entrance",
+              "Other"
+            ],
+            "title": "Category"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category"
+        ],
+        "title": "GeneralDetails",
+        "description": "The categories that add no facts beyond the shared ones."
       },
       "HTTPValidationError": {
         "properties": {
