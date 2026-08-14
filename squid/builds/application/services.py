@@ -15,7 +15,7 @@ from squid.builds.application.ports import (
 )
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, Status
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InvalidStateError
 
@@ -47,27 +47,32 @@ class BuildService:
         return await self._repository.get_by_source_submission_draft_id(draft_id)
 
     async def submit_door(self, submission: DoorSubmissionInput) -> Build:
-        build = Build(
+        build = DoorBuild(
             submitter_id=submission.submitter_id,
             ai_generated=submission.ai_generated,
-            category=BuildCategory.DOOR,
             submission_status=Status.PENDING,
             version_spec=submission.works_in,
             width=submission.build_size[0],
             height=submission.build_size[1],
             depth=submission.build_size[2],
-            door_width=submission.door_size[0],
-            door_height=submission.door_size[1],
+            door_width=submission.door_size[0] if submission.door_size[0] is not None else 1,
+            door_height=submission.door_size[1] if submission.door_size[1] is not None else 2,
             door_depth=submission.door_size[2],
-            door_type=list(submission.pattern),
-            door_orientation_type=submission.door_type,
+            patterns=list(submission.pattern),
+            orientation=submission.door_type,
             normal_closing_time=submission.normal_closing_time,
             normal_opening_time=submission.normal_opening_time,
             creators_ign=list(submission.creators),
-            image_urls=list(submission.image_urls),
-            video_urls=list(submission.video_urls),
-            world_download_urls=list(submission.world_download_urls),
-            schematic_urls=list(submission.schematic_urls),
+            links=[
+                BuildLink(url=url, media_type=media_type)
+                for media_type, urls in (
+                    ("image", submission.image_urls),
+                    ("video", submission.video_urls),
+                    ("world-download", submission.world_download_urls),
+                    ("schematic", submission.schematic_urls),
+                )
+                for url in urls
+            ],
             completion_time=submission.date_of_creation,
         )
         await self._set_restrictions(build, submission.restrictions)
@@ -91,25 +96,23 @@ class BuildService:
         """Release persisted build locks older than a cutoff."""
         await self._locks.clean_stale(older_than=older_than)
 
-    async def classify_restrictions(self, build: Build, restrictions: Sequence[str]) -> Build:
+    async def classify_restrictions[BuildT: (Build, BuildDraft)](
+        self, build: BuildT, restrictions: Sequence[str]
+    ) -> BuildT:
         """Replace a build's restrictions using repository-owned metadata."""
         definitions = await self._restrictions.fetch_all_restrictions()
         build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
 
-    async def submit(
-        self,
-        build: Build,
-        *,
-        submitter_id: int,
-        ai_generated: bool,
-        category: BuildCategory = BuildCategory.DOOR,
-    ) -> Build:
-        """Apply legacy Discord submission metadata and persist an already prepared build."""
+    async def submit(self, build: Build, *, submitter_id: int, ai_generated: bool) -> Build:
+        """Apply legacy Discord submission metadata and persist an already prepared build.
+
+        The build's category is a fact of its type; callers construct the right
+        subclass (or finalize a :class:`BuildDraft`) before submitting.
+        """
         build.submitter_account_id = None
         build.submitter_id = submitter_id
         build.ai_generated = ai_generated
-        build.category = category
         build.submission_status = Status.PENDING
         await self._persist(build)
         return build
@@ -122,7 +125,6 @@ class BuildService:
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
-        category: BuildCategory,
     ) -> Build:
         """Finalize one synchronized draft under a provider-neutral account.
 
@@ -150,7 +152,6 @@ class BuildService:
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
-        build.category = category
         build.submission_status = Status.PENDING
         await self._persist(build)
         return build

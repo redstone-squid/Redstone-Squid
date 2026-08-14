@@ -23,7 +23,7 @@ from squid.bot.utils.components import (
     truncate_display_text,
 )
 from squid.bot.voting.build_session import BuildVoteSession
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.domain.titles import format_build_display_title
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 
@@ -97,9 +97,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         if self._build_original_message_obj:
             return self._build_original_message_obj
 
-        if self.build.original_channel_id:
-            assert self.build.original_message_id is not None
-            return await self.bot.get_or_fetch_message(self.build.original_channel_id, self.build.original_message_id)
+        original = self.build.original_message
+        if original is not None and original.channel_id is not None:
+            return await self.bot.get_or_fetch_message(original.channel_id, original.message_id)
         return None
 
     async def get_display_messages(self) -> list[discord.Message]:
@@ -273,14 +273,15 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             fields["Volume"] = str(build.width * build.height * build.depth)
 
         # The times are stored as game ticks, so they need to be divided by 20 to get seconds
-        if build.normal_opening_time:
-            fields["Opening Time"] = f"{build.normal_opening_time / 20}s"
-        if build.normal_closing_time:
-            fields["Closing Time"] = f"{build.normal_closing_time / 20}s"
-        if build.visible_opening_time:
-            fields["Visible Opening Time"] = f"{build.visible_opening_time / 20}s"
-        if build.visible_closing_time:
-            fields["Visible Closing Time"] = f"{build.visible_closing_time / 20}s"
+        if isinstance(build, DoorBuild):
+            if build.normal_opening_time:
+                fields["Opening Time"] = f"{build.normal_opening_time / 20}s"
+            if build.normal_closing_time:
+                fields["Closing Time"] = f"{build.normal_closing_time / 20}s"
+            if build.visible_opening_time:
+                fields["Visible Opening Time"] = f"{build.visible_opening_time / 20}s"
+            if build.visible_closing_time:
+                fields["Visible Closing Time"] = f"{build.visible_closing_time / 20}s"
 
         if build.creators_ign:
             fields["Creators"] = ", ".join(sorted(build.creators_ign))

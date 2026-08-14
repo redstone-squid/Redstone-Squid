@@ -13,7 +13,7 @@ from discord.ui import Item
 
 from squid.bot.i18n import t
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildDraft, DoorBuild
 from squid.core.i18n import _
 
 if TYPE_CHECKING:
@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 
 
 class DoorTypeSelect(discord.ui.Select):
-    def __init__(self, build: Build, *, locale: str | None = None) -> None:
-        self.build = build
+    def __init__(self, draft: BuildDraft, *, locale: str | None = None) -> None:
+        self.draft = draft
         self.locale = locale
         options = [
             discord.SelectOption(
                 label=t(locale, _(door_type)),
                 value=door_type,
-                default=build.door_orientation_type == door_type,
+                default=draft.door_orientation == door_type,
             )
             for door_type in DOOR_ORIENTATION_NAMES
         ]
@@ -48,7 +48,7 @@ class DoorTypeSelect(discord.ui.Select):
     @override
     async def callback(self, interaction: discord.Interaction) -> None:
         data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
-        self.build.door_orientation_type = data["values"][0]  # type: ignore
+        self.draft.door_orientation = data["values"][0]  # type: ignore
         parent = self.view
         if parent is not None and hasattr(parent, "refresh"):
             await parent.refresh(interaction)  # type: ignore[reportUnknownMemberType]
@@ -57,21 +57,21 @@ class DoorTypeSelect(discord.ui.Select):
 
 
 class DirectonalityLocationalitySelect(discord.ui.Select):
-    def __init__(self, build: Build, *, locale: str | None = None) -> None:
-        self.build = build
+    def __init__(self, draft: BuildDraft, *, locale: str | None = None) -> None:
+        self.draft = draft
         self.locale = locale
         options = [
             discord.SelectOption(
                 label=t(locale, _("Directional")),
                 value="Directional",
                 description=t(locale, _("May depend on the direction it faces")),
-                default="Directional" in build.miscellaneous_restrictions,
+                default="Directional" in draft.miscellaneous_restrictions,
             ),
             discord.SelectOption(
                 label=t(locale, _("Locational")),
                 value="Locational",
                 description=t(locale, _("May depend on its position in the world")),
-                default="Locational" in build.miscellaneous_restrictions,
+                default="Locational" in draft.miscellaneous_restrictions,
             ),
         ]
         super().__init__(
@@ -84,7 +84,7 @@ class DirectonalityLocationalitySelect(discord.ui.Select):
     @override
     async def callback(self, interaction: discord.Interaction) -> None:
         data = cast("discord.types.interactions.SelectMessageComponentInteractionData", interaction.data)
-        self.build.miscellaneous_restrictions = data["values"]
+        self.draft.miscellaneous_restrictions = data["values"]
         parent = self.view
         if parent is not None and hasattr(parent, "refresh"):
             await parent.refresh(interaction)  # type: ignore[reportUnknownMemberType]
@@ -129,11 +129,7 @@ class BuildField[T](discord.ui.TextInput):
             max_length: The maximum length of the field.
             row: The row of the field.
         """
-        try:
-            value: T = getattr(build, attribute)
-        except AttributeError as err:
-            msg = f"Invalid attribute {attribute}"
-            raise ValueError(msg) from err
+        value: T = _read_edit_value(build, attribute)
         if not is_bearable(value, attr_type):  # type: ignore[arg-type]
             logger.error("Invalid hint for %s: %s", attribute, attr_type)
 
@@ -194,6 +190,46 @@ class BuildField[T](discord.ui.TextInput):
         return discord.ui.Label(text=self.display_label, component=self)
 
 
+# The generic edit UI is keyed by BuildEditPatch field names, which no longer all
+# match domain attributes: patterns and the door facts live on category
+# subclasses, and the url views are read-only projections of `links`.
+_EDIT_FIELD_READERS: dict[str, tuple[Callable[[Build], Any], Any]] = {
+    "door_type": (lambda build: list(build.patterns), list[str]),
+    "door_orientation_type": (
+        lambda build: build.orientation if isinstance(build, DoorBuild) else None,
+        str | None,
+    ),
+    "door_dimensions": (
+        lambda build: build.door_dimensions if isinstance(build, DoorBuild) else None,
+        tuple[int | None, int | None, int | None] | None,
+    ),
+    "normal_opening_time": (
+        lambda build: build.normal_opening_time if isinstance(build, DoorBuild) else None,
+        int | None,
+    ),
+    "normal_closing_time": (
+        lambda build: build.normal_closing_time if isinstance(build, DoorBuild) else None,
+        int | None,
+    ),
+    "image_urls": (lambda build: list(build.image_urls), list[str]),
+    "video_urls": (lambda build: list(build.video_urls), list[str]),
+    "world_download_urls": (lambda build: list(build.world_download_urls), list[str]),
+    "schematic_urls": (lambda build: list(build.schematic_urls), list[str]),
+    "render_urls": (lambda build: list(build.render_urls), list[str]),
+}
+
+
+def _read_edit_value(build: Build, attribute: str) -> Any:
+    reader = _EDIT_FIELD_READERS.get(attribute)
+    if reader is not None:
+        return reader[0](build)
+    try:
+        return getattr(build, attribute)
+    except AttributeError as err:
+        msg = f"Invalid attribute {attribute}"
+        raise ValueError(msg) from err
+
+
 def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = None, **kwargs: Any) -> BuildField[T]:
     """
     Gets the bound input for the attribute.
@@ -205,7 +241,8 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
         **kwargs: Additional keyword arguments to pass to the BuildField constructor.
     """
     if attr_type is None:
-        attr_type = build.get_attr_type(attribute)
+        reader = _EDIT_FIELD_READERS.get(attribute)
+        attr_type = reader[1] if reader is not None else build.get_attr_type(attribute)
     formatter, parser = get_formatter_and_parser_for_type(attr_type)
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 

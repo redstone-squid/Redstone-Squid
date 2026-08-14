@@ -7,7 +7,7 @@ import discord
 import pytest
 
 from squid.bot.submission import ingestion
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import Build, BuildCategory, BuildDraft
 from squid.runtime import BotServices
 from squid.schematics.application import IngestedSchematic
 
@@ -29,9 +29,9 @@ async def test_raw_schematic_is_recorded_privately_without_public_mirroring(
         channel=Mock(id=400),
         content="submission",
     )
-    build = Build(category=BuildCategory.DOOR)
+    draft = BuildDraft(category=BuildCategory.DOOR)
     services = Mock()
-    services.build_inference.infer = AsyncMock(return_value=[build])
+    services.build_inference.infer = AsyncMock(return_value=[draft])
     services.schematics.limits.max_upload_bytes = 1024
     services.schematics.available = True
     services.schematics.ingest = AsyncMock(return_value=cast(IngestedSchematic, object()))
@@ -54,7 +54,8 @@ async def test_raw_schematic_is_recorded_privately_without_public_mirroring(
         mirror=mirror,
     )
 
-    assert result == [build]
-    assert build.schematic_urls == []
+    (build,) = result
+    assert build.id == 42
+    assert build.schematic_urls == ()
     mirror.upload.assert_not_awaited()
     services.schematics.record.assert_awaited_once()

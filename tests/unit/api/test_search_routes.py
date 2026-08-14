@@ -8,7 +8,7 @@ import pytest
 
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import search, suggest_terms
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.runtime import ApiServices
 from squid.search.domain import (
     BuildSearchHit,
@@ -28,16 +28,15 @@ class Fakes(NamedTuple):
 
 
 def indexed_build(build_id: int = 42) -> Build:
-    return Build(
+    return DoorBuild(
         id=build_id,
         submitter_id=123,
-        category=BuildCategory.DOOR,
         submission_status=Status.CONFIRMED,
         versions=["1.21"],
         door_width=2,
         door_height=2,
-        door_type=["Regular"],
-        door_orientation_type="Door",
+        patterns=["Regular"],
+        orientation="Door",
     )
 
 

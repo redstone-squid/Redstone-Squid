@@ -20,7 +20,7 @@ from squid.bot.submission.ui.views import (
     SubmissionModal,
 )
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, OriginalMessage, Status
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -31,27 +31,24 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def display_build() -> Build:
-    return Build(
+    return DoorBuild(
         id=7,
         submission_status=Status.PENDING,
-        category=BuildCategory.DOOR,
         width=5,
         height=6,
         depth=7,
         door_width=2,
         door_height=2,
         door_depth=1,
-        door_type=["Regular"],
-        door_orientation_type="Door",
+        patterns=["Regular"],
+        orientation="Door",
         component_restrictions=["Observerless"],
         creators_ign=["Builder"],
         version_spec="1.20+",
         versions=["Java 1.20"],
-        image_urls=["https://example.com/build.png"],
+        links=[BuildLink(url="https://example.com/build.png", media_type="image")],
         extra_info={},
-        original_server_id=1,
-        original_channel_id=2,
-        original_message_id=3,
+        original_message=OriginalMessage(message_id=3, server_id=1, channel_id=2),
     )
 
 
@@ -143,8 +140,16 @@ def test_build_handler_uses_the_sponsor_address_when_no_name_is_public(display_b
     assert metadata["Sponsor Website"].endswith("…")
 
 
-def test_submission_form_uses_explicit_v2_rows(display_build: Build) -> None:
-    form = BuildSubmissionForm(display_build, cast(BuildService, object()))
+def test_submission_form_uses_explicit_v2_rows() -> None:
+    draft = BuildDraft(
+        door_orientation="Door",
+        door_width=2,
+        door_height=2,
+        patterns=["Regular"],
+        version_spec="1.20+",
+        creators_ign=["Builder"],
+    )
+    form = BuildSubmissionForm(draft, cast(BuildService, object()))
     payload = form.to_components()
 
     assert form.has_components_v2()
@@ -188,12 +193,12 @@ def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:
 
 
 def test_submission_requires_only_type_and_opening_size() -> None:
-    build = Build()
-    form = BuildSubmissionForm(build, cast(BuildService, object()))
+    draft = BuildDraft()
+    form = BuildSubmissionForm(draft, cast(BuildService, object()))
 
     assert form.is_ready is False
-    build.door_orientation_type = "Door"
-    build.door_dimensions = (2, 2, None)
+    draft.door_orientation = "Door"
+    draft.door_dimensions = (2, 2, None)
     assert form.is_ready is True
 
 

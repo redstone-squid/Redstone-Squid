@@ -20,12 +20,10 @@ from squid.accounts.domain import IdentityProvider, normalize_ign
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import (
     Build,
-    BuildCategory,
-    MediaTypeLiteral,
     Status,
 )
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
-from squid.builds.infrastructure.mapping import BuildMapper
+from squid.builds.infrastructure.mapping import SQL_CLASS_BY_CATEGORY, BuildMapper, category_values_from_domain
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
@@ -33,11 +31,6 @@ from squid.builds.infrastructure.models import (
     BuildCreator,
     BuildLink,
     BuildVersion,
-    Door,
-    Entrance,
-    Extender,
-    Other,
-    Utility,
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
@@ -164,9 +157,11 @@ class BuildRepository:
                     await self._setup_relationships(build, session, sql_build)
                 await session.flush()
                 build.id = sql_build.id
-                if build.original_message_id is not None:
+                if build.original_message is not None:
                     await self._create_or_update_message(build, session)
-                sql_build.original_message_id = build.original_message_id
+                sql_build.original_message_id = (
+                    build.original_message.message_id if build.original_message is not None else None
+                )
                 await session.commit()
                 build.revision = sql_build.revision
         else:
@@ -239,9 +234,11 @@ class BuildRepository:
                     sql_build.links.clear()
                     await self._setup_relationships(build, session, sql_build)
                     sql_build.extra_info = build.extra_info
-                if build.original_message_id is not None:
+                if build.original_message is not None:
                     await self._create_or_update_message(build, session)
-                sql_build.original_message_id = build.original_message_id
+                sql_build.original_message_id = (
+                    build.original_message.message_id if build.original_message is not None else None
+                )
                 await session.commit()
             except StaleDataError as error:
                 await session.rollback()
@@ -251,9 +248,6 @@ class BuildRepository:
     @staticmethod
     def _new_model(build: Build, submitter_account_id: int) -> SQLBuild:
         """Construct the joined row matching the domain category."""
-        if build.category is None:
-            msg = "Category must be set for new builds."
-            raise InvalidBuildError(msg, context={"category": None})
         common: dict[str, Any] = {
             "submission_status": build.submission_status or Status.PENDING,
             "record_category": build.record_category,
@@ -280,58 +274,19 @@ class BuildRepository:
             "edited_time": build.edited_time,
             "is_locked": False,
         }
-        match build.category:
-            case BuildCategory.DOOR:
-                return Door(
-                    **common,
-                    orientation=build.door_orientation_type or "Door",
-                    door_width=build.door_width or 1,
-                    door_height=build.door_height or 2,
-                    door_depth=build.door_depth,
-                    normal_opening_time=build.normal_opening_time,
-                    normal_closing_time=build.normal_closing_time,
-                    visible_opening_time=build.visible_opening_time,
-                    visible_closing_time=build.visible_closing_time,
-                )
-            case BuildCategory.EXTENDER:
-                return Extender(
-                    **common,
-                    orientation=build.extender_orientation,
-                    extension_length=build.extension_length,
-                    extender_type=build.extender_type,
-                )
-            case BuildCategory.UTILITY:
-                return Utility(**common)
-            case BuildCategory.ENTRANCE:
-                return Entrance(**common)
-            case BuildCategory.OTHER:
-                return Other(**common)
+        return SQL_CLASS_BY_CATEGORY[build.category](**common, **category_values_from_domain(build))
 
     @staticmethod
     def _update_category_fields(build: Build, sql_build: SQLBuild) -> None:
         """Update facts owned by one joined category without allowing a category switch."""
-        if build.category is None or sql_build.category != build.category:
+        if sql_build.category != build.category:
             msg = "A persisted build's category cannot be changed."
             raise InvalidBuildError(
                 msg,
                 context={"build_id": build.id, "current_category": sql_build.category, "category": build.category},
             )
-        match sql_build:
-            case Door():
-                sql_build.orientation = build.door_orientation_type or "Door"
-                sql_build.door_width = build.door_width or 1
-                sql_build.door_height = build.door_height or 2
-                sql_build.door_depth = build.door_depth
-                sql_build.normal_opening_time = build.normal_opening_time
-                sql_build.normal_closing_time = build.normal_closing_time
-                sql_build.visible_opening_time = build.visible_opening_time
-                sql_build.visible_closing_time = build.visible_closing_time
-            case Extender():
-                sql_build.orientation = build.extender_orientation
-                sql_build.extension_length = build.extension_length
-                sql_build.extender_type = build.extender_type
-            case Utility() | Entrance() | Other():
-                pass
+        for name, value in category_values_from_domain(build).items():
+            setattr(sql_build, name, value)
 
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
         """Resolve legacy Discord ownership only when no canonical account ID was supplied."""
@@ -364,21 +319,7 @@ class BuildRepository:
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
         # Handle links
-        all_links: list[tuple[str, MediaTypeLiteral]] = []
-        if build.image_urls:
-            all_links.extend([(url, "image") for url in build.image_urls])
-        if build.video_urls:
-            all_links.extend([(url, "video") for url in build.video_urls])
-        if build.world_download_urls:
-            all_links.extend([(url, "world-download") for url in build.world_download_urls])
-        if build.schematic_urls:
-            all_links.extend([(url, "schematic") for url in build.schematic_urls])
-        if build.render_urls:
-            all_links.extend([(url, "render") for url in build.render_urls])
-
-        for url, media_type in all_links:
-            build_link = BuildLink(url=url, media_type=media_type)
-            sql_build.links.append(build_link)
+        sql_build.links.extend(BuildLink(url=link.url, media_type=link.media_type) for link in build.links)
 
     async def _setup_tag_assignments(
         self,
@@ -534,35 +475,34 @@ class BuildRepository:
     @staticmethod
     async def _create_or_update_message(build: Build, session: AsyncSession) -> None:
         """Create or update the original message record."""
-        if build.original_message_id is None:
+        original = build.original_message
+        if original is None:
             return
-        assert build.original_server_id is not None, "Original server ID must be set for original message."
+        assert original.server_id is not None, "Original server ID must be set for original message."
         # Channel ID may be None if the message is from DMs
-        assert build.original_message_author_id is not None, (
-            "Original message author ID must be set for original message."
-        )
+        assert original.author_id is not None, "Original message author ID must be set for original message."
 
-        stmt = select(Message).where(Message.id == build.original_message_id)
+        stmt = select(Message).where(Message.id == original.message_id)
         result = await session.execute(stmt)
         message = result.scalar_one_or_none()
 
         if message is None:
             message = Message(
-                id=build.original_message_id,
-                server_id=build.original_server_id,
-                channel_id=build.original_channel_id,
-                author_id=build.original_message_author_id,
+                id=original.message_id,
+                server_id=original.server_id,
+                channel_id=original.channel_id,
+                author_id=original.author_id,
                 purpose="build_original_message",
-                content=build.original_message,
+                content=original.content,
                 build_id=build.id,
             )
             session.add(message)
         else:
-            message.server_id = build.original_server_id
-            message.channel_id = build.original_channel_id
-            message.author_id = build.original_message_author_id
+            message.server_id = original.server_id
+            message.channel_id = original.channel_id
+            message.author_id = original.author_id
             message.purpose = "build_original_message"
-            message.content = build.original_message
+            message.content = original.content
             message.build_id = build.id
             message.updated_at = Instant.now()
         await session.flush()

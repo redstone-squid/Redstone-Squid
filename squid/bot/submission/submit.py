@@ -30,7 +30,7 @@ from squid.builds.application import (
     BuildService,
     DoorSubmissionInput,
 )
-from squid.builds.domain import Build
+from squid.builds.domain import Build, BuildDraft
 from squid.core.errors import SquidError
 from squid.core.i18n import _
 from squid.messages.application import MessageService
@@ -161,7 +161,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
 
-        build = Build(ai_generated=False)
+        draft = BuildDraft(ai_generated=False)
         attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
         schematics = self.bot.services.schematics
 
@@ -189,22 +189,22 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 continue
             kind, url, data = uploaded
             if kind == "image":
-                build.image_urls.append(url)
+                draft.add_link("image", url)
             elif kind == "video":
-                build.video_urls.append(url)
+                draft.add_link("video", url)
             else:
                 pending_schematics.append((url, data))
 
-        # Prefilling is safe here: `build` was constructed empty a few lines above, so there is
+        # Prefilling is safe here: `draft` was constructed empty a few lines above, so there is
         # no human-declared value to overwrite. The modal shows these as editable defaults, and
         # whatever the human submits wins from that point on.
         analyses = await self._analyse_attachments(pending_schematics, uploader_id=interaction.user.id)
         if analyses:
             measured = analyses[0][1].analysis.metrics.dimensions
-            build.dimensions = (measured.width, measured.height, measured.length)
+            draft.dimensions = (measured.width, measured.height, measured.length)
 
         view = BuildSubmissionForm(
-            build,
+            draft,
             self.builds,
             author_id=interaction.user.id,
             locale=locale,
@@ -231,6 +231,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             )
             return
 
+        build = draft.finalize()
         self._note_dimension_mismatch(build, analyses)
         await self._note_schematic_duplicates(build, analyses)
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)

@@ -111,8 +111,9 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert generator.calls[0][0] == "system prompt"
     assert '<message id="10" author="Builder"' in generator.calls[0][1]
     assert generator.calls[0][2:] == (InferenceResult, "test-model", (), "low")
-    assert build.original_message_id == 10
-    assert build.original_message == "A redstone door\nand it is fast"
+    assert build.original_message is not None
+    assert build.original_message.message_id == 10
+    assert build.original_message.content == "A redstone door\nand it is fast"
     assert build.category is not None
     assert build.category.value == "Door"
     assert build.door_dimensions == (3, 4, 1)
@@ -121,7 +122,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     unknown_restrictions = build.extra_info.get("unknown_restrictions")
     assert unknown_restrictions is not None
     assert unknown_restrictions.get("component_restrictions") == ["Mystery"]
-    assert build.door_type == ["Regular"]
+    assert build.patterns == ["Regular"]
     assert build.extra_info.get("unknown_patterns") == ["Unknown Pattern"]
     assert build.version_spec == "1.20+"
     assert build.extra_info.get("user") == "first line\nsecond line"

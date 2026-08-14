@@ -10,7 +10,7 @@ import pytest
 
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, BuildSummary
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, DoorBuild, MediaTypeLiteral, Status
 from squid.core.errors import DataIntegrityError
 from squid.records.application.models import ActiveRecord
 from squid.sponsors import PublicSponsor
@@ -28,7 +28,6 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
     values: dict[str, Any] = {
         "id": build_id,
         "submitter_id": 123,
-        "category": BuildCategory.DOOR,
         "submission_status": Status.CONFIRMED,
         "versions": ["Java 1.21.5"],
         "version_spec": ">=1.21",
@@ -37,13 +36,22 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
         "depth": 5,
         "door_width": 2,
         "door_height": 3,
-        "door_type": ["Regular"],
-        "door_orientation_type": "Door",
+        "patterns": ["Regular"],
+        "orientation": "Door",
         "normal_opening_time": 8,
         "normal_closing_time": 10,
     }
+    url_fields = {name: changes.pop(name) for name in ("image_urls", "video_urls", "render_urls") if name in changes}
     values.update(changes)
-    return Build(**values)
+    build = DoorBuild(**values)
+    media_types: dict[str, MediaTypeLiteral] = {
+        "image_urls": "image",
+        "video_urls": "video",
+        "render_urls": "render",
+    }
+    for name, urls in url_fields.items():
+        build.replace_links(media_types[name], urls)
+    return build
 
 
 def active_record(*holder_build_ids: int) -> ActiveRecord:

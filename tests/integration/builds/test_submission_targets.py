@@ -2,6 +2,7 @@
 
 import uuid
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select, text, update
@@ -13,7 +14,7 @@ from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import Account
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, DoorBuild, ExtenderBuild, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
@@ -121,27 +122,22 @@ def _build(
     draft_id: uuid.UUID | None = None,
     sponsor: PublicSponsor | None = None,
 ) -> Build:
-    build = Build(
-        category=category,
-        submission_status=Status.PENDING,
-        submitter_account_id=account_id,
-        source_submission_draft_id=draft_id,
-        sponsor=sponsor,
-        display_name="Workshop prototype" if draft_id is not None else None,
-        versions=["Java 1.21.0"],
-        width=3,
-        height=4,
-        depth=5,
-    )
+    common: dict[str, Any] = {
+        "submission_status": Status.PENDING,
+        "submitter_account_id": account_id,
+        "source_submission_draft_id": draft_id,
+        "sponsor": sponsor,
+        "display_name": "Workshop prototype" if draft_id is not None else None,
+        "versions": ["Java 1.21.0"],
+        "width": 3,
+        "height": 4,
+        "depth": 5,
+    }
     if category is BuildCategory.DOOR:
-        build.door_width = 2
-        build.door_height = 3
-        build.door_orientation_type = "Door"
-    elif category is BuildCategory.EXTENDER:
-        build.extender_orientation = "Upward"
-        build.extension_length = 3
-        build.extender_type = "Regular"
-    return build
+        return DoorBuild(**common, door_width=2, door_height=3, orientation="Door")
+    if category is BuildCategory.EXTENDER:
+        return ExtenderBuild(**common, orientation="Upward", extension_length=3, extender_type="Regular")
+    return BUILD_CLASS_BY_CATEGORY[category](**common)
 
 
 async def test_repository_round_trips_and_updates_every_manifest_category(

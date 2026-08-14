@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Build, DoorBuild, ExtenderBuild, Status
 
 type InputDimensions = tuple[int | None, int | None, int | None]
 
@@ -199,8 +199,8 @@ class BuildSummary(BaseModel):
             preview=_preview(build),
             version_spec=build.version_spec,
             versions=list(build.versions),
-            opening_time=build.normal_opening_time,
-            closing_time=build.normal_closing_time,
+            opening_time=build.normal_opening_time if isinstance(build, DoorBuild) else None,
+            closing_time=build.normal_closing_time if isinstance(build, DoorBuild) else None,
             created_at=build.submission_time.to_stdlib() if build.submission_time is not None else None,
             updated_at=build.edited_time.to_stdlib() if build.edited_time is not None else None,
         )
@@ -248,13 +248,29 @@ class BuildDetail(BuildSummary):
     def from_domain(cls, build: Build) -> "BuildDetail":
         """Render public detail without raw extra_info or account identifiers."""
         summary = BuildSummary.from_domain(build)
+        match build:
+            case DoorBuild():
+                door_dimensions = Dimensions(width=build.door_width, height=build.door_height, depth=build.door_depth)
+                orientation = build.orientation
+                extension_length = None
+                extender_type = None
+            case ExtenderBuild():
+                door_dimensions = Dimensions(width=None, height=None, depth=None)
+                orientation = build.orientation
+                extension_length = build.extension_length
+                extender_type = build.extender_type
+            case _:
+                door_dimensions = Dimensions(width=None, height=None, depth=None)
+                orientation = None
+                extension_length = None
+                extender_type = None
         return cls(
             **summary.model_dump(),
-            door_dimensions=Dimensions(width=build.door_width, height=build.door_height, depth=build.door_depth),
-            patterns=list(build.door_type),
-            orientation=build.door_orientation_type or build.extender_orientation,
-            extension_length=build.extension_length,
-            extender_type=build.extender_type,
+            door_dimensions=door_dimensions,
+            patterns=list(build.patterns),
+            orientation=orientation,
+            extension_length=extension_length,
+            extender_type=extender_type,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
             links=BuildLinks(
@@ -279,7 +295,7 @@ class BuildDetail(BuildSummary):
 
 
 def _preview(build: Build) -> BuildPreview | None:
-    sources: tuple[tuple[Literal["render", "image"], list[str]], ...] = (
+    sources: tuple[tuple[Literal["render", "image"], tuple[str, ...]], ...] = (
         ("render", build.render_urls),
         ("image", build.image_urls),
     )

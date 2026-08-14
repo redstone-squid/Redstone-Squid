@@ -11,7 +11,7 @@ from squid.api.security import ANONYMOUS, UNBOUNDED, Principal
 from squid.api.v1.builds import list_builds
 from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import SignedCursor
 from squid.runtime import ApiServices
@@ -42,16 +42,15 @@ def awaited_kwargs(mock: AsyncMock) -> Mapping[str, Any]:
 
 
 def persisted_build(build_id: int, status: Status = Status.PENDING) -> Build:
-    return Build(
+    return DoorBuild(
         id=build_id,
         submitter_id=123,
-        category=BuildCategory.DOOR,
         submission_status=status,
         versions=["1.21"],
         door_width=2,
         door_height=2,
-        door_type=["Regular"],
-        door_orientation_type="Door",
+        patterns=["Regular"],
+        orientation="Door",
     )
 
 

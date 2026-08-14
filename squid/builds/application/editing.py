@@ -2,11 +2,11 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Final, Literal, Self, override
+from typing import Final, Literal, Self, cast, override
 
 from squid.builds.application.commands import Dimensions
 from squid.builds.application.ports import BuildLockManager, BuildRepository
-from squid.builds.domain import Build, Info, ServerInfo
+from squid.builds.domain import Build, DoorBuild, DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.core.errors import InvalidStateError
 
@@ -72,23 +72,19 @@ class BuildEditPatch:
         return patch
 
     def apply(self, build: Build) -> None:
-        """Apply the patch after the caller has acquired the build lock."""
+        """Apply the patch after the caller has acquired the build lock.
+
+        Raises:
+            InvalidBuildError: If a door-specific field is patched onto a build
+                of another category.
+        """
         direct_fields = (
             "version_spec",
-            "door_type",
-            "door_orientation_type",
             "wiring_placement_restrictions",
             "animated_restrictions",
             "component_restrictions",
             "miscellaneous_restrictions",
-            "normal_closing_time",
-            "normal_opening_time",
             "creators_ign",
-            "image_urls",
-            "video_urls",
-            "world_download_urls",
-            "schematic_urls",
-            "render_urls",
             "completion_time",
             "extra_info",
             "ai_generated",
@@ -98,10 +94,50 @@ class BuildEditPatch:
             if value is not UNSET:
                 setattr(build, name, value)
 
+        if not isinstance(self.door_type, _Unset):
+            build.patterns = self.door_type
+
+        media_fields: tuple[tuple[str, MediaTypeLiteral], ...] = (
+            ("image_urls", "image"),
+            ("video_urls", "video"),
+            ("world_download_urls", "world-download"),
+            ("schematic_urls", "schematic"),
+            ("render_urls", "render"),
+        )
+        for name, media_type in media_fields:
+            value = getattr(self, name)
+            if not isinstance(value, _Unset):
+                build.replace_links(media_type, value)
+
         if not isinstance(self.dimensions, _Unset):
             build.dimensions = self.dimensions
-        if not isinstance(self.door_dimensions, _Unset):
-            build.door_dimensions = self.door_dimensions
+
+        door_fields = ("door_dimensions", "door_orientation_type", "normal_closing_time", "normal_opening_time")
+        patched_door_fields = [name for name in door_fields if not isinstance(getattr(self, name), _Unset)]
+        if patched_door_fields:
+            if not isinstance(build, DoorBuild):
+                msg = "Door fields can only be edited on door builds."
+                raise InvalidBuildError(
+                    msg,
+                    context={"build_id": build.id, "category": build.category, "fields": patched_door_fields},
+                    public_context={"fields": patched_door_fields},
+                )
+            if not isinstance(self.door_dimensions, _Unset):
+                width, height, depth = self.door_dimensions
+                # A cleared width or height falls back to the entity's declared
+                # defaults, matching the save-time coercion this replaced.
+                door_fields_by_name = type(build).__dataclass_fields__
+                build.door_width = width if width is not None else cast(int, door_fields_by_name["door_width"].default)
+                build.door_height = (
+                    height if height is not None else cast(int, door_fields_by_name["door_height"].default)
+                )
+                build.door_depth = depth
+            if not isinstance(self.door_orientation_type, _Unset) and self.door_orientation_type is not None:
+                build.orientation = cast(DoorOrientationLiteral, self.door_orientation_type)
+            if not isinstance(self.normal_closing_time, _Unset):
+                build.normal_closing_time = self.normal_closing_time
+            if not isinstance(self.normal_opening_time, _Unset):
+                build.normal_opening_time = self.normal_opening_time
 
         if not isinstance(self.locationality, _Unset):
             self._replace_reliability(

@@ -50,7 +50,7 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     time, and ``build.tags`` is the single source the repository persists.
     """
     restrictions = [value for values in build.restrictions.values() for value in values or ()]
-    patterns = list(build.door_type) or (
+    patterns = list(build.patterns) or (
         ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
     )
     resolution = await resolver.resolve_official(
@@ -89,7 +89,7 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
         for definition in resolved
         if definition.semantic_kind is TagSemanticKind.RESTRICTION and definition.restriction_type == "miscellaneous"
     ]
-    build.door_type = [
+    build.patterns = [
         definition.display_name for definition in resolved if definition.semantic_kind is TagSemanticKind.PATTERN
     ]
 

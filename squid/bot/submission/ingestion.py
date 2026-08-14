@@ -30,13 +30,17 @@ async def ingest_message_bundle(
 ) -> list[Build]:
     """Infer, mirror, analyze, submit, and track one message bundle."""
     bundle = await assemble_bundle(primary, preceding=preceding, include_images=include_images)
-    builds = await services.build_inference.infer(
+    drafts = await services.build_inference.infer(
         bundle,
         model=model,
         reasoning_effort=reasoning_effort,
     )
-    if not builds or dry_run:
-        return builds
+    # Inference may leave the category open; finalization needs one, and a build
+    # log bundle without a clearer signal is overwhelmingly a door.
+    for draft in drafts:
+        draft.category = draft.category or BuildCategory.DOOR
+    if not drafts or dry_run:
+        return [draft.finalize() for draft in drafts]
 
     media_urls: dict[str, list[str]] = {"image": [], "video": []}
     pending_schematics: list[tuple[IngestRequest, IngestedSchematic]] = []
@@ -70,9 +74,13 @@ async def ingest_message_bundle(
                 continue
             media_urls[classified.kind].append(url)
 
-    for build in builds:
-        build.image_urls.extend(media_urls["image"])
-        build.video_urls.extend(media_urls["video"])
+    builds: list[Build] = []
+    for draft in drafts:
+        for url in media_urls["image"]:
+            draft.add_link("image", url)
+        for url in media_urls["video"]:
+            draft.add_link("video", url)
+        build = draft.finalize()
         if pending_schematics:
             try:
                 duplicates = await services.schematics.find_duplicates(pending_schematics[0][1])
@@ -88,9 +96,9 @@ async def ingest_message_bundle(
             except SquidError:
                 logger.warning("Could not check an inferred schematic for duplicates", exc_info=True)
 
-        category = build.category or BuildCategory.DOOR
-        await services.builds.submit(build, submitter_id=uploader_id, ai_generated=True, category=category)
+        await services.builds.submit(build, submitter_id=uploader_id, ai_generated=True)
         assert build.id is not None
+        builds.append(build)
         for index, (request, ingested) in enumerate(pending_schematics):
             try:
                 await services.schematics.record(build.id, ingested, request, primary=index == 0)

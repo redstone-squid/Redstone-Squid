@@ -18,16 +18,26 @@ are silently defaulted to 1x2 on write.
 """
 
 from dataclasses import fields as dataclass_fields
+from typing import Any
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.infrastructure.models import Account
 from squid.builds.application.taxonomy import apply_build_taxonomy
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import (
+    BUILD_CLASS_BY_CATEGORY,
+    Build,
+    BuildCategory,
+    BuildLink,
+    DoorBuild,
+    ExtenderBuild,
+    OriginalMessage,
+    OtherBuild,
+    Status,
+)
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.settings.infrastructure.models import ServerSetting
@@ -149,49 +159,56 @@ async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> 
 
 def _make_build(category: BuildCategory, account_id: int) -> Build:
     """A fully populated build whose taxonomy resolves without loss."""
-    build = Build(
-        category=category,
-        submission_status=Status.PENDING,
-        record_category="Smallest",
-        submitter_account_id=account_id,
-        versions=["Java 1.21.0"],
-        version_spec="1.21+",
-        width=5,
-        height=7,
-        depth=3,
-        wiring_placement_restrictions=[KNOWN_RESTRICTIONS["wiring-placement"]],
-        animated_restrictions=[KNOWN_RESTRICTIONS["animated"]],
-        component_restrictions=[KNOWN_RESTRICTIONS["component"]],
-        miscellaneous_restrictions=[KNOWN_RESTRICTIONS["miscellaneous"]],
-        extra_info={"user": "Some additional context"},
-        creators_ign=["Alice", "Bob"],
-        image_urls=["https://example.com/a.png"],
-        video_urls=["https://example.com/a.mp4"],
-        world_download_urls=["https://example.com/world.zip"],
-        schematic_urls=["https://example.com/a.schem"],
-        render_urls=["https://example.com/render.png"],
-        display_name="Round trip probe",
-        completion_time="~2 seconds",
-        completion_evidence="https://example.com/evidence",
-        description="A build with every mappable field populated.",
-        ai_generated=False,
-    )
+    common: dict[str, Any] = {
+        "submission_status": Status.PENDING,
+        "record_category": "Smallest",
+        "submitter_account_id": account_id,
+        "versions": ["Java 1.21.0"],
+        "version_spec": "1.21+",
+        "width": 5,
+        "height": 7,
+        "depth": 3,
+        "wiring_placement_restrictions": [KNOWN_RESTRICTIONS["wiring-placement"]],
+        "animated_restrictions": [KNOWN_RESTRICTIONS["animated"]],
+        "component_restrictions": [KNOWN_RESTRICTIONS["component"]],
+        "miscellaneous_restrictions": [KNOWN_RESTRICTIONS["miscellaneous"]],
+        "extra_info": {"user": "Some additional context"},
+        "creators_ign": ["Alice", "Bob"],
+        "links": [
+            BuildLink(url="https://example.com/a.png", media_type="image"),
+            BuildLink(url="https://example.com/a.mp4", media_type="video"),
+            BuildLink(url="https://example.com/world.zip", media_type="world-download"),
+            BuildLink(url="https://example.com/a.schem", media_type="schematic"),
+            BuildLink(url="https://example.com/render.png", media_type="render"),
+        ],
+        "display_name": "Round trip probe",
+        "completion_time": "~2 seconds",
+        "completion_evidence": "https://example.com/evidence",
+        "description": "A build with every mappable field populated.",
+        "ai_generated": False,
+    }
     if category is BuildCategory.DOOR:
-        build.door_width = 2
-        build.door_height = 3
-        build.door_depth = 1
-        build.door_type = ["Full Lamp"]
-        build.door_orientation_type = "Trapdoor"
-        build.normal_opening_time = 12
-        build.normal_closing_time = 15
-        build.visible_opening_time = 10
-        build.visible_closing_time = 13
-    elif category is BuildCategory.EXTENDER:
-        build.door_type = ["Full Lamp"]
-        build.extender_orientation = "Upward"
-        build.extension_length = 6
-        build.extender_type = "Regular"
-    return build
+        return DoorBuild(
+            **common,
+            patterns=["Full Lamp"],
+            door_width=2,
+            door_height=3,
+            door_depth=1,
+            orientation="Trapdoor",
+            normal_opening_time=12,
+            normal_closing_time=15,
+            visible_opening_time=10,
+            visible_closing_time=13,
+        )
+    if category is BuildCategory.EXTENDER:
+        return ExtenderBuild(
+            **common,
+            patterns=["Full Lamp"],
+            orientation="Upward",
+            extension_length=6,
+            extender_type="Regular",
+        )
+    return BUILD_CLASS_BY_CATEGORY[category](**common)
 
 
 # Fields whose lists are rebuilt from tag rows on read; ordering is not part of
@@ -201,8 +218,9 @@ _SET_COMPARED = {
     "animated_restrictions",
     "component_restrictions",
     "miscellaneous_restrictions",
-    "door_type",
+    "patterns",
     "creators_ign",
+    "links",
 }
 # The ORM fills submission_time at insert (default_factory=Instant.now), so a
 # None on the domain object does not survive the trip. save() likewise stamps
@@ -215,7 +233,8 @@ _TAG_FIELDS = {"tags"}
 
 def _assert_round_trip(saved: Build, loaded: Build) -> None:
     """Field-for-field comparison over the dataclass, with labelled exceptions."""
-    for field in dataclass_fields(Build):
+    assert type(loaded) is type(saved), "category subclass did not round-trip"
+    for field in dataclass_fields(saved):
         name = field.name
         saved_value = getattr(saved, name)
         loaded_value = getattr(loaded, name)
@@ -273,10 +292,10 @@ async def test_update_round_trip_preserves_category_fields(
 
     build.description = "Edited description"
     build.width = 9
-    if category is BuildCategory.DOOR:
+    if isinstance(build, DoorBuild):
         build.door_width = 4
         build.normal_opening_time = 20
-    elif category is BuildCategory.EXTENDER:
+    elif isinstance(build, ExtenderBuild):
         build.extension_length = 11
     await _resolve_and_save(migrated_session_factory, repository, build)
 
@@ -311,27 +330,29 @@ async def test_original_message_round_trips(
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(BuildCategory.OTHER, account_id)
-    frozen = Build(
-        category=build.category,
+    frozen = OtherBuild(
         submission_status=build.submission_status,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
-        original_server_id=4000,
-        original_channel_id=5000,
-        original_message_id=6000,
-        original_message_author_id=7000,
-        original_message="the original submission text",
+        original_message=OriginalMessage(
+            message_id=6000,
+            server_id=4000,
+            channel_id=5000,
+            author_id=7000,
+            content="the original submission text",
+        ),
     )
     await repository.save(frozen)
     assert frozen.id is not None
 
     loaded = await repository.get_by_id(frozen.id)
     assert loaded is not None
-    assert loaded.original_server_id == 4000
-    assert loaded.original_channel_id == 5000
-    assert loaded.original_message_id == 6000
-    assert loaded.original_message_author_id == 7000
-    assert loaded.original_message == "the original submission text"
+    assert loaded.original_message is not None
+    assert loaded.original_message.server_id == 4000
+    assert loaded.original_message.channel_id == 5000
+    assert loaded.original_message.message_id == 6000
+    assert loaded.original_message.author_id == 7000
+    assert loaded.original_message.content == "the original submission text"
 
 
 # --- Edit-time taxonomy handling ---------------------------------------------
@@ -386,19 +407,19 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(BuildCategory.DOOR, account_id)
-    build.door_type = []
+    build.patterns = []
     await repository.save(build)
 
     # Without apply_build_taxonomy, the strings are not resolved, no default
     # pattern is injected, and the input is not mutated.
-    assert build.door_type == []
+    assert build.patterns == []
     assert build.tags == []
 
     assert build.id is not None
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     assert loaded.tags == []
-    assert loaded.door_type == []
+    assert loaded.patterns == []
 
 
 async def test_apply_build_taxonomy_defaults_door_pattern(
@@ -408,55 +429,72 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(BuildCategory.DOOR, account_id)
-    build.door_type = []
+    build.patterns = []
     await apply_build_taxonomy(build, OfficialTagResolver(migrated_session_factory))
 
     # The default pattern is materialized visibly at edit time.
-    assert build.door_type == ["Regular"]
+    assert build.patterns == ["Regular"]
     assert {assignment.definition.stable_key for assignment in build.tags} >= {"pattern-regular"}
 
     await repository.save(build)
     assert build.id is not None
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
-    assert loaded.door_type == ["Regular"]
+    assert loaded.patterns == ["Regular"]
 
 
-async def test_asymmetry_same_url_under_two_media_types_is_rejected(
+async def test_replacing_links_of_one_media_type_moves_a_shared_url(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The schema keys links by (build_id, url); the flat domain model does not.
+    """The schema keys links by (build_id, url), and the model now matches it.
 
-    The five parallel url lists let a caller place one URL under two media
-    types, a state the database rejects only at save time. The links redesign
-    makes this unrepresentable in the domain model.
+    Under the five parallel url lists a caller could place one URL under two
+    media types, a state the database rejected only at save time. With a single
+    typed collection, re-adding the URL as a video simply moves it.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(BuildCategory.OTHER, account_id)
-    build.image_urls = ["https://example.com/dual.png"]
-    build.video_urls = ["https://example.com/dual.png"]
-    with pytest.raises(IntegrityError):
-        await repository.save(build)
+    build.replace_links("image", ["https://example.com/dual.png"])
+    build.replace_links("video", ["https://example.com/dual.png"])
+    build.replace_links("image", [])
+    await _resolve_and_save(migrated_session_factory, repository, build)
+
+    assert build.id is not None
+    loaded = await repository.get_by_id(build.id)
+    assert loaded is not None
+    assert loaded.image_urls == ()
+    assert loaded.video_urls == ("https://example.com/dual.png",)
 
 
-async def test_asymmetry_missing_door_dimensions_are_defaulted(
+async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    """Door dimensions default on the entity, so save has nothing to coerce.
+
+    They used to be optional on the flat model and were silently forced to 1x2
+    during the write; DoorBuild declares them as required ints with those
+    defaults instead.
+    """
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
 
-    build = _make_build(BuildCategory.DOOR, account_id)
-    build.door_width = None
-    build.door_height = None
-    await repository.save(build)
+    build = DoorBuild(
+        submission_status=Status.PENDING,
+        submitter_account_id=account_id,
+        versions=["Java 1.21.0"],
+        # The column is NOT NULL, so save() normalizes None to False; setting it
+        # keeps this test about door dimensions.
+        ai_generated=False,
+    )
+    assert (build.door_width, build.door_height) == (1, 2)
+    await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
-    assert loaded.door_width == 1
-    assert loaded.door_height == 2
+    _assert_round_trip(build, loaded)
 
 
 # --- Property-based round trip -----------------------------------------------
@@ -464,8 +502,6 @@ async def test_asymmetry_missing_door_dimensions_are_defaulted(
 
 # The pools are disjoint per media type: build_links' primary key is
 # (build_id, url), so one URL cannot carry two media types on the same build.
-# The flat domain model does not encode that constraint; see the deterministic
-# test below which pins the resulting IntegrityError.
 _IMAGE_URLS = st.lists(
     st.sampled_from(["https://example.com/one.png", "https://example.com/two.png"]),
     max_size=2,
@@ -479,17 +515,18 @@ _VIDEO_URLS = st.lists(
 
 
 @st.composite
-def _build_values(draw: st.DrawFn) -> dict[str, object]:
+def _build_values(draw: st.DrawFn) -> tuple[BuildCategory, dict[str, object]]:
     category = draw(st.sampled_from(list(BuildCategory)))
     values: dict[str, object] = {
-        "category": category,
         "width": draw(st.none() | st.integers(min_value=1, max_value=100)),
         "height": draw(st.none() | st.integers(min_value=1, max_value=100)),
         "depth": draw(st.none() | st.integers(min_value=1, max_value=100)),
         "description": draw(st.none() | st.text(st.characters(codec="utf-8", exclude_categories=("C",)), max_size=80)),
         "creators_ign": draw(st.lists(st.sampled_from(["Alice", "Bob", "Charlie"]), max_size=3, unique=True)),
-        "image_urls": draw(_IMAGE_URLS),
-        "video_urls": draw(_VIDEO_URLS),
+        "links": [
+            *(BuildLink(url=url, media_type="image") for url in draw(_IMAGE_URLS)),
+            *(BuildLink(url=url, media_type="video") for url in draw(_VIDEO_URLS)),
+        ],
         "component_restrictions": draw(
             st.lists(st.sampled_from([KNOWN_RESTRICTIONS["component"]]), max_size=1, unique=True)
         ),
@@ -501,13 +538,13 @@ def _build_values(draw: st.DrawFn) -> dict[str, object]:
     if category is BuildCategory.DOOR:
         values["door_width"] = draw(st.integers(min_value=1, max_value=10))
         values["door_height"] = draw(st.integers(min_value=1, max_value=10))
-        values["door_orientation_type"] = draw(st.sampled_from(["Door", "Skydoor", "Trapdoor"]))
-        values["door_type"] = draw(st.lists(st.sampled_from(list(KNOWN_PATTERNS)), max_size=2, unique=True))
+        values["orientation"] = draw(st.sampled_from(["Door", "Skydoor", "Trapdoor"]))
+        values["patterns"] = draw(st.lists(st.sampled_from(list(KNOWN_PATTERNS)), max_size=2, unique=True))
         values["normal_opening_time"] = draw(st.none() | st.integers(min_value=0, max_value=10_000))
     elif category is BuildCategory.EXTENDER:
         values["extension_length"] = draw(st.none() | st.integers(min_value=1, max_value=30))
-        values["door_type"] = draw(st.lists(st.sampled_from(list(KNOWN_PATTERNS)), max_size=2, unique=True))
-    return values
+        values["patterns"] = draw(st.lists(st.sampled_from(list(KNOWN_PATTERNS)), max_size=2, unique=True))
+    return category, values
 
 
 @pytest.fixture
@@ -523,7 +560,7 @@ async def seeded_factory(
 @given(values=_build_values())
 async def test_round_trip_property(
     seeded_factory: tuple[async_sessionmaker[AsyncSession], int],
-    values: dict[str, object],
+    values: tuple[BuildCategory, dict[str, object]],
 ) -> None:
     """Any build drawn from resolvable taxonomy survives save→load intact.
 
@@ -532,12 +569,13 @@ async def test_round_trip_property(
     """
     session_factory, account_id = seeded_factory
     repository = BuildRepository(session_factory)
+    category, field_values = values
 
-    build = Build(
+    build = BUILD_CLASS_BY_CATEGORY[category](
         submission_status=Status.PENDING,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
-        **values,  # type: ignore[arg-type]
+        **field_values,  # type: ignore[arg-type]
     )
     await _resolve_and_save(session_factory, repository, build)
     assert build.id is not None

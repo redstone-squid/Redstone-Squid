@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock
 import discord
 
 from squid.bot.submission.ui.views import BUILD_INFO_TIMEOUT_SECONDS, BuildInfoView
-from squid.builds.domain import Build
+from squid.builds.domain import OtherBuild
 
 
 async def test_build_info_view_expires_and_disables_every_control() -> None:
     """Stateful build navigation does not remain registered indefinitely."""
-    view = BuildInfoView[Any](Build(id=42))
+    view = BuildInfoView[Any](OtherBuild(id=42))
     message = AsyncMock(spec=discord.Message)
     view._message = cast(discord.Message, message)  # pyright: ignore[reportPrivateUsage]
 

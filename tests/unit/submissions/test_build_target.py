@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import Build, BuildCategory, DoorBuild, ExtenderBuild, OtherBuild
 from squid.builds.errors import InvalidBuildError
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ActionableSubmissionError
@@ -170,7 +170,6 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
     assert result.target_key == TARGET_KEY
     assert arguments["submitter_account_id"] == 17
     assert arguments["source_submission_draft_id"] == DRAFT_ID
-    assert arguments["category"] is build_category
     assert build.submitter_id is None
     assert build.category is build_category
     assert build.display_name == "Workshop prototype"
@@ -209,8 +208,9 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
 
     build = builds.calls[0][0]
     assert build.door_dimensions == (3, 4, 2)
-    assert build.door_orientation_type == "Trapdoor"
-    assert build.door_type == ["Regular"]
+    assert isinstance(build, DoorBuild)
+    assert build.orientation == "Trapdoor"
+    assert build.patterns == ["Regular"]
     assert build.wiring_placement_restrictions == ["Seamless"]
     assert [assignment.definition.stable_key for assignment in build.tags] == ["showcase_compact"]
     assert (build.normal_opening_time, build.visible_opening_time) == (4, 3)
@@ -302,7 +302,7 @@ async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_prove
 
     class RacingBuilds(FakeBuilds):
         async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
-            return Build(
+            return OtherBuild(
                 id=41,
                 submitter_account_id=17,
                 source_submission_draft_id=DRAFT_ID,
@@ -329,7 +329,8 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
     await BuildSubmissionTarget(builds, FakeTags(), FakeVersions()).create_or_get(submission)
 
     build = builds.calls[0][0]
-    assert build.extender_orientation == "Upward"
+    assert isinstance(build, ExtenderBuild)
+    assert build.orientation == "Upward"
     assert build.extension_length == 5
     provenance = cast(Mapping[str, object], build.extra_info).get("submission_provenance")
     assert isinstance(provenance, Mapping)
