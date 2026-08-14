@@ -8,6 +8,7 @@ import discord
 import pytest
 from discord.ext.commands import Context
 
+from squid.accounts.application import AccountService
 from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     AccountIdCache,
@@ -103,14 +104,14 @@ class TestRequires:
         bot, guild = _bot(member_id=8, store=store)
         context = _context(bot, guild, _member(8, guild))
 
-        assert await requires("vote.log_delete.cast").predicate(context)  # pyright: ignore[reportFunctionMemberAccess]
+        assert await requires("vote.log_delete.cast").predicate(context)
 
     async def test_a_missing_node_names_itself(self) -> None:
         bot, guild = _bot(member_id=8)
         context = _context(bot, guild, _member(8, guild))
 
         with pytest.raises(PermissionNodeRequired) as raised:
-            await requires("build.submission.approve").predicate(context)  # pyright: ignore[reportFunctionMemberAccess]
+            await requires("build.submission.approve").predicate(context)
 
         assert raised.value.nodes == ("build.submission.approve",)
         assert raised.value.forbidden is False
@@ -124,7 +125,7 @@ class TestRequires:
         context = _context(bot, guild, _member(8, guild))
 
         with pytest.raises(PermissionNodeRequired) as raised:
-            await requires("build.submission.approve").predicate(context)  # pyright: ignore[reportFunctionMemberAccess]
+            await requires("build.submission.approve").predicate(context)
 
         assert raised.value.forbidden is True
 
@@ -135,15 +136,13 @@ class TestRequires:
         bot, guild = _bot(member_id=8, store=store)
         context = _context(bot, guild, _member(8, guild))
 
-        assert await requires(  # pyright: ignore[reportFunctionMemberAccess]
-            "build.submission.approve", "vote.log_delete.cast", mode="any"
-        ).predicate(context)
+        assert await requires("build.submission.approve", "vote.log_delete.cast", mode="any").predicate(context)
 
     async def test_the_declared_nodes_are_introspectable(self) -> None:
         """The taxonomy test reads this rather than a predicate's name."""
         decorated = requires("settings.server.edit", mode="all")
 
-        assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyright: ignore[reportFunctionMemberAccess]
+        assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyrefly: ignore[missing-attribute]
 
     def test_an_unknown_node_fails_at_import_time(self) -> None:
         from squid.permissions.domain import UnknownPermissionNodeError
@@ -180,16 +179,16 @@ class TestAccountIdCache:
         accounts = FakeAccountService()
         cache = AccountIdCache()
 
-        assert await cache.resolve(cast(object, accounts), 5) == 5  # pyright: ignore[reportArgumentType]
-        assert await cache.resolve(cast(object, accounts), 5) == 5  # pyright: ignore[reportArgumentType]
+        assert await cache.resolve(cast(AccountService, accounts), 5) == 5
+        assert await cache.resolve(cast(AccountService, accounts), 5) == 5
         assert accounts.lookups == 1
 
     async def test_forgetting_an_entry_forces_a_reread(self) -> None:
         accounts = FakeAccountService()
         cache = AccountIdCache()
 
-        await cache.resolve(cast(object, accounts), 5)  # pyright: ignore[reportArgumentType]
+        await cache.resolve(cast(AccountService, accounts), 5)
         cache.forget(5)
-        await cache.resolve(cast(object, accounts), 5)  # pyright: ignore[reportArgumentType]
+        await cache.resolve(cast(AccountService, accounts), 5)
 
         assert accounts.lookups == 2

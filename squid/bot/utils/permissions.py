@@ -6,9 +6,8 @@ engine in `squid.permissions` decides. Nothing here knows about tiers any more:
 command runs rather than who is running it.
 """
 
-from collections.abc import Callable
 from functools import cache
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import discord
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
@@ -18,6 +17,8 @@ from squid.accounts.application import AccountService
 from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason, Subject
 
 if TYPE_CHECKING:
+    from discord.ext.commands._types import Check
+
     import squid.bot.app
 
 type CheckMode = Literal["all", "any"]
@@ -133,7 +134,7 @@ def requires(
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
     guild_only: bool = False,
-) -> Callable[[Any], Any]:
+) -> "Check[Context[squid.bot.app.RedstoneSquid]]":
     """Require permission nodes, decided by the permission engine.
 
     `mode="any"` passes when the caller holds one of the nodes, for a command
