@@ -216,11 +216,15 @@ class PermissionGrant(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
     effect: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    granted_by_account_id: Mapped[int] = mapped_column(
+    granted_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_grants_granted_by_fkey", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
+        default=None,
     )
+    """Who issued this, or NULL when the system did: a migration backfill or the
+    owner recovery CLI has no human grantor, and inventing one would put a
+    fictional account into the audit trail."""
     subject_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_grants_subject_account_fkey", ondelete="CASCADE"),
@@ -287,11 +291,13 @@ class PermissionRoleAssignment(Base, kw_only=True):
         ForeignKey("permission_roles.id", name="permission_role_assignments_role_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    granted_by_account_id: Mapped[int] = mapped_column(
+    granted_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_role_assignments_granted_by_fkey", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
+        default=None,
     )
+    """Who issued this, or NULL when the system did. See `PermissionGrant`."""
     subject_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_role_assignments_subject_account_fkey", ondelete="CASCADE"),
