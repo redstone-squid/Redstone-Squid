@@ -56,6 +56,7 @@ from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
     AuthorizationService,
+    PermissionAdministrationService,
     PermissionEpochWatcher,
     PermissionService,
     SubjectRuleCache,
@@ -63,6 +64,7 @@ from squid.permissions.application import (
 from squid.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
     GlobalAdministratorRepository,
+    PermissionAdminRepository,
     PermissionRepository,
 )
 from squid.persistence.engine import DatabaseEngine
@@ -216,6 +218,10 @@ class _ServiceGraph:
     @cached_property
     def permissions(self) -> PermissionService:
         return PermissionService(self.permission_repository, cache=self.permission_cache)
+
+    @cached_property
+    def permission_admin(self) -> PermissionAdministrationService:
+        return PermissionAdministrationService(PermissionAdminRepository(self.db.async_session), self.permissions)
 
     @cached_property
     def permission_epoch(self) -> PermissionEpochWatcher:
@@ -604,6 +610,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         messages=MessageService(MessageRepository(db.async_session)),
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         permissions=graph.permissions,
+        permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
         record_computation=graph.record_computation,

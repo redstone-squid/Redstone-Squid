@@ -27,7 +27,12 @@ from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
-from squid.permissions.application import AuthorizationService, PermissionEpochWatcher, PermissionService
+from squid.permissions.application import (
+    AuthorizationService,
+    PermissionAdministrationService,
+    PermissionEpochWatcher,
+    PermissionService,
+)
 from squid.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
@@ -93,6 +98,7 @@ class BotServices:
     messages: MessageService
     authorization: AuthorizationService
     permissions: PermissionService
+    permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
     record_computation: RecordComputationService

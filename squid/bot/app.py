@@ -138,6 +138,7 @@ class RedstoneSquid(Bot):
             "squid.bot.notifications",
             "squid.bot.verify",
             "squid.bot.admin",
+            "squid.bot.permissions",
             "squid.bot.give_redstoner",
             "squid.bot.version_tracking",
             "squid.bot.welcome_relay",

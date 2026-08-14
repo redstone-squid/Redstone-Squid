@@ -116,3 +116,189 @@ class ActorCapabilityResolver(Protocol):
     ) -> frozenset[str]:
         """The subset of `nodes` the described actor holds."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class RuleRow:
+    """One stored rule, as `/perm list` and `/perm audit` render it."""
+
+    id: int
+    pattern: str
+    effect: int
+    subject_account_id: int | None = None
+    subject_role_id: int | None = None
+    subject_guild_id: int | None = None
+    scope_guild_id: int | None = None
+    expires_at: Instant | None = None
+    granted_by_account_id: int | None = None
+    granted_at: Instant | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AssignmentRow:
+    """One stored role assignment, with the role's slug resolved."""
+
+    id: int
+    role_id: int
+    role_slug: str
+    subject_account_id: int | None = None
+    subject_role_id: int | None = None
+    subject_guild_id: int | None = None
+    scope_guild_id: int | None = None
+    expires_at: Instant | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AuditRow:
+    """One recorded permission mutation."""
+
+    id: int
+    action: str
+    at: Instant
+    actor_account_id: int | None = None
+    subject_kind: str | None = None
+    subject_id: int | None = None
+    subject_guild_id: int | None = None
+    pattern: str | None = None
+    role_id: int | None = None
+    scope_guild_id: int | None = None
+    effect: int | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AuditEntry:
+    """What the service asks the store to append when it changes something."""
+
+    action: str
+    actor_account_id: int | None = None
+    subject_kind: str | None = None
+    subject_id: int | None = None
+    subject_guild_id: int | None = None
+    pattern: str | None = None
+    role_id: int | None = None
+    scope_guild_id: int | None = None
+    effect: int | None = None
+    expires_at: Instant | None = None
+    reason: str | None = None
+    details: dict[str, object] | None = None
+
+
+class PermissionAdminStore(Protocol):
+    """Write operations behind `/perm` and `/role`.
+
+    Every mutation takes the audit entry that describes it, because the log is
+    written in the same transaction as the change: an audit trail that can be
+    half-written is not an audit trail.
+    """
+
+    async def upsert_grant(
+        self,
+        *,
+        pattern: str,
+        effect: int,
+        subject_account_id: int | None,
+        subject_role_id: int | None,
+        subject_guild_id: int | None,
+        scope_guild_id: int | None,
+        expires_at: Instant | None,
+        granted_by_account_id: int | None,
+        reason: str | None,
+        audit: AuditEntry,
+    ) -> None: ...
+
+    async def delete_grant(
+        self,
+        *,
+        pattern: str,
+        subject_account_id: int | None,
+        subject_role_id: int | None,
+        scope_guild_id: int | None,
+        audit: AuditEntry,
+    ) -> bool: ...
+
+    async def list_rules(
+        self,
+        *,
+        subject_account_id: int | None = None,
+        subject_role_id: int | None = None,
+        guild_id: int | None = None,
+    ) -> tuple[RuleRow, ...]: ...
+
+    async def list_assignments(
+        self,
+        *,
+        subject_account_id: int | None = None,
+        subject_role_id: int | None = None,
+        guild_id: int | None = None,
+    ) -> tuple[AssignmentRow, ...]: ...
+
+    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]: ...
+
+    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None: ...
+
+    async def create_role(
+        self,
+        *,
+        slug: str,
+        name: str,
+        description: str | None,
+        guild_id: int | None,
+        rank: int,
+        created_by_account_id: int | None,
+        audit: AuditEntry,
+    ) -> RoleRecord: ...
+
+    async def delete_role(self, role_id: int, *, audit: AuditEntry) -> bool: ...
+
+    async def set_role_rank(self, role_id: int, rank: int, *, audit: AuditEntry) -> None: ...
+
+    async def set_role_pattern(
+        self,
+        role_id: int,
+        pattern: str,
+        mode: int,
+        *,
+        added_by_account_id: int | None,
+        audit: AuditEntry,
+    ) -> None: ...
+
+    async def remove_role_pattern(self, role_id: int, pattern: str, *, audit: AuditEntry) -> bool: ...
+
+    async def add_role_include(
+        self,
+        role_id: int,
+        included_role_id: int,
+        *,
+        added_by_account_id: int | None,
+        audit: AuditEntry,
+    ) -> None: ...
+
+    async def remove_role_include(self, role_id: int, included_role_id: int, *, audit: AuditEntry) -> bool: ...
+
+    async def assign_role(
+        self,
+        role_id: int,
+        *,
+        subject_account_id: int | None,
+        subject_role_id: int | None,
+        subject_guild_id: int | None,
+        scope_guild_id: int | None,
+        expires_at: Instant | None,
+        granted_by_account_id: int | None,
+        reason: str | None,
+        audit: AuditEntry,
+    ) -> None: ...
+
+    async def unassign_role(
+        self,
+        role_id: int,
+        *,
+        subject_account_id: int | None,
+        subject_role_id: int | None,
+        scope_guild_id: int | None,
+        audit: AuditEntry,
+    ) -> bool: ...
+
+    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]: ...
