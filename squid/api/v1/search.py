@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query
 
 from squid.api.dependencies import BuildQueries, Search
 from squid.api.errors import responses
-from squid.api.pagination import Page
+from squid.api.pagination import OffsetParam, Page, PageSizeParam, anchor
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
@@ -56,8 +56,8 @@ async def search(
     q: Annotated[str, Query(max_length=1_000)],
     scope: SearchScope = SearchScope.ALL,
     sort: Annotated[str | None, Query(max_length=80)] = None,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
-    cursor: Annotated[str | None, Query(max_length=4_096)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
 ) -> Page[SearchResult]:
     """Match builds, computed records, and taxonomy entries in one ranked page."""
     result = await search_service.search(
@@ -66,7 +66,7 @@ async def search(
             scope=scope,
             mode=SearchMode.LEXICAL,
             page_size=page_size,
-            cursor=cursor,
+            offset=offset or 0,
             sort=parse_sort(sort),
             visible_statuses=PUBLIC_SEARCH_STATUSES,
         )
@@ -85,7 +85,12 @@ async def search(
                 items.append(RecordSearchResult(score=hit.score, record=RecordSearchEntry.from_domain(hit)))
             case "metadata":
                 items.append(MetadataSearchResult(score=hit.score, metadata=MetadataSearchEntry.from_domain(hit)))
-    return Page(items=items, next_cursor=result.next_cursor, has_more=result.has_more)
+    return Page(
+        items=items,
+        total=result.total,
+        next=anchor(result.next),
+        prev=anchor(result.prev),
+    )
 
 
 def parse_sort(value: str | None) -> SearchSort | None:

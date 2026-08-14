@@ -2,15 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Path, Response
 
-from squid.api.dependencies import BuildQueries, CursorSigner, Schematics
+from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
-from squid.api.pagination import Page
+from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
 from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.builds.domain import Status
 from squid.builds.errors import BuildNotFoundError
-from squid.core.errors import ErrorCode, ValidationError
+from squid.core.pagination import offset_page
 
 router = APIRouter(tags=["schematics"])
 
@@ -24,25 +24,16 @@ async def list_build_schematics(
     build_id: int,
     build_queries: BuildQueries,
     schematics: Schematics,
-    signer: CursorSigner,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 50,
-    cursor: Annotated[str | None, Query(max_length=4_096)] = None,
+    page_size: PageSizeParam = 50,
+    offset: OffsetParam = None,
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a confirmed build."""
     build = await build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
     stored = await schematics.list_public_for_build(build_id)
-    binding = f"build-schematics:{build_id}"
-    offset = _offset(signer, cursor, binding)
-    selected = stored[offset : offset + page_size]
-    next_offset = offset + len(selected)
-    has_more = next_offset < len(stored)
-    return Page(
-        items=[SchematicSummary.from_domain(schematic) for schematic in selected],
-        next_cursor=signer.encode({"offset": next_offset}, binding=binding) if has_more else None,
-        has_more=has_more,
-    )
+    page = offset_page(stored, offset=offset or 0, page_size=page_size)
+    return render_page(page, SchematicSummary.from_domain)
 
 
 @router.get(
@@ -97,13 +88,3 @@ async def get_schematic_render_content(
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
-
-
-def _offset(signer: CursorSigner, cursor: str | None, binding: str) -> int:
-    if cursor is None:
-        return 0
-    value = signer.decode(cursor, binding=binding).get("offset")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        msg = "cursor payload contains an invalid offset"
-        raise ValidationError(msg, code=ErrorCode.INVALID_CURSOR)
-    return value

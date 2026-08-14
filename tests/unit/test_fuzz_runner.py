@@ -19,9 +19,9 @@ def test_parse_run_defaults_to_the_smoke_budget() -> None:
     [
         (),
         ("target=unknown",),
-        ("target=cursor_codec", "seconds=0"),
-        ("target=cursor_codec", "seconds=not-an-integer"),
-        ("target=cursor_codec", "target=version_parser"),
+        ("target=search_parser", "seconds=0"),
+        ("target=search_parser", "seconds=not-an-integer"),
+        ("target=search_parser", "target=version_parser"),
     ],
 )
 def test_parse_run_rejects_unknown_or_unbounded_settings(settings: tuple[str, ...]) -> None:
@@ -38,14 +38,14 @@ def test_parse_run_requires_an_explicit_override_for_long_runs() -> None:
 
 
 def test_command_uses_separate_corpus_and_artifact_directories(tmp_path: Path) -> None:
-    seeds = tmp_path / "tests" / "fuzz" / "corpus" / "cursor_codec"
+    seeds = tmp_path / "tests" / "fuzz" / "corpus" / "search_parser"
     seeds.mkdir(parents=True)
-    (seeds / "valid").write_bytes(b"cursor")
-    run = parse_run(("target=cursor_codec", "seconds=7"), allow_long_run=False)
+    (seeds / "valid").write_bytes(b"title:door")
+    run = parse_run(("target=search_parser", "seconds=7"), allow_long_run=False)
 
     command = command_for(run, tmp_path)
 
-    assert command[2:4] == ["tests.fuzz.fuzz_cursor_codec", str(tmp_path / ".fuzz/corpus/cursor_codec")]
+    assert command[2:4] == ["tests.fuzz.fuzz_search_parser", str(tmp_path / ".fuzz/corpus/search_parser")]
     assert "-max_total_time=7" in command
-    assert command[-1] == f"-artifact_prefix={tmp_path}/.fuzz/artifacts/cursor_codec/"
-    assert (tmp_path / ".fuzz/corpus/cursor_codec/valid").read_bytes() == b"cursor"
+    assert command[-1] == f"-artifact_prefix={tmp_path}/.fuzz/artifacts/search_parser/"
+    assert (tmp_path / ".fuzz/corpus/search_parser/valid").read_bytes() == b"title:door"

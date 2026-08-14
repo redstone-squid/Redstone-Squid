@@ -9,6 +9,7 @@ import pytest
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import search, suggest_terms
 from squid.builds.domain import Build, DoorBuild, Status
+from squid.core.pagination import PageAnchor
 from squid.runtime import ApiServices
 from squid.search.domain import (
     BuildSearchHit,
@@ -51,7 +52,7 @@ def fakes(page: SearchPage, builds: list[Build] | None = None) -> Fakes:
 
 
 def empty_page() -> SearchPage:
-    return SearchPage(hits=(), next_cursor=None, has_more=False)
+    return SearchPage(hits=(), total=0, next=None, prev=None)
 
 
 @pytest.mark.asyncio
@@ -72,8 +73,9 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
             ),
             MetadataSearchHit(source_id="tag:3", title="Seamless", metadata_kind="tag", score=0.5),
         ),
-        next_cursor="next",
-        has_more=True,
+        total=9,
+        next=PageAnchor(offset=3),
+        prev=None,
     )
     graph = fakes(page, [indexed_build()])
 
@@ -89,8 +91,9 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     assert build_item.build.id == 42
     assert record_item.record.record_id == 7
     assert metadata_item.metadata.id == "tag:3"
-    assert result.next_cursor == "next"
-    assert result.has_more is True
+    assert result.total == 9
+    assert result.next is not None
+    assert result.next.offset == 3
 
 
 @pytest.mark.asyncio
@@ -113,8 +116,9 @@ async def test_search_never_widens_build_visibility_past_confirmed() -> None:
 async def test_search_drops_hits_whose_build_has_vanished() -> None:
     page = SearchPage(
         hits=(BuildSearchHit(source_id="42", title="Gone", status="confirmed"),),
-        next_cursor=None,
-        has_more=False,
+        total=1,
+        next=None,
+        prev=None,
     )
     graph = fakes(page)
 

@@ -23,6 +23,14 @@ These were settled with the user before design and are not open questions:
 - **Catalogue endpoints gain `sort`** with a small per-endpoint allowlist.
 - **Envelope is `{items, total, next, prev}`** where `next`/`prev` are the plain parameter values to send back, not
   opaque strings.
+- **Application services assemble pages, transports only map them.** The old signed-cursor helpers lived in the
+  routes, which left catalogue paging assembled at the API layer while search paging was already assembled in
+  `SearchService`. `squid/core/pagination.py` now holds the transport-neutral `Page`, `PageAnchor`, `PageSelector`
+  and the two assemblers; `BuildQueryService.list_page`, `RecordService.list_page` and `NotificationService.inbox`
+  return a `Page[...]`, and `squid/api/pagination.py` keeps only what is HTTP: the query parameters, the 400s they
+  can earn, and the pydantic envelope. The exception is `/v1/tags`, `/v1/versions` and the build-schematics listing,
+  whose services materialize a full in-memory list and have no pagination concept; those routes call the same
+  `offset_page` assembler on the list the service returned.
 
 ## Global design
 
@@ -374,5 +382,12 @@ this machine.
 
 ## Status
 
-- Commit 1: implemented in the working tree, pending verification and commit.
-- Commits 2–5: not started.
+- Commit 1: landed.
+- Commit 2: landed, with the page-assembly layering above folded in. `parse_page_sort` allows identifier anchors in
+  either direction (the rule is "ID anchors require an ID ordering", which is what the repositories actually
+  enforce), rather than only in the default descending order.
+- Commits 3–5: not started.
+
+Note for future runs on this machine: a broad `pytest tests/unit` OOM-ed it once, and
+`tests/unit/api/test_openapi_fuzz.py` (Schemathesis) is slow enough to look like a hang. Run suites a directory or
+two at a time with `--no-cov`, and give the fuzz module its own run.

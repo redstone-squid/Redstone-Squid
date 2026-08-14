@@ -8,7 +8,6 @@ from whenever import Instant
 from squid.api.v1.schematics import get_schematic_content, list_build_schematics, router
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
-from squid.core.pagination import SignedCursor
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
@@ -58,9 +57,8 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
         7,
         cast(BuildQueryService, ConfirmedBuilds()),
         cast(SchematicService, PublicSchematics()),
-        SignedCursor(b"schematic-test-cursor-secret"),
         page_size=50,
-        cursor=None,
+        offset=None,
     )
 
     item = page.items[0].model_dump(mode="json")
