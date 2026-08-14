@@ -66,6 +66,14 @@ worker_logger = logging.getLogger("squid.schematics.worker")
 
 WORKER_MODULE = "squid.schematics.infrastructure.worker_main"
 
+STDERR_LINE_LIMIT = 1024 * 1024
+"""`StreamReader` line budget for the child's stderr.
+
+A faulthandler traceback or a Rust panic dump serialised into one JSON record easily exceeds
+asyncio's 64 KiB default, and overrunning it raises `ValueError` out of `readline` — losing
+exactly the diagnostics this pipe exists to carry.
+"""
+
 
 class _Worker:
     """One child process and the single request slot that guards it."""
@@ -124,6 +132,7 @@ class _Worker:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=os.name == "posix",
+            limit=STDERR_LINE_LIMIT,
         )
         if self._started_once:
             add_counter("squid.schematic.worker.respawns")
@@ -134,26 +143,48 @@ class _Worker:
     async def _pump_stderr(self, process: asyncio.subprocess.Process) -> None:
         """Forward the child's stderr — including faulthandler tracebacks — into our logs."""
         assert process.stderr is not None
-        with contextlib.suppress(asyncio.CancelledError, ValueError):
-            async for line in process.stderr:
+        try:
+            while True:
+                try:
+                    line = await process.stderr.readline()
+                except ValueError:
+                    # `readline` drops the buffered partial line before raising, so the next
+                    # read resumes cleanly. Losing one record beats losing the whole stream.
+                    worker_logger.warning(
+                        "Schematic worker emitted an oversized stderr line; it was dropped.",
+                        extra={"worker_pid": process.pid},
+                    )
+                    continue
+                if not line:
+                    return
                 decoded = line.decode("utf-8", "replace").rstrip()
                 record = _worker_log_record(decoded, process.pid)
                 if record is None:
-                    worker_logger.warning("[pid %s] %s", process.pid, decoded)
+                    worker_logger.warning(
+                        "Schematic worker emitted unstructured stderr: %s",
+                        decoded,
+                        extra={"worker_pid": process.pid},
+                    )
                 else:
                     worker_logger.handle(record)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Without this the pump dies silently and the worker's stderr is never forwarded
+            # again for the life of the process.
+            logger.exception("The stderr pump for schematic worker %s died; further worker logs are lost.", process.pid)
 
     async def _terminate(self) -> int | None:
         """Kill the child and its whole group, returning its exit code if we can learn one."""
         process, self._process = self._process, None
-        if self._stderr_pump is not None:
-            pump, self._stderr_pump = self._stderr_pump, None
-            pump.cancel()
-            # cancel() only schedules the CancelledError; dropping the last strong
-            # reference before it lands lets the task be collected mid-cancellation.
-            with contextlib.suppress(asyncio.CancelledError):
-                await pump
+        pump, self._stderr_pump = self._stderr_pump, None
         if process is None:
+            if pump is not None:
+                pump.cancel()
+                # cancel() only schedules the CancelledError; dropping the last strong
+                # reference before it lands lets the task be collected mid-cancellation.
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pump
             return None
 
         if process.returncode is None:
@@ -164,8 +195,18 @@ class _Worker:
                     process.kill()
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), 5.0)
+        # Drain after the process is gone, never before: on a crash the traceback we care about
+        # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
+        if pump is not None:
+            with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+                await asyncio.wait_for(pump, 2.0)
         if process.returncode is not None:
-            logger.warning("Schematic worker %s exited with code %s.", process.pid, process.returncode)
+            logger.log(
+                logging.INFO if process.returncode == 0 else logging.WARNING,
+                "Schematic worker %s exited with code %s.",
+                process.pid,
+                process.returncode,
+            )
         return process.returncode
 
     async def aclose(self) -> None:

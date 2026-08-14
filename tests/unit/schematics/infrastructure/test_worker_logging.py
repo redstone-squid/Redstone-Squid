@@ -107,7 +107,73 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker:
     record = handle.call_args.args[0]
     assert record.levelno == logging.DEBUG
     assert record.name == "squid.schematics.infrastructure.worker_main"
-    warning.assert_called_once_with("[pid %s] %s", 2718, "native panic output")
+    warning.assert_called_once_with(
+        "Schematic worker emitted unstructured stderr: %s",
+        "native panic output",
+        extra={"worker_pid": 2718},
+    )
+
+
+async def test_stderr_pump_survives_an_oversized_line(mocker: MockerFixture) -> None:
+    stream = asyncio.StreamReader(limit=64)
+    stream.feed_data(b"x" * 4096 + b"\n")
+    stream.feed_data((json.dumps({"levelname": "INFO", "name": "child", "message": "still alive"}) + "\n").encode())
+    stream.feed_eof()
+    process = mocker.Mock(stderr=stream, pid=2718)
+    handle = mocker.patch.object(worker_module.worker_logger, "handle")
+    warning = mocker.patch.object(worker_module.worker_logger, "warning")
+
+    await _Worker(SchematicConfig())._pump_stderr(process)
+
+    warning.assert_called_once_with(
+        "Schematic worker emitted an oversized stderr line; it was dropped.",
+        extra={"worker_pid": 2718},
+    )
+    assert handle.call_args.args[0].getMessage() == "still alive"
+
+
+async def test_stderr_pump_logs_when_it_dies(mocker: MockerFixture) -> None:
+    stderr = mocker.Mock()
+    stderr.readline = mocker.AsyncMock(side_effect=RuntimeError("transport gone"))
+    process = mocker.Mock(stderr=stderr, pid=2718)
+    exception = mocker.patch.object(worker_module.logger, "exception")
+
+    await _Worker(SchematicConfig())._pump_stderr(process)
+
+    exception.assert_called_once()
+    assert "further worker logs are lost" in exception.call_args.args[0]
+
+
+async def test_terminate_drains_buffered_stderr_before_finishing(mocker: MockerFixture) -> None:
+    stream = asyncio.StreamReader()
+    stream.feed_data((json.dumps({"levelname": "ERROR", "name": "child", "message": "dying words"}) + "\n").encode())
+    stream.feed_eof()
+    process = mocker.Mock(stderr=stream, pid=2718, returncode=0)
+    process.wait = mocker.AsyncMock(return_value=0)
+    handle = mocker.patch.object(worker_module.worker_logger, "handle")
+    worker = _Worker(SchematicConfig())
+    worker._process = process
+    worker._stderr_pump = asyncio.create_task(worker._pump_stderr(process))
+
+    await worker._terminate()
+
+    assert handle.call_args.args[0].getMessage() == "dying words"
+
+
+@pytest.mark.parametrize(("returncode", "level"), [(0, logging.INFO), (-9, logging.WARNING)])
+async def test_terminate_logs_expected_exits_below_warning(
+    mocker: MockerFixture, caplog: pytest.LogCaptureFixture, returncode: int, level: int
+) -> None:
+    process = mocker.Mock(stderr=None, pid=2718, returncode=returncode)
+    process.wait = mocker.AsyncMock(return_value=returncode)
+    worker = _Worker(SchematicConfig())
+    worker._process = process
+
+    with caplog.at_level(logging.INFO, logger=worker_module.logger.name):
+        await worker._terminate()
+
+    exits = [record for record in caplog.records if "exited with code" in record.getMessage()]
+    assert [record.levelno for record in exits] == [level]
 
 
 async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:

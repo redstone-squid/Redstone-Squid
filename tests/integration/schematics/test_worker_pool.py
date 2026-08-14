@@ -6,6 +6,7 @@ does not.
 """
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Callable
 
 import pytest
@@ -180,6 +181,19 @@ async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
         await in_flight
 
     assert (await pool.analyze(periodic_door(), limits=SchematicLimits())).metrics.block_count == 24
+
+
+async def test_a_clean_shutdown_does_not_look_like_a_failure(
+    pool: SchematicWorkerPool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Operators page on WARNING, so an orderly stop must not emit one."""
+    await pool.capabilities()
+
+    with caplog.at_level(logging.INFO, logger="squid.schematics.infrastructure.worker"):
+        await pool.aclose()
+
+    assert [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING] == []
+    assert any("exited with code 0" in record.getMessage() for record in caplog.records)
 
 
 async def test_an_operation_past_its_deadline_is_killed_rather_than_left_running(
