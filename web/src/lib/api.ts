@@ -68,10 +68,24 @@ export function createCatalogueClient(
   });
 }
 
-export type BuildQuery = {
+/** How a request addresses one page. At most one field is meaningful at a time. */
+export type PageQuery = {
+  offset?: number;
+  afterId?: number;
+  beforeId?: number;
+};
+
+/** Serialize a page address, omitting the parameters the API treats as mutually exclusive. */
+function pageParams(query: PageQuery): Record<string, number> {
+  if (query.afterId !== undefined) return { after_id: query.afterId };
+  if (query.beforeId !== undefined) return { before_id: query.beforeId };
+  if (query.offset) return { offset: query.offset };
+  return {};
+}
+
+export type BuildQuery = PageQuery & {
   q?: string;
   sort?: string;
-  cursor?: string;
   pageSize?: number;
 };
 
@@ -83,8 +97,8 @@ export async function fetchBuilds(
     client: createCatalogueClient(locale),
     query: {
       ...(query.q ? { q: query.q } : {}),
-      ...(query.sort && query.q ? { sort: query.sort } : {}),
-      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.sort ? { sort: query.sort } : {}),
+      ...pageParams(query),
       page_size: Math.min(query.pageSize ?? 20, 50),
     },
   });
@@ -99,14 +113,22 @@ export async function fetchBuild(locale: Locale, id: number): Promise<BuildDetai
   return unwrap(result);
 }
 
+export type RecordQuery = PageQuery & {
+  sort?: string;
+  pageSize?: number;
+};
+
 export async function fetchRecords(
   locale: Locale,
-  cursor?: string,
-  pageSize = 20,
+  query: RecordQuery = {},
 ): Promise<PageRecordSummary> {
   const result = await recordsList({
     client: createCatalogueClient(locale),
-    query: { ...(cursor ? { cursor } : {}), page_size: Math.min(pageSize, 50) },
+    query: {
+      ...(query.sort ? { sort: query.sort } : {}),
+      ...pageParams(query),
+      page_size: Math.min(query.pageSize ?? 20, 50),
+    },
   });
   return unwrap(result);
 }
@@ -131,11 +153,12 @@ export async function fetchSchematics(
   return unwrap(result);
 }
 
+/** Relevance has no identifier order to anchor to, so search pages are addressed by offset. */
 export type CatalogueSearchQuery = {
   q: string;
   scope?: SearchScope;
   sort?: string;
-  cursor?: string;
+  offset?: number;
   pageSize?: number;
 };
 
@@ -149,7 +172,7 @@ export async function fetchSearch(
       q: query.q,
       scope: query.scope ?? "all",
       ...(query.sort ? { sort: query.sort } : {}),
-      ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.offset ? { offset: query.offset } : {}),
       page_size: Math.min(query.pageSize ?? 20, 50),
     },
   });

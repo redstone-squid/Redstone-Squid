@@ -23,13 +23,11 @@ describe("locale mapping", () => {
     expect(localeFromPath("/builds/zh-cn-example")).toBe("en");
   });
 
-  it("preserves routes, queries, fragments, and cursors while switching language", () => {
-    expect(localizePath("/builds?q=door&cursor=next#results", "zh-CN")).toBe(
-      "/zh-cn/builds?q=door&cursor=next#results",
+  it("preserves routes, queries, fragments, and page addresses while switching language", () => {
+    expect(localizePath("/builds?q=door&after_id=42#results", "zh-CN")).toBe(
+      "/zh-cn/builds?q=door&after_id=42#results",
     );
-    expect(localizePath("/zh-cn/builds?q=door&cursor=next", "en")).toBe(
-      "/builds?q=door&cursor=next",
-    );
+    expect(localizePath("/zh-cn/builds?q=door&offset=20", "en")).toBe("/builds?q=door&offset=20");
     expect(localizePath("/", "zh-CN")).toBe("/zh-cn");
     expect(localizePath("/zh-cn", "en")).toBe("/");
   });

@@ -17,7 +17,7 @@ let records;
 try {
   [builds, records] = await Promise.all([
     fetchBuilds(locale, { pageSize: 6 }),
-    fetchRecords(locale, undefined, 3),
+    fetchRecords(locale, { pageSize: 3 }),
   ]);
 } catch (caught) {
   error = asCatalogueError(caught);
