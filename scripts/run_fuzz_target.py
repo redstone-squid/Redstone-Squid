@@ -30,7 +30,6 @@ class FuzzRun:
 
 
 TARGETS = {
-    "cursor_codec": FuzzTarget("tests.fuzz.fuzz_cursor_codec", "cursor_codec"),
     "search_parser": FuzzTarget("tests.fuzz.fuzz_search_parser", "search_parser"),
     "version_parser": FuzzTarget("tests.fuzz.fuzz_version_parser", "version_parser"),
 }

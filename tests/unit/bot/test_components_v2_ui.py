@@ -220,8 +220,9 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     page = SearchPage(
         (record, BuildSearchHit("8", "Fast door", "confirmed")),
-        next_cursor=None,
-        has_more=False,
+        total=1,
+        next=None,
+        prev=None,
     )
     view = SearchResultsView(
         cast(SearchService, object()),
@@ -241,7 +242,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
 
 @pytest.mark.asyncio
 async def test_search_timeout_visibly_disables_bound_controls() -> None:
-    page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), next_cursor=None, has_more=False)
+    page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
     message = AsyncMock(spec=discord.Message)
     view.bind_message(cast(discord.Message, message))

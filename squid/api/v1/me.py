@@ -2,15 +2,22 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from squid.accounts.errors import AccountNotFoundError
-from squid.api.dependencies import Accounts, BuildQueries, CursorSigner
+from squid.api.dependencies import Accounts, BuildQueries
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.pagination import Page
+from squid.api.pagination import (
+    AfterIdParam,
+    BeforeIdParam,
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    render_page,
+    resolve_selector,
+)
 from squid.api.security import Principal, requires
-from squid.api.v1.builds import after_id_from_cursor, keyset_page
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.me import UserMe
 from squid.builds.domain import Status
@@ -50,11 +57,12 @@ async def grant_consent(accounts: Accounts, principal: UserPrincipal) -> UserMe:
 @router.get("/builds", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
 async def list_my_builds(
     build_queries: BuildQueries,
-    signer: CursorSigner,
     principal: UserPrincipal,
     status: BuildStatusFilter | None = None,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
-    cursor: Annotated[str | None, Query(max_length=4_096)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
 ) -> Page[BuildSummary]:
     """List the caller's own submissions, including the ones still awaiting review.
 
@@ -63,12 +71,12 @@ async def list_my_builds(
     """
     if principal.kind != "account" or principal.account_id is None:
         raise AuthenticationError
+    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
-    binding = f"accounts:{principal.account_id}:builds:status={status or 'all'}:id-desc"
-    builds = await build_queries.list_page(
+    page = await build_queries.list_page(
         statuses=statuses,
         submitter_account_id=principal.account_id,
-        after_id=after_id_from_cursor(signer, cursor, binding),
-        limit=page_size + 1,
+        selector=selector,
+        page_size=page_size,
     )
-    return keyset_page(signer, builds, page_size=page_size, binding=binding)
+    return render_page(page, BuildSummary.from_domain)

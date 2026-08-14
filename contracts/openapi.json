@@ -1115,26 +1115,69 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 20,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset.",
+              "title": "After Id"
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset."
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset.",
+              "title": "Before Id"
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset."
           }
         ],
         "responses": {
@@ -3218,26 +3261,69 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 20,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset.",
+              "title": "After Id"
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset."
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset.",
+              "title": "Before Id"
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset."
           }
         ],
         "responses": {
@@ -5914,26 +6000,69 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 20,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset.",
+              "title": "After Id"
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset."
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset.",
+              "title": "Before Id"
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset."
           }
         ],
         "responses": {
@@ -6321,6 +6450,23 @@
         ],
         "parameters": [
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
             "name": "page_size",
             "in": "query",
             "required": false,
@@ -6328,26 +6474,69 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 20,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset.",
+              "title": "After Id"
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset."
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset.",
+              "title": "Before Id"
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset."
           }
         ],
         "responses": {
@@ -6456,26 +6645,31 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 50,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
           }
         ],
         "responses": {
@@ -7001,26 +7195,31 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 20,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
           }
         ],
         "responses": {
@@ -9482,26 +9681,31 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 50,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
           }
         ],
         "responses": {
@@ -9901,26 +10105,31 @@
               "type": "integer",
               "maximum": 50,
               "minimum": 1,
+              "description": "Maximum number of items to return.",
               "default": 50,
               "title": "Page Size"
-            }
+            },
+            "description": "Maximum number of items to return."
           },
           {
-            "name": "cursor",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "maxLength": 4096
+                  "type": "integer",
+                  "maximum": 10000,
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Cursor"
-            }
+              "description": "Number of items to skip. Excludes after_id and before_id.",
+              "title": "Offset"
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id."
           }
         ],
         "responses": {
@@ -12544,7 +12753,6 @@
           "IDEMPOTENCY_IN_PROGRESS",
           "INTERNAL_ERROR",
           "INVALID_BUILD",
-          "INVALID_CURSOR",
           "INVALID_MESSAGE",
           "INVALID_QUERY",
           "INVALID_REQUEST",
@@ -13642,6 +13850,47 @@
         "title": "OwnVoteSelection",
         "description": "The authenticated caller's own ballot selection."
       },
+      "PageAnchor": {
+        "properties": {
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
+          },
+          "after_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Id"
+          },
+          "before_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PageAnchor",
+        "description": "Query-parameter values addressing an adjacent page. Exactly one field is set."
+      },
       "Page_Annotated_Union_BuildSearchResult__RecordSearchResult__MetadataSearchResult___FieldInfo_annotation_NoneType__required_True__discriminator__resource_kind____": {
         "properties": {
           "items": {
@@ -13669,28 +13918,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[Annotated[Union[BuildSearchResult, RecordSearchResult, MetadataSearchResult], FieldInfo(annotation=NoneType, required=True, discriminator='resource_kind')]]"
       },
@@ -13703,28 +13962,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[BuildSummary]"
       },
@@ -13737,28 +14006,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[InboxNotificationDetail]"
       },
@@ -13771,28 +14050,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[RecordSummary]"
       },
@@ -13805,28 +14094,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[SchematicSummary]"
       },
@@ -13839,28 +14138,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[TagDetail]"
       },
@@ -13873,28 +14182,38 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PageAnchor"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Next Cursor"
+            ]
           },
-          "has_more": {
-            "type": "boolean",
-            "title": "Has More"
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "next_cursor",
-          "has_more"
+          "total",
+          "next",
+          "prev"
         ],
         "title": "Page[VersionDetail]"
       },
