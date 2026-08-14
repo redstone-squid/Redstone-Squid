@@ -35,13 +35,22 @@ depends_on: str | Sequence[str] | None = None
 
 _FUNCTION_NAMES = {"bump_permission_epoch"}
 _TRIGGER_NAMES = {
-    "global_administrators_bump_epoch",
     "permission_grants_bump_epoch",
     "permission_role_assignments_bump_epoch",
     "permission_role_includes_bump_epoch",
     "permission_role_patterns_bump_epoch",
     "permission_roles_bump_epoch",
 }
+
+# Written out rather than taken from the shipped entity definitions, because
+# `f0a1b2c3d4e5` drops the legacy table and removes this trigger from
+# `postgres_entities.sql`. A revision must not depend on SQL a later revision
+# deletes, or migrating a fresh database from scratch stops working.
+_LEGACY_TIER_TRIGGER = (
+    "CREATE TRIGGER global_administrators_bump_epoch "
+    "AFTER INSERT OR DELETE OR UPDATE ON public.global_administrators "
+    "FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch()"
+)
 
 _ONE_SUBJECT = "num_nonnulls(subject_account_id, subject_role_id) = 1"
 _ROLE_SUBJECT_HAS_GUILD = "subject_role_id IS NULL OR subject_guild_id IS NOT NULL"
@@ -324,6 +333,7 @@ def upgrade() -> None:
         op.execute(entity.to_sql_statement_create())
     for entity in _selected_entities(PGTrigger, _TRIGGER_NAMES):
         op.execute(entity.to_sql_statement_create())
+    op.execute(_LEGACY_TIER_TRIGGER)
 
     roles = sa.table(
         "permission_roles",
@@ -352,6 +362,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop the RBAC tables and the epoch trigger."""
+    op.execute("DROP TRIGGER IF EXISTS global_administrators_bump_epoch ON public.global_administrators")
     for entity in reversed(_selected_entities(PGTrigger, _TRIGGER_NAMES)):
         op.execute(entity.to_sql_statement_drop())
     for entity in reversed(_selected_entities(PGFunction, _FUNCTION_NAMES)):
