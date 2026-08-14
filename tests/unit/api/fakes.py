@@ -14,6 +14,7 @@ from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.idempotency import PendingRequest
 from squid.notifications import NotificationPreferences
+from squid.permissions.application import PermissionService, SubjectRecords
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -205,6 +206,35 @@ class MockNotifications:
         return None
 
 
+class MockPermissions:
+    """A permission service over an empty store, so nodes fall to their defaults."""
+
+    def __init__(self) -> None:
+        self._service = PermissionService(EmptyPermissionStore())
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._service, name)
+
+
+class EmptyPermissionStore:
+    """No stored rules, and a fixed epoch."""
+
+    async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+        return SubjectRecords(epoch=1)
+
+    async def epoch(self) -> int:
+        return 1
+
+
+class MockPermissionEpoch:
+    """A watcher with nothing to watch, so the lifespan's job is a no-op."""
+
+    listener = None
+
+    async def refresh(self) -> None:
+        return None
+
+
 def build_app(
     *,
     web_auth: object | None = None,
@@ -227,6 +257,8 @@ def build_app(
             accounts=accounts or MockAccountManager(),
             build_queries=MockBuildQueries(),
             authorization=MockAuthorization(),
+            permissions=MockPermissions(),
+            permission_epoch=MockPermissionEpoch(),
             search=MockSearch(),
             tags=MockTags(),
             versions=MockVersions(),

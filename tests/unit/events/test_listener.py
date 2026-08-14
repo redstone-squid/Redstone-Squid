@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import SecretStr
 
-from squid.events.infrastructure import listener as listener_module
 from squid.events.infrastructure.listener import DomainEventWakeListener
+from squid.persistence import wake_listener as listener_module
 
 
 class FakeConnection:

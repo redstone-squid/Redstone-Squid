@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable, Sequence
 
+from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import (
     GlobalAdministratorStore,
     GrantRecord,
@@ -108,14 +109,26 @@ def _grant_rule(record: GrantRecord) -> Rule:
 class PermissionService:
     """Answer permission questions for one subject at a time."""
 
-    def __init__(self, store: PermissionStore, *, catalogue: Catalogue = CATALOGUE):
+    def __init__(
+        self,
+        store: PermissionStore,
+        *,
+        catalogue: Catalogue = CATALOGUE,
+        cache: SubjectRuleCache | None = None,
+    ):
         self._store = store
         self._catalogue = catalogue
+        self._cache = cache
 
     @property
     def catalogue(self) -> Catalogue:
         """The node catalogue this service resolves against."""
         return self._catalogue
+
+    @property
+    def cache(self) -> SubjectRuleCache | None:
+        """The rule-set cache this service reads through, if it has one."""
+        return self._cache
 
     async def rules_for(self, subject: Subject) -> tuple[Rule, ...]:
         """Every rule that could bear on `subject`, role composition already applied."""
@@ -123,12 +136,20 @@ class PermissionService:
             # The owner short-circuits before any rule is read, so loading them
             # would be pure cost.
             return ()
+
+        key = cache_key(subject)
+        if self._cache is not None and (cached := self._cache.get(key)) is not None:
+            return cached
+
         records = await self._store.load_for_subject(
             account_id=subject.account_id,
             discord_role_ids=subject.discord_role_ids,
             guild_id=subject.guild_id,
         )
-        return self.assemble(records, subject)
+        rules = self.assemble(records, subject)
+        if self._cache is not None:
+            self._cache.put(key, rules, epoch=records.epoch)
+        return rules
 
     def assemble(self, records: SubjectRecords, subject: Subject) -> tuple[Rule, ...]:
         """Turn stored rows into resolver rules. Pure, so it is cheap to test."""

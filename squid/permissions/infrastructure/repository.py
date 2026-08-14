@@ -23,6 +23,9 @@ from squid.permissions.infrastructure.models import (
 INCLUDE_MODE = 1
 EXCLUDE_MODE = -1
 
+EPOCH_CHANNEL = "squid_permissions"
+"""The channel `bump_permission_epoch()` notifies after any permission write."""
+
 
 def _to_domain(model: GlobalAdministratorModel) -> GlobalAdministrator:
     return GlobalAdministrator(

@@ -23,7 +23,7 @@ from squid.bootstrap import create_api_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
-from squid.runtime import ApiServices, ApplicationRuntime
+from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, start_permission_epoch_watch
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
 ConfigFactory = Callable[[], ApiProcessConfig]
@@ -96,7 +96,13 @@ def create_api_app(
         try:
             async with runtime_factory(resolved_config.runtime) as runtime:
                 app.state.runtime = runtime
-                yield
+                # The API holds its own rule cache, so it needs its own watcher:
+                # a grant made in Discord has to reach HTTP checks too.
+                supervisor = BackgroundTaskSupervisor()
+                async with supervisor.running():
+                    app.state.background_tasks = supervisor
+                    start_permission_epoch_watch(supervisor, runtime.services.permission_epoch)
+                    yield
         finally:
             await limiter.aclose()
 
