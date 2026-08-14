@@ -185,6 +185,16 @@ class TestBuildLoggingConfig:
         assert payload["squid.build.id"] == 42
         assert payload["service_name"] == "redstone-squid"
 
+        # A record forwarded from a schematic worker child names its own service, and the
+        # supervisor's identity must not be stamped over it on the way to the collector.
+        stream.truncate(0)
+        stream.seek(0)
+        forwarded = logging.LogRecord("squid.child", logging.INFO, __file__, 1, "From the child", None, None)
+        forwarded.service_name = "redstone-squid-schematic-worker"  # type: ignore[attr-defined]
+        handler.handle(forwarded)
+
+        assert json.loads(stream.getvalue())["service_name"] == "redstone-squid-schematic-worker"
+
 
 class TestConfigureWorkerLogging:
     """The schematic worker child's stderr-only configuration."""
