@@ -7,23 +7,20 @@ from squid.permissions.application.ports import (
     ActorCapabilityResolver,
     AssignmentRecord,
     AuditEntry,
-    GlobalAdministratorStore,
     GrantRecord,
     PermissionAdminStore,
     PermissionStore,
     RoleRecord,
     SubjectRecords,
 )
-from squid.permissions.application.services import AuthorizationService, PermissionService
+from squid.permissions.application.services import PermissionService
 
 __all__ = [
     "Actor",
     "ActorCapabilityResolver",
     "AssignmentRecord",
     "AuditEntry",
-    "AuthorizationService",
     "CacheKey",
-    "GlobalAdministratorStore",
     "GrantRecord",
     "PermissionAdminStore",
     "PermissionAdministrationService",

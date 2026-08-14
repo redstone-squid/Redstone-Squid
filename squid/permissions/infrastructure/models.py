@@ -41,33 +41,6 @@ _ROLE_SUBJECT_STAYS_HOME = "subject_role_id IS NULL OR scope_guild_id IS NULL OR
 Discord role from one guild can never carry authority scoped into another."""
 
 
-class GlobalAdministrator(Base):
-    """An active bot-wide administrator grant.
-
-    Superseded by the `global-admin` built-in role; retained until the legacy
-    tiers are removed.
-    """
-
-    __tablename__ = "global_administrators"
-
-    account_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("accounts.id", name="global_administrators_account_id_fkey", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    """Internal account receiving application-wide access."""
-    granted_by_account_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("accounts.id", name="global_administrators_granted_by_account_id_fkey", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    """Internal account that issued the grant."""
-    granted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    """When the active grant was created."""
-
-
 class PermissionRole(Base, kw_only=True):
     """A named bundle of permission patterns.
 

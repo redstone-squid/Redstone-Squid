@@ -11,9 +11,12 @@ class SettingOptions(TypedDict, total=False):
     First: int | None
     Builds: int | None
     Vote: int | None
-    Trusted: list[int]
 
 
 ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-ListRoleSetting = Literal["Trusted"]
-Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote", "Trusted"]
+Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+"""Every configurable server setting.
+
+`Trusted` used to live here: a role list that doubled as an authorization tier.
+Permissions are now nodes granted with `/perm`, so a server's settings are about
+configuration again rather than about who may do what."""

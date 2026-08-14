@@ -1,10 +1,9 @@
 """Permission application services."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import (
-    GlobalAdministratorStore,
     GrantRecord,
     PermissionStore,
     RoleRecord,
@@ -16,7 +15,6 @@ from squid.permissions.domain import (
     Catalogue,
     Decision,
     Effect,
-    GlobalAdministrator,
     InvalidPatternError,
     NodeScope,
     Origin,
@@ -34,33 +32,6 @@ from squid.permissions.domain import (
 
 GUILD_ADMIN_KEY = "guild-admin"
 """The built-in role standing in for Discord's Manage Server permission."""
-
-
-class AuthorizationService:
-    """Manage bot-wide administrator grants.
-
-    Superseded by the `global-admin` built-in role; retained until the legacy
-    tiers are removed.
-    """
-
-    def __init__(self, store: GlobalAdministratorStore):
-        self._store = store
-
-    async def is_global_administrator(self, account_id: int) -> bool:
-        """Return whether an account has an active global administrator grant."""
-        return await self._store.contains(account_id)
-
-    async def list_global_administrators(self) -> Sequence[GlobalAdministrator]:
-        """List global administrators in grant order."""
-        return await self._store.list()
-
-    async def grant_global_administrator(self, account_id: int, *, granted_by_account_id: int) -> GlobalAdministrator:
-        """Grant global administrator access, returning the existing grant when present."""
-        return await self._store.grant(account_id, granted_by_account_id)
-
-    async def revoke_global_administrator(self, account_id: int) -> bool:
-        """Revoke global administrator access if an active grant exists."""
-        return await self._store.revoke(account_id)
 
 
 def _role_specs(roles: Iterable[RoleRecord]) -> dict[str, RoleSpec]:

@@ -12,13 +12,11 @@ class FakeSettingsRepository:
         self.values = SettingOptions()
         self.locale: str | None = None
 
-    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:
+    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | None]:
         return {}
 
-    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
-        if setting == "Trusted":
-            return self.values.get("Trusted", [])
-        return cast(int | list[int] | None, self.values.get(setting))
+    async def get_single(self, server_id: int, setting: Setting) -> int | None:
+        return cast(int | None, self.values.get(setting))
 
     async def get_all(self, server_id: int) -> SettingOptions:
         return self.values
@@ -39,14 +37,14 @@ class FakeSettingsRepository:
         return None
 
 
-async def test_settings_clear_uses_shape_specific_empty_values() -> None:
+async def test_clearing_a_setting_unsets_it() -> None:
+    """Every setting is a channel id now; the Trusted role list moved to /perm."""
     repository = FakeSettingsRepository()
     service = SettingsService(repository)
 
     await service.clear(1, "Vote")
-    await service.clear(1, "Trusted")
 
-    assert repository.values == {"Vote": None, "Trusted": []}
+    assert repository.values == {"Vote": None}
 
 
 async def test_settings_locale_round_trips() -> None:

@@ -568,5 +568,3 @@ CREATE TRIGGER permission_roles_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON p
 CREATE TRIGGER permission_role_patterns_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_patterns FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 CREATE TRIGGER permission_role_includes_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_includes FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
-
-CREATE TRIGGER global_administrators_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.global_administrators FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();

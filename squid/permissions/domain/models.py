@@ -4,19 +4,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from typing import Self
 
-from whenever import Instant
-
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import _
-
-
-@dataclass(frozen=True, slots=True)
-class GlobalAdministrator:
-    """An account granted application-wide administrative access."""
-
-    account_id: int
-    granted_by_account_id: int
-    granted_at: Instant
 
 
 class NodeScope(StrEnum):

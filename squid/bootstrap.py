@@ -55,7 +55,6 @@ from squid.minecraft_auth.infrastructure import (
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
-    AuthorizationService,
     PermissionAdministrationService,
     PermissionEpochWatcher,
     PermissionService,
@@ -63,7 +62,6 @@ from squid.permissions.application import (
 )
 from squid.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
-    GlobalAdministratorRepository,
     PermissionAdminRepository,
     PermissionRepository,
 )
@@ -579,7 +577,6 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session, idempotency_cipher)),
         notifications=graph.notifications,
         build_queries=graph.build_queries,
-        authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         permissions=graph.permissions,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
@@ -608,7 +605,6 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
-        authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
         permissions=graph.permissions,
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,

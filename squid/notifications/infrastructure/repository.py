@@ -33,7 +33,8 @@ from squid.notifications.infrastructure.models import (
     NotificationRecord,
     NotificationSubscriptionRecord,
 )
-from squid.permissions.infrastructure.models import GlobalAdministrator
+from squid.permissions.domain import BuiltinRoleKeys
+from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
 from squid.records.infrastructure.models import (
     RecordCompetition,
     RecordDefinition,
@@ -41,6 +42,25 @@ from squid.records.infrastructure.models import (
     RecordResultHolder,
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
+
+
+def _staff_role_ids():
+    """The `global-admin` role's id, as a scalar subquery.
+
+    Staff notification targeting is a set query over every account, so it cannot
+    run the resolver per row. Holding the `global-admin` role is the structural
+    stand-in: the tier backfill wrote exactly these rows, so the audience is
+    unchanged, and a future refinement is to resolve
+    `build.submission.view_pending` per account instead of naming a role here.
+    """
+    return select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN.value)
+
+
+def _is_staff_account(account_column):
+    return exists().where(
+        PermissionRoleAssignment.subject_account_id == account_column,
+        PermissionRoleAssignment.role_id.in_(_staff_role_ids()),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,7 +304,7 @@ class PostgresNotificationRepository:
                 await session.scalar(
                     select(
                         exists()
-                        .where(GlobalAdministrator.account_id == AccountIdentity.account_id)
+                        .where(_is_staff_account(AccountIdentity.account_id))
                         .where(
                             AccountIdentity.provider == IdentityProvider.DISCORD,
                             AccountIdentity.subject == str(discord_id),
@@ -295,8 +315,8 @@ class PostgresNotificationRepository:
 
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         async with self._session_factory() as session, session.begin():
-            claimable_staff = exists().where(
-                GlobalAdministrator.account_id == NotificationDeliveryRecord.account_id
+            claimable_staff = _is_staff_account(
+                NotificationDeliveryRecord.account_id
             ) | NotificationDeliveryRecord.discord_id.in_(self._staff_discord_ids)
             ids = tuple(
                 (
@@ -452,14 +472,13 @@ class PostgresNotificationRepository:
         staff_account_ids = (
             await session.execute(
                 select(Account.id)
-                .outerjoin(GlobalAdministrator, GlobalAdministrator.account_id == Account.id)
                 .outerjoin(
                     AccountIdentity,
                     (AccountIdentity.account_id == Account.id) & (AccountIdentity.provider == IdentityProvider.DISCORD),
                 )
                 .where(
                     or_(
-                        GlobalAdministrator.account_id.is_not(None),
+                        _is_staff_account(Account.id),
                         AccountIdentity.subject.in_(str(value) for value in self._staff_discord_ids),
                     )
                 )
