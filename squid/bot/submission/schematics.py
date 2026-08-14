@@ -17,9 +17,10 @@ from discord.ext.commands import Context
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.utils.components import StaticLayout, no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_trusted_or_global_admin
+from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
 from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
 
@@ -134,7 +135,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         )
 
     @BuildCommandGroup.build_hybrid_group.command(name="measure-timing")  # type: ignore
-    @check_is_trusted_or_global_admin()
+    @requires(BUILD_SCHEMATIC_MEASURE_TIMING)
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to simulate.")),
         input_position=app_commands.locale_str(_("An input block as x y z, required when several exist.")),
@@ -161,7 +162,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
 
     @BuildCommandGroup.build_hybrid_group.command(name="detect-lattice")  # type: ignore
-    @check_is_trusted_or_global_admin()
+    @requires(BUILD_SCHEMATIC_DETECT_LATTICE)
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
     async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
         """Show the repeating unit detected during schematic analysis."""
