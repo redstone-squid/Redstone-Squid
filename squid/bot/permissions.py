@@ -15,7 +15,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import requires, subject_for
+from squid.bot.utils.permissions import build_subject, requires, subject_for
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.application.administration import (
@@ -247,8 +247,6 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     @requires(PERM_SUBJECT_INSPECT)
     async def explain(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
         """Show exactly why a user does or does not hold a permission."""
-        from squid.bot.utils.permissions import build_subject
-
         subject = await build_subject(self.bot, user, ctx.guild.id if ctx.guild is not None else None)
         decision = await self.bot.services.permissions.check(subject, node)
         await self._reply(ctx, _("Permission decision"), render_decision(decision, user.display_name))
@@ -273,8 +271,6 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     @requires(PERM_SUBJECT_INSPECT)
     async def test(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
         """Answer one permission question with a plain yes or no."""
-        from squid.bot.utils.permissions import build_subject
-
         subject = await build_subject(self.bot, user, ctx.guild.id if ctx.guild is not None else None)
         decision = await self.bot.services.permissions.check(subject, node)
         verdict = _("allowed") if decision.allowed else _("denied")
