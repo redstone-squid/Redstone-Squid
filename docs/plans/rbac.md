@@ -1,11 +1,11 @@
 # RBAC, replacing the four permission tiers
 
-> **Status.** Phase 0 (this document) and Phase 1 (the pure domain: catalogue, matcher, resolver)
-> landed 2026-08-13; Phase 2 (tables, revision 1, repository, `PermissionService`, the ports, and
-> the `runtime.py`/`bootstrap.py` wiring) landed 2026-08-14 — minus the integration tests of §10,
-> which need a database fixture and land alongside `test_epoch_notify.py` in Phase 3. Phases 3–8
-> outstanding. Amend this document in place as building it proves parts of it wrong, calling out
-> the amendments where they occur rather than silently applying them.
+> **Status.** Every phase has landed: 0–1 on 2026-08-13, 2–8 on 2026-08-14. The four tiers are
+> gone, the tables are dropped, and `/perm` and `/role` are the way permissions are administered.
+> One thing this document asked for is *not* implemented and says so where it belongs: property
+> **P11** (§10). Amend this document in place as
+> building it proves parts of it wrong, calling out the amendments where they occur rather than
+> silently applying them.
 
 ## Context
 
@@ -438,6 +438,23 @@ degrades to a 30-second TTL rather than to unbounded staleness. Bounded LRU (409
 Counters via `squid.observability.add_counter`:
 `permissions.cache.{hit,miss,invalidation,stale_epoch_discard}`.
 
+> **Amendment (Phase 3).** Three things the cache needed that this section did not say.
+>
+> The key is `(account_id, role_ids, guild_id, discord_guild_admin)`. The Manage-Server bridge
+> contributes rules to the assembled set, so two subjects differing only in that flag do not share
+> an answer; leaving it out would have served one of them the other's permissions. `is_bot_owner`
+> is deliberately absent, because the owner short-circuits before any rule is read and no owner
+> entry is ever stored.
+>
+> A load returning a *newer* epoch than the process knew about advances the cache itself, so
+> entries read before that write are discarded on their next read without waiting for the watcher.
+> The watcher is a latency hint here too, not the only route to correctness.
+>
+> The watcher starts in the bot's `setup_hook` rather than in a cog: every command's check reads
+> through the cache it keeps honest, so it cannot depend on which extensions are enabled. The API
+> process had no `BackgroundTaskSupervisor` at all and gained one in its lifespan, since it holds
+> its own cache and a grant made in Discord has to reach HTTP checks too.
+
 > **Amendment (Phase 2).** "One query" means one repository *call*. `load_for_subject` runs six
 > statements in a single session — epoch, roles, role patterns, role includes, grants, assignments —
 > and reads *every* role flat rather than walking the composition graph, which would otherwise cost
@@ -464,6 +481,19 @@ Discord-role grants. Discord role membership is not cached by us on the bot path
 test can introspect the real contract. Drop the `@cache` on the factories: it exists only to keep
 `predicate.__qualname__` stable for the current test.
 
+> **Amendment (Phase 4).** The subject is memoized on the `Context`, not resolved in a
+> `bot.before_invoke` hook. Checks run *before* that hook, and a subcommand runs its group's checks
+> as well, so the hook would have been both too late and too few. The memo gives the same "resolve
+> once per command" guarantee where it is actually needed.
+>
+> `requires()` also grew `mode="any"`, which the plan mentioned but did not motivate. Group gates
+> need it: every node is separately grantable, so gating a group on one node makes its other
+> commands unreachable for anyone granted only those. `settings`, `starboard`, `admin`,
+> `redstoner` and `perm` all gate their group on the union of what their commands declare.
+>
+> The account-id lookup caches misses too, on a shorter TTL than hits, because linking an account
+> is exactly the event that invalidates one.
+
 `squid/bot/errors.py:132-156` — four branches become one, rendering the node name (identifiers stay
 untranslated) plus its `_()`-wrapped catalogue description, and a distinct message for `FORBIDDEN`.
 Four `.po` entries out, two in; run the i18n extract in that phase.
@@ -486,6 +516,23 @@ Subject derivation:
   `PermissionService.check`, so revoking the owner's node instantly defangs every key they issued.
   An ownerless key falls back to its own nodes. The legacy bootstrap secret gets demoted to an
   explicit config node list, or deleted.
+
+> **Amendment (Phase 6).** The plan's four subject kinds needed a fifth rule and one correction.
+>
+> A credential with **no owner account** falls back to its own nodes, and that now includes the
+> legacy bootstrap secret as well as an ownerless key. Intersecting an ownerless credential with an
+> empty subject's authority would make it inert, which is indistinguishable from deleting it — and
+> the config list that replaced `frozenset(Scope)` would then be decorative. Its default is
+> `build.submission.read`, i.e. what anonymous callers already have, so leaving it unset makes the
+> secret useless rather than dangerous.
+>
+> `ANONYMOUS` carries `**` as its *credential* bound, which costs nothing: the subject behind it
+> has no account and therefore reaches only default-allow nodes. The alternative — an empty node
+> set — would have refused public reads, since the credential check runs first.
+>
+> The contract field stays `x-required-api-scopes`. It is part of the published OpenAPI document,
+> and renaming it would break consumers over a vocabulary change they have no reason to care about;
+> only its values became node names.
 
 `ApiKeyService.issue` validates that requested patterns are a subset of the issuer's authority.
 `tests/fuzz/api/database.py:335` seeds literal scope strings and needs updating in the same commit.
@@ -517,6 +564,15 @@ the edge.
   `requires(BUILD_SUBMISSION_VIEW_PENDING)`. Keep the "service keys never read unreviewed
   submissions" property by granting that node to no key by default — it is now an expressible
   policy rather than a hardcoded branch.
+
+> **Amendment (Phase 5).** `vote.poll.create` is catalogued but **not enforced**. Creating a poll
+> is open to everyone today, and the node defaults to deny, so gating `/vote poll` on it would take
+> the feature away from every non-administrator the moment this shipped. That is a product decision
+> rather than part of moving an existing check, so the node waits for someone to make it
+> deliberately. `/vote delete` is left open for the same reason.
+>
+> The starboard's `ReactionActor` carries no capabilities: its weight policy runs with
+> `staff_multiplier=1.0`, so the staff fallback was already a no-op there.
 
 New port `squid/permissions/application/ports.py: ActorCapabilityResolver`, so the voting
 infrastructure depends on a protocol rather than on the permissions application package, keeping
@@ -617,11 +673,30 @@ the pattern reaches** is guild-scoped.
 > some later release quietly gave it meaning. An unparseable pattern is refused for the same reason
 > rather than raising, so the guard answers a straight yes or no at every call site.
 
+> **Amendment (Phase 7).** The guards live in a new `PermissionAdministrationService`, not in
+> `PermissionService`. The plan's "in the service, not in the cog" is what matters and holds: the
+> API and any future CLI reach the same rules. Splitting them keeps the read path — which every
+> command runs, through a cache — free of audit rows, clocks and actor plumbing that only writes
+> need.
+>
+> Discord's Manage Server contributes the `guild-admin` role's rank to the actor's highest rank.
+> Without that, a server administrator could not manage any role they had not also been explicitly
+> assigned, which would have made the guild-scoped half of `/role` unusable in practice.
+>
+> Created roles are capped at rank 999, below `owner`, so no role can be created that the owner
+> cannot then manage.
+
 ### Two independent management gates
 
 Both must pass before any role edit or assignment. They block different attacks, so the failure
 messages must say which one refused — a single "insufficient permissions" here is what makes
 permission systems infuriating.
+
+> **Amendment (Phase 7).** *Exclusions* are not gated by the authority boundary. Subtracting a
+> pattern from a role can only ever narrow what it confers, so requiring the node would stop an
+> administrator from removing a capability they cannot themselves hold — which is backwards, and
+> would make "moderator = helper minus the destructive bits" impossible for exactly the people most
+> likely to want it. Includes are gated as the plan says.
 
 1. **Authority boundary** (AWS permissions-boundary semantics). You may only grant a pattern, or
    edit a role into a state, whose every reachable leaf you hold yourself. Self-maintaining: it
@@ -669,6 +744,20 @@ Commits are Hashimoto-style and component-scoped, e.g.
 Phase 4 carries the only live-behaviour risk, so it is split per cog family: a bad node mapping
 affects one command family and reverts cleanly. Revision 2 lands *before* the first flipped site,
 so nobody loses access mid-deploy.
+
+> **Amendment (Phase 8).** Two dependencies on the tiers that this plan did not list.
+>
+> Staff notification targeting joined `global_administrators` to decide who receives
+> pending-submission notices. It now joins the `global-admin` role's assignments, which the backfill
+> wrote, so the audience is unchanged. That is a deliberate simplification: the query runs over
+> every account and cannot invoke the resolver per row. Refining it means resolving
+> `build.submission.view_pending` per account, and the comment in
+> `squid/notifications/infrastructure/repository.py` says so.
+>
+> `Setting["Trusted"]` took `ListRoleSetting` and the `/settings set` role branch with it, since it
+> was the only list-shaped setting. Removing it is the point rather than a side effect: a server
+> setting that doubled as an authorization tier meant configuring your server and deciding who may
+> moderate it were the same command.
 
 > **Amendment (Phase 2).** `ActorCapabilityResolver` (§6) landed with the other ports rather than
 > waiting for Phase 5. It is a protocol with no implementer yet, and writing it beside the store
@@ -748,6 +837,20 @@ cross-guild role scope, a duplicate rule, and a self-including role; `test_epoch
 **parametrized old-vs-new equivalence table** over ~20 `(user, guild, tier)` cases asserting the new
 resolver matches the old predicate — using the `migration_database_url` pattern from
 `tests/integration/test_alembic_migrations.py`.
+
+> **Amendment (Phase 8).** The integration tests deferred out of Phase 2 landed here:
+> `tests/integration/permissions/test_constraints.py` proves the CHECKs reject a cross-guild role
+> scope, a role subject with no guild, a two-subject rule, a duplicate rule, a self-including role,
+> an unknown effect and a guild-scoped built-in; `test_epoch_notify.py` proves a fifty-row grant
+> bumps the epoch **once** and that a committed write notifies; and `test_migration_backfill.py`
+> runs the old-vs-new equivalence table over 21 `(subject, node)` cases plus the grant provenance
+> and the API-key scope rewrite.
+>
+> Writing them found a real bug that the unit tests could not: revision 1 created the legacy
+> table's epoch trigger by *selecting it from the shipped entity definitions*, which Phase 8 then
+> removed — so migrating a fresh database from scratch failed at revision 1. The trigger is now
+> written out inline in the revision that owns it. A revision must never depend on SQL a later
+> revision deletes, and nothing but a from-scratch migration would have caught it.
 
 **Rewritten `tests/unit/bot/test_command_taxonomy.py`**: replace `_check_names` and the count
 assertions (lines 148-211) with a node contract read from `predicate.__squid_nodes__`, plus a
