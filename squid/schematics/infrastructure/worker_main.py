@@ -273,7 +273,9 @@ def main() -> None:
             "file_size_bytes": int(limits.get("file_size_bytes", 64 * 1024 * 1024)),
         }
     )
-    observability = configure_observability(load_worker_observability_config(), service_name="worker")
+    # Not "worker": that is the supervising database worker, and sharing a service.name makes
+    # a schematic child's spans and metrics indistinguishable from its parent's.
+    observability = configure_observability(load_worker_observability_config(), service_name="schematic-worker")
     try:
         serve(sys.stdin.buffer, sys.stdout.buffer)
     finally:
