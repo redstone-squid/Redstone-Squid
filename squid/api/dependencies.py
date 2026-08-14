@@ -10,7 +10,7 @@ from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.core.pagination import SignedCursor
 from squid.notifications import NotificationService
-from squid.permissions.application import AuthorizationService, PermissionService
+from squid.permissions.application import PermissionService
 from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
@@ -36,10 +36,6 @@ def get_builds(services: Services) -> BuildService:
 
 def get_build_queries(services: Services) -> BuildQueryService:
     return services.build_queries
-
-
-def get_authorization(services: Services) -> AuthorizationService:
-    return services.authorization
 
 
 def get_records(services: Services) -> RecordService:
@@ -93,7 +89,6 @@ async def cursor_signer(request: Request) -> SignedCursor:
 
 
 PageSize = Annotated[int, Query(ge=1, le=50)]
-Authorization = Annotated[AuthorizationService, Depends(get_authorization)]
 Permissions = Annotated[PermissionService, Depends(get_permissions)]
 BuildCommands = Annotated[BuildService, Depends(get_builds)]
 BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]

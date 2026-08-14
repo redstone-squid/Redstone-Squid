@@ -2,12 +2,10 @@
 
 from typing import TYPE_CHECKING
 
-import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import requires
@@ -33,86 +31,6 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def admin_group(self, ctx: Context[BotT]) -> None:
         """Inspect and maintain internal bot data."""
         await ctx.send_help("admin")
-
-    @admin_group.group(name="global-admin")
-    @commands.is_owner()
-    async def global_admin_group(self, ctx: Context[BotT]) -> None:
-        """Manage bot-wide administrator access."""
-        await ctx.send_help("admin global-admin")
-
-    @global_admin_group.command(name="list")
-    async def list_global_admins(self, ctx: Context[BotT]) -> None:
-        """List users with bot-wide administrator access."""
-        administrators = await self.bot.services.authorization.list_global_administrators()
-        lines: list[str] = []
-        for administrator in administrators:
-            account = await self.bot.services.accounts.get_account_by_id(administrator.account_id)
-            grantor = await self.bot.services.accounts.get_account_by_id(administrator.granted_by_account_id)
-            identity = None if account is None else account.identity(IdentityProvider.DISCORD)
-            grantor_identity = None if grantor is None else grantor.identity(IdentityProvider.DISCORD)
-            recipient = f"account {administrator.account_id}" if identity is None else f"<@{identity.subject}>"
-            issuer = (
-                f"account {administrator.granted_by_account_id}"
-                if grantor_identity is None
-                else f"<@{grantor_identity.subject}>"
-            )
-            lines.append(f"{recipient} — granted by {issuer}")
-        description = "\n".join(lines)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=info_layout(
-                t(locale, _("Global administrators")),
-                description or t(locale, _("No global administrators are configured.")),
-            ),
-            ephemeral=ctx.interaction is not None,
-            allowed_mentions=no_mentions(),
-        )
-
-    @global_admin_group.command(name="add")
-    async def add_global_admin(self, ctx: Context[BotT], user: discord.User) -> None:
-        """Grant a user bot-wide administrator access."""
-        if await self.bot.is_owner(user):
-            msg = "The bot owner already has every permission and is not stored as a global administrator."
-            raise commands.BadArgument(msg)
-        account = await self.bot.services.accounts.get_or_create_account(user.id)
-        grantor = await self.bot.services.accounts.get_or_create_account(ctx.author.id)
-        assert account.id is not None and grantor.id is not None
-        await self.bot.services.authorization.grant_global_administrator(account.id, granted_by_account_id=grantor.id)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=info_layout(
-                t(locale, _("Global administrator granted")),
-                t(
-                    locale,
-                    _("{user} now has bot-wide administrator access."),
-                    user=f"<@{user.id}>",
-                ),
-            ),
-            allowed_mentions=no_mentions(),
-        )
-
-    @global_admin_group.command(name="remove")
-    async def remove_global_admin(self, ctx: Context[BotT], user: discord.User) -> None:
-        """Revoke a user's bot-wide administrator access."""
-        if await self.bot.is_owner(user):
-            msg = "The bot owner's implicit access cannot be removed."
-            raise commands.BadArgument(msg)
-        account = await self.bot.services.accounts.get_account(user.id)
-        removed = bool(
-            account is not None
-            and account.id is not None
-            and await self.bot.services.authorization.revoke_global_administrator(account.id)
-        )
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        description = (
-            t(locale, _("Removed bot-wide administrator access from {user}."), user=f"<@{user.id}>")
-            if removed
-            else t(locale, _("{user} was not a global administrator."), user=f"<@{user.id}>")
-        )
-        await ctx.send(
-            view=info_layout(t(locale, _("Global administrator removed")), description),
-            allowed_mentions=no_mentions(),
-        )
 
     @admin_group.command(name="records-gaps")
     @requires(RECORD_ENTRY_INSPECT)

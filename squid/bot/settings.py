@@ -1,11 +1,11 @@
 """This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
 
-from typing import TYPE_CHECKING, Annotated, cast, override
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 from beartype.door import is_bearable
 from discord import app_commands
-from discord.ext.commands import Cog, Context, Greedy, guild_only, hybrid_group
+from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal
@@ -18,7 +18,7 @@ from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_VIEW,
     SETTINGS_VOTING_EDIT,
 )
-from squid.settings.domain import ListRoleSetting, ScalarChannelSetting, Setting
+from squid.settings.domain import ScalarChannelSetting, Setting
 from squid.voting.domain import RoleWeight, VoteChoice, VoteKindLiteral, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -67,11 +67,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     channel = cast(GuildMessageable | None, ctx.guild.get_channel(value))
                     display_value = channel.name if channel is not None else t(locale, _("_Not found_"))
                     desc += t(locale, _("{setting} channel: {value}\n"), setting=setting, value=display_value)
-                elif is_bearable(setting, ListRoleSetting):  # pyright: ignore[reportArgumentType]
-                    value = cast(list[int], value)
-                    roles = [role for role in ctx.guild.roles if role.id in value]
-                    display_value = ", ".join(role.name for role in roles) or t(locale, _("_Not set_"))
-                    desc += t(locale, _("{setting} roles: {value}\n"), setting=setting, value=display_value)
                 else:  # Should not happen, but may happen if the schema is updated and this code is not
                     desc += t(locale, _("{setting}: {value}\n"), setting=setting, value=value)
 
@@ -105,11 +100,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                             if channel is not None
                             else t(locale, _("_Not found_"))
                         )
-                case "Trusted":
-                    title = t(locale, _("{setting} Roles Info"), setting=setting)
-                    value = await self.settings_service.get(ctx.guild.id, setting)
-                    roles = [role for role in ctx.guild.roles if role.id in value]
-                    description = ", ".join(role.name for role in roles) or t(locale, _("_Not set_"))
                 case _:  # pyright: ignore[reportUnnecessaryComparison]  # Should not happen, but may happen if the schema is updated and this code is not
                     title = setting
                     description = str(await self.settings_service.get(ctx.guild.id, setting))
@@ -121,10 +111,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             )
 
     @settings_hybrid_group.command(name="set")
-    @app_commands.describe(
-        channel=app_commands.locale_str(_("The channel to send this type of message to")),
-        roles=app_commands.locale_str(_("The roles which will have this permission")),
-    )
+    @app_commands.describe(channel=app_commands.locale_str(_("The channel to send this type of message to")))
     @app_commands.rename(setting="type")
     @requires(SETTINGS_SERVER_EDIT)
     async def change_setting(
@@ -132,21 +119,10 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ctx: Context[BotT],
         setting: Setting,
         channel: GuildMessageable | None = None,
-        roles: Annotated[list[discord.Role] | None, Greedy[discord.Role]] = None,
     ):
         """Change the server's setting."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
-
-        if channel is not None and roles is not None:
-            await ctx.send(
-                view=error_layout(
-                    t(locale, _("Error")),
-                    t(locale, _("You can only provide a channel or a list of roles, not both.")),
-                ),
-                allowed_mentions=no_mentions(),
-            )
-            return
 
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             if is_bearable(setting, ScalarChannelSetting):  # pyright: ignore[reportArgumentType]
@@ -176,36 +152,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     info_layout(
                         t(locale, _("Settings updated")),
                         t(locale, _("{setting} channel has successfully been set."), setting=setting),
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
-            elif is_bearable(setting, ListRoleSetting):  # pyright: ignore[reportArgumentType]
-                if roles is None:
-                    await edit_layout(
-                        sent_message,
-                        error_layout(
-                            t(locale, _("Error")),
-                            t(locale, _("You must provide a list of roles for this setting.")),
-                        ),
-                        allowed_mentions=no_mentions(),
-                    )
-                    return
-
-                role_ids = [role.id for role in roles]
-                if any(role.guild != ctx.guild for role in roles):
-                    await edit_layout(
-                        sent_message,
-                        error_layout(t(locale, _("Error")), t(locale, _("The roles must be from this server."))),
-                        allowed_mentions=no_mentions(),
-                    )
-                    return
-
-                await self.settings_service.set_roles(ctx.guild.id, setting, role_ids)
-                await edit_layout(
-                    sent_message,
-                    info_layout(
-                        t(locale, _("Settings updated")),
-                        t(locale, _("{setting} roles have successfully been set."), setting=setting),
                     ),
                     allowed_mentions=no_mentions(),
                 )

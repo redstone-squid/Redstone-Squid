@@ -55,14 +55,9 @@ UNGATED_COMMANDS = frozenset(
         "vote close",
         "vote delete",
         "vote refresh",
-        # Owner-only, gated by is_owner rather than by a node.
-        "admin global-admin",
-        "admin global-admin add",
-        "admin global-admin list",
-        "admin global-admin remove",
     }
 )
-"""Commands that legitimately declare no permission node.
+"""Commands that legitimately declare no permission node: the public ones.
 
 Everything else in `PUBLIC_COGS` must declare one, so a privileged command
 shipped without a gate fails CI instead of shipping open.
@@ -85,10 +80,6 @@ PUBLIC_COGS = (
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
     "admin": (
-        "global-admin",
-        "global-admin add",
-        "global-admin list",
-        "global-admin remove",
         "records-gaps",
         "records-lookup",
         "records-rebuild",

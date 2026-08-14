@@ -1,27 +1,10 @@
 """Application ports for permissions."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
 from whenever import Instant
-
-from squid.permissions.domain import GlobalAdministrator
-
-
-class GlobalAdministratorStore(Protocol):
-    """Persistence operations required by :class:`AuthorizationService`.
-
-    Superseded by :class:`PermissionStore`; retained until the legacy tiers go.
-    """
-
-    async def contains(self, account_id: int) -> bool: ...
-
-    async def list(self) -> Sequence[GlobalAdministrator]: ...
-
-    async def grant(self, account_id: int, granted_by_account_id: int) -> GlobalAdministrator: ...
-
-    async def revoke(self, account_id: int) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)

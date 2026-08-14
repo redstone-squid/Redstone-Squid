@@ -28,7 +28,6 @@ from squid.minecraft_auth.application import InstallationCredentialService, Play
 from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
 from squid.permissions.application import (
-    AuthorizationService,
     PermissionAdministrationService,
     PermissionEpochWatcher,
     PermissionService,
@@ -68,7 +67,6 @@ class ApiServices:
     idempotency: IdempotencyService
     notifications: NotificationService
     build_queries: BuildQueryService
-    authorization: AuthorizationService
     permissions: PermissionService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
@@ -96,7 +94,6 @@ class BotServices:
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
-    authorization: AuthorizationService
     permissions: PermissionService
     permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher

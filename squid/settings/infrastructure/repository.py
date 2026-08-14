@@ -20,7 +20,6 @@ DbSettingKey = Literal[
     "first_channel_id",
     "builds_channel_id",
     "voting_channel_id",
-    "trusted_roles_ids",
 ]
 _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "Smallest": "smallest_channel_id",
@@ -28,7 +27,6 @@ _SETTING_TO_DB_KEY: dict[Setting, DbSettingKey] = {
     "First": "first_channel_id",
     "Builds": "builds_channel_id",
     "Vote": "voting_channel_id",
-    "Trusted": "trusted_roles_ids",
 }
 _DB_KEY_TO_SETTING: dict[DbSettingKey, Setting] = {value: key for key, value in _SETTING_TO_DB_KEY.items()}
 
@@ -43,7 +41,7 @@ class SettingsRepository:
         self,
         server_ids: Iterable[int],
         setting: Setting,
-    ) -> dict[int, int | list[int] | None]:
+    ) -> dict[int, int | None]:
         """Get a single setting's value for each of the given servers.
 
         Args:
@@ -58,9 +56,9 @@ class SettingsRepository:
             repository = _ServerSettingModelRepository(session=session)
             rows = await repository.get_many(ServerSetting.server_id.in_(tuple(server_ids)))
             column_name = _SETTING_TO_DB_KEY[setting]
-            return {row.server_id: cast(int | list[int] | None, getattr(row, column_name)) for row in rows}
+            return {row.server_id: cast(int | None, getattr(row, column_name)) for row in rows}
 
-    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
+    async def get_single(self, server_id: int, setting: Setting) -> int | None:
         """Get a single setting's value for one server.
 
         Args:
@@ -76,7 +74,7 @@ class SettingsRepository:
             row = await repository.get_one_or_none(server_id=server_id)
             if row is None:
                 return None
-            return cast(int | list[int] | None, getattr(row, _SETTING_TO_DB_KEY[setting]))
+            return cast(int | None, getattr(row, _SETTING_TO_DB_KEY[setting]))
 
     async def get_all(self, server_id: int) -> SettingOptions:
         """Get every setting for one server.

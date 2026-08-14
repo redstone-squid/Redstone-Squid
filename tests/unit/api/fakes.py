@@ -103,11 +103,6 @@ class MockSearch:
         return DEFAULT_FIELD_REGISTRY
 
 
-class MockAuthorization:
-    async def is_global_administrator(self, _discord_id: int) -> bool:
-        return False
-
-
 class MockTags:
     async def public_definitions(self):
         return ()
@@ -259,7 +254,6 @@ def build_app(
             builds=SimpleNamespace(),
             accounts=accounts or MockAccountManager(),
             build_queries=MockBuildQueries(),
-            authorization=MockAuthorization(),
             permissions=MockPermissions(),
             permission_epoch=MockPermissionEpoch(),
             search=MockSearch(),

@@ -109,7 +109,7 @@ def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
     assert document["paths"]["/v1/capabilities"]["get"]["security"] == [{}]
     assert document["paths"]["/v1/auth/logout"]["post"]["security"] == [{"WebSession": [], "CsrfToken": []}]
     assert document["paths"]["/v1/cli/auth/sessions/current"]["delete"]["security"] == [{"DeviceSession": []}]
-    assert document["paths"]["/v1/verify"]["post"]["x-required-api-scopes"] == ["verify"]
+    assert document["paths"]["/v1/verify"]["post"]["x-required-api-scopes"] == ["account.verify.relay"]
 
 
 def test_openapi_declares_submission_draft_producer_links() -> None:
