@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import desc, func, or_, select, update
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -23,7 +23,6 @@ from squid.builds.domain import (
     BuildCategory,
     MediaTypeLiteral,
     Status,
-    UnknownRestrictions,
 )
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.infrastructure.mapping import BuildMapper
@@ -43,13 +42,9 @@ from squid.builds.infrastructure.models import (
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.tags.domain import TagAssignment as DomainTagAssignment
-from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.tags.domain import TagValueType
 from squid.tags.infrastructure.models import (
     BuildTagAssignment as SQLTagAssignment,
-)
-from squid.tags.infrastructure.models import (
-    TagAlias,
-    TagApplicability,
 )
 from squid.tags.infrastructure.models import (
     TagDefinition as SQLTagDefinition,
@@ -362,8 +357,6 @@ class BuildRepository:
             alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
             sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
 
-        if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} and not build.door_type:
-            build.door_type = ["Regular"]
         await self._setup_tag_assignments(build, session, sql_build)
 
         # Handle versions
@@ -393,7 +386,13 @@ class BuildRepository:
         session: AsyncSession,
         sql_build: SQLBuild,
     ) -> None:
-        assignments = await self._authoritative_tag_assignments(build, session)
+        """Persist ``build.tags`` verbatim.
+
+        Taxonomy names are resolved into assignments at edit time by
+        ``squid.builds.application.taxonomy.apply_build_taxonomy``; the
+        repository no longer interprets the restriction string fields.
+        """
+        assignments = build.tags
         if not assignments:
             return
 
@@ -432,40 +431,6 @@ class BuildRepository:
                     created_by_discord_id=build.submitter_id,
                 )
             )
-
-    async def _authoritative_tag_assignments(
-        self,
-        build: Build,
-        session: AsyncSession,
-    ) -> list[DomainTagAssignment]:
-        """Translate editable taxonomy fields into the sole persisted tag model."""
-        restrictions = [value for values in build.restrictions.values() for value in values or ()]
-        patterns = build.door_type or (
-            ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
-        )
-        rows, unknown_restrictions, unknown_patterns = await _resolve_official_tag_rows(
-            session,
-            build_kind=build.category.value if build.category is not None else None,
-            restrictions=restrictions,
-            patterns=patterns,
-        )
-        _merge_unknown_taxonomy(build, unknown_restrictions, unknown_patterns)
-        classification = [
-            DomainTagAssignment(
-                definition=self._mapper.tag_definition_to_domain(row),
-                provenance="submitted",
-            )
-            for row in rows
-        ]
-        retained = [
-            assignment
-            for assignment in build.tags
-            if assignment.definition.authority is not TagAuthority.OFFICIAL
-            or assignment.definition.semantic_kind not in {TagSemanticKind.RESTRICTION, TagSemanticKind.PATTERN}
-        ]
-        assignments = [*retained, *classification]
-        build.tags = assignments
-        return assignments
 
     @staticmethod
     async def _get_or_create_account(session: AsyncSession, discord_id: int) -> int:
@@ -716,111 +681,6 @@ def _split_tag_value(
         return None, None, value
     msg = f"Tag {assignment.definition.stable_key} expects a {value_type.value} value."
     raise InvalidBuildError(msg, context={"tag_id": assignment.definition.id})
-
-
-async def _resolve_official_tag_rows(
-    session: AsyncSession,
-    *,
-    build_kind: str | None,
-    restrictions: list[str],
-    patterns: list[str],
-) -> tuple[list[SQLTagDefinition], set[str], set[str]]:
-    restriction_names = {_normalize_tag_name(name) for name in restrictions}
-    pattern_names = {_normalize_tag_name(name) for name in patterns}
-    if not restriction_names and not pattern_names:
-        return [], set(), set()
-
-    matched_name = or_(
-        SQLTagDefinition.normalized_name.in_(restriction_names | pattern_names),
-        TagAlias.normalized_alias.in_(restriction_names | pattern_names),
-    )
-    matched_kind = or_(
-        (SQLTagDefinition.semantic_kind == TagSemanticKind.RESTRICTION)
-        & matched_name
-        & or_(
-            SQLTagDefinition.normalized_name.in_(restriction_names),
-            TagAlias.normalized_alias.in_(restriction_names),
-        ),
-        (SQLTagDefinition.semantic_kind == TagSemanticKind.PATTERN)
-        & matched_name
-        & or_(
-            SQLTagDefinition.normalized_name.in_(pattern_names),
-            TagAlias.normalized_alias.in_(pattern_names),
-        ),
-    )
-    statement = (
-        select(SQLTagDefinition)
-        .outerjoin(TagAlias, TagAlias.tag_id == SQLTagDefinition.id)
-        .where(
-            SQLTagDefinition.authority == "official",
-            SQLTagDefinition.moderation_status == "approved",
-            matched_kind,
-        )
-        .order_by(SQLTagDefinition.default_display_order, SQLTagDefinition.id)
-    )
-    if build_kind is not None:
-        statement = statement.join(
-            TagApplicability,
-            TagApplicability.tag_id == SQLTagDefinition.id,
-        ).where(TagApplicability.build_kind == build_kind)
-    rows = list((await session.scalars(statement)).unique().all())
-    matched_restrictions = _unambiguously_matched_names(rows, restriction_names, TagSemanticKind.RESTRICTION)
-    matched_patterns = _unambiguously_matched_names(rows, pattern_names, TagSemanticKind.PATTERN)
-    selected = [
-        row
-        for row in rows
-        if (
-            (row.semantic_kind == TagSemanticKind.RESTRICTION and bool(_definition_names(row) & matched_restrictions))
-            or (row.semantic_kind == TagSemanticKind.PATTERN and bool(_definition_names(row) & matched_patterns))
-        )
-    ]
-    return selected, restriction_names - matched_restrictions, pattern_names - matched_patterns
-
-
-def _unambiguously_matched_names(
-    definitions: Sequence[SQLTagDefinition],
-    requested: set[str],
-    semantic_kind: TagSemanticKind,
-) -> set[str]:
-    return {
-        name
-        for name in requested
-        if sum(
-            name in _definition_names(definition)
-            for definition in definitions
-            if definition.semantic_kind == semantic_kind
-        )
-        == 1
-    }
-
-
-def _definition_names(definition: SQLTagDefinition) -> set[str]:
-    return {definition.normalized_name, *(alias.normalized_alias for alias in definition.aliases)}
-
-
-def _merge_unknown_taxonomy(
-    build: Build,
-    unknown_restrictions: set[str],
-    unknown_patterns: set[str],
-) -> None:
-    current_restrictions: UnknownRestrictions = {}
-    current_restrictions.update(build.extra_info.get("unknown_restrictions", {}))
-    for field_name, values in build.restrictions.items():
-        new_values = [value for value in values or () if _normalize_tag_name(value) in unknown_restrictions]
-        existing_values = cast(list[str], current_restrictions.get(field_name, []))
-        if new_values or existing_values:
-            current_restrictions[field_name] = list(dict.fromkeys([*existing_values, *new_values]))
-    if current_restrictions:
-        build.extra_info["unknown_restrictions"] = current_restrictions
-
-    new_patterns = [value for value in build.door_type if _normalize_tag_name(value) in unknown_patterns]
-    existing_patterns = build.extra_info.get("unknown_patterns", [])
-    if new_patterns or existing_patterns:
-        build.extra_info["unknown_patterns"] = list(dict.fromkeys([*existing_patterns, *new_patterns]))
-
-
-def _normalize_tag_name(value: str) -> str:
-    return " ".join(value.casefold().split())
 
 
 def _normalize_display_name(value: str | None) -> str | None:

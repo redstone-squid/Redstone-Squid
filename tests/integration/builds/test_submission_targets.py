@@ -19,6 +19,7 @@ from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
+from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import DataIntegrityError
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ActionableSubmissionError, StoredDraft
@@ -239,6 +240,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         RestrictionRepository(migrated_session_factory),
         versions,
         NoopEmbeddings(),
+        OfficialTagResolver(migrated_session_factory),
     )
     target = BuildSubmissionTarget(builds, NoApprovedTags(), versions)
     canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
