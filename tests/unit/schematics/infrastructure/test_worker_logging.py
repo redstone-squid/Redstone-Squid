@@ -6,11 +6,14 @@ import io
 import json
 import logging
 import signal
+from pathlib import Path
 
 import pytest
 from pytest_mock import MockerFixture
+from pythonjsonlogger.json import JsonFormatter
 
-from squid.config import SchematicConfig
+from squid.config import LoggingConfig, SchematicConfig
+from squid.logging_config import build_logging_config
 from squid.schematics.infrastructure import worker as worker_module
 from squid.schematics.infrastructure import worker_main
 from squid.schematics.infrastructure.wire import Frame
@@ -176,6 +179,33 @@ async def test_terminate_logs_expected_exits_below_warning(
 
     exits = [record for record in caplog.records if "exited with code" in record.getMessage()]
     assert [record.levelno for record in exits] == [level]
+
+
+def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
+    """The collector keys logs off service_name, so the parent must not relabel them."""
+    line = json.dumps(
+        {
+            "levelname": "WARNING",
+            "name": "squid.schematics.infrastructure.worker_main",
+            "message": "Schematic operation render failed: boom",
+            "service_name": "redstone-squid-schematic-worker",
+        }
+    )
+    record = _worker_log_record(line, 2718)
+    assert record is not None
+    formatter_config = build_logging_config(
+        config=LoggingConfig(
+            level="INFO", root_level="INFO", directory=Path("/tmp"), log_file=None, access_log_file=None
+        ),
+        service_name="redstone-squid-worker",
+    )["formatters"]
+    assert isinstance(formatter_config, dict)
+    formatter = JsonFormatter(formatter_config["json"]["format"], defaults=formatter_config["json"]["defaults"])
+
+    payload = json.loads(formatter.format(record))
+
+    assert payload["service_name"] == "redstone-squid-schematic-worker"
+    assert payload["worker_pid"] == 2718
 
 
 def test_child_records_are_dispatched_under_their_own_logger(caplog: pytest.LogCaptureFixture) -> None:

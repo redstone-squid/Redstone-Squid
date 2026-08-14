@@ -39,8 +39,13 @@ DEFAULT_ACCESS_LOG_FORMAT = (
 )
 """Format for uvicorn access log records."""
 
-JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s %(service_name)s"
-"""Fields emitted for structured application and worker logs."""
+JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s"
+"""Fields emitted for structured application and worker logs.
+
+`service_name` is deliberately absent: it is supplied as a formatter *default* so that a record
+forwarded from a schematic worker child keeps the identity the child stamped on it. As a format
+field it would be a required field, which `static_fields` overwrite and record attributes cannot.
+"""
 
 JSON_ACCESS_LOG_FORMAT = f"{JSON_LOG_FORMAT} %(client_addr)s %(request_line)s %(status_code)s"
 """Fields emitted for structured uvicorn access logs."""
@@ -207,12 +212,12 @@ def build_logging_config(
             "json": {
                 "()": "pythonjsonlogger.json.JsonFormatter",
                 "format": JSON_LOG_FORMAT,
-                "static_fields": {"service_name": service_name},
+                "defaults": {"service_name": service_name},
             },
             "json_access": {
                 "()": "pythonjsonlogger.json.JsonFormatter",
                 "format": JSON_ACCESS_LOG_FORMAT,
-                "static_fields": {"service_name": service_name},
+                "defaults": {"service_name": service_name},
             },
         },
         "handlers": handlers,
@@ -294,7 +299,7 @@ def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str 
                 "json": {
                     "()": "pythonjsonlogger.json.JsonFormatter",
                     "format": JSON_LOG_FORMAT,
-                    "static_fields": {"service_name": "redstone-squid-schematic-worker"},
+                    "defaults": {"service_name": "redstone-squid-schematic-worker"},
                 }
             },
             "handlers": {
