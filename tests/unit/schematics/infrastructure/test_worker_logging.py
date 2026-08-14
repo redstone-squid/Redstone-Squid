@@ -14,8 +14,11 @@ from pythonjsonlogger.json import JsonFormatter
 
 from squid.config import LoggingConfig, SchematicConfig
 from squid.logging_config import build_logging_config
+from squid.schematics.domain.models import AnalyzerCapabilities
+from squid.schematics.errors import InvalidSchematicError
 from squid.schematics.infrastructure import worker as worker_module
 from squid.schematics.infrastructure import worker_main
+from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.wire import Frame
 from squid.schematics.infrastructure.worker import (
     SchematicWorkerPool,
@@ -23,6 +26,7 @@ from squid.schematics.infrastructure.worker import (
     _record_worker_failure,
     _Worker,
     _worker_log_record,
+    current_schematic_job_id,
 )
 
 
@@ -257,6 +261,71 @@ async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFix
     inject.assert_called_once()
     encoded = stdin.write.call_args.args[0]
     assert b'"traceparent":"00-' in encoded
+
+
+@pytest.mark.parametrize("job_id", [4242, None])
+async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, job_id: int | None) -> None:
+    worker = _Worker(SchematicConfig())
+    stdout = asyncio.StreamReader()
+    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdin = mocker.Mock()
+    stdin.drain = mocker.AsyncMock()
+    mocker.patch.object(
+        worker, "_ensure_started", new=mocker.AsyncMock(return_value=mocker.Mock(stdin=stdin, stdout=stdout))
+    )
+    token = current_schematic_job_id.set(job_id)
+    try:
+        await worker.request("capabilities", {}, (), 1.0)
+    finally:
+        current_schematic_job_id.reset(token)
+
+    encoded = stdin.write.call_args.args[0]
+    assert (b'"job_id":4242' in encoded) is (job_id is not None)
+
+
+def test_serve_stamps_request_context_on_child_logs(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
+    """Without this the only correlation between a child log and its job is the trace context."""
+    header = {"id": 7, "op": "analyze", "params": {}, "job_id": 4242}
+    stdin = io.BytesIO(Frame(header).encode())
+
+    def _fail(*_: object, **__: object) -> None:
+        raise InvalidSchematicError(context={"reason": "unreadable"})
+
+    mocker.patch.object(worker_main, "handle", side_effect=_fail)
+
+    with caplog.at_level(logging.DEBUG, logger=worker_main.logger.name):
+        # caplog's handler is not the child's stderr handler, so apply the filter by hand.
+        caplog.handler.addFilter(worker_main._request_context)
+        try:
+            worker_main.serve(stdin, io.BytesIO())
+        finally:
+            caplog.handler.removeFilter(worker_main._request_context)
+
+    (record,) = caplog.records
+    assert getattr(record, "squid.schematic.request_id") == 7
+    assert getattr(record, "squid.schematic.job_id") == 4242
+    assert getattr(record, "squid.schematic.operation") == "analyze"
+    assert worker_main._request_context.fields == {}
+
+
+async def test_job_runner_publishes_the_job_id_to_the_worker(mocker: MockerFixture) -> None:
+    seen: list[int | None] = []
+
+    async def _capture(*_: object, **__: object) -> AnalyzerCapabilities:
+        seen.append(current_schematic_job_id.get())
+        return AnalyzerCapabilities(available=True)
+
+    analyzer = mocker.Mock()
+    analyzer.capabilities = _capture
+    jobs = mocker.Mock()
+    jobs.complete = mocker.AsyncMock(return_value=True)
+    runner = SchematicJobRunner(jobs, mocker.Mock(), analyzer, SchematicConfig())
+    job = mocker.Mock(id=4242, operation="capabilities", input_keys=(), params={})
+
+    await runner._process(job)
+
+    assert seen == [4242]
+    assert current_schematic_job_id.get() is None
 
 
 def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixture) -> None:

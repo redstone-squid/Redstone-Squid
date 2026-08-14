@@ -41,6 +41,7 @@ from squid.schematics.errors import (
     SchematicWorkerCrashedError,
 )
 from squid.schematics.infrastructure import wire
+from squid.schematics.infrastructure.worker import current_schematic_job_id
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,13 @@ class SchematicJobRunner:
             await self._artifacts.delete(object_key)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
+        token = current_schematic_job_id.set(job.id)
+        try:
+            await self._process_claimed(job)
+        finally:
+            current_schematic_job_id.reset(token)
+
+    async def _process_claimed(self, job: ClaimedSchematicJob) -> None:
         result_object_key: str | None = None
         try:
             inputs = await run_all([partial(self._load_input, job, key) for key in job.input_keys])

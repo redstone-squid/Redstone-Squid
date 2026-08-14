@@ -34,6 +34,7 @@ import signal
 import sys
 from collections import deque
 from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from typing import Any, Self, cast
 
 from squid.config import SchematicConfig
@@ -72,6 +73,14 @@ this one carries only the supervisor's own commentary about a worker's stderr.
 
 WORKER_MODULE = "squid.schematics.infrastructure.worker_main"
 
+current_schematic_job_id: ContextVar[int | None] = ContextVar("squid.schematic_job_id", default=None)
+"""The durable job a request belongs to, if it came from one.
+
+Carried in the request frame so the child can stamp it on its own logs. A ContextVar rather
+than a parameter because every method of the seven-method analyzer protocol would otherwise
+have to grow one, for the benefit of a single implementation.
+"""
+
 STDERR_LINE_LIMIT = 1024 * 1024
 """`StreamReader` line budget for the child's stderr.
 
@@ -99,7 +108,12 @@ class _Worker:
         async with self._lock:
             process = await self._ensure_started()
             self._next_id += 1
+            # `id` counts per worker, not per pool, so the correlation key in the logs is the
+            # pair (worker_pid, request_id).
             header: dict[str, Any] = {"id": self._next_id, "op": operation, "params": params}
+            job_id = current_schematic_job_id.get()
+            if job_id is not None:
+                header["job_id"] = job_id
             inject_trace_context(header)
             frame = Frame(header, tuple(payloads))
             assert process.stdin is not None and process.stdout is not None
