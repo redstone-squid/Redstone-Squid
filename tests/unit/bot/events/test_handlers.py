@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.events.handlers import PostConfirmedBuildHandler, PostSubmittedBuildHandler
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Build, OtherBuild, Status
 from squid.events import DomainEvent, UnsupportedEventVersionError
 from squid.messages.domain import MessageRecord
 
@@ -94,7 +94,7 @@ def _event(build_id: int = 42, *, event_type: str = "build.confirmed", schema_ve
 
 
 async def test_posts_a_confirmed_build_to_every_configured_channel() -> None:
-    build = Build(id=42)
+    build = OtherBuild(id=42)
     build.submission_status = Status.CONFIRMED
     channels = [FakeChannel(id=1), FakeChannel(id=2)]
     messages = FakeMessages()
@@ -107,7 +107,7 @@ async def test_posts_a_confirmed_build_to_every_configured_channel() -> None:
 
 async def test_redelivery_does_not_post_the_build_again() -> None:
     """At-least-once delivery must not produce a second copy of the same post."""
-    build = Build(id=42)
+    build = OtherBuild(id=42)
     build.submission_status = Status.CONFIRMED
     channels = [FakeChannel(id=1), FakeChannel(id=2)]
     messages = FakeMessages()
@@ -120,7 +120,7 @@ async def test_redelivery_does_not_post_the_build_again() -> None:
 
 
 async def test_redelivery_after_a_partial_failure_posts_only_the_missing_channel() -> None:
-    build = Build(id=42)
+    build = OtherBuild(id=42)
     build.submission_status = Status.CONFIRMED
     channels = [FakeChannel(id=1), FakeChannel(id=2)]
     messages = FakeMessages(
@@ -147,7 +147,7 @@ async def test_redelivery_after_a_partial_failure_posts_only_the_missing_channel
 
 async def test_a_build_no_longer_confirmed_is_not_posted() -> None:
     """A later transition owns its own event, so the stale one must do nothing."""
-    build = Build(id=42)
+    build = OtherBuild(id=42)
     build.submission_status = Status.DENIED
     channels = [FakeChannel(id=1)]
 
@@ -163,7 +163,7 @@ async def test_a_deleted_build_is_skipped_without_raising() -> None:
 
 
 async def test_a_failing_send_propagates_so_the_delivery_retries() -> None:
-    build = Build(id=42)
+    build = OtherBuild(id=42)
     build.submission_status = Status.CONFIRMED
 
     class ExplodingChannel(FakeChannel):
@@ -178,7 +178,7 @@ async def test_a_failing_send_propagates_so_the_delivery_retries() -> None:
 
 
 async def test_submitted_build_is_delegated_to_the_idempotent_review_publisher() -> None:
-    build = Build(id=42, submitter_account_id=7)
+    build = OtherBuild(id=42, submitter_account_id=7)
     build.submission_status = Status.PENDING
     bot = AsyncMock()
     bot.services.build_queries.get.return_value = build
@@ -191,7 +191,7 @@ async def test_submitted_build_is_delegated_to_the_idempotent_review_publisher()
 
 
 async def test_submitted_build_redelivery_reuses_the_same_review_publisher_path() -> None:
-    build = Build(id=42, submitter_account_id=7)
+    build = OtherBuild(id=42, submitter_account_id=7)
     build.submission_status = Status.PENDING
     bot = AsyncMock()
     bot.services.build_queries.get.return_value = build

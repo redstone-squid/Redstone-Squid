@@ -1,7 +1,7 @@
 """Build embedding application tests."""
 
 from squid.builds.application import BuildEmbeddingService
-from squid.builds.domain import Build
+from squid.builds.domain import OtherBuild
 
 
 class FakeEmbeddingModel:
@@ -30,7 +30,7 @@ async def test_prepare_index_and_search_share_embedding_abstractions() -> None:
     model = FakeEmbeddingModel([1.0, 2.0])
     index = FakeVectorIndex()
     service = BuildEmbeddingService(model, index)
-    build = Build(id=7)
+    build = OtherBuild(id=7)
 
     await service.prepare(build)
     await service.index(build)
@@ -45,7 +45,7 @@ async def test_prepare_index_and_search_share_embedding_abstractions() -> None:
 async def test_missing_embedding_skips_index_and_search() -> None:
     index = FakeVectorIndex()
     service = BuildEmbeddingService(FakeEmbeddingModel(None), index)
-    build = Build(id=7)
+    build = OtherBuild(id=7)
 
     await service.prepare(build)
     await service.index(build)

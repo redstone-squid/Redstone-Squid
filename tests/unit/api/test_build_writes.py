@@ -12,7 +12,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Principal
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorSubmission
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
@@ -27,16 +27,15 @@ ACCOUNT = Principal(
 
 
 def persisted_build(*, submitter_id: int = 123, status: Status = Status.PENDING) -> Build:
-    return Build(
+    return DoorBuild(
         id=42,
         submitter_id=submitter_id,
-        category=BuildCategory.DOOR,
         submission_status=status,
         versions=["1.21"],
         door_width=2,
         door_height=2,
-        door_type=["Regular"],
-        door_orientation_type="Door",
+        patterns=["Regular"],
+        orientation="Door",
     )
 
 

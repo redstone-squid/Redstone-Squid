@@ -40,7 +40,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
@@ -70,7 +70,7 @@ class SubmissionModal(ErrorHandledModal):
 
     def __init__(
         self,
-        build: Build,
+        build: BuildDraft,
         builds: BuildService,
         parent: "BuildSubmissionForm | None" = None,
         *,
@@ -89,7 +89,7 @@ class SubmissionModal(ErrorHandledModal):
         )
         self.pattern = discord.ui.TextInput(
             placeholder=t(locale, _("For example: regular, full lamp")),
-            default=", ".join(build.door_type),
+            default=", ".join(build.patterns),
             required=False,
         )
         self.dimensions = discord.ui.TextInput(
@@ -139,7 +139,7 @@ class SubmissionModal(ErrorHandledModal):
             return
 
         self.build.door_dimensions = door_dimensions
-        self.build.door_type = _split_values(self.pattern.value) or ["Regular"]
+        self.build.patterns = _split_values(self.pattern.value) or ["Regular"]
         self.build.dimensions = dimensions
         self.build.version_spec = self.versions.value.strip() or None
         self.build.creators_ign = _split_values(self.creators.value)
@@ -219,9 +219,9 @@ class SubmissionDetailsModal(ErrorHandledModal):
             self.parent.build,
             _split_values(self.restrictions.value),
         )
-        self.parent.build.image_urls = image_urls
-        self.parent.build.video_urls = video_urls
-        self.parent.build.world_download_urls = world_urls
+        self.parent.build.replace_links("image", image_urls)
+        self.parent.build.replace_links("video", video_urls)
+        self.parent.build.replace_links("world-download", world_urls)
         notes = self.notes.value.strip()
         if notes:
             self.parent.build.extra_info["user"] = notes
@@ -258,7 +258,7 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
 
     def __init__(
         self,
-        build: Build,
+        build: BuildDraft,
         builds: BuildService,
         *,
         author_id: int | None = None,
@@ -268,7 +268,7 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         super().__init__(timeout=timeout)
         build.submission_status = Status.PENDING
         build.category = BuildCategory.DOOR
-        build.door_type = build.door_type or ["Regular"]
+        build.patterns = build.patterns or ["Regular"]
 
         self.build = build
         self.builds = builds
@@ -286,14 +286,14 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
     def is_ready(self) -> bool:
         """Return whether the minimal builder-entered fields are present."""
         width, height, _depth = self.build.door_dimensions
-        return self.build.door_orientation_type is not None and width is not None and height is not None
+        return self.build.door_orientation is not None and width is not None and height is not None
 
     def render(self) -> None:
         """Render the current draft and keep all actions in one message."""
         controls = self.actions
         self.clear_items()
         missing = []
-        if self.build.door_orientation_type is None:
+        if self.build.door_orientation is None:
             missing.append(t(self.locale, _("door type")))
         if not self.build.door_width or not self.build.door_height:
             missing.append(t(self.locale, _("door opening size")))
@@ -312,11 +312,11 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
                     CardSection(
                         t(self.locale, _("Basics")),
                         (
-                            CardField(t(self.locale, _("Door type")), self.build.door_orientation_type or "—"),
+                            CardField(t(self.locale, _("Door type")), self.build.door_orientation or "—"),
                             CardField(
                                 t(self.locale, _("Opening size")), _format_dimensions(self.build.door_dimensions) or "—"
                             ),
-                            CardField(t(self.locale, _("Pattern")), ", ".join(self.build.door_type)),
+                            CardField(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
                             CardField(
                                 t(self.locale, _("Build size")), _format_dimensions(self.build.dimensions) or "—"
                             ),

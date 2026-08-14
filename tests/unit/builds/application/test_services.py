@@ -15,7 +15,7 @@ from squid.builds.application.services import (
     BuildService,
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, BuildCategory, DoorBuild, OtherBuild, Status, UtilityBuild
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.errors import InvalidStateError
 from squid.sponsors import PublicSponsor
@@ -187,11 +187,10 @@ def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None 
 
 @pytest.fixture
 def existing_build() -> Build:
-    return Build(
+    return DoorBuild(
         id=42,
         submitter_id=1,
         submission_status=Status.PENDING,
-        category=BuildCategory.DOOR,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
         extra_info={
             "user": "old",
@@ -376,7 +375,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
 async def test_classify_restrictions_replaces_existing_values_without_persisting() -> None:
     repository = FakeBuildRepository()
     service = build_service(repository)
-    build = Build(component_restrictions=["Old"], miscellaneous_restrictions=["Old"])
+    build = UtilityBuild(component_restrictions=["Old"], miscellaneous_restrictions=["Old"])
 
     result = await service.classify_restrictions(build, ["seamless", "unknown"])
 
@@ -393,12 +392,11 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     draft_id = UUID("11111111-1111-1111-1111-111111111111")
 
     build = await service.submit_for_account(
-        Build(description="A transport-neutral submission"),
+        OtherBuild(description="A transport-neutral submission"),
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
         display_name="  Workshop prototype  ",
         ai_generated=False,
-        category=BuildCategory.OTHER,
     )
 
     assert build.submitter_account_id == 17
@@ -412,7 +410,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
 
 async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> None:
     draft_id = UUID("11111111-1111-4111-8111-111111111111")
-    existing = Build(id=41, source_submission_draft_id=draft_id)
+    existing = OtherBuild(id=41, source_submission_draft_id=draft_id)
 
     result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(draft_id)
 
@@ -421,22 +419,20 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
 
 async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry() -> None:
     draft_id = UUID("22222222-2222-2222-2222-222222222222")
-    existing = Build(
+    existing = UtilityBuild(
         id=42,
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
-        category=BuildCategory.UTILITY,
         submission_status=Status.PENDING,
     )
     repository = FakeBuildRepository(existing)
 
     result = await build_service(repository).submit_for_account(
-        Build(),
+        OtherBuild(),
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
         display_name="ignored retry value",
         ai_generated=False,
-        category=BuildCategory.UTILITY,
     )
 
     assert result is existing
@@ -446,11 +442,10 @@ async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry(
 async def test_submit_for_account_rejects_existing_build_with_different_sponsor() -> None:
     draft_id = UUID("22222222-2222-4222-8222-222222222223")
     installation_id = UUID("33333333-3333-4333-8333-333333333333")
-    existing = Build(
+    existing = UtilityBuild(
         id=42,
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
-        category=BuildCategory.UTILITY,
         submission_status=Status.PENDING,
         sponsor=PublicSponsor(installation_id, display_name="Original server"),
     )
@@ -458,12 +453,11 @@ async def test_submit_for_account_rejects_existing_build_with_different_sponsor(
 
     with pytest.raises(InvalidStateError):
         await build_service(repository).submit_for_account(
-            Build(sponsor=PublicSponsor(installation_id, display_name="Changed server")),
+            OtherBuild(sponsor=PublicSponsor(installation_id, display_name="Changed server")),
             submitter_account_id=17,
             source_submission_draft_id=draft_id,
             display_name="Retry",
             ai_generated=False,
-            category=BuildCategory.UTILITY,
         )
 
     repository.save.assert_not_awaited()
@@ -476,7 +470,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     service = BuildService(
         repository, locks, FakeRestrictionRepository(), FakeVersions(), embeddings, FakeTaxonomyResolver()
     )
-    build = Build(id=42)
+    build = DoorBuild(id=42)
 
     await service.save(build)
 

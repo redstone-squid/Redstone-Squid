@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from squid.bot.voting.build_session import BuildVoteSession, _review_message_nonce
-from squid.builds.domain import Build, Status
+from squid.builds.domain import OtherBuild, Status
 from squid.voting.domain import EmojiPreset, VoteChoice, VoteOption, VoteSessionSnapshot, VoteTarget
 
 
@@ -144,7 +144,7 @@ async def test_retry_after_send_succeeds_but_tracking_fails_reuses_discord_messa
         services=SimpleNamespace(votes=votes, messages=messages),
         for_build=lambda _build: SimpleNamespace(render_layout=AsyncMock(return_value=object())),
     )
-    build = Build(id=42, submitter_account_id=7)
+    build = OtherBuild(id=42, submitter_account_id=7)
     build.submission_status = Status.PENDING
     channel = _DeduplicatingChannel()
 

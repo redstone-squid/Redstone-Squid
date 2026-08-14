@@ -1,10 +1,18 @@
 """Adapter from normalized synchronized submissions to the build aggregate."""
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
-from squid.builds.domain import Build, BuildCategory, DoorOrientationLiteral, Info
+from squid.builds.domain import (
+    BUILD_CLASS_BY_CATEGORY,
+    Build,
+    BuildCategory,
+    DoorBuild,
+    DoorOrientationLiteral,
+    ExtenderBuild,
+    Info,
+)
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.application.finalization import ActionableSubmissionError
@@ -56,7 +64,6 @@ class ProviderNeutralBuilds(Protocol):
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
-        category: BuildCategory,
     ) -> Build: ...
 
 
@@ -96,7 +103,6 @@ class BuildSubmissionTarget:
         await self._validate_source_version(submission.source_version)
         definitions = await self._resolve_tags(submission)
         build = _to_build(submission, definitions)
-        category = _CATEGORY_MAP[submission.category]
         try:
             persisted = await self._builds.submit_for_account(
                 build,
@@ -104,7 +110,6 @@ class BuildSubmissionTarget:
                 source_submission_draft_id=submission.source_draft_id,
                 display_name=submission.display_name,
                 ai_generated=submission.ai_generated,
-                category=category,
             )
         except (InvalidBuildError, InvalidStateError) as error:
             raise _target_rejected() from error
@@ -189,40 +194,45 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     if pattern_proposals:
         extra_info["unknown_patterns"] = list(pattern_proposals)
 
-    build = Build(
-        category=_CATEGORY_MAP[submission.category],
-        versions=[submission.source_version],
-        version_spec=submission.version_compatibility,
-        width=submission.capture_dimensions.width,
-        height=submission.capture_dimensions.height,
-        depth=submission.capture_dimensions.depth,
-        wiring_placement_restrictions=restriction_values["wiring_placement_restrictions"],
-        animated_restrictions=restriction_values["animated_restrictions"],
-        component_restrictions=restriction_values["component_restrictions"],
-        miscellaneous_restrictions=restriction_values["miscellaneous_restrictions"],
-        tags=showcase_assignments,
-        extra_info=cast(Info, extra_info),
-        creators_ign=[creator.strip() for creator in submission.creators if creator.strip()],
-        completion_time=submission.completion,
-        description=submission.description,
-        sponsor=submission.sponsor,
-    )
+    common: dict[str, Any] = {
+        "versions": [submission.source_version],
+        "version_spec": submission.version_compatibility,
+        "width": submission.capture_dimensions.width,
+        "height": submission.capture_dimensions.height,
+        "depth": submission.capture_dimensions.depth,
+        "wiring_placement_restrictions": restriction_values["wiring_placement_restrictions"],
+        "animated_restrictions": restriction_values["animated_restrictions"],
+        "component_restrictions": restriction_values["component_restrictions"],
+        "miscellaneous_restrictions": restriction_values["miscellaneous_restrictions"],
+        "tags": showcase_assignments,
+        "extra_info": cast(Info, extra_info),
+        "creators_ign": [creator.strip() for creator in submission.creators if creator.strip()],
+        "completion_time": submission.completion,
+        "description": submission.description,
+        "sponsor": submission.sponsor,
+    }
     if isinstance(submission.details, DoorSubmissionDetails):
-        build.door_width = submission.details.opening.width
-        build.door_height = submission.details.opening.height
-        build.door_depth = submission.details.opening.depth
-        build.door_orientation_type = cast(DoorOrientationLiteral, submission.details.orientation.value.title())
-        build.door_type = pattern_names
-        build.normal_opening_time = submission.details.timing.opening
-        build.visible_opening_time = submission.details.timing.visible_opening
-        build.normal_closing_time = submission.details.timing.closing
-        build.visible_closing_time = submission.details.timing.visible_closing
-    elif isinstance(submission.details, ExtenderSubmissionDetails):
-        build.extender_orientation = _EXTENDER_ORIENTATION[submission.details.orientation]
-        build.extension_length = submission.details.extension_length
-        build.door_type = pattern_names
-        build.extender_type = pattern_names[0] if pattern_names else None
-    return build
+        return DoorBuild(
+            **common,
+            door_width=submission.details.opening.width,
+            door_height=submission.details.opening.height,
+            door_depth=submission.details.opening.depth,
+            orientation=cast(DoorOrientationLiteral, submission.details.orientation.value.title()),
+            patterns=pattern_names,
+            normal_opening_time=submission.details.timing.opening,
+            visible_opening_time=submission.details.timing.visible_opening,
+            normal_closing_time=submission.details.timing.closing,
+            visible_closing_time=submission.details.timing.visible_closing,
+        )
+    if isinstance(submission.details, ExtenderSubmissionDetails):
+        return ExtenderBuild(
+            **common,
+            orientation=_EXTENDER_ORIENTATION[submission.details.orientation],
+            extension_length=submission.details.extension_length,
+            patterns=pattern_names,
+            extender_type=pattern_names[0] if pattern_names else None,
+        )
+    return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
 
 
 def _target_result(build: Build, submission: NormalizedSubmission) -> SubmissionTargetResult:

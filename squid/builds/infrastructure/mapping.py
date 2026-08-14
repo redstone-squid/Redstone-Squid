@@ -1,11 +1,20 @@
-"""Map build persistence rows to domain entities."""
+"""Map build persistence rows to domain entities.
+
+The domain category subclasses name their fields identically to the joined ORM
+subclasses, so both mapping directions share :data:`CATEGORY_FIELD_NAMES` — the
+single authoritative list of category-specific fields. Adding a column means
+adding it to the ORM model, the domain subclass, and that one tuple.
+"""
+
+from collections.abc import Mapping
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.infrastructure.models import AccountIdentity, CreatorAlias
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, BuildLink, OriginalMessage
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
@@ -26,12 +35,53 @@ from squid.tags.infrastructure.models import BuildTagAssignment
 from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
 from squid.versions.infrastructure.models import Version
 
+CATEGORY_FIELD_NAMES: Mapping[BuildCategory, tuple[str, ...]] = {
+    BuildCategory.DOOR: (
+        "orientation",
+        "door_width",
+        "door_height",
+        "door_depth",
+        "normal_opening_time",
+        "normal_closing_time",
+        "visible_opening_time",
+        "visible_closing_time",
+    ),
+    BuildCategory.EXTENDER: (
+        "orientation",
+        "extension_length",
+        "extender_type",
+    ),
+    BuildCategory.UTILITY: (),
+    BuildCategory.ENTRANCE: (),
+    BuildCategory.OTHER: (),
+}
+"""Category-specific fields, named identically on the ORM and domain subclasses."""
+
+SQL_CLASS_BY_CATEGORY: Mapping[BuildCategory, type[SQLBuild]] = {
+    BuildCategory.DOOR: Door,
+    BuildCategory.EXTENDER: Extender,
+    BuildCategory.UTILITY: Utility,
+    BuildCategory.ENTRANCE: Entrance,
+    BuildCategory.OTHER: Other,
+}
+
+
+def category_values_from_row(sql_build: SQLBuild) -> dict[str, Any]:
+    """Read the category-specific fields off a joined row."""
+    return {name: getattr(sql_build, name) for name in CATEGORY_FIELD_NAMES[BuildCategory(sql_build.category)]}
+
+
+def category_values_from_domain(build: Build) -> dict[str, Any]:
+    """Read the category-specific fields off a domain entity."""
+    return {name: getattr(build, name) for name in CATEGORY_FIELD_NAMES[build.category]}
+
 
 class BuildMapper:
     """Load cross-context values explicitly while mapping a build."""
 
     async def to_domain(self, session: AsyncSession, sql_build: SQLBuild) -> Build:
-        if not isinstance(sql_build, (Door, Extender, Utility, Entrance, Other)):
+        category = BuildCategory(sql_build.category)
+        if not isinstance(sql_build, SQL_CLASS_BY_CATEGORY[category]):
             msg = f"Unsupported persisted build category: {sql_build.category}."
             raise TypeError(msg)
 
@@ -58,11 +108,12 @@ class BuildMapper:
                 .where(BuildVersion.build_id == sql_build.id)
             )
         ).all()
-        original_message = (
+        message_row = (
             None
             if sql_build.original_message_id is None
             else await session.scalar(select(Message).where(Message.id == sql_build.original_message_id))
         )
+        original_message = _original_message(sql_build.original_message_id, message_row)
 
         tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
         official_restrictions = [
@@ -77,11 +128,10 @@ class BuildMapper:
             if assignment.definition.authority is TagAuthority.OFFICIAL
             and assignment.definition.semantic_kind is TagSemanticKind.PATTERN
         ]
-        return Build(
+        return BUILD_CLASS_BY_CATEGORY[category](
             id=sql_build.id,
             revision=sql_build.revision,
             submission_status=sql_build.submission_status,
-            category=BuildCategory(sql_build.category),
             record_category=sql_build.record_category,
             versions=[
                 f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
@@ -91,11 +141,7 @@ class BuildMapper:
             width=sql_build.width,
             height=sql_build.height,
             depth=sql_build.depth,
-            door_width=sql_build.door_width if isinstance(sql_build, Door) else None,
-            door_height=sql_build.door_height if isinstance(sql_build, Door) else None,
-            door_depth=sql_build.door_depth if isinstance(sql_build, Door) else None,
-            door_type=official_patterns,
-            door_orientation_type=sql_build.orientation if isinstance(sql_build, Door) else None,
+            patterns=official_patterns,
             wiring_placement_restrictions=[
                 restriction.display_name
                 for restriction in official_restrictions
@@ -117,20 +163,15 @@ class BuildMapper:
                 if restriction.restriction_type == "miscellaneous"
             ],
             tags=tags,
-            extender_orientation=sql_build.orientation if isinstance(sql_build, Extender) else None,
-            extension_length=sql_build.extension_length if isinstance(sql_build, Extender) else None,
-            extender_type=sql_build.extender_type if isinstance(sql_build, Extender) else None,
-            normal_closing_time=sql_build.normal_closing_time if isinstance(sql_build, Door) else None,
-            normal_opening_time=sql_build.normal_opening_time if isinstance(sql_build, Door) else None,
-            visible_closing_time=sql_build.visible_closing_time if isinstance(sql_build, Door) else None,
-            visible_opening_time=sql_build.visible_opening_time if isinstance(sql_build, Door) else None,
             extra_info=sql_build.extra_info,
             creators_ign=creator_names,
-            image_urls=[link.url for link in sql_build.links if link.media_type == "image"],
-            video_urls=[link.url for link in sql_build.links if link.media_type == "video"],
-            world_download_urls=[link.url for link in sql_build.links if link.media_type == "world-download"],
-            schematic_urls=[link.url for link in sql_build.links if link.media_type == "schematic"],
-            render_urls=[link.url for link in sql_build.links if link.media_type == "render"],
+            # A NULL media_type (the column is legacy-nullable) was invisible to the old
+            # per-type filters as well, so such rows stay unmapped rather than guessed at.
+            links=[
+                BuildLink(url=link.url, media_type=link.media_type)
+                for link in sql_build.links
+                if link.media_type is not None
+            ],
             display_name=sql_build.display_name,
             source_submission_draft_id=sql_build.source_submission_draft_id,
             sponsor=_sponsor(sql_build),
@@ -142,13 +183,10 @@ class BuildMapper:
             description=sql_build.description,
             submission_time=sql_build.submission_time,
             edited_time=sql_build.edited_time,
-            original_server_id=original_message.server_id if original_message else None,
-            original_channel_id=original_message.channel_id if original_message else None,
-            original_message_id=sql_build.original_message_id,
-            original_message_author_id=original_message.author_id if original_message else None,
-            original_message=original_message.content if original_message else None,
+            original_message=original_message,
             ai_generated=sql_build.ai_generated,
             embedding=sql_build.embedding,
+            **category_values_from_row(sql_build),
         )
 
     @staticmethod
@@ -173,6 +211,20 @@ class BuildMapper:
             default_display_order=definition.default_display_order,
             moderation_status=TagModerationStatus(definition.moderation_status),
         )
+
+
+def _original_message(message_id: int | None, message: Message | None) -> OriginalMessage | None:
+    if message_id is None:
+        return None
+    if message is None:
+        return OriginalMessage(message_id=message_id)
+    return OriginalMessage(
+        message_id=message_id,
+        server_id=message.server_id,
+        channel_id=message.channel_id,
+        author_id=message.author_id,
+        content=message.content,
+    )
 
 
 def _tag_assignment_to_domain(assignment: BuildTagAssignment) -> TagAssignment:

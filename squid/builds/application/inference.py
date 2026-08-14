@@ -9,9 +9,10 @@ from typing import Literal, Protocol, cast
 from pydantic import BaseModel, ConfigDict
 
 from squid.builds.domain import (
-    Build,
     BuildCategory,
+    BuildDraft,
     DoorOrientationLiteral,
+    OriginalMessage,
     RestrictionTypeLiteral,
     UnknownRestrictions,
     parse_time_string,
@@ -173,7 +174,7 @@ class BuildInferenceService:
         *,
         model: str,
         reasoning_effort: str | None = None,
-    ) -> list[Build]:
+    ) -> list[BuildDraft]:
         """Infer zero or more builds from a normalized message bundle."""
         result = await self._generator.generate(
             self._system_prompt,
@@ -187,7 +188,7 @@ class BuildInferenceService:
             return []
 
         primary_by_id = {message.message_id: message for message in source.primary}
-        builds: list[Build] = []
+        builds: list[BuildDraft] = []
         for inferred in result.builds:
             resolved = [
                 primary_by_id[message_id] for message_id in inferred.source_message_ids if message_id in primary_by_id
@@ -200,12 +201,14 @@ class BuildInferenceService:
                 continue
             resolved.sort(key=lambda message: source.primary.index(message))
             origin = resolved[0]
-            build = Build(
-                original_server_id=source.server_id,
-                original_channel_id=source.channel_id,
-                original_message_id=origin.message_id,
-                original_message_author_id=origin.author_id,
-                original_message="\n".join(message.content for message in resolved),
+            build = BuildDraft(
+                original_message=OriginalMessage(
+                    message_id=origin.message_id,
+                    server_id=source.server_id,
+                    channel_id=source.channel_id,
+                    author_id=origin.author_id,
+                    content="\n".join(message.content for message in resolved),
+                ),
                 ai_generated=True,
             )
             await self._apply_taxonomy(build, inferred)
@@ -231,7 +234,7 @@ class BuildInferenceService:
         context = "\n".join(render(message) for message in source.context)
         return f"<messages>\n <primary>\n{primary}\n </primary>\n <context>\n{context}\n </context>\n</messages>"
 
-    async def _apply_taxonomy(self, build: Build, inferred: InferredBuild) -> None:
+    async def _apply_taxonomy(self, build: BuildDraft, inferred: InferredBuild) -> None:
         validations: list[Awaitable[tuple[list[str], list[str]]]] = []
         destinations: list[str] = []
         restriction_fields: tuple[tuple[list[str], RestrictionTypeLiteral, str], ...] = (
@@ -268,10 +271,10 @@ class BuildInferenceService:
                 build.miscellaneous_restrictions = recognized
                 unknown["miscellaneous_restrictions"] = unrecognized
             else:
-                build.door_type = recognized
+                build.patterns = recognized
                 build.extra_info["unknown_patterns"] = unrecognized
 
-    async def _apply_fields(self, build: Build, inferred: InferredBuild) -> None:
+    async def _apply_fields(self, build: BuildDraft, inferred: InferredBuild) -> None:
         categories = {
             "Piston Door": BuildCategory.DOOR,
             "Entrance": BuildCategory.ENTRANCE,
@@ -280,7 +283,7 @@ class BuildInferenceService:
         }
         build.category = categories[inferred.build_category] if inferred.build_category is not None else None
         orientation = inferred.door_orientation
-        build.door_orientation_type = (
+        build.door_orientation = (
             "Door" if orientation is None or orientation == "Normal" else cast(DoorOrientationLiteral, orientation)
         )
         build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
