@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
@@ -47,6 +47,34 @@ from squid.versions.infrastructure.models import Version
 logger = logging.getLogger(__name__)
 
 
+def _mapper_load_options() -> tuple[Any, ...]:
+    """The relationship graph BuildMapper reads off a row.
+
+    Model-level ``lazy="selectin"`` would already load these, but stating the
+    contract here keeps every read path loading the same graph rather than
+    depending on which query happened to declare it. Creators and versions are
+    fenced off because the mapper batches them itself across the whole page;
+    ``raiseload`` makes a future traversal fail loudly instead of silently
+    reading an empty collection.
+    """
+    return (
+        selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
+        selectinload(SQLBuild.links),
+        raiseload(SQLBuild.build_creators),
+        raiseload(SQLBuild.build_versions),
+    )
+
+
+def _write_load_options() -> tuple[Any, ...]:
+    """The graph the update path rebuilds, which does traverse every collection."""
+    return (
+        selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
+        selectinload(SQLBuild.links),
+        selectinload(SQLBuild.build_creators),
+        selectinload(SQLBuild.build_versions),
+    )
+
+
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
@@ -66,7 +94,7 @@ class BuildRepository:
             The Build object with the specified ID, or None if the build was not found.
         """
         async with self._session_factory() as session:
-            stmt = select(SQLBuild).where(SQLBuild.id == build_id)
+            stmt = select(SQLBuild).where(SQLBuild.id == build_id).options(*_mapper_load_options())
             result = await session.execute(stmt)
             sql_build = result.unique().scalar_one_or_none()
             if sql_build is None:
@@ -78,14 +106,24 @@ class BuildRepository:
         if not build_ids:
             return []
         async with self._session_factory() as session:
-            rows = (await session.scalars(select(SQLBuild).where(SQLBuild.id.in_(build_ids)))).unique().all()
-            by_id = {row.id: await self._mapper.to_domain(session, row) for row in rows}
+            rows = (
+                (
+                    await session.scalars(
+                        select(SQLBuild).where(SQLBuild.id.in_(build_ids)).options(*_mapper_load_options())
+                    )
+                )
+                .unique()
+                .all()
+            )
+            by_id = {build.id: build for build in await self._mapper.to_domain_many(session, rows)}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
         async with self._session_factory() as session:
-            sql_build = await session.scalar(select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id))
+            sql_build = await session.scalar(
+                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
+            )
             if sql_build is None:
                 return None
             return await self._mapper.to_domain(session, sql_build)
@@ -115,8 +153,16 @@ class BuildRepository:
                 )
             if after_id is not None:
                 statement = statement.where(SQLBuild.id < after_id)
-            rows = (await session.scalars(statement.order_by(desc(SQLBuild.id)).limit(limit))).unique().all()
-            return [await self._mapper.to_domain(session, row) for row in rows]
+            rows = (
+                (
+                    await session.scalars(
+                        statement.order_by(desc(SQLBuild.id)).limit(limit).options(*_mapper_load_options())
+                    )
+                )
+                .unique()
+                .all()
+            )
+            return await self._mapper.to_domain_many(session, rows)
 
     async def get_by_message_id(self, message_id: int) -> Build | None:
         """
@@ -178,16 +224,7 @@ class BuildRepository:
             raise InvalidStateError(msg, context={"build_id": build.id})
 
         async with self._session_factory() as session:
-            statement = (
-                select(SQLBuild)
-                .where(SQLBuild.id == build.id)
-                .options(
-                    selectinload(SQLBuild.build_creators),
-                    selectinload(SQLBuild.build_versions),
-                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
-                    selectinload(SQLBuild.links),
-                )
-            )
+            statement = select(SQLBuild).where(SQLBuild.id == build.id).options(*_write_load_options())
             sql_build = (await session.execute(statement)).scalar_one()
             if sql_build.revision != build.revision:
                 raise BuildRevisionMismatchError(
@@ -565,15 +602,10 @@ class BuildRepository:
         """Return pending builds with the relationships required by the domain mapper."""
         async with self._session_factory() as session:
             statement = (
-                select(SQLBuild)
-                .where(SQLBuild.submission_status == Status.PENDING)
-                .options(
-                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
-                    selectinload(SQLBuild.links),
-                )
+                select(SQLBuild).where(SQLBuild.submission_status == Status.PENDING).options(*_mapper_load_options())
             )
             result = await session.execute(statement)
-            return [await self._mapper.to_domain(session, build) for build in result.unique().scalars().all()]
+            return await self._mapper.to_domain_many(session, list(result.unique().scalars().all()))
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
         """Fetches builds from the database with the given IDs."""
@@ -581,25 +613,11 @@ class BuildRepository:
             return []
 
         async with self._session_factory() as session:
-            stmt = (
-                select(SQLBuild)
-                .options(
-                    selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
-                    selectinload(SQLBuild.links),
-                )
-                .where(SQLBuild.id.in_(build_ids))
-            )
+            stmt = select(SQLBuild).options(*_mapper_load_options()).where(SQLBuild.id.in_(build_ids))
             result = await session.execute(stmt)
-            sql_builds = result.scalars().all()
-
-            # Create result list with None placeholders
-            builds: list[Build | None] = [None] * len(build_ids)
-
-            # Fill in the found builds at their correct positions
-            for sql_build in sql_builds:
-                idx = build_ids.index(sql_build.id)
-                builds[idx] = await self._mapper.to_domain(session, sql_build)
-            return builds
+            sql_builds = list(result.unique().scalars().all())
+            by_id = {build.id: build for build in await self._mapper.to_domain_many(session, sql_builds)}
+            return [by_id.get(build_id) for build_id in build_ids]
 
     async def get_unsent_builds(self, server_id: int) -> list[Build] | None:
         """Get all the builds that have not been posted on the server"""
