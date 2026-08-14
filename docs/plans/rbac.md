@@ -1,9 +1,11 @@
 # RBAC, replacing the four permission tiers
 
 > **Status.** Phase 0 (this document) and Phase 1 (the pure domain: catalogue, matcher, resolver)
-> landed 2026-08-13. Phases 2–8 outstanding. Amend this document in place as building it proves
-> parts of it wrong, calling out the amendments where they occur rather than silently applying
-> them.
+> landed 2026-08-13; Phase 2 (tables, revision 1, repository, `PermissionService`, the ports, and
+> the `runtime.py`/`bootstrap.py` wiring) landed 2026-08-14 — minus the integration tests of §10,
+> which need a database fixture and land alongside `test_epoch_notify.py` in Phase 3. Phases 3–8
+> outstanding. Amend this document in place as building it proves parts of it wrong, calling out
+> the amendments where they occur rather than silently applying them.
 
 ## Context
 
@@ -223,7 +225,8 @@ diff in the pull request that adds it.
 
 ## 2. Data model
 
-Eight tables in `squid/permissions/infrastructure/models.py` — the module is already registered in
+Seven new tables in `squid/permissions/infrastructure/models.py`, beside the legacy
+`global_administrators` already living there — the module is already registered in
 `squid/persistence/model_registry.py:14`, so no registry change is needed.
 
 - **`permission_roles`** — `id`, `slug`, `name`, `description`, `guild_id` (NULL = global),
@@ -252,10 +255,40 @@ The anti-escalation constraint lives in storage, not only in code:
 `CHECK (subject_role_id IS NULL OR scope_guild_id IS NULL OR scope_guild_id = subject_guild_id)`
 — a Discord role from guild A can never carry authority scoped into guild B.
 
+> **Amendment (Phase 2).** Four things the schema needed that the list above did not say.
+>
+> `permission_grants` and `permission_role_assignments` carry a surrogate `id`. The uniqueness rules
+> are *partial* indexes — one per subject kind, since which subject column is NULL differs between
+> them — and a partial index cannot be a primary key, so a rule needs its own identity for the audit
+> log to reference and for `/perm revoke` to name.
+>
+> The XOR is the named CHECK `num_nonnulls(subject_account_id, subject_role_id) = 1`, joined by
+> `subject_role_id IS NULL OR subject_guild_id IS NOT NULL`. A role snowflake means nothing without
+> the guild it lives in, and the anti-escalation CHECK compares *against* `subject_guild_id`, so
+> leaving it nullable for role subjects would have made that comparison vacuous — the constraint
+> would have passed by having nothing to compare. `permission_roles.slug` also gained a format CHECK
+> (`^[a-z][a-z0-9-]{1,31}$`), since slugs are typed into commands.
+>
+> `permission_role_assignments` gained `expires_at`. The plan gave temporary rules to grants only,
+> but the two share a subject shape already, and a time-boxed *role* ("moderator for the event
+> weekend") is the more common of the two requests.
+>
+> `permission_audit_log.reason` stays nullable, with "NOT NULL for `forbid`" enforced in
+> `PermissionService`. The column is shared with actions that legitimately have no reason, and a
+> partial CHECK keyed on `action` would put a list of action names into the schema, where adding one
+> costs a migration and misspelling one fails at write time rather than at import.
+
 **Built-in roles carry their pattern lists in code** (`catalogue.py: BUILTIN_ROLES`), not in the
 database; the row exists only so assignments have a foreign key. This is what stops a
 migration-seeded list from rotting as the catalogue grows. Database rows for a built-in are purely
 *additive overrides*, so an operator can still extend `global-admin` without a deploy.
+
+> **Amendment (Phase 2).** "Purely additive" needed one bound. Stored includes are unioned in
+> *before* the built-in's code-level excludes are subtracted, so a row widens a built-in but cannot
+> punch through its boundary. Those excludes are precisely what hold `global-admin` clear of
+> `bot.**`, `@destructive` and `perm.grant.global`; if a row could override them, write access to
+> `permission_role_patterns` would be a route to the owner-only surface — the escalation the
+> boundary exists to stop. Widening past it takes a deploy, or a separate role.
 
 `api_keys.scopes` keeps its `ARRAY(Text)` shape; only its values become node patterns. Making a
 key a fourth grant subject was considered and rejected — a key's node set is an attribute of the
@@ -266,6 +299,21 @@ as statement-level `AFTER INSERT OR UPDATE OR DELETE` triggers on the six mutabl
 `UPDATE ... version + 1 RETURNING version` then `PERFORM pg_notify('squid_permissions', ...)` —
 the same shape as `publish_domain_event` at `postgres_entities.sql:352`. **Bump the
 `15 functions / 34 triggers` assertion at `squid/persistence/alembic_entities.py:20-22`.**
+
+> **Amendment (Phase 2).** Six tables, but not the six this paragraph had in mind.
+> `permission_audit_log` gets no trigger: it is append-only and no decision reads it, so bumping the
+> epoch for an audit row would clear every cache in the fleet on every write, including the writes
+> that are only *recording* a change that already bumped it. `global_administrators` gets one
+> instead: while the legacy table is still a live permission source it belongs behind the same
+> "permissions changed" signal, so anything Phase 4 onwards mirrors from it — or any cache that
+> comes to consult it during the cut-over — invalidates for free. Nothing in the Phase 2 read path
+> reads that table, so today the trigger is purely defensive, and it leaves with the table in Phase
+> 8. The assertion is now **16 functions / 40 triggers**.
+>
+> `bump_permission_epoch` skips the `pg_notify` when the singleton row is missing rather than
+> failing the statement. A permission write erroring out because someone deleted the epoch row is a
+> far worse failure than a stale cache, and the watchers' wall-clock backstop still bounds how stale
+> that gets.
 
 ## 3. Resolution
 
@@ -390,6 +438,15 @@ degrades to a 30-second TTL rather than to unbounded staleness. Bounded LRU (409
 Counters via `squid.observability.add_counter`:
 `permissions.cache.{hit,miss,invalidation,stale_epoch_discard}`.
 
+> **Amendment (Phase 2).** "One query" means one repository *call*. `load_for_subject` runs six
+> statements in a single session — epoch, roles, role patterns, role includes, grants, assignments —
+> and reads *every* role flat rather than walking the composition graph, which would otherwise cost
+> a recursive CTE or a round trip per level for a table that holds a handful of rows. The number
+> that grows with nodes-per-command is the call count, and that is what the N+1 guard asserts on;
+> the six are constant. The epoch is read *first* in that session, so a write landing mid-read
+> stamps the entry with the older version and Phase 3 discards it rather than serving it — the
+> ordering is what makes the epoch stamp safe rather than merely decorative.
+
 Resolve the subject **once per command** in a `bot.before_invoke` hook, and keep a small TTL map
 for `discord_id → account_id`. Never call `get_or_create_account` inside a check — that writes a
 row for every unauthenticated caller; the resolver accepts `account_id=None` and answers from
@@ -469,7 +526,7 @@ infrastructure depends on a protocol rather than on the permissions application 
 
 Create each revision with `just db-revision "..."` so the filename template applies.
 
-1. **`add_permission_rbac_tables`** — eight tables, constraints, indexes, the epoch row, the
+1. **`add_permission_rbac_tables`** — seven tables, constraints, indexes, the epoch row, the
    trigger function, and four built-in role rows. All `protected`, ranks `owner` 1000,
    `global-admin` 800, `guild-admin` 500, `trusted` 200, and **no pattern rows** (patterns live in
    code):
@@ -477,13 +534,19 @@ Create each revision with `just db-revision "..."` so the filename template appl
    | Role | Includes | Excludes |
    |---|---|---|
    | `owner` | `**` | — (immutable) |
-   | `global-admin` | `build.**`, `record.**`, `tag.**`, `restriction.**`, `version.**`, `account.**`, `settings.**`, `starboard.**`, `message.**`, `vote.**`, `perm.subject.inspect`, `perm.audit.view`, `perm.grant.guild`, `role.definition.manage_guild` | `@destructive`, `bot.**`, `perm.grant.global`, `role.definition.manage` |
+   | `global-admin` | `build.**`, `record.**`, `tag.**`, `restriction.**`, `version.**`, `account.**`, `settings.**`, `starboard.**`, `message.**`, `redstoner.**`, `vote.**`, `perm.subject.inspect`, `perm.audit.view`, `perm.grant.guild`, `role.definition.manage_guild` | `@destructive`, `bot.**`, `perm.grant.global`, `role.definition.manage` |
    | `guild-admin` (Manage-Server bridge) | `settings.**`, `starboard.**`, `message.**`, `redstoner.**`, `vote.**`, `perm.grant.guild`, `perm.subject.inspect`, `role.definition.manage_guild` | `@destructive` |
    | `trusted` | `build.schematic.measure_timing`, `build.schematic.detect_lattice`, `vote.log_delete.cast`, `vote.weight.staff` | — |
 
    `global-admin` expressed as subtraction rather than a hand-enumerated list is the design paying
    for itself twice: it is shorter, and a future `@destructive` node is excluded automatically.
    Invariant test: every leaf `guild-admin` resolves to is `Scope.GUILD`.
+
+   > **Amendment (Phase 2).** The table above is a *rendering* of
+   > `squid/permissions/domain/catalogue.py: BUILTIN_ROLES`, not a second source of truth — it
+   > already drifted once, missing the `redstoner.**` the Phase 1 amendment added, and is corrected
+   > here. Read the code when the two disagree. The migration inserts only the four rows' identity,
+   > name, description and rank; no pattern rows exist for them at any point.
 
 2. **`backfill_permission_grants_from_legacy_tiers`** — each `global_administrators` row becomes a
    `global-admin` role assignment preserving the original `granted_by`/`granted_at`; each
@@ -547,6 +610,13 @@ are owner-only. `perm.grant.guild` and `role.definition.manage_guild` are granta
 `perm.grant.guild` holder may only write rules scoped to their guild where **every catalogue leaf
 the pattern reaches** is guild-scoped.
 
+> **Amendment (Phase 2).** `PermissionService.is_delegable_by_guild_admin` landed early, with the
+> service, and it also refuses a pattern reaching *no* leaf at all. "Every leaf it reaches is
+> guild-scoped" is vacuously true of a typo, and equally true of a bet on a node that does not exist
+> yet — the second being the dangerous one, since such a rule would sit in the table inert until
+> some later release quietly gave it meaning. An unparseable pattern is refused for the same reason
+> rather than raising, so the guard answers a straight yes or no at every call site.
+
 ### Two independent management gates
 
 Both must pass before any role edit or assignment. They block different attacks, so the failure
@@ -600,6 +670,16 @@ Phase 4 carries the only live-behaviour risk, so it is split per cog family: a b
 affects one command family and reverts cleanly. Revision 2 lands *before* the first flipped site,
 so nobody loses access mid-deploy.
 
+> **Amendment (Phase 2).** `ActorCapabilityResolver` (§6) landed with the other ports rather than
+> waiting for Phase 5. It is a protocol with no implementer yet, and writing it beside the store
+> protocol it will be built on kept `application/ports.py` to a single review rather than two.
+>
+> The integration tests §10 asks for — the CHECK constraints actually rejecting a cross-guild role
+> scope, a duplicate rule and a self-including role — did **not** land with Phase 2. They belong
+> with `test_epoch_notify.py` in Phase 3, which needs the same database fixture, and until then the
+> constraints are exercised only by `alembic upgrade head` succeeding. That is a real gap, not a
+> deferral on the merits: nothing yet proves the CHECKs reject what they are written to reject.
+
 ## 10. Testing
 
 **Catalogue** (`tests/unit/permissions/domain/test_catalogue.py`): naming convention and depth;
@@ -649,8 +729,17 @@ generate rule sets, roles and composition graphs over the real catalogue.
   step reproduces the verdict, which is what keeps `/perm explain` honest), **P14 default
   fallthrough**.
 
+**Service** (`tests/unit/permissions/application/test_permission_service.py`, Phase 2): a built-in
+resolves from its code-defined list; a stored pattern extends a built-in but cannot punch through
+its excludes; the Manage-Server bridge confers the guild nodes, loses to an explicit account deny,
+and cannot reach a global node even when someone widens `guild-admin` with a global pattern; an
+expired assignment falls through to the default; and the delegation guard's accept/refuse table.
+A `FakeStore` counting calls carries the N+1 guard below.
+
 **Cache**: epoch bump clears; stale-epoch entries are discarded on read; the wall-clock backstop
-refetches; and **one repository call for an N-node resolution**, the N+1 regression guard.
+refetches; and **one repository call for an N-node resolution**, the N+1 regression guard —
+already asserted at the service seam in Phase 2, and to be re-asserted against the real repository
+once the cache exists.
 
 **Integration** (`tests/integration/permissions/`): the CHECK constraints actually reject a
 cross-guild role scope, a duplicate rule, and a self-including role; `test_epoch_notify.py` mirrors

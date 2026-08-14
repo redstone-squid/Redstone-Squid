@@ -27,7 +27,7 @@ from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
-from squid.permissions.application import AuthorizationService
+from squid.permissions.application import AuthorizationService, PermissionService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.search.application import SearchEmbeddingService, SearchService
@@ -60,6 +60,7 @@ class ApiServices:
     notifications: NotificationService
     build_queries: BuildQueryService
     authorization: AuthorizationService
+    permissions: PermissionService
     records: RecordService
     schematics: SchematicService
     search: SearchService
@@ -86,6 +87,7 @@ class BotServices:
     build_queries: BuildQueryService
     messages: MessageService
     authorization: AuthorizationService
+    permissions: PermissionService
     records: RecordService
     record_computation: RecordComputationService
     schematics: SchematicService

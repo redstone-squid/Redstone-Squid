@@ -54,8 +54,8 @@ from squid.minecraft_auth.infrastructure import (
 )
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
-from squid.permissions.application import AuthorizationService
-from squid.permissions.infrastructure.repository import GlobalAdministratorRepository
+from squid.permissions.application import AuthorizationService, PermissionService
+from squid.permissions.infrastructure.repository import GlobalAdministratorRepository, PermissionRepository
 from squid.persistence.engine import DatabaseEngine
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
@@ -535,6 +535,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         notifications=graph.notifications,
         build_queries=graph.build_queries,
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
+        permissions=PermissionService(PermissionRepository(db.async_session)),
         records=graph.records,
         schematics=graph.schematics,
         search=graph.search,
@@ -562,6 +563,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
+        permissions=PermissionService(PermissionRepository(db.async_session)),
         records=graph.records,
         record_computation=graph.record_computation,
         schematics=graph.schematics,
