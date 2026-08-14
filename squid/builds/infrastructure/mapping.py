@@ -6,7 +6,8 @@ single authoritative list of category-specific fields. Adding a column means
 adding it to the ORM model, the domain subclass, and that one tuple.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -76,44 +77,98 @@ def category_values_from_domain(build: Build) -> dict[str, Any]:
     return {name: getattr(build, name) for name in CATEGORY_FIELD_NAMES[build.category]}
 
 
+@dataclass(frozen=True, slots=True)
+class _CrossContextValues:
+    """Cross-context rows for a batch of builds, loaded with four queries total."""
+
+    creators: Mapping[int, list[str]]
+    submitter_discord_ids: Mapping[int, int]
+    versions: Mapping[int, list[str]]
+    messages: Mapping[int, Message]
+
+
 class BuildMapper:
-    """Load cross-context values explicitly while mapping a build."""
+    """Load cross-context values explicitly while mapping a build.
+
+    Cross-context relationships were deliberately removed from the ORM models,
+    so the values other contexts own are fetched here instead of traversed.
+    Batch them per page: `to_domain` is the single-row delegate of
+    `to_domain_many`, which issues a fixed four queries regardless of page size.
+    """
 
     async def to_domain(self, session: AsyncSession, sql_build: SQLBuild) -> Build:
+        mapped = await self.to_domain_many(session, [sql_build])
+        return mapped[0]
+
+    async def to_domain_many(self, session: AsyncSession, sql_builds: Sequence[SQLBuild]) -> list[Build]:
+        """Map several rows, loading their cross-context values in one batch."""
+        if not sql_builds:
+            return []
+        values = await self._load_cross_context(session, sql_builds)
+        return [self._to_domain(sql_build, values) for sql_build in sql_builds]
+
+    @staticmethod
+    async def _load_cross_context(session: AsyncSession, sql_builds: Sequence[SQLBuild]) -> _CrossContextValues:
+        build_ids = [sql_build.id for sql_build in sql_builds]
+        account_ids = {
+            sql_build.submitter_account_id for sql_build in sql_builds if sql_build.submitter_account_id is not None
+        }
+        message_ids = {
+            sql_build.original_message_id for sql_build in sql_builds if sql_build.original_message_id is not None
+        }
+
+        creators: dict[int, list[str]] = {build_id: [] for build_id in build_ids}
+        for build_id, name in await session.execute(
+            select(BuildCreator.build_id, CreatorAlias.name)
+            .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
+            .where(BuildCreator.build_id.in_(build_ids))
+        ):
+            creators[build_id].append(name)
+
+        submitter_discord_ids: dict[int, int] = {}
+        if account_ids:
+            for account_id, subject in await session.execute(
+                select(AccountIdentity.account_id, AccountIdentity.subject).where(
+                    AccountIdentity.account_id.in_(account_ids),
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                )
+            ):
+                submitter_discord_ids[account_id] = int(subject)
+
+        versions: dict[int, list[str]] = {build_id: [] for build_id in build_ids}
+        for build_id, version in await session.execute(
+            select(BuildVersion.build_id, Version)
+            .join(Version, BuildVersion.version_id == Version.id)
+            .where(BuildVersion.build_id.in_(build_ids))
+        ):
+            versions[build_id].append(
+                f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
+            )
+
+        messages: dict[int, Message] = {}
+        if message_ids:
+            messages = {
+                message.id: message
+                for message in (await session.scalars(select(Message).where(Message.id.in_(message_ids)))).all()
+            }
+        return _CrossContextValues(creators, submitter_discord_ids, versions, messages)
+
+    @staticmethod
+    def _to_domain(sql_build: SQLBuild, values: _CrossContextValues) -> Build:
         category = BuildCategory(sql_build.category)
         if not isinstance(sql_build, SQL_CLASS_BY_CATEGORY[category]):
             msg = f"Unsupported persisted build category: {sql_build.category}."
             raise TypeError(msg)
 
-        creator_names = list(
-            (
-                await session.scalars(
-                    select(CreatorAlias.name)
-                    .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
-                    .where(BuildCreator.build_id == sql_build.id)
-                )
-            ).all()
-        )
-        submitter_subject = await session.scalar(
-            select(AccountIdentity.subject).where(
-                AccountIdentity.account_id == sql_build.submitter_account_id,
-                AccountIdentity.provider == IdentityProvider.DISCORD,
-            )
-        )
-        submitter_discord_id = None if submitter_subject is None else int(submitter_subject)
-        version_rows = (
-            await session.scalars(
-                select(Version)
-                .join(BuildVersion, BuildVersion.version_id == Version.id)
-                .where(BuildVersion.build_id == sql_build.id)
-            )
-        ).all()
-        message_row = (
+        submitter_discord_id = (
             None
-            if sql_build.original_message_id is None
-            else await session.scalar(select(Message).where(Message.id == sql_build.original_message_id))
+            if sql_build.submitter_account_id is None
+            else values.submitter_discord_ids.get(sql_build.submitter_account_id)
         )
-        original_message = _original_message(sql_build.original_message_id, message_row)
+        original_message = _original_message(
+            sql_build.original_message_id,
+            None if sql_build.original_message_id is None else values.messages.get(sql_build.original_message_id),
+        )
 
         tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
         official_restrictions = [
@@ -133,10 +188,7 @@ class BuildMapper:
             revision=sql_build.revision,
             submission_status=sql_build.submission_status,
             record_category=sql_build.record_category,
-            versions=[
-                f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
-                for version in version_rows
-            ],
+            versions=list(values.versions.get(sql_build.id, ())),
             version_spec=sql_build.version_spec,
             width=sql_build.width,
             height=sql_build.height,
@@ -164,7 +216,7 @@ class BuildMapper:
             ],
             tags=tags,
             extra_info=sql_build.extra_info,
-            creators_ign=creator_names,
+            creators_ign=list(values.creators.get(sql_build.id, ())),
             # A NULL media_type (the column is legacy-nullable) was invisible to the old
             # per-type filters as well, so such rows stay unmapped rather than guessed at.
             links=[

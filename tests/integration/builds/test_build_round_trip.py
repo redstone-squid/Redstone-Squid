@@ -1,20 +1,16 @@
 """Round-trip coverage pinning the build persistence semantics.
 
-This is the safety net for the build aggregate redesign: the door/extender field
-lists currently exist in four hand-maintained copies across the mapper and the
-repository, and nothing else ties them together. Every test here runs against a
-migrated PostgreSQL database, exercising the real write path
+This is the safety net for the build aggregate redesign. Every test here runs
+against a migrated PostgreSQL database, exercising the real write path
 (`apply_build_taxonomy` + `BuildRepository.save`) and the real read path
-(`BuildMapper.to_domain`).
+(`BuildMapper.to_domain`), so the one authoritative list of category-specific
+fields is checked in both directions for every category.
 
 Taxonomy names are resolved into tag assignments at edit time by
 ``apply_build_taxonomy``, which canonicalizes the typed restriction fields and
 records unresolvable or ambiguous names in ``extra_info``. After it runs,
 save→load is the identity (up to database-generated timestamps), and ``save()``
 itself persists ``build.tags`` verbatim without interpreting the string fields.
-
-One asymmetry remains characterized for a later phase: missing door dimensions
-are silently defaulted to 1x2 on write.
 """
 
 from dataclasses import fields as dataclass_fields
