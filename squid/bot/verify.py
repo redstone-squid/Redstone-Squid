@@ -9,8 +9,9 @@ from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_global_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_LIST, ACCOUNT_CLAIM_REJECT
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -107,7 +108,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
 
     @account_group.command(name="claims")
-    @check_is_global_admin()
+    @requires(ACCOUNT_CLAIM_LIST)
     async def pending_claims(self, ctx: Context[BotT]) -> None:
         """List creator credit claims awaiting review."""
         claims = await self.account_service.pending_alias_claims()
@@ -120,7 +121,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
 
     @account_group.command(name="approve-claim")
-    @check_is_global_admin()
+    @requires(ACCOUNT_CLAIM_APPROVE)
     async def approve_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Credit a claimant with the creator name they requested."""
         staff = await self.account_service.get_or_create_account(ctx.author.id)
@@ -133,7 +134,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
 
     @account_group.command(name="reject-claim")
-    @check_is_global_admin()
+    @requires(ACCOUNT_CLAIM_REJECT)
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Close a creator credit claim without crediting the claimant."""
         staff = await self.account_service.get_or_create_account(ctx.author.id)

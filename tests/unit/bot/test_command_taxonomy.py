@@ -18,6 +18,55 @@ from squid.bot.voting.vote import VoteCog
 
 type AnyCommand = Command[Any, ..., Any]
 
+UNGATED_COMMANDS = frozenset(
+    {
+        # Public: anyone may run these.
+        "account",
+        "account claim",
+        "account link",
+        "account unlink",
+        "build",
+        "build queue",
+        "build schematic",
+        "build schematic convert",
+        "build schematic download",
+        "build schematic info",
+        "build submit-full",
+        "build view",
+        "info",
+        "info docs",
+        "info form",
+        "info invite",
+        "info source",
+        "patterns",
+        "patterns list",
+        "patterns search",
+        "restrictions",
+        "restrictions search",
+        "search",
+        "tag",
+        "tag apply",
+        "tag propose",
+        "version",
+        "version list",
+        "vote",
+        "vote poll",
+        "vote close",
+        "vote delete",
+        "vote refresh",
+        # Owner-only, gated by is_owner rather than by a node.
+        "admin global-admin",
+        "admin global-admin add",
+        "admin global-admin list",
+        "admin global-admin remove",
+    }
+)
+"""Commands that legitimately declare no permission node.
+
+Everything else in `PUBLIC_COGS` must declare one, so a privileged command
+shipped without a gate fails CI instead of shipping open.
+"""
+
 PUBLIC_COGS = (
     SearchCog,
     Admin,
@@ -118,8 +167,13 @@ def _assert_check_counts(commands: Iterable[AnyCommand], expected: dict[str, int
     assert {name: len(_command(commands, name).checks) for name in expected} == expected
 
 
-def _check_names(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
-    return {predicate.__qualname__.partition(".<locals>")[0] for predicate in _command(commands, qualified_name).checks}
+def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
+    """The permission nodes a command declares, read off its check predicates."""
+    return {
+        node
+        for predicate in _command(commands, qualified_name).checks
+        for node in getattr(predicate, "__squid_nodes__", ())
+    }
 
 
 def test_public_prefix_command_tree_matches_taxonomy() -> None:
@@ -145,67 +199,75 @@ def test_search_modes_have_user_friendly_labels() -> None:
     ]
 
 
-def test_administrator_and_owner_checks_remain_on_sensitive_commands() -> None:
+def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
+    """The node contract, read from the predicate rather than from its name.
+
+    The old form counted checks and compared their qualified names, which could
+    only tell that *a* tier was applied. A node set is the actual contract, so a
+    command silently regated to the wrong capability fails here.
+    """
     search = SearchCog.__new__(SearchCog)
-    _assert_check_counts(
-        search.__cog_commands__,
-        {
-            "build approve": 1,
-            "build debug": 1,
-            "build detect-lattice": 1,
-            "build reject": 1,
-            "build edit": 1,
-            "build measure-timing": 1,
-            "build recalc": 1,
-        },
-    )
-
-    records = RecordCog.__new__(RecordCog)
-    _assert_check_counts(
-        records.__cog_commands__,
-        {
-            "admin": 1,
-            "admin records-gaps": 1,
-            "admin records-lookup": 1,
-            "admin records-rebuild": 1,
-            "admin records-title-issues": 1,
-        },
-    )
-
-    verify = VerifyCog.__new__(VerifyCog)
-    _assert_check_counts(
-        verify.__cog_commands__,
-        {
-            "account claim": 0,
-            "account claims": 1,
-            "account approve-claim": 1,
-            "account reject-claim": 1,
-        },
-    )
-
-
-def test_sensitive_commands_use_the_intended_permission_tier() -> None:
-    search = SearchCog.__new__(SearchCog)
-    assert _check_names(search.__cog_commands__, "build approve") == {"check_is_global_admin"}
-    assert _check_names(search.__cog_commands__, "build edit") == {"check_is_home_server_trusted_or_global_admin"}
-    assert _check_names(search.__cog_commands__, "build measure-timing") == {"check_is_trusted_or_global_admin"}
+    assert _nodes(search.__cog_commands__, "build approve") == {"build.submission.approve"}
+    assert _nodes(search.__cog_commands__, "build reject") == {"build.submission.reject"}
+    assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
+    assert _nodes(search.__cog_commands__, "build edit") == {"build.submission.edit"}
+    assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
+    assert _nodes(search.__cog_commands__, "build measure-timing") == {"build.schematic.measure_timing"}
+    assert _nodes(search.__cog_commands__, "build detect-lattice") == {"build.schematic.detect_lattice"}
+    assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
     settings = SettingsCog.__new__(SettingsCog)
-    assert _check_names(settings.__cog_commands__, "settings set") == {"check_is_server_admin"}
+    assert _nodes(settings.__cog_commands__, "settings set") == {"settings.server.edit"}
+    assert _nodes(settings.__cog_commands__, "settings list") == {"settings.server.view"}
 
     starboard = StarboardCog.__new__(StarboardCog)
-    assert _check_names(starboard.__cog_commands__, "starboard") == {"check_is_server_admin", "guild_only"}
+    assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
+    assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
 
     admin = Admin.__new__(Admin)
-    assert _check_names(admin.__cog_commands__, "tag approve") == {"check_is_global_admin"}
-    assert _check_names(admin.__cog_commands__, "archive") == {"check_is_server_admin"}
+    assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
+    assert _nodes(admin.__cog_commands__, "archive") == {"message.archive.create"}
 
     records = RecordCog.__new__(RecordCog)
-    assert _check_names(records.__cog_commands__, "admin global-admin") == {"is_owner"}
-    assert _check_names(records.__cog_commands__, "admin records-rebuild") == {"is_owner"}
+    assert _nodes(records.__cog_commands__, "admin records-rebuild") == {"record.entry.rebuild"}
+    assert _nodes(records.__cog_commands__, "admin records-lookup") == {"record.entry.inspect"}
+
+    verify = VerifyCog.__new__(VerifyCog)
+    assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
+    assert _nodes(verify.__cog_commands__, "account claim") == set()
 
     redstoner = GiveRedstoner.__new__(GiveRedstoner)
-    assert _check_names(redstoner.__cog_commands__, "redstoner panel") == {
-        "check_is_home_server",
-        "check_is_server_admin",
-    }
+    assert _nodes(redstoner.__cog_commands__, "redstoner panel") == {"redstoner.panel.manage"}
+
+
+def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
+    """A group gate must not be narrower than the commands inside it.
+
+    Every node is separately grantable, so gating a group on one node would make
+    the others unreachable for anyone granted only those.
+    """
+    for cog, group, member in (
+        (SettingsCog, "settings", "settings set"),
+        (StarboardCog, "starboard", "starboard recount"),
+        (RecordCog, "admin", "admin records-rebuild"),
+    ):
+        commands = cog.__new__(cog).__cog_commands__
+        assert _nodes(commands, member) <= _nodes(commands, group)
+
+
+def test_every_privileged_command_declares_a_node() -> None:
+    """A privileged command shipped with no gate fails CI.
+
+    The allowlist is the whole point: adding a command to it is a visible,
+    reviewable decision, whereas forgetting a check is silent.
+    """
+    ungated: set[str] = set()
+    for cog in PUBLIC_COGS:
+        for command in cog.__new__(cog).__cog_commands__:
+            if command.hidden:
+                continue
+            for entry in (command, *getattr(command, "commands", ())):
+                if not _nodes([entry], entry.qualified_name):
+                    ungated.add(entry.qualified_name)
+
+    assert ungated == UNGATED_COMMANDS

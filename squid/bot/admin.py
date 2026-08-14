@@ -11,8 +11,15 @@ from discord.ext.commands import Context, Greedy
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_global_admin, check_is_server_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import (
+    MESSAGE_ARCHIVE_CREATE,
+    TAG_PROPOSAL_APPROVE,
+    TAG_PROPOSAL_ARCHIVE,
+    TAG_PROPOSAL_LIST,
+    TAG_PROPOSAL_REJECT,
+)
 from squid.tags.domain import TagValueType
 
 if TYPE_CHECKING:
@@ -98,7 +105,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @tag_group.command(name="pending")
-    @check_is_global_admin()
+    @requires(TAG_PROPOSAL_LIST)
     async def pending_tags(self, ctx: Context[BotT]) -> None:
         """List user tags awaiting moderation."""
         definitions = await self.tags.pending()
@@ -117,7 +124,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @tag_group.command(name="approve")
-    @check_is_global_admin()
+    @requires(TAG_PROPOSAL_APPROVE)
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Publish a proposed showcase tag."""
         tag = await self.tags.approve(tag_id)
@@ -131,7 +138,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @tag_group.command(name="reject")
-    @check_is_global_admin()
+    @requires(TAG_PROPOSAL_REJECT)
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Reject a proposed showcase tag."""
         tag = await self.tags.reject(tag_id)
@@ -145,7 +152,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @tag_group.command(name="archive")
-    @check_is_global_admin()
+    @requires(TAG_PROPOSAL_ARCHIVE)
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Archive a published tag."""
         tag = await self.tags.archive(tag_id)
@@ -159,7 +166,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
 
     @commands.hybrid_command(name="archive")
-    @check_is_server_admin()
+    @requires(MESSAGE_ARCHIVE_CREATE, guild_only=True)
     async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
         """Makes a copy of the message in the current channel."""
         if isinstance(message.author, discord.User):
