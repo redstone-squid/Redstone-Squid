@@ -27,7 +27,8 @@ from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.observability import add_counter, record_gauge, record_histogram
-from squid.permissions.application import AuthorizationService, PermissionService
+from squid.permissions.application import AuthorizationService, PermissionEpochWatcher, PermissionService
+from squid.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.search.application import SearchEmbeddingService, SearchService
@@ -47,6 +48,9 @@ from squid.voting.application.ports import InteractiveVoteActorResolver
 
 logger = logging.getLogger(__name__)
 
+PERMISSION_EPOCH_JOB = "permission-epoch"
+"""Name of the job every process runs to keep its permission cache current."""
+
 
 @dataclass(frozen=True, slots=True)
 class ApiServices:
@@ -61,6 +65,7 @@ class ApiServices:
     build_queries: BuildQueryService
     authorization: AuthorizationService
     permissions: PermissionService
+    permission_epoch: PermissionEpochWatcher
     records: RecordService
     schematics: SchematicService
     search: SearchService
@@ -88,6 +93,7 @@ class BotServices:
     messages: MessageService
     authorization: AuthorizationService
     permissions: PermissionService
+    permission_epoch: PermissionEpochWatcher
     records: RecordService
     record_computation: RecordComputationService
     schematics: SchematicService
@@ -156,6 +162,25 @@ class ApplicationRuntime[ServicesT]:
         traceback: TracebackType | None,
     ) -> None:
         await self.close()
+
+
+def start_permission_epoch_watch(
+    supervisor: "BackgroundTaskSupervisor",
+    watcher: PermissionEpochWatcher,
+) -> None:
+    """Start one process's permission-cache invalidation jobs.
+
+    Two jobs, deliberately: the poll is what makes invalidation durable, and the
+    `LISTEN` connection only shortens the window. A deployment with no listener
+    URL configured still converges, just five seconds slower.
+    """
+    supervisor.start_periodic(
+        watcher.refresh,
+        name=PERMISSION_EPOCH_JOB,
+        interval=PERMISSION_POLL_INTERVAL_SECONDS,
+    )
+    if watcher.listener is not None:
+        supervisor.start(watcher.listen(), name=f"{PERMISSION_EPOCH_JOB}-listener")
 
 
 @dataclass(eq=False, slots=True)

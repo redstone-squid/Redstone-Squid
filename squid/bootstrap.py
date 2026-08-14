@@ -54,9 +54,19 @@ from squid.minecraft_auth.infrastructure import (
 )
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
-from squid.permissions.application import AuthorizationService, PermissionService
-from squid.permissions.infrastructure.repository import GlobalAdministratorRepository, PermissionRepository
+from squid.permissions.application import (
+    AuthorizationService,
+    PermissionEpochWatcher,
+    PermissionService,
+    SubjectRuleCache,
+)
+from squid.permissions.infrastructure.repository import (
+    EPOCH_CHANNEL,
+    GlobalAdministratorRepository,
+    PermissionRepository,
+)
 from squid.persistence.engine import DatabaseEngine
+from squid.persistence.wake_listener import PostgresWakeListener
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
@@ -194,6 +204,33 @@ class _ServiceGraph:
     @cached_property
     def restriction_repository(self) -> RestrictionRepository:
         return RestrictionRepository(self.db.async_session)
+
+    @cached_property
+    def permission_repository(self) -> PermissionRepository:
+        return PermissionRepository(self.db.async_session)
+
+    @cached_property
+    def permission_cache(self) -> SubjectRuleCache:
+        return SubjectRuleCache()
+
+    @cached_property
+    def permissions(self) -> PermissionService:
+        return PermissionService(self.permission_repository, cache=self.permission_cache)
+
+    @cached_property
+    def permission_epoch(self) -> PermissionEpochWatcher:
+        """The watcher keeping this process's rule cache honest.
+
+        It shares the cache instance with the service above, which is the whole
+        point: a grant written in another process clears the one cache the checks
+        in this process read through.
+        """
+        listener = (
+            None
+            if self.config.database.listener_url is None
+            else PostgresWakeListener(self.config.database.listener_url, channel=EPOCH_CHANNEL)
+        )
+        return PermissionEpochWatcher(self.permission_repository, self.permission_cache, listener=listener)
 
     @cached_property
     def version_service(self) -> VersionService:
@@ -535,7 +572,8 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         notifications=graph.notifications,
         build_queries=graph.build_queries,
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
-        permissions=PermissionService(PermissionRepository(db.async_session)),
+        permissions=graph.permissions,
+        permission_epoch=graph.permission_epoch,
         records=graph.records,
         schematics=graph.schematics,
         search=graph.search,
@@ -563,7 +601,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
         authorization=AuthorizationService(GlobalAdministratorRepository(db.async_session)),
-        permissions=PermissionService(PermissionRepository(db.async_session)),
+        permissions=graph.permissions,
+        permission_epoch=graph.permission_epoch,
         records=graph.records,
         record_computation=graph.record_computation,
         schematics=graph.schematics,
