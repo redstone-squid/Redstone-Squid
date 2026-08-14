@@ -5,16 +5,17 @@ import RecordCard from "../components/RecordCard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, fetchRecords } from "../lib/api";
 import { translate, type Locale } from "../lib/i18n";
+import { isPaged, PAGE_PARAMS, readPageParams } from "../lib/pagination";
 
 type Props = { locale: Locale };
 const { locale } = Astro.props;
-const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const page_ = readPageParams(Astro.url.searchParams);
 const canonicalUrl = new URL(Astro.url);
-canonicalUrl.searchParams.delete("cursor");
+for (const name of PAGE_PARAMS) canonicalUrl.searchParams.delete(name);
 let error;
 let page;
 try {
-  page = await fetchRecords(locale, cursor);
+  page = await fetchRecords(locale, page_);
 } catch (caught) {
   error = asCatalogueError(caught);
   Astro.locals.responseStatus = error.status;
@@ -26,7 +27,7 @@ try {
   description={translate(locale, "meta.recordsDescription")}
   locale={locale}
   canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
-  noindex={Boolean(cursor)}
+  noindex={isPaged(page_)}
 >
   <div class="page-shell section-stack">
     <header class="page-heading">
@@ -47,6 +48,6 @@ try {
         <div class="empty-state">{translate(locale, "records.empty")}</div>
       )
     }
-    {page && <Pagination locale={locale} cursor={page.next_cursor} url={Astro.url} />}
+    {page && <Pagination locale={locale} next={page.next} prev={page.prev} url={Astro.url} />}
   </div>
 </BaseLayout>

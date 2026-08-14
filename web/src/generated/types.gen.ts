@@ -1178,7 +1178,7 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_CURSOR' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
 
 /**
  * ExtenderDetails
@@ -1768,6 +1768,26 @@ export type OwnVoteSelection = {
 };
 
 /**
+ * PageAnchor
+ *
+ * Query-parameter values addressing an adjacent page. Exactly one field is set.
+ */
+export type PageAnchor = {
+    /**
+     * Offset
+     */
+    offset?: number | null;
+    /**
+     * After Id
+     */
+    after_id?: number | null;
+    /**
+     * Before Id
+     */
+    before_id?: number | null;
+};
+
+/**
  * Page[Annotated[Union[BuildSearchResult, RecordSearchResult, MetadataSearchResult], FieldInfo(annotation=NoneType, required=True, discriminator='resource_kind')]]
  */
 export type PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchResultFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorResourceKind = {
@@ -1776,13 +1796,11 @@ export type PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchR
      */
     items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1794,13 +1812,11 @@ export type PageBuildSummary = {
      */
     items: Array<BuildSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1812,13 +1828,11 @@ export type PageInboxNotificationDetail = {
      */
     items: Array<InboxNotificationDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1830,13 +1844,11 @@ export type PageRecordSummary = {
      */
     items: Array<RecordSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1848,13 +1860,11 @@ export type PageSchematicSummary = {
      */
     items: Array<SchematicSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1866,13 +1876,11 @@ export type PageTagDetail = {
      */
     items: Array<TagDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1884,13 +1892,11 @@ export type PageVersionDetail = {
      */
     items: Array<VersionDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -3224,12 +3230,28 @@ export type BuildsListData = {
         sort?: string | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/builds';
 };
@@ -4053,12 +4075,28 @@ export type AccountBuildsListData = {
         status?: BuildStatusFilter | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/users/me/builds';
 };
@@ -5027,12 +5065,28 @@ export type NotificationInboxListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/users/me/notifications/inbox';
 };
@@ -5188,13 +5242,33 @@ export type RecordsListData = {
     path?: never;
     query?: {
         /**
+         * Sort
+         */
+        sort?: string | null;
+        /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/records';
 };
@@ -5240,12 +5314,16 @@ export type BuildSchematicsListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/builds/{build_id}/schematics';
 };
@@ -5462,12 +5540,16 @@ export type SearchExecuteData = {
         sort?: string | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/search';
 };
@@ -6324,12 +6406,16 @@ export type TagsListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/tags';
 };
@@ -6496,12 +6582,16 @@ export type MinecraftVersionsListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/versions';
 };
