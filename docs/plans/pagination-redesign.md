@@ -386,7 +386,12 @@ this machine.
 - Commit 2: landed, with the page-assembly layering above folded in. `parse_page_sort` allows identifier anchors in
   either direction (the rule is "ID anchors require an ID ordering", which is what the repositories actually
   enforce), rather than only in the default descending order.
-- Commits 3–5: not started.
+- Commit 3: landed.
+- Commit 4: landed. `tests/integration/search/test_repository_pagination.py` and
+  `tests/integration/builds/test_build_pagination.py` both run green against testcontainers PostgreSQL.
+- Commit 5: landed. The web catalogue reads `offset`/`after_id`/`before_id` through `web/src/lib/pagination.ts`,
+  renders Previous and Next links, and crawls the sitemap along `after_id` anchors. `bun run test:e2e` could not be
+  verified locally -- Playwright's browsers are not installed on this machine -- so it is left to CI.
 
 Note for future runs on this machine: a broad `pytest tests/unit` OOM-ed it once, and
 `tests/unit/api/test_openapi_fuzz.py` (Schemathesis) is slow enough to look like a hang. Run suites a directory or

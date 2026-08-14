@@ -19,12 +19,12 @@ test("serves meaningful navigation and catalogue cards without JavaScript", asyn
   await context.close();
 });
 
-test("switches locale while preserving query and cursor state", async ({ page }) => {
-  await page.goto("/builds?q=door&cursor=build-page-2");
+test("switches locale while preserving query and page state", async ({ page }) => {
+  await page.goto("/builds?q=door&after_id=2");
   const language = page.getByRole("link", { name: "简体中文" });
-  await expect(language).toHaveAttribute("href", "/zh-cn/builds?q=door&cursor=build-page-2");
+  await expect(language).toHaveAttribute("href", "/zh-cn/builds?q=door&after_id=2");
   await language.click();
-  await expect(page).toHaveURL(/\/zh-cn\/builds\?q=door&cursor=build-page-2/);
+  await expect(page).toHaveURL(/\/zh-cn\/builds\?q=door&after_id=2/);
   await expect(page.getByRole("heading", { name: "作品目录" })).toBeVisible();
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");
 });
@@ -51,10 +51,10 @@ test("advanced invalid syntax renders the localized problem instead of an empty 
   await expect(page.getByText("请检查搜索语法后重试。")).toBeVisible();
 });
 
-test("cursor pagination is a real link with a first-page canonical", async ({ page }) => {
+test("pagination is a real link with a first-page canonical", async ({ page }) => {
   await page.goto("/builds?q=door");
   const more = page.getByRole("link", { name: "Load more" });
-  await expect(more).toHaveAttribute("href", /cursor=build-page-2/);
+  await expect(more).toHaveAttribute("href", /after_id=2/);
   await more.click();
   await expect(page.getByRole("link", { name: "Slim Piston Extender" })).toBeVisible();
   await expectCatalogueMetadata(page, "/builds?q=door");

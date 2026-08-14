@@ -1,18 +1,38 @@
 ---
+import type { PageAnchor } from "../generated/types.gen";
 import { translate, type Locale } from "../lib/i18n";
 
-type Props = { locale: Locale; cursor: string | null; url: URL };
-const { locale, cursor, url } = Astro.props;
-const next = new URL(url);
-if (cursor) next.searchParams.set("cursor", cursor);
+type Props = { locale: Locale; next: PageAnchor | null; prev: PageAnchor | null; url: URL };
+const { locale, next, prev, url } = Astro.props;
+
+/** Address one adjacent page, replacing whichever parameter addressed the current one. */
+function link(anchor: PageAnchor | null): string | null {
+  if (!anchor) return null;
+  const target = new URL(url);
+  for (const name of ["offset", "after_id", "before_id"]) target.searchParams.delete(name);
+  if (anchor.after_id != null) target.searchParams.set("after_id", String(anchor.after_id));
+  else if (anchor.before_id != null) target.searchParams.set("before_id", String(anchor.before_id));
+  else if (anchor.offset != null) target.searchParams.set("offset", String(anchor.offset));
+  return `${target.pathname}${target.search}`;
+}
+
+const previousHref = link(prev);
+const nextHref = link(next);
 ---
 
 {
-  cursor && (
+  (previousHref || nextHref) && (
     <nav class="pagination" aria-label="Pagination">
-      <a class="pagination-link" href={`${next.pathname}${next.search}`} rel="next">
-        {translate(locale, "common.loadMore")}
-      </a>
+      {previousHref && (
+        <a class="pagination-link" href={previousHref} rel="prev">
+          {translate(locale, "common.previous")}
+        </a>
+      )}
+      {nextHref && (
+        <a class="pagination-link" href={nextHref} rel="next">
+          {translate(locale, "common.loadMore")}
+        </a>
+      )}
     </nav>
   )
 }
