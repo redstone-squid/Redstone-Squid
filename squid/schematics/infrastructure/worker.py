@@ -62,7 +62,13 @@ from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed, Operation
 
 logger = logging.getLogger(__name__)
+
 worker_logger = logging.getLogger("squid.schematics.worker")
+"""Stands in for a child that told us nothing usable about itself.
+
+Structured child records are re-emitted under their own logger names by `_emit_child_record`;
+this one carries only the supervisor's own commentary about a worker's stderr.
+"""
 
 WORKER_MODULE = "squid.schematics.infrastructure.worker_main"
 
@@ -166,7 +172,7 @@ class _Worker:
                         extra={"worker_pid": process.pid},
                     )
                 else:
-                    worker_logger.handle(record)
+                    _emit_child_record(record)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -218,6 +224,19 @@ class _Worker:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), 2.0)
         await self._terminate()
+
+
+def _emit_child_record(record: logging.LogRecord) -> None:
+    """Dispatch a rebuilt child record as if the child's own logger had emitted it.
+
+    `Logger.handle` skips `isEnabledFor`, so re-emitting through one fixed logger made
+    parent-side level configuration for the child's module names inert. Going through the
+    record's own logger, with the level check the parent applies to its own records, keeps
+    filtering meaningful; the handler chain is unchanged because child loggers are `squid.*`.
+    """
+    target = logging.getLogger(record.name)
+    if target.isEnabledFor(record.levelno):
+        target.handle(record)
 
 
 def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
@@ -429,7 +448,7 @@ class SchematicWorkerPool:
         if self._breaker.is_open(now):
             msg = "The schematic engine is failing repeatedly and has been taken out of service."
             raise SchematicSupportUnavailableError(
-                msg, developer_action="Check the squid.schematics.worker log for the crashing payload."
+                msg, developer_action="Check the squid.schematics logs for the crashing payload."
             )
 
         try:

@@ -1,8 +1,8 @@
 """The schematic worker child process.
 
 Run as ``python -m squid.schematics.infrastructure.worker_main``. Reads request frames from
-stdin, writes response frames to stdout, and logs to stderr, which the supervisor pipes into
-the `squid.schematics.worker` logger.
+stdin, writes response frames to stdout, and logs JSON records to stderr, which the supervisor
+re-emits under each record's own logger name.
 
 This process exists so that the native engine's failure modes stay contained. wgpu, rayon, and
 MCHPRS each spawn their own threads; a panic in one of them, or a Rust profile built with

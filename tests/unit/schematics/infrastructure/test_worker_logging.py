@@ -16,6 +16,7 @@ from squid.schematics.infrastructure import worker_main
 from squid.schematics.infrastructure.wire import Frame
 from squid.schematics.infrastructure.worker import (
     SchematicWorkerPool,
+    _emit_child_record,
     _record_worker_failure,
     _Worker,
     _worker_log_record,
@@ -100,12 +101,12 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker:
     process = mocker.Mock()
     process.stderr = stream
     process.pid = 2718
-    handle = mocker.patch.object(worker_module.worker_logger, "handle")
+    emit = mocker.patch.object(worker_module, "_emit_child_record")
     warning = mocker.patch.object(worker_module.worker_logger, "warning")
 
     await _Worker(SchematicConfig())._pump_stderr(process)  # pyright: ignore[reportPrivateUsage]
 
-    record = handle.call_args.args[0]
+    record = emit.call_args.args[0]
     assert record.levelno == logging.DEBUG
     assert record.name == "squid.schematics.infrastructure.worker_main"
     warning.assert_called_once_with(
@@ -121,7 +122,7 @@ async def test_stderr_pump_survives_an_oversized_line(mocker: MockerFixture) -> 
     stream.feed_data((json.dumps({"levelname": "INFO", "name": "child", "message": "still alive"}) + "\n").encode())
     stream.feed_eof()
     process = mocker.Mock(stderr=stream, pid=2718)
-    handle = mocker.patch.object(worker_module.worker_logger, "handle")
+    emit = mocker.patch.object(worker_module, "_emit_child_record")
     warning = mocker.patch.object(worker_module.worker_logger, "warning")
 
     await _Worker(SchematicConfig())._pump_stderr(process)
@@ -130,7 +131,7 @@ async def test_stderr_pump_survives_an_oversized_line(mocker: MockerFixture) -> 
         "Schematic worker emitted an oversized stderr line; it was dropped.",
         extra={"worker_pid": 2718},
     )
-    assert handle.call_args.args[0].getMessage() == "still alive"
+    assert emit.call_args.args[0].getMessage() == "still alive"
 
 
 async def test_stderr_pump_logs_when_it_dies(mocker: MockerFixture) -> None:
@@ -151,14 +152,14 @@ async def test_terminate_drains_buffered_stderr_before_finishing(mocker: MockerF
     stream.feed_eof()
     process = mocker.Mock(stderr=stream, pid=2718, returncode=0)
     process.wait = mocker.AsyncMock(return_value=0)
-    handle = mocker.patch.object(worker_module.worker_logger, "handle")
+    emit = mocker.patch.object(worker_module, "_emit_child_record")
     worker = _Worker(SchematicConfig())
     worker._process = process
     worker._stderr_pump = asyncio.create_task(worker._pump_stderr(process))
 
     await worker._terminate()
 
-    assert handle.call_args.args[0].getMessage() == "dying words"
+    assert emit.call_args.args[0].getMessage() == "dying words"
 
 
 @pytest.mark.parametrize(("returncode", "level"), [(0, logging.INFO), (-9, logging.WARNING)])
@@ -175,6 +176,36 @@ async def test_terminate_logs_expected_exits_below_warning(
 
     exits = [record for record in caplog.records if "exited with code" in record.getMessage()]
     assert [record.levelno for record in exits] == [level]
+
+
+def test_child_records_are_dispatched_under_their_own_logger(caplog: pytest.LogCaptureFixture) -> None:
+    record = _worker_log_record(
+        json.dumps({"levelname": "WARNING", "name": "squid.schematics.child", "message": "engine complained"}), 2718
+    )
+    assert record is not None
+
+    with caplog.at_level(logging.DEBUG):
+        _emit_child_record(record)
+
+    assert [(entry.name, entry.getMessage()) for entry in caplog.records] == [
+        ("squid.schematics.child", "engine complained")
+    ]
+
+
+def test_child_records_obey_parent_side_levels_for_their_logger(caplog: pytest.LogCaptureFixture) -> None:
+    """The point of routing by name: silencing a chatty child module from the parent works."""
+    child = logging.getLogger("squid.schematics.child")
+    record = _worker_log_record(json.dumps({"levelname": "DEBUG", "name": child.name, "message": "noisy detail"}), 2718)
+    assert record is not None
+    previous = child.level
+    child.setLevel(logging.WARNING)
+    try:
+        with caplog.at_level(logging.DEBUG):
+            _emit_child_record(record)
+    finally:
+        child.setLevel(previous)
+
+    assert caplog.records == []
 
 
 async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:
