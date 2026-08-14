@@ -10,8 +10,9 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import check_is_global_admin
+from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
 from squid.records.domain import BuildKind
 
@@ -28,7 +29,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.computation = bot.services.record_computation
 
     @hybrid_group(name="admin")
-    @check_is_global_admin()
+    @requires(RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
     async def admin_group(self, ctx: Context[BotT]) -> None:
         """Inspect and maintain internal bot data."""
         await ctx.send_help("admin")
@@ -114,7 +115,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-gaps")
-    @check_is_global_admin()
+    @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
@@ -136,7 +137,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-title-issues")
-    @check_is_global_admin()
+    @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
     async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List canonical titles containing unknown or contradictory taxonomy."""
@@ -159,7 +160,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-rebuild")
-    @commands.is_owner()
+    @requires(RECORD_ENTRY_REBUILD)
     @app_commands.describe(
         current_version_id=app_commands.locale_str(
             _("Optional database ID to also compute the pinned current-version records.")
@@ -193,7 +194,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @admin_group.command(name="records-lookup")
-    @check_is_global_admin()
+    @requires(RECORD_ENTRY_INSPECT)
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind=app_commands.locale_str(_("The typed record family.")),

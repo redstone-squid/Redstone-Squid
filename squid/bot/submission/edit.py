@@ -20,11 +20,12 @@ from squid.bot.utils.converters import (
     fix_converter_annotations,
 )
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_admin
+from squid.bot.utils.permissions import requires
 from squid.bot.utils.sentinel import MISSING, MissingType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.core.i18n import _
 from squid.messages.application import MessageService
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -103,7 +104,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         # fmt: on
 
     @BuildCommandGroup.build_hybrid_group.command(name="edit")  # type: ignore
-    @check_is_home_server_trusted_or_global_admin()
+    @requires(BUILD_SUBMISSION_EDIT)
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):
         """Edit a build with the full field list."""
         await ctx.defer()

@@ -24,7 +24,7 @@ from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.permissions import check_is_home_server_trusted_or_global_admin
+from squid.bot.utils.permissions import requires
 from squid.builds.application import (
     BuildInferenceService,
     BuildService,
@@ -34,6 +34,7 @@ from squid.builds.domain import Build
 from squid.core.errors import SquidError
 from squid.core.i18n import _
 from squid.messages.application import MessageService
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
 from squid.schematics.application import IngestedSchematic, IngestRequest
 
 if TYPE_CHECKING:
@@ -364,7 +365,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self.bot.for_build(build).post_for_voting(type="add")
 
     @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
-    @check_is_home_server_trusted_or_global_admin()
+    @requires(BUILD_SUBMISSION_RECALC)
     async def recalc(self, ctx: Context[BotT], message: discord.Message):
         """Recalculate a build from a message."""
         await ctx.defer(ephemeral=True)

@@ -27,9 +27,15 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.permissions import check_is_global_admin
+from squid.bot.utils.permissions import requires
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
+from squid.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_APPROVE,
+    BUILD_SUBMISSION_DEBUG,
+    BUILD_SUBMISSION_REJECT,
+    RESTRICTION_ALIAS_CREATE,
+)
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
 
 if TYPE_CHECKING:
@@ -122,7 +128,7 @@ class SearchCog[
             )
 
     @restrictions_group.command(name="add-alias")
-    @check_is_global_admin()
+    @requires(RESTRICTION_ALIAS_CREATE)
     @app_commands.describe(
         restriction=app_commands.locale_str(_("The restriction to add another name for.")),
         alias=app_commands.locale_str(_("The additional name.")),
@@ -258,7 +264,7 @@ class SearchCog[
         return None
 
     @BuildCommandGroup.build_hybrid_group.command(name="approve")  # type: ignore
-    @check_is_global_admin()
+    @requires(BUILD_SUBMISSION_APPROVE)
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
     async def confirm_build(self, ctx: Context[BotT], build_id: int):
@@ -274,7 +280,7 @@ class SearchCog[
             )
 
     @BuildCommandGroup.build_hybrid_group.command(name="reject")  # type: ignore
-    @check_is_global_admin()
+    @requires(BUILD_SUBMISSION_REJECT)
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
     async def deny_build(self, ctx: Context[BotT], build_id: int):
@@ -292,7 +298,7 @@ class SearchCog[
             )
 
     @BuildCommandGroup.build_hybrid_group.command(name="debug")  # type: ignore
-    @check_is_global_admin()
+    @requires(BUILD_SUBMISSION_DEBUG)
     @app_commands.rename(build_id="id")
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The ID of the build whose debug details you want to see."))
