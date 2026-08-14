@@ -262,6 +262,20 @@ class PermissionService:
         )
         return await self.capabilities(subject, nodes)
 
+    def role_leaves(self, role: RoleRecord, roles: Iterable[RoleRecord]) -> tuple[str, ...]:
+        """The node names one role actually confers, sorted.
+
+        Expansion is a read-time convenience for rendering and for the authority
+        gate; nothing stores it, so a node added tomorrow appears here without a
+        migration.
+        """
+        specs = _role_specs(roles)
+        expansion = expand_role(str(role.id), specs, catalogue=self._catalogue)
+        leaves: set[str] = set()
+        for pattern in expansion.includes:
+            leaves |= self._catalogue.expand(pattern)
+        return tuple(sorted(leaves - expansion.excluded))
+
     def is_delegable_by_guild_admin(self, pattern: str) -> bool:
         """Whether a guild administrator may issue `pattern` inside their guild.
 

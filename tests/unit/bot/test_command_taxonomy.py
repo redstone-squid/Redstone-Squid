@@ -8,6 +8,7 @@ from discord.ext.commands import Command, HybridCommand, HybridGroup
 from squid.bot.admin import Admin
 from squid.bot.give_redstoner import GiveRedstoner
 from squid.bot.misc_commands import Miscellaneous
+from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
 from squid.bot.starboard import StarboardCog
 from squid.bot.submission.records import RecordCog
@@ -78,6 +79,7 @@ PUBLIC_COGS = (
     Miscellaneous,
     GiveRedstoner,
     StarboardCog,
+    PermissionCog,
 )
 
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
@@ -111,8 +113,34 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "info": ("docs", "form", "invite", "source"),
     "patterns": ("list", "search"),
+    "perm": (
+        "audit",
+        "deny",
+        "explain",
+        "forbid",
+        "grant",
+        "list",
+        "nodes",
+        "revoke",
+        "test",
+        "whoami",
+    ),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias", "search"),
+    "role": (
+        "add-role",
+        "assign",
+        "create",
+        "delete",
+        "exclude",
+        "include",
+        "list",
+        "rank",
+        "remove-pattern",
+        "remove-role",
+        "show",
+        "unassign",
+    ),
     "search": (),
     "settings": (
         "clear",

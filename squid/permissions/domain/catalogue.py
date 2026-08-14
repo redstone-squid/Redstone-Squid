@@ -11,6 +11,7 @@ name fails at import time rather than at the call site that happens to lose.
 
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 
 from squid.core.i18n import _
 from squid.permissions.domain.matching import MAX_SEGMENTS, Pattern
@@ -527,6 +528,16 @@ TRUSTED = RoleDefinition(
         "vote.weight.staff",
     ),
 )
+
+
+class BuiltinRoleKeys(StrEnum):
+    """`builtin_key` values, so nothing matches these by bare string."""
+
+    OWNER = "owner"
+    GLOBAL_ADMIN = "global-admin"
+    GUILD_ADMIN = "guild-admin"
+    TRUSTED = "trusted"
+
 
 BUILTIN_ROLES: tuple[RoleDefinition, ...] = (OWNER, GLOBAL_ADMIN, GUILD_ADMIN, TRUSTED)
 """Built-in roles, highest rank first."""
