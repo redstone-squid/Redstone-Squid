@@ -365,7 +365,21 @@ class SchematicWorkerPool:
         self._idle: deque[_Worker] = deque(self._workers)
         self._breaker = _CircuitBreaker(config.max_restarts_per_window, config.restart_window_seconds)
         self._breaker_was_open = False
+        self._waiting = 0
         self._closed = False
+
+    async def record_health(self) -> None:
+        """Publish how saturated the pool is, for the process that owns it to sample.
+
+        Render-slot contention is deliberately absent: renders are serialised by design, and
+        `squid.schematic.operation.duration{operation=render}` already shows the queueing as
+        latency.
+        """
+        idle = len(self._idle)
+        record_gauge("squid.schematic.pool.idle_workers", idle)
+        record_gauge("squid.schematic.pool.in_flight", len(self._workers) - idle)
+        record_gauge("squid.schematic.pool.waiters", self._waiting)
+        self._note_breaker_state(asyncio.get_running_loop().time())
 
     def _note_breaker_state(self, now: float) -> None:
         """Log and publish breaker transitions, once per transition rather than per call.
@@ -498,10 +512,13 @@ class SchematicWorkerPool:
                 msg, developer_action="Check the squid.schematics logs for the crashing payload."
             )
 
+        self._waiting += 1
         try:
             await asyncio.wait_for(self._available.acquire(), timeout)
         except TimeoutError:
             raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
+        finally:
+            self._waiting -= 1
 
         leased_at = asyncio.get_running_loop().time()
         remaining = timeout - (leased_at - now)
