@@ -27,7 +27,7 @@ try:
 except ImportError:  # pragma: no cover - Windows has no rlimits
     resource = None  # type: ignore[assignment]
 
-from squid.config import load_worker_observability_config
+from squid.config import load_worker_log_config, load_worker_observability_config
 from squid.core.errors import DomainError, SquidError
 from squid.logging_config import configure_worker_logging
 from squid.observability import configure_observability, extracted_trace_span
@@ -262,7 +262,9 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
 
 def main() -> None:
     """Install guardrails from the supervisor's environment, then serve requests."""
-    configure_worker_logging()
+    log_config = load_worker_log_config()
+    # "INFO" matches WorkerProcessConfig.logging, so the child's floor is the supervisor's.
+    configure_worker_logging(level=log_config.level, root_level=log_config.root_level or "INFO")
     limits = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
     apply_guardrails(
         {

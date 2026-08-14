@@ -1240,6 +1240,22 @@ def load_worker_observability_config() -> ObservabilityConfig:
     return settings.observability
 
 
+def load_worker_log_config() -> LogConfig:
+    """Load only inherited logging settings in a schematic worker child."""
+
+    class WorkerLogSettings(BaseSettings):
+        model_config = _ProcessSettings.model_config
+        log: LogConfig = LogConfig()
+        strict_unknown_keys: bool = False
+
+    try:
+        settings = WorkerLogSettings()  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    return settings.log
+
+
 __all__ = [
     "EMBEDDING_DIMENSION",
     "ApiProcessConfig",
@@ -1269,6 +1285,7 @@ __all__ = [
     "load_application_config",
     "load_bot_process_config",
     "load_database_config",
+    "load_worker_log_config",
     "load_worker_observability_config",
     "load_worker_process_config",
 ]
