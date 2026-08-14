@@ -39,7 +39,7 @@ from typing import Any, Self, cast
 
 from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
-from squid.observability import add_counter, inject_trace_context, record_histogram
+from squid.observability import add_counter, inject_trace_context, record_gauge, record_histogram
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -156,6 +156,7 @@ class _Worker:
         )
         if self._started_once:
             add_counter("squid.schematic.worker.respawns")
+            logger.warning("Respawning schematic worker as %s after a failure.", self._process.pid)
         self._started_once = True
         self._stderr_pump = asyncio.create_task(self._pump_stderr(self._process))
         return self._process
@@ -300,10 +301,17 @@ def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
 
 
 def _record_worker_failure(exit_code: int | None, *, reason: str) -> None:
+    """Record a worker death as both a metric and a log line.
+
+    Metrics alone are not a signal: `add_counter` is a no-op when the optional observability
+    extra is not installed, which left such a deployment with no way at all to see that its
+    workers were crash-looping.
+    """
     attributes: dict[str, str | int] = {"squid.worker.failure_reason": reason}
     if exit_code is not None:
         attributes["squid.worker.exit_code"] = exit_code
     add_counter("squid.schematic.worker.crashes", attributes=attributes)
+    logger.warning("Schematic worker failed (%s) with exit code %s.", reason, exit_code, extra=dict(attributes))
 
     rlimit_signal = {
         -value: limit
@@ -315,9 +323,10 @@ def _record_worker_failure(exit_code: int | None, *, reason: str) -> None:
     }.get(exit_code)
     if rlimit_signal is not None:
         assert exit_code is not None
-        add_counter(
-            "squid.schematic.worker.rlimit_kills",
-            attributes={"squid.worker.rlimit": rlimit_signal, "squid.worker.exit_code": exit_code},
+        rlimit_attributes = {"squid.worker.rlimit": rlimit_signal, "squid.worker.exit_code": exit_code}
+        add_counter("squid.schematic.worker.rlimit_kills", attributes=rlimit_attributes)
+        logger.warning(
+            "Schematic worker exceeded its %s limit and was killed.", rlimit_signal, extra=dict(rlimit_attributes)
         )
 
 
@@ -355,7 +364,30 @@ class SchematicWorkerPool:
         """One GPU, so renders are serialised regardless of how many workers exist."""
         self._idle: deque[_Worker] = deque(self._workers)
         self._breaker = _CircuitBreaker(config.max_restarts_per_window, config.restart_window_seconds)
+        self._breaker_was_open = False
         self._closed = False
+
+    def _note_breaker_state(self, now: float) -> None:
+        """Log and publish breaker transitions, once per transition rather than per call.
+
+        Closing again is only noticed the next time the pool is asked to do something or
+        sampled for health, because the window slides on inspection rather than on a timer.
+        """
+        is_open = self._breaker.is_open(now)
+        record_gauge("squid.schematic.pool.breaker_open", int(is_open))
+        if is_open == self._breaker_was_open:
+            return
+        self._breaker_was_open = is_open
+        if is_open:
+            add_counter("squid.schematic.worker.breaker.trips")
+            logger.error(
+                "Schematic worker circuit breaker opened after %s failures in %ss; "
+                "schematic operations are refused until it closes.",
+                self._config.max_restarts_per_window,
+                self._config.restart_window_seconds,
+            )
+        else:
+            logger.info("Schematic worker circuit breaker closed; schematic operations resume.")
 
     async def capabilities(self) -> AnalyzerCapabilities:
         try:
@@ -459,6 +491,7 @@ class SchematicWorkerPool:
             msg = "The schematic worker pool has been shut down."
             raise SchematicSupportUnavailableError(msg)
         now = asyncio.get_running_loop().time()
+        self._note_breaker_state(now)
         if self._breaker.is_open(now):
             msg = "The schematic engine is failing repeatedly and has been taken out of service."
             raise SchematicSupportUnavailableError(
@@ -483,6 +516,7 @@ class SchematicWorkerPool:
             except (SchematicWorkerCrashedError, SchematicTimeoutError):
                 loop_time = asyncio.get_running_loop().time()
                 self._breaker.record_failure(loop_time)
+                self._note_breaker_state(loop_time)
                 # A pause before this worker is next handed out, so a payload a user keeps
                 # retrying cannot spawn processes as fast as they can press the button.
                 await asyncio.sleep(self._breaker.backoff_seconds(self._config.restart_backoff_seconds))

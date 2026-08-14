@@ -216,7 +216,7 @@ async def test_an_operation_past_its_deadline_is_killed_rather_than_left_running
 
 
 async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_forever(
-    slow_schematic: bytes,
+    slow_schematic: bytes, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A user who keeps retrying a poison file must not be able to fork-bomb the host."""
     pool = SchematicWorkerPool(
@@ -228,11 +228,15 @@ async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_for
         )
     )
     try:
-        for _ in range(2):
-            with pytest.raises(SchematicTimeoutError):
+        with caplog.at_level(logging.ERROR, logger="squid.schematics.infrastructure.worker"):
+            for _ in range(2):
+                with pytest.raises(SchematicTimeoutError):
+                    await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)
+
+            with pytest.raises(SchematicSupportUnavailableError):
                 await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)
 
-        with pytest.raises(SchematicSupportUnavailableError):
-            await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)
+        # Operators without an OTel exporter must still see the outage in the logs.
+        assert [record.getMessage() for record in caplog.records if "circuit breaker opened" in record.getMessage()]
     finally:
         await pool.aclose()
